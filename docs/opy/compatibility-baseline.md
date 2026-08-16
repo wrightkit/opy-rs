@@ -80,7 +80,7 @@ rejected/documented-absent dimension, `—` an inapplicable dimension, and
 Verified against the pinned oracle. Each item is classified with the tier it
 belongs to; none is a per-symbol implementation request. Items marked
 *manifest-covered* resolve through the OPY semantic compatibility manifest
-(`crates/wright-opy/src/manifest/`; frontend workstream) once the frontend
+(`crates/opy-frontend/src/manifest/`; frontend workstream) once the frontend
 lands.
 
 | Evidence | Oracle 9.7.10 | opy-rs status | Classification |
@@ -118,6 +118,6 @@ lands.
 
 * [`docs/compatibility/upstream-references.md`](../compatibility/upstream-references.md) — pinned reference identity and provenance
 * [`support-matrix.md`](support-matrix.md) — corpus-evidenced declared surface
-* [`compat-manifest-spec.md`](compat-manifest-spec.md) — machine-readable semantic manifest specification (data in `crates/wright-opy/src/manifest/`)
+* [`compat-manifest-spec.md`](compat-manifest-spec.md) — machine-readable semantic manifest specification (data in `crates/opy-frontend/src/manifest/`)
 * [`compatibility/support-matrix.json`](../../compatibility/support-matrix.json) — machine-readable state tracking
 * [`compatibility/README.md`](../../compatibility/README.md) — corpus and harness layout

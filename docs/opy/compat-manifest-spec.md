@@ -6,7 +6,7 @@ frontend workstream (issues #4/#5)
 Scope: the opy-rs-owned representation for builtin actions/values, member
 functions, signatures, parameter enum domains, enum members, and source
 aliases; reference-validated and consumed by the native frontend. The
-implementation lives in `crates/wright-opy/src/manifest/` (data in
+implementation lives in `crates/opy-frontend/src/manifest/` (data in
 `data/manifest.json`, probe evidence in `probes/`); this document is the
 schema and boundary contract for that data.
 
@@ -17,7 +17,7 @@ opy-rs-owned manifest is justified: the declared parse surface exceeds the
 initial semantic surface, and residual `unknown-action`/`unknown-value`/
 `unsupported-member` gaps are semantic-coverage gaps, not grammar gaps. The
 manifest replaces the hardcoded `KNOWN_ENUMS` table in
-`crates/wright-opy/src/lower.rs` with data and gives the frontend a single,
+`crates/opy-frontend/src/lower.rs` with data and gives the frontend a single,
 reference-validated source for:
 
 * builtin actions and values (generic and member);
@@ -173,7 +173,7 @@ hash, and — for rejections — the diagnostic category fragment).
 
 ## Validation rules
 
-* `Manifest::load` (`crates/wright-opy/src/manifest`) — schema validation,
+* `Manifest::load` (`crates/opy-frontend/src/manifest`) — schema validation,
   duplicate/colliding ids, colliding or missing aliases, undeclared enum
   domains, undeclared enum-default members, keyword-binding data sanity
   (`keywordOnly`/`positionalOnly` are mutually exclusive, alternate
@@ -202,7 +202,7 @@ hash, and — for rejections — the diagnostic category fragment).
 
 ## Consumers
 
-* the opy-rs frontend (`crates/wright-opy`) — name/member/enum resolution,
+* the opy-rs frontend (`crates/opy-frontend`) — name/member/enum resolution,
   arity and signature checks, `KNOWN_ENUMS` absorption, early resolution of
   unknown-action/value errors;
 * `workshop-rs` — canonical-id linkage to the emission catalog (validated by

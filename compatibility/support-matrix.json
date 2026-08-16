@@ -172,7 +172,7 @@
         "fixtures:synthetic/basic-rule",
         "fixtures:synthetic/chase-condition-agentlab"
       ],
-      "notes": "Issue #4. Resolves through the opy-rs semantic compatibility manifest (crates/wright-opy/src/manifest/, spec: docs/opy/compat-manifest-spec.md); every entry probe-validated against the pinned oracle. Full surface stays baseline-planned."
+      "notes": "Issue #4. Resolves through the opy-rs semantic compatibility manifest (crates/opy-frontend/src/manifest/, spec: docs/opy/compat-manifest-spec.md); every entry probe-validated against the pinned oracle. Full surface stays baseline-planned."
     },
     {
       "id": "semantics/receiver-members",

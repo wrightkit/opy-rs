@@ -48,8 +48,8 @@ Workshop-independent up to the documented integration boundary toward
 | `compatibility/fixtures/real-world/{ow1-emulator,6v6-adjustments}/` | Independent third-party projects (BSD-2-Clause), full include closures |
 | `compatibility/fixtures/**/oracle.json` | Pinned OverPy 9.7.10 reference snapshots (normalized Workshop output, diagnostics, exit codes) |
 | `compatibility/support-matrix.json` | Machine-readable state tracking of every declared feature (the mechanically checkable artifact) |
-| `crates/wright-opy/src/manifest/data/manifest.json` and `crates/wright-opy/src/manifest/probes/` | The opy-rs-owned semantic compatibility manifest and its oracle probes (frontend workstream; referenced here, not duplicated) |
-| `crates/wright-opy/tests/differential.rs` + `compatibility/diff.py` | Native-vs-reference differential parity — **deferred (issue #7)**; `diff.py` already implements the result contract without requiring a producer |
+| `crates/opy-frontend/src/manifest/data/manifest.json` and `crates/opy-frontend/src/manifest/probes/` | The opy-rs-owned semantic compatibility manifest and its oracle probes (frontend workstream; referenced here, not duplicated) |
+| `crates/opy-frontend/tests/differential.rs` + `compatibility/diff.py` | Native-vs-reference differential parity — **deferred (issue #7)**; `diff.py` already implements the result contract without requiring a producer |
 | `adapter/fixtures/**/*.json` | Pinned OverPy 9.7.10 HIR reference fixtures — **deferred (integration boundary, issue #7)** |
 
 ## Supported surface (corpus-evidenced contract)
@@ -127,11 +127,11 @@ implements; "reference" always means the pinned OverPy 9.7.10
   (`points.append`, `candlePos[i2]`) → `ReceiverCall`/`Index`.
 - Builtin action/value/member identity, signatures, receiver categories,
   parameter enum domains, and non-contextual aliases resolve through the OPY
-  semantic compatibility manifest (`crates/wright-opy/src/manifest/`, schema
+  semantic compatibility manifest (`crates/opy-frontend/src/manifest/`, schema
   v1; spec in [`compat-manifest-spec.md`](compat-manifest-spec.md)) — the
   single authoritative semantic table. Every manifest entry is
   probe-validated against the pinned OverPy 9.7.10 oracle
-  (`crates/wright-opy/src/manifest/probes/`). Unknown or misplaced builtins
+  (`crates/opy-frontend/src/manifest/probes/`). Unknown or misplaced builtins
   fail at semantic resolution with structured, source-located diagnostics
   (`unknown-action`, `unknown-value`, `unknown-member`, `invalid-arity`,
   `invalid-receiver`, `enum-domain-mismatch`, `action-in-value-position`,

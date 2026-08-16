@@ -77,7 +77,7 @@ The harness tests (`compatibility/tests/`) run without the oracle installed:
 (the machine-readable support matrix structure and evidence paths).
 The wright-side tests for npm packaging and the manifest probe validator are
 not ported: the first tests wright's release tooling, the second depends on
-`crates/wright-opy/src/manifest/probes/` and will be wired when the frontend
+`crates/opy-frontend/src/manifest/probes/` and will be wired when the frontend
 lands (issue #7).
 
 ## Differential result contract
