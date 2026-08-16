@@ -1,0 +1,9 @@
+{
+  "name": "@opy-rs/overpy-oracle",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@11.10.0",
+  "dependencies": {
+    "overpy": "9.7.10"
+  }
+}
