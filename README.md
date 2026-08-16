@@ -49,16 +49,32 @@ The standalone frontend foundation is CI-covered:
 
 ## Compatibility
 
-Compatibility means **observable semantic compatibility for the declared
-support surface**, not byte/text, optimizer, or format identity: the
-accepted/rejected surface, diagnostics, and the semantic model are the
-contract; presentation differences are not bugs unless they change
-observable semantics. The declared surface is the machine-readable
+Compatibility is **observable semantic compatibility for the declared
+support surface**, not byte/text, optimizer, or format identity. What matters
+is whether the same `.opy` project is accepted, what diagnostics it produces,
+and what the semantic model says about it. A presentation difference (for
+example `Global.<name>` vs a bare variable name in emitted text) only matters
+when it changes observable semantics.
+
+The declared surface is the machine-readable
 [`compatibility/support-matrix.json`](compatibility/support-matrix.json)
-(35 entries), backed by the corpus under `compatibility/fixtures/`, the
+(35 features), backed by the corpus under `compatibility/fixtures/`, the
 tiered [`docs/opy/compatibility-baseline.md`](docs/opy/compatibility-baseline.md),
 and the pinned OverPy 9.7.10 oracle
 ([`docs/compatibility/upstream-references.md`](docs/compatibility/upstream-references.md)).
+
+Each feature is tracked in one of five states:
+
+* `frontend-supported`: the frontend handles it at the source level
+  (lexing, parsing, preprocessing, macro expansion), with corpus evidence;
+* `semantic-supported`: it also resolves into the semantic model (names,
+  members, enums, call semantics);
+* `planned`: declared and evidenced, but not implemented yet;
+* `lowering-dependent`: finishing it needs canonical Workshop data (catalog,
+  emission, locale) from `workshop-rs`, so opy-rs tracks it without
+  approximating it;
+* `end-to-end-supported`: full OPY-to-Workshop compile parity through
+  `workshop-rs`.
 
 | Capability | Matrix scope | State |
 | --- | --- | --- |
@@ -76,23 +92,21 @@ and the pinned OverPy 9.7.10 oracle
 | Workshop lowering, emission, catalog, settings/locale emission | `compilation/workshop-lowering`, `compilation/end-to-end`, `semantics/settings-emission`, `translations/locale-emission`, `optimization/emission-form`, `hooks/post-compile-workshop` | lowering-dependent |
 | Workshop → OPY reconstruction | `decompilation/*` | lowering-dependent |
 
-Matrix snapshot (source of truth: `compatibility/support-matrix.json`):
-14 `frontend-supported`, 5 `semantic-supported`, 8 `planned`, 8
-`lowering-dependent`, 0 `end-to-end-supported`.
+Current counts: 14 `frontend-supported`, 5 `semantic-supported`, 8
+`planned`, 8 `lowering-dependent`, 0 `end-to-end-supported` (35 total). The
+matrix is the single mechanically checked source of truth; this table is a
+summary of it.
 
 Stable contracts:
 
 * **Corpus-defined support.** Every declared feature is backed by the
-  compatibility corpus or explicitly marked as investigation; the support
-  matrix is the single mechanically checked state source, with states
-  `planned`, `frontend-supported`, `semantic-supported`,
-  `lowering-dependent`, `end-to-end-supported`.
-* There is **no WrightKit-only OPY dialect**: the surface targets the pinned
-  OverPy 9.7.10 reference, and deviations are documented, corpus-evidenced
-  differences, not new dialect features.
-* The default tooling model is **source-aware validated edits**: tooling
-  operates on authored source ranges with full provenance and validates
-  before editing, rather than regenerating whole files
+  compatibility corpus or explicitly marked as investigation.
+* **No WrightKit-only OPY dialect.** The surface targets the pinned OverPy
+  9.7.10 reference; deviations are documented, corpus-evidenced differences,
+  not new dialect features.
+* **Source-aware validated edits.** Tooling operates on authored source
+  ranges with full provenance and validates before editing, instead of
+  regenerating whole files
   ([`trivia-retention-policy.md`](docs/opy/trivia-retention-policy.md)).
 
 ## Current limitations
