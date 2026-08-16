@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    branches: ["main"]
   pull_request:
 
 permissions:
@@ -38,6 +39,9 @@ jobs:
           toolchain: ${{ matrix.toolchain }}
           components: clippy, rustfmt
           rustflags: ""
+          cache-shared-key: linux-quality
+          cache-save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: false
 
       - name: Check formatting
         if: steps.crates.outputs.exists == 'true'
@@ -75,6 +79,10 @@ jobs:
           toolchain: stable
           components: clippy, rustfmt
           rustflags: ""
+          cache-targets: false
+          cache-bin: false
+          cache-save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: false
 
       - name: Run opy-macro-js tests
         run: cargo test -p opy-macro-js --all-targets
