@@ -22,6 +22,9 @@ pub mod diag;
 pub mod hir;
 pub mod lexer;
 pub mod parser;
+pub mod preprocess;
+pub mod settings;
 
 pub use diag::{FrontendError, FrontendResult};
 pub use parser::parse;
+pub use preprocess::{preprocess, preprocess_with_overlay};
