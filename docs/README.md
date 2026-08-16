@@ -1,0 +1,39 @@
+# opy-rs Documentation
+
+This directory is the documentation index for `opy-rs`. The root
+[`README.md`](../README.md) is the user-facing project overview; detailed
+architecture, compatibility evidence, APIs, and internal contracts live here.
+
+## Architecture and APIs
+
+- [Architecture](opy/architecture.md): repository responsibilities, source
+  pipeline, and the integration boundary with `workshop-rs`.
+- [Tooling API](opy/tooling-api.md): Rust library and CLI contracts for checking,
+  inspection, overlays, diagnostics, and support queries.
+- [Source-edit policy](opy/trivia-retention-policy.md): provenance and trivia
+  requirements for validated source-oriented edits.
+
+## Compatibility
+
+- [Support reference](opy/support-matrix.md): detailed, corpus-evidenced OverPy
+  feature coverage.
+- [Compatibility baseline](opy/compatibility-baseline.md): planning/reference
+  inventory for remaining OverPy surface and compatibility priorities.
+- [Upstream references](compatibility/upstream-references.md): pinned reference
+  identity, provenance, licensing notes, and oracle boundaries.
+- [Compatibility harness](../compatibility/README.md): fixtures, snapshots,
+  differential testing, and machine-readable support data.
+
+## Internals
+
+- [Opy HIR v1](hir/opy-hir-v1.md): semantic interchange representation and
+  wire contract.
+- [Semantic compatibility manifest](opy/compat-manifest-spec.md): builtin,
+  signature, alias, and catalog-link metadata owned by the OPY implementation.
+- [Tooling notes](opy/tooling-notes.md): focused implementation notes that do
+  not belong in the public README.
+
+> [!NOTE]
+> GitHub issues and pull requests own implementation sequencing and acceptance
+> criteria. Documents here describe durable architecture, interfaces, evidence,
+> or current compatibility boundaries.
