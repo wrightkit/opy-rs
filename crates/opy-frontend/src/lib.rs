@@ -26,6 +26,8 @@ pub mod manifest;
 pub mod parser;
 pub mod preprocess;
 pub mod settings;
+pub mod support;
+pub mod tooling;
 
 use std::path::Path;
 
@@ -85,75 +87,30 @@ pub struct CompileOutcome {
 
 /// Compile with open-document overlays while retaining the frontend file
 /// registry on parse/lower failure.
+///
+/// This is the compile contract view of [`tooling::check_with_overlay`]: the
+/// two share one pipeline, so `check` and `compile` never disagree about
+/// whether a project is clean.
 pub fn compile_with_overlay_outcome(
     source: &str,
     main_path: &str,
     root: &Path,
     overlay: &std::collections::BTreeMap<String, String>,
 ) -> CompileOutcome {
-    let preprocess::PreprocessOutcome { result, files } =
-        preprocess::preprocess_with_overlay_outcome(source, main_path, root, overlay);
-    let preprocessed = match result {
-        Ok((preprocessed, _)) => preprocessed,
-        Err(error) => {
-            return CompileOutcome {
-                hir: None,
-                error: Some(error),
-                files,
-            };
-        }
-    };
-    let parsed = parse(&preprocessed.tokens);
-    if let Some(error) = parsed.errors.first() {
-        return CompileOutcome {
-            hir: None,
-            error: Some(error.clone()),
-            files,
-        };
-    }
-    let mut program = parsed
-        .program
-        .expect("program present when errors are empty");
-    // Parse the extracted settings block into the CST; errors flow through
-    // the same error path (registry retained for span mapping, #86).
-    if let Some(block) = &preprocessed.settings {
-        match settings::parse_block(block) {
-            Ok(parsed_settings) => program.settings = Some(parsed_settings),
-            Err(error) => {
-                return CompileOutcome {
-                    hir: None,
-                    error: Some(error),
-                    files,
-                };
-            }
-        }
-    }
-    let defines = preprocessed
-        .defines
-        .iter()
-        .map(|define| hir::types::Define {
-            name: define.name.clone(),
-            is_function: define.is_function,
-            span: define.span.map(Into::into),
-        })
-        .collect();
-    let hir_files = files
-        .iter()
-        .map(|file| hir::types::SourceFile {
-            id: file.id,
-            path: file.path.clone(),
-        })
-        .collect();
-    match lower(&program, hir_files, defines) {
-        Ok(hir) => CompileOutcome {
-            hir: Some(hir),
-            error: None,
-            files,
-        },
-        Err(error) => CompileOutcome {
-            hir: None,
-            error: Some(error),
-            files,
-        },
+    let outcome = tooling::check_with_overlay(source, main_path, root, overlay);
+    // Every failed check carries at least one diagnostic, so a None model
+    // always yields an error (the compile outcome invariant).
+    let error = outcome.diagnostics.first().map(|diagnostic| FrontendError {
+        code: diagnostic.code.clone(),
+        message: diagnostic.message.clone(),
+        span: diagnostic
+            .span
+            .as_ref()
+            .map(tooling::SourceLocation::to_span),
+    });
+    CompileOutcome {
+        hir: outcome.model.map(|model| model.hir),
+        error,
+        files: outcome.files,
     }
 }
