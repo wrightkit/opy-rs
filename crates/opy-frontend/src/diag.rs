@@ -3,6 +3,10 @@
 //! Every frontend failure is a [`FrontendError`] with a stable `code`, a
 //! human message, and an optional source span. The `code` is the machine
 //! contract; wording is not.
+//!
+//! [`Position`] is serializable so tooling surfaces ([`crate::tooling`]) can
+//! emit resolved source locations as JSON without introducing a parallel
+//! position type.
 
 /// A structured frontend error.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,7 +28,7 @@ pub struct Span {
 }
 
 /// A 1-based line/column position.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 pub struct Position {
     pub line: u32,
     pub col: u32,

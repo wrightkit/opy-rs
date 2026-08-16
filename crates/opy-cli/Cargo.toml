@@ -1,0 +1,15 @@
+[package]
+name = "opy-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Standalone OPY frontend CLI: check, inspect, support-matrix, version (Workshop-independent, no Node or Workshop backend required)."
+
+[lints]
+workspace = true
+
+[dependencies]
+opy-frontend = { path = "../opy-frontend" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
