@@ -47,11 +47,11 @@ python3 -m unittest discover -s compatibility/tests   # oracle-free harness chec
 ```
 
 CI runs the Rust quality gates on Ubuntu (Rust stable and 1.85.0) and the
-`opy-macro-js` runtime suite on macOS and Windows on every push/PR. The
-oracle-free compatibility harness tests run as standalone validation (they
-are not part of CI); oracle-required steps (`compatibility/run_oracle.py`,
-the manifest probe validator) run locally against the pinned oracle. Do not
-merge work that fails these checks.
+`opy-macro-js` runtime suite on macOS and Windows on pushes to `main` and on
+pull requests. The oracle-free compatibility harness tests run as standalone
+validation (they are not part of CI); oracle-required steps
+(`compatibility/run_oracle.py`, the manifest probe validator) run locally
+against the pinned oracle. Do not merge work that fails these checks.
 
 ## Delivery
 
