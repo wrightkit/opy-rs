@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/control-flow",
+  "category": "synthetic",
+  "features": ["for", "while", "if", "elif", "else"],
+  "source": "source.opy",
+  "expectedStatus": "success",
+  "provenance": {
+    "kind": "original",
+    "origin": "Wright compatibility corpus",
+    "license": "AGPL-3.0-or-later",
+    "redistributable": true
+  }
+}

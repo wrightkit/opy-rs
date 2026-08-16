@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/settings",
+  "category": "synthetic",
+  "features": ["settings", "declarations", "rules"],
+  "source": "source.opy",
+  "expectedStatus": "success",
+  "provenance": {
+    "kind": "original",
+    "origin": "Wright compatibility corpus",
+    "license": "AGPL-3.0-or-later",
+    "redistributable": true
+  }
+}

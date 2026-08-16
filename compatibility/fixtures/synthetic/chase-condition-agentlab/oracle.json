@@ -1,0 +1,32 @@
+{
+  "compile": {
+    "diagnostics": [
+      {
+        "severity": "info",
+        "text": "The global variable 'Round_Attack_Time' is chased, but also used in a rule condition, making the rule condition possibly not trigger properly due to a workshop bug. (w_ow2_rule_condition_chase)\n    | line 7, col 19, at source.opy\nWarning: The global variable 'Round_Attack_Time' is chased, but also used in a rule condition, making the rule condition possibly not trigger properly due to a workshop bug. (w_ow2_rule_condition_chase)\n    | line 7, col 19, at source.opy"
+      }
+    ],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: Round_Attack_Time\n}\n\nrule (\"chase and condition\") {\n    event {\n        Ongoing - Global;\n    }\n    conditions {\n        Is Game In Progress == True;\n        Global.Round_Attack_Time != 0;\n    }\n    actions {\n        Chase Global Variable Over Time(Round_Attack_Time, 0, 30, None);\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: Round_Attack_Time\n}\n\nrule (\"chase and condition\") {\n    event {\n        Ongoing - Global;\n    }\n    conditions {\n        Is Game In Progress == True;\n        Global.Round_Attack_Time != 0;\n    }\n    actions {\n        Chase Global Variable Over Time(Round_Attack_Time, 0, 30, None);\n    }\n}\n\n",
+    "workshopSha256": "f867ca9e1086370f49cd688f52763d9df8d7f900e5f447b47fb27d445bc9e34d"
+  },
+  "fixture": "synthetic/chase-condition-agentlab",
+  "input": {
+    "sha256": "5aa7ad4f0cb028b57e750557ef6410c0c39dd1fd39572a875ef9cb0c746d7ae6",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

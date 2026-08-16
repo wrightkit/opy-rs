@@ -1,0 +1,29 @@
+{
+  "acquisitionMethod": "scripts/acquire-corpus.py: GitHub archive of the pinned commit (codeload.tar.gz), include-closure resolution matching the pinned oracle, SHA-256 verification",
+  "category": "real-world",
+  "expectedStatus": "success",
+  "features": [
+    "declarations",
+    "expressions",
+    "events",
+    "workshop enums/actions",
+    "custom game settings"
+  ],
+  "files": {
+    "clientToServer.opy": "3ef442054f57c1a9f9905f11da4d5e27726564c5bab44c74ebfab56825b94781"
+  },
+  "id": "real-world/overpy-client-to-server",
+  "provenance": {
+    "kind": "imported-example",
+    "license": "GPL-3.0-only",
+    "licenseUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/LICENSE",
+    "modifications": "none",
+    "origin": "Zezombye/overpy examples/clientToServer.opy",
+    "redistributable": true,
+    "sourceCommit": "eea67adbcf6926c4004e35e25ab4be072624a44e",
+    "sourceUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/examples/clientToServer.opy"
+  },
+  "runtimeSeconds": 6.4,
+  "schemaVersion": 1,
+  "source": "clientToServer.opy"
+}

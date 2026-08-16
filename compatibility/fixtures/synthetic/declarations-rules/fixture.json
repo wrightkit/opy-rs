@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/declarations-rules",
+  "category": "synthetic",
+  "features": ["global variables", "player variables", "subroutines", "rules"],
+  "source": "source.opy",
+  "expectedStatus": "success",
+  "provenance": {
+    "kind": "original",
+    "origin": "Wright compatibility corpus",
+    "license": "AGPL-3.0-or-later",
+    "redistributable": true
+  }
+}

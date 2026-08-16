@@ -1,0 +1,29 @@
+{
+  "acquisitionMethod": "scripts/acquire-corpus.py: GitHub archive of the pinned commit (codeload.tar.gz), include-closure resolution matching the pinned oracle, SHA-256 verification",
+  "category": "real-world",
+  "expectedStatus": "success",
+  "features": [
+    "declarations",
+    "macros",
+    "subroutines",
+    "control flow",
+    "workshop actions"
+  ],
+  "files": {
+    "cronch.opy": "413d3d598ae08f3682acf925b7294316a68aba7c9a959e95d66b461485ba9169"
+  },
+  "id": "real-world/overpy-cronch",
+  "provenance": {
+    "kind": "imported-example",
+    "license": "GPL-3.0-only",
+    "licenseUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/LICENSE",
+    "modifications": "none",
+    "origin": "Zezombye/overpy examples/cronch.opy",
+    "redistributable": true,
+    "sourceCommit": "eea67adbcf6926c4004e35e25ab4be072624a44e",
+    "sourceUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/examples/cronch.opy"
+  },
+  "runtimeSeconds": 6.1,
+  "schemaVersion": 1,
+  "source": "cronch.opy"
+}

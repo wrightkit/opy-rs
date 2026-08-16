@@ -1,0 +1,29 @@
+{
+  "acquisitionMethod": "scripts/acquire-corpus.py: GitHub archive of the pinned commit (codeload.tar.gz), include-closure resolution matching the pinned oracle, SHA-256 verification",
+  "category": "real-world",
+  "expectedStatus": "success",
+  "features": [
+    "declarations",
+    "player variables",
+    "control flow",
+    "strings",
+    "custom functions"
+  ],
+  "files": {
+    "santa.opy": "63d9a92ba2c59423857322c4b6d651a2e86863ed040e8af585599a364f11fe0e"
+  },
+  "id": "real-world/overpy-santa",
+  "provenance": {
+    "kind": "imported-example",
+    "license": "GPL-3.0-only",
+    "licenseUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/LICENSE",
+    "modifications": "none",
+    "origin": "Zezombye/overpy examples/santa.opy",
+    "redistributable": true,
+    "sourceCommit": "eea67adbcf6926c4004e35e25ab4be072624a44e",
+    "sourceUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/examples/santa.opy"
+  },
+  "runtimeSeconds": 4.1,
+  "schemaVersion": 1,
+  "source": "santa.opy"
+}

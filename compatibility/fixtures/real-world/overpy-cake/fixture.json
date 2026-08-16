@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "id": "real-world/overpy-cake",
+  "category": "real-world",
+  "features": ["declarations", "arrays", "expressions", "for", "while", "macros"],
+  "source": "source.opy",
+  "expectedStatus": "success",
+  "provenance": {
+    "kind": "imported-example",
+    "origin": "Zezombye/overpy examples/cake.opy",
+    "sourceUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/examples/cake.opy",
+    "sourceCommit": "eea67adbcf6926c4004e35e25ab4be072624a44e",
+    "license": "GPL-3.0-only",
+    "licenseUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/LICENSE",
+    "redistributable": true,
+    "modifications": "none"
+  }
+}
