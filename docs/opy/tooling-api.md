@@ -87,7 +87,7 @@ Span layout: `file_id` indexes the registry, positions are 1-based
 | `unknown-identifier` / `enum-type-without-member` | resolve | Unresolved names |
 | `unknown-action` / `unknown-value` / `unknown-member` | resolve | Unknown builtins |
 | `unsupported-member` | resolve | Member access outside the declared surface |
-| `unknown-enum-member` / `enum-domain-mismatch` | resolve | Enum member/domain validation |
+| `unknown-enum-member` | resolve | Custom (user-declared) enum member validation |
 | `invalid-arity` / `missing-argument` / `invalid-argument` | resolve | Signature validation |
 | `keyword-unsupported` / `unknown-keyword` / `duplicate-argument` / `keyword-required` / `positional-after-keyword` | resolve | Keyword binding |
 | `invalid-iterable` / `invalid-call-context` | resolve | Position/context validation |

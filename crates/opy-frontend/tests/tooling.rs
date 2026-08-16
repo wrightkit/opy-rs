@@ -166,10 +166,6 @@ const STABLE_DIAGNOSTICS: &[(&str, &str)] = &[
     ("globalvar x\nrule \"r\":\n    @Event global\n    x = nope\n", "unknown-identifier"),
     // Unknown member function.
     ("rule \"r\":\n    @Event eachPlayer\n    eventPlayer.frobnicate()\n", "unknown-member"),
-    // Declared enum domain without the member.
-    ("globalvar x\nrule \"r\":\n    @Event global\n    x = Color.CYAN\n", "unknown-enum-member"),
-    // Enum-domain mismatch on a builtin argument.
-    ("globalvar g\nrule \"r\":\n    @Event global\n    chaseOverTime(g, 10, 3, Invis.ALL)\n", "enum-domain-mismatch"),
     // Positional overflow.
     ("globalvar g\nrule \"r\":\n    @Event global\n    chaseOverTime(g, 10, 3, 4, 5)\n", "invalid-arity"),
     // Value function in action position.
