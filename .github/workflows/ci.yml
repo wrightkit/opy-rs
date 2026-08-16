@@ -51,7 +51,6 @@ jobs:
         if: steps.crates.outputs.exists == 'true'
         run: cargo test --workspace --all-targets --all-features
 
-<<<<<<< HEAD
       - name: Note docs-only branch
         if: steps.crates.outputs.exists == 'false'
         run: echo "No workspace crates on this branch; Rust quality gates skipped."
@@ -79,4 +78,3 @@ jobs:
 
       - name: Run opy-macro-js tests
         run: cargo test -p opy-macro-js --all-targets
- origin/feat/js-macro-runtime
