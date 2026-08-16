@@ -1,6 +1,6 @@
 # opy-rs Native .opy Frontend Support Matrix
 
-Status: accepted baseline — living .opy frontend support matrix for the
+Status: accepted baseline. A living .opy frontend support matrix for the
 opy-rs evidence base (issue #2)
 Scope: the `.opy` source-language surface the opy-rs native frontend targets,
 with corpus/production evidence for each feature and explicitly deferred
@@ -29,7 +29,7 @@ preprocess → CST/parser → semantic resolution → Opy HIR v1), the bounded
 JavaScript macro runtime, the tooling API/CLI, and the native differential
 suite are implemented and CI-covered. The rows they evidence are flipped to
 `frontend-supported`/`semantic-supported` in
-`compatibility/support-matrix.json` — the mechanically checked state source;
+`compatibility/support-matrix.json`, the mechanically checked state source;
 features whose completion requires canonical Workshop semantics are
 `lowering-dependent` and are inventory-only until the `workshop-rs`
 integration stage (#8), which remains the active Workshop-independent
@@ -72,7 +72,7 @@ implements; "reference" always means the pinned OverPy 9.7.10
 - Operators: `+ - * / // % ** == != < <= > >= = += -= *= /= //= %= and or not`,
   plus `.`/`,`/`:`/`(`/`)`/`[`/`]`/`@`. (`in` is only the `for ... in`
   header keyword; expression-level `in`/`not in` membership operators are not
-  supported — see the deferred list.)
+  supported; see the deferred list.)
 
 ### Declarations
 - `globalvar name` / `globalvar name = expr` / `globalvar name <index>`
@@ -87,23 +87,23 @@ implements; "reference" always means the pinned OverPy 9.7.10
 - `subroutine name`.
 - `def name():` subroutine bodies (parameters are outside the declared
   surface; rejected explicitly).
-- `enum Name: MEMBER, ...` — members fold to numeric constants
+- `enum Name: MEMBER, ...`: members fold to numeric constants
   (`Phase.FINISHED` → `1`), matching the reference.
 - `macro name(params):` statement bodies with `MacroParam` references.
 
 ### Preprocessing
-- `#!include "file.opy"` — root-relative include resolution, cycle detection
+- `#!include "file.opy"`: root-relative include resolution, cycle detection
   (`include-cycle`), missing-file diagnostics (`include-not-found`), included
   files registered in the HIR file registry (reference behavior).
-- `#!define NAME value` — object-like macros; recursive expansion at use sites
+- `#!define NAME value`: object-like macros; recursive expansion at use sites
   (a define may reference earlier defines); recursion guard
   (`macro-recursion`).
-- `#!define name(args) value` — function-like macros with argument
+- `#!define name(args) value`: function-like macros with argument
   substitution (`cakeBeam(start, end, yPos) → createBeam(...)`).
-- `#!define name(args) __script__("path.js")` — OverPy-compatible
+- `#!define name(args) __script__("path.js")`: OverPy-compatible
   **JavaScript macros** (see below).
 - `#!undef NAME`.
-- `#!postCompileHook "hook.js"` — post-compile hook registration (see below).
+- `#!postCompileHook "hook.js"`: post-compile hook registration (see below).
 - Unsupported directives fail explicitly (`unsupported-directive`).
 
 ### JavaScript macros and post-compile hooks (issue #5/#6)
@@ -150,7 +150,7 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
 - Statements: expression statements, `=` and augmented assignment,
   `if`/`elif`/`else`, `for x in range(...)`, `while`, `pass`.
 - `for`-loop binder resolution: the loop variable must resolve to a global
-  variable — either a declared `globalvar`, or an OverPy **default variable
+  variable, either a declared `globalvar`, or an OverPy **default variable
   name** (`A`–`Z`, `AA`–`AZ`, …, `DA`–`DX`), which the pinned reference
   accepts as an implicit global at its fixed Workshop slot (e.g. `for I in
   range(0, 10):` with no declaration, the agent-lab regression). Nested
@@ -174,7 +174,7 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
 - Builtin action/value/member identity, signatures, receiver categories,
   parameter enum domains, and non-contextual aliases resolve through the OPY
   semantic compatibility manifest (`crates/opy-frontend/src/manifest/`, schema
-  v1; spec in [`compat-manifest-spec.md`](compat-manifest-spec.md)) — the
+  v1; spec in [`compat-manifest-spec.md`](compat-manifest-spec.md)), the
   single authoritative semantic table. Every manifest entry is
   probe-validated against the pinned OverPy 9.7.10 oracle
   (`crates/opy-frontend/src/manifest/probes/`). Unknown or misplaced builtins
@@ -197,7 +197,7 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
   `eventPlayer.teleport(eventPlayer.getPosition())`,
   `target.setMoveSpeed(50)` on a player-valued global) lower to
   `ReceiverCall`; their Workshop emission resolves through the `workshop-rs`
-  catalog — **lowering-dependent** (inventory-only until integration). The
+  catalog, **lowering-dependent** (inventory-only until integration). The
   corpus-evidenced receiver methods are the `synthetic/receiver-calls`
   fixture methods plus the enum-gated members (en-US spellings per the
   oracle-transcribed evidence).
@@ -225,7 +225,7 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
   SURFACES_AND_ALL_BARRIERS,SURFACES_AND_ENEMY_BARRIERS}`, `Team.ALL`.
   Member accesses on declared domain identities resolve as **opaque
   identities**; Workshop enum member-existence and domain validation was
-  removed from the frontend core and is **lowering-dependent** (#8) — the
+  removed from the frontend core and is **lowering-dependent** (#8). The
   checks are never approximated (custom, user-declared enum members are
   OPY-level source semantics and stay frontend-validated). Enum
   domains/members beyond the declared baseline remain `baseline-planned`;
@@ -233,7 +233,7 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
 - `wait()` / `wait(time)` default-argument filling: the reference appends
   `Wait.IGNORE_CONDITION` (and `0.016` for the no-argument form).
 - **Named/keyword arguments** (`name = expr` call arguments) bind against the
-  manifest's canonical parameter names — the pinned reference's declared
+  manifest's canonical parameter names, the pinned reference's declared
   names (`wait(time=1)`, `wait(waitBehavior=Wait.IGNORE_CONDITION, time=2)`,
   `chaseOverTime(g, 10, duration=3)`,
   `chaseOverTime(g, 10, 3, reevaluation=ChaseTimeReeval.NONE)`,
@@ -246,19 +246,19 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
   rejects positional arguments after keyword arguments
   (`positional-after-keyword`), unknown keyword names (`unknown-keyword`),
   duplicate bindings (`duplicate-argument`), and missing required arguments
-  (`missing-argument`) — all structured, source-located diagnostics. The
+  (`missing-argument`), all structured, source-located diagnostics. The
   reference's generic binder is routed around for `range`, `random.*`, and
   `.format` (keyword arguments on those fail with `keyword-unsupported`),
   and for `macro` invocations.
 - **The `chase` keyword form** (reference special form):
   `chase(variable, destination, rate=…, ChaseReeval.MEMBER)` and
-  `chase(variable, destination, duration=…, ChaseReeval.MEMBER)` — exactly
+  `chase(variable, destination, duration=…, ChaseReeval.MEMBER)`, exactly
   four arguments, the 3rd passed as the `rate`/`duration` keyword and the
   4th as a bare `ChaseReeval.MEMBER` access. `ChaseReeval` resolves **only**
   in this   call context: `rate=` selects the `ChaseRateReeval` domain and
   lowers the call to `chaseAtRate`; `duration=` selects `ChaseTimeReeval`
   and lowers to `chaseOverTime`. The contextual member is rewritten to the
-  keyword-selected domain without membership checks — member/domain
+  keyword-selected domain without membership checks. Member/domain
   validation is **lowering-dependent** (#8), matching the reference's
   "Unknown chaseratereeval" as a lowering-time outcome. Outside the chase
   signature `ChaseReeval` never
@@ -282,7 +282,7 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
 ### Settings
 - Top-of-file `settings { ... }` custom-game-settings blocks (JSONC: quoted
   keys, `"`/`'` strings with escapes, numbers, `true`/`false`, string lists,
-  nested groups, trailing commas) — recognized and consumed before lexing
+  nested groups, trailing commas), recognized and consumed before lexing
   (scoped lexing: the block never enters the token stream and the lexer
   gains no global braces), parsed into the typed HIR `settings` payload.
 - Placement rules: the block must be the first construct in the main file
@@ -294,19 +294,19 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
   map/hero list elements) is **lowering-dependent**: the typed payload is
   frontend-owned; the emission table and its domain data are Workshop data
   owned by `workshop-rs`. Key-existence and leaf-kind settings validation
-  is Workshop schema content and **lowering-dependent** (#8) — the frontend
+  is Workshop schema content and **lowering-dependent** (#8). The frontend
   validates structure only (group shape, span validity, non-empty key
   names). The emitted `settings` section is deliberately not
   reparseable by the Workshop parser (a `.ws` decompiler is a non-goal).
 
 ## Deferred / out of scope
 
-- **Reconstruction / decompilation (Workshop → OPY)** — deferred and
-  `lowering-dependent`: full Workshop-to-OPY reconstruction requires the
+- **Reconstruction / decompilation (Workshop → OPY)**: deferred and
+  `lowering-dependent`. Full Workshop-to-OPY reconstruction requires the
   canonical Workshop semantic representation from `workshop-rs` and is
   inventory-only (see `compatibility/support-matrix.json`, category
   `decompilation`; wright's implemented reconstruction surface is not ported
-  as a claim — it becomes an opy-rs contract only at the integration stage).
+  as a claim; it becomes an opy-rs contract only at the integration stage).
 - Macro/`#!define` values that require runtime evaluation are **implemented**
   for the reference's `__script__` ABI (see "JavaScript macros and
   post-compile hooks" above); the remaining runtime surface is
@@ -319,13 +319,13 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
   without a catalogged spelling); these fail at emission with catalog
   diagnostics once integration lands, never silently.
 - Rule `disabled` markers (no corpus evidence for the source annotation).
-- Expression-level `in`/`not in` membership operators — rejected at parsing
+- Expression-level `in`/`not in` membership operators: rejected at parsing
   (`for ... in` headers are supported).
 - Backslash line continuation (`\` at end of line inside string
-  concatenations / macro bodies) — rejected at lexing.
-- Postfix increment/decrement (`++`/`--`) — rejected at parsing.
-- Dict literals (`{...}`) — rejected at lexing.
-- Triple-quoted strings / docstrings (`"""`) — rejected at lexing.
+  concatenations / macro bodies): rejected at lexing.
+- Postfix increment/decrement (`++`/`--`): rejected at parsing.
+- Dict literals (`{...}`): rejected at lexing.
+- Triple-quoted strings / docstrings (`"""`): rejected at lexing.
 - Subroutine parameters, default `@Team`/`@Slot` overrides, `raycast`
   `include=`/`exclude=` named-argument forms (no reference/corpus evidence
   in the declared surface; the reference's `raycast` special form is not
@@ -338,7 +338,7 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
 - Emission presentation: variable references may emit as `Global.<name>`
   where the reference emits the bare variable name; observable semantics and
   round-trip validity are unchanged (output-text identity is explicitly not
-  the compatibility contract — see `upstream-references.md`).
+  the compatibility contract; see `upstream-references.md`).
 
 ## Boundary contract
 

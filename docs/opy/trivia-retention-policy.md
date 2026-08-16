@@ -1,6 +1,6 @@
 # Trivia and Source-Provenance Retention Policy
 
-Status: accepted policy — issue #3 acceptance
+Status: accepted policy. Issue #3 acceptance.
 Scope: what the OPY frontend retains from authored source and what it
 intentionally discards, for the Workshop-independent frontend surface
 

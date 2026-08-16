@@ -3,7 +3,7 @@
 Workshop-independent tooling surface for the OPY frontend (issue #7): a
 library API in `crates/opy-frontend` (`opy_frontend::tooling`) and a
 standalone CLI in `crates/opy-cli` (`opy-cli`). Both operate on `.opy` source
-only — no Workshop backend, catalog, Node, or OverPy is required or invoked.
+only. No Workshop backend, catalog, Node, or OverPy is required or invoked.
 
 The integration boundary toward `workshop-rs` remains documented, not
 implemented: anything that needs canonical Workshop semantics is classified
@@ -11,8 +11,8 @@ implemented: anything that needs canonical Workshop semantics is classified
 
 ## Pipeline contract
 
-`check` runs the same pipeline as `compile` — preprocess (includes,
-`#!define` macros) → parse (CST) → resolve (Opy HIR) — so the two entry
+`check` runs the same pipeline as `compile` (preprocess (includes,
+`#!define` macros) → parse (CST) → resolve (Opy HIR)), so the two entry
 points never disagree about a project's verdict. Resolution stops at the
 Workshop-independent Opy HIR semantic model ([`hir::Program`]). There is no
 Workshop emission step.
@@ -30,9 +30,9 @@ pub struct CheckOutcome {
 }
 ```
 
-* `Diagnostic { severity, code, message, span }` — structured, stable-coded,
+* `Diagnostic { severity, code, message, span }`: structured, stable-coded,
   source-attributed (see the diagnostics contract below).
-* `SourceLocation { file_id, path, start, end }` — a span resolved through
+* `SourceLocation { file_id, path, start, end }`: a span resolved through
   the file registry to `(file id, path, line/col)`.
 
 `SemanticModel` wraps the resolved program and answers queries:
@@ -55,7 +55,7 @@ are not name-resolvable identifiers in OPY). `Constant` is a declared
 binding kind in the contract; the current frontend produces no constant
 declarations (custom enums fold instead).
 
-Source provenance: the file registry maps every span's file id to its path —
+Source provenance: the file registry maps every span's file id to its path.
 id 0 is the main file, then one entry per include, in include order. Macro
 expansion stamps expanded tokens with the use-site span; the recorded
 `defines` carry their definition-site spans, so both define attribution and
@@ -109,10 +109,10 @@ crate rebuilds when the file changes), parsed once, and exposed as
 `SupportMatrix`:
 
 * `SupportMatrix::builtin() -> Result<&'static SupportMatrix, …>`
-* `feature(id)` / `feature_state(id)` — feature lookup by id
-* `features_by_category(category)` / `features_by_state(state)` — filtered
+* `feature(id)` / `feature_state(id)`: feature lookup by id
+* `features_by_category(category)` / `features_by_state(state)`: filtered
   slices
-* `categories()`, `declared_states()`, `summary()` — declared surface
+* `categories()`, `declared_states()`, `summary()`: declared surface
 
 The five declared states (`planned`, `frontend-supported`,
 `semantic-supported`, `lowering-dependent`, `end-to-end-supported`) are

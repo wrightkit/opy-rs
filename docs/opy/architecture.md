@@ -1,8 +1,8 @@
 # opy-rs Architecture
 
-Status: accepted baseline — the opy-rs repository architecture, ownership
-boundary, and stable compatibility contracts as of the merged `main` baseline
-(PRs #9–#14)
+Status: accepted baseline. Documents the opy-rs repository architecture,
+ownership boundary, and stable compatibility contracts as of the merged
+`main` baseline (PRs #9–#14).
 Scope: project intent, current capability, the integration boundary toward
 `workshop-rs`, and the stable contracts that downstream tooling and agents can
 rely on.
@@ -23,15 +23,15 @@ OPY source ──▶ lexer ──▶ preprocess ──▶ CST/parser ──▶ s
                                    member/domain/settings/locale data)
 ```
 
-The pipeline is fully Workshop-independent up to the integration boundary:
+The pipeline is fully Workshop-independent up to the integration boundary.
 `opy-rs` produces the Opy HIR v1 semantic model
 ([`docs/hir/opy-hir-v1.md`](../hir/opy-hir-v1.md)) with structured,
 source-located diagnostics, and stops there. Anything that requires canonical
-Workshop semantics — emission, catalog spellings, member/domain existence,
-settings-schema content, locale data, `#!postCompileHook` execution against
-the final Workshop text — is classified `lowering-dependent` in the support
-matrix and is inventory-only until the `workshop-rs` integration stage
-(issue #8).
+Workshop semantics (emission, catalog spellings, member/domain existence,
+settings-schema content, locale data, and `#!postCompileHook` execution
+against the final Workshop text) is classified `lowering-dependent` in the
+support matrix and is inventory-only until the `workshop-rs` integration
+stage (issue #8).
 
 ## Ownership boundary
 
@@ -43,7 +43,7 @@ matrix and is inventory-only until the `workshop-rs` integration stage
 * the OPY semantic compatibility manifest
   ([`compat-manifest-spec.md`](compat-manifest-spec.md)): builtin
   action/value/member identities, signatures, aliases, contextual-domain
-  dispatch, and `catalogId` links — never Workshop catalog content;
+  dispatch, and `catalogId` links, never Workshop catalog content;
 * Workshop-independent tooling: the `check`/`inspect` library API and the
   `opy-cli` CLI ([`tooling-api.md`](tooling-api.md)).
 
@@ -64,8 +64,8 @@ The following contracts are stable and preserved verbatim across the
 documentation:
 
 * **Observable semantic compatibility, not compiler-output identity.**
-  Compatibility is defined by observable semantics — accepted/rejected
-  surface, diagnostics, and the semantic model — not by byte/text identity,
+  Compatibility is defined by observable semantics (accepted/rejected
+  surface, diagnostics, and the semantic model), not by byte/text identity,
   formatting, optimizer choices, or internal representation. Presentation
   differences (e.g. `Global.<name>` vs a bare variable name in emitted text)
   are not compatibility bugs unless they change observable semantics.
@@ -85,7 +85,7 @@ documentation:
 * **Source-aware validated edits as the default tooling model.** Tooling
   operates on authored source ranges with full provenance (spans, file
   registry, include and macro expansion attribution) and validates before
-  editing — not by regenerating whole files. Trivia/comments are not
+  editing instead of regenerating whole files. Trivia/comments are not
   retained (see
   [`trivia-retention-policy.md`](trivia-retention-policy.md)); reconstruction
   and byte-stable regeneration are deferred to the reconstruction surface.
@@ -100,8 +100,7 @@ budget, 64 MiB memory, 512 KiB stack), and failures map to structured
 is a bounded failure/capability boundary: thrown exceptions, timeouts,
 memory/stack aborts, and non-string results are diagnostics, never panics or
 unbounded execution. `#!postCompileHook` is parsed, validated, and recorded
-only — the frontend never executes it, and never fabricates a Workshop
-payload.
+only. The frontend never executes it and never fabricates a Workshop payload.
 
 ## Current capability and readiness
 
@@ -138,18 +137,18 @@ started here.
 
 ## Authoritative documents
 
-* [`support-matrix.md`](support-matrix.md) — declared corpus-evidenced
-  surface; [`compatibility/support-matrix.json`](../../compatibility/support-matrix.json)
+* [`support-matrix.md`](support-matrix.md): declared corpus-evidenced
+  surface. [`compatibility/support-matrix.json`](../../compatibility/support-matrix.json)
   is the single mechanically checked state source.
-* [`compatibility-baseline.md`](compatibility-baseline.md) — tiered planning
+* [`compatibility-baseline.md`](compatibility-baseline.md): tiered planning
   for the remaining surface.
-* [`compat-manifest-spec.md`](compat-manifest-spec.md) — the semantic
-  manifest schema and ownership boundary.
-* [`../hir/opy-hir-v1.md`](../hir/opy-hir-v1.md) — the Opy HIR v1 wire
+* [`compat-manifest-spec.md`](compat-manifest-spec.md): the semantic manifest
+  schema and ownership boundary.
+* [`../hir/opy-hir-v1.md`](../hir/opy-hir-v1.md): the Opy HIR v1 wire
   contract.
-* [`tooling-api.md`](tooling-api.md) — the `check`/`inspect` API and CLI
+* [`tooling-api.md`](tooling-api.md): the `check`/`inspect` API and CLI
   contract.
-* [`../compatibility/upstream-references.md`](../compatibility/upstream-references.md)
-  — the pinned OverPy reference identity and clean-room/provenance policy.
-* [`trivia-retention-policy.md`](trivia-retention-policy.md) — what the
+* [`../compatibility/upstream-references.md`](../compatibility/upstream-references.md):
+  the pinned OverPy reference identity and clean-room/provenance policy.
+* [`trivia-retention-policy.md`](trivia-retention-policy.md): what the
   frontend retains and discards from authored source.
