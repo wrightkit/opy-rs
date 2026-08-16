@@ -40,10 +40,11 @@ never `latest` or a range (see the pinning policy below).
 
 ### Acquisition and verification record
 
-* The reference tree used for the inventory (`/private/tmp/overpy-ref` on the
-  machine that built this evidence base) is the repository content at the
-  pinned content commit `889d9749d1def17f146548cbddb94ea1ab015847` (tag
-  `v9.7.10`), i.e. the same content as the pinned npm tarball.
+* The reference tree used for the inventory was acquired from the pinned npm
+  tarball `overpy@9.7.10` and byte-verified against the repository content at
+  the pinned content commit `889d9749d1def17f146548cbddb94ea1ab015847` (tag
+  `v9.7.10`). The durable record is the tarball integrity hash and the content
+  commit, not any machine-specific extraction path.
 * The npm package is installed separately into `compatibility/oracle/` via the
   pinned `pnpm-lock.yaml`; `pnpm install` resolves `overpy@9.7.10` by its
   integrity hash.
@@ -136,13 +137,29 @@ component boundary (wright `docs/licensing.md`) and reference pinning policy
 | --- | --- | --- |
 | `opy-rs` core (lexer, preprocess, CST/parser, semantic resolution, HIR, diagnostics) | No | Independently implemented code. It must not link to the reference, copy its source, import its internal AST/types, or compile against its generated artifacts. |
 | Compatibility harness / oracle tool | Yes, for isolated evaluation | It may invoke a separately installed/pinned reference and compare documented or generated results. It must remain separable from the core build and runtime distribution. |
-| Compatibility fixtures and generated reference artifacts | Only after provenance review | Store identifiers, hashes, generators, or reviewable artifacts only when their license and redistribution status are recorded. Do not add copied reference source or unclear third-party content. |
+| Compatibility fixtures (upstream example/test corpus) | Only after provenance review | Provenance/license/redistribution-reviewed upstream example and test fixture files (e.g. the GPL-3.0 OverPy `examples/*.opy` corpus) may be retained under `compatibility/fixtures/` as documented, isolated oracle evidence, with per-file origin, license, redistribution status, byte-identity against the pinned content commit, and SHA-256 records (see the fixture corpus policy below). They are never imported by core code and never bundled into core builds or release artifacts. |
+| Generated reference artifacts (oracle snapshots, manifests) | Only after provenance review | Store identifiers, hashes, generators, or reviewable artifacts only when their license and redistribution status are recorded. Do not add reference implementation/data content or unclear third-party content. |
 | CI and development scripts | Yes, when isolated | They may install or invoke a pinned external oracle for a compatibility check, but must not silently turn it into a core dependency or bundled release component. |
 
 No allow-listed path may import reference implementation details into the
 core. When a compatibility component is added, its ownership, license,
 invocation method, and distribution status must be named in its own manifest
 or README and linked from this document before it is used.
+
+### Fixture corpus policy
+
+`compatibility/fixtures/` may retain provenance/license/redistribution-reviewed
+upstream example and test fixture files — e.g. the GPL-3.0 OverPy
+`examples/*.opy` corpus — as documented, isolated oracle evidence. Each
+imported file carries its per-file record (origin, license, redistribution
+status, byte-identity against the pinned content commit, SHA-256) in
+`compatibility/fixtures/README.md` and its `fixture.json`; that record is
+authoritative and is not duplicated here. The fixture corpus is oracle
+evidence, not a core input: core code never imports it, and it is never
+bundled into core builds or release artifacts. Content with unclear
+provenance or no license is prohibited, and OverPy implementation or data
+(`src/` sources, `src/data/*` tables, internal AST/types, generated
+artifacts) must not be imported into the core.
 
 ### Permitted inputs to the independent core
 

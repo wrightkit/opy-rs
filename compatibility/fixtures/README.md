@@ -11,6 +11,8 @@ fixtures — `sourceCommit`, `sourceUrl`, `licenseUrl`, `modifications`).
 No fixture is committed without a clear provenance record. The pinned
 reference identity and the clean-room policy are in
 [`docs/compatibility/upstream-references.md`](../../docs/compatibility/upstream-references.md).
+These files are oracle evidence, not core inputs: the core never imports
+them, and they are never bundled into core builds or release artifacts.
 
 ## Layout
 
@@ -54,8 +56,8 @@ tree's `examples/` content (verified by `diff` against the pinned content
 commit on acquisition; the fixture `fixture.json` files additionally record
 the example-capture commit `eea67adbcf6926c4004e35e25ab4be072624a44e` used
 by the original WrightKit acquisition pipeline — both identities describe
-the same bytes). Mapping to the pinned tree
-(`/private/tmp/overpy-ref` at commit `889d9749d1def17f146548cbddb94ea1ab015847`):
+the same bytes). Mapping to the pinned tree (content commit
+`889d9749d1def17f146548cbddb94ea1ab015847`):
 
 | Fixture | Pinned-tree source | `expectedStatus` |
 | --- | --- | --- |
