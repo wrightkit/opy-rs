@@ -1,24 +1,28 @@
 //! Frontend integration of the JavaScript macro runtime (issue #5/#6).
 //!
-//! OverPy-compatible `__script__("…")` macros and `#!postCompileHook` scripts
-//! run at compile time through `opy_macro_js::MacroRuntime`. The reference ABI
-//! (OverPy 9.7.10, `src/compiler/tokenizer.ts`, `src/quickjs.ts`,
-//! `src/globalVars.ts`) is:
+//! OverPy-compatible `__script__("…")` macros run at compile time through
+//! `opy_macro_js::MacroRuntime`; `#!postCompileHook` scripts are parsed,
+//! validated, and recorded only (never executed by the frontend). The
+//! reference ABI (OverPy 9.7.10, `src/compiler/tokenizer.ts`,
+//! `src/quickjs.ts`, `src/globalVars.ts`) is:
 //!
 //! * `#!define name(args) __script__("path.js")` — the script path resolves
 //!   root-relative at the define site; each expansion injects the call-site
 //!   arguments as `var <name>=<raw>;` and evaluates the script; the string
 //!   completion value becomes the expanded text;
-//! * `#!postCompileHook "hook.js"` — the hook receives the compiled content
-//!   as `var content = …;` (here: the Opy HIR v1 wire payload) and returns
-//!   the transformed content; a second hook declaration is rejected;
+//! * `#!postCompileHook "hook.js"` — the directive is recognized, parsed,
+//!   validated, and recorded (script path + span on the compile outcome);
+//!   the frontend never executes the hook (real execution runs against the
+//!   final Workshop text and is lowering-dependent, issue #8); a second hook
+//!   declaration is rejected;
 //! * resource limits mirror the reference constants
 //!   (`opy_macro_js::Limits::default()`: 1000 ms macro budget, 64 MiB memory,
 //!   512 KiB stack).
 //!
 //! Fixtures live in `tests/fixtures/macros/`. Workshop-emission wiring (hook
-//! output into emitted Workshop text, catalog constant population) stays
-//! lowering-dependent.
+//! execution against emitted Workshop text, catalog constant population)
+//! stays lowering-dependent; the runtime's hook ABI on synthetic content is
+//! tested in `crates/opy-macro-js/tests/hooks.rs`.
 
 use std::path::{Path, PathBuf};
 
@@ -157,31 +161,42 @@ fn non_string_result_is_rejected_with_the_reference_wording() {
 }
 
 #[test]
-fn post_compile_hook_receives_the_hir_payload_and_transforms_it() {
+fn post_compile_hook_is_parsed_validated_and_recorded_without_execution() {
+    // The frontend recognizes, parses, validates, and records
+    // `#!postCompileHook`; it never executes the hook. The recorded record is
+    // the declaration only: script path + directive span (execution against
+    // the final Workshop text is lowering-dependent, issue #8).
     let outcome = outcome("hook.opy");
-    let post = outcome
-        .post_compile
+    let record = outcome
+        .post_compile_hook
         .expect("the fixture declares a postCompileHook");
-    assert_eq!(post.script, "hook.js");
-    // The content is the Opy HIR v1 wire payload; the hook transforms it.
-    assert!(post.content.contains("\"setup\""), "{}", post.content);
-    assert!(post.output.contains("\"transformed\""), "{}", post.output);
-    // A successful compile keeps the HIR.
-    let hir = outcome.hir.expect("hook success keeps the program");
+    assert_eq!(record.script, "hook.js");
+    let span = record.span.expect("the directive span is recorded");
+    assert_eq!(span.start.line, 1, "span points at the directive");
+    // A successful compile keeps the HIR; nothing was executed or
+    // transformed (there is no payload: the frontend never fabricates one).
+    let hir = outcome.hir.expect("recorded hooks keep the program");
     assert!(hir.dump().contains("rule \"setup\""));
 }
 
 #[test]
-fn hook_throw_maps_to_script_error_with_provenance() {
-    let error = compile(
+fn a_throwing_hook_script_is_recorded_but_never_executed() {
+    // The hook script throws ("hook failed"); because the frontend never
+    // executes hooks, the declaration alone cannot fail the compile. Real
+    // hook execution receives the final Workshop text (lowering-dependent).
+    let outcome = compile_with_overlay_outcome(
         "#!postCompileHook \"hook-boom.js\"\nrule \"r\":\n    pass\n",
         "main.opy",
         &fixture_dir(),
-    )
-    .unwrap_err();
-    assert_eq!(error.code, "script-error");
-    assert!(error.message.contains("hook failed"), "{}", error.message);
-    assert!(error.message.contains("hook-boom.js"), "{}", error.message);
+        &Default::default(),
+    );
+    let record = outcome
+        .post_compile_hook
+        .expect("the directive is recorded even though the hook would throw");
+    assert_eq!(record.script, "hook-boom.js");
+    outcome
+        .hir
+        .expect("a recorded, never-executed hook cannot fail the compile");
 }
 
 #[test]
