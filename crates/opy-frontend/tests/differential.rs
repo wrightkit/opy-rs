@@ -62,6 +62,18 @@
 //! (`resolve` / `expected-diagnostic` / `divergence`), the native diagnostic
 //! code, the reference status, rule-name comparison, and the support-matrix
 //! feature ids the fixture evidences.
+//!
+//! # Current corpus state
+//!
+//! All 26 declared fixtures run (0 skips, 0 divergences): **14 resolve** and
+//! **12 produce expected diagnostics** with pinned codes; 7 fixtures are
+//! documented reference gaps (the oracle accepts a surface the native
+//! frontend deliberately rejects). Settings key-existence/leaf-kind
+//! validation and Workshop enum member/domain validation were removed from
+//! the frontend core (ownership fix): the affected fixtures resolve
+//! structurally with opaque Workshop identity, and the checks are
+//! `lowering-dependent` (issue #8) — the expectation table reflects that
+//! contract.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -158,7 +170,7 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         &mut cases,
         "synthetic/settings",
         true,
-        "top-of-file settings block parsed into the typed HIR payload; oracle status success.",
+        "top-of-file settings block parsed into the typed HIR payload; validation is structural only (group shape, span validity, non-empty key names) — key-existence/leaf-kind checks were removed from the core and are lowering-dependent (#8); oracle status success.",
     );
     resolve(
         &mut cases,
@@ -170,7 +182,7 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         &mut cases,
         "synthetic/chase-enums",
         true,
-        "ChaseTimeReeval/ChaseRateReeval enum domains; oracle status success.",
+        "ChaseTimeReeval/ChaseRateReeval member accesses resolve as opaque Workshop enum identities (member-existence/domain validation was removed from the core and is lowering-dependent, #8); oracle status success.",
     );
     resolve(
         &mut cases,
@@ -182,7 +194,7 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         &mut cases,
         "synthetic/chase-keywords",
         true,
-        "named/keyword arguments and chase/ChaseReeval forms; oracle status success.",
+        "named/keyword arguments and chase/ChaseReeval forms; the contextual member rewrites to the keyword-selected domain without membership checks (lowering-dependent, #8); oracle status success.",
     );
     resolve(
         &mut cases,
@@ -227,7 +239,7 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         &mut cases,
         "real-world/overpy-broken-weapons",
         Some("parse-error"),
-        "reference accepts; the native frontend rejects the `createWorkshopSetting(float[0.5:10], …)` numeric-range type (not in the declared settings surface, baseline 12a). Gap: reference accepts, native rejects (documented).",
+        "reference accepts; the native frontend rejects the `createWorkshopSetting(float[0.5:10], …)` numeric-range type at parse (the settings surface itself is parsed structurally; key/type validation is lowering-dependent, #8). Gap: reference accepts, native rejects (documented).",
     );
     diagnostic(
         &mut cases,
@@ -488,6 +500,11 @@ fn native_and_reference_agree_on_the_declared_corpus() {
         } else {
             "divergence"
         };
+        // The report summary keys the counts by camelCase status labels.
+        let status_key = match status {
+            "expected-diagnostic" => "expectedDiagnostic",
+            other => other,
+        };
         let skipped = !snapshot_present;
 
         // Pinned diagnostic codes must match exactly.
@@ -599,7 +616,7 @@ fn native_and_reference_agree_on_the_declared_corpus() {
                 "detail": detail,
             }));
         }
-        if let Value::Number(count) = &mut counts[status] {
+        if let Value::Number(count) = &mut counts[status_key] {
             *count =
                 serde_json::Number::from(count.as_u64().expect("status counts start as u64") + 1);
         }
