@@ -1,10 +1,11 @@
 # opy-rs
 
 Standalone, Workshop-independent Rust frontend for the OverPy `.opy` source
-language — the OPY language provider within WrightKit. It parses, checks,
-inspects, and resolves OverPy `.opy` projects into a Workshop-independent
-semantic model (Opy HIR), and exposes that surface as a library API and a CLI.
-No Node, OverPy, Workshop backend, or catalog is required to build or run it.
+language. It is the OPY language provider within WrightKit: it parses,
+checks, inspects, and resolves OverPy `.opy` projects into a
+Workshop-independent semantic model (Opy HIR), and exposes that surface as a
+library API and a CLI. No Node, OverPy, Workshop backend, or catalog is
+required to build or run it.
 
 Pipeline: `OPY source → lexer → preprocess → CST/parser → semantic resolution
 → OPY semantic model (Opy HIR v1)`, with a documented integration boundary
@@ -26,7 +27,7 @@ complete; issue #7 partially delivered):
   embedded QuickJS-NG runtime (`crates/opy-macro-js`; no Node);
 * the OPY semantic compatibility manifest
   ([`compat-manifest-spec.md`](docs/opy/compat-manifest-spec.md)) with
-  oracle-validated probes — builtin action/value/member identities,
+  oracle-validated probes: builtin action/value/member identities,
   signatures, aliases, and `catalogId` links;
 * the 26-fixture compatibility corpus
   ([`compatibility/`](compatibility/README.md)) with pinned OverPy 9.7.10
@@ -34,12 +35,12 @@ complete; issue #7 partially delivered):
 
 ## Library and CLI surfaces
 
-* `crates/opy-frontend` — `compile`/`compile_with_overlay_outcome` and the
+* `crates/opy-frontend`: `compile`/`compile_with_overlay_outcome` and the
   Workshop-independent tooling API (`opy_frontend::tooling`:
   `check`/`check_with_overlay` → `CheckOutcome` with diagnostics, semantic
   model, and file registry; `opy_frontend::support` exposes the embedded
   support matrix). See [`docs/opy/tooling-api.md`](docs/opy/tooling-api.md).
-* `crates/opy-cli` — `opy-cli check|inspect|support|version`. Example:
+* `crates/opy-cli`: `opy-cli check|inspect|support|version`. Example:
 
   ```sh
   opy-cli check main.opy       # diagnostics → stderr; exit 0 clean / 1 diagnostics
@@ -62,7 +63,7 @@ complete; issue #7 partially delivered):
 * There is **no WrightKit-only OPY dialect**: the surface targets the pinned
   OverPy 9.7.10 reference (see
   [`upstream-references.md`](docs/compatibility/upstream-references.md)), and
-  deviations are documented, corpus-evidenced differences — not new dialect
+  deviations are documented, corpus-evidenced differences, not new dialect
   features.
 * The default tooling model is **source-aware validated edits**: tooling
   operates on authored source ranges with full provenance and validates
@@ -75,9 +76,9 @@ complete; issue #7 partially delivered):
   remaining `planned` features and the full builtin/enum/receiver surface
   beyond the manifest-declared evidence are not yet implemented
   ([`compatibility-baseline.md`](docs/opy/compatibility-baseline.md)).
-* Issue #8 — Workshop lowering, emission, catalog/member/domain/settings
+* Issue #8 (Workshop lowering, emission, catalog/member/domain/settings
   validation, locale data, and `#!postCompileHook` execution against the
-  final Workshop text — is blocked on `#7` and the `wrightkit/workshop-rs#2`
+  final Workshop text) is blocked on `#7` and the `wrightkit/workshop-rs#2`
   contracts, and is not started in this repository. `opy-rs` never
   approximates Workshop-owned validation or a temporary Workshop IR.
 
@@ -96,19 +97,19 @@ validator) run standalone.
 
 ## Documentation
 
-* [`docs/opy/architecture.md`](docs/opy/architecture.md) — pipeline, ownership
+* [`docs/opy/architecture.md`](docs/opy/architecture.md): pipeline, ownership
   boundary, stable contracts, readiness.
-* [`docs/opy/support-matrix.md`](docs/opy/support-matrix.md) — declared
+* [`docs/opy/support-matrix.md`](docs/opy/support-matrix.md): declared
   corpus-evidenced surface.
-* [`docs/opy/compatibility-baseline.md`](docs/opy/compatibility-baseline.md) —
+* [`docs/opy/compatibility-baseline.md`](docs/opy/compatibility-baseline.md):
   tiered planning for the remaining surface.
-* [`docs/opy/compat-manifest-spec.md`](docs/opy/compat-manifest-spec.md) —
+* [`docs/opy/compat-manifest-spec.md`](docs/opy/compat-manifest-spec.md):
   semantic manifest schema and ownership boundary.
-* [`docs/hir/opy-hir-v1.md`](docs/hir/opy-hir-v1.md) — the Opy HIR v1 wire
+* [`docs/hir/opy-hir-v1.md`](docs/hir/opy-hir-v1.md): the Opy HIR v1 wire
   contract.
-* [`docs/opy/tooling-api.md`](docs/opy/tooling-api.md) — library API and CLI
+* [`docs/opy/tooling-api.md`](docs/opy/tooling-api.md): library API and CLI
   contract.
-* [`compatibility/README.md`](compatibility/README.md) — corpus and harness
+* [`compatibility/README.md`](compatibility/README.md): corpus and harness
   layout.
 
 This repository is part of the WrightKit multi-repository workspace. Follow

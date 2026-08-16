@@ -1,6 +1,6 @@
-# Upstream Reference and Provenance — OverPy
+# Upstream Reference and Provenance: OverPy
 
-Status: accepted baseline (issue #2) — the pinned compatibility oracle and the
+Status: accepted baseline (issue #2). The pinned compatibility oracle and the
 clean-room/provenance policy for the opy-rs evidence base
 Scope: project-level provenance for the OverPy reference `opy-rs` studies or
 derives compatibility knowledge from; the durable record that lets `opy-rs`
@@ -11,7 +11,7 @@ bureaucracy
 reimplements OverPy source-language semantics. Reimplementing compatible
 language semantics without inspecting the reference implementation is neither
 required nor desirable, but the reference is an **oracle and behavior
-reference only** — never a runtime dependency, and never a source of copied
+reference only**, never a runtime dependency, and never a source of copied
 implementation.
 
 This document is the opy-rs-owned record of the reference identity, invocation
@@ -31,7 +31,7 @@ not legal advice and does not settle questions that require a qualified lawyer.
 | Pinned reference | npm `overpy@9.7.10` |
 | Content commit | `889d9749d1def17f146548cbddb94ea1ab015847` (git tag `v9.7.10`; byte-verified) |
 | Registry integrity | `sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==` (recorded in `compatibility/oracle/oracle-metadata.json` and the lockfile) |
-| Recorded `gitHead` | `1e2688954302a402d076944b46db07efb14d7b61` — npm's `gitHead` field lags the tarball content by one release; it is the `v9.7.9` tag commit and must **not** be treated as the content commit |
+| Recorded `gitHead` | `1e2688954302a402d076944b46db07efb14d7b61`. npm's `gitHead` field lags the tarball content by one release; it is the `v9.7.9` tag commit and must **not** be treated as the content commit |
 | License assumption | GPL-3.0-only (engineering assumption, not a legal conclusion; the npm `package.json` ships no `license` field, see `compatibility/oracle/oracle-metadata.json`) |
 | Language | en-US (Workshop locale for reference evidence) |
 
@@ -105,25 +105,25 @@ The feature inventory in [`docs/opy/support-matrix.md`](../opy/support-matrix.md
 and [`docs/opy/compatibility-baseline.md`](../opy/compatibility-baseline.md) is
 grounded in the pinned tree, specifically:
 
-* `README.md` — user-visible syntax tour (rules, annotations, subroutines,
+* `README.md`: user-visible syntax tour (rules, annotations, subroutines,
   macros, enums, settings) and advertised feature surface;
-* `examples/` — real-world OPY corpus (see `compatibility/fixtures/README.md`
+* `examples/`: real-world OPY corpus (see `compatibility/fixtures/README.md`
   for the ported subset and the per-file mapping);
-* `src/tests/` — 60 `.opy` compile tests with 50 pinned result files plus 17
+* `src/tests/`: 60 `.opy` compile tests with 50 pinned result files plus 17
   decompiler inputs (16 pinned results) covering arrays, macros, enums,
   dicts, gotos, includes, loops, operators, rule prefixes, strings,
   translations, custom game settings, and full gamemode `z_*` programs;
-* `runTests.mjs` / `runCliTests.mjs` / `jest.config.cjs` — upstream test
+* `runTests.mjs` / `runCliTests.mjs` / `jest.config.cjs`: upstream test
   entry points (compile, decompile, CLI, QuickJS macro runtime);
 * `src/compiler/{tokenizer.ts,parser.ts,astParser.ts,astToWorkshop.ts,
-  compiler.ts,translations.ts}` and `src/decompiler/` — behavior reference
+  compiler.ts,translations.ts}` and `src/decompiler/`: behavior reference
   for grammar, preprocessing, lowering, and decompilation semantics (read
   for observation only);
 * `src/data/{actions.ts,values.ts,constants.ts,customGameSettings.ts,
   gamemodes.ts,heroes.ts,maps.ts,localizedStrings.ts,other.ts}` and
   `src/data/opy/{annotations,blizzardGlobal,constants,functions,
-  internalFunctions,keywords,macros,memberFunctions,modules,preprocessing}.ts`
-  — the upstream data surface (action/value/member/enum/hero/map domains).
+  internalFunctions,keywords,macros,memberFunctions,modules,preprocessing}.ts`,
+  the upstream data surface (action/value/member/enum/hero/map domains).
   These files are GPL-3.0 data and are **not** imported into `opy-rs`; the
   opy-rs-owned semantic manifest records only oracle-validated facts
   (see `compat-manifest-spec.md`).
@@ -152,8 +152,8 @@ or README and linked from this document before it is used.
 ### Fixture corpus policy
 
 `compatibility/fixtures/` may retain provenance/license/redistribution-reviewed
-upstream example and test fixture files — e.g. the GPL-3.0 OverPy
-`examples/*.opy` corpus — as documented, isolated oracle evidence. Each
+upstream example and test fixture files, e.g. the GPL-3.0 OverPy
+`examples/*.opy` corpus, as documented, isolated oracle evidence. Each
 imported file carries its per-file record (origin, license, redistribution
 status, byte-identity against the pinned content commit, SHA-256) in
 `compatibility/fixtures/README.md` and its `fixture.json`; that record is
@@ -199,7 +199,7 @@ itself a legal determination that two works may be combined or distributed.
 ### Pinning policy
 
 The oracle pin is **version-exact and content-pinned**, and it is changed only
-on **demonstrated behavioral need — never on release recency**:
+on **demonstrated behavioral need**, never on release recency:
 
 1. **Version-exact.** The pin is an exact npm version plus its integrity hash,
    recorded in `compatibility/oracle/package.json`,
@@ -208,8 +208,8 @@ on **demonstrated behavioral need — never on release recency**:
 2. **Content-pinned.** The recorded identity includes the npm integrity hash
    and the byte-verified git content commit. A version bump alone is not an
    oracle change.
-3. **Demonstrated need only.** "Demonstrated" means a version-sensitivity run —
-   the minimal repro plus the evidence source against candidate versions —
+3. **Demonstrated need only.** "Demonstrated" means a version-sensitivity run
+   (the minimal repro plus the evidence source against candidate versions)
    showing a different accept/reject outcome or a different normalized output
    for a construct the corpus needs. Absence of measured divergence is a
    no-change decision.
@@ -257,10 +257,10 @@ when the oracle is absent.
 
 ## Related documents
 
-* [`docs/opy/support-matrix.md`](../opy/support-matrix.md) — corpus-evidenced declared surface and current states
-* [`docs/opy/compatibility-baseline.md`](../opy/compatibility-baseline.md) — tiered planning baseline
-* [`docs/opy/compat-manifest-spec.md`](../opy/compat-manifest-spec.md) — machine-readable semantic manifest specification
-* [`docs/opy/tooling-notes.md`](../opy/tooling-notes.md) — harness usage
-* [`compatibility/README.md`](../../compatibility/README.md) — oracle and fixture layout
-* [`compatibility/fixtures/README.md`](../../compatibility/fixtures/README.md) — corpus provenance
+* [`docs/opy/support-matrix.md`](../opy/support-matrix.md): corpus-evidenced declared surface and current states
+* [`docs/opy/compatibility-baseline.md`](../opy/compatibility-baseline.md): tiered planning baseline
+* [`docs/opy/compat-manifest-spec.md`](../opy/compat-manifest-spec.md): machine-readable semantic manifest specification
+* [`docs/opy/tooling-notes.md`](../opy/tooling-notes.md): harness usage
+* [`compatibility/README.md`](../../compatibility/README.md): oracle and fixture layout
+* [`compatibility/fixtures/README.md`](../../compatibility/fixtures/README.md): corpus provenance
 * WrightKit's policy sources this document adapts: `wright/docs/licensing.md`, wright ADR-0004 (OverPy licensing and clean-room boundary), ADR-0007 (reference pinning policy)

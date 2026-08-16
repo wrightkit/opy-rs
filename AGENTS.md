@@ -7,7 +7,7 @@ architecture, validation, and delivery rules.
 Within WrightKit, `opy-rs` is the OPY language provider: it owns OverPy `.opy`
 syntax, lexer, parser, CST, preprocessing, macros, semantic resolution, and the
 OPY semantic model (Opy HIR). It does **not** own canonical Workshop semantics,
-catalog, WIR, emitter, or locale data — those belong to `workshop-rs`.
+catalog, WIR, emitter, or locale data. Those belong to `workshop-rs`.
 
 ## Ownership boundary
 
@@ -26,8 +26,8 @@ catalog, WIR, emitter, or locale data — those belong to `workshop-rs`.
 
 OverPy is the pinned compatibility oracle (see
 `docs/compatibility/upstream-references.md`). It is GPL-3.0; this repository
-is AGPL-3.0-or-later. OverPy implementation or data — compiler sources,
-`src/data/*` tables, internal AST/types, generated artifacts — is never
+is AGPL-3.0-or-later. OverPy implementation or data (compiler sources,
+`src/data/*` tables, internal AST/types, generated artifacts) is never
 imported into, linked to, or bundled with the opy-rs core (`crates/`) or
 release artifacts. Provenance/license/redistribution-reviewed upstream
 example and test fixtures (e.g. the GPL-3.0 OverPy `examples/` corpus) may be

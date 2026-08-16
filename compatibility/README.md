@@ -46,8 +46,8 @@ compatibility/fixtures/<category>/<name>/
 Imported fixtures should also record an immutable `sourceCommit`, a direct
 `sourceUrl`, a `licenseUrl`, and whether the source was modified. The corpus
 contains 26 fixtures: 13 original WrightKit-authored synthetic cases and 13
-real-world projects (11 derived from the pinned OverPy `examples/` tree —
-GPL-3.0-only, provenance-recorded evidence — and the independent BSD-2-Clause
+real-world projects (11 derived from the pinned OverPy `examples/` tree,
+GPL-3.0-only, provenance-recorded evidence, plus the independent BSD-2-Clause
 projects `real-world/ow1-emulator` and `real-world/6v6-adjustments`, full
 include closures). See `compatibility/fixtures/README.md` for the complete
 provenance record.
@@ -104,9 +104,9 @@ in the report as `referenceGap` entries without failing CI.
 
 Artifacts under `target/`:
 
-* `target/opy-differential/<fixture-id>.native.json` — normalized native HIR
+* `target/opy-differential/<fixture-id>.native.json`: normalized native HIR
   wire payload (span endpoints removed) per fixture;
-* `target/opy-differential-report.json` — machine-readable per-fixture status
+* `target/opy-differential-report.json`: machine-readable per-fixture status
   (`resolve` / `expected-diagnostic` / `divergence`), native diagnostic code,
   reference status, rule-name comparison, and the support-matrix feature ids
   the fixture evidences.

@@ -6,7 +6,7 @@ Small operational notes for the compatibility harness
 
 ## Prerequisites
 
-* Python 3 (stdlib only — no pip dependencies).
+* Python 3 (stdlib only, no pip dependencies).
 * For oracle execution only: Node + pnpm
   (`pnpm install --dir compatibility/oracle`, which resolves the pinned
   `overpy@9.7.10` by integrity hash). No Node toolchain is needed to run
@@ -28,7 +28,7 @@ python3 compatibility/run_oracle.py
 
 # Differential report against an external producer's results (generic
 # producer contract; the native Rust differential suite is the opy-rs
-# producer side and runs in cargo test — see compatibility/README.md)
+# producer side and runs in cargo test; see compatibility/README.md)
 python3 compatibility/diff.py --results <results-root> --report compatibility/report.json
 python3 compatibility/diff.py --producer-command '<cmd template>' --report compatibility/report.json
 ```

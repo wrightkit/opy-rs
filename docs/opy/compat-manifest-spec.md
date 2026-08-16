@@ -1,8 +1,8 @@
-# OPY Semantic Compatibility Manifest — Specification
+# OPY Semantic Compatibility Manifest Specification
 
-Status: accepted specification — opy-rs-owned semantic contract, ported and
-adapted from the WrightKit evidence base (issue #2); implemented by the
-frontend workstream (issues #4/#5) and merged on `main` (PRs #9/#13)
+Status: accepted specification. An opy-rs-owned semantic contract, ported and
+adapted from the WrightKit evidence base (issue #2), implemented by the
+frontend workstream (issues #4/#5) and merged on `main` (PRs #9/#13).
 Scope: the opy-rs-owned representation for builtin action/value identities,
 member functions, signatures, parameter enum-domain identities (catalog
 links), and source aliases; reference-validated and consumed by the native
@@ -34,12 +34,12 @@ It is **language-compatibility metadata**, distinct from:
   output), owned by `workshop-rs`; the manifest links to it by canonical id
   (`catalogId`) rather than duplicating spellings;
 * authoritative Workshop enum member lists, hero/map/mode/settings content,
-  locale spellings, and canonical member/domain existence — Workshop-owned
-  catalog content that the frontend **never approximates**: member accesses on
-  a declared domain identity resolve as opaque identities, and
-  member/domain/catalog validation stays `lowering-dependent` (#8); and
+  locale spellings, and canonical member/domain existence. These are
+  Workshop-owned catalog content that the frontend **never approximates**:
+  member accesses on a declared domain identity resolve as opaque identities,
+  and member/domain/catalog validation stays `lowering-dependent` (#8); and
 * a runtime content registry (heroes/maps/abilities content data, extension
-  boundaries, independent version identities) — deferred; this inventory
+  boundaries, independent version identities), deferred. This inventory
   found no architecture trigger that requires opening one.
 
 ## Data model (schema v1)
@@ -109,40 +109,40 @@ Workshop-owned catalog content and stays `lowering-dependent` (#8).
 
 Entry semantics:
 
-* `kind` — `action`/`value` are generic builtins; `memberAction`/`memberValue`
+* `kind`: `action`/`value` are generic builtins; `memberAction`/`memberValue`
   are receiver methods whose `params` are the **explicit** arguments (the
   receiver is separate). The frontend enforces action/value position
   (`value-in-action-position`, `action-in-value-position`).
-* `receiver` — the declared receiver category. `Player` is metadata for
+* `receiver`: the declared receiver category. `Player` is metadata for
   player-oriented members (the pinned reference does not type-check those
   receivers, so the frontend accepts any receiver); `Variable` and `String`
   are enforced where the reference semantics are clear (`.append` requires an
   assignable receiver, `.format` a string literal).
-* `params` — ordered arguments. Arity is `(first defaulted/optional param
+* `params`: ordered arguments. Arity is `(first defaulted/optional param
   index, params.len())`; `"optional": true` marks an omittable argument
   without an emitted expansion, `"default"` an expansion value. Only
   enum-member defaults are expanded at lowering (e.g. `chaseOverTime(g, 10,
   3)` fills `DESTINATION_AND_DURATION`, matching the reference emission).
   `"unbounded": true` (`.format` placeholders) accepts any argument count.
-  Named/keyword argument binding consumes these parameter names directly —
-  they are the reference's declared parameter names (e.g. `wait` binds
+  Named/keyword argument binding consumes these parameter names directly.
+  They are the reference's declared parameter names (e.g. `wait` binds
   `time`/`waitBehavior`, `print` binds `text`, `len` binds `array`):
-  * `"keywordOnly": true` — the argument must be passed as `name = expr`
+  * `"keywordOnly": true`: the argument must be passed as `name = expr`
     (the reference `chase` form requires its 3rd argument to be
     `rate = ...` or `duration = ...`);
-  * `"positionalOnly": true` — keyword binding is rejected for this
+  * `"positionalOnly": true`: keyword binding is rejected for this
     parameter (the `chase` form's leading arguments);
-  * `"alternateNames": [...]` — additional accepted keyword spellings
+  * `"alternateNames": [...]`: additional accepted keyword spellings
     (`chase` accepts both `rate` and `duration` for its 3rd parameter);
-  * `"variable": true` — the argument must be a variable reference (a
+  * `"variable": true`: the argument must be a variable reference (a
     `globalvar` or a `playervar`); the chase family requires a variable
     first argument to select the global/player emission form.
-* `keywordArgs` — whether the entry accepts keyword arguments at all;
+* `keywordArgs`: whether the entry accepts keyword arguments at all;
   defaults to `true` (the pinned reference's generic binder applies to
   every workshop function). Entries the reference routes around that
   mechanism declare `"keywordArgs": false` (`range`, `random.*`,
   `.format`).
-* `contextualDomain` — the `chase` dispatch record: a merged enum domain
+* `contextualDomain`: the `chase` dispatch record, a merged enum domain
   (`ChaseReeval`) that has no standalone member list and resolves **only**
   within this entry's signature context, selected by the keyword spelling
   bound to the `by` parameter. Each option maps a keyword spelling to the
@@ -151,13 +151,13 @@ Entry semantics:
   `chaseOverTime`). The contextual domain is deliberately *not* a declared
   enum domain: a bare `ChaseReeval.MEMBER` outside the `chase` signature is
   rejected like the reference rejects it.
-* `context` — a call-context restriction; `"forIterable"` (`range`) is only
+* `context`: a call-context restriction; `"forIterable"` (`range`) is only
   valid as a `for ... in` iterable.
-* `catalogId` — the canonical Workshop emission catalog id; absent for
+* `catalogId`: the canonical Workshop emission catalog id; absent for
   special emission forms (`debug`/`print`, `append` via Modify) or emission
   surfaces not yet catalog-covered (documented gaps). Catalog linkage is a
   `workshop-rs` integration concern.
-* `evidence` — every entry must reference at least one probe recording
+* `evidence`: every entry must reference at least one probe recording
   oracle acceptance (deterministic `check` failure otherwise).
 
 Entries carry the minimal semantic data the frontend needs to resolve names,
@@ -175,11 +175,11 @@ forbids importing OverPy implementation details into the core, and observed
 behavior through documented compatibility tests is the permitted input. Every
 entry records the reference probe that validates it (`probes/probes.json`
 carries the probe source hash, expected oracle status, normalized emission
-hash, and — for rejections — the diagnostic category fragment).
+hash, and, for rejections, the diagnostic category fragment).
 
 ## Validation rules
 
-* `Manifest::load` (`crates/opy-frontend/src/manifest`) — schema validation,
+* `Manifest::load` (`crates/opy-frontend/src/manifest`): schema validation,
   duplicate/colliding ids, colliding or missing aliases, declared parameter
   domain identities (tracked for the frontend's opaque member resolution),
   enum-member defaults requiring a declared domain, keyword-binding data
@@ -192,8 +192,8 @@ hash, and — for rejections — the diagnostic category fragment).
   byte-canonical form, and a cross-check test pins every `catalogId` (and
   contextual option target) to the Workshop emission catalog once the
   `workshop-rs` catalog contract exists.
-* `probes/validate.py` — reference validation: every probe runs against the
-  pinned oracle and must match its recorded accept/reject, normalized
+* `probes/validate.py` performs reference validation. Every probe runs
+  against the pinned oracle and must match its recorded accept/reject, normalized
   emission hash, and diagnostic category. The probe set and validator are
   frontend-workstream-owned; the validator requires the pinned oracle (Node +
   pnpm) and runs standalone like `compatibility/run_oracle.py`, so it is not
@@ -214,10 +214,10 @@ hash, and — for rejections — the diagnostic category fragment).
 
 ## Consumers
 
-* the opy-rs frontend (`crates/opy-frontend`) — name/member/enum resolution,
+* the opy-rs frontend (`crates/opy-frontend`): name/member/enum resolution,
   arity and signature checks, early resolution of unknown-action/value
   errors;
-* `workshop-rs` — canonical-id linkage to the emission catalog and
+* `workshop-rs`: canonical-id linkage to the emission catalog and
   member/domain/catalog validation (validated by the cross-check test at
   integration time, issue #8);
 * differential and systematic reference tests (the native differential suite

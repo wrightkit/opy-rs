@@ -1,4 +1,4 @@
-# Opy HIR v1 — opy-rs frontend protocol
+# Opy HIR v1: opy-rs frontend protocol
 
 Status: accepted baseline for v0.1; opy-rs-owned contract (adopted from the
 WrightKit evidence base, issue #2)
@@ -172,13 +172,13 @@ half-open interval in a file:
 
 Declaration, rule, and `subroutineDef` nodes additionally carry an optional
 `name_span` field (wire spelling `name_span`): the exact source span of the
-identifier token — the declared or defined identifier, or the rule name inside
-its string literal — when the frontend can record it. It is optional and
+identifier token (the declared or defined identifier, or the rule name inside
+its string literal) when the frontend can record it. It is optional and
 omitted when absent; it is never emitted as `null`, and it has the same shape
 and validation as any other span (§8). The native frontend records it; the
 differential suite's normalization strips `span`-family fields from the
 per-fixture native wire-payload artifact (`target/opy-differential/`) as
-documented frontend-internal provenance — protocol and generator identities
+documented frontend-internal provenance. Protocol and generator identities
 are kept, and the oracle comparison itself uses status, rule-name, and
 diagnostic evidence rather than span data.
 
@@ -336,7 +336,7 @@ Example `for` with `if`:
 }
 ```
 
-### 6.2 Expression kinds — literals
+### 6.2 Expression kinds: literals
 
 | Kind | Fields | Meaning |
 | --- | --- | --- |
@@ -348,7 +348,7 @@ Example `for` with `if`:
 | `vector` | `x`, `y`, `z`, `span` | Vector literal (`vect(x, y, z)`). |
 | `enum` | `type`, `value`, `span` | A built-in enumerated value, e.g. `Team.ALL`, `Color.WHITE`, `Beam.GRAPPLE`. `type` is the value domain, `value` the member name. |
 
-### 6.3 Expression kinds — references
+### 6.3 Expression kinds: references
 
 | Kind | Fields | Meaning |
 | --- | --- | --- |
@@ -357,7 +357,7 @@ Example `for` with `if`:
 | `eventPlayer` | `span` | The `eventPlayer` pseudo-symbol. |
 | `constant` | `name`, `span` | Reference to a source-level constant. |
 
-### 6.4 Expression kinds — operations
+### 6.4 Expression kinds: operations
 
 | Kind | Fields | Meaning |
 | --- | --- | --- |
@@ -388,12 +388,12 @@ validates it only structurally (§8).
 
 The protocol version is semver. Within the same major version:
 
-* **Additive change** — a producer may add new optional fields to existing
+* **Additive change**: a producer may add new optional fields to existing
   nodes and new `kind` variants for constructs the consumer can treat as
   opaque *only if* the consumer is updated to understand them. A consumer
   must reject a `kind` it does not recognize (§7.3), so an additive change
   ships with a matching consumer update and does not require a major bump.
-* **Breaking change** — removing or renaming a node, changing the meaning of
+* **Breaking change**: removing or renaming a node, changing the meaning of
   a field, or changing required-ness is a major-version change. Consumers of
   an older major version must reject the payload before inspecting its
   contents.
