@@ -1,0 +1,519 @@
+{
+  "schemaVersion": 1,
+  "artifact": "opy-rs OverPy feature inventory and support matrix",
+  "reference": {
+    "name": "overpy",
+    "version": "9.7.10",
+    "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw=="
+  },
+  "snapshot": {
+    "date": "2026-08-16",
+    "note": "Evidence-base snapshot (issue #2). No opy-rs frontend implementation is merged on main yet (issues #3-#7), so states are current-repository states, not target states: frontend-surface features are `planned` until the frontend workstream lands corpus-evidenced behavior, and features whose completion requires canonical Workshop semantics are `lowering-dependent` and inventory-only until the workshop-rs integration stage (#8)."
+  },
+  "states": {
+    "planned": "Declared surface, not yet implemented in opy-rs; evidence/provenance recorded for the implementing issue.",
+    "frontend-supported": "Frontend behavior (lex/parse/preprocess/macro expansion) implemented in opy-rs and corpus-evidenced.",
+    "semantic-supported": "Semantic resolution implemented in opy-rs (names, members, enums, call semantics covered by the semantic model).",
+    "lowering-dependent": "Completion requires canonical Workshop semantics/catalog/emission owned by workshop-rs; inventory-only until the integration stage.",
+    "end-to-end-supported": "Full OPY to Workshop compile parity through the workshop-rs integration boundary."
+  },
+  "categories": [
+    "syntax",
+    "semantics",
+    "preprocessing",
+    "macros",
+    "directives",
+    "translations",
+    "optimization",
+    "runtime",
+    "compilation",
+    "decompilation"
+  ],
+  "features": [
+    {
+      "id": "syntax/lexing",
+      "name": "Lexer: identifiers, literals, strings, comments, #! directives, operators",
+      "category": "syntax",
+      "state": "planned",
+      "evidence": [
+        "fixtures:synthetic/basic-rule",
+        "fixtures:synthetic/control-flow",
+        "fixtures:synthetic/expressions-values",
+        "fixtures:synthetic/diagnostics",
+        "fixtures:real-world/overpy-cake",
+        "upstream:src/tests/comments.opy",
+        "upstream:src/tests/operators.opy",
+        "upstream:src/tests/strings.opy",
+        "upstream:src/tests/arrays.opy"
+      ],
+      "notes": "Issue #3. Rejected sub-forms (dict literals, triple-quoted strings, backslash continuation, postfix ++/--) must fail with explicit diagnostics; baseline category 1."
+    },
+    {
+      "id": "syntax/expressions",
+      "name": "Expression/postfix/member/call grammar, precedence, indexing",
+      "category": "syntax",
+      "state": "planned",
+      "evidence": [
+        "fixtures:synthetic/expressions-values",
+        "fixtures:synthetic/receiver-calls",
+        "fixtures:real-world/overpy-cake",
+        "upstream:src/tests/operators.opy",
+        "upstream:src/tests/arrays.opy",
+        "upstream:src/tests/strings_args.opy"
+      ],
+      "notes": "Issue #3. Corpus subset is baseline-supported in the declared contract; `del`/`in`/`not in` stay out (see syntax/switch)."
+    },
+    {
+      "id": "syntax/declarations",
+      "name": "Declarations: globalvar/playervar (index + initializer), subroutine, def, enum, macro constants",
+      "category": "syntax",
+      "state": "planned",
+      "evidence": [
+        "fixtures:synthetic/declarations-rules",
+        "fixtures:synthetic/declarations-numbers",
+        "fixtures:synthetic/preprocessing",
+        "fixtures:real-world/overpy-cake",
+        "upstream:src/tests/variables.opy",
+        "upstream:src/tests/subroutines.opy",
+        "upstream:src/tests/enums.opy"
+      ],
+      "notes": "Issues #3/#4. Bare-integer index form is an explicit Workshop variable index; integer-0 initializers are dropped from HIR matching the reference; Initialize-rule synthesis is lowering-dependent."
+    },
+    {
+      "id": "syntax/assignments-control-flow",
+      "name": "Assignments and control flow: =, augmented ops, if/elif/else, for-in-range, while, pass",
+      "category": "syntax",
+      "state": "planned",
+      "evidence": [
+        "fixtures:synthetic/control-flow",
+        "fixtures:synthetic/for-range-agentlab",
+        "fixtures:synthetic/chase-condition-agentlab",
+        "upstream:src/tests/loops.opy",
+        "upstream:src/tests/conditions.opy"
+      ],
+      "notes": "Issue #3. Baseline category 3; augmented operators include min=/max= per the reference."
+    },
+    {
+      "id": "syntax/switch",
+      "name": "switch/case/default, do…while, hex 0x literals, expression-level not in",
+      "category": "syntax",
+      "state": "planned",
+      "evidence": [
+        "upstream:src/tests/switches.opy",
+        "upstream:src/tests/operators.opy"
+      ],
+      "notes": "Baseline category 1a: evidence-prioritized. Explicitly rejected (documented diagnostics) until implemented."
+    },
+    {
+      "id": "syntax/string-modifiers",
+      "name": "String modifiers (f/w/l/b/c/t), dict literals, list comprehensions, lambda",
+      "category": "syntax",
+      "state": "planned",
+      "evidence": [
+        "upstream:src/tests/dicts.opy",
+        "upstream:src/tests/strings.opy"
+      ],
+      "notes": "Baseline category 1b: legacy-quirk/demand-driven for dicts and modifiers, evidence-prioritized for comprehensions; explicit rejection until demand is demonstrated."
+    },
+    {
+      "id": "syntax/settings-blocks",
+      "name": "settings { ... } custom-game-settings blocks: JSONC parse into the typed HIR payload",
+      "category": "syntax",
+      "state": "planned",
+      "evidence": [
+        "fixtures:synthetic/settings",
+        "fixtures:real-world/overpy-meipocalypse/settings.opy",
+        "fixtures:real-world/6v6-adjustments/lobby/lobby.opy",
+        "upstream:src/tests/customGameSettings.opy",
+        "upstream:src/tests/workshopSettings.opy"
+      ],
+      "notes": "Issue #3. Parsing/placement validation is frontend-owned; the Workshop settings-section emission is lowering-dependent (see semantics/settings-emission)."
+    },
+    {
+      "id": "semantics/declaration-resolution",
+      "name": "Name resolution: undeclared identifiers, subroutine and constant references, enum types",
+      "category": "semantics",
+      "state": "planned",
+      "evidence": [
+        "fixtures:synthetic/declarations-rules",
+        "fixtures:synthetic/expressions-values",
+        "upstream:src/tests/functions.opy",
+        "upstream:src/tests/subroutines.opy"
+      ],
+      "notes": "Issue #4. Structured source-located diagnostics: unknown-identifier, enum-type-without-member, unsupported-member."
+    },
+    {
+      "id": "semantics/for-binder",
+      "name": "for-loop binder: declared globalvar or implicit default variables A-Z … DA-DX",
+      "category": "semantics",
+      "state": "planned",
+      "evidence": [
+        "fixtures:synthetic/for-range-agentlab",
+        "upstream:src/tests/loops.opy"
+      ],
+      "notes": "Issue #4. Agent-lab regression: undeclared uppercase binder is an implicit global at its fixed Workshop slot; nested same-name loops reuse the binding; lowercase undeclared binders rejected like the reference."
+    },
+    {
+      "id": "semantics/builtin-actions-values",
+      "name": "Builtin actions and values (manifest-declared surface; full 225 action / 267 value Workshop surface)",
+      "category": "semantics",
+      "state": "planned",
+      "evidence": [
+        "probes:generic-builtins",
+        "probes:chase-over-time",
+        "probes:is-game-in-progress",
+        "probes:get-players-in-radius",
+        "probes:catalog-only-names",
+        "probes:unknown-function",
+        "probes:unknown-value",
+        "probes:action-in-value-position",
+        "probes:value-in-action-position",
+        "fixtures:synthetic/basic-rule",
+        "fixtures:synthetic/chase-condition-agentlab"
+      ],
+      "notes": "Issue #4. Resolves through the opy-rs semantic compatibility manifest (crates/wright-opy/src/manifest/, spec: docs/opy/compat-manifest-spec.md); every entry probe-validated against the pinned oracle. Full surface stays baseline-planned."
+    },
+    {
+      "id": "semantics/receiver-members",
+      "name": "Receiver/member functions: receiver categories, explicit-argument signatures, variable receivers",
+      "category": "semantics",
+      "state": "planned",
+      "evidence": [
+        "probes:receiver-calls",
+        "probes:enum-gated-members",
+        "probes:invalid-arity-member",
+        "probes:generic-member-only-action",
+        "probes:member-value-in-action-position",
+        "probes:invalid-receiver-append",
+        "probes:invalid-receiver-format",
+        "fixtures:synthetic/receiver-calls",
+        "upstream:src/data/opy/memberFunctions.ts"
+      ],
+      "notes": "Issue #4. Includes the bare-playervar-receiver residual item (A = B.C, baseline-planned). Workshop emission of member calls through the catalog is lowering-dependent."
+    },
+    {
+      "id": "semantics/enum-domains",
+      "name": "Builtin enum/constant domains and members (declared domains; 46 upstream domains incl. Hero/Map/Gamemode)",
+      "category": "semantics",
+      "state": "planned",
+      "evidence": [
+        "probes:builtin-enums",
+        "probes:unknown-enum",
+        "probes:enum-domain-mismatch-1",
+        "probes:enum-domain-mismatch-2",
+        "probes:enum-arg-non-enum",
+        "probes:enum-arg-variable",
+        "fixtures:synthetic/chase-enums",
+        "fixtures:synthetic/chase-keywords",
+        "upstream:src/tests/builtinenums.opy",
+        "upstream:src/data/opy/constants.ts"
+      ],
+      "notes": "Issue #4. Members outside declared domains fail with unknown-enum-member (Color.CYAN, DynamicEffect.SPARKLES …); full domain surface stays baseline-planned; emission spellings are lowering-dependent."
+    },
+    {
+      "id": "semantics/aliases",
+      "name": "Source aliases: non-contextual (stopChasingVariable, getCurrentHero, hasStatusEffect) and the ChaseReeval contextual alias",
+      "category": "semantics",
+      "state": "planned",
+      "evidence": [
+        "probes:aliases",
+        "probes:member-aliases",
+        "probes:chase-reeval-context",
+        "probes:chase-reeval-outside",
+        "probes:chase-reeval-wrong-domain"
+      ],
+      "notes": "Issue #4/#5. Remaining alias surface (hero renames, obsolete names) stays legacy-quirk/demand-driven; ChaseReeval resolves only in the chase call context."
+    },
+    {
+      "id": "semantics/modules",
+      "name": "Modules: random.{randint,uniform,choice,shuffle}",
+      "category": "semantics",
+      "state": "planned",
+      "evidence": [
+        "fixtures:real-world/overpy-cake",
+        "fixtures:real-world/overpy-zencopter/heli.opy",
+        "fixtures:real-world/overpy-meipocalypse/meipocalypse.opy",
+        "upstream:src/data/opy/modules.ts"
+      ],
+      "notes": "Issue #4. Corpus-evidenced: random.uniform/random.choice; range/random.*/.format route around the reference's generic keyword binder (keyword-unsupported)."
+    },
+    {
+      "id": "semantics/keyword-arguments",
+      "name": "Named/keyword arguments: generic name=expr binding and the chase/ChaseReeval special form",
+      "category": "semantics",
+      "state": "planned",
+      "evidence": [
+        "probes:chase-keywords",
+        "probes:chase-keyword-binding",
+        "probes:chase-arg3-keyword-required",
+        "probes:chase-duplicate-keyword",
+        "probes:chase-missing-argument",
+        "probes:chase-positional-after-keyword",
+        "probes:chase-unknown-keyword",
+        "probes:wait-keyword-names",
+        "probes:keyword-arguments-unsupported",
+        "fixtures:synthetic/chase-keywords"
+      ],
+      "notes": "Issue #4. raycast include=/exclude= and macro keyword arguments stay evidence-prioritized (no corpus/reference evidence in the declared surface)."
+    },
+    {
+      "id": "semantics/diagnostics",
+      "name": "Source identity and diagnostics: structured, source-located frontend errors, wright-result/v1 envelope",
+      "category": "semantics",
+      "state": "planned",
+      "evidence": [
+        "fixtures:synthetic/diagnostics",
+        "fixtures:synthetic/declarations-rules",
+        "upstream:runTests.mjs"
+      ],
+      "notes": "Issues #3/#4. Stable codes (lex-error, parse-error, unknown-*, invalid-*, enum-*, chase-*); parser recovers at statement boundaries; S/D evidence class."
+    },
+    {
+      "id": "semantics/settings-emission",
+      "name": "Workshop settings-section emission: key table, enum values, map/hero list elements",
+      "category": "semantics",
+      "state": "lowering-dependent",
+      "evidence": [
+        "fixtures:synthetic/settings",
+        "fixtures:real-world/6v6-adjustments/lobby/lobby.opy",
+        "upstream:src/tests/customGameSettings.opy"
+      ],
+      "notes": "The typed settings payload is frontend-owned; the emission table and its domains are Workshop data owned by workshop-rs. Emitted settings are deliberately not reparseable (round-trip boundary)."
+    },
+    {
+      "id": "preprocessing/include",
+      "name": "#!include: root-relative resolution, cycle detection, missing-file diagnostics, file registry",
+      "category": "preprocessing",
+      "state": "planned",
+      "evidence": [
+        "fixtures:synthetic/preprocessing",
+        "fixtures:real-world/ow1-emulator",
+        "fixtures:real-world/6v6-adjustments",
+        "upstream:src/tests/include.opy",
+        "upstream:src/tests/include3.opy",
+        "upstream:src/tests/include5.opy"
+      ],
+      "notes": "Issue #5. Real-world fixtures are full include closures (per-file SHA-256 recorded in fixture.json)."
+    },
+    {
+      "id": "preprocessing/define-undef",
+      "name": "#!define (object- and function-like), #!undef, recursive expansion, recursion guard",
+      "category": "preprocessing",
+      "state": "planned",
+      "evidence": [
+        "fixtures:synthetic/preprocessing",
+        "fixtures:real-world/overpy-cake",
+        "upstream:src/tests/macros.opy",
+        "upstream:src/tests/builtinmacros.opy"
+      ],
+      "notes": "Issue #5. Unsupported directives fail explicitly (unsupported-directive); macro-recursion guard."
+    },
+    {
+      "id": "preprocessing/advanced-directives",
+      "name": "#!mainFile, #!allowMacroRedeclaration, #!optimize*/#!replace0By* family, #!rulePrefix*",
+      "category": "preprocessing",
+      "state": "planned",
+      "evidence": [
+        "upstream:src/tests/rulePrefix.opy",
+        "upstream:src/tests/compression.opy",
+        "upstream:src/data/opy/preprocessing.ts"
+      ],
+      "notes": "Baseline category 5a: legacy-quirk/demand-driven; explicit rejection until the declared compatibility target requires them."
+    },
+    {
+      "id": "macros/definitions",
+      "name": "macro name(params): statement bodies with MacroParam references, macro constants",
+      "category": "macros",
+      "state": "planned",
+      "evidence": [
+        "fixtures:synthetic/preprocessing",
+        "fixtures:real-world/overpy-cake",
+        "fixtures:real-world/overpy-meipocalypse",
+        "fixtures:real-world/ow1-emulator/common/macro_functions.opy",
+        "upstream:src/tests/macros.opy",
+        "upstream:src/tests/astMacros.opy",
+        "upstream:src/tests/builtinmacros.opy"
+      ],
+      "notes": "Issue #5. Macro keyword arguments are treated as raw text by the reference and rejected explicitly."
+    },
+    {
+      "id": "macros/javascript",
+      "name": "__script__ JavaScript macros and post-compile hooks (QuickJS runtime)",
+      "category": "macros",
+      "state": "planned",
+      "evidence": [
+        "upstream:runTests.mjs",
+        "upstream:src/tests/postCompileHook.opy",
+        "upstream:src/tests/quickjs-modern.js",
+        "upstream:src/tests/quickjs-invalid-return.js",
+        "upstream:src/tests/quickjs-runaway.js",
+        "upstream:src/quickjs.ts"
+      ],
+      "notes": "Issue #6. Bounded runtime compatibility surface; does not require Node.js compatibility (issue #1); the reference's quickjs-ng.wasm is pinned in the oracle package."
+    },
+    {
+      "id": "directives/rule-annotations",
+      "name": "Rule annotations: @Event, @Condition, bare @Team/@Slot; evidence-prioritized: @Team/@Slot args, @Name, @Hero, @Disabled, @Delimiter, @NewPage, @SuppressWarnings",
+      "category": "directives",
+      "state": "planned",
+      "evidence": [
+        "fixtures:synthetic/basic-rule",
+        "fixtures:synthetic/declarations-rules",
+        "fixtures:synthetic/control-flow",
+        "upstream:src/tests/rules.opy",
+        "upstream:README.md"
+      ],
+      "notes": "Issue #3/#5. Baseline categories 4 (bare forms) and 4a (argument forms, evidence-prioritized); other @ directives fail explicitly."
+    },
+    {
+      "id": "directives/rule-model",
+      "name": "Rule model: rule \"name\": with events (global, eachPlayer), conditions list, statements",
+      "category": "directives",
+      "state": "planned",
+      "evidence": [
+        "fixtures:synthetic/basic-rule",
+        "fixtures:synthetic/chase-condition-agentlab",
+        "fixtures:synthetic/control-flow",
+        "upstream:src/tests/rules.opy",
+        "upstream:src/tests/eventVars.opy"
+      ],
+      "notes": "Issue #3. Rule disabled markers stay out (no corpus evidence for the source annotation)."
+    },
+    {
+      "id": "translations/directive",
+      "name": "#!translations directive recognition and .po generation surface",
+      "category": "translations",
+      "state": "planned",
+      "evidence": [
+        "upstream:src/tests/translations.opy",
+        "upstream:src/tests/translations2.opy",
+        "upstream:src/tests/translations.es.po",
+        "upstream:src/tests/translations2.fr.po",
+        "upstream:src/compiler/translations.ts"
+      ],
+      "notes": "Baseline category 5a: legacy-quirk/demand-driven; directive recognition is frontend-owned; the emitted locale data path is lowering-dependent."
+    },
+    {
+      "id": "translations/locale-emission",
+      "name": "Localized Workshop output (--language flag, localizedStrings data)",
+      "category": "translations",
+      "state": "lowering-dependent",
+      "evidence": [
+        "upstream:src/data/localizedStrings.ts",
+        "oracle:CLI --language en-US invocation recorded in compatibility/run_oracle.py"
+      ],
+      "notes": "Locale data is Workshop-owned content (workshop-rs); the oracle harness pins en-US as the evidence language."
+    },
+    {
+      "id": "optimization/controls",
+      "name": "#!optimize*/#!replace0By* family and compression controls",
+      "category": "optimization",
+      "state": "planned",
+      "evidence": [
+        "upstream:src/tests/compression.opy",
+        "upstream:src/data/opy/preprocessing.ts"
+      ],
+      "notes": "Baseline category 5a: legacy-quirk/demand-driven. Optimizer choices are not a compatibility contract; only observable semantics count."
+    },
+    {
+      "id": "optimization/emission-form",
+      "name": "Workshop text emission form (variable naming, enum spellings, formatting)",
+      "category": "optimization",
+      "state": "lowering-dependent",
+      "evidence": [
+        "fixtures:synthetic/basic-rule/oracle.json",
+        "fixtures:real-world/overpy-cake/oracle.json"
+      ],
+      "notes": "Output-text identity is explicitly not the compatibility contract; exact-vs-normalized differences are presentation differences. Emission form is workshop-rs-owned."
+    },
+    {
+      "id": "runtime/js-hooks",
+      "name": "QuickJS runtime for __script__ hook execution",
+      "category": "runtime",
+      "state": "planned",
+      "evidence": [
+        "upstream:runTests.mjs",
+        "upstream:src/quickjs.ts",
+        "oracle:quickjs-ng.wasm shipped in the pinned npm package"
+      ],
+      "notes": "Issue #6. Bounded runtime surface: reference-compatible accept/reject and result semantics for documented hook probes; no Node.js compatibility required."
+    },
+    {
+      "id": "compilation/frontend-pipeline",
+      "name": "Frontend pipeline: lexer -> preprocess -> CST/parser -> semantic resolution -> Opy HIR v1",
+      "category": "compilation",
+      "state": "planned",
+      "evidence": [
+        "fixtures:synthetic",
+        "fixtures:real-world",
+        "docs:docs/hir/opy-hir-v1.md"
+      ],
+      "notes": "Issues #3-#5. Fully Workshop-independent; the whole corpus is the target acceptance corpus; differential HIR parity is issue #7."
+    },
+    {
+      "id": "compilation/workshop-lowering",
+      "name": "HIR -> Workshop lowering and emission through workshop-rs",
+      "category": "compilation",
+      "state": "lowering-dependent",
+      "evidence": [
+        "fixtures:synthetic",
+        "fixtures:real-world"
+      ],
+      "notes": "Issue #8; blocked on the workshop-rs public contracts (wrightkit/workshop-rs#2). Oracle snapshots (fixtures/**/oracle.json) remain the reference; no temporary Workshop IR is introduced here."
+    },
+    {
+      "id": "compilation/end-to-end",
+      "name": "End-to-end OPY -> Workshop compile parity",
+      "category": "compilation",
+      "state": "lowering-dependent",
+      "evidence": [
+        "fixtures:synthetic",
+        "fixtures:real-world"
+      ],
+      "notes": "Becomes end-to-end-supported only after the workshop-rs integration stage (#8); differential harness contract is ready (compatibility/diff.py, issue #7 wiring)."
+    },
+    {
+      "id": "decompilation/workshop-to-opy",
+      "name": "Workshop -> OPY decompilation",
+      "category": "decompilation",
+      "state": "lowering-dependent",
+      "evidence": [
+        "upstream:src/tests/decompiler",
+        "upstream:src/decompiler"
+      ],
+      "notes": "Deferred until the canonical Workshop semantic representation exists (workshop-rs integration); a non-goal before it. Upstream decompiler corpus (17 inputs) is the future reference."
+    },
+    {
+      "id": "decompilation/roundtrip-boundary",
+      "name": "Round-trip boundary: emitted settings reparsing, .ws round-trip",
+      "category": "decompilation",
+      "state": "lowering-dependent",
+      "evidence": [
+        "docs:docs/opy/support-matrix.md"
+      ],
+      "notes": "Documented boundary: emitted settings sections are deliberately not reparseable; a .ws decompiler is a non-goal. Reconstruction of arbitrary Workshop text is out of scope."
+    }
+  ],
+  "summary": {
+    "byState": {
+      "planned": 27,
+      "frontend-supported": 0,
+      "semantic-supported": 0,
+      "lowering-dependent": 7,
+      "end-to-end-supported": 0
+    },
+    "byCategory": {
+      "syntax": 7,
+      "semantics": 10,
+      "preprocessing": 3,
+      "macros": 2,
+      "directives": 2,
+      "translations": 2,
+      "optimization": 2,
+      "runtime": 1,
+      "compilation": 3,
+      "decompilation": 2
+    }
+  }
+}
