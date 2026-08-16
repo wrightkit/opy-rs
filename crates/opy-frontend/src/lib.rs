@@ -12,6 +12,16 @@
 //! Pipeline: [`lexer::lex`] → [`preprocess::preprocess`] →
 //! [`parser::parse`] → [`lower::lower`] → Opy HIR ([`hir`]).
 //!
+//! OverPy-compatible `__script__("…")` macros and `#!postCompileHook` scripts
+//! execute at compile time through the bounded embedded runtime
+//! ([`opy_macro_js`]): script macros expand during preprocessing with the
+//! reference's argument-injection ABI, and the post-compile hook runs against
+//! the Opy HIR v1 payload once lowering succeeds (see
+//! [`compile_with_overlay_outcome`] and `preprocess`). Resource limits mirror
+//! the pinned reference constants (`opy_macro_js::Limits::default()`); wiring
+//! hook output and catalog constants into Workshop emission stays
+//! lowering-dependent.
+//!
 //! This crate is the extraction of the mature Wright frontend
 //! (`crates/wright-opy`); module provenance and issue references follow the
 //! original implementation. Workshop→OPY reconstruction and the differential
@@ -31,6 +41,7 @@ pub mod tooling;
 
 use std::path::Path;
 
+use diag::Span;
 pub use diag::{FrontendError, FrontendResult};
 pub use lower::lower;
 pub use parser::parse;
@@ -83,6 +94,28 @@ pub struct CompileOutcome {
     pub hir: Option<hir::Program>,
     pub error: Option<FrontendError>,
     pub files: Vec<preprocess::FileRecord>,
+    /// The declared `#!postCompileHook` script, when the source declared one
+    /// and compilation succeeded.
+    ///
+    /// This is the declaration record, not an execution result: the frontend
+    /// recognizes, parses, validates, and records the directive, but never
+    /// executes the hook. Execution against the final Workshop text is
+    /// lowering-dependent (workshop-rs emission, issue #8); the frontend
+    /// never fabricates a Workshop payload.
+    pub post_compile_hook: Option<PostCompileHookRecord>,
+}
+
+/// The recorded declaration of a `#!postCompileHook` script.
+///
+/// The declared `#!postCompileHook` script; execution against the final
+/// Workshop text is lowering-dependent (workshop-rs emission, issue #8). The
+/// frontend never fabricates a Workshop payload.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PostCompileHookRecord {
+    /// The script path as declared (root-relative).
+    pub script: String,
+    /// The directive's source span, when known.
+    pub span: Option<Span>,
 }
 
 /// Compile with open-document overlays while retaining the frontend file
@@ -108,9 +141,18 @@ pub fn compile_with_overlay_outcome(
             .as_ref()
             .map(tooling::SourceLocation::to_span),
     });
+    // The directive was parsed, validated, and recorded by preprocessing; the
+    // frontend never executes the hook (real hook execution receives the
+    // final Workshop text and is lowering-dependent, issue #8 — see
+    // `PostCompileHookRecord`).
+    let post_compile_hook = outcome.post_compile_hook.map(|hook| PostCompileHookRecord {
+        script: hook.path,
+        span: Some(hook.span),
+    });
     CompileOutcome {
         hir: outcome.model.map(|model| model.hir),
         error,
         files: outcome.files,
+        post_compile_hook,
     }
 }
