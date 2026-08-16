@@ -117,7 +117,8 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
   reconstructed from tokens; string literals are re-quoted with JSON
   escaping, which is JavaScript-value-equivalent to the reference's raw text
   injection). The string completion value becomes the expanded text, which is
-  re-lexed into the token stream at the call site. Thrown exceptions,
+  re-lexed into the token stream at the call site. Script-macro expansion is
+  compile-time behavior and is **frontend-supported**. Thrown exceptions,
   resource-limit aborts (`script-timeout` for the 1000 ms budget,
   `script-memory-limit` for the 64 MiB memory limit, `script-stack-limit`
   for the 512 KiB stack), and non-string results
@@ -126,12 +127,15 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
   line/column. The reference's `vect(x, y, z)` helper and the constant
   objects (`Map`, `Hero`, `Gamemode`, `Color`, `Team`, `Button`) are always
   defined (constants empty until catalog data lands with `workshop-rs`).
-- `#!postCompileHook "hook.js"` registers the hook script (duplicate
-  declarations: `post-compile-hook-duplicate`, matching the reference);
-  after a successful compile the hook receives the Opy HIR v1 wire payload
-  as `content` and its transformed output is recorded on the compile
-  outcome. Workshop-emission wiring of hook output (the reference passes the
-  final Workshop text) stays **lowering-dependent**.
+- `#!postCompileHook "hook.js"` is recognized, parsed, validated, and
+  **recorded only**: the frontend never executes the hook (duplicate
+  declarations: `post-compile-hook-duplicate`, matching the reference). Real
+  hook execution receives the **final Workshop text** produced by lowering
+  and is **lowering-dependent** (`hooks/post-compile-workshop` in the
+  support matrix, issue #8); the frontend never fabricates a Workshop
+  payload. The runtime's hook ABI (content injection, console capture,
+  result/error semantics, 2000 ms budget) is tested on synthetic content in
+  `crates/opy-macro-js/tests/hooks.rs`.
 - There is no `#!require` directive in the pinned reference; the script
   macro form is the only JavaScript declaration surface (verified against
   OverPy 9.7.10, `src/compiler/tokenizer.ts`).
@@ -173,7 +177,7 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
   (`crates/opy-frontend/src/manifest/probes/`). Unknown or misplaced builtins
   fail at semantic resolution with structured, source-located diagnostics
   (`unknown-action`, `unknown-value`, `unknown-member`, `invalid-arity`,
-  `invalid-receiver`, `enum-domain-mismatch`, `action-in-value-position`,
+  `invalid-receiver`, `action-in-value-position`,
   `value-in-action-position`, `invalid-call-context`, `invalid-iterable`,
   plus the argument-binding codes `unknown-keyword`, `duplicate-argument`,
   `missing-argument`, `positional-after-keyword`, `keyword-required`,
@@ -214,13 +218,15 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
   domain), plus the evidence domains `Invis.{ALL,ENEMIES,NONE}`,
   `Transform.{ROTATION,ROTATION_AND_TRANSLATION}`,
   `Status.{ASLEEP,BURNING,FROZEN,HACKED,INVINCIBLE,KNOCKED_DOWN,PHASED_OUT,
-  ROOTED,STUNNED,UNKILLABLE}`, `LosCheck.{OFF,SURFACES,
+  ROOTED,STUNNED,UNKILLABLE}`,   `LosCheck.{OFF,SURFACES,
   SURFACES_AND_ALL_BARRIERS,SURFACES_AND_ENEMY_BARRIERS}`, `Team.ALL`.
-  Members outside the declared domains (including spellings the pinned
-  reference rejects, such as `Color.CYAN` or `DynamicEffect.SPARKLES`) fail
-  explicitly (`unknown-enum-member`). Enum domains/members beyond the
-  declared baseline remain `baseline-planned`; emission coverage stays
-  corpus-scoped and is **lowering-dependent**.
+  Member accesses on declared domain identities resolve as **opaque
+  identities**; Workshop enum member-existence and domain validation was
+  removed from the frontend core and is **lowering-dependent** (#8) — the
+  checks are never approximated (custom, user-declared enum members are
+  OPY-level source semantics and stay frontend-validated). Enum
+  domains/members beyond the declared baseline remain `baseline-planned`;
+  emission coverage stays corpus-scoped and is **lowering-dependent**.
 - `wait()` / `wait(time)` default-argument filling: the reference appends
   `Wait.IGNORE_CONDITION` (and `0.016` for the no-argument form).
 - **Named/keyword arguments** (`name = expr` call arguments) bind against the
@@ -246,12 +252,13 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
   `chase(variable, destination, duration=…, ChaseReeval.MEMBER)` — exactly
   four arguments, the 3rd passed as the `rate`/`duration` keyword and the
   4th as a bare `ChaseReeval.MEMBER` access. `ChaseReeval` resolves **only**
-  in this call context: `rate=` selects the `ChaseRateReeval` domain and
+  in this   call context: `rate=` selects the `ChaseRateReeval` domain and
   lowers the call to `chaseAtRate`; `duration=` selects `ChaseTimeReeval`
-  and lowers to `chaseOverTime`. Members are checked against the selected
-  domain (`chase(g, 10, rate=2, ChaseReeval.DESTINATION_AND_DURATION)` is
-  rejected with `enum-domain-mismatch`, matching the reference's "Unknown
-  chaseratereeval"). Outside the chase signature `ChaseReeval` never
+  and lowers to `chaseOverTime`. The contextual member is rewritten to the
+  keyword-selected domain without membership checks — member/domain
+  validation is **lowering-dependent** (#8), matching the reference's
+  "Unknown chaseratereeval" as a lowering-time outcome. Outside the chase
+  signature `ChaseReeval` never
   resolves (a bare `g = ChaseReeval.NONE` is rejected like the reference).
   The first argument must be a variable (`invalid-argument` otherwise);
   emission dispatches on its kind (global vs player variable) and is
@@ -283,7 +290,10 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
 - Emission of the Workshop `settings` section (the key table, enum values,
   map/hero list elements) is **lowering-dependent**: the typed payload is
   frontend-owned; the emission table and its domain data are Workshop data
-  owned by `workshop-rs`. The emitted `settings` section is deliberately not
+  owned by `workshop-rs`. Key-existence and leaf-kind settings validation
+  is Workshop schema content and **lowering-dependent** (#8) — the frontend
+  validates structure only (group shape, span validity, non-empty key
+  names). The emitted `settings` section is deliberately not
   reparseable by the Workshop parser (a `.ws` decompiler is a non-goal).
 
 ## Deferred / out of scope

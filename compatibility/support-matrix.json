@@ -9,7 +9,7 @@
   },
   "snapshot": {
     "date": "2026-08-16",
-    "note": "Evidence-base snapshot (issue #2) plus frontend-workstream state (issues #3-#7). Frontend (PR #9), evidence (PR #10), and JS runtime (PR #11) are merged locally on feat/frontend-completeness; the differential suite (issue #7, part B) runs all 26 corpus fixtures through the native pipeline. Frontend-supported rows: declared syntax surface, settings blocks, structured diagnostics, preprocessing (include/define/undef), macro statements, and rule directives/model. Semantic-supported rows: declaration resolution, for-loop binders, modules, keyword arguments, and the declared alias surface. Remaining planned rows: full builtin/enum/receiver surfaces beyond the manifest-declared evidence, advanced directives, translations, and optimization controls. Workshop-dependent features are lowering-dependent and inventory-only until the workshop-rs integration stage (#8).",
+    "note": "Evidence-base snapshot (issue #2) plus frontend-workstream state (issues #3-#7). Frontend (PR #9), evidence (PR #10), and JS runtime (PR #11) are merged locally on feat/frontend-completeness; the differential suite (issue #7, part B) runs all 26 corpus fixtures through the native pipeline. Frontend-supported rows: declared syntax surface, settings blocks, structured diagnostics, preprocessing (include/define/undef), macro statements, and rule directives/model. Semantic-supported rows: declaration resolution, for-loop binders, modules, keyword arguments, and the declared alias surface. Remaining planned rows: full builtin/enum/receiver surfaces beyond the manifest-declared evidence, advanced directives, translations, and optimization controls. Workshop-dependent features are lowering-dependent and inventory-only until the workshop-rs integration stage (#8). #!postCompileHook is parsed/validated/recorded by the frontend; execution against the final Workshop text is lowering-dependent (#8).",
     "asOfCommit": ""
   },
   "states": {
@@ -129,7 +129,7 @@
         "upstream:src/tests/customGameSettings.opy",
         "upstream:src/tests/workshopSettings.opy"
       ],
-      "notes": "Corpus-evidenced: settings fixtures parse into the typed HIR payload; emission lowering-dependent."
+      "notes": "Corpus-evidenced: settings fixtures parse into the typed HIR payload. Validation is structural only (group shape, span validity, non-empty key names); key-existence and leaf-kind settings validation was removed from the core and is lowering-dependent (#8). Emission lowering-dependent."
     },
     {
       "id": "semantics/declaration-resolution",
@@ -199,18 +199,13 @@
       "category": "semantics",
       "state": "planned",
       "evidence": [
-        "probes:builtin-enums",
         "probes:unknown-enum",
-        "probes:enum-domain-mismatch-1",
-        "probes:enum-domain-mismatch-2",
-        "probes:enum-arg-non-enum",
-        "probes:enum-arg-variable",
         "fixtures:synthetic/chase-enums",
         "fixtures:synthetic/chase-keywords",
         "upstream:src/tests/builtinenums.opy",
         "upstream:src/data/opy/constants.ts"
       ],
-      "notes": "Issue #4. Members outside declared domains fail with unknown-enum-member (Color.CYAN, DynamicEffect.SPARKLES …); full domain surface stays baseline-planned; emission spellings are lowering-dependent."
+      "notes": "Issue #4. Workshop enum member/domain validation (member existence, domain mismatch) was removed from the core and is lowering-dependent (#8): member accesses on declared domain identities resolve as opaque identities, and the checks are never approximated. Full domain surface stays baseline-planned; emission spellings are lowering-dependent."
     },
     {
       "id": "semantics/aliases",
@@ -221,10 +216,9 @@
         "probes:aliases",
         "probes:member-aliases",
         "probes:chase-reeval-context",
-        "probes:chase-reeval-outside",
-        "probes:chase-reeval-wrong-domain"
+        "probes:chase-reeval-outside"
       ],
-      "notes": "Declared alias surface (3 non-contextual + ChaseReeval contextual) resolves; probes pass. Remaining alias surface legacy-quirk/demand-driven."
+      "notes": "Issue #4. Declared alias surface (3 non-contextual + ChaseReeval contextual) resolves; probes pass (chase-reeval-outside stays: it documents the contextual-domain identity rule). Wrong-domain member rejection is lowering-dependent (#8). Remaining alias surface legacy-quirk/demand-driven."
     },
     {
       "id": "semantics/modules",
@@ -280,7 +274,7 @@
         "fixtures:real-world/6v6-adjustments/lobby/lobby.opy",
         "upstream:src/tests/customGameSettings.opy"
       ],
-      "notes": "The typed settings payload is frontend-owned; the emission table and its domains are Workshop data owned by workshop-rs. Emitted settings are deliberately not reparseable (round-trip boundary)."
+      "notes": "The typed settings payload is frontend-owned; the emission table and its domains are Workshop data owned by workshop-rs. Key-existence and leaf-kind settings validation is Workshop schema content and lowering-dependent (#8) — the core validates structure only. Emitted settings are deliberately not reparseable (round-trip boundary)."
     },
     {
       "id": "preprocessing/include",
@@ -340,7 +334,7 @@
     },
     {
       "id": "macros/javascript",
-      "name": "__script__ JavaScript macros and post-compile hooks (QuickJS runtime)",
+      "name": "__script__ JavaScript macros (QuickJS runtime); #!postCompileHook parsed and recorded",
       "category": "macros",
       "state": "frontend-supported",
       "evidence": [
@@ -355,7 +349,20 @@
         "test:opy-frontend-differential",
         "fixtures:real-world/overpy-meipocalypse"
       ],
-      "notes": "Issue #6 + #7 part B. `#!define name(args) __script__(\"path.js\")` parsed (root-relative script resolution, script-not-found at the define site like the reference's ENOENT), expanded through opy_macro_js::MacroRuntime with the reference's var-injection ABI, indentation rule, and string-only completion contract; `#!postCompileHook` parsed (duplicate rejection) and executed against the Opy HIR v1 payload. Structured script-* diagnostics carry script provenance. Catalog constants and Workshop-emission hook wiring stay lowering-dependent; `#!require` does not exist in the pinned reference."
+      "notes": "Issue #6 + #7 part B. `#!define name(args) __script__(\"path.js\")` parsed (root-relative script resolution, script-not-found at the define site like the reference's ENOENT), expanded through opy_macro_js::MacroRuntime with the reference's var-injection ABI, indentation rule, and string-only completion contract — compile-time expansion executes and is frontend-supported. `#!postCompileHook` is parsed, validated, and recorded (duplicate rejection); the frontend never executes the hook, so no Workshop payload is fabricated. Structured script-* diagnostics carry script provenance. Catalog constants and post-compile-hook Workshop-output execution stay lowering-dependent (see hooks/post-compile-workshop, issue #8); `#!require` does not exist in the pinned reference."
+    },
+    {
+      "id": "hooks/post-compile-workshop",
+      "name": "Post-compile hook execution against the final Workshop text",
+      "category": "macros",
+      "state": "lowering-dependent",
+      "evidence": [
+        "upstream:src/tests/postCompileHook.opy",
+        "upstream:src/quickjs.ts",
+        "test:opy-macro-js-hooks",
+        "test:opy-frontend-macro-integration"
+      ],
+      "notes": "Issue #6 + #8. The runtime's hook ABI (content injection, console capture, result/error semantics, 2000 ms budget) is implemented and tested on synthetic content in opy-macro-js; the frontend parses, validates, and records #!postCompileHook but never executes it. Real hook execution receives the final Workshop text from lowering and is inventory-only until the workshop-rs integration stage (#8); the frontend never fabricates a Workshop payload."
     },
     {
       "id": "directives/rule-annotations",
@@ -434,7 +441,7 @@
     },
     {
       "id": "runtime/js-hooks",
-      "name": "QuickJS runtime for __script__ hook execution",
+      "name": "QuickJS runtime for __script__ macro and hook execution (synthetic-content hook ABI)",
       "category": "runtime",
       "state": "frontend-supported",
       "evidence": [
@@ -446,7 +453,7 @@
         "test:opy-macro-js-limits",
         "test:opy-frontend-macro-integration"
       ],
-      "notes": "Issue #6 + #7 part B. Bounded runtime surface wired into the frontend: macro/hook execution, argument injection, `vect` helper, empty constant objects, console capture, reference-compatible accept/reject and result semantics, resource limits defaulting to the pinned reference constants (1000 ms macro / 2000 ms hook budgets, 64 MiB memory, 512 KiB stack). Browser/WASM execution remains unsupported (native embedding only), matching the declared boundary."
+      "notes": "Issue #6 + #7 part B. Bounded runtime surface wired into the frontend: macro execution with argument injection, `vect` helper, empty constant objects, console capture, reference-compatible accept/reject and result semantics, resource limits defaulting to the pinned reference constants (1000 ms macro / 2000 ms hook budgets, 64 MiB memory, 512 KiB stack). The hook ABI runs against synthetic content in opy-macro-js; hook execution against the Workshop output is lowering-dependent (see hooks/post-compile-workshop, issue #8). Browser/WASM execution remains unsupported (native embedding only), matching the declared boundary."
     },
     {
       "id": "compilation/frontend-pipeline",
@@ -510,14 +517,14 @@
       "planned": 8,
       "frontend-supported": 14,
       "semantic-supported": 5,
-      "lowering-dependent": 7,
+      "lowering-dependent": 8,
       "end-to-end-supported": 0
     },
     "byCategory": {
       "syntax": 7,
       "semantics": 10,
       "preprocessing": 3,
-      "macros": 2,
+      "macros": 3,
       "directives": 2,
       "translations": 2,
       "optimization": 2,
