@@ -1,103 +1,71 @@
 # opy-rs
 
-`opy-rs` is WrightKit's Rust implementation of the OverPy `.opy` language.
-It is a standalone, Workshop-independent library and CLI: it parses, checks,
-inspects, and resolves `.opy` projects into a semantic model, with structured
-diagnostics and full source provenance. No Node, OverPy, Workshop backend, or
-catalog is required to build or run it.
+`opy-rs` is WrightKit's Rust implementation of the OverPy `.opy` language. It
+provides a standalone library and CLI for parsing, checking, inspecting, and
+resolving `.opy` projects with structured diagnostics and source provenance.
+No Node.js or upstream OverPy runtime is required.
 
-Pipeline: `OPY source → lexer → preprocess → CST/parser → semantic resolution
-→ OPY semantic model`, with a documented integration boundary toward
-`workshop-rs` for canonical Workshop lowering and emission. See
-[`docs/opy/architecture.md`](docs/opy/architecture.md) for the full
-architecture, ownership boundary, and stable contracts.
+The implementation is Workshop-independent until the documented
+[Workshop integration boundary](docs/opy/architecture.md): canonical Workshop
+semantics and emission are provided by `workshop-rs` rather than duplicated in
+this repository.
 
-## What is implemented
+## Features
 
-The standalone frontend foundation is CI-covered:
+- **OverPy source analysis:** lexer, preprocessing, parser, semantic resolution,
+  source-located diagnostics, and provenance across includes and macros.
+- **Preprocessing and macros:** `#!include`, object- and function-like
+  `#!define`, `#!undef`, settings blocks, and recorded `#!postCompileHook`.
+- **JavaScript macros:** OverPy-compatible `__script__("...")` macros run in a
+  bounded embedded QuickJS-NG runtime without Node.js.
+- **Tooling APIs:** `check`, semantic inspection, source-aware queries, and
+  [validated source-edit foundations](docs/opy/trivia-retention-policy.md).
+- **Compatibility evidence:** a [26-fixture corpus](compatibility/README.md),
+  pinned oracle snapshots, semantic probes, and native differential tests.
 
-* a full Workshop-independent pipeline from `.opy` source to a semantic
-  model, with structured, source-located diagnostics and full source
-  provenance (spans, file registry, include/macro attribution);
-* preprocessing: `#!include`, `#!define` (object- and function-like),
-  `#!undef`, `#!postCompileHook` (record-only), and settings blocks;
-* OverPy-compatible `__script__("…")` JavaScript macros through the bounded
-  embedded QuickJS-NG runtime (`crates/opy-macro-js`; no Node);
-* the OPY semantic compatibility manifest
-  ([`compat-manifest-spec.md`](docs/opy/compat-manifest-spec.md)) with
-  oracle-validated probes: builtin action/value/member identities,
-  signatures, aliases, and `catalogId` links;
-* the 26-fixture compatibility corpus
-  ([`compatibility/`](compatibility/README.md)) with pinned OverPy 9.7.10
-  oracle snapshots and the native differential suite.
+## CLI and library
 
-## Library and CLI surfaces
+The standalone CLI exposes the current tooling surface:
 
-* `crates/opy-frontend`: `compile`/`compile_with_overlay_outcome` and the
-  Workshop-independent tooling API (`opy_frontend::tooling`:
-  `check`/`check_with_overlay` → `CheckOutcome` with diagnostics, semantic
-  model, and file registry; `opy_frontend::support` exposes the embedded
-  support matrix). See [`docs/opy/tooling-api.md`](docs/opy/tooling-api.md).
-* `crates/opy-cli`: `opy-cli check|inspect|support|version`. Example:
+```sh
+opy-cli check main.opy       # diagnostics; exit 0 clean / 1 diagnostics
+opy-cli inspect main.opy     # resolved semantic model as JSON
+opy-cli support --json       # detailed machine-readable support data
+opy-cli version
+```
 
-  ```sh
-  opy-cli check main.opy       # diagnostics → stderr; exit 0 clean / 1 diagnostics
-  opy-cli inspect main.opy     # resolved semantic model as JSON
-  opy-cli support --json       # embedded support matrix (or a filtered slice)
-  ```
+The Rust library surface lives in `crates/opy-frontend`; see the
+[tooling API reference](docs/opy/tooling-api.md) for integration details.
 
 ## Compatibility
 
-Compatibility is **observable semantic compatibility for the declared
-support surface**, not byte/text, optimizer, or format identity. What matters
-is whether the same `.opy` project is accepted, what diagnostics it produces,
-and what the semantic model says about it. A presentation difference (for
-example `Global.<name>` vs a bare variable name in emitted text) only matters
-when it changes observable semantics.
+Compatibility targets observable OverPy semantics for the declared support
+surface, not byte-identical output, optimizer choices, or formatting. Support
+claims are backed by the compatibility corpus and a pinned OverPy 9.7.10
+reference.[^overpy-reference]
+
+> [!IMPORTANT]
+> `opy-rs` follows the OverPy language. It does not introduce a WrightKit-only
+> OPY dialect.
 
 | Capability | Status | Notes |
 | --- | --- | --- |
 | Core syntax & control flow | ✅ Supported | Lexing, expressions, assignments, `if`/`elif`/`else`, `for`/`while`, settings blocks |
 | Declarations | ✅ Supported | `globalvar`/`playervar`, `subroutine`, `def`, `enum`, `macro` |
 | Preprocessing & macros | ✅ Supported | `#!include`, `#!define`, `#!undef` |
-| JavaScript macros | ✅ Supported | `#!define name(...) __script__("...")` with a bounded embedded runtime; no Node |
+| JavaScript macros | ✅ Supported | `#!define name(...) __script__("...")` with a bounded embedded runtime |
 | Rules & directives | ✅ Supported | `rule` blocks, `@Event`, `@Condition`, bare `@Team`/`@Slot` |
 | Builtin actions & values | 🟡 Partial | The declared subset works; the full OverPy surface is not implemented yet |
 | Receiver/member functions | 🟡 Partial | Declared members work; the full member surface is not implemented yet |
-| Enums & constants | 🟡 Partial | Declared enum domains resolve as opaque values; the full domain surface is not implemented yet |
+| Enums & constants | 🟡 Partial | Declared enum domains resolve; the full domain surface is not implemented yet |
 | `switch` / string modifiers | ⏳ Not yet | |
 | Advanced directives, translations & optimization controls | ⏳ Not yet | `#!translations`, the `#!optimize` family, `#!mainFile`, and similar |
-| OPY → Workshop compilation | ⏳ Not yet | Integrated through `workshop-rs` |
-| Workshop → OPY reconstruction | ⏳ Not yet | Integrated through `workshop-rs` |
+| OPY → Workshop compilation | ⏳ Not yet | Requires the `workshop-rs` integration path |
+| Workshop → OPY reconstruction | ⏳ Not yet | Requires the `workshop-rs` integration path |
 
-Per-feature evidence and the machine-readable matrix live in
-[`docs/opy/support-matrix.md`](docs/opy/support-matrix.md) and
-[`compatibility/support-matrix.json`](compatibility/support-matrix.json).
-
-Stable contracts:
-
-* **Corpus-defined support.** Every declared feature is backed by the
-  compatibility corpus or explicitly marked as investigation.
-* **No WrightKit-only OPY dialect.** The surface targets the pinned OverPy
-  9.7.10 reference; deviations are documented, corpus-evidenced differences,
-  not new dialect features.
-* **Source-aware validated edits.** Tooling operates on authored source
-  ranges with full provenance and validates before editing, instead of
-  regenerating whole files
-  ([`trivia-retention-policy.md`](docs/opy/trivia-retention-policy.md)).
-
-## Current limitations
-
-* The full builtin action/value, receiver/member, and enum/constant-domain
-  surfaces are not implemented yet; only the declared subset works today.
-  `switch`/`case`, string modifiers, advanced preprocessing directives,
-  translations, and optimization controls are not implemented yet either
-  ([`compatibility-baseline.md`](docs/opy/compatibility-baseline.md)).
-* Workshop lowering, emission, catalog validation, locale data, and
-  `#!postCompileHook` execution against the final Workshop text require the
-  `workshop-rs` integration layer and are not part of this repository today.
-  `opy-rs` never approximates Workshop-owned behavior with a temporary
-  implementation.
+Exact per-feature evidence remains available in the
+[human-readable support reference](docs/opy/support-matrix.md) and
+[machine-readable support matrix](compatibility/support-matrix.json).
 
 ## Validation
 
@@ -105,31 +73,28 @@ Stable contracts:
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-targets --all-features
-python3 -m unittest discover -s compatibility/tests   # oracle-free harness checks
+python3 -m unittest discover -s compatibility/tests
 ```
 
-CI additionally runs the `opy-macro-js` runtime suite on macOS and Windows.
-Oracle-required steps (`compatibility/run_oracle.py`, the manifest probe
-validator) run standalone.
+CI additionally exercises the JavaScript macro runtime on macOS and Windows.
+Oracle-dependent compatibility probes run separately from the normal Rust and
+Python test suites.
 
 ## Documentation
 
-* [`docs/opy/architecture.md`](docs/opy/architecture.md): pipeline, ownership
-  boundary, stable contracts, readiness.
-* [`docs/opy/support-matrix.md`](docs/opy/support-matrix.md): declared
-  corpus-evidenced surface.
-* [`docs/opy/compatibility-baseline.md`](docs/opy/compatibility-baseline.md):
-  tiered planning for the remaining surface.
-* [`docs/opy/compat-manifest-spec.md`](docs/opy/compat-manifest-spec.md):
-  semantic manifest schema and ownership boundary.
-* [`docs/hir/opy-hir-v1.md`](docs/hir/opy-hir-v1.md): the Opy HIR v1 wire
-  contract.
-* [`docs/opy/tooling-api.md`](docs/opy/tooling-api.md): library API and CLI
-  contract.
-* [`compatibility/README.md`](compatibility/README.md): corpus and harness
-  layout.
+Architecture, compatibility evidence, APIs, HIR, provenance, and maintainer
+references are indexed in [`docs/README.md`](docs/README.md).
 
-This repository is part of the WrightKit multi-repository workspace. Follow
-the workspace-level `AGENTS.md` first, then this repository's local rules.
+## Contributing
 
-License: AGPL-3.0-or-later (see `LICENSE`).
+This repository is part of the WrightKit multi-repository workspace. Follow the
+workspace-level `AGENTS.md` first, then this repository's local rules when
+contributing changes.
+
+## License
+
+`opy-rs` is distributed under the GNU Affero General Public License v3.0 or
+later. See [`LICENSE`](LICENSE).
+
+[^overpy-reference]: The exact package identity, source revision, and provenance
+    are recorded in the [upstream reference record](docs/compatibility/upstream-references.md).
