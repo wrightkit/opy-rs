@@ -414,11 +414,11 @@ impl SemanticModel {
                 | Declaration::PlayerVariable {
                     initializer: Some(initializer),
                     ..
-                } => self.collect_expr(initializer, &mut sites),
-                Declaration::Constant { value, .. } => self.collect_expr(value, &mut sites),
+                } => Self::collect_expr(initializer, &mut sites),
+                Declaration::Constant { value, .. } => Self::collect_expr(value, &mut sites),
                 Declaration::Macro { body, .. } => {
                     for stmt in body {
-                        self.collect_stmt(stmt, &mut sites);
+                        Self::collect_stmt(stmt, &mut sites);
                     }
                 }
                 _ => {}
@@ -428,18 +428,18 @@ impl SemanticModel {
             match entry {
                 RuleEntry::Rule(rule) => {
                     for arg in &rule.event.args {
-                        self.collect_expr(arg, &mut sites);
+                        Self::collect_expr(arg, &mut sites);
                     }
                     for condition in &rule.conditions {
-                        self.collect_expr(condition, &mut sites);
+                        Self::collect_expr(condition, &mut sites);
                     }
                     for stmt in &rule.actions {
-                        self.collect_stmt(stmt, &mut sites);
+                        Self::collect_stmt(stmt, &mut sites);
                     }
                 }
                 RuleEntry::SubroutineDef { body, .. } => {
                     for stmt in body {
-                        self.collect_stmt(stmt, &mut sites);
+                        Self::collect_stmt(stmt, &mut sites);
                     }
                 }
             }
@@ -465,7 +465,7 @@ impl SemanticModel {
         }
     }
 
-    fn collect_expr(&self, expr: &HirExpr, sites: &mut Vec<(SymbolKind, String, Span)>) {
+    fn collect_expr(expr: &HirExpr, sites: &mut Vec<(SymbolKind, String, Span)>) {
         match expr {
             HirExpr::Number { .. }
             | HirExpr::String { .. }
@@ -491,13 +491,13 @@ impl SemanticModel {
             }
             HirExpr::Array { elements, .. } => {
                 for element in elements {
-                    self.collect_expr(element, sites);
+                    Self::collect_expr(element, sites);
                 }
             }
             HirExpr::Vector { x, y, z, .. } => {
-                self.collect_expr(x, sites);
-                self.collect_expr(y, sites);
-                self.collect_expr(z, sites);
+                Self::collect_expr(x, sites);
+                Self::collect_expr(y, sites);
+                Self::collect_expr(z, sites);
             }
             HirExpr::Call { name, span, args } => {
                 // A call may name a declared subroutine (with arguments) or
@@ -512,7 +512,7 @@ impl SemanticModel {
                     sites.push((SymbolKind::Def, name.clone(), to_frontend_span(*span)));
                 }
                 for arg in args {
-                    self.collect_expr(arg, sites);
+                    Self::collect_expr(arg, sites);
                 }
             }
             HirExpr::MacroCall { name, span, args } => {
@@ -520,54 +520,54 @@ impl SemanticModel {
                     sites.push((SymbolKind::Macro, name.clone(), to_frontend_span(*span)));
                 }
                 for arg in args {
-                    self.collect_expr(arg, sites);
+                    Self::collect_expr(arg, sites);
                 }
             }
             HirExpr::ReceiverCall { receiver, args, .. } => {
                 // The receiver may be a call (e.g. getPlayersInRadius(...).x)
                 // whose name binds a symbol; the call span of the outer node
                 // is attributed to the member name, not the receiver.
-                self.collect_expr(receiver, sites);
+                Self::collect_expr(receiver, sites);
                 for arg in args {
-                    self.collect_expr(arg, sites);
+                    Self::collect_expr(arg, sites);
                 }
             }
             HirExpr::Binary { left, right, .. } => {
-                self.collect_expr(left, sites);
-                self.collect_expr(right, sites);
+                Self::collect_expr(left, sites);
+                Self::collect_expr(right, sites);
             }
-            HirExpr::Unary { operand, .. } => self.collect_expr(operand, sites),
+            HirExpr::Unary { operand, .. } => Self::collect_expr(operand, sites),
             HirExpr::Index { array, index, .. } => {
-                self.collect_expr(array, sites);
-                self.collect_expr(index, sites);
+                Self::collect_expr(array, sites);
+                Self::collect_expr(index, sites);
             }
             HirExpr::Format { args, .. } => {
                 for arg in args {
-                    self.collect_expr(arg, sites);
+                    Self::collect_expr(arg, sites);
                 }
             }
         }
     }
 
-    fn collect_stmt(&self, stmt: &HirStmt, sites: &mut Vec<(SymbolKind, String, Span)>) {
+    fn collect_stmt(stmt: &HirStmt, sites: &mut Vec<(SymbolKind, String, Span)>) {
         match stmt {
-            HirStmt::Expr { expr, .. } => self.collect_expr(expr, sites),
+            HirStmt::Expr { expr, .. } => Self::collect_expr(expr, sites),
             HirStmt::Assign { target, value, .. } => {
-                self.collect_expr(target, sites);
-                self.collect_expr(value, sites);
+                Self::collect_expr(target, sites);
+                Self::collect_expr(value, sites);
             }
             HirStmt::If {
                 branches, r#else, ..
             } => {
                 for branch in branches {
-                    self.collect_expr(&branch.condition, sites);
+                    Self::collect_expr(&branch.condition, sites);
                     for stmt in &branch.body {
-                        self.collect_stmt(stmt, sites);
+                        Self::collect_stmt(stmt, sites);
                     }
                 }
                 if let Some(r#else) = r#else {
                     for stmt in r#else {
-                        self.collect_stmt(stmt, sites);
+                        Self::collect_stmt(stmt, sites);
                     }
                 }
             }
@@ -577,18 +577,18 @@ impl SemanticModel {
                 body,
                 ..
             } => {
-                self.collect_expr(variable, sites);
-                self.collect_expr(iterable, sites);
+                Self::collect_expr(variable, sites);
+                Self::collect_expr(iterable, sites);
                 for stmt in body {
-                    self.collect_stmt(stmt, sites);
+                    Self::collect_stmt(stmt, sites);
                 }
             }
             HirStmt::While {
                 condition, body, ..
             } => {
-                self.collect_expr(condition, sites);
+                Self::collect_expr(condition, sites);
                 for stmt in body {
-                    self.collect_stmt(stmt, sites);
+                    Self::collect_stmt(stmt, sites);
                 }
             }
             HirStmt::CallSubroutine { name, span } => {
