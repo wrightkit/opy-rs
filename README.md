@@ -1,15 +1,14 @@
 # opy-rs
 
-Standalone, Workshop-independent Rust frontend for the OverPy `.opy` source
-language. It is the OPY language provider within WrightKit: it parses,
-checks, inspects, and resolves OverPy `.opy` projects into a
-Workshop-independent semantic model (Opy HIR), and exposes that surface as a
-library API and a CLI. No Node, OverPy, Workshop backend, or catalog is
-required to build or run it.
+`opy-rs` is WrightKit's Rust implementation of the OverPy `.opy` language.
+It is a standalone, Workshop-independent library and CLI: it parses, checks,
+inspects, and resolves `.opy` projects into a semantic model, with structured
+diagnostics and full source provenance. No Node, OverPy, Workshop backend, or
+catalog is required to build or run it.
 
 Pipeline: `OPY source → lexer → preprocess → CST/parser → semantic resolution
-→ OPY semantic model (Opy HIR v1)`, with a documented integration boundary
-toward `workshop-rs` for canonical Workshop lowering and emission. See
+→ OPY semantic model`, with a documented integration boundary toward
+`workshop-rs` for canonical Workshop lowering and emission. See
 [`docs/opy/architecture.md`](docs/opy/architecture.md) for the full
 architecture, ownership boundary, and stable contracts.
 
@@ -17,9 +16,9 @@ architecture, ownership boundary, and stable contracts.
 
 The standalone frontend foundation is CI-covered:
 
-* the Workshop-independent frontend pipeline to Opy HIR v1, with structured,
-  source-located diagnostics and full source provenance (spans, file
-  registry, include/macro attribution);
+* a full Workshop-independent pipeline from `.opy` source to a semantic
+  model, with structured, source-located diagnostics and full source
+  provenance (spans, file registry, include/macro attribution);
 * preprocessing: `#!include`, `#!define` (object- and function-like),
   `#!undef`, `#!postCompileHook` (record-only), and settings blocks;
 * OverPy-compatible `__script__("…")` JavaScript macros through the bounded
@@ -56,46 +55,24 @@ and what the semantic model says about it. A presentation difference (for
 example `Global.<name>` vs a bare variable name in emitted text) only matters
 when it changes observable semantics.
 
-The declared surface is the machine-readable
-[`compatibility/support-matrix.json`](compatibility/support-matrix.json)
-(35 features), backed by the corpus under `compatibility/fixtures/`, the
-tiered [`docs/opy/compatibility-baseline.md`](docs/opy/compatibility-baseline.md),
-and the pinned OverPy 9.7.10 oracle
-([`docs/compatibility/upstream-references.md`](docs/compatibility/upstream-references.md)).
-
-Each feature is tracked in one of five states:
-
-* `frontend-supported`: the frontend handles it at the source level
-  (lexing, parsing, preprocessing, macro expansion), with corpus evidence;
-* `semantic-supported`: it also resolves into the semantic model (names,
-  members, enums, call semantics);
-* `planned`: declared and evidenced, but not implemented yet;
-* `lowering-dependent`: finishing it needs canonical Workshop data (catalog,
-  emission, locale) from `workshop-rs`, so opy-rs tracks it without
-  approximating it;
-* `end-to-end-supported`: full OPY-to-Workshop compile parity through
-  `workshop-rs`.
-
-| Capability | Matrix scope | State |
+| Capability | Status | Notes |
 | --- | --- | --- |
-| Frontend pipeline (lexing, expressions, declarations, control flow) | `compilation/frontend-pipeline`, `syntax/lexing`, `syntax/expressions`, `syntax/declarations`, `syntax/assignments-control-flow` | frontend-supported |
-| Settings blocks | `syntax/settings-blocks` | frontend-supported |
-| Preprocessing (include / define / undef) | `preprocessing/include`, `preprocessing/define-undef` | frontend-supported |
-| JavaScript macros and runtime hooks | `macros/definitions`, `macros/javascript`, `runtime/js-hooks` | frontend-supported |
-| Rule directives and model | `directives/rule-annotations`, `directives/rule-model` | frontend-supported |
-| Structured diagnostics | `semantics/diagnostics` | frontend-supported |
-| Declaration resolution, aliases, modules, keyword arguments | `semantics/declaration-resolution`, `semantics/for-binder`, `semantics/aliases`, `semantics/modules`, `semantics/keyword-arguments` | semantic-supported |
-| Full builtin actions/values surface | `semantics/builtin-actions-values` | planned |
-| Receiver/member functions (full surface) | `semantics/receiver-members` | planned |
-| Enum/constant domains (full surface) | `semantics/enum-domains` | planned |
-| `switch` / string modifiers / advanced directives / translations / optimization controls | `syntax/switch`, `syntax/string-modifiers`, `preprocessing/advanced-directives`, `translations/directive`, `optimization/controls` | planned |
-| Workshop lowering, emission, catalog, settings/locale emission | `compilation/workshop-lowering`, `compilation/end-to-end`, `semantics/settings-emission`, `translations/locale-emission`, `optimization/emission-form`, `hooks/post-compile-workshop` | lowering-dependent |
-| Workshop → OPY reconstruction | `decompilation/*` | lowering-dependent |
+| Core syntax & control flow | ✅ Supported | Lexing, expressions, assignments, `if`/`elif`/`else`, `for`/`while`, settings blocks |
+| Declarations | ✅ Supported | `globalvar`/`playervar`, `subroutine`, `def`, `enum`, `macro` |
+| Preprocessing & macros | ✅ Supported | `#!include`, `#!define`, `#!undef` |
+| JavaScript macros | ✅ Supported | `#!define name(...) __script__("...")` with a bounded embedded runtime; no Node |
+| Rules & directives | ✅ Supported | `rule` blocks, `@Event`, `@Condition`, bare `@Team`/`@Slot` |
+| Builtin actions & values | 🟡 Partial | The declared subset works; the full OverPy surface is not implemented yet |
+| Receiver/member functions | 🟡 Partial | Declared members work; the full member surface is not implemented yet |
+| Enums & constants | 🟡 Partial | Declared enum domains resolve as opaque values; the full domain surface is not implemented yet |
+| `switch` / string modifiers | ⏳ Not yet | |
+| Advanced directives, translations & optimization controls | ⏳ Not yet | `#!translations`, the `#!optimize` family, `#!mainFile`, and similar |
+| OPY → Workshop compilation | ⏳ Not yet | Integrated through `workshop-rs` |
+| Workshop → OPY reconstruction | ⏳ Not yet | Integrated through `workshop-rs` |
 
-Current counts: 14 `frontend-supported`, 5 `semantic-supported`, 8
-`planned`, 8 `lowering-dependent`, 0 `end-to-end-supported` (35 total). The
-matrix is the single mechanically checked source of truth; this table is a
-summary of it.
+Per-feature evidence and the machine-readable matrix live in
+[`docs/opy/support-matrix.md`](docs/opy/support-matrix.md) and
+[`compatibility/support-matrix.json`](compatibility/support-matrix.json).
 
 Stable contracts:
 
@@ -111,16 +88,16 @@ Stable contracts:
 
 ## Current limitations
 
-* Eight Workshop-independent features remain unimplemented: the full
-  builtin action/value, receiver/member, and enum/constant-domain surfaces
-  beyond the manifest-declared evidence, `switch` and string modifiers,
-  advanced preprocessing directives, translations, and optimization controls
+* The full builtin action/value, receiver/member, and enum/constant-domain
+  surfaces are not implemented yet; only the declared subset works today.
+  `switch`/`case`, string modifiers, advanced preprocessing directives,
+  translations, and optimization controls are not implemented yet either
   ([`compatibility-baseline.md`](docs/opy/compatibility-baseline.md)).
-* Workshop lowering, emission, catalog/member/domain/settings validation,
-  locale data, and `#!postCompileHook` execution against the final Workshop
-  text are not implemented in this repository; they belong to the
-  `workshop-rs` integration layer. `opy-rs` never approximates Workshop-owned
-  validation or a temporary Workshop IR.
+* Workshop lowering, emission, catalog validation, locale data, and
+  `#!postCompileHook` execution against the final Workshop text require the
+  `workshop-rs` integration layer and are not part of this repository today.
+  `opy-rs` never approximates Workshop-owned behavior with a temporary
+  implementation.
 
 ## Validation
 
