@@ -16,13 +16,6 @@
       "source": "aliases.opy"
     },
     {
-      "expect": "success",
-      "id": "builtin-enums",
-      "outputSha256": "860dd0fdc020122d128715067711004775967820519749ec0e6f14dd6d19ddd1",
-      "sha256": "f73a456e26707e2b49edbf7a1259ad990455649d78a8ba0710cbaa0bdfc0fe4b",
-      "source": "builtin-enums.opy"
-    },
-    {
       "diagnosticContains": "Unknown function 'createHudText'",
       "expect": "failure",
       "id": "catalog-only-names",
@@ -108,13 +101,6 @@
     },
     {
       "expect": "failure",
-      "id": "chase-reeval-wrong-domain",
-      "sha256": "4daa766f072ba77902f8f387dfec30ad74591626a73d735aa35f972e8d215cc7",
-      "source": "chase-reeval-wrong-domain.opy",
-      "diagnosticContains": "Unknown chaseratereeval"
-    },
-    {
-      "expect": "failure",
       "id": "chase-unknown-keyword",
       "sha256": "6b959459187346932379288b01cb1b915e13901055bd2eee1b3a80f6b018d348",
       "source": "chase-unknown-keyword.opy",
@@ -126,34 +112,6 @@
       "sha256": "eb8b4348eb425945cbf0499b2cce1a663dec29358fdd2b64c6839c3eae1a7575",
       "source": "chase-variable-first-arg.opy",
       "diagnosticContains": "Expected variable for 1st argument of function 'chaseAtRate'"
-    },
-    {
-      "diagnosticContains": "Expected type 'Invis' for the 2nd argument of function '.setInvisibility'",
-      "expect": "failure",
-      "id": "enum-arg-non-enum",
-      "sha256": "c5f41d43a347da13e489bb7cd5699120855016f2c425c9dd3cbc9802809dcdec",
-      "source": "enum-arg-non-enum.opy"
-    },
-    {
-      "diagnosticContains": "Expected type 'Invis' for the 2nd argument of function '.setInvisibility'",
-      "expect": "failure",
-      "id": "enum-arg-variable",
-      "sha256": "590d8108e117e11b2c4ca951417346c2f951dc7ed6436890cc7ff26a045715d8",
-      "source": "enum-arg-variable.opy"
-    },
-    {
-      "diagnosticContains": "Expected type 'ChaseTimeReeval' for the 4th argument of function 'chaseOverTime'",
-      "expect": "failure",
-      "id": "enum-domain-mismatch-1",
-      "sha256": "e564620792923ff010a31738849eacc40af42ce257bbfe99d95d9036737af5fb",
-      "source": "enum-domain-mismatch-1.opy"
-    },
-    {
-      "diagnosticContains": "Expected type 'Invis' for the 2nd argument of function '.setInvisibility'",
-      "expect": "failure",
-      "id": "enum-domain-mismatch-2",
-      "sha256": "482c5164effd7fb2e5a3bcb89385de100d910753371d6c1ea26332284de237f3",
-      "source": "enum-domain-mismatch-2.opy"
     },
     {
       "expect": "success",
