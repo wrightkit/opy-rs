@@ -9,14 +9,13 @@ required to build or run it.
 
 Pipeline: `OPY source → lexer → preprocess → CST/parser → semantic resolution
 → OPY semantic model (Opy HIR v1)`, with a documented integration boundary
-toward `workshop-rs` for canonical Workshop lowering and emission (issue #8).
-See [`docs/opy/architecture.md`](docs/opy/architecture.md) for the full
+toward `workshop-rs` for canonical Workshop lowering and emission. See
+[`docs/opy/architecture.md`](docs/opy/architecture.md) for the full
 architecture, ownership boundary, and stable contracts.
 
-## What is implemented (merged `main`)
+## What is implemented
 
-The standalone frontend foundation is merged and CI-covered (issues #2–#6
-complete; issue #7 partially delivered):
+The standalone frontend foundation is CI-covered:
 
 * the Workshop-independent frontend pipeline to Opy HIR v1, with structured,
   source-located diagnostics and full source provenance (spans, file
@@ -48,39 +47,66 @@ complete; issue #7 partially delivered):
   opy-cli support --json       # embedded support matrix (or a filtered slice)
   ```
 
-## Compatibility policy
+## Compatibility
 
-* Compatibility is **observable semantic compatibility**, not byte/text,
-  optimizer, or format identity: accepted/rejected surface, diagnostics, and
-  the semantic model are the contract; presentation differences are not bugs
-  unless they change observable semantics.
-* Support is **corpus-defined**: every declared feature is backed by the
-  compatibility corpus or explicitly marked as investigation. The support
-  matrix ([`compatibility/support-matrix.json`](compatibility/support-matrix.json))
-  is the single mechanically checked state source, with states `planned`,
-  `frontend-supported`, `semantic-supported`, `lowering-dependent`,
-  `end-to-end-supported`.
+Compatibility means **observable semantic compatibility for the declared
+support surface**, not byte/text, optimizer, or format identity: the
+accepted/rejected surface, diagnostics, and the semantic model are the
+contract; presentation differences are not bugs unless they change
+observable semantics. The declared surface is the machine-readable
+[`compatibility/support-matrix.json`](compatibility/support-matrix.json)
+(35 entries), backed by the corpus under `compatibility/fixtures/`, the
+tiered [`docs/opy/compatibility-baseline.md`](docs/opy/compatibility-baseline.md),
+and the pinned OverPy 9.7.10 oracle
+([`docs/compatibility/upstream-references.md`](docs/compatibility/upstream-references.md)).
+
+| Capability | Matrix scope | State |
+| --- | --- | --- |
+| Frontend pipeline (lexing, expressions, declarations, control flow) | `compilation/frontend-pipeline`, `syntax/lexing`, `syntax/expressions`, `syntax/declarations`, `syntax/assignments-control-flow` | frontend-supported |
+| Settings blocks | `syntax/settings-blocks` | frontend-supported |
+| Preprocessing (include / define / undef) | `preprocessing/include`, `preprocessing/define-undef` | frontend-supported |
+| JavaScript macros and runtime hooks | `macros/definitions`, `macros/javascript`, `runtime/js-hooks` | frontend-supported |
+| Rule directives and model | `directives/rule-annotations`, `directives/rule-model` | frontend-supported |
+| Structured diagnostics | `semantics/diagnostics` | frontend-supported |
+| Declaration resolution, aliases, modules, keyword arguments | `semantics/declaration-resolution`, `semantics/for-binder`, `semantics/aliases`, `semantics/modules`, `semantics/keyword-arguments` | semantic-supported |
+| Full builtin actions/values surface | `semantics/builtin-actions-values` | planned |
+| Receiver/member functions (full surface) | `semantics/receiver-members` | planned |
+| Enum/constant domains (full surface) | `semantics/enum-domains` | planned |
+| `switch` / string modifiers / advanced directives / translations / optimization controls | `syntax/switch`, `syntax/string-modifiers`, `preprocessing/advanced-directives`, `translations/directive`, `optimization/controls` | planned |
+| Workshop lowering, emission, catalog, settings/locale emission | `compilation/workshop-lowering`, `compilation/end-to-end`, `semantics/settings-emission`, `translations/locale-emission`, `optimization/emission-form`, `hooks/post-compile-workshop` | lowering-dependent |
+| Workshop → OPY reconstruction | `decompilation/*` | lowering-dependent |
+
+Matrix snapshot (source of truth: `compatibility/support-matrix.json`):
+14 `frontend-supported`, 5 `semantic-supported`, 8 `planned`, 8
+`lowering-dependent`, 0 `end-to-end-supported`.
+
+Stable contracts:
+
+* **Corpus-defined support.** Every declared feature is backed by the
+  compatibility corpus or explicitly marked as investigation; the support
+  matrix is the single mechanically checked state source, with states
+  `planned`, `frontend-supported`, `semantic-supported`,
+  `lowering-dependent`, `end-to-end-supported`.
 * There is **no WrightKit-only OPY dialect**: the surface targets the pinned
-  OverPy 9.7.10 reference (see
-  [`upstream-references.md`](docs/compatibility/upstream-references.md)), and
-  deviations are documented, corpus-evidenced differences, not new dialect
-  features.
+  OverPy 9.7.10 reference, and deviations are documented, corpus-evidenced
+  differences, not new dialect features.
 * The default tooling model is **source-aware validated edits**: tooling
   operates on authored source ranges with full provenance and validates
   before editing, rather than regenerating whole files
   ([`trivia-retention-policy.md`](docs/opy/trivia-retention-policy.md)).
 
-## Current limitations / readiness
+## Current limitations
 
-* Issue #7 is the active Workshop-independent readiness gate: the eight
-  remaining `planned` features and the full builtin/enum/receiver surface
-  beyond the manifest-declared evidence are not yet implemented
+* Eight Workshop-independent features remain unimplemented: the full
+  builtin action/value, receiver/member, and enum/constant-domain surfaces
+  beyond the manifest-declared evidence, `switch` and string modifiers,
+  advanced preprocessing directives, translations, and optimization controls
   ([`compatibility-baseline.md`](docs/opy/compatibility-baseline.md)).
-* Issue #8 (Workshop lowering, emission, catalog/member/domain/settings
-  validation, locale data, and `#!postCompileHook` execution against the
-  final Workshop text) is blocked on `#7` and the `wrightkit/workshop-rs#2`
-  contracts, and is not started in this repository. `opy-rs` never
-  approximates Workshop-owned validation or a temporary Workshop IR.
+* Workshop lowering, emission, catalog/member/domain/settings validation,
+  locale data, and `#!postCompileHook` execution against the final Workshop
+  text are not implemented in this repository; they belong to the
+  `workshop-rs` integration layer. `opy-rs` never approximates Workshop-owned
+  validation or a temporary Workshop IR.
 
 ## Validation
 
