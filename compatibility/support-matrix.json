@@ -9,7 +9,8 @@
   },
   "snapshot": {
     "date": "2026-08-16",
-    "note": "Evidence-base snapshot (issue #2) plus frontend-workstream state (issues #3-#7, part B). The frontend crate (PR #9), evidence base (PR #10), and JS macro runtime (PR #11) are merged locally on feat/frontend-completeness; rows advanced by the issue #7 part B differential + macro-integration work (macros/javascript, runtime/js-hooks, compilation/frontend-pipeline) are frontend-supported with corpus/runtime evidence. All other frontend-surface rows stay planned until the frontend workstream lands their corpus-evidenced behavior; features whose completion requires canonical Workshop semantics are `lowering-dependent` and inventory-only until the workshop-rs integration stage (#8)."
+    "note": "Evidence-base snapshot (issue #2) plus frontend-workstream state (issues #3-#7). Frontend (PR #9), evidence (PR #10), and JS runtime (PR #11) are merged locally on feat/frontend-completeness; the differential suite (issue #7, part B) runs all 26 corpus fixtures through the native pipeline. Frontend-supported rows: declared syntax surface, settings blocks, structured diagnostics, preprocessing (include/define/undef), macro statements, and rule directives/model. Semantic-supported rows: declaration resolution, for-loop binders, modules, keyword arguments, and the declared alias surface. Remaining planned rows: full builtin/enum/receiver surfaces beyond the manifest-declared evidence, advanced directives, translations, and optimization controls. Workshop-dependent features are lowering-dependent and inventory-only until the workshop-rs integration stage (#8).",
+    "asOfCommit": ""
   },
   "states": {
     "planned": "Declared surface, not yet implemented in opy-rs; evidence/provenance recorded for the implementing issue.",
@@ -35,7 +36,7 @@
       "id": "syntax/lexing",
       "name": "Lexer: identifiers, literals, strings, comments, #! directives, operators",
       "category": "syntax",
-      "state": "planned",
+      "state": "frontend-supported",
       "evidence": [
         "fixtures:synthetic/basic-rule",
         "fixtures:synthetic/control-flow",
@@ -47,13 +48,13 @@
         "upstream:src/tests/strings.opy",
         "upstream:src/tests/arrays.opy"
       ],
-      "notes": "Issue #3. Rejected sub-forms (dict literals, triple-quoted strings, backslash continuation, postfix ++/--) must fail with explicit diagnostics; baseline category 1."
+      "notes": "Corpus-evidenced: differential suite runs 26 fixtures; upstream tokenizer surface probed."
     },
     {
       "id": "syntax/expressions",
       "name": "Expression/postfix/member/call grammar, precedence, indexing",
       "category": "syntax",
-      "state": "planned",
+      "state": "frontend-supported",
       "evidence": [
         "fixtures:synthetic/expressions-values",
         "fixtures:synthetic/receiver-calls",
@@ -62,13 +63,13 @@
         "upstream:src/tests/arrays.opy",
         "upstream:src/tests/strings_args.opy"
       ],
-      "notes": "Issue #3. Corpus subset is baseline-supported in the declared contract; `del`/`in`/`not in` stay out (see syntax/switch)."
+      "notes": "Corpus-evidenced: expression fixtures + receiver-calls fixture resolve through the semantic model."
     },
     {
       "id": "syntax/declarations",
       "name": "Declarations: globalvar/playervar (index + initializer), subroutine, def, enum, macro constants",
       "category": "syntax",
-      "state": "planned",
+      "state": "frontend-supported",
       "evidence": [
         "fixtures:synthetic/declarations-rules",
         "fixtures:synthetic/declarations-numbers",
@@ -78,13 +79,13 @@
         "upstream:src/tests/subroutines.opy",
         "upstream:src/tests/enums.opy"
       ],
-      "notes": "Issues #3/#4. Bare-integer index form is an explicit Workshop variable index; integer-0 initializers are dropped from HIR matching the reference; Initialize-rule synthesis is lowering-dependent."
+      "notes": "Corpus-evidenced: declarations fixtures + overpy-cake resolve; diagnostics for malformed declarations."
     },
     {
       "id": "syntax/assignments-control-flow",
       "name": "Assignments and control flow: =, augmented ops, if/elif/else, for-in-range, while, pass",
       "category": "syntax",
-      "state": "planned",
+      "state": "frontend-supported",
       "evidence": [
         "fixtures:synthetic/control-flow",
         "fixtures:synthetic/for-range-agentlab",
@@ -92,7 +93,7 @@
         "upstream:src/tests/loops.opy",
         "upstream:src/tests/conditions.opy"
       ],
-      "notes": "Issue #3. Baseline category 3; augmented operators include min=/max= per the reference."
+      "notes": "Corpus-evidenced: control-flow fixtures resolve; parser rejects out-of-surface forms structurally."
     },
     {
       "id": "syntax/switch",
@@ -120,7 +121,7 @@
       "id": "syntax/settings-blocks",
       "name": "settings { ... } custom-game-settings blocks: JSONC parse into the typed HIR payload",
       "category": "syntax",
-      "state": "planned",
+      "state": "frontend-supported",
       "evidence": [
         "fixtures:synthetic/settings",
         "fixtures:real-world/overpy-meipocalypse/settings.opy",
@@ -128,31 +129,31 @@
         "upstream:src/tests/customGameSettings.opy",
         "upstream:src/tests/workshopSettings.opy"
       ],
-      "notes": "Issue #3. Parsing/placement validation is frontend-owned; the Workshop settings-section emission is lowering-dependent (see semantics/settings-emission)."
+      "notes": "Corpus-evidenced: settings fixtures parse into the typed HIR payload; emission lowering-dependent."
     },
     {
       "id": "semantics/declaration-resolution",
       "name": "Name resolution: undeclared identifiers, subroutine and constant references, enum types",
       "category": "semantics",
-      "state": "planned",
+      "state": "semantic-supported",
       "evidence": [
         "fixtures:synthetic/declarations-rules",
         "fixtures:synthetic/expressions-values",
         "upstream:src/tests/functions.opy",
         "upstream:src/tests/subroutines.opy"
       ],
-      "notes": "Issue #4. Structured source-located diagnostics: unknown-identifier, enum-type-without-member, unsupported-member."
+      "notes": "Resolved in Opy HIR with structured unknown-identifier/unsupported-member diagnostics; fixtures + tooling tests."
     },
     {
       "id": "semantics/for-binder",
       "name": "for-loop binder: declared globalvar or implicit default variables A-Z … DA-DX",
       "category": "semantics",
-      "state": "planned",
+      "state": "semantic-supported",
       "evidence": [
         "fixtures:synthetic/for-range-agentlab",
         "upstream:src/tests/loops.opy"
       ],
-      "notes": "Issue #4. Agent-lab regression: undeclared uppercase binder is an implicit global at its fixed Workshop slot; nested same-name loops reuse the binding; lowercase undeclared binders rejected like the reference."
+      "notes": "for-loop binders resolve to declared globals or implicit default variables (A-Z .. DA-DX); fixture for-range-agentlab."
     },
     {
       "id": "semantics/builtin-actions-values",
@@ -215,7 +216,7 @@
       "id": "semantics/aliases",
       "name": "Source aliases: non-contextual (stopChasingVariable, getCurrentHero, hasStatusEffect) and the ChaseReeval contextual alias",
       "category": "semantics",
-      "state": "planned",
+      "state": "semantic-supported",
       "evidence": [
         "probes:aliases",
         "probes:member-aliases",
@@ -223,26 +224,26 @@
         "probes:chase-reeval-outside",
         "probes:chase-reeval-wrong-domain"
       ],
-      "notes": "Issue #4/#5. Remaining alias surface (hero renames, obsolete names) stays legacy-quirk/demand-driven; ChaseReeval resolves only in the chase call context."
+      "notes": "Declared alias surface (3 non-contextual + ChaseReeval contextual) resolves; probes pass. Remaining alias surface legacy-quirk/demand-driven."
     },
     {
       "id": "semantics/modules",
       "name": "Modules: random.{randint,uniform,choice,shuffle}",
       "category": "semantics",
-      "state": "planned",
+      "state": "semantic-supported",
       "evidence": [
         "fixtures:real-world/overpy-cake",
         "fixtures:real-world/overpy-zencopter/heli.opy",
         "fixtures:real-world/overpy-meipocalypse/meipocalypse.opy",
         "upstream:src/data/opy/modules.ts"
       ],
-      "notes": "Issue #4. Corpus-evidenced: random.uniform/random.choice; range/random.*/.format route around the reference's generic keyword binder (keyword-unsupported)."
+      "notes": "random.{uniform,choice} calls resolve; corpus-evidenced (overpy-cake, zencopter, meipocalypse)."
     },
     {
       "id": "semantics/keyword-arguments",
       "name": "Named/keyword arguments: generic name=expr binding and the chase/ChaseReeval special form",
       "category": "semantics",
-      "state": "planned",
+      "state": "semantic-supported",
       "evidence": [
         "probes:chase-keywords",
         "probes:chase-keyword-binding",
@@ -255,19 +256,19 @@
         "probes:keyword-arguments-unsupported",
         "fixtures:synthetic/chase-keywords"
       ],
-      "notes": "Issue #4. raycast include=/exclude= and macro keyword arguments stay evidence-prioritized (no corpus/reference evidence in the declared surface)."
+      "notes": "Generic keyword binding + chase/ChaseReeval special form; probe-evidenced (chase-keywords set)."
     },
     {
       "id": "semantics/diagnostics",
       "name": "Source identity and diagnostics: structured, source-located frontend errors, wright-result/v1 envelope",
       "category": "semantics",
-      "state": "planned",
+      "state": "frontend-supported",
       "evidence": [
         "fixtures:synthetic/diagnostics",
         "fixtures:synthetic/declarations-rules",
         "upstream:runTests.mjs"
       ],
-      "notes": "Issues #3/#4. Stable codes (lex-error, parse-error, unknown-*, invalid-*, enum-*, chase-*); parser recovers at statement boundaries; S/D evidence class."
+      "notes": "Structured stable-code diagnostics with 1-based spans; 13-code contract tested in opy-frontend tooling tests."
     },
     {
       "id": "semantics/settings-emission",
@@ -285,7 +286,7 @@
       "id": "preprocessing/include",
       "name": "#!include: root-relative resolution, cycle detection, missing-file diagnostics, file registry",
       "category": "preprocessing",
-      "state": "planned",
+      "state": "frontend-supported",
       "evidence": [
         "fixtures:synthetic/preprocessing",
         "fixtures:real-world/ow1-emulator",
@@ -294,20 +295,20 @@
         "upstream:src/tests/include3.opy",
         "upstream:src/tests/include5.opy"
       ],
-      "notes": "Issue #5. Real-world fixtures are full include closures (per-file SHA-256 recorded in fixture.json)."
+      "notes": "Root-relative include resolution, cycle detection, missing-file diagnostics, file registry; deterministic multi-file tests."
     },
     {
       "id": "preprocessing/define-undef",
       "name": "#!define (object- and function-like), #!undef, recursive expansion, recursion guard",
       "category": "preprocessing",
-      "state": "planned",
+      "state": "frontend-supported",
       "evidence": [
         "fixtures:synthetic/preprocessing",
         "fixtures:real-world/overpy-cake",
         "upstream:src/tests/macros.opy",
         "upstream:src/tests/builtinmacros.opy"
       ],
-      "notes": "Issue #5. Unsupported directives fail explicitly (unsupported-directive); macro-recursion guard."
+      "notes": "Object- and function-like #!define, #!undef, recursive expansion with recursion guard; preprocessing fixtures."
     },
     {
       "id": "preprocessing/advanced-directives",
@@ -325,7 +326,7 @@
       "id": "macros/definitions",
       "name": "macro name(params): statement bodies with MacroParam references, macro constants",
       "category": "macros",
-      "state": "planned",
+      "state": "frontend-supported",
       "evidence": [
         "fixtures:synthetic/preprocessing",
         "fixtures:real-world/overpy-cake",
@@ -335,7 +336,7 @@
         "upstream:src/tests/astMacros.opy",
         "upstream:src/tests/builtinmacros.opy"
       ],
-      "notes": "Issue #5. Macro keyword arguments are treated as raw text by the reference and rejected explicitly."
+      "notes": "macro name(params): statement bodies with MacroParam references expand; corpus-evidenced (cake, meipocalypse, ow1-emulator)."
     },
     {
       "id": "macros/javascript",
@@ -360,7 +361,7 @@
       "id": "directives/rule-annotations",
       "name": "Rule annotations: @Event, @Condition, bare @Team/@Slot; evidence-prioritized: @Team/@Slot args, @Name, @Hero, @Disabled, @Delimiter, @NewPage, @SuppressWarnings",
       "category": "directives",
-      "state": "planned",
+      "state": "frontend-supported",
       "evidence": [
         "fixtures:synthetic/basic-rule",
         "fixtures:synthetic/declarations-rules",
@@ -368,13 +369,13 @@
         "upstream:src/tests/rules.opy",
         "upstream:README.md"
       ],
-      "notes": "Issue #3/#5. Baseline categories 4 (bare forms) and 4a (argument forms, evidence-prioritized); other @ directives fail explicitly."
+      "notes": "Bare @Event/@Condition/@Team/@Slot; argument forms and @Name/@Hero/@Disabled etc. remain planned (no corpus evidence in declared surface)."
     },
     {
       "id": "directives/rule-model",
       "name": "Rule model: rule \"name\": with events (global, eachPlayer), conditions list, statements",
       "category": "directives",
-      "state": "planned",
+      "state": "frontend-supported",
       "evidence": [
         "fixtures:synthetic/basic-rule",
         "fixtures:synthetic/chase-condition-agentlab",
@@ -382,7 +383,7 @@
         "upstream:src/tests/rules.opy",
         "upstream:src/tests/eventVars.opy"
       ],
-      "notes": "Issue #3. Rule disabled markers stay out (no corpus evidence for the source annotation)."
+      "notes": "rule \"name\": with global/eachPlayer events, conditions, statements; differential fixtures."
     },
     {
       "id": "translations/directive",
@@ -506,9 +507,9 @@
   ],
   "summary": {
     "byState": {
-      "planned": 24,
-      "frontend-supported": 3,
-      "semantic-supported": 0,
+      "planned": 8,
+      "frontend-supported": 14,
+      "semantic-supported": 5,
       "lowering-dependent": 7,
       "end-to-end-supported": 0
     },

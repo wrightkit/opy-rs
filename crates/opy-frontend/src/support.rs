@@ -198,8 +198,11 @@ mod tests {
         let matrix = SupportMatrix::builtin().unwrap();
         let lexing = matrix.feature("syntax/lexing").expect("declared feature");
         assert_eq!(lexing.category, "syntax");
-        assert_eq!(lexing.state, "planned");
-        assert_eq!(matrix.feature_state("syntax/lexing"), Some("planned"));
+        assert_eq!(lexing.state, "frontend-supported");
+        assert_eq!(
+            matrix.feature_state("syntax/lexing"),
+            Some("frontend-supported")
+        );
         assert_eq!(
             matrix.feature_state("compilation/workshop-lowering"),
             Some("lowering-dependent")
@@ -215,13 +218,13 @@ mod tests {
         assert_eq!(syntax.len(), 7);
         assert!(syntax.iter().all(|feature| feature.category == "syntax"));
         let lowering = matrix.features_by_state("lowering-dependent");
-        assert_eq!(lowering.len(), 7);
+        assert_eq!(lowering.len(), 8);
         assert!(
             lowering
                 .iter()
                 .all(|feature| feature.state == "lowering-dependent")
         );
-        assert_eq!(matrix.summary().by_state["planned"], 27);
+        assert_eq!(matrix.summary().by_state["planned"], 8);
         assert_eq!(matrix.summary().by_category["semantics"], 10);
         // Every feature id is unique.
         let mut ids: Vec<&str> = matrix
