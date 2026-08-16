@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/for-range-agentlab",
+  "category": "synthetic",
+  "features": ["for", "range", "implicit-default-var-binder"],
+  "source": "source.opy",
+  "expectedStatus": "success",
+  "provenance": {
+    "kind": "derived",
+    "origin": "wrightkit/agent-lab tools/test/fixtures/analyzer/loop-for.opy (default-branch commit at 2026-08-15); the @Condition getTotalTimeElapsed() > 5 line is dropped because that builtin is outside the declared manifest surface, keeping the for-binder regression itself intact",
+    "license": "AGPL-3.0-or-later",
+    "redistributable": true
+  }
+}

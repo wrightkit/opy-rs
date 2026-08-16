@@ -1,0 +1,41 @@
+{
+  "acquisitionMethod": "scripts/acquire-corpus.py: GitHub archive of the pinned commit (codeload.tar.gz), include-closure resolution matching the pinned oracle, SHA-256 verification",
+  "category": "real-world",
+  "expectedStatus": "failure",
+  "features": [
+    "declarations",
+    "preprocessing/includes",
+    "subroutines",
+    "control flow",
+    "arrays",
+    "workshop actions"
+  ],
+  "files": {
+    "barricades.opy": "98c6af05fdf0459efc371666e60b736adbe3d845aec6a0f05b9fec4f0c16100f",
+    "debug.opy": "b5f78f0049bf965fbb1ebf1ae55b4a524523c8770094455e5780a31bf5e152f3",
+    "debug_settings.opy": "96ec104b525c7a24b64049354334b53afa9cd6ee7eaed0afc2709dc7d1c6e459",
+    "fightforyourlife.opy": "7b6c69554922c81cea80283c95b0dc3a8641fca5edbb00019fc2456337ad25fd",
+    "heroUnlock.opy": "ba49692b62356fa821e20b925b097fde8b5ce5ff1d9bb30d4dfe563ceeff8283",
+    "mei_types.opy": "39b1b890831a674c299930f7ceb9dc77e335147a914fb544767dfdbf2fbb4381",
+    "meipocalypse.opy": "f982574116462c2796b8800a18f35ed8a55c599f2785c1ef7ca5ee6b21e5b604",
+    "settings.opy": "429e51da582c24bb52112bd6db9f2ef759e70621e3f5ddb543533aa53ed19634",
+    "shop.opy": "f84b1cb88cb6c935ecbaf9dced48cbdd9327616a698a4d50b984a844a1c13b1c",
+    "waves.opy": "0c6fe7d2d5bdd83805413bbdb3d62a26055b6b01e17874759acd2d2a68338c09",
+    "zones.opy": "a4f3d898c31cdcdb427ab02d986d786fa312acd1a00e2cc8dcc2c2f6aac0aba7"
+  },
+  "id": "real-world/overpy-meipocalypse",
+  "provenance": {
+    "kind": "imported-example",
+    "license": "GPL-3.0-only",
+    "licenseUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/LICENSE",
+    "modifications": "none",
+    "origin": "Zezombye/overpy examples/meipocalypse/",
+    "redistributable": true,
+    "sourceCommit": "eea67adbcf6926c4004e35e25ab4be072624a44e",
+    "sourceUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/examples/meipocalypse/meipocalypse.opy"
+  },
+  "provenanceNote": "upstream examples/meipocalypse/ also contains non-.opy generator helpers (generateWalls.js, generateZoneVariables.js, settings.opy.json, *.md) that are intentionally not committed as fixture sources under the compatibility fixture policy (non-.opy sources are not fixture inputs); the .opy sources reference the JS generation steps via __script__ (meipocalypse.opy:57-58, barricades.opy:51), so the pinned oracle fails with ENOENT, recorded as reference evidence in oracle.json and adapter/test/adapter.test.js",
+  "runtimeSeconds": 4.6,
+  "schemaVersion": 1,
+  "source": "meipocalypse.opy"
+}

@@ -1,0 +1,22 @@
+#!mainFile "../../dev_main.opy"
+
+#!include "../../heroes/orisa/javelin.opy"
+#!include "../../heroes/orisa/fortify.opy"
+#!include "../../heroes/orisa/terra_surge.opy"
+
+
+def initOrisa():
+    @Name "[orisa/init.opy]: initOrisa()"
+    
+    setCustomHp(
+        ADJ_ORISA_HEALTH_DUPLICATE if eventPlayer.isDuplicatingAHero() else ADJ_ORISA_HEALTH, 
+        ADJ_ORISA_ARMOR_DUPLICATE if eventPlayer.isDuplicatingAHero() else ADJ_ORISA_ARMOR, 
+        0)
+    setUltCost(ADJ_ORISA_ULT_COST)
+    removeTankPassive()
+    if not eventPlayer.isDuplicatingAHero():
+        removeSelfHealing()
+
+    eventPlayer.startScalingSize(1.04, true)
+    eventPlayer.balance_change_check = true
+    eventPlayer.hero_initialized = true

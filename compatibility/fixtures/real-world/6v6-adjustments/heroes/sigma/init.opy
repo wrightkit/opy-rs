@@ -1,0 +1,41 @@
+#!mainFile "../../dev_main.opy"
+
+#!include "../../heroes/sigma/accretion.opy"
+#!include "../../heroes/sigma/kinetic_grasp.opy"
+
+
+def initSigma():
+    @Name "[sigma/init.opy]: initSigma()"
+
+    setCustomHp(
+        ADJ_SIGMA_HEALTH_DUPLICATE if eventPlayer.isDuplicatingAHero() else ADJ_SIGMA_HEALTH,
+        0,
+        ADJ_SIGMA_SHIELDS)
+    setUltCost(
+        ADJ_SIGMA_ULT_COST)
+    removeTankPassive()
+    removeSelfHealing()
+
+    if not eventPlayer.isDuplicatingAHero():
+        setBaseDamage(eventPlayer, ADJ_SIGMA_ACCRETION_DAMAGE/OW2_SIGMA_ACCRETION_DAMAGE)
+
+    eventPlayer.balance_change_check = 0
+    eventPlayer.hero_initialized = true
+
+
+rule "[sigma/init.opy]: Increase Sigma other forms of damage":
+    @Event playerDealtDamage
+    @Hero sigma
+    @Condition eventAbility in [Button.MELEE, Button.PRIMARY_FIRE]
+    
+    damage(victim, attacker, ((eventDamage/eventPlayer._base_damage_scalar) - eventDamage)/eventPlayer._base_damage_scalar)
+
+
+rule "[sigma/init.opy]: Reduce Gravitic Flux damage":
+    @Event eachPlayer
+    @Hero sigma
+    @Condition eventPlayer.isUsingUltimate()
+    
+    eventPlayer.setDamageDealt(100)
+    waitUntil(not eventPlayer.isUsingUltimate(), Math.INFINITY)
+    eventPlayer.setDamageDealt(percent(eventPlayer._base_damage_scalar))

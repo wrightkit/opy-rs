@@ -1,0 +1,27 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "settings\n{\n\tmain\n\t{\n\t\tDescription: \"HUD Text Crosshair | by Zezombye\"\n\t}\n\tmodes\n\t{\n\t\tSkirmish\n\t\t{\n\t\t\tenabled maps\n\t\t\t{\n\t\t\t\tWorkshop Island\n\t\t\t}\n\t\t}\n\t\tGeneral\n\t\t{\n\t\t\tHero Limit: Off\n\t\t\tRespawn Time Scalar: 30%\n\t\t}\n\t}\n}\n\nrule (\"crosshair\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        \"hudSubtext(getAllPlayers(), \\\" \\\\n\\\\n\\\\n\\\\n\\\\n\\\\n\\\\n\\\\n\\\\n\\\\n\\\\n\\\\n\\\\n\\\", HudPosition.TOP, -999, Color.GREEN, HudReeval.VISIBILITY, SpecVisibility.NEVER)\"\n        Create HUD Text(All Players(All Teams), Null, Custom String(\"\u2028\\n\"), Null, Top, -998, Null, Color(Green), Null, Visible To, Visible Never);\n        Create HUD Text(All Players(All Teams), Null, Custom String(\" \\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\"), Null, Top, -997, Null, Color(Green), Null, Visible To, Visible Never);\n        Create HUD Text(All Players(All Teams), Null, Null, Custom String(\"\u2005\u2005\u2005\u2005\u2005\u2005\u2005\u2005\u2005\u2299\u202f\u202f\u202f\u202f\u202f\u202f\u202f\u202f\u202f\u202f\u202f\u202f\u202f\u202f\u202f\u202f\"), Top, -996, Null, Null, Color(Green), Visible To, Visible Never);\n    }\n}\n\nrule (\"disable hud\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    conditions {\n        Is Button Held(Event Player, Button(Interact)) == True;\n    }\n    actions {\n        Disable Hero HUD(Event Player);\n    }\n}\n\nrule (\"enable hud\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    conditions {\n        Is Button Held(Event Player, Button(Interact)) == False;\n    }\n    actions {\n        Enable Hero HUD(Event Player);\n    }\n}\n",
+    "workshopExact": "settings\n{\n\tmain\n\t{\n\t\tDescription: \"HUD Text Crosshair | by Zezombye\"\n\t}\n\tmodes\n\t{\n\t\tSkirmish\n\t\t{\n\t\t\tenabled maps\n\t\t\t{\n\t\t\t\tWorkshop Island\n\t\t\t}\n\t\t}\n\t\tGeneral\n\t\t{\n\t\t\tHero Limit: Off\n\t\t\tRespawn Time Scalar: 30%\n\t\t}\n\t}\n}\n\nrule (\"crosshair\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        \"hudSubtext(getAllPlayers(), \\\" \\\\n\\\\n\\\\n\\\\n\\\\n\\\\n\\\\n\\\\n\\\\n\\\\n\\\\n\\\\n\\\\n\\\", HudPosition.TOP, -999, Color.GREEN, HudReeval.VISIBILITY, SpecVisibility.NEVER)\"\n        Create HUD Text(All Players(All Teams), Null, Custom String(\"\u2028\\n\"), Null, Top, -998, Null, Color(Green), Null, Visible To, Visible Never);\n        Create HUD Text(All Players(All Teams), Null, Custom String(\" \\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\\n\"), Null, Top, -997, Null, Color(Green), Null, Visible To, Visible Never);\n        Create HUD Text(All Players(All Teams), Null, Null, Custom String(\"\u2005\u2005\u2005\u2005\u2005\u2005\u2005\u2005\u2005\u2299\u202f\u202f\u202f\u202f\u202f\u202f\u202f\u202f\u202f\u202f\u202f\u202f\u202f\u202f\u202f\u202f\"), Top, -996, Null, Null, Color(Green), Visible To, Visible Never);\n    }\n}\n\nrule (\"disable hud\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    conditions {\n        Is Button Held(Event Player, Button(Interact)) == True;\n    }\n    actions {\n        Disable Hero HUD(Event Player);\n    }\n}\n\nrule (\"enable hud\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    conditions {\n        Is Button Held(Event Player, Button(Interact)) == False;\n    }\n    actions {\n        Enable Hero HUD(Event Player);\n    }\n}\n\n",
+    "workshopSha256": "be2fabcbdb831e5ee64e076252ecc20fe35a006a31bb87cfd7fc5ea0e5b5bd97"
+  },
+  "fixture": "real-world/overpy-crosshair",
+  "input": {
+    "sha256": "d2c22b59c11fee75ae4febc96c94126059f4e5c5f64cc2e5a28e939968ed8f8f",
+    "source": "crosshair.opy"
+  },
+  "oracle": {
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

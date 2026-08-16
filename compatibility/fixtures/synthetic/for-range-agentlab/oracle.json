@@ -1,0 +1,27 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: total\n        8: I\n}\n\nrule (\"for loop\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        For Global Variable(I, 0, 10, 1);\n            Modify Global Variable(total, Add, 1);\n        End;\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: total\n        8: I\n}\n\nrule (\"for loop\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        For Global Variable(I, 0, 10, 1);\n            Modify Global Variable(total, Add, 1);\n        End;\n    }\n}\n\n",
+    "workshopSha256": "dd43e2440dfd02a9ec12d578e1ee5c64deea70c864b7f6cae52c3dc76be8c5ee"
+  },
+  "fixture": "synthetic/for-range-agentlab",
+  "input": {
+    "sha256": "8cfabbc9369bd2af0f39b2f15dcdc44edcc380891740e4b03edb3080c1400561",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

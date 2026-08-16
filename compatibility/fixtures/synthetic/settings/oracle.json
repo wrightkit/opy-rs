@@ -1,0 +1,27 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "settings\n{\n\tmain\n\t{\n\t\tDescription: \"M11 bounded settings fixture\"\n\t}\n\tmodes\n\t{\n\t\tSkirmish\n\t\t{\n\t\t\tenabled maps\n\t\t\t{\n\t\t\t\tWorkshop Island\n\t\t\t}\n\t\t}\n\t\tGeneral\n\t\t{\n\t\t\tHero Limit: Off\n\t\t\tRespawn Time Scalar: 30%\n\t\t\tAllow Hero Switching: On\n\t\t}\n\t}\n\theroes\n\t{\n\t\tGeneral\n\t\t{\n\t\t\tMei\n\t\t\t{\n\t\t\t\tHealth: 200%\n\t\t\t}\n\t\t}\n\t}\n}\n\nrule (\"setup\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Disable Inspector Recording;\n    }\n}\n",
+    "workshopExact": "settings\n{\n\tmain\n\t{\n\t\tDescription: \"M11 bounded settings fixture\"\n\t}\n\tmodes\n\t{\n\t\tSkirmish\n\t\t{\n\t\t\tenabled maps\n\t\t\t{\n\t\t\t\tWorkshop Island\n\t\t\t}\n\t\t}\n\t\tGeneral\n\t\t{\n\t\t\tHero Limit: Off\n\t\t\tRespawn Time Scalar: 30%\n\t\t\tAllow Hero Switching: On\n\t\t}\n\t}\n\theroes\n\t{\n\t\tGeneral\n\t\t{\n\t\t\tMei\n\t\t\t{\n\t\t\t\tHealth: 200%\n\t\t\t}\n\t\t}\n\t}\n}\n\nrule (\"setup\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Disable Inspector Recording;\n    }\n}\n\n",
+    "workshopSha256": "b8c2a31a7ca350f5093fab8a2e80173b75480a423fbf9499adb3b4e77eadad6d"
+  },
+  "fixture": "synthetic/settings",
+  "input": {
+    "sha256": "b7989b6c078370649e87407d697da6ca89719b4ec6fcfcee63ce7836d2008fa2",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

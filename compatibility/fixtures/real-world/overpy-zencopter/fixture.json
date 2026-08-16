@@ -1,0 +1,28 @@
+{
+  "acquisitionMethod": "scripts/acquire-corpus.py: GitHub archive of the pinned commit (codeload.tar.gz), include-closure resolution matching the pinned oracle, SHA-256 verification",
+  "category": "real-world",
+  "expectedStatus": "failure",
+  "features": [
+    "preprocessing/macros",
+    "expressions",
+    "events",
+    "workshop enums/actions"
+  ],
+  "files": {
+    "heli.opy": "246f74a946b097c299853dc3d46d1a722cbdc6f97baf7e095986cda6963cfe96"
+  },
+  "id": "real-world/overpy-zencopter",
+  "provenance": {
+    "kind": "imported-example",
+    "license": "GPL-3.0-only",
+    "licenseUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/LICENSE",
+    "modifications": "none",
+    "origin": "Zezombye/overpy examples/Zencopter/heli.opy",
+    "redistributable": true,
+    "sourceCommit": "eea67adbcf6926c4004e35e25ab4be072624a44e",
+    "sourceUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/examples/Zencopter/heli.opy"
+  },
+  "runtimeSeconds": 7.4,
+  "schemaVersion": 1,
+  "source": "heli.opy"
+}
