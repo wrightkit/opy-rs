@@ -1,0 +1,29 @@
+{
+  "acquisitionMethod": "scripts/acquire-corpus.py: GitHub archive of the pinned commit (codeload.tar.gz), include-closure resolution matching the pinned oracle, SHA-256 verification",
+  "category": "real-world",
+  "expectedStatus": "success",
+  "features": [
+    "settings",
+    "declarations",
+    "expressions",
+    "control flow",
+    "workshop actions"
+  ],
+  "files": {
+    "crosshair.opy": "d2c22b59c11fee75ae4febc96c94126059f4e5c5f64cc2e5a28e939968ed8f8f"
+  },
+  "id": "real-world/overpy-crosshair",
+  "provenance": {
+    "kind": "imported-example",
+    "license": "GPL-3.0-only",
+    "licenseUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/LICENSE",
+    "modifications": "none",
+    "origin": "Zezombye/overpy examples/crosshair.opy",
+    "redistributable": true,
+    "sourceCommit": "eea67adbcf6926c4004e35e25ab4be072624a44e",
+    "sourceUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/examples/crosshair.opy"
+  },
+  "runtimeSeconds": 3.2,
+  "schemaVersion": 1,
+  "source": "crosshair.opy"
+}

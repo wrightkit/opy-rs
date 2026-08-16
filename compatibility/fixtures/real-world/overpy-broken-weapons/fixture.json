@@ -1,0 +1,28 @@
+{
+  "acquisitionMethod": "scripts/acquire-corpus.py: GitHub archive of the pinned commit (codeload.tar.gz), include-closure resolution matching the pinned oracle, SHA-256 verification",
+  "category": "real-world",
+  "expectedStatus": "success",
+  "features": [
+    "declarations",
+    "macros",
+    "control flow",
+    "workshop actions"
+  ],
+  "files": {
+    "broken_weapons.opy": "4b966f2b755545143c7a9fafdbb7b5d5e85604910f14d2532d92eea0854ae427"
+  },
+  "id": "real-world/overpy-broken-weapons",
+  "provenance": {
+    "kind": "imported-example",
+    "license": "GPL-3.0-only",
+    "licenseUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/LICENSE",
+    "modifications": "none",
+    "origin": "Zezombye/overpy examples/broken_weapons.opy",
+    "redistributable": true,
+    "sourceCommit": "eea67adbcf6926c4004e35e25ab4be072624a44e",
+    "sourceUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/examples/broken_weapons.opy"
+  },
+  "runtimeSeconds": 4.4,
+  "schemaVersion": 1,
+  "source": "broken_weapons.opy"
+}

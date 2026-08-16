@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/expressions-values",
+  "category": "synthetic",
+  "features": ["expressions", "arrays", "strings", "vectors"],
+  "source": "source.opy",
+  "expectedStatus": "success",
+  "provenance": {
+    "kind": "original",
+    "origin": "Wright compatibility corpus",
+    "license": "AGPL-3.0-or-later",
+    "redistributable": true
+  }
+}

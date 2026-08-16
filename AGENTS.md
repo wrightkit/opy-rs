@@ -25,10 +25,17 @@ catalog, WIR, emitter, or locale data — those belong to `workshop-rs`.
 ## Upstream reference and provenance
 
 OverPy is the pinned compatibility oracle (see
-`docs/compatibility/upstream-references.md`). It is GPL-3.0; this repository is
-AGPL-3.0-or-later and never links to, bundles, or copies OverPy source. Oracle
-use is limited to documented, isolated evaluation through the compatibility
-harness. Fixtures and derived evidence must carry provenance.
+`docs/compatibility/upstream-references.md`). It is GPL-3.0; this repository
+is AGPL-3.0-or-later. OverPy implementation or data — compiler sources,
+`src/data/*` tables, internal AST/types, generated artifacts — is never
+imported into, linked to, or bundled with the opy-rs core (`crates/`) or
+release artifacts. Provenance/license/redistribution-reviewed upstream
+example and test fixtures (e.g. the GPL-3.0 OverPy `examples/` corpus) may be
+retained under `compatibility/fixtures/` as documented, isolated oracle
+evidence, with per-file provenance records; they are never imported by core
+code and never bundled into core builds or releases. Fixtures and derived
+evidence must carry provenance; unclear-provenance or unlicensed content is
+prohibited.
 
 ## Validation
 

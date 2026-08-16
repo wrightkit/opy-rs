@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/chase-keywords",
+  "category": "synthetic",
+  "features": ["named/keyword arguments", "chase forms", "ChaseReeval contextual resolution"],
+  "source": "source.opy",
+  "expectedStatus": "success",
+  "provenance": {
+    "kind": "original",
+    "origin": "Wright compatibility corpus",
+    "license": "AGPL-3.0-or-later",
+    "redistributable": true
+  },
+  "provenanceNote": "Synthetic-original source authored by Wright for the corpus. It reproduces the chase(...) keyword forms discovered in the real-world overpy-meipocalypse corpus (chase(variable, destination, rate=..., ChaseReeval.NONE), e.g. mei_types.opy and fightforyourlife.opy) in a fully supported native-frontend context, and exercises the generic keyword-argument binding for wait/vect/len/print/getPlayersInRadius/setStatusEffect. Reference-validated against the pinned OverPy 9.7.10 oracle (issue #110); the meipocalypse fixture itself stays out of the corpus because its broader surface (list comprehensions, Team.1, script hooks) is not native-supported."
+}

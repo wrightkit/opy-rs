@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/receiver-calls",
+  "category": "synthetic",
+  "features": [
+    "receiver calls",
+    "event player methods",
+    "member calls in conditions",
+    "member calls as arguments",
+    "player variable receiver"
+  ],
+  "source": "source.opy",
+  "expectedStatus": "success",
+  "provenance": {
+    "kind": "original",
+    "origin": "Wright compatibility corpus; receiver/member call forms derived from the real-world overpy-meipocalypse corpus (Zezombye/overpy examples/meipocalypse at commit eea67adbcf6926c4004e35e25ab4be072624a44e, GPL-3.0-only, see real-world/overpy-meipocalypse fixture.json)",
+    "license": "AGPL-3.0-or-later",
+    "redistributable": true
+  },
+  "provenanceNote": "Synthetic-original fixture: newly authored for the issue #104 regression. The receiver-call idioms (eventPlayer.setMoveSpeed(...), eventPlayer.getPosition(), eventPlayer.isAlive(), eventPlayer.getHealth(), eventPlayer.teleport(...), and the player-variable receiver) are the same forms exercised by the redistributable overpy-meipocalypse corpus; unsupported enum-gated methods from that corpus (setInvisibility/setStatusEffect with Invis/Status enums, worldVector with Transform) are intentionally excluded and remain structured diagnostics. Oracle en-US spellings for the exercised methods come from the pinned overpy@9.7.10 package surface.",
+  "files": {
+    "source.opy": "72ab2b077545fea887e26bd0544441e42bbaab569e5fdd77a9650452e08982e9"
+  }
+}

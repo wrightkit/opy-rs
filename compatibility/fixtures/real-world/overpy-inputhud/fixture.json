@@ -1,0 +1,30 @@
+{
+  "acquisitionMethod": "scripts/acquire-corpus.py: GitHub archive of the pinned commit (codeload.tar.gz), include-closure resolution matching the pinned oracle, SHA-256 verification",
+  "category": "real-world",
+  "expectedStatus": "success",
+  "features": [
+    "settings",
+    "declarations",
+    "expressions",
+    "control flow",
+    "workshop actions",
+    "strings"
+  ],
+  "files": {
+    "inputhud.opy": "ae7a0e004cc80e61d256d0ff2509f51bdc96b27d60a93c9215b327436e7eefc1"
+  },
+  "id": "real-world/overpy-inputhud",
+  "provenance": {
+    "kind": "imported-example",
+    "license": "GPL-3.0-only",
+    "licenseUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/LICENSE",
+    "modifications": "none",
+    "origin": "Zezombye/overpy examples/inputhud.opy",
+    "redistributable": true,
+    "sourceCommit": "eea67adbcf6926c4004e35e25ab4be072624a44e",
+    "sourceUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/examples/inputhud.opy"
+  },
+  "runtimeSeconds": 3.2,
+  "schemaVersion": 1,
+  "source": "inputhud.opy"
+}

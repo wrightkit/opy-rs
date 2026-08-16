@@ -1,0 +1,29 @@
+{
+  "acquisitionMethod": "scripts/acquire-corpus.py: GitHub archive of the pinned commit (codeload.tar.gz), include-closure resolution matching the pinned oracle, SHA-256 verification",
+  "category": "real-world",
+  "expectedStatus": "success",
+  "features": [
+    "declarations",
+    "control flow",
+    "strings",
+    "workshop enums/actions",
+    "settings block"
+  ],
+  "files": {
+    "pixelart.opy": "b9b7c9b0dea9ebd4734a88a10eb8639f32eec8119aefee44333a73cee7ac6502"
+  },
+  "id": "real-world/overpy-pixelart",
+  "provenance": {
+    "kind": "imported-example",
+    "license": "GPL-3.0-only",
+    "licenseUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/LICENSE",
+    "modifications": "none",
+    "origin": "Zezombye/overpy examples/pixelart.opy",
+    "redistributable": true,
+    "sourceCommit": "eea67adbcf6926c4004e35e25ab4be072624a44e",
+    "sourceUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/examples/pixelart.opy"
+  },
+  "runtimeSeconds": 6.2,
+  "schemaVersion": 1,
+  "source": "pixelart.opy"
+}

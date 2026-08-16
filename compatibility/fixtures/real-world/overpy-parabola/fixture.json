@@ -1,0 +1,29 @@
+{
+  "acquisitionMethod": "scripts/acquire-corpus.py: GitHub archive of the pinned commit (codeload.tar.gz), include-closure resolution matching the pinned oracle, SHA-256 verification",
+  "category": "real-world",
+  "expectedStatus": "success",
+  "features": [
+    "settings",
+    "declarations",
+    "expressions",
+    "control flow",
+    "workshop actions"
+  ],
+  "files": {
+    "parabola.opy": "2dce50c374a00e3d3e664f4753f736f788cfb2d0df3a2149b139e6f8cb484940"
+  },
+  "id": "real-world/overpy-parabola",
+  "provenance": {
+    "kind": "imported-example",
+    "license": "GPL-3.0-only",
+    "licenseUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/LICENSE",
+    "modifications": "none",
+    "origin": "Zezombye/overpy examples/parabola.opy",
+    "redistributable": true,
+    "sourceCommit": "eea67adbcf6926c4004e35e25ab4be072624a44e",
+    "sourceUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/examples/parabola.opy"
+  },
+  "runtimeSeconds": 3.0,
+  "schemaVersion": 1,
+  "source": "parabola.opy"
+}

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/chase-enums",
+  "category": "synthetic",
+  "features": ["workshop enums", "assignments"],
+  "source": "source.opy",
+  "expectedStatus": "success",
+  "provenance": {
+    "kind": "original",
+    "origin": "Wright compatibility corpus",
+    "license": "AGPL-3.0-or-later",
+    "redistributable": true
+  },
+  "provenanceNote": "Synthetic-original source authored by Wright for the corpus. It reproduces the ChaseTimeReeval.NONE usage discovered in wrightkit/agent-lab tools/test/fixtures/analyzer/chase-condition.opy (blob SHA 2938baff2bac77f8818309ac1e356cf5b9e15d56) in a fully supported native-frontend context (assignments), because agent-lab declares no redistribution license and its source stays out of the corpus. Member spellings and emitted Workshop text were reference-validated against the pinned OverPy 9.7.10 oracle (see docs/opy/support-matrix.md and crates/wright-workshop/src/catalog/data/catalog.json provenance)."
+}
