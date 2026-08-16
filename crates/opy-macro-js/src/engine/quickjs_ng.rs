@@ -111,8 +111,16 @@ impl JsEngine for QuickJsEngine {
             );
             if q::JS_Ext_IsException(value) {
                 let exception = q::JS_GetException(self.context);
-                let message =
-                    self.prop_string_or(exception, c"message", self.value_string(exception));
+                // Under memory exhaustion QuickJS-NG reports the exception as
+                // null on some platforms (Linux CI observed "null" rendered
+                // from a null exception). Map a null exception to the stable
+                // out-of-memory message so resource-limit behavior is
+                // platform-independent.
+                let message = if q::JS_Ext_IsNull(exception) {
+                    "out of memory".to_string()
+                } else {
+                    self.prop_string_or(exception, c"message", self.value_string(exception))
+                };
                 let stack = self.prop_string_or(exception, c"stack", String::new());
                 q::JS_FreeValue(self.context, exception);
                 return Err(EngineError::Exception { message, stack });
