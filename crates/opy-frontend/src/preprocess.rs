@@ -27,10 +27,17 @@
 //! structured `script-*` diagnostics with the script path, line, and column.
 //!
 //! `#!postCompileHook "hook.js"` registers the post-compile hook script
-//! (duplicate declarations are rejected like the reference); the hook runs at
-//! the end of [`crate::compile_with_overlay_outcome`] against the Opy HIR
-//! wire payload, and its output is recorded on the outcome. Wiring hook
-//! output into Workshop emission stays lowering-dependent (workshop-rs).
+//! (duplicate declarations are rejected like the reference). The frontend
+//! recognizes, parses, validates, and records the directive only — it never
+//! executes the hook: real hook execution receives the final Workshop text
+//! produced by lowering and is lowering-dependent (workshop-rs emission,
+//! issue #8); the frontend never fabricates a Workshop payload.
+//!
+//! Boundary: `__script__` macros expand at compile time through the runtime
+//! (frontend-supported); `#!postCompileHook` is recorded and executed only
+//! against the real Workshop output (lowering-dependent). The runtime's hook
+//! ABI is tested separately on synthetic content in `opy-macro-js` (see its
+//! `hooks` test suite).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -59,7 +66,11 @@ pub struct ScriptMacro {
     pub source: String,
 }
 
-/// A registered `#!postCompileHook` script.
+/// A registered `#!postCompileHook` script (the declaration record).
+///
+/// The frontend recognizes, parses, validates, and records the directive; it
+/// never executes the hook. Execution against the final Workshop text is
+/// lowering-dependent (issue #8).
 #[derive(Debug, Clone, PartialEq)]
 pub struct PostCompileHook {
     /// The script path as declared (root-relative).

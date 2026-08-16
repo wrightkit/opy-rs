@@ -12,15 +12,18 @@
 //! Pipeline: [`lexer::lex`] → [`preprocess::preprocess`] →
 //! [`parser::parse`] → [`lower::lower`] → Opy HIR ([`hir`]).
 //!
-//! OverPy-compatible `__script__("…")` macros and `#!postCompileHook` scripts
-//! execute at compile time through the bounded embedded runtime
-//! ([`opy_macro_js`]): script macros expand during preprocessing with the
-//! reference's argument-injection ABI, and the post-compile hook runs against
-//! the Opy HIR v1 payload once lowering succeeds (see
-//! [`compile_with_overlay_outcome`] and `preprocess`). Resource limits mirror
-//! the pinned reference constants (`opy_macro_js::Limits::default()`); wiring
-//! hook output and catalog constants into Workshop emission stays
-//! lowering-dependent.
+//! OverPy-compatible `__script__("…")` macros execute at compile time through
+//! the bounded embedded runtime ([`opy_macro_js`]): script macros expand
+//! during preprocessing with the reference's argument-injection ABI, and
+//! resource limits mirror the pinned reference constants
+//! (`opy_macro_js::Limits::default()`). Script-macro expansion is
+//! compile-time behavior and is frontend-supported.
+//!
+//! `#!postCompileHook` is recognized, parsed, validated, and recorded only
+//! (see [`preprocess`] and [`CompileOutcome::post_compile_hook`]): the
+//! frontend never executes the hook. Real hook execution receives the final
+//! Workshop text produced by lowering and is lowering-dependent (workshop-rs
+//! emission, issue #8); the frontend never fabricates a Workshop payload.
 //!
 //! This crate is the extraction of the mature Wright frontend
 //! (`crates/wright-opy`); module provenance and issue references follow the
