@@ -5,13 +5,20 @@
 //! checked first (in [`super::parse_value`]), then unknown node kinds are
 //! rejected with the offending kind name and span, then the payload is
 //! deserialized, then structural invariants (spans, identifiers, references)
-//! are checked over the typed program. Settings-key domain checks resolve
-//! against the identity-only table in [`super::settings_table`].
+//! are checked over the typed program.
+//!
+//! Settings validation is structural only: the block's group shape (children
+//! must be groups, a `gamemodes` group must be present), span validity, and
+//! non-empty key names. Key *existence* and leaf *kinds* (which keys exist,
+//! whether a leaf is a number/bool/string/enum/list-of-heroes, and which
+//! mode/team/hero/map/enum spellings are valid) need the canonical Workshop
+//! settings schema, which is Workshop-owned catalog content; those checks
+//! are `lowering-dependent` (issue #8) and are never approximated with a
+//! local allowlist here.
 
 use serde_json::Value;
 
 use super::error::{HirError, invalid};
-use super::settings_table::{self as table, KeyKind, PathPart};
 use super::types::{
     Declaration, Expr, PROTOCOL_MAJOR, PROTOCOL_NAME, Position, Program, Rule, RuleEntry, Settings,
     SettingsNode, Span, Stmt, default_var_index,
@@ -255,8 +262,12 @@ pub(crate) fn validate_program(program: &Program) -> Result<(), HirError> {
     Ok(())
 }
 
-/// Validate the settings carrier: block/gamemodes presence, span validity,
-/// non-empty keys, and domain checks against the emission table (#86).
+/// Validate the settings carrier structurally: the block's group shape,
+/// span validity, and non-empty key names. Key existence and leaf kinds are
+/// NOT validated here — the canonical Workshop settings schema (key paths,
+/// value kinds, mode/team/hero/map/enum spellings) is Workshop-owned catalog
+/// content, so that validation is `lowering-dependent` (issue #8) and the
+/// tree is carried structurally.
 fn validate_settings(program: &Program, settings: &Settings) -> Result<(), HirError> {
     check_span(settings.span, program.files.len())?;
     let mut has_gamemodes = false;
@@ -271,7 +282,7 @@ fn validate_settings(program: &Program, settings: &Settings) -> Result<(), HirEr
         if name == "gamemodes" {
             has_gamemodes = true;
         }
-        validate_group(program, child, Slot::Root)?;
+        validate_settings_node(program, child)?;
     }
     if !has_gamemodes {
         return Err(invalid(
@@ -283,188 +294,15 @@ fn validate_settings(program: &Program, settings: &Settings) -> Result<(), HirEr
     Ok(())
 }
 
-/// Where a settings group sits in the block (decides how its children are
-/// interpreted).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Slot {
-    Root,
-    Mode,
-    Team,
-    Hero,
-}
-
-fn validate_group(program: &Program, node: &SettingsNode, slot: Slot) -> Result<(), HirError> {
-    let SettingsNode::Group {
-        name,
-        children,
-        span,
-    } = node
-    else {
-        return Err(invalid(
-            "settings-invalid",
-            "expected a settings group",
-            node.span().copied(),
-        ));
-    };
-    check_span(*span, program.files.len())?;
-    check_key(name, *span)?;
-    match slot {
-        Slot::Root => match name.as_str() {
-            "main" | "lobby" => {
-                for child in children {
-                    validate_member(program, child, &[PathPart::Part(name)])?;
-                }
-                Ok(())
-            }
-            "gamemodes" => {
-                for child in children {
-                    validate_group(program, child, Slot::Mode)?;
-                }
-                Ok(())
-            }
-            "heroes" => {
-                for child in children {
-                    validate_group(program, child, Slot::Team)?;
-                }
-                Ok(())
-            }
-            _ => Err(invalid(
-                "settings-unknown-key",
-                format!("unknown settings group '{name}'"),
-                *span,
-            )),
-        },
-        Slot::Mode => {
-            if !table::mode_known(name) {
-                return Err(invalid(
-                    "settings-unknown-key",
-                    format!("unknown game mode '{name}'"),
-                    *span,
-                ));
-            }
-            // Mode names are literal path parts: the per-key subsets of the
-            // emission table are exact-path entries (#86).
-            for child in children {
-                validate_member(
-                    program,
-                    child,
-                    &[PathPart::Part("gamemodes"), PathPart::Part(name)],
-                )?;
-            }
-            Ok(())
-        }
-        Slot::Team => {
-            if !table::team_known(name) {
-                return Err(invalid(
-                    "settings-unknown-key",
-                    format!("unknown team '{name}'"),
-                    *span,
-                ));
-            }
-            for child in children {
-                if matches!(child, SettingsNode::Group { .. }) {
-                    validate_group(program, child, Slot::Hero)?;
-                } else {
-                    validate_member(program, child, &[PathPart::Part("heroes"), PathPart::Team])?;
-                }
-            }
-            Ok(())
-        }
-        Slot::Hero => {
-            if !table::hero_known(name) {
-                return Err(invalid(
-                    "settings-unknown-key",
-                    format!("unknown hero '{name}'"),
-                    *span,
-                ));
-            }
-            for child in children {
-                validate_member(
-                    program,
-                    child,
-                    &[PathPart::Part("heroes"), PathPart::Team, PathPart::Hero],
-                )?;
-            }
-            Ok(())
-        }
-    }
-}
-
-/// Validate one leaf-level member (number/bool/string/list) against the
-/// emission table.
-fn validate_member(
-    program: &Program,
-    node: &SettingsNode,
-    path: &[PathPart],
-) -> Result<(), HirError> {
-    let name = node_name(node);
-    let span = node.span().copied();
-    check_span(span, program.files.len())?;
-    check_key(name, span)?;
-    if let SettingsNode::Group { span, .. } = node {
-        return Err(invalid(
-            "settings-unknown-key",
-            format!("unknown settings group '{name}'"),
-            *span,
-        ));
-    }
-    let mut full = path.to_vec();
-    full.push(PathPart::Part(name));
-    let Some(entry) = table::lookup(&full) else {
-        return Err(invalid(
-            "settings-unknown-key",
-            format!("unknown settings key '{}'", table::path_string(&full)),
-            span,
-        ));
-    };
-    match (node, &entry.kind) {
-        (SettingsNode::Number { .. }, KeyKind::Number | KeyKind::Percent) => Ok(()),
-        (SettingsNode::Bool { .. }, KeyKind::Bool) => Ok(()),
-        (SettingsNode::String { .. }, KeyKind::String) => Ok(()),
-        (SettingsNode::String { value, span, .. }, KeyKind::Enum(domain)) => {
-            if !table::enum_member_known(domain, value) {
-                return Err(invalid(
-                    "settings-unknown-value",
-                    format!("unknown value '{value}' for settings key '{name}'"),
-                    *span,
-                ));
-            }
-            Ok(())
-        }
-        (SettingsNode::List { elements, span, .. }, KeyKind::ListMap) => {
-            validate_list_elements(program, name, elements, *span, table::map_known)
-        }
-        (SettingsNode::List { elements, span, .. }, KeyKind::ListHero) => {
-            validate_list_elements(program, name, elements, *span, table::hero_known)
-        }
-        _ => Err(invalid(
-            "settings-unknown-value",
-            format!("settings key '{name}' has the wrong value type"),
-            span,
-        )),
-    }
-}
-
-/// Every list element must carry a valid span and name a known map/hero.
-fn validate_list_elements(
-    program: &Program,
-    name: &str,
-    elements: &[super::types::SettingsListElement],
-    span: Option<Span>,
-    known: fn(&str) -> bool,
-) -> Result<(), HirError> {
-    let _ = span;
-    for element in elements {
-        check_span(element.span, program.files.len())?;
-        if !known(&element.value) {
-            return Err(invalid(
-                "settings-unknown-value",
-                format!(
-                    "unknown value '{}' in settings list '{name}'",
-                    element.value
-                ),
-                element.span,
-            ));
+/// Validate one settings node: span validity, non-empty key, and (for
+/// groups) recursive child validation. Values are carried structurally —
+/// the JSONC parse is value-driven and key kinds are lowering-dependent.
+fn validate_settings_node(program: &Program, node: &SettingsNode) -> Result<(), HirError> {
+    check_span(node.span().copied(), program.files.len())?;
+    check_key(node_name(node), node.span().copied())?;
+    if let SettingsNode::Group { children, .. } = node {
+        for child in children {
+            validate_settings_node(program, child)?;
         }
     }
     Ok(())

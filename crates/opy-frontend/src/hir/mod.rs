@@ -13,7 +13,6 @@
 
 pub mod dump;
 pub mod error;
-mod settings_table;
 pub mod types;
 mod validate;
 
