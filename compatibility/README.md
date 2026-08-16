@@ -80,6 +80,40 @@ not ported: the first tests wright's release tooling, the second depends on
 `crates/opy-frontend/src/manifest/probes/` and will be wired when the frontend
 lands (issue #7).
 
+## Native differential runner (issue #7)
+
+The native frontend side of the differential contract lives in
+`crates/opy-frontend/tests/differential.rs` and runs in `cargo test` with no
+Node or OverPy installed:
+
+```sh
+cargo test -p opy-frontend --test differential
+```
+
+It compiles every fixture through the native pipeline (preprocess → parse →
+lower), verifies the Opy HIR v1 structure (validation, wire round-trip,
+deterministic dump), and compares the outcome against the recorded
+`oracle.json` evidence: status parity (resolve vs expected diagnostic),
+ordered authored rule names (normalized to drop reference-synthesized
+`Initialize …`/`Subroutine …` rules), and the pinned diagnostic code. Every
+fixture has an explicit expected-outcome entry; behavior that leaves the
+table fails the suite, while documented reference gaps (reference accepts,
+native rejects a declared-rejected or not-yet-declared surface) are recorded
+in the report as `referenceGap` entries without failing CI.
+
+Artifacts under `target/`:
+
+* `target/opy-differential/<fixture-id>.native.json` — normalized native HIR
+  wire payload (span endpoints removed) per fixture;
+* `target/opy-differential-report.json` — machine-readable per-fixture status
+  (`resolve` / `expected-diagnostic` / `divergence`), native diagnostic code,
+  reference status, rule-name comparison, and the support-matrix feature ids
+  the fixture evidences.
+
+Fixtures without an `oracle.json` are marked `skip` (reference comparison
+degraded gracefully); the structural self-check and the expected-outcome
+table still run.
+
 ## Differential result contract
 
 `diff.py` compares each `oracle.json` with a producer result at
