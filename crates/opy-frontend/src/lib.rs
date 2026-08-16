@@ -17,4 +17,11 @@
 //! original implementation. Workshop→OPY reconstruction and the differential
 //! harness are not part of this crate (see the opy-rs roadmap).
 
+pub mod cst;
+pub mod diag;
 pub mod hir;
+pub mod lexer;
+pub mod parser;
+
+pub use diag::{FrontendError, FrontendResult};
+pub use parser::parse;
