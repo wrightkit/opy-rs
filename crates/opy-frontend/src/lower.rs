@@ -5,15 +5,25 @@
 //! HIR nodes, custom enums fold to constants, `vect` becomes a vector,
 //! `.format()` becomes a format node, `wait` default arguments are filled,
 //! and subroutine calls become `CallSubroutine` statements. Semantic errors
-//! (unknown identifiers, unknown enum members, invalid `vect` arity) are
-//! structured and source-located.
+//! (unknown identifiers, unknown custom-enum members, invalid `vect` arity)
+//! are structured and source-located.
 //!
 //! Builtin action/value/member identity, action/value position, signatures
-//! and arity, receiver categories, parameter enum domains, and non-contextual
-//! source aliases resolve through the OPY semantic compatibility manifest
-//! ([`crate::manifest`], issue #109) before Workshop emission: unknown or
-//! misplaced builtins fail here with structured, source-located diagnostics
-//! instead of surfacing as emitter catalog misses.
+//! and arity, receiver categories, parameter enum-domain identities, and
+//! non-contextual source aliases resolve through the OPY semantic
+//! compatibility manifest ([`crate::manifest`], issue #109) before Workshop
+//! emission: unknown or misplaced builtins fail here with structured,
+//! source-located diagnostics instead of surfacing as emitter catalog
+//! misses.
+//!
+//! Ownership boundary: enum *domains* are catalog-identity links carried by
+//! the manifest signatures, but enum *member lists* are Workshop-owned
+//! catalog content. A member access on a declared domain identity resolves
+//! as an opaque `Enum` node and member-existence/domain checks
+//! (`unknown-enum-member` for Workshop enums, `enum-domain-mismatch`) are
+//! `lowering-dependent` (issue #8) — they are not approximated here. Custom
+//! (user-declared) enum member checks are OPY-level source semantics and
+//! stay in this frontend.
 
 use std::collections::{HashMap, HashSet};
 
@@ -562,22 +572,17 @@ impl Lowerer {
                     }
                 };
             }
-            // Builtin Workshop enum: members resolve through the manifest's
-            // declared enum domains (reference-validated, #109).
-            if let Some(domain) = self.manifest.enum_domain(name) {
-                if domain.members.iter().any(|candidate| candidate == member) {
-                    return HirExpr::Enum {
-                        value_type: name.clone(),
-                        value: member.to_string(),
-                        span: Some(span.into()),
-                    };
-                }
-                self.error_at(
-                    "unknown-enum-member",
-                    format!("enum '{name}' has no member '{member}'"),
-                    span,
-                );
-                return HirExpr::Null { span: None };
+            // Builtin Workshop enum: the domain name is a declared OPY
+            // signature identity (manifest `param.domain`); the member list
+            // is Workshop-owned catalog content, so the member access
+            // resolves as an opaque identity without member validation.
+            // Member-existence checks are lowering-dependent (issue #8).
+            if self.manifest.domain_identity(name) {
+                return HirExpr::Enum {
+                    value_type: name.clone(),
+                    value: member.to_string(),
+                    span: Some(span.into()),
+                };
             }
             // Event-player member: a player-variable reference.
             if name == "eventPlayer" {
@@ -697,9 +702,8 @@ impl Lowerer {
                             };
                         }
                         let (bound, selector) = self.bind_args(entry, args, macro_params);
-                        self.check_enum_domains(entry, &bound);
                         let (call_name, bound) =
-                            self.resolve_contextual_domain(entry, bound, selector.as_deref(), span);
+                            self.resolve_contextual_domain(entry, bound, selector.as_deref());
                         HirExpr::Call {
                             name: call_name,
                             args: bound,
@@ -990,14 +994,17 @@ impl Lowerer {
     /// Resolve a contextual enum-domain parameter (the `chase` form's
     /// `ChaseReeval` member, issue #110): the keyword spelling bound to the
     /// selector parameter selects the concrete domain and the function the
-    /// call lowers to. Outside this signature context `ChaseReeval` never
-    /// resolves (it is not a declared enum domain).
+    /// call lowers to. This is pure catalog-identity dispatch — member
+    /// *existence* in the selected domain is Workshop-owned knowledge and is
+    /// not validated here (lowering-dependent, issue #8). Outside this
+    /// signature context `ChaseReeval` never resolves (it is not a standalone
+    /// domain identity). A call that does not bind a contextual member keeps
+    /// its declared name and arguments without a domain diagnostic.
     fn resolve_contextual_domain(
         &mut self,
         entry: &Function,
         mut bound: Vec<HirExpr>,
         selector: Option<&str>,
-        span: Span,
     ) -> (String, Vec<HirExpr>) {
         let Some(contextual) = &entry.contextual_domain else {
             return (entry.id.clone(), bound);
@@ -1009,63 +1016,26 @@ impl Lowerer {
         else {
             return (entry.id.clone(), bound);
         };
-        let manifest = self.manifest;
-        let mut mismatch = |message: String| {
-            self.error_at("enum-domain-mismatch", message, span);
-        };
+        // Dispatch only when the argument is written as a member of the
+        // contextual domain; anything else keeps the generic call (the
+        // reference's "expected an enum" rejection is lowering-dependent).
         let HirExpr::Enum {
             value_type,
             value,
             span: value_span,
         } = &bound[contextual_param]
         else {
-            mismatch(format!(
-                "argument {} of '{}' expects an enum value of domain '{}'",
-                contextual_param + 1,
-                entry.id,
-                contextual.domain
-            ));
             return (entry.id.clone(), bound);
         };
         if value_type != &contextual.domain {
-            mismatch(format!(
-                "argument {} of '{}' expects enum domain '{}', found '{}'",
-                contextual_param + 1,
-                entry.id,
-                contextual.domain,
-                value_type
-            ));
             return (entry.id.clone(), bound);
         }
         let Some(keyword) = selector else {
-            mismatch(format!(
-                "argument {} of '{}' cannot resolve the contextual domain '{}' \
-                 without a '{}' keyword selector",
-                contextual_param + 1,
-                entry.id,
-                contextual.domain,
-                contextual.by
-            ));
             return (entry.id.clone(), bound);
         };
         let Some(option) = contextual.options.get(keyword) else {
-            mismatch(format!(
-                "argument {} of '{}' uses the unknown selector keyword '{keyword}'",
-                contextual_param + 1,
-                entry.id
-            ));
             return (entry.id.clone(), bound);
         };
-        let Some(declared) = manifest.enum_domain(&option.domain) else {
-            return (entry.id.clone(), bound);
-        };
-        if !declared.members.contains(value) {
-            mismatch(format!(
-                "member '{value}' is not a member of enum domain '{}'",
-                option.domain
-            ));
-            return (entry.id.clone(), bound);
-        }
         bound[contextual_param] = HirExpr::Enum {
             value_type: option.domain.clone(),
             value: value.clone(),
@@ -1117,7 +1087,6 @@ impl Lowerer {
                 let lowered: Vec<HirExpr> = self.lower_arg_values(args, macro_params);
                 if let Some(entry) = self.manifest.resolve_member("format") {
                     self.check_call_position("format", entry, position, span);
-                    self.check_enum_domains(entry, &lowered);
                 }
                 return HirExpr::Format {
                     text: value.clone(),
@@ -1135,7 +1104,6 @@ impl Lowerer {
                     self.check_receiver(receiver, category, entry, span);
                 }
                 let (bound, _) = self.bind_args(entry, args, macro_params);
-                self.check_enum_domains(entry, &bound);
                 (entry.id.clone(), bound)
             }
             None => {
@@ -1272,54 +1240,6 @@ impl Lowerer {
         }
     }
 
-    /// Check each bound argument that has a declared enum domain: the pinned
-    /// reference requires an enum member of that domain (variables and other
-    /// values are rejected), so any mismatch is a structured diagnostic at
-    /// the argument's span. Contextual domains (the `chase` form) resolve
-    /// separately and are skipped here.
-    fn check_enum_domains(&mut self, entry: &Function, bound: &[HirExpr]) {
-        for (index, param) in entry.params.iter().enumerate() {
-            let Some(domain) = param.domain.as_deref() else {
-                continue;
-            };
-            if entry
-                .contextual_domain
-                .as_ref()
-                .is_some_and(|contextual| contextual.domain == domain)
-            {
-                continue;
-            }
-            let Some(bound_arg) = bound.get(index) else {
-                continue;
-            };
-            let span = hir_span_to_frontend(bound_arg.span());
-            match bound_arg {
-                HirExpr::Enum { value_type, .. } if value_type == domain => {}
-                HirExpr::Enum { value_type, .. } => self.error_at(
-                    "enum-domain-mismatch",
-                    format!(
-                        "argument {} of '{}' expects enum domain '{}', found '{}'",
-                        index + 1,
-                        entry.id,
-                        domain,
-                        value_type
-                    ),
-                    span,
-                ),
-                _ => self.error_at(
-                    "enum-domain-mismatch",
-                    format!(
-                        "argument {} of '{}' expects an enum value of domain '{}'",
-                        index + 1,
-                        entry.id,
-                        domain
-                    ),
-                    span,
-                ),
-            }
-        }
-    }
-
     fn error_at(&mut self, code: &str, message: String, span: Span) {
         self.errors.push(FrontendError::at(code, message, span));
     }
@@ -1342,23 +1262,6 @@ fn arg_span(args: &[CallArg]) -> Span {
             crate::diag::Position::new(1, 1),
         )
     })
-}
-
-/// Recover the frontend span of a lowered expression (HIR spans are the
-/// same source positions, carried through lowering).
-fn hir_span_to_frontend(span: Option<&HirSpan>) -> Span {
-    match span {
-        Some(span) => Span::new(
-            span.file,
-            crate::diag::Position::new(span.start.line, span.start.col),
-            crate::diag::Position::new(span.end.line, span.end.col),
-        ),
-        None => Span::new(
-            0,
-            crate::diag::Position::new(1, 1),
-            crate::diag::Position::new(1, 1),
-        ),
-    }
 }
 
 /// Whether a CST receiver is assignable (the `.append` receiver rule): a
@@ -1579,16 +1482,14 @@ mod tests {
     }
 
     #[test]
-    fn unknown_chase_time_reeval_member_is_a_deterministic_source_located_error() {
-        let error = crate::compile(
+    fn unknown_chase_time_reeval_member_resolves_as_an_opaque_enum_identity() {
+        // Member spellings are Workshop catalog content: a member access on
+        // a declared domain identity resolves as an opaque Enum node without
+        // member validation (lowering-dependent, #8).
+        let value = lowered_value(
             "globalvar g\nrule \"r\":\n    @Event global\n    g = ChaseTimeReeval.NOPE\n",
-            "test.opy",
-            std::path::Path::new(""),
-        )
-        .expect_err("an unknown member must fail");
-        assert_eq!(error.code, "unknown-enum-member");
-        let span = error.span.expect("the error is source-located");
-        assert_eq!(span.start.line, 4);
+        );
+        assert_enum(&value, "ChaseTimeReeval", "NOPE");
     }
 
     #[test]
@@ -1839,25 +1740,38 @@ mod tests {
     }
 
     #[test]
-    fn chase_reeval_resolves_only_in_the_chase_call_context() {
-        // `ChaseReeval` is not a declared enum domain: a bare member access
-        // outside the chase signature is rejected.
+    fn chase_reeval_is_only_a_standalone_identity_inside_the_chase_context() {
+        // `ChaseReeval` is a contextual domain, not a standalone domain
+        // identity: a bare member access outside the chase signature is
+        // rejected.
         let error = compile_error(&action_source("g = ChaseReeval.NONE"), 4);
         assert_eq!(error.code, "unsupported-member");
 
-        // A member of the wrong concrete domain is rejected through the
-        // selected option (reference: "Unknown chaseratereeval …").
-        let error = compile_error(
-            &action_source("chase(g, 10, rate=2, ChaseReeval.DESTINATION_AND_DURATION)"),
-            4,
-        );
-        assert_eq!(error.code, "enum-domain-mismatch");
-        assert!(error.message.contains("ChaseRateReeval"));
+        // Inside the chase context the member is an opaque identity
+        // dispatched to the concrete domain selected by the keyword
+        // selector; member existence in that domain is not validated here
+        // (lowering-dependent, #8).
+        let expr = first_action_expr(&action_source(
+            "chase(g, 10, rate=2, ChaseReeval.DESTINATION_AND_DURATION)",
+        ));
+        let HirExpr::Call { name, args, .. } = &expr else {
+            panic!("expected a call, got {expr:?}");
+        };
+        assert_eq!(name, "chaseAtRate");
+        assert!(matches!(
+            &args[3],
+            HirExpr::Enum { value_type, value, .. }
+                if value_type == "ChaseRateReeval" && value == "DESTINATION_AND_DURATION"
+        ));
 
-        // A non-enum 4th argument is rejected like the reference's
-        // "Expected a member of the 'ChaseReeval' enum" check.
-        let error = compile_error(&action_source("chase(g, 10, rate=2, 5)"), 4);
-        assert_eq!(error.code, "enum-domain-mismatch");
+        // A non-enum 4th argument is carried structurally; the reference's
+        // "expected an enum member" rejection is lowering-dependent.
+        let expr = first_action_expr(&action_source("chase(g, 10, rate=2, 5)"));
+        let HirExpr::Call { name, args, .. } = &expr else {
+            panic!("expected a call, got {expr:?}");
+        };
+        assert_eq!(name, "chase");
+        assert!(matches!(&args[3], HirExpr::Number { .. }));
     }
 
     #[test]
@@ -2029,40 +1943,52 @@ mod tests {
     }
 
     #[test]
-    fn enum_domain_mismatch_is_a_source_located_diagnostic() {
-        // Wrong enum domain for a parameter (#106): the oracle rejects
-        // `chaseOverTime(..., Invis.ALL)` and
-        // `eventPlayer.setInvisibility(ChaseTimeReeval.NONE)`.
-        let error = compile_error(&action_source("chaseOverTime(g, 10, 3, Invis.ALL)"), 4);
-        assert_eq!(error.code, "enum-domain-mismatch");
-        assert!(error.message.contains("ChaseTimeReeval"));
+    fn cross_domain_enum_arguments_resolve_as_opaque_identities() {
+        // Domain mismatches need canonical Workshop enum knowledge: a member
+        // of the wrong domain is carried as an opaque identity and the check
+        // is lowering-dependent (#8).
+        let expr = first_action_expr(&action_source("chaseOverTime(g, 10, 3, Invis.ALL)"));
+        let HirExpr::Call { args, .. } = &expr else {
+            panic!("expected a call, got {expr:?}");
+        };
+        assert!(matches!(
+            &args[3],
+            HirExpr::Enum { value_type, value, .. }
+                if value_type == "Invis" && value == "ALL"
+        ));
 
-        let error = compile_error(
-            "globalvar g\nrule \"r\":\n    @Event eachPlayer\n    \
-             eventPlayer.setInvisibility(ChaseTimeReeval.NONE)\n",
-            4,
-        );
-        assert_eq!(error.code, "enum-domain-mismatch");
-        assert!(error.message.contains("Invis"));
+        let expr = first_action_expr(&action_source(
+            "eventPlayer.setInvisibility(ChaseTimeReeval.NONE)",
+        ));
+        let HirExpr::ReceiverCall { args, .. } = &expr else {
+            panic!("expected a receiver call, got {expr:?}");
+        };
+        assert!(matches!(
+            &args[0],
+            HirExpr::Enum { value_type, value, .. }
+                if value_type == "ChaseTimeReeval" && value == "NONE"
+        ));
     }
 
     #[test]
-    fn non_enum_arguments_for_enum_parameters_are_rejected() {
-        // The reference requires an enum member for enum-domain parameters;
-        // numbers, strings, and even variables are rejected.
-        let error = compile_error(
-            "globalvar g\nrule \"r\":\n    @Event eachPlayer\n    \
-             eventPlayer.setInvisibility(g)\n",
-            4,
-        );
-        assert_eq!(error.code, "enum-domain-mismatch");
+    fn non_enum_arguments_for_enum_parameters_are_carried_structurally() {
+        // Whether a non-enum value is acceptable for an enum parameter is
+        // Workshop catalog knowledge; the frontend carries the argument
+        // structurally and leaves the check to lowering (#8).
+        let expr = first_action_expr(&action_source("eventPlayer.setInvisibility(g)"));
+        let HirExpr::ReceiverCall { args, .. } = &expr else {
+            panic!("expected a receiver call, got {expr:?}");
+        };
+        assert!(matches!(
+            &args[0],
+            HirExpr::GlobalVar { name, .. } if name == "g"
+        ));
 
-        let error = compile_error(
-            "globalvar g\nrule \"r\":\n    @Event eachPlayer\n    \
-             eventPlayer.setInvisibility(3)\n",
-            4,
-        );
-        assert_eq!(error.code, "enum-domain-mismatch");
+        let expr = first_action_expr(&action_source("eventPlayer.setInvisibility(3)"));
+        let HirExpr::ReceiverCall { args, .. } = &expr else {
+            panic!("expected a receiver call, got {expr:?}");
+        };
+        assert!(matches!(&args[0], HirExpr::Number { .. }));
     }
 
     #[test]
@@ -2161,16 +2087,19 @@ mod tests {
     }
 
     #[test]
-    fn reference_rejected_enum_members_are_rejected() {
-        // The KNOWN_ENUMS table previously accepted Color.CYAN and
-        // DynamicEffect.SPARKLES; the pinned reference rejects those
-        // spellings, so the manifest's reference-validated member lists do
-        // not preserve them (#109).
-        let error = compile_error(&action_source("g = Color.CYAN"), 4);
-        assert_eq!(error.code, "unknown-enum-member");
+    fn previously_rejected_enum_member_spellings_resolve_as_opaque_identities() {
+        // The KNOWN_ENUMS-era member allowlist is gone: Color.CYAN and
+        // DynamicEffect.SPARKLES are member spellings whose validity is
+        // Workshop-owned knowledge, so they resolve as opaque enum
+        // identities instead of failing (lowering-dependent, #8).
+        let value =
+            lowered_value("globalvar g\nrule \"r\":\n    @Event global\n    g = Color.CYAN\n");
+        assert_enum(&value, "Color", "CYAN");
 
-        let error = compile_error(&action_source("g = DynamicEffect.SPARKLES"), 4);
-        assert_eq!(error.code, "unknown-enum-member");
+        let value = lowered_value(
+            "globalvar g\nrule \"r\":\n    @Event global\n    g = DynamicEffect.SPARKLES\n",
+        );
+        assert_enum(&value, "DynamicEffect", "SPARKLES");
     }
 
     #[test]

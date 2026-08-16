@@ -7,6 +7,12 @@
 //! region out of the text handed to the lexer (newlines preserved, so
 //! positions after the block are unchanged), and [`parse_block`] turns the
 //! JSONC text into a typed [`cst::Settings`] tree with source spans.
+//!
+//! The parse is value-driven: any JSONC object/leaf shape becomes a
+//! structurally generic [`cst::SettingsNode`]. Which keys exist and which
+//! leaf kinds/spellings are valid is Workshop-owned settings-schema content;
+//! that validation is `lowering-dependent` (issue #8) and lives at the
+//! Workshop integration boundary, never in a local allowlist here.
 
 use crate::cst;
 use crate::diag::{FrontendError, FrontendResult, Position, Span};

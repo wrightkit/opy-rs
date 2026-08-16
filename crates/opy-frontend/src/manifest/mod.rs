@@ -2,7 +2,7 @@
 //!
 //! This module owns the Wright-authored, reference-validated semantic table
 //! that the frontend resolves builtin names, member functions, receiver
-//! categories, signatures/arity, parameter enum domains, enum members, and
+//! categories, signatures/arity, parameter enum-domain identities, and
 //! non-contextual source aliases against — the authoritative replacement for
 //! the hardcoded `KNOWN_ENUMS` table and the semantic catalog-coverage gap
 //! behind `unknown-action`/`unknown-value`/`unsupported-member` emission
@@ -19,13 +19,23 @@
 //!   data. The wright repository cross-checks every declared id against its
 //!   emission catalog; opy-rs does not copy the catalog itself.
 //!
+//! Ownership boundary: the **function**, **alias**, and **module** tables are
+//! OPY *source-language API* metadata (OverPy's documented language API;
+//! Wright-authored, probe-validated) and are not Workshop content data.
+//! Workshop *content/catalog* data — enum member lists, settings keys,
+//! mode/team/hero/map names — is Workshop-owned and is not carried here:
+//! `param.domain` and the contextual-domain machinery are catalog *identity*
+//! links only (no member validation), and validation that would need the
+//! canonical Workshop enum catalog is `lowering-dependent` (issue #8),
+//! never approximated.
+//!
 //! The manifest is language-compatibility metadata, not runtime content data
 //! (issue #96 stays deferred), and it is Wright-authored data validated
 //! against observed oracle behavior — never a mechanical conversion of
 //! OverPy's GPL-3.0 data files (ADR-0004, `docs/licensing.md` in the wright
 //! repository).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
@@ -257,15 +267,6 @@ fn default_keyword_args() -> bool {
     true
 }
 
-/// One enum value domain (`Invis`, `Transform`, `ChaseTimeReeval`, …).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct EnumDomain {
-    pub domain: String,
-    pub members: Vec<String>,
-    #[serde(default)]
-    pub evidence: Vec<String>,
-}
-
 /// A non-contextual source alias: a pure name rewrite to a declared entry.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -318,15 +319,18 @@ pub struct Manifest {
     pub schema_version: u32,
     pub reference: Reference,
     pub functions: Vec<Function>,
-    pub enum_domains: Vec<EnumDomain>,
     pub aliases: Vec<Alias>,
     pub provenance: Provenance,
     /// The recorded probe evidence (`probes/probes.json`).
     pub probes: Vec<Probe>,
     by_function: HashMap<String, usize>,
     by_member: HashMap<String, usize>,
-    by_domain: HashMap<String, usize>,
     alias_by_source: HashMap<String, usize>,
+    /// The declared enum-domain identities: every `param.domain` and
+    /// contextual option domain in the function table. Identity links only —
+    /// member lists are Workshop-owned catalog content and are not carried
+    /// here (lowering-dependent validation, #8).
+    domain_identities: HashSet<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -336,8 +340,6 @@ struct ManifestFile {
     reference: Reference,
     #[serde(default)]
     functions: Vec<Function>,
-    #[serde(default)]
-    enum_domains: Vec<EnumDomain>,
     #[serde(default)]
     aliases: Vec<Alias>,
     provenance: Provenance,
@@ -374,14 +376,13 @@ impl Manifest {
             schema_version: file.schema_version,
             reference: file.reference.clone(),
             functions: Vec::new(),
-            enum_domains: Vec::new(),
             aliases: Vec::new(),
             provenance: file.provenance.clone(),
             probes: probes_file.probes,
             by_function: HashMap::new(),
             by_member: HashMap::new(),
-            by_domain: HashMap::new(),
             alias_by_source: HashMap::new(),
+            domain_identities: HashSet::new(),
         };
         manifest.validate(file)?;
         Ok(manifest)
@@ -395,34 +396,6 @@ impl Manifest {
             if probes.insert(&probe.id, probe).is_some() {
                 return Err(ManifestError(format!("duplicate probe id '{}'", probe.id)));
             }
-        }
-
-        // Enum domains: unique, non-empty, distinct members.
-        for domain in &file.enum_domains {
-            if self.by_domain.contains_key(&domain.domain) {
-                return Err(ManifestError(format!(
-                    "duplicate enum domain '{}'",
-                    domain.domain
-                )));
-            }
-            if domain.members.is_empty() {
-                return Err(ManifestError(format!(
-                    "enum domain '{}' declares no members",
-                    domain.domain
-                )));
-            }
-            let mut members = std::collections::HashSet::new();
-            for member in &domain.members {
-                if !members.insert(member) {
-                    return Err(ManifestError(format!(
-                        "enum domain '{}' repeats member '{}'",
-                        domain.domain, member
-                    )));
-                }
-            }
-            self.by_domain
-                .insert(domain.domain.clone(), self.enum_domains.len());
-            self.enum_domains.push(domain.clone());
         }
 
         // Functions: unique ids, member-only receiver/kind combinations,
@@ -457,33 +430,14 @@ impl Manifest {
                 if let Some(domain) = &param.domain {
                     // A parameter may declare the function's own contextual
                     // domain (`chase`'s `ChaseReeval`): it resolves only in
-                    // this signature's context and has no standalone member
-                    // list.
+                    // this signature's context and is not a standalone
+                    // identity.
                     let is_contextual = function
                         .contextual_domain
                         .as_ref()
                         .is_some_and(|contextual| &contextual.domain == domain);
-                    let declared = if is_contextual {
-                        None
-                    } else {
-                        Some(self.enum_domain(domain).ok_or_else(|| {
-                            ManifestError(format!(
-                                "function '{}' parameter '{}' references undeclared enum \
-                                     domain '{}'",
-                                function.id, param.name, domain
-                            ))
-                        })?)
-                    };
-                    if let (Some(declared), Some(ParamDefault::EnumMember(member))) =
-                        (declared, &param.default)
-                    {
-                        if !declared.members.contains(member) {
-                            return Err(ManifestError(format!(
-                                "function '{}' parameter '{}' default '{}' is not a member \
-                                 of enum domain '{}'",
-                                function.id, param.name, member, domain
-                            )));
-                        }
+                    if !is_contextual {
+                        self.domain_identities.insert(domain.clone());
                     }
                 } else if matches!(param.default, Some(ParamDefault::EnumMember(_))) {
                     return Err(ManifestError(format!(
@@ -521,13 +475,6 @@ impl Manifest {
                 }
             }
             if let Some(contextual) = &function.contextual_domain {
-                if self.enum_domain(&contextual.domain).is_some() {
-                    return Err(ManifestError(format!(
-                        "function '{}' contextual domain '{}' must not be a declared \
-                         enum domain (it resolves only in this signature's context)",
-                        function.id, contextual.domain
-                    )));
-                }
                 let by_param = function
                     .params
                     .iter()
@@ -561,13 +508,10 @@ impl Manifest {
                             function.id, by_param.name
                         )));
                     }
-                    self.enum_domain(&option.domain).ok_or_else(|| {
-                        ManifestError(format!(
-                            "function '{}' contextual option '{keyword}' references \
-                             undeclared enum domain '{}'",
-                            function.id, option.domain
-                        ))
-                    })?;
+                    // The option's concrete domain is a catalog identity link
+                    // (the domain the selected member/emission belongs to);
+                    // member lists are not carried here.
+                    self.domain_identities.insert(option.domain.clone());
                 }
             }
             self.check_evidence(&function.id, &function.evidence, &probes)?;
@@ -622,10 +566,6 @@ impl Manifest {
             self.aliases.push(alias.clone());
         }
 
-        // Enum-domain evidence records acceptance probes too.
-        for domain in &file.enum_domains {
-            self.check_evidence(&domain.domain, &domain.evidence, &probes)?;
-        }
         Ok(())
     }
 
@@ -697,9 +637,13 @@ impl Manifest {
         self.by_member.get(id).map(|i| &self.functions[*i])
     }
 
-    /// The enum domain with the given name, if declared.
-    pub fn enum_domain(&self, domain: &str) -> Option<&EnumDomain> {
-        self.by_domain.get(domain).map(|i| &self.enum_domains[*i])
+    /// Whether the name is a declared enum-domain identity: a `param.domain`
+    /// or contextual option domain in the function table. These are OPY
+    /// signature metadata (catalog identity links); the domain *member
+    /// lists* are Workshop-owned catalog content and are not carried here,
+    /// so member validation is `lowering-dependent` (issue #8).
+    pub fn domain_identity(&self, name: &str) -> bool {
+        self.domain_identities.contains(name)
     }
 }
 
@@ -730,17 +674,23 @@ mod tests {
         assert_eq!(manifest.reference.name, "overpy");
         assert_eq!(manifest.reference.version, "9.7.10");
         assert!(!manifest.functions.is_empty());
-        assert!(!manifest.enum_domains.is_empty());
         assert!(!manifest.aliases.is_empty());
-        // Every member entry declares a receiver; every entry has evidence.
+        // Enum-domain *identities* come from the function signatures
+        // (param.domain / contextual option domains); member lists are
+        // Workshop-owned catalog content and are not carried here. Every
+        // member entry declares a receiver; every entry has evidence.
+        for domain in ["Invis", "ChaseTimeReeval", "Team", "LosCheck", "Color"] {
+            assert!(manifest.domain_identity(domain), "{domain}");
+        }
+        assert!(
+            !manifest.domain_identity("ChaseReeval"),
+            "contextual domains are not standalone identities"
+        );
         for function in &manifest.functions {
             assert!(!function.evidence.is_empty(), "{}", function.id);
             if function.kind.is_member() {
                 assert!(function.receiver.is_some(), "{}", function.id);
             }
-        }
-        for domain in &manifest.enum_domains {
-            assert!(!domain.evidence.is_empty(), "{}", domain.domain);
         }
     }
 
@@ -758,7 +708,7 @@ mod tests {
     }
 
     #[test]
-    fn validation_rejects_duplicates_and_undeclared_domains() {
+    fn validation_rejects_duplicates_and_missing_evidence() {
         fn mutate(mutate: impl FnOnce(&mut ManifestFile)) -> Result<Manifest, ManifestError> {
             let mut file: ManifestFile = serde_json::from_str(MANIFEST_DATA).unwrap();
             mutate(&mut file);
@@ -768,12 +718,17 @@ mod tests {
         let error = mutate(|file| file.functions.push(file.functions[0].clone()))
             .expect_err("duplicate function id must fail");
         assert!(error.0.contains("duplicate function id"));
-        // undeclared enum domain
+        // entry without evidence
+        let error = mutate(|file| file.functions[0].evidence.clear())
+            .expect_err("missing evidence must fail");
+        assert!(error.0.contains("no oracle probe evidence"));
+        // enum-member default without a declared domain is a data-integrity
+        // error (the default cannot be expanded without an identity)
         let error = mutate(|file| {
             file.functions[0].params.push(Param {
                 name: "bad".to_string(),
-                domain: Some("NotADomain".to_string()),
-                default: None,
+                domain: None,
+                default: Some(ParamDefault::EnumMember("X".to_string())),
                 optional: false,
                 keyword_only: false,
                 positional_only: false,
@@ -781,12 +736,8 @@ mod tests {
                 variable: false,
             })
         })
-        .expect_err("undeclared domain must fail");
-        assert!(error.0.contains("undeclared enum domain"));
-        // entry without evidence
-        let error = mutate(|file| file.functions[0].evidence.clear())
-            .expect_err("missing evidence must fail");
-        assert!(error.0.contains("no oracle probe evidence"));
+        .expect_err("enum default without a domain must fail");
+        assert!(error.0.contains("no declared domain"));
     }
 
     #[test]
