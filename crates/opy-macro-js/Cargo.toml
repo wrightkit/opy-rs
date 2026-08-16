@@ -1,0 +1,12 @@
+[package]
+name = "opy-macro-js"
+description = "Bounded JavaScript macro and post-compile hook runtime for OverPy-compatible OPY tooling, embedding QuickJS-NG."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+libquickjs-ng-sys = "0.13.0"
+serde_json = "1"
