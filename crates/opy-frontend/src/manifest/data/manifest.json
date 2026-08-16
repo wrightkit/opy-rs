@@ -1,0 +1,823 @@
+{
+  "aliases": [
+    {
+      "evidence": [
+        "aliases"
+      ],
+      "kind": "functionAlias",
+      "source": "stopChasingVariable",
+      "target": "stopChasing"
+    },
+    {
+      "evidence": [
+        "member-aliases"
+      ],
+      "kind": "memberAlias",
+      "source": "getCurrentHero",
+      "target": "getHero"
+    },
+    {
+      "evidence": [
+        "member-aliases"
+      ],
+      "kind": "memberAlias",
+      "source": "hasStatusEffect",
+      "target": "hasStatus"
+    }
+  ],
+  "enumDomains": [
+    {
+      "domain": "Beam",
+      "evidence": [
+        "builtin-enums"
+      ],
+      "members": [
+        "GOOD",
+        "GRAPPLE"
+      ]
+    },
+    {
+      "domain": "Color",
+      "evidence": [
+        "builtin-enums"
+      ],
+      "members": [
+        "YELLOW",
+        "WHITE",
+        "RED",
+        "ORANGE",
+        "GREEN",
+        "BLUE",
+        "BLACK",
+        "PURPLE",
+        "AQUA",
+        "VIOLET",
+        "ROSE"
+      ]
+    },
+    {
+      "domain": "DynamicEffect",
+      "evidence": [
+        "builtin-enums"
+      ],
+      "members": [
+        "BAD_EXPLOSION",
+        "GOOD_EXPLOSION",
+        "RING_EXPLOSION",
+        "GOOD_PICKUP_EFFECT",
+        "BAD_PICKUP_EFFECT",
+        "BUFF_IMPACT_SOUND",
+        "DEBUFF_IMPACT_SOUND"
+      ]
+    },
+    {
+      "domain": "EffectReeval",
+      "evidence": [
+        "builtin-enums"
+      ],
+      "members": [
+        "VISIBILITY",
+        "COLOR",
+        "VISIBILITY_AND_COLOR"
+      ]
+    },
+    {
+      "domain": "ChaseTimeReeval",
+      "evidence": [
+        "builtin-enums",
+        "chase-over-time",
+        "chase-over-time-defaults"
+      ],
+      "members": [
+        "NONE",
+        "DESTINATION_AND_DURATION"
+      ]
+    },
+    {
+      "domain": "ChaseRateReeval",
+      "evidence": [
+        "builtin-enums"
+      ],
+      "members": [
+        "NONE",
+        "DESTINATION_AND_RATE"
+      ]
+    },
+    {
+      "domain": "Wait",
+      "evidence": [
+        "builtin-enums"
+      ],
+      "members": [
+        "IGNORE_CONDITION"
+      ]
+    },
+    {
+      "domain": "Invis",
+      "evidence": [
+        "builtin-enums",
+        "enum-gated-members"
+      ],
+      "members": [
+        "ALL",
+        "ENEMIES",
+        "NONE"
+      ]
+    },
+    {
+      "domain": "Transform",
+      "evidence": [
+        "builtin-enums",
+        "enum-gated-members"
+      ],
+      "members": [
+        "ROTATION",
+        "ROTATION_AND_TRANSLATION"
+      ]
+    },
+    {
+      "domain": "Status",
+      "evidence": [
+        "builtin-enums",
+        "enum-gated-members"
+      ],
+      "members": [
+        "ASLEEP",
+        "BURNING",
+        "FROZEN",
+        "HACKED",
+        "INVINCIBLE",
+        "KNOCKED_DOWN",
+        "PHASED_OUT",
+        "ROOTED",
+        "STUNNED",
+        "UNKILLABLE"
+      ]
+    },
+    {
+      "domain": "LosCheck",
+      "evidence": [
+        "builtin-enums",
+        "get-players-in-radius"
+      ],
+      "members": [
+        "OFF",
+        "SURFACES",
+        "SURFACES_AND_ALL_BARRIERS",
+        "SURFACES_AND_ENEMY_BARRIERS"
+      ]
+    },
+    {
+      "domain": "Team",
+      "evidence": [
+        "builtin-enums",
+        "get-players-in-radius"
+      ],
+      "members": [
+        "ALL"
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "catalogId": "wait",
+      "evidence": [
+        "generic-builtins"
+      ],
+      "id": "wait",
+      "kind": "action",
+      "params": [
+        {
+          "default": 0.016,
+          "name": "time"
+        },
+        {
+          "default": "IGNORE_CONDITION",
+          "domain": "Wait",
+          "name": "waitBehavior"
+        }
+      ]
+    },
+    {
+      "catalogId": "disableInspector",
+      "evidence": [
+        "generic-builtins"
+      ],
+      "id": "disableInspector",
+      "kind": "action",
+      "params": []
+    },
+    {
+      "evidence": [
+        "generic-builtins"
+      ],
+      "id": "debug",
+      "kind": "action",
+      "params": [
+        {
+          "name": "value"
+        }
+      ]
+    },
+    {
+      "evidence": [
+        "generic-builtins"
+      ],
+      "id": "print",
+      "kind": "action",
+      "params": [
+        {
+          "name": "text"
+        }
+      ]
+    },
+    {
+      "catalogId": "createBeamEffect",
+      "evidence": [
+        "generic-builtins"
+      ],
+      "id": "createBeam",
+      "kind": "action",
+      "params": [
+        {
+          "name": "visibleTo"
+        },
+        {
+          "domain": "Beam",
+          "name": "type"
+        },
+        {
+          "name": "startPosition"
+        },
+        {
+          "name": "endPosition"
+        },
+        {
+          "domain": "Color",
+          "name": "color",
+          "optional": true
+        },
+        {
+          "domain": "EffectReeval",
+          "name": "reevaluation"
+        }
+      ]
+    },
+    {
+      "catalogId": "playEffect",
+      "evidence": [
+        "generic-builtins"
+      ],
+      "id": "playEffect",
+      "kind": "action",
+      "params": [
+        {
+          "name": "visibleTo"
+        },
+        {
+          "domain": "DynamicEffect",
+          "name": "type"
+        },
+        {
+          "domain": "Color",
+          "name": "color"
+        },
+        {
+          "name": "position"
+        },
+        {
+          "name": "radius"
+        }
+      ]
+    },
+    {
+      "contextualDomain": {
+        "by": "rate",
+        "domain": "ChaseReeval",
+        "options": {
+          "duration": {
+            "domain": "ChaseTimeReeval",
+            "target": "chaseOverTime"
+          },
+          "rate": {
+            "domain": "ChaseRateReeval",
+            "target": "chaseAtRate"
+          }
+        }
+      },
+      "evidence": [
+        "chase-keywords",
+        "chase-reeval-context"
+      ],
+      "id": "chase",
+      "kind": "action",
+      "params": [
+        {
+          "name": "variable",
+          "positionalOnly": true,
+          "variable": true
+        },
+        {
+          "name": "destination",
+          "positionalOnly": true
+        },
+        {
+          "alternateNames": [
+            "duration"
+          ],
+          "keywordOnly": true,
+          "name": "rate"
+        },
+        {
+          "domain": "ChaseReeval",
+          "name": "reevaluation"
+        }
+      ]
+    },
+    {
+      "catalogId": "chaseOverTime",
+      "evidence": [
+        "chase-over-time",
+        "chase-over-time-defaults"
+      ],
+      "id": "chaseOverTime",
+      "kind": "action",
+      "params": [
+        {
+          "name": "variable",
+          "variable": true
+        },
+        {
+          "name": "destination"
+        },
+        {
+          "name": "duration"
+        },
+        {
+          "default": "DESTINATION_AND_DURATION",
+          "domain": "ChaseTimeReeval",
+          "name": "reevaluation"
+        }
+      ]
+    },
+    {
+      "evidence": [
+        "aliases"
+      ],
+      "id": "stopChasing",
+      "kind": "action",
+      "params": [
+        {
+          "name": "variable"
+        }
+      ]
+    },
+    {
+      "catalogId": "countOf",
+      "evidence": [
+        "generic-builtins"
+      ],
+      "id": "len",
+      "kind": "value",
+      "params": [
+        {
+          "name": "array"
+        }
+      ]
+    },
+    {
+      "catalogId": "absoluteValue",
+      "evidence": [
+        "generic-builtins"
+      ],
+      "id": "abs",
+      "kind": "value",
+      "params": [
+        {
+          "name": "value"
+        }
+      ]
+    },
+    {
+      "catalogId": "squareRoot",
+      "evidence": [
+        "generic-builtins"
+      ],
+      "id": "sqrt",
+      "kind": "value",
+      "params": [
+        {
+          "name": "value"
+        }
+      ]
+    },
+    {
+      "catalogId": "allPlayers",
+      "evidence": [
+        "generic-builtins"
+      ],
+      "id": "getAllPlayers",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "randomReal",
+      "evidence": [
+        "generic-builtins"
+      ],
+      "id": "random.uniform",
+      "keywordArgs": false,
+      "kind": "value",
+      "params": [
+        {
+          "name": "min"
+        },
+        {
+          "name": "max"
+        }
+      ]
+    },
+    {
+      "catalogId": "randomValueInArray",
+      "evidence": [
+        "generic-builtins"
+      ],
+      "id": "random.choice",
+      "keywordArgs": false,
+      "kind": "value",
+      "params": [
+        {
+          "name": "array"
+        }
+      ]
+    },
+    {
+      "context": "forIterable",
+      "evidence": [
+        "range-for-header"
+      ],
+      "id": "range",
+      "keywordArgs": false,
+      "kind": "value",
+      "params": [
+        {
+          "name": "start"
+        },
+        {
+          "name": "stop",
+          "optional": true
+        },
+        {
+          "name": "step",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "catalogId": "vector",
+      "evidence": [
+        "generic-builtins"
+      ],
+      "id": "vect",
+      "kind": "value",
+      "params": [
+        {
+          "name": "x"
+        },
+        {
+          "name": "y"
+        },
+        {
+          "name": "z"
+        }
+      ]
+    },
+    {
+      "catalogId": "isGameInProgress",
+      "evidence": [
+        "is-game-in-progress"
+      ],
+      "id": "isGameInProgress",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "getPlayersInRadius",
+      "evidence": [
+        "get-players-in-radius"
+      ],
+      "id": "getPlayersInRadius",
+      "kind": "value",
+      "params": [
+        {
+          "name": "center"
+        },
+        {
+          "name": "radius"
+        },
+        {
+          "default": "ALL",
+          "domain": "Team",
+          "name": "team"
+        },
+        {
+          "default": "OFF",
+          "domain": "LosCheck",
+          "name": "losCheck"
+        }
+      ]
+    },
+    {
+      "catalogId": "worldVector",
+      "evidence": [
+        "enum-gated-members"
+      ],
+      "id": "worldVector",
+      "kind": "value",
+      "params": [
+        {
+          "name": "localVector"
+        },
+        {
+          "name": "relativePlayer"
+        },
+        {
+          "domain": "Transform",
+          "name": "transformation"
+        }
+      ]
+    },
+    {
+      "evidence": [
+        "receiver-calls"
+      ],
+      "id": "append",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "value"
+        }
+      ],
+      "receiver": "Variable"
+    },
+    {
+      "catalogId": "setMoveSpeed",
+      "evidence": [
+        "receiver-calls"
+      ],
+      "id": "setMoveSpeed",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "moveSpeedPercent"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setMaxHealth",
+      "evidence": [
+        "receiver-calls"
+      ],
+      "id": "setMaxHealth",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "healthPercent"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setHealth",
+      "evidence": [
+        "receiver-calls"
+      ],
+      "id": "setHealth",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "amount"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setAimSpeed",
+      "evidence": [
+        "receiver-calls"
+      ],
+      "id": "setAimSpeed",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "turnSpeedPercent"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setGravity",
+      "evidence": [
+        "receiver-calls"
+      ],
+      "id": "setGravity",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "gravityPercent"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setDamageDealt",
+      "evidence": [
+        "receiver-calls"
+      ],
+      "id": "setDamageDealt",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "damageDealtPercent"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setDamageReceived",
+      "evidence": [
+        "receiver-calls"
+      ],
+      "id": "setDamageReceived",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "damageReceivedPercent"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setUltCharge",
+      "evidence": [
+        "receiver-calls"
+      ],
+      "id": "setUltCharge",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "chargePercent"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "teleport",
+      "evidence": [
+        "receiver-calls"
+      ],
+      "id": "teleport",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "position"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setInvisibility",
+      "evidence": [
+        "enum-gated-members"
+      ],
+      "id": "setInvisibility",
+      "kind": "memberAction",
+      "params": [
+        {
+          "domain": "Invis",
+          "name": "invisibleTo"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setStatusEffect",
+      "evidence": [
+        "enum-gated-members"
+      ],
+      "id": "setStatusEffect",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "assister"
+        },
+        {
+          "domain": "Status",
+          "name": "status"
+        },
+        {
+          "name": "duration"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getPosition",
+      "evidence": [
+        "receiver-calls"
+      ],
+      "id": "getPosition",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getHealth",
+      "evidence": [
+        "receiver-calls"
+      ],
+      "id": "getHealth",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "isAlive",
+      "evidence": [
+        "receiver-calls"
+      ],
+      "id": "isAlive",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "hasSpawned",
+      "evidence": [
+        "receiver-calls"
+      ],
+      "id": "hasSpawned",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getThrottle",
+      "evidence": [
+        "enum-gated-members"
+      ],
+      "id": "getThrottle",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "evidence": [
+        "member-aliases"
+      ],
+      "id": "getHero",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "evidence": [
+        "member-aliases"
+      ],
+      "id": "hasStatus",
+      "kind": "memberValue",
+      "params": [
+        {
+          "domain": "Status",
+          "name": "status"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "customString",
+      "evidence": [
+        "generic-builtins"
+      ],
+      "id": "format",
+      "keywordArgs": false,
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "String",
+      "unbounded": true
+    }
+  ],
+  "provenance": {
+    "generator": "wright-opy semantic compatibility manifest v1 (Wright-authored; probe-validated against the pinned OverPy 9.7.10 oracle)",
+    "license": "AGPL-3.0-or-later",
+    "reviewed": true
+  },
+  "reference": {
+    "contentCommit": "889d974",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "name": "overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

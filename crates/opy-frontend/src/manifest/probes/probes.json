@@ -1,0 +1,313 @@
+{
+  "schemaVersion": 1,
+  "probes": [
+    {
+      "diagnosticContains": "Expected a value, but got function 'wait' which is an action",
+      "expect": "failure",
+      "id": "action-in-value-position",
+      "sha256": "9e8f4dbcb58dfe6c2ef69b497785153862558711e0e2406846e92c22b51d04fd",
+      "source": "action-in-value-position.opy"
+    },
+    {
+      "expect": "success",
+      "id": "aliases",
+      "outputSha256": "a6e298c6cca101812d7471383d3091d3a0873fac8d2193788eaa88797a81eef0",
+      "sha256": "7137c6c459efee047d49aeb96e3e3324e300098ead933c65653512d91cd8f8ef",
+      "source": "aliases.opy"
+    },
+    {
+      "expect": "success",
+      "id": "builtin-enums",
+      "outputSha256": "860dd0fdc020122d128715067711004775967820519749ec0e6f14dd6d19ddd1",
+      "sha256": "f73a456e26707e2b49edbf7a1259ad990455649d78a8ba0710cbaa0bdfc0fe4b",
+      "source": "builtin-enums.opy"
+    },
+    {
+      "diagnosticContains": "Unknown function 'createHudText'",
+      "expect": "failure",
+      "id": "catalog-only-names",
+      "sha256": "f5ee4ed1a779991253afa2d4be9685c2f85c837923d88cbf14f3e36296dacb58",
+      "source": "catalog-only-names.opy"
+    },
+    {
+      "expect": "failure",
+      "id": "chase-arg3-keyword-required",
+      "sha256": "559e04258c77b4e1794dcf2c0cb7a2a8521c762fb3a3d939aedb33c22902067f",
+      "source": "chase-arg3-keyword-required.opy",
+      "diagnosticContains": "must be 'rate = xxxx' or 'duration = xxxx'"
+    },
+    {
+      "expect": "failure",
+      "id": "chase-duplicate-keyword",
+      "sha256": "44947d3028149f8507fd9ae5e0b193b5707769bb4810eb4bbc25f3c93a847f7d",
+      "source": "chase-duplicate-keyword.opy",
+      "diagnosticContains": "is defined twice"
+    },
+    {
+      "expect": "success",
+      "id": "chase-keyword-binding",
+      "sha256": "ceeb33dca2ae30bdfa7d2b5457f5f17d071b5b4e03910491ce927b3f41308185",
+      "source": "chase-keyword-binding.opy",
+      "outputSha256": "54a1e643ee6235f9f8894bc29409690992c96b8e453f46ae09a26073f0e4bd64"
+    },
+    {
+      "expect": "success",
+      "id": "chase-keywords",
+      "sha256": "4b2e31975709e04d5121cc800bd086baf4b8d9e1e78da6074d91ef7300bea906",
+      "source": "chase-keywords.opy",
+      "outputSha256": "70e4208094e783ac7f674e927a45aadf0f6184d489dd1c152b2ebb0dad74c51c"
+    },
+    {
+      "expect": "failure",
+      "id": "chase-missing-argument",
+      "sha256": "f4b858aed0c77b02c66c1d96bea0c3a64a34cad670d8bf66dd67d807a6d35476",
+      "source": "chase-missing-argument.opy",
+      "diagnosticContains": "Missing argument 'duration'"
+    },
+    {
+      "expect": "success",
+      "id": "chase-over-time",
+      "outputSha256": "1d68ff79d6381ddd8fe81bbc703aa1f1e9df0457b715108d5579fce33c0509c0",
+      "sha256": "5e6fac560f1f85f635960b45c3dbae72c054c597bcf5bb70b4bcedeaadf06b2c",
+      "source": "chase-over-time.opy"
+    },
+    {
+      "expect": "success",
+      "id": "chase-over-time-defaults",
+      "outputSha256": "c09b3417002f90231cff3111d2fd3b038ce999aaab4d2aa62c0bd85762239774",
+      "sha256": "bc3129b756a5e63b92e10c08f9cc38dc6ebc51f32116d4860091ac1f1ae89ace",
+      "source": "chase-over-time-defaults.opy"
+    },
+    {
+      "expect": "failure",
+      "id": "chase-over-time-variable",
+      "sha256": "932e70be36fdd809801e9dad7d73187b46452da8cfdca79e02c92c911dbaa6ff",
+      "source": "chase-over-time-variable.opy",
+      "diagnosticContains": "Expected variable for 1st argument of function 'chaseOverTime'"
+    },
+    {
+      "expect": "failure",
+      "id": "chase-positional-after-keyword",
+      "sha256": "8da563c09bb5d1da4b7fc32f62189a7cb298bd3d6f10184c9097f754f6f61d14",
+      "source": "chase-positional-after-keyword.opy",
+      "diagnosticContains": "Cannot use positional arguments after keyword arguments"
+    },
+    {
+      "expect": "success",
+      "id": "chase-reeval-context",
+      "sha256": "42998e1212e7b9941dc0e8317ef12489aa9002cdeabbfb75ea102d9349e25e61",
+      "source": "chase-reeval-context.opy",
+      "outputSha256": "24f13ab112521854a5b474fc9e3751b725a93b5ec61309ec90433c1d5a11b532"
+    },
+    {
+      "expect": "failure",
+      "id": "chase-reeval-outside",
+      "sha256": "fc79ad626446c27be49eaf7d950d11c9f6f701d7ddcdf2d74df1b0b79357f17a",
+      "source": "chase-reeval-outside.opy",
+      "diagnosticContains": "Unknown member 'NONE' of 'ChaseReeval'"
+    },
+    {
+      "expect": "failure",
+      "id": "chase-reeval-wrong-domain",
+      "sha256": "4daa766f072ba77902f8f387dfec30ad74591626a73d735aa35f972e8d215cc7",
+      "source": "chase-reeval-wrong-domain.opy",
+      "diagnosticContains": "Unknown chaseratereeval"
+    },
+    {
+      "expect": "failure",
+      "id": "chase-unknown-keyword",
+      "sha256": "6b959459187346932379288b01cb1b915e13901055bd2eee1b3a80f6b018d348",
+      "source": "chase-unknown-keyword.opy",
+      "diagnosticContains": "Unknown keyword argument 'bogus'"
+    },
+    {
+      "expect": "failure",
+      "id": "chase-variable-first-arg",
+      "sha256": "eb8b4348eb425945cbf0499b2cce1a663dec29358fdd2b64c6839c3eae1a7575",
+      "source": "chase-variable-first-arg.opy",
+      "diagnosticContains": "Expected variable for 1st argument of function 'chaseAtRate'"
+    },
+    {
+      "diagnosticContains": "Expected type 'Invis' for the 2nd argument of function '.setInvisibility'",
+      "expect": "failure",
+      "id": "enum-arg-non-enum",
+      "sha256": "c5f41d43a347da13e489bb7cd5699120855016f2c425c9dd3cbc9802809dcdec",
+      "source": "enum-arg-non-enum.opy"
+    },
+    {
+      "diagnosticContains": "Expected type 'Invis' for the 2nd argument of function '.setInvisibility'",
+      "expect": "failure",
+      "id": "enum-arg-variable",
+      "sha256": "590d8108e117e11b2c4ca951417346c2f951dc7ed6436890cc7ff26a045715d8",
+      "source": "enum-arg-variable.opy"
+    },
+    {
+      "diagnosticContains": "Expected type 'ChaseTimeReeval' for the 4th argument of function 'chaseOverTime'",
+      "expect": "failure",
+      "id": "enum-domain-mismatch-1",
+      "sha256": "e564620792923ff010a31738849eacc40af42ce257bbfe99d95d9036737af5fb",
+      "source": "enum-domain-mismatch-1.opy"
+    },
+    {
+      "diagnosticContains": "Expected type 'Invis' for the 2nd argument of function '.setInvisibility'",
+      "expect": "failure",
+      "id": "enum-domain-mismatch-2",
+      "sha256": "482c5164effd7fb2e5a3bcb89385de100d910753371d6c1ea26332284de237f3",
+      "source": "enum-domain-mismatch-2.opy"
+    },
+    {
+      "expect": "success",
+      "id": "enum-gated-members",
+      "outputSha256": "aea63820d0ebfc177a7a32f2b4af9bc20adfea499509b2952aa3b79b814acaaa",
+      "sha256": "14d5f9542b07daaf4599aa7ecb27f21e99edadcbee80f76b5f8974b5640511d7",
+      "source": "enum-gated-members.opy"
+    },
+    {
+      "expect": "success",
+      "id": "generic-builtins",
+      "outputSha256": "29706885620f5e8e270148321989911a29a251f9b326fcc5c8e095da9ca14b8a",
+      "sha256": "f8cc098038f525941ebccac6fddaed85de3972804c76f97438606a3dee101901",
+      "source": "generic-builtins.opy"
+    },
+    {
+      "diagnosticContains": "Unknown function 'setMoveSpeed'",
+      "expect": "failure",
+      "id": "generic-member-only-action",
+      "sha256": "56f2d32fa673102751ef178e2d120fce9a9c9853e25a6ff33df12de9ecca3029",
+      "source": "generic-member-only-action.opy"
+    },
+    {
+      "expect": "success",
+      "id": "get-players-in-radius",
+      "outputSha256": "36ed8b01ebbcedba64a48742a934398cbc32e31242f876f58b1068e094266673",
+      "sha256": "357a74741a6f2fe094e68351d046722331471c5d5e4b66dfa0cf97956ee595e5",
+      "source": "get-players-in-radius.opy"
+    },
+    {
+      "diagnosticContains": "Missing argument 'duration' for function '.setStatusEffect'",
+      "expect": "failure",
+      "id": "invalid-arity-member",
+      "sha256": "a270a6db6777219ad864c5de8141180516821ff2888d538017476a02c91851fb",
+      "source": "invalid-arity-member.opy"
+    },
+    {
+      "diagnosticContains": "Missing argument 'duration' for function 'chaseOverTime'",
+      "expect": "failure",
+      "id": "invalid-arity-too-few",
+      "sha256": "241484f5c57b2fac9b2ef857b3f3e9531b7b090539f840913f668b5dea3d3632",
+      "source": "invalid-arity-too-few.opy"
+    },
+    {
+      "diagnosticContains": "Function 'wait' takes 2 arguments, received 3",
+      "expect": "failure",
+      "id": "invalid-arity-wait",
+      "sha256": "0df395c3105137790c3119a91a627ccee631f5db2a91e6172dd15eea425c5122",
+      "source": "invalid-arity-wait.opy"
+    },
+    {
+      "diagnosticContains": "Cannot modify or assign to number '3'",
+      "expect": "failure",
+      "id": "invalid-receiver-append",
+      "sha256": "36964992dc3bcb5f37390499376411361227db72a478c2342e9d47ca53382c16",
+      "source": "invalid-receiver-append.opy"
+    },
+    {
+      "diagnosticContains": "Expected a string literal for .format(), but got '3'",
+      "expect": "failure",
+      "id": "invalid-receiver-format",
+      "sha256": "b78406bd3690f7f26fbcf40cd79d12d8e7b211fdbf3e8219ab01a81fab66cee8",
+      "source": "invalid-receiver-format.opy"
+    },
+    {
+      "expect": "success",
+      "id": "is-game-in-progress",
+      "outputSha256": "d6703d63ceb007a823e382b5d7444f4897c7c4d631ff1ee1009c74259dec97a2",
+      "sha256": "a76edc7c82ee9d6654b7e459f91432371ef3486e422651863c7dab86f1bc1c28",
+      "source": "is-game-in-progress.opy"
+    },
+    {
+      "expect": "failure",
+      "id": "keyword-arguments-unsupported",
+      "sha256": "2a4b1b11447c4c7be4e02eb39af2e35e9203e2c19cb1e52da6ecc652ee9af88e",
+      "source": "keyword-arguments-unsupported.opy",
+      "diagnosticContains": "Unknown function name 'start'"
+    },
+    {
+      "expect": "success",
+      "id": "member-aliases",
+      "outputSha256": "dd250b6bb625584867937f72f477eda6a25789361cbd761a29c3f731c2990835",
+      "sha256": "a8eeee51f7ab5ffeefaa449c101f780c332e406a19b1521a07fcbaa184896d41",
+      "source": "member-aliases.opy"
+    },
+    {
+      "diagnosticContains": "Expected an action, but got function '.isAlive' which is a value",
+      "expect": "failure",
+      "id": "member-value-in-action-position",
+      "sha256": "98ca1546d1baaec19f9dcfc7407143a654da99406a90271d404e0f7ba48bc8f8",
+      "source": "member-value-in-action-position.opy"
+    },
+    {
+      "expect": "success",
+      "id": "range-for-header",
+      "outputSha256": "6dc18d6b87769152eeaea1fbd47ffb510648776686a6fdd444cae696579cc49b",
+      "sha256": "6ef7fbb8f9429ea0bbe204550245e7c5a3f985c56cda2d2e199a47b23fa6d64b",
+      "source": "range-for-header.opy"
+    },
+    {
+      "diagnosticContains": "Unknown type 'Iterator' of 'range'",
+      "expect": "failure",
+      "id": "range-standalone",
+      "sha256": "c29a8f89f81427c1f70933ebb8e1e7c27757a2b88edf290c5a2561738709b3bb",
+      "source": "range-standalone.opy"
+    },
+    {
+      "expect": "success",
+      "id": "receiver-calls",
+      "outputSha256": "827a36368c290664087189244f197822790e8874dec3e0c89ca7647c1af0c1a7",
+      "sha256": "abc9c1f92eb179879da0bc17906bb489b8f764bd89ef7e8af36f3bd4bf3ca968",
+      "source": "receiver-calls.opy"
+    },
+    {
+      "diagnosticContains": "Unknown member 'MEMBER' of 'NotARealEnum'",
+      "expect": "failure",
+      "id": "unknown-enum",
+      "sha256": "bf43c69871bbc7d596ee05f7b86e1bf631180609f7b5ed912ce2f34c2c28c8eb",
+      "source": "unknown-enum.opy"
+    },
+    {
+      "diagnosticContains": "Unknown function 'frobnicate'",
+      "expect": "failure",
+      "id": "unknown-function",
+      "sha256": "457cff126a3e257f09597f9d3808ece0b695cbdb60fb084ea4a0f0ebccc99a28",
+      "source": "unknown-function.opy"
+    },
+    {
+      "diagnosticContains": "Unknown function '.frobnicate'",
+      "expect": "failure",
+      "id": "unknown-member",
+      "sha256": "00eec5e1b1689b880cd24f024be52733910caf270f0fbf0c30433da1cd5a85e1",
+      "source": "unknown-member.opy"
+    },
+    {
+      "diagnosticContains": "Unknown function 'frobnicate'",
+      "expect": "failure",
+      "id": "unknown-value",
+      "sha256": "af4d8f8fe85c141e38867a3b5655525b6a886c000151f39b2a49878c38ddb37b",
+      "source": "unknown-value.opy"
+    },
+    {
+      "diagnosticContains": "Expected an action, but got function 'isGameInProgress' which is a value",
+      "expect": "failure",
+      "id": "value-in-action-position",
+      "sha256": "eae22cf4b2e2190b3deffd9fe9fa57d49d2cf9882b8635cfa0ad324e17521fc6",
+      "source": "value-in-action-position.opy"
+    },
+    {
+      "expect": "failure",
+      "id": "wait-keyword-names",
+      "sha256": "275864fc4db1e06955e674ed4656dc8350faf96d3f0877d06d2c9906cfde6ec9",
+      "source": "wait-keyword-names.opy",
+      "diagnosticContains": "Unknown keyword argument 'duration'"
+    }
+  ]
+}
