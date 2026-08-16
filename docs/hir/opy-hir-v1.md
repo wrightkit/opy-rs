@@ -68,7 +68,7 @@ Every payload is a JSON object with the following top-level fields.
 
 ```jsonc
 {
-  "name": "wright-overpy-adapter",
+  "name": "wright/opy-native",
   "version": "0.1.0",
   "frontend": "overpy@9.7.10"
 }
@@ -78,9 +78,9 @@ Every payload is a JSON object with the following top-level fields.
 * `version` is the producer's own version.
 * `frontend` records the exact external frontend identity (package and
   version) the producer translated from, so compatibility evidence can name
-  the reference. opy-rs producers (the native frontend and its reference
-  adapter) record their own identities here; the pinned reference identity
-  is `overpy@9.7.10` (content commit
+  the reference. The opy-rs native frontend records its own identity here
+  (`FRONTEND_NAME` = `wright/opy-native`, version = the crate version); the
+  pinned reference identity is `overpy@9.7.10` (content commit
   `889d9749d1def17f146548cbddb94ea1ab015847`, see
   [`docs/compatibility/upstream-references.md`](../compatibility/upstream-references.md)).
 
@@ -176,9 +176,11 @@ identifier token — the declared or defined identifier, or the rule name inside
 its string literal — when the frontend can record it. It is optional and
 omitted when absent; it is never emitted as `null`, and it has the same shape
 and validation as any other span (§8). The native frontend records it; the
-reference adapter does not carry exact identifier spans, so the differential
-suite's normalization treats `name_span` as frontend-internal provenance and
-removes it (alongside `span`) before comparison.
+differential suite's normalization strips `span`-family fields from the
+per-fixture native wire-payload artifact (`target/opy-differential/`) as
+documented frontend-internal provenance — protocol and generator identities
+are kept, and the oracle comparison itself uses status, rule-name, and
+diagnostic evidence rather than span data.
 
 Spans are for diagnostics and identity, not for byte-accurate reconstruction.
 The adapter is responsible for producing them; the consumer validates them
@@ -496,5 +498,4 @@ reason to extend the schema silently.
   typed settings nodes, validation checks (§8 item 6), and a settings dump
   section. No existing node or field changed; consumers of the 1.x major
   accept the payload unchanged (`check_envelope` gates the major only).
-  Both producers (the opy-rs native frontend and the reference adapter)
-  emit 1.1.0.
+  The opy-rs native frontend emits 1.1.0.

@@ -2,13 +2,13 @@
 
 Status: accepted specification — opy-rs-owned semantic contract, ported and
 adapted from the WrightKit evidence base (issue #2); implemented by the
-frontend workstream (issues #4/#5)
-Scope: the opy-rs-owned representation for builtin actions/values, member
-functions, signatures, parameter enum domains, enum members, and source
-aliases; reference-validated and consumed by the native frontend. The
-implementation lives in `crates/opy-frontend/src/manifest/` (data in
-`data/manifest.json`, probe evidence in `probes/`); this document is the
-schema and boundary contract for that data.
+frontend workstream (issues #4/#5) and merged on `main` (PRs #9/#13)
+Scope: the opy-rs-owned representation for builtin action/value identities,
+member functions, signatures, parameter enum-domain identities (catalog
+links), and source aliases; reference-validated and consumed by the native
+frontend. The implementation lives in `crates/opy-frontend/src/manifest/`
+(data in `data/manifest.json`, probe evidence in `probes/`); this document is
+the schema and boundary contract for that data.
 
 ## Purpose and boundary
 
@@ -16,22 +16,28 @@ The compatibility inventory (issue #2) concluded that a machine-readable,
 opy-rs-owned manifest is justified: the declared parse surface exceeds the
 initial semantic surface, and residual `unknown-action`/`unknown-value`/
 `unsupported-member` gaps are semantic-coverage gaps, not grammar gaps. The
-manifest replaces the hardcoded `KNOWN_ENUMS` table in
-`crates/opy-frontend/src/lower.rs` with data and gives the frontend a single,
-reference-validated source for:
+manifest replaced the hardcoded `KNOWN_ENUMS` table (removed from
+`crates/opy-frontend/src/lower.rs` in the ownership-fixed frontend, PR #9)
+with data and gives the frontend a single, reference-validated source for:
 
 * builtin actions and values (generic and member);
 * member-function metadata (receiver + argument signatures);
 * signatures, argument names/order, and defaults;
-* parameter enum domains (`Invis`, `Status`, `Transform`, `Throttle`, …);
-* enum members per domain;
+* parameter enum-domain **identities** as catalog links (the domain a
+  parameter requires, e.g. `Invis`, `Status`, `Transform`, `ChaseTimeReeval`),
+  **not** the authoritative member lists of those domains;
 * source aliases (non-contextual rewrites such as `stopChasingVariable`).
 
 It is **language-compatibility metadata**, distinct from:
 
 * the Workshop emission/localization layer (en-US spellings, emitter
   output), owned by `workshop-rs`; the manifest links to it by canonical id
-  (`catalogId`) rather than duplicating spellings; and
+  (`catalogId`) rather than duplicating spellings;
+* authoritative Workshop enum member lists, hero/map/mode/settings content,
+  locale spellings, and canonical member/domain existence — Workshop-owned
+  catalog content that the frontend **never approximates**: member accesses on
+  a declared domain identity resolve as opaque identities, and
+  member/domain/catalog validation stays `lowering-dependent` (#8); and
 * a runtime content registry (heroes/maps/abilities content data, extension
   boundaries, independent version identities) — deferred; this inventory
   found no architecture trigger that requires opening one.
@@ -82,13 +88,6 @@ It is **language-compatibility metadata**, distinct from:
       "evidence": ["chase-keywords", "chase-reeval-context"]
     }
   ],
-  "enumDomains": [
-    {
-      "domain": "ChaseTimeReeval",
-      "members": ["NONE", "DESTINATION_AND_DURATION"],
-      "evidence": ["builtin-enums", "chase-over-time"]
-    }
-  ],
   "aliases": [
     { "source": "stopChasingVariable", "target": "stopChasing",
       "kind": "functionAlias", "evidence": ["aliases"] }
@@ -100,6 +99,13 @@ It is **language-compatibility metadata**, distinct from:
   }
 }
 ```
+
+There is **no `enumDomains` table**: the manifest records enum *domain
+identities* as parameter metadata (`"domain": "ChaseTimeReeval"`) and as the
+contextual `chase` dispatch record, but it does not carry authoritative
+Workshop member lists. A member access on a declared domain identity resolves
+as an opaque `enum` node; canonical member-existence and domain validation is
+Workshop-owned catalog content and stays `lowering-dependent` (#8).
 
 Entry semantics:
 
@@ -174,11 +180,12 @@ hash, and — for rejections — the diagnostic category fragment).
 ## Validation rules
 
 * `Manifest::load` (`crates/opy-frontend/src/manifest`) — schema validation,
-  duplicate/colliding ids, colliding or missing aliases, undeclared enum
-  domains, undeclared enum-default members, keyword-binding data sanity
-  (`keywordOnly`/`positionalOnly` are mutually exclusive, alternate
+  duplicate/colliding ids, colliding or missing aliases, declared parameter
+  domain identities (tracked for the frontend's opaque member resolution),
+  enum-member defaults requiring a declared domain, keyword-binding data
+  sanity (`keywordOnly`/`positionalOnly` are mutually exclusive, alternate
   spellings do not collide with other parameters), contextual-domain
-  integrity (the contextual domain is not a declared enum domain, the
+  integrity (the contextual domain is not a standalone declared identity, the
   selector parameter exists and its keyword spellings cover the options,
   every option domain is declared), and entries lacking oracle evidence all
   fail deterministically; a canonical-rewrite test pins the data file to its
@@ -188,26 +195,33 @@ hash, and — for rejections — the diagnostic category fragment).
 * `probes/validate.py` — reference validation: every probe runs against the
   pinned oracle and must match its recorded accept/reject, normalized
   emission hash, and diagnostic category. The probe set and validator are
-  frontend-workstream-owned; wiring into the harness test suite happens with
-  the differential work (issue #7). Until then the probe names are recorded
-  as evidence references in `compatibility/support-matrix.json` and the
-  corpus fixtures cover the same surface end-to-end.
+  frontend-workstream-owned; the validator requires the pinned oracle (Node +
+  pnpm) and runs standalone like `compatibility/run_oracle.py`, so it is not
+  part of the oracle-less harness suite. The probe names are recorded as
+  evidence references in `compatibility/support-matrix.json`, and the native
+  differential suite (`crates/opy-frontend/tests/differential.rs`, merged in
+  PR #13) covers the same surface end-to-end in `cargo test`.
 * The frontend consumes the manifest in `lower.rs`: unknown names, wrong
-  action/value position, invalid arity, invalid receiver category,
-  enum-domain mismatches, and named/keyword argument binding
-  (`unknown-keyword`, `duplicate-argument`, `missing-argument`,
-  `positional-after-keyword`, `keyword-required`, `keyword-unsupported`,
-  `invalid-argument`) produce structured, source-located frontend
-  diagnostics before Workshop emission.
+  action/value position, invalid arity, invalid receiver category, and
+  named/keyword argument binding (`unknown-keyword`, `duplicate-argument`,
+  `missing-argument`, `positional-after-keyword`, `keyword-required`,
+  `keyword-unsupported`, `invalid-argument`) produce structured,
+  source-located frontend diagnostics before Workshop emission. Workshop
+  enum member/domain mismatch checks were removed from the core in PR #9
+  (they require canonical Workshop catalog knowledge) and are
+  `lowering-dependent` (#8); custom user-declared enum member validation is
+  OPY-level source semantics and stays frontend-owned.
 
 ## Consumers
 
 * the opy-rs frontend (`crates/opy-frontend`) — name/member/enum resolution,
-  arity and signature checks, `KNOWN_ENUMS` absorption, early resolution of
-  unknown-action/value errors;
-* `workshop-rs` — canonical-id linkage to the emission catalog (validated by
-  the cross-check test at integration time);
-* differential and systematic reference tests (the probe validator, issue #7);
+  arity and signature checks, early resolution of unknown-action/value
+  errors;
+* `workshop-rs` — canonical-id linkage to the emission catalog and
+  member/domain/catalog validation (validated by the cross-check test at
+  integration time, issue #8);
+* differential and systematic reference tests (the native differential suite
+  and the oracle-required probe validator);
 * documentation, agents, and future release metadata can consume the same
   declared boundary.
 

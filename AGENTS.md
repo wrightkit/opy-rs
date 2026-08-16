@@ -43,14 +43,21 @@ prohibited.
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-targets --all-features
+python3 -m unittest discover -s compatibility/tests   # oracle-free harness checks
 ```
 
-CI runs these on every push/PR. Do not merge work that fails them.
+CI runs the Rust quality gates on Ubuntu (Rust stable and 1.85.0) and the
+`opy-macro-js` runtime suite on macOS and Windows on every push/PR. The
+oracle-free compatibility harness tests run as standalone validation (they
+are not part of CI); oracle-required steps (`compatibility/run_oracle.py`,
+the manifest probe validator) run locally against the pinned oracle. Do not
+merge work that fails these checks.
 
 ## Delivery
 
 - Never push directly to `main`; develop on independent branches and deliver
   Draft PRs per change.
 - Keep commits focused and issue-linked; do not mix unrelated changes.
-- Keep issue/PR state and the support matrix (`docs/opy/support-matrix.md`) in
-  sync with the code.
+- Keep issue/PR state and the support matrix in sync with the code:
+  `compatibility/support-matrix.json` is the single mechanically checked
+  state source (`docs/opy/support-matrix.md` describes it and links to it).
