@@ -1,4 +1,5 @@
-//! `.opy` preprocessing: includes, `#!define` macros, and expansion.
+//! `.opy` preprocessing: includes, `#!define` macros (textual and
+//! `__script__` JavaScript-backed), `#!postCompileHook`, and expansion.
 //!
 //! Operates at the token level, matching the reference frontend's observable
 //! behavior: `#!include "file.opy"` splices the included file's tokens at the
@@ -9,9 +10,39 @@
 //! convention (the HIR file registry keeps the main file). Invalid include
 //! graphs (cycles, missing files) and recursive defines fail deterministically
 //! with structured diagnostics that name the offending file/line.
+//!
+//! # JavaScript macros and hooks
+//!
+//! A function-like define whose replacement starts with `__script__("…")`
+//! (OverPy 9.7.10 ABI, `src/compiler/tokenizer.ts`) is a script macro: the
+//! script path resolves root-relative at the define site (missing files are a
+//! `script-not-found` diagnostic, mirroring the reference's ENOENT failure),
+//! and each expansion runs the script through [`opy_macro_js::MacroRuntime`]
+//! with the call-site arguments injected as `var <name>=<raw>;` declarations
+//! (the reference's `resolveMacro`). The string completion value is lexed
+//! back into the token stream at the call site, with the reference's
+//! per-line indentation rule applied to the text; the frontend token model
+//! makes indentation unobservable (the parser never consumes it), so the rule
+//! is preserved in the expansion text only. Runtime failures map to the
+//! structured `script-*` diagnostics with the script path, line, and column.
+//!
+//! `#!postCompileHook "hook.js"` registers the post-compile hook script
+//! (duplicate declarations are rejected like the reference). The frontend
+//! recognizes, parses, validates, and records the directive only — it never
+//! executes the hook: real hook execution receives the final Workshop text
+//! produced by lowering and is lowering-dependent (workshop-rs emission,
+//! issue #8); the frontend never fabricates a Workshop payload.
+//!
+//! Boundary: `__script__` macros expand at compile time through the runtime
+//! (frontend-supported); `#!postCompileHook` is recorded and executed only
+//! against the real Workshop output (lowering-dependent). The runtime's hook
+//! ABI is tested separately on synthetic content in `opy-macro-js` (see its
+//! `hooks` test suite).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+
+use opy_macro_js::{Limits, MacroArg, MacroError, MacroRuntime};
 
 use crate::diag::{FrontendError, FrontendResult, Span};
 use crate::lexer::{LexInput, Token, TokenKind, lex};
@@ -25,6 +56,31 @@ pub struct DefineRecord {
     pub span: Option<Span>,
 }
 
+/// A resolved `__script__("…")` macro backing.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ScriptMacro {
+    /// The script path as declared (root-relative), used for diagnostics and
+    /// runtime attribution.
+    pub path: String,
+    /// The script text, read at the define site.
+    pub source: String,
+}
+
+/// A registered `#!postCompileHook` script (the declaration record).
+///
+/// The frontend recognizes, parses, validates, and records the directive; it
+/// never executes the hook. Execution against the final Workshop text is
+/// lowering-dependent (issue #8).
+#[derive(Debug, Clone, PartialEq)]
+pub struct PostCompileHook {
+    /// The script path as declared (root-relative).
+    pub path: String,
+    /// The script text, read at the directive site.
+    pub source: String,
+    /// The directive's source span, used for error attribution.
+    pub span: Span,
+}
+
 /// The result of preprocessing.
 #[derive(Debug, Clone)]
 pub struct Preprocessed {
@@ -34,6 +90,8 @@ pub struct Preprocessed {
     pub defines: Vec<DefineRecord>,
     /// The top-of-file `settings { ... }` block, when present (#86).
     pub settings: Option<SettingsBlock>,
+    /// The registered `#!postCompileHook` script, when declared.
+    pub post_compile_hook: Option<PostCompileHook>,
 }
 
 /// The output file registry: the main file only (reference convention).
@@ -92,6 +150,7 @@ pub fn preprocess_with_overlay_outcome(
         include_stack: Vec::new(),
         macros: Vec::new(),
         defines: Vec::new(),
+        post_compile_hook: None,
     };
     // The top-of-file settings block is extracted before lexing and blanked
     // out of the lexed text, so the lexer never sees the block's braces
@@ -140,6 +199,7 @@ pub fn preprocess_with_overlay_outcome(
                     tokens,
                     defines: pre.defines,
                     settings,
+                    post_compile_hook: pre.post_compile_hook,
                 },
                 pre.files.clone(),
             ));
@@ -163,15 +223,18 @@ struct Preprocessor {
     include_stack: Vec<PathBuf>,
     macros: Vec<MacroDef>,
     defines: Vec<DefineRecord>,
+    post_compile_hook: Option<PostCompileHook>,
 }
 
-/// A registered macro: object-like or function-like.
+/// A registered macro: object-like, function-like, or a script macro.
 struct MacroDef {
     name: String,
     params: Vec<String>,
     body: Vec<Token>,
     /// True when the body came from a `#!define name(args) value` form.
     is_function: bool,
+    /// The resolved `__script__` backing, when the replacement is one.
+    script: Option<ScriptMacro>,
 }
 
 impl Preprocessor {
@@ -220,11 +283,63 @@ impl Preprocessor {
             self.macros.retain(|m| m.name != name);
             return Ok(());
         }
+        if let Some(rest) = text.strip_prefix("postCompileHook") {
+            let rest = rest.trim();
+            let Some(path) = strip_quoted(rest) else {
+                return Err(FrontendError::at(
+                    "script-invalid",
+                    format!(
+                        "invalid postCompileHook directive: `{text}` (expected `#!postCompileHook \"hook.js\"`)"
+                    ),
+                    span,
+                ));
+            };
+            if self.post_compile_hook.is_some() {
+                return Err(FrontendError::at(
+                    "post-compile-hook-duplicate",
+                    "post-compile hook is already defined".to_string(),
+                    span,
+                ));
+            }
+            let hook = self.resolve_script(path, span)?;
+            self.post_compile_hook = Some(PostCompileHook {
+                path: hook.path,
+                source: hook.source,
+                span,
+            });
+            return Ok(());
+        }
         Err(FrontendError::at(
             "unsupported-directive",
             format!("unsupported preprocessing directive `#!{text}`"),
             span,
         ))
+    }
+
+    /// Resolve a script path root-relative (the reference's
+    /// `getFilePaths(path, rootPath)` convention) and read its text.
+    fn resolve_script(&self, path: &str, span: Span) -> FrontendResult<ScriptMacro> {
+        let canonical = self.root.join(path).canonicalize().map_err(|_| {
+            FrontendError::at(
+                "script-not-found",
+                format!(
+                    "cannot find script '{path}' under root '{}'",
+                    self.root.display()
+                ),
+                span,
+            )
+        })?;
+        let source = std::fs::read_to_string(&canonical).map_err(|error| {
+            FrontendError::at(
+                "script-not-found",
+                format!("cannot read script '{path}': {error}"),
+                span,
+            )
+        })?;
+        Ok(ScriptMacro {
+            path: path.to_string(),
+            source,
+        })
     }
 
     /// Resolve, lex, and splice one included file.
@@ -365,6 +480,34 @@ impl Preprocessor {
                 span,
             ));
         }
+        let script = if is_function_like && body_text.starts_with("__script__(") {
+            // The OverPy script-macro ABI: the replacement is exactly
+            // `__script__("path.js")`; the reference extracts the path from
+            // the text between the parentheses and resolves it root-relative
+            // at the define site (missing files fail at compile time).
+            let inner = &body_text["__script__(".len()..];
+            let inner = inner.strip_suffix(')').ok_or_else(|| {
+                FrontendError::at(
+                    "script-invalid",
+                    format!(
+                        "malformed script macro `#!define {rest}`: expected `__script__(\"path.js\")`"
+                    ),
+                    span,
+                )
+            })?;
+            let Some(path) = strip_quoted(inner.trim()) else {
+                return Err(FrontendError::at(
+                    "script-invalid",
+                    format!(
+                        "malformed script macro `#!define {rest}`: expected a quoted script path"
+                    ),
+                    span,
+                ));
+            };
+            Some(self.resolve_script(path, span)?)
+        } else {
+            None
+        };
         let body_tokens = lex(LexInput {
             file_id: span.file,
             text: &body_text,
@@ -385,6 +528,7 @@ impl Preprocessor {
             params,
             body: body_tokens,
             is_function,
+            script,
         });
         Ok(())
     }
@@ -464,8 +608,6 @@ impl Preprocessor {
         ))
     }
 
-    /// Substitute macro params with the call arguments and re-stamp the
-    /// resulting tokens to the use site.
     /// Substitute macro params with the call arguments and stamp every
     /// expanded token with the use-site span.
     ///
@@ -490,6 +632,9 @@ impl Preprocessor {
                 use_site,
             ));
         }
+        if let Some(script) = &mac.script {
+            return self.expand_script(mac, script, args, use_site);
+        }
         let mut out = Vec::new();
         for token in &mac.body {
             if mac.is_function
@@ -513,6 +658,51 @@ impl Preprocessor {
             }
         }
         Ok(out)
+    }
+
+    /// Expand a script macro: run the resolved script through the bounded
+    /// runtime with the call-site arguments injected, then lex the string
+    /// completion value back into the token stream at the use site.
+    ///
+    /// Argument text is reconstructed from the call-site tokens (see
+    /// [`raw_arg_text`]); the reference injects the raw source text, and the
+    /// reconstruction is JavaScript-value-equivalent to it (string literals
+    /// are re-quoted with JSON escaping, so quoting-style differences are
+    /// unobservable to the script). The reference's per-line indentation rule
+    /// is applied to the expansion text before lexing; the frontend parser
+    /// never consumes indentation, so this is preserved in the text only.
+    fn expand_script(
+        &self,
+        mac: &MacroDef,
+        script: &ScriptMacro,
+        args: Vec<Vec<Token>>,
+        use_site: Span,
+    ) -> FrontendResult<Vec<Token>> {
+        let macro_args: Vec<MacroArg> = mac
+            .params
+            .iter()
+            .zip(args.iter())
+            .map(|(param, tokens)| MacroArg::new(param.clone(), raw_arg_text(tokens)))
+            .collect();
+        // Resource limits mirror the pinned reference constants (1000 ms macro
+        // budget, 64 MiB memory, 512 KiB stack; see `opy_macro_js::Limits`).
+        let runtime = MacroRuntime::new(Limits::default());
+        let result = runtime
+            .run_macro(&script.source, &macro_args, &script.path)
+            .map_err(|error| map_macro_error(&error, &script.path, use_site))?;
+        // Reference indentation rule (`resolveMacro`): every newline in the
+        // replacement is followed by the call line's indentation.
+        let indent = " ".repeat(use_site.start.col.saturating_sub(1) as usize);
+        let indented = result.text.replace('\n', &format!("\n{indent}"));
+        let mut tokens = lex(LexInput {
+            file_id: use_site.file,
+            text: &indented,
+        })?;
+        tokens.retain(|token| token.kind != TokenKind::Eof);
+        for token in &mut tokens {
+            token.span = use_site;
+        }
+        Ok(tokens)
     }
 
     /// Recursively expand macros inside an already-expanded run, guarding
@@ -571,6 +761,90 @@ impl Preprocessor {
         }
         *tokens = out;
         Ok(())
+    }
+}
+
+/// Strips a matched `"…"` or `'…'` pair, returning the inner text.
+fn strip_quoted(text: &str) -> Option<&str> {
+    text.strip_prefix('"')
+        .and_then(|rest| rest.strip_suffix('"'))
+        .or_else(|| {
+            text.strip_prefix('\'')
+                .and_then(|rest| rest.strip_suffix('\''))
+        })
+}
+
+/// Reconstructs the raw call-site argument text from its tokens.
+///
+/// The reference injects the raw source substring as `var <name>=<raw>;`; the
+/// token model stores string values unescaped, so string tokens are re-quoted
+/// with JSON escaping. The reconstruction is JavaScript-value-equivalent to
+/// the reference's raw injection: identifiers, numbers, operators, and
+/// punctuation pass through verbatim, and string literals differ only in
+/// quoting style, which is unobservable to the script.
+fn raw_arg_text(tokens: &[Token]) -> String {
+    let mut out = String::new();
+    for token in tokens {
+        match token.kind {
+            TokenKind::String => out.push_str(&json_string_literal(&token.text)),
+            TokenKind::Newline => out.push('\n'),
+            _ => out.push_str(&token.text),
+        }
+    }
+    out
+}
+
+/// Encodes `value` as a JSON string literal (double-quoted, escaped).
+fn json_string_literal(value: &str) -> String {
+    serde_json::to_string(value).expect("serializing a string is infallible")
+}
+
+/// Maps a runtime [`MacroError`] to a structured frontend diagnostic with the
+/// script path as provenance and the directive/call-site span.
+///
+/// The runtime's QuickJS abort messages are classified into stable codes:
+/// `script-timeout` (`"interrupted"`), `script-memory-limit`
+/// (`"out of memory"`), `script-stack-limit`
+/// (`"Maximum call stack size exceeded"`), and `script-error` for thrown
+/// exceptions (with the script path and, when the engine provided one, the
+/// line/column). Non-string completion values are `script-result-not-string`
+/// with the reference's wording, and engine setup failures are
+/// `script-internal`.
+pub(crate) fn map_macro_error(error: &MacroError, script_path: &str, span: Span) -> FrontendError {
+    match error {
+        MacroError::Script(script) => {
+            let code = match script.message.as_str() {
+                "interrupted" => "script-timeout",
+                "out of memory" => "script-memory-limit",
+                "Maximum call stack size exceeded" => "script-stack-limit",
+                _ => "script-error",
+            };
+            let location = match (script.line, script.column) {
+                (Some(line), Some(column)) => format!(" (line {line}, column {column})"),
+                (Some(line), None) => format!(" (line {line})"),
+                _ => String::new(),
+            };
+            FrontendError::at(
+                code,
+                format!(
+                    "script '{}' failed: {}{}",
+                    script_path, script.message, location
+                ),
+                span,
+            )
+        }
+        MacroError::InvalidResult { type_name } => FrontendError::at(
+            "script-result-not-string",
+            format!(
+                "JavaScript macro returned value with type of {type_name}, expected string. Try using .toString()"
+            ),
+            span,
+        ),
+        MacroError::Internal(message) => FrontendError::at(
+            "script-internal",
+            format!("script '{}' runtime failure: {message}", script_path),
+            span,
+        ),
     }
 }
 

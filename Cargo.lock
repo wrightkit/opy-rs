@@ -206,6 +206,7 @@ dependencies = [
 name = "opy-frontend"
 version = "0.1.0"
 dependencies = [
+ "opy-macro-js",
  "serde",
  "serde_json",
 ]

@@ -51,6 +51,15 @@ pub struct CheckOutcome {
     pub diagnostics: Vec<Diagnostic>,
     pub model: Option<SemanticModel>,
     pub files: Vec<FileRecord>,
+    /// The declared `#!postCompileHook` script, when the source declared one
+    /// and the project checked clean.
+    ///
+    /// This is the declaration record, not an execution result: the frontend
+    /// recognizes, parses, validates, and records the directive, but never
+    /// executes the hook. Execution against the final Workshop text is
+    /// lowering-dependent (workshop-rs emission, issue #8); the frontend
+    /// never fabricates a Workshop payload.
+    pub post_compile_hook: Option<crate::preprocess::PostCompileHook>,
 }
 
 impl CheckOutcome {
@@ -84,6 +93,7 @@ pub fn check_with_overlay(
                 diagnostics: vec![Diagnostic::from_error(error, &files)],
                 model: None,
                 files,
+                post_compile_hook: None,
             };
         }
     };
@@ -99,6 +109,7 @@ pub fn check_with_overlay(
                 .collect(),
             model: None,
             files,
+            post_compile_hook: None,
         };
     };
     // Parse the extracted settings block into the CST; errors flow through
@@ -111,6 +122,7 @@ pub fn check_with_overlay(
                     diagnostics: vec![Diagnostic::from_error(error, &files)],
                     model: None,
                     files,
+                    post_compile_hook: None,
                 };
             }
         }
@@ -136,11 +148,17 @@ pub fn check_with_overlay(
             diagnostics: Vec::new(),
             model: Some(SemanticModel::build(hir, &program)),
             files,
+            // The directive was parsed, validated, and recorded by
+            // preprocessing; the frontend never executes the hook (real hook
+            // execution receives the final Workshop text and is
+            // lowering-dependent, issue #8).
+            post_compile_hook: preprocessed.post_compile_hook,
         },
         Err(error) => CheckOutcome {
             diagnostics: vec![Diagnostic::from_error(error, &files)],
             model: None,
             files,
+            post_compile_hook: None,
         },
     }
 }
