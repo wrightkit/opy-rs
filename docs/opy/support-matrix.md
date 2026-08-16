@@ -23,23 +23,26 @@ machine-readable semantic contract for builtins is specified in
 
 ## Current implementation state
 
-The opy-rs repository is being built in stages (issues #1–#8). The frontend
-workstream has landed on the `feat/frontend-completeness` branch: the native
-pipeline (lexer → preprocess → CST/parser → semantic resolution → Opy HIR
-v1) with the JavaScript macro runtime and the differential harness are
-implemented, and the rows they evidence are flipped to
+The standalone frontend foundation is merged on `main` (PRs #9–#14; issues
+#2–#6 complete and #7 partially delivered): the native pipeline (lexer →
+preprocess → CST/parser → semantic resolution → Opy HIR v1), the bounded
+JavaScript macro runtime, the tooling API/CLI, and the native differential
+suite are implemented and CI-covered. The rows they evidence are flipped to
 `frontend-supported`/`semantic-supported` in
-`compatibility/support-matrix.json`; features whose completion requires
-canonical Workshop semantics are `lowering-dependent` and are inventory-only
-until the `workshop-rs` integration stage (#8). Per-fixture differential
-status (resolve / expected-diagnostic / divergence) is recorded in
-`target/opy-differential-report.json`.
+`compatibility/support-matrix.json` — the mechanically checked state source;
+features whose completion requires canonical Workshop semantics are
+`lowering-dependent` and are inventory-only until the `workshop-rs`
+integration stage (#8), which remains the active Workshop-independent
+readiness gate. Per-fixture differential status (resolve /
+expected-diagnostic / divergence) is recorded in
+`target/opy-differential-report.json` by `cargo test -p opy-frontend
+--test differential`.
 
 The declared pipeline is `lexer → preprocess → CST/parser → semantic
 resolution → OPY semantic model (Opy HIR v1, see
 [`docs/hir/opy-hir-v1.md`](../hir/opy-hir-v1.md))`, fully
 Workshop-independent up to the documented integration boundary toward
-`workshop-rs`.
+`workshop-rs` (see [`architecture.md`](architecture.md)).
 
 ## Evidence sources
 
@@ -58,7 +61,7 @@ Workshop-independent up to the documented integration boundary toward
 ## Supported surface (corpus-evidenced contract)
 
 The sections below describe the declared surface with the corpus/oracle
-evidence behind each item. They are the contract the frontend workstream
+evidence behind each item. They are the contract the merged frontend
 implements; "reference" always means the pinned OverPy 9.7.10
 (`889d9749d1def17f146548cbddb94ea1ab015847`).
 

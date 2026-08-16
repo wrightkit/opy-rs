@@ -18,10 +18,12 @@ The reference identity is the pinned OverPy 9.7.10 content
 [`docs/compatibility/upstream-references.md`](../compatibility/upstream-references.md)
 for provenance. Evidence claims in this document were verified against the
 pinned oracle (all 26 corpus snapshots match on 2026-08-16). The opy-rs
-frontend is not yet implemented on `main` (issues #3–#7), so the category
-table below is the **tier assignment contract** — the state column of
+frontend foundation is implemented and merged on `main` (issues #3–#7
+partially delivered via PRs #9–#14); the category table below is the
+**tier assignment contract** for the remaining surface — the state column of
 `compatibility/support-matrix.json` tracks actual implementation progress
-against it.
+against it, and rows marked `baseline-supported` in this document are
+implemented unless the table says otherwise.
 
 ## Tier taxonomy
 
@@ -48,7 +50,8 @@ For each category the following dimensions are distinguished:
 * **Reference coverage** — oracle probes/fixtures validate the behavior.
 
 In the table, `✅` marks a dimension that is part of the declared contract for
-the tier (to be evidenced by the frontend workstream), `❌` a deliberately
+the tier (evidenced by the merged frontend via the corpus and the native
+differential suite), `❌` a deliberately
 rejected/documented-absent dimension, `—` an inapplicable dimension, and
 `partial` a bounded subset.
 
@@ -67,7 +70,7 @@ rejected/documented-absent dimension, `—` an inapplicable dimension, and
 | 5a | `#!mainFile`, `#!allowMacroRedeclaration`, `#!optimize*`/`#!replace0By*` family, `#!translations`, `#!rulePrefix*`, `__script__` JS hooks | `legacy-quirk/demand-driven` | ❌ | ❌ | ❌ | ❌ | partial |
 | 6 | **Builtin actions & values (generic)** — the 225 action / 267 value Workshop surface | `baseline-supported` for the manifest-declared evidence surface (chaseOverTime, isGameInProgress, getPlayersInRadius, worldVector, the corpus call surface); the full surface stays **`baseline-planned`** | ✅ | ✅ | ✅ (catalog subset, integration) | ✅ | ✅ probes |
 | 7 | **Receiver/member functions** — `eventPlayer.setMoveSpeed(100)`, `eventPlayer.isAlive()`, variable receivers | `baseline-supported` for the manifest-declared member surface (receiver categories, explicit-arg signatures); **`baseline-planned`** for the full member surface | ✅ | ✅ | ✅ (catalog subset, integration) | ✅ | ✅ |
-| 8 | **Builtin enum/constant domains** — 46 upstream domains (incl. `Hero`/`Map`/`Gamemode` literals) | `baseline-supported` for the manifest-declared domains (reference-validated member lists); **`baseline-planned`** (systematic) for the full surface | ✅ (declared domains) | ✅ | partial | partial | ✅ probes |
+| 8 | **Builtin enum/constant domains** — 46 upstream domains (incl. `Hero`/`Map`/`Gamemode` literals) | `baseline-supported` for the manifest-declared domain **identities** (opaque member resolution; Workshop member lists are catalog content and **not** carried here — see `compat-manifest-spec.md`); **`baseline-planned`** (systematic) for the full surface | ✅ (declared domains) | ✅ | partial | partial | ✅ probes |
 | 9 | **Aliases** — old function names (`stopChasingVariable`→`stopChasing`, `getCurrentHero`→`getHero`, `hasStatusEffect`→`hasStatus`, …), hero renames (`MCCREE`→`CASSIDY`), `ChaseReeval` contextual alias | `baseline-supported` for the three manifest-declared non-contextual aliases and the `ChaseReeval` call-context resolution; the remaining alias surface stays `legacy-quirk/demand-driven` | ✅ (declared) | ✅ | ✅ (chase forms catalog-covered at integration) | ✅ | ✅ |
 | 10 | **Modules** — `random.{randint,uniform,choice,shuffle}` | `baseline-supported` (corpus: `random.uniform`, `random.choice`) | ✅ | ✅ | ✅ (integration) | ✅ | ✅ |
 | 11 | **Named/keyword arguments** — `chase(A, B, rate=30, …)`, generic `name = expr` binding against manifest signatures | `baseline-supported` for the evidence surface (generic keyword binding plus the `chase`/`ChaseReeval` call-context forms); `raycast` `include=`/`exclude=` forms and macro keyword arguments stay `evidence-prioritized` (no corpus/reference evidence in the declared surface) | ✅ | ✅ | ✅ (integration) | ✅ | ✅ probes |
@@ -75,26 +78,41 @@ rejected/documented-absent dimension, `—` an inapplicable dimension, and
 | 12a | `settings "file"`, richer settings expressions, hero/map/ability content beyond the pin | `legacy-quirk/demand-driven` / `reference-limited` | ❌/partial | ❌ | ❌ | ❌ | partial (data newer than pin unavailable per the pinning policy) |
 | 13 | **Source identity & diagnostics** — structured, source-located frontend errors, `wright-result/v1` | `baseline-supported` | ✅ | ✅ | — | ✅ | ✅ S/D |
 
-## Residual evidence items (classified, not yet implemented)
+## Current `planned` entries
+
+The eight Workshop-independent features still `planned` in
+`compatibility/support-matrix.json` — the mechanically checked state source —
+are: `syntax/switch`, `syntax/string-modifiers`,
+`semantics/builtin-actions-values`, `semantics/receiver-members`,
+`semantics/enum-domains`, `preprocessing/advanced-directives`,
+`translations/directive`, and `optimization/controls`. Their tiers above
+distinguish **evidence-prioritized** work (broad or high-fan-out surface with
+clear tooling value, ordered by corpus/consumer evidence) from
+**legacy-quirk/demand-driven** compatibility (rare historical quirks and
+upstream behaviors implemented only when the declared compatibility target
+requires them) — not every upstream quirk is a planned implementation.
+
+## Residual evidence items (classified)
 
 Verified against the pinned oracle. Each item is classified with the tier it
 belongs to; none is a per-symbol implementation request. Items marked
 *manifest-covered* resolve through the OPY semantic compatibility manifest
-(`crates/opy-frontend/src/manifest/`; frontend workstream) once the frontend
-lands.
+(`crates/opy-frontend/src/manifest/`), which is merged on `main`; rows below
+record their current opy-rs status as of the merged baseline (PRs #9–#14),
+and remaining gaps stay classified rather than being filed per-symbol.
 
 | Evidence | Oracle 9.7.10 | opy-rs status | Classification |
 | --- | --- | --- | --- |
-| **Bare playervar receiver** — `A = B.C` (declared playervar member on a player-valued receiver) | accept (`__playerVar__`) | not implemented — must accept per the manifest contract | `baseline-planned` (receiver/member semantics + playervar member resolution, category 7) |
-| **Value member as statement** — `B.isAlive()` on its own line | **reject** ("Expected an action, but got … a value") | not implemented — must reject with `value-in-action-position` | `baseline-supported` (reviewed difference; recorded in the probe set) |
-| **Generic action gap** — `chaseOverTime(A, 0, 30, ChaseTimeReeval.NONE)` | accept (warning recorded) | not implemented — resolves through the manifest; regression fixture: `synthetic/chase-condition-agentlab`, probe `chase-over-time` | `baseline-supported` (manifest-covered); emission via catalog spelling is lowering-dependent |
-| **Generic value gap** — `@Condition isGameInProgress() == true` | accept | not implemented — manifest entry; probe `is-game-in-progress` | `baseline-supported` (manifest-covered) |
-| **Member value/signature gap** — `getPlayersInRadius(...).setStatusEffect(eventPlayer, 30)` | **reject** (arity: `.setStatusEffect` needs `player, assister, status, duration`) | not implemented — must reject with `invalid-arity`; probe `invalid-arity-member` | `baseline-supported` (manifest-covered) |
-| **Enum-gated members** — `eventPlayer.setInvisibility(Invis.ALL)`, `eventPlayer.getThrottle()`, `worldVector(...)` (args typed `Invis`/`Transform`) | accept | not implemented — member entries + enum domains (`Invis`, `Status`, `Transform`) in the manifest; probes `enum-gated-members`, `builtin-enums` | `baseline-supported` (manifest-covered); catalog spellings lowering-dependent |
-| **Named arguments / `ChaseReeval` alias** — `chase(A, 10, rate=2, ChaseReeval.NONE)` | accept (contextual alias resolution) | not implemented — generic `name = expr` binding plus the `chase` special form; probes `chase-keywords`, `chase-reeval-context`, `chase-keyword-binding`, the `chase-*` diagnostic probes, and the `synthetic/chase-keywords` corpus fixture | `baseline-supported` (manifest-covered) |
+| **Bare playervar receiver** — `A = B.C` (declared playervar member on a player-valued receiver) | accept (`__playerVar__`) | not implemented — currently rejects with `unsupported-member`; must accept per the manifest contract | `baseline-planned` (receiver/member semantics + playervar member resolution, category 7) |
+| **Value member as statement** — `B.isAlive()` on its own line | **reject** ("Expected an action, but got … a value") | implemented — rejects with `value-in-action-position` | `baseline-supported` (reviewed difference; recorded in the probe set) |
+| **Generic action gap** — `chaseOverTime(A, 0, 30, ChaseTimeReeval.NONE)` | accept (warning recorded) | implemented — manifest-declared; differential fixture: `synthetic/chase-condition-agentlab`, probe `chase-over-time` | `baseline-supported` (manifest-covered); emission via catalog spelling is lowering-dependent |
+| **Generic value gap** — `@Condition isGameInProgress() == true` | accept | implemented — manifest entry; probe `is-game-in-progress` | `baseline-supported` (manifest-covered) |
+| **Member value/signature gap** — `getPlayersInRadius(...).setStatusEffect(eventPlayer, 30)` | **reject** (arity: `.setStatusEffect` needs `player, assister, status, duration`) | implemented — rejects with a structured arity diagnostic (`missing-argument`); probe `invalid-arity-member` | `baseline-supported` (manifest-covered) |
+| **Enum-gated members** — `eventPlayer.setInvisibility(Invis.ALL)`, `eventPlayer.getThrottle()`, `worldVector(...)` (args typed `Invis`/`Transform`) | accept | implemented — manifest domain identities resolve as opaque members; member-existence validation is **lowering-dependent** (#8); probe `enum-gated-members` | `baseline-supported` (manifest-covered); catalog spellings lowering-dependent |
+| **Named arguments / `ChaseReeval` alias** — `chase(A, 10, rate=2, ChaseReeval.NONE)` | accept (contextual alias resolution) | implemented — generic `name = expr` binding plus the `chase` special form; probes `chase-keywords`, `chase-reeval-context`, `chase-keyword-binding`, the `chase-*` diagnostic probes, and the `synthetic/chase-keywords` corpus fixture | `baseline-supported` (manifest-covered) |
 | **Ambiguous Workshop enum spelling** — `ChaseTimeReeval.NONE`, `ChaseRateReeval.NONE`, and `Invis.NONE` all emit as bare `None` | — | emission-context resolution is **lowering-dependent** (needs the Workshop emission context); frontend-side signature-pinned resolution stays frontend-owned | `lowering-dependent` for context-free `None`; signature-pinned contexts are `baseline-supported` |
-| **Constant-0 canonicalization** — `globalvar A = 0` drops the initializer; `= 5`/`= 0.0` preserved via the Initialize rule; `globalvar A 0` is an explicit index | canonical | not implemented — frontend preserves/omits per the reference; Initialize-rule synthesis is lowering-dependent | `baseline-supported` (frontend part); lowering-dependent (Initialize synthesis) |
-| **Diagnostic provenance** — unresolved action/value errors surface as structured semantic diagnostics, not emitter catalog misses | — | manifest-covered (`unknown-action`, `unknown-value`, `unknown-member`, `invalid-arity`, `invalid-receiver`, `enum-domain-mismatch`, `action-in-value-position`, `value-in-action-position`, `invalid-call-context`, `invalid-iterable`, argument-binding codes) | `baseline-supported` (manifest-covered) |
+| **Constant-0 canonicalization** — `globalvar A = 0` drops the initializer; `= 5`/`= 0.0` preserved via the Initialize rule; `globalvar A 0` is an explicit index | canonical | implemented — `globalvar A = 0` drops the initializer and `= 5`/`= 0.0` are preserved, matching the reference; Initialize-rule synthesis is lowering-dependent | `baseline-supported` (frontend part); lowering-dependent (Initialize synthesis) |
+| **Diagnostic provenance** — unresolved action/value errors surface as structured semantic diagnostics, not emitter catalog misses | — | implemented — structured semantic diagnostics (`unknown-action`, `unknown-value`, `unknown-member`, `invalid-arity`, `invalid-receiver`, `action-in-value-position`, `value-in-action-position`, `invalid-call-context`, `invalid-iterable`, argument-binding codes); Workshop enum member/domain mismatch codes were removed with the catalog validation (PR #9) and stay `lowering-dependent` | `baseline-supported` (manifest-covered) |
 
 ## Boundaries
 

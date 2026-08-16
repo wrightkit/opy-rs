@@ -75,10 +75,11 @@ The harness tests (`compatibility/tests/`) run without the oracle installed:
 `test_runner.py` (normalization + corpus metadata/snapshot validity),
 `test_diff.py` (differential result contract), and `test_support_matrix.py`
 (the machine-readable support matrix structure and evidence paths).
-The wright-side tests for npm packaging and the manifest probe validator are
-not ported: the first tests wright's release tooling, the second depends on
-`crates/opy-frontend/src/manifest/probes/` and will be wired when the frontend
-lands (issue #7).
+The wright-side npm-packaging tests are not ported (they test wright's release
+tooling). The manifest probe validator
+(`crates/opy-frontend/src/manifest/probes/validate.py`) is frontend-owned and
+runs standalone against the pinned oracle (Node + pnpm required), like
+`run_oracle.py`; it is not part of the oracle-less harness suite.
 
 ## Native differential runner (issue #7)
 
@@ -145,6 +146,8 @@ Missing producer results or unavailable semantic evidence are `inconclusive`
 and exit 2 by default, so a CI job cannot silently pass without a producer.
 Use `--allow-inconclusive` only for local contract checks.
 
-Wiring a real opy-rs producer into `diff.py` is deferred to the differential
-work (issue #7); until then the oracle side of the contract is exercised by
+The opy-rs producer side of the differential contract is the native Rust
+suite (`crates/opy-frontend/tests/differential.rs`, merged in PR #13), which
+runs in `cargo test` with no Node or OverPy installed; `diff.py` remains the
+generic external-producer contract for other producers, exercised locally via
 `run_oracle.py` and the corpus snapshots.

@@ -26,7 +26,9 @@ python3 compatibility/run_oracle.py --update
 # Verify snapshots still match the pinned oracle (fails on any mismatch)
 python3 compatibility/run_oracle.py
 
-# Differential report against future producer results (issue #7 wiring)
+# Differential report against an external producer's results (generic
+# producer contract; the native Rust differential suite is the opy-rs
+# producer side and runs in cargo test — see compatibility/README.md)
 python3 compatibility/diff.py --results <results-root> --report compatibility/report.json
 python3 compatibility/diff.py --producer-command '<cmd template>' --report compatibility/report.json
 ```

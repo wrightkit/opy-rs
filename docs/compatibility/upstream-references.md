@@ -67,9 +67,12 @@ it serves as:
 * the source of systematic probe validation for the proactive compatibility
   baseline (see [`docs/opy/compatibility-baseline.md`](../opy/compatibility-baseline.md)
   and [`docs/opy/compat-manifest-spec.md`](../opy/compat-manifest-spec.md));
-* the future reference for differential HIR parity at the Opy HIR v1 boundary
-  ([`docs/hir/opy-hir-v1.md`](../hir/opy-hir-v1.md)) once the frontend and the
-  differential wiring land (issue #7).
+* the reference for differential parity at the Opy HIR v1 boundary
+  ([`docs/hir/opy-hir-v1.md`](../hir/opy-hir-v1.md)): the native differential
+  suite (`crates/opy-frontend/tests/differential.rs`, merged in PR #13) runs
+  every corpus fixture through the native pipeline in `cargo test` and
+  compares status, rule-name, and diagnostic evidence against the recorded
+  oracle snapshots.
 
 ### Invocation records
 

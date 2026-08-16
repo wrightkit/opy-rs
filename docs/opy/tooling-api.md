@@ -102,8 +102,9 @@ reporting depth differs.
 
 ## Support-matrix accessor (`opy_frontend::support`)
 
-`compatibility/support-matrix.json` is owned by the evidence workstream and
-consumed read-only. It is embedded at build time via `include_str!` (the
+`compatibility/support-matrix.json` is the repository's machine-readable
+support state source (merged with the evidence base, PR #10) and is consumed
+read-only. It is embedded at build time via `include_str!` (the
 crate rebuilds when the file changes), parsed once, and exposed as
 `SupportMatrix`:
 
@@ -143,5 +144,7 @@ embedded).
   declarations are queryable through `SemanticModel::enums`, not the HIR
   declaration list.
 * Workshop emission, decompilation, settings-section emission, and locale
-  data are `lowering-dependent` (see the support matrix); the differential
-  harness wiring that consumes this API end-to-end is a separate PR.
+  data are `lowering-dependent` (see the support matrix). The native
+  differential suite (`crates/opy-frontend/tests/differential.rs`, merged in
+  PR #13) consumes this pipeline end-to-end in `cargo test` against the
+  recorded oracle snapshots.
