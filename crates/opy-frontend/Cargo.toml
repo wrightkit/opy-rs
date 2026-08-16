@@ -1,0 +1,14 @@
+[package]
+name = "opy-frontend"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Standalone OverPy-compatible .opy frontend: lexer, CST/parser, preprocessing, semantic resolution, and Opy HIR lowering (Workshop-independent)."
+
+[lints]
+workspace = true
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
