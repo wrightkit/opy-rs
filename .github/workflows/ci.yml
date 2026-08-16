@@ -51,6 +51,32 @@ jobs:
         if: steps.crates.outputs.exists == 'true'
         run: cargo test --workspace --all-targets --all-features
 
+<<<<<<< HEAD
       - name: Note docs-only branch
         if: steps.crates.outputs.exists == 'false'
         run: echo "No workspace crates on this branch; Rust quality gates skipped."
+
+  macro-runtime-ports:
+    name: JS runtime on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-latest
+          - windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: clippy, rustfmt
+          rustflags: ""
+
+      - name: Run opy-macro-js tests
+        run: cargo test -p opy-macro-js --all-targets
+ origin/feat/js-macro-runtime
