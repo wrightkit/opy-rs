@@ -9,7 +9,7 @@
   },
   "snapshot": {
     "date": "2026-08-16",
-    "note": "Evidence-base snapshot (issue #2). No opy-rs frontend implementation is merged on main yet (issues #3-#7), so states are current-repository states, not target states: frontend-surface features are `planned` until the frontend workstream lands corpus-evidenced behavior, and features whose completion requires canonical Workshop semantics are `lowering-dependent` and inventory-only until the workshop-rs integration stage (#8)."
+    "note": "Evidence-base snapshot (issue #2) plus frontend-workstream state (issues #3-#7, part B). The frontend crate (PR #9), evidence base (PR #10), and JS macro runtime (PR #11) are merged locally on feat/frontend-completeness; rows advanced by the issue #7 part B differential + macro-integration work (macros/javascript, runtime/js-hooks, compilation/frontend-pipeline) are frontend-supported with corpus/runtime evidence. All other frontend-surface rows stay planned until the frontend workstream lands their corpus-evidenced behavior; features whose completion requires canonical Workshop semantics are `lowering-dependent` and inventory-only until the workshop-rs integration stage (#8)."
   },
   "states": {
     "planned": "Declared surface, not yet implemented in opy-rs; evidence/provenance recorded for the implementing issue.",
@@ -341,16 +341,20 @@
       "id": "macros/javascript",
       "name": "__script__ JavaScript macros and post-compile hooks (QuickJS runtime)",
       "category": "macros",
-      "state": "planned",
+      "state": "frontend-supported",
       "evidence": [
         "upstream:runTests.mjs",
         "upstream:src/tests/postCompileHook.opy",
         "upstream:src/tests/quickjs-modern.js",
         "upstream:src/tests/quickjs-invalid-return.js",
         "upstream:src/tests/quickjs-runaway.js",
-        "upstream:src/quickjs.ts"
+        "upstream:src/quickjs.ts",
+        "test:opy-frontend-macro-integration",
+        "test-fixture:crates/opy-frontend/tests/fixtures/macros",
+        "test:opy-frontend-differential",
+        "fixtures:real-world/overpy-meipocalypse"
       ],
-      "notes": "Issue #6. Bounded runtime compatibility surface; does not require Node.js compatibility (issue #1); the reference's quickjs-ng.wasm is pinned in the oracle package."
+      "notes": "Issue #6 + #7 part B. `#!define name(args) __script__(\"path.js\")` parsed (root-relative script resolution, script-not-found at the define site like the reference's ENOENT), expanded through opy_macro_js::MacroRuntime with the reference's var-injection ABI, indentation rule, and string-only completion contract; `#!postCompileHook` parsed (duplicate rejection) and executed against the Opy HIR v1 payload. Structured script-* diagnostics carry script provenance. Catalog constants and Workshop-emission hook wiring stay lowering-dependent; `#!require` does not exist in the pinned reference."
     },
     {
       "id": "directives/rule-annotations",
@@ -431,25 +435,30 @@
       "id": "runtime/js-hooks",
       "name": "QuickJS runtime for __script__ hook execution",
       "category": "runtime",
-      "state": "planned",
+      "state": "frontend-supported",
       "evidence": [
         "upstream:runTests.mjs",
         "upstream:src/quickjs.ts",
-        "oracle:quickjs-ng.wasm shipped in the pinned npm package"
+        "oracle:quickjs-ng.wasm shipped in the pinned npm package",
+        "test:opy-macro-js-abi",
+        "test:opy-macro-js-hooks",
+        "test:opy-macro-js-limits",
+        "test:opy-frontend-macro-integration"
       ],
-      "notes": "Issue #6. Bounded runtime surface: reference-compatible accept/reject and result semantics for documented hook probes; no Node.js compatibility required."
+      "notes": "Issue #6 + #7 part B. Bounded runtime surface wired into the frontend: macro/hook execution, argument injection, `vect` helper, empty constant objects, console capture, reference-compatible accept/reject and result semantics, resource limits defaulting to the pinned reference constants (1000 ms macro / 2000 ms hook budgets, 64 MiB memory, 512 KiB stack). Browser/WASM execution remains unsupported (native embedding only), matching the declared boundary."
     },
     {
       "id": "compilation/frontend-pipeline",
       "name": "Frontend pipeline: lexer -> preprocess -> CST/parser -> semantic resolution -> Opy HIR v1",
       "category": "compilation",
-      "state": "planned",
+      "state": "frontend-supported",
       "evidence": [
         "fixtures:synthetic",
         "fixtures:real-world",
-        "docs:docs/hir/opy-hir-v1.md"
+        "docs:docs/hir/opy-hir-v1.md",
+        "test:opy-frontend-differential"
       ],
-      "notes": "Issues #3-#5. Fully Workshop-independent; the whole corpus is the target acceptance corpus; differential HIR parity is issue #7."
+      "notes": "Issues #3-#7. Fully Workshop-independent; the whole corpus is the acceptance corpus. Differential harness wired (issue #7): every fixture runs through the native pipeline in cargo test with structural self-checks (HIR validation, wire round-trip, deterministic dump), status/rule-name parity against the recorded oracle.json snapshots, and a machine-readable report (target/opy-differential-report.json). 14/26 corpus fixtures resolve, 12/26 produce expected diagnostics with documented codes; 7 documented reference gaps (reference accepts, native rejects declared-rejected or not-yet-declared surface)."
     },
     {
       "id": "compilation/workshop-lowering",
@@ -497,8 +506,8 @@
   ],
   "summary": {
     "byState": {
-      "planned": 27,
-      "frontend-supported": 0,
+      "planned": 24,
+      "frontend-supported": 3,
       "semantic-supported": 0,
       "lowering-dependent": 7,
       "end-to-end-supported": 0

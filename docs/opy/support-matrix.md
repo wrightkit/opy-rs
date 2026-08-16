@@ -23,15 +23,17 @@ machine-readable semantic contract for builtins is specified in
 
 ## Current implementation state
 
-The opy-rs repository is being built in stages (issues #1–#8). At the time of
-this evidence-base issue, **no frontend implementation is merged on `main`**:
-the corpus, oracle harness, and matrix below are the evidence baseline that
-frontend issues #3–#7 implement against. Consequently every non-Workshop
-feature below is currently `planned` in `compatibility/support-matrix.json`;
-features whose completion requires canonical Workshop semantics are
-`lowering-dependent` and are inventory-only until the `workshop-rs`
-integration stage (#8). The matrix states flip as the frontend workstream
-lands corpus-evidenced behavior.
+The opy-rs repository is being built in stages (issues #1–#8). The frontend
+workstream has landed on the `feat/frontend-completeness` branch: the native
+pipeline (lexer → preprocess → CST/parser → semantic resolution → Opy HIR
+v1) with the JavaScript macro runtime and the differential harness are
+implemented, and the rows they evidence are flipped to
+`frontend-supported`/`semantic-supported` in
+`compatibility/support-matrix.json`; features whose completion requires
+canonical Workshop semantics are `lowering-dependent` and are inventory-only
+until the `workshop-rs` integration stage (#8). Per-fixture differential
+status (resolve / expected-diagnostic / divergence) is recorded in
+`target/opy-differential-report.json`.
 
 The declared pipeline is `lexer → preprocess → CST/parser → semantic
 resolution → OPY semantic model (Opy HIR v1, see
@@ -48,9 +50,10 @@ Workshop-independent up to the documented integration boundary toward
 | `compatibility/fixtures/real-world/{ow1-emulator,6v6-adjustments}/` | Independent third-party projects (BSD-2-Clause), full include closures |
 | `compatibility/fixtures/**/oracle.json` | Pinned OverPy 9.7.10 reference snapshots (normalized Workshop output, diagnostics, exit codes) |
 | `compatibility/support-matrix.json` | Machine-readable state tracking of every declared feature (the mechanically checkable artifact) |
-| `crates/opy-frontend/src/manifest/data/manifest.json` and `crates/opy-frontend/src/manifest/probes/` | The opy-rs-owned semantic compatibility manifest and its oracle probes (frontend workstream; referenced here, not duplicated) |
-| `crates/opy-frontend/tests/differential.rs` + `compatibility/diff.py` | Native-vs-reference differential parity — **deferred (issue #7)**; `diff.py` already implements the result contract without requiring a producer |
-| `adapter/fixtures/**/*.json` | Pinned OverPy 9.7.10 HIR reference fixtures — **deferred (integration boundary, issue #7)** |
+ | `crates/opy-frontend/src/manifest/` | The opy-rs-owned semantic compatibility manifest and its oracle probes (ported with the frontend, issue #3/#4) |
+ | `crates/opy-frontend/tests/differential.rs` + `compatibility/diff.py` | Native-vs-reference differential parity (issue #7): the rust suite runs every corpus fixture through the native pipeline in `cargo test` (no Node), compares status/rule-name evidence against the recorded `oracle.json` snapshots, and writes `target/opy-differential-report.json` |
+ | `crates/opy-frontend/tests/fixtures/macros/` | JavaScript macro / post-compile hook end-to-end fixtures (issue #5/#6) |
+ | `crates/opy-macro-js/tests/` | Bounded QuickJS runtime ABI fixtures (issue #6) |
 
 ## Supported surface (corpus-evidenced contract)
 
@@ -94,8 +97,44 @@ implements; "reference" always means the pinned OverPy 9.7.10
   (`macro-recursion`).
 - `#!define name(args) value` — function-like macros with argument
   substitution (`cakeBeam(start, end, yPos) → createBeam(...)`).
+- `#!define name(args) __script__("path.js")` — OverPy-compatible
+  **JavaScript macros** (see below).
 - `#!undef NAME`.
+- `#!postCompileHook "hook.js"` — post-compile hook registration (see below).
 - Unsupported directives fail explicitly (`unsupported-directive`).
+
+### JavaScript macros and post-compile hooks (issue #5/#6)
+
+The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
+`src/globalVars.ts`) is implemented through the embedded runtime
+(`crates/opy-macro-js`, QuickJS-NG; no Node required):
+
+- A function-like define whose replacement is `__script__("path.js")` is a
+  script macro: the script path resolves root-relative at the define site
+  (missing files: `script-not-found`, mirroring the reference's ENOENT
+  failure), and each expansion executes the script with the call-site
+  arguments injected as `var <name>=<raw>;` (raw argument text is
+  reconstructed from tokens; string literals are re-quoted with JSON
+  escaping, which is JavaScript-value-equivalent to the reference's raw text
+  injection). The string completion value becomes the expanded text, which is
+  re-lexed into the token stream at the call site. Thrown exceptions,
+  resource-limit aborts (`script-timeout` for the 1000 ms budget,
+  `script-memory-limit` for the 64 MiB memory limit, `script-stack-limit`
+  for the 512 KiB stack), and non-string results
+  (`script-result-not-string`, with the reference's wording) map to
+  structured `script-*` diagnostics carrying the script path and
+  line/column. The reference's `vect(x, y, z)` helper and the constant
+  objects (`Map`, `Hero`, `Gamemode`, `Color`, `Team`, `Button`) are always
+  defined (constants empty until catalog data lands with `workshop-rs`).
+- `#!postCompileHook "hook.js"` registers the hook script (duplicate
+  declarations: `post-compile-hook-duplicate`, matching the reference);
+  after a successful compile the hook receives the Opy HIR v1 wire payload
+  as `content` and its transformed output is recorded on the compile
+  outcome. Workshop-emission wiring of hook output (the reference passes the
+  final Workshop text) stays **lowering-dependent**.
+- There is no `#!require` directive in the pinned reference; the script
+  macro form is the only JavaScript declaration surface (verified against
+  OverPy 9.7.10, `src/compiler/tokenizer.ts`).
 
 ### Rules and directives
 - `rule "name":` with `@Event global` / `@Event eachPlayer` / `@Condition <expr>`.
@@ -255,7 +294,11 @@ implements; "reference" always means the pinned OverPy 9.7.10
   inventory-only (see `compatibility/support-matrix.json`, category
   `decompilation`; wright's implemented reconstruction surface is not ported
   as a claim — it becomes an opy-rs contract only at the integration stage).
-- Macro/`#!define` values that require runtime evaluation (no scripting).
+- Macro/`#!define` values that require runtime evaluation are **implemented**
+  for the reference's `__script__` ABI (see "JavaScript macros and
+  post-compile hooks" above); the remaining runtime surface is
+  `lowering-dependent`: hook output into Workshop emission and catalog
+  constant population (`Map`/`Hero`/… objects stay empty).
 - OverPy enum domains/members beyond the manifest's declared baseline (a
   data change, `baseline-planned` in the compatibility baseline).
 - Emission spellings for manifest-valid entries not yet catalog-covered
@@ -291,5 +334,6 @@ The frontend produces the Opy HIR v1 program model
 file registry, declarations, and rules as specified there. It never requires
 Node or OverPy at build/runtime; the oracle remains available as an explicit
 `pnpm install --dir compatibility/oracle` step for the compatibility harness
-only. Differential HIR parity against the reference adapter is deferred to the
-frontend/differential wiring issue (#7).
+only. Differential parity runs in `cargo test -p opy-frontend --test
+differential` against the recorded oracle snapshots (issue #7); the report
+and per-fixture native HIR dumps land in `target/`.
