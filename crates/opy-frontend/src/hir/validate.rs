@@ -41,6 +41,7 @@ const STMT_KINDS: &[&str] = &[
     "while",
     "doWhile",
     "switch",
+    "break",
     "callSubroutine",
     "pass",
 ];
@@ -539,7 +540,7 @@ fn statement_exprs(statements: &[Stmt]) -> Vec<&Expr> {
                     exprs.extend(statement_exprs(default_body));
                 }
             }
-            Stmt::CallSubroutine { .. } | Stmt::Pass { .. } => {}
+            Stmt::Break { .. } | Stmt::CallSubroutine { .. } | Stmt::Pass { .. } => {}
         }
     }
     exprs
@@ -636,6 +637,7 @@ fn for_each_stmt<'a>(statements: &'a [Stmt], f: &mut impl FnMut(&'a Stmt)) {
             }
             Stmt::Expr { .. }
             | Stmt::Assign { .. }
+            | Stmt::Break { .. }
             | Stmt::CallSubroutine { .. }
             | Stmt::Pass { .. } => {}
         }

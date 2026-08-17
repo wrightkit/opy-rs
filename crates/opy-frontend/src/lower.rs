@@ -55,6 +55,8 @@ enum CallPosition {
     Value,
     /// A `for ... in` iterable (only `range` is a valid builtin here).
     ForIterable,
+    /// An expression occupying a signature-approved lambda argument slot.
+    LambdaArgument,
 }
 
 /// The lowerer's symbol context, built from the CST declarations.
@@ -65,7 +67,6 @@ struct Lowerer {
     macros: HashSet<String>,
     enums: HashMap<String, Vec<String>>,
     locals: Vec<String>,
-    allow_lambda: bool,
     allow_dict_literal: bool,
     /// The authoritative builtin semantic table (issue #109).
     manifest: &'static Manifest,
@@ -103,7 +104,6 @@ pub fn lower_with_preprocessing(
         macros: HashSet::new(),
         enums: HashMap::new(),
         locals: Vec::new(),
-        allow_lambda: false,
         allow_dict_literal: false,
         manifest,
         errors: Vec::new(),
@@ -211,7 +211,7 @@ pub fn lower_with_preprocessing(
                     source_name: name.clone(),
                     span: Some(span.into()),
                     name_span: Some(name_span.into()),
-                    body: lowerer.lower_block(body, &[]),
+                    body: lowerer.lower_block(body, &[], false),
                     annotations: lower_annotations(annotations),
                 });
             }
@@ -619,7 +619,7 @@ impl Lowerer {
             .iter()
             .map(|condition| self.lower_expr(condition, &[], CallPosition::Value))
             .collect();
-        let actions = self.lower_block(&rule.actions, &[]);
+        let actions = self.lower_block(&rule.actions, &[], false);
         Ok(Rule {
             name: render_rule_name(
                 &rule.name,
@@ -651,14 +651,19 @@ impl Lowerer {
     }
 
     /// Lower a statement block; `macro_params` names resolve to `MacroParam`.
-    fn lower_block(&mut self, stmts: &[Stmt], macro_params: &[String]) -> Vec<HirStmt> {
+    fn lower_block(
+        &mut self,
+        stmts: &[Stmt],
+        macro_params: &[String],
+        breakable: bool,
+    ) -> Vec<HirStmt> {
         stmts
             .iter()
-            .map(|stmt| self.lower_stmt(stmt, macro_params))
+            .map(|stmt| self.lower_stmt(stmt, macro_params, breakable))
             .collect()
     }
 
-    fn lower_stmt(&mut self, stmt: &Stmt, macro_params: &[String]) -> HirStmt {
+    fn lower_stmt(&mut self, stmt: &Stmt, macro_params: &[String], breakable: bool) -> HirStmt {
         match stmt {
             Stmt::Expr { expr, span } => {
                 // A bare call of a declared subroutine becomes
@@ -700,12 +705,12 @@ impl Lowerer {
                             macro_params,
                             CallPosition::Value,
                         )),
-                        body: self.lower_block(&branch.body, macro_params),
+                        body: self.lower_block(&branch.body, macro_params, breakable),
                     })
                     .collect(),
                 r#else: r#else
                     .as_ref()
-                    .map(|body| self.lower_block(body, macro_params)),
+                    .map(|body| self.lower_block(body, macro_params, breakable)),
                 span: Some(span.into()),
             },
             Stmt::For {
@@ -735,7 +740,7 @@ impl Lowerer {
                         CallPosition::Value,
                     )),
                     iterable: Box::new(self.lower_expr(iterable, macro_params, iterable_position)),
-                    body: self.lower_block(body, macro_params),
+                    body: self.lower_block(body, macro_params, true),
                     span: Some(span.into()),
                 }
             }
@@ -745,7 +750,7 @@ impl Lowerer {
                 span,
             } => HirStmt::While {
                 condition: Box::new(self.lower_expr(condition, macro_params, CallPosition::Value)),
-                body: self.lower_block(body, macro_params),
+                body: self.lower_block(body, macro_params, true),
                 span: Some(span.into()),
             },
             Stmt::DoWhile {
@@ -754,7 +759,7 @@ impl Lowerer {
                 span,
             } => HirStmt::DoWhile {
                 condition: Box::new(self.lower_expr(condition, macro_params, CallPosition::Value)),
-                body: self.lower_block(body, macro_params),
+                body: self.lower_block(body, macro_params, true),
                 span: Some(span.into()),
             },
             Stmt::Switch {
@@ -772,15 +777,27 @@ impl Lowerer {
                             macro_params,
                             CallPosition::Value,
                         )),
-                        body: self.lower_block(&case.body, macro_params),
+                        body: self.lower_block(&case.body, macro_params, true),
                         span: Some(case.span.into()),
                     })
                     .collect(),
                 r#default: r#default
                     .as_ref()
-                    .map(|body| self.lower_block(body, macro_params)),
+                    .map(|body| self.lower_block(body, macro_params, true)),
                 span: Some(span.into()),
             },
+            Stmt::Break { span } => {
+                if !breakable {
+                    self.error_at(
+                        "break-context",
+                        "break is only valid inside a switch or loop".to_string(),
+                        *span,
+                    );
+                }
+                HirStmt::Break {
+                    span: Some(span.into()),
+                }
+            }
             Stmt::Pass { span } => HirStmt::Pass {
                 span: Some(span.into()),
             },
@@ -788,7 +805,7 @@ impl Lowerer {
     }
 
     fn lower_macro_body(&mut self, body: &[Stmt], params: &[String]) -> Vec<HirStmt> {
-        self.lower_block(body, params)
+        self.lower_block(body, params, false)
     }
 
     fn lower_expr(
@@ -882,7 +899,7 @@ impl Lowerer {
                 }
             }
             Expr::Lambda { params, body, span } => {
-                if !self.allow_lambda {
+                if position != CallPosition::LambdaArgument {
                     self.error_at(
                         "lambda-context",
                         "lambda expressions are only valid as array operation arguments"
@@ -908,12 +925,36 @@ impl Lowerer {
             Expr::StringModifier {
                 modifier,
                 value,
+                format_text,
+                interpolations,
                 span,
-            } => HirExpr::StringModifier {
-                modifier: modifier.to_string(),
-                value: value.clone(),
-                span: Some(span.into()),
-            },
+            } => {
+                if *modifier == 'f' {
+                    if let Some(format_text) = format_text {
+                        if !interpolations.is_empty() {
+                            return HirExpr::Format {
+                                text: format_text.clone(),
+                                args: interpolations
+                                    .iter()
+                                    .map(|expr| {
+                                        self.lower_expr(expr, macro_params, CallPosition::Value)
+                                    })
+                                    .collect(),
+                                span: Some(span.into()),
+                            };
+                        }
+                        return HirExpr::String {
+                            value: format_text.clone(),
+                            span: Some(span.into()),
+                        };
+                    }
+                }
+                HirExpr::StringModifier {
+                    modifier: modifier.to_string(),
+                    value: value.clone(),
+                    span: Some(span.into()),
+                }
+            }
             Expr::Name { name, span } => self.lower_name(name, *span, macro_params),
             Expr::Member {
                 receiver,
@@ -1118,6 +1159,9 @@ impl Lowerer {
                             "invalid-iterable",
                             format!("for-loop iterable '{name}' must be a range(...) call"),
                         ),
+                        CallPosition::LambdaArgument => {
+                            ("unknown-value", format!("unknown value '{name}'"))
+                        }
                     };
                     self.error_at(code, message, span);
                 }
@@ -1125,14 +1169,17 @@ impl Lowerer {
         }
         match name {
             "sorted" => {
-                let previous = self.allow_lambda;
-                self.allow_lambda = true;
                 let lowered = HirExpr::Call {
                     name: name.to_string(),
-                    args: self.lower_arg_values(args, macro_params),
+                    args: self.lower_arg_values_with_lambda(args, macro_params, |index, arg| {
+                        index == 1
+                            || arg
+                                .keyword
+                                .as_ref()
+                                .is_some_and(|(name, _)| name == "key")
+                    }),
                     span: Some(span.into()),
                 };
-                self.allow_lambda = previous;
                 lowered
             }
             "vect" => {
@@ -1219,8 +1266,25 @@ impl Lowerer {
     /// Lower call arguments to HIR values in source order (used for macro
     /// calls and unresolved names; keyword values lose their name).
     fn lower_arg_values(&mut self, args: &[cst::CallArg], macro_params: &[String]) -> Vec<HirExpr> {
+        self.lower_arg_values_with_lambda(args, macro_params, |_, _| false)
+    }
+
+    fn lower_arg_values_with_lambda(
+        &mut self,
+        args: &[cst::CallArg],
+        macro_params: &[String],
+        allows_lambda: impl Fn(usize, &cst::CallArg) -> bool,
+    ) -> Vec<HirExpr> {
         args.iter()
-            .map(|arg| self.lower_expr(&arg.value, macro_params, CallPosition::Value))
+            .enumerate()
+            .map(|(index, arg)| {
+                let position = if allows_lambda(index, arg) {
+                    CallPosition::LambdaArgument
+                } else {
+                    CallPosition::Value
+                };
+                self.lower_expr(&arg.value, macro_params, position)
+            })
             .collect()
     }
 
@@ -1551,19 +1615,13 @@ impl Lowerer {
         position: CallPosition,
     ) -> HirExpr {
         if matches!(name, "map" | "filter" | "all" | "any")
-            && args
-                .iter()
-                .any(|arg| matches!(&arg.value, Expr::Lambda { .. }))
         {
-            let previous = self.allow_lambda;
-            self.allow_lambda = true;
             let lowered = HirExpr::ReceiverCall {
                 receiver: Box::new(self.lower_expr(receiver, macro_params, CallPosition::Value)),
                 name: name.to_string(),
-                args: self.lower_arg_values(args, macro_params),
+                args: self.lower_arg_values_with_lambda(args, macro_params, |index, _| index == 0),
                 span: Some(span.into()),
             };
-            self.allow_lambda = previous;
             return lowered;
         }
         // `random.uniform(...)` etc. are dotted generic calls.
@@ -1689,6 +1747,21 @@ impl Lowerer {
                     self.error_at(
                         "invalid-iterable",
                         format!("for-loop iterable '{name}' must be a range(...) call"),
+                        span,
+                    );
+                }
+            }
+            CallPosition::LambdaArgument => {
+                if entry.kind.is_action() {
+                    self.error_at(
+                        "action-in-value-position",
+                        format!("action function '{name}' cannot be used as a value"),
+                        span,
+                    );
+                } else if entry.context == Some(FunctionContext::ForIterable) {
+                    self.error_at(
+                        "invalid-call-context",
+                        format!("'{name}' is only valid as a for-loop iterable"),
                         span,
                     );
                 }

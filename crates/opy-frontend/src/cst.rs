@@ -198,6 +198,9 @@ pub enum Stmt {
         r#default: Option<Vec<Stmt>>,
         span: Span,
     },
+    Break {
+        span: Span,
+    },
     Pass {
         span: Span,
     },
@@ -275,6 +278,12 @@ pub enum Expr {
     StringModifier {
         modifier: char,
         value: String,
+        /// The decoded f-string template, with interpolation placeholders
+        /// normalized to `{0}`, `{1}`, …; present only for modifier `f`.
+        format_text: Option<String>,
+        /// Expressions parsed from f-string interpolation regions, in source
+        /// order. Their spans point into the original string literal.
+        interpolations: Vec<Expr>,
         span: Span,
     },
     /// A plain function call.

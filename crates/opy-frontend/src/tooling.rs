@@ -674,6 +674,7 @@ impl SemanticModel {
                     }
                 }
             }
+            HirStmt::Break { .. } => {}
             HirStmt::CallSubroutine { name, span } => {
                 if let Some(span) = span {
                     sites.push((

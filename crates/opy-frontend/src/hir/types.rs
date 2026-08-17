@@ -457,6 +457,10 @@ pub enum Stmt {
         #[serde(skip_serializing_if = "Option::is_none")]
         span: Option<Span>,
     },
+    Break {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        span: Option<Span>,
+    },
     CallSubroutine {
         name: String,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -487,13 +491,15 @@ impl Stmt {
             | Stmt::While { span, .. }
             | Stmt::DoWhile { span, .. }
             | Stmt::Switch { span, .. }
+            | Stmt::Break { span }
             | Stmt::CallSubroutine { span, .. }
             | Stmt::Pass { span } => span.as_ref(),
         }
     }
 }
 
-/// One switch case in the OPY HIR.
+/// One switch case in the OPY HIR. Cases execute in source order and fall
+/// through to subsequent cases until a `break` statement is encountered.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SwitchCase {
     pub value: Box<Expr>,

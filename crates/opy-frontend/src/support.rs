@@ -215,7 +215,7 @@ mod tests {
     fn category_and_state_filters_match_the_summary() {
         let matrix = SupportMatrix::builtin().unwrap();
         let syntax = matrix.features_by_category("syntax");
-        assert_eq!(syntax.len(), 13);
+        assert_eq!(syntax.len(), 14);
         assert!(syntax.iter().all(|feature| feature.category == "syntax"));
         let lowering = matrix.features_by_state("lowering-dependent");
         assert_eq!(lowering.len(), 13);

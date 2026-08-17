@@ -102,9 +102,22 @@
       "state": "frontend-supported",
       "evidence": [
         "fixtures:synthetic/issue-28-syntax",
+        "fixtures:synthetic/issue-33-switch-break",
         "upstream:src/tests/switches.opy"
       ],
-      "notes": "Issue #28: switch/case/default preserve arm expressions, bodies, and source spans in the OPY HIR; Workshop lowering remains out of scope."
+      "notes": "Issue #28/#33: switch/case/default preserve source-order arms and fall through into subsequent arms; explicit break exits the innermost switch or loop. Workshop lowering remains out of scope."
+    },
+    {
+      "id": "syntax/break",
+      "name": "break statements in switch and loops",
+      "category": "syntax",
+      "state": "frontend-supported",
+      "evidence": [
+        "fixtures:synthetic/issue-33-switch-break",
+        "upstream:src/tests/switches.opy",
+        "upstream:src/tests/loops.opy"
+      ],
+      "notes": "Issue #33: break is a real HIR statement, validates its enclosing switch/loop context, and is retained without implicit arm exits."
     },
     {
       "id": "syntax/do-while",
@@ -148,9 +161,10 @@
       "evidence": [
         "fixtures:synthetic/issue-28-string-modifiers",
         "fixtures:synthetic/issue-28-syntax",
+        "fixtures:synthetic/issue-33-f-string",
         "upstream:src/tests/strings.opy"
       ],
-      "notes": "Issue #28: modifiers are preserved as OPY HIR string nodes. f/w/b/c are oracle-corpus evidenced; l/t remain syntax-carried without duplicating translation data."
+      "notes": "Issue #28/#33: f-string interpolation lowers to a semantic format node with source-spanned arguments; w/b/c remain semantic string modifiers and l/t remain syntax-carried without duplicating translation data."
     },
     {
       "id": "syntax/dicts",
@@ -181,9 +195,11 @@
       "state": "frontend-supported",
       "evidence": [
         "fixtures:synthetic/issue-28-syntax",
+        "fixtures:synthetic/issue-33-f-string",
+        "fixtures:synthetic/issue-33-lambda-negative",
         "upstream:src/tests/dicts.opy"
       ],
-      "notes": "Issue #28: lambda x: expr forms are carried through sorted/map/filter/any/all argument positions; standalone lambdas remain an explicit diagnostic like the pinned reference."
+      "notes": "Issue #28/#33: lambda x: expr is accepted only in signature-approved positions (sorted index 1/key and array map/filter/all/any index 0); standalone and other argument positions produce a structured diagnostic."
     },
     {
       "id": "syntax/settings-blocks",
@@ -673,7 +689,7 @@
       "end-to-end-supported": 0
     },
     "byCategory": {
-      "syntax": 13,
+      "syntax": 14,
       "semantics": 14,
       "preprocessing": 4,
       "macros": 3,

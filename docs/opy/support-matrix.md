@@ -163,7 +163,8 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
   source-located diagnostics.
 - Statements: expression statements, `=` and augmented assignment,
   `if`/`elif`/`else`, `for x in range(...)`, `while`, `do: … while`,
-  `switch`/`case`/`default`, and `pass`.
+  `switch`/`case`/`default`, `break`, and `pass`. Switch arms execute in
+  source order and fall through; `break` exits the innermost switch or loop.
 - `for`-loop binder resolution: the loop variable must resolve to a global
   variable, either a declared `globalvar`, or an OverPy **default variable
   name** (`A`–`Z`, `AA`–`AZ`, …, `DA`–`DX`), which the pinned reference
@@ -180,12 +181,13 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
   parenthesized expressions, list comprehensions with one `for` clause and
   optional `if`, and the reference's context-bound lambda forms.
 - String modifiers `f`/`w`/`l`/`b`/`c`/`t` are preserved as OPY source
-  semantics. `l`/`t` translation/content behavior remains reference-limited;
-  the committed positive fixture covers the inventory-backed `f`/`w`/`b`/`c`
-  forms.
-- `lambda` is accepted in the reference-supported array-operation contexts
-  (`sorted(..., key=...)` and array `map`/`filter`/`all`/`any`); standalone
-  lambda expressions are rejected with a structured frontend diagnostic.
+  semantics. f-string interpolation is lowered to a semantic format node,
+  retaining source spans for each expression; `l`/`t` translation/content
+  behavior remains reference-limited.
+- `lambda` is accepted only in signature-approved positions
+  (`sorted(..., key=...)` or positional slot 1, and array
+  `map`/`filter`/`all`/`any` slot 0); standalone and other argument positions
+  are rejected with a structured frontend diagnostic.
 - Calls (`range`, `len`, `abs`, `sqrt`, `debug`, `print`, `wait`,
   `createBeam`, `playEffect`, `getAllPlayers`, `disableInspector`, …).
 - `vect(x, y, z)` → HIR `Vector` (3 arguments required; other arities are an

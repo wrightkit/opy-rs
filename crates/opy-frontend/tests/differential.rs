@@ -175,6 +175,24 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         true,
         "Issue #28 inventory-backed string modifiers; translation-dependent l/t are syntax-carried outside the fixture.",
     );
+    resolve(
+        &mut cases,
+        "synthetic/issue-33-switch-break",
+        true,
+        "Issue #33 switch arms preserve source-order fallthrough and explicit break statements validate nested switch/loop context.",
+    );
+    resolve(
+        &mut cases,
+        "synthetic/issue-33-f-string",
+        true,
+        "Issue #33 f-string interpolation preserves source-spanned expressions and the approved sorted lambda argument slot.",
+    );
+    diagnostic(
+        &mut cases,
+        "synthetic/issue-33-lambda-negative",
+        Some("lambda-context"),
+        "Issue #33 standalone lambda use remains rejected outside a signature-approved argument position.",
+    );
     diagnostic(
         &mut cases,
         "synthetic/issue-28-invalid-syntax",

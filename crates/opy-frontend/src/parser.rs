@@ -891,6 +891,10 @@ impl Parser<'_> {
                 "while" => return self.parse_while(),
                 "do" => return self.parse_do_while(),
                 "switch" => return self.parse_switch(),
+                "break" => {
+                    let token = self.advance();
+                    return Ok(Stmt::Break { span: token.span });
+                }
                 "pass" => {
                     let start = self.advance();
                     return Ok(Stmt::Pass { span: start.span });
@@ -1503,9 +1507,18 @@ impl Parser<'_> {
                 }
                 if is_string_modifier(&token.text) && self.peek_kind() == TokenKind::String {
                     let string = self.advance();
+                    let (format_text, interpolations) = if token.text == "f" {
+                        let raw = string.raw.as_deref().unwrap_or(&string.text);
+                        let (format_text, interpolations) = self.parse_f_string(raw, string.span)?;
+                        (Some(format_text), interpolations)
+                    } else {
+                        (None, Vec::new())
+                    };
                     return Ok(Expr::StringModifier {
                         modifier: token.text.chars().next().unwrap_or_default(),
                         value: string.text,
+                        format_text,
+                        interpolations,
                         span: Span::new(token.span.file, token.span.start, string.span.end),
                     });
                 }
@@ -1661,6 +1674,174 @@ impl Parser<'_> {
             body: Box::new(body.clone()),
             span: Span::new(start.file, start.start, body.span().end),
         })
+    }
+
+    /// Parse the expression regions of a pinned-OverPy f-string. Double
+    /// braces are literal braces; a single brace introduces one expression.
+    /// The resulting expression tokens are shifted back into the source
+    /// string so HIR and tooling retain source provenance.
+    fn parse_f_string(&mut self, raw: &str, string_span: Span) -> Result<(String, Vec<Expr>), ()> {
+        let chars: Vec<char> = raw.chars().collect();
+        let mut text = String::new();
+        let mut interpolations = Vec::new();
+        let mut index = 0;
+        while index < chars.len() {
+            match chars[index] {
+                '{' if chars.get(index + 1) == Some(&'{') => {
+                    text.push_str("{{");
+                    index += 2;
+                }
+                '}' if chars.get(index + 1) == Some(&'}') => {
+                    text.push_str("}}");
+                    index += 2;
+                }
+                '{' => {
+                    let end = self.find_f_string_end(&chars, index + 1);
+                    let Some(end) = end else {
+                        self.errors.push(FrontendError::at(
+                            "parse-error",
+                            "unterminated f-string interpolation".to_string(),
+                            string_span,
+                        ));
+                        return Err(());
+                    };
+                    let expression: String = chars[index + 1..end].iter().collect();
+                    if expression.trim().is_empty() {
+                        self.errors.push(FrontendError::at(
+                            "parse-error",
+                            "f-string interpolation cannot be empty".to_string(),
+                            Span::new(
+                                string_span.file,
+                                Position::new(
+                                    string_span.start.line,
+                                    string_span.start.col + index as u32 + 1,
+                                ),
+                                Position::new(
+                                    string_span.start.line,
+                                    string_span.start.col + end as u32 + 1,
+                                ),
+                            ),
+                        ));
+                        return Err(());
+                    }
+                    let origin = Position::new(
+                        string_span.start.line,
+                        string_span.start.col + index as u32 + 1,
+                    );
+                    let parsed = parse_expression_fragment(&expression, string_span.file, origin)
+                        .map_err(|error| {
+                            self.errors.push(error);
+                        });
+                    let Ok(parsed) = parsed else {
+                        return Err(());
+                    };
+                    text.push_str(&format!("{{{}}}", interpolations.len()));
+                    interpolations.push(parsed);
+                    index = end + 1;
+                }
+                '}' => {
+                    self.errors.push(FrontendError::at(
+                        "parse-error",
+                        "single '}' is not valid in an f-string".to_string(),
+                        string_span,
+                    ));
+                    return Err(());
+                }
+                '\\' if index + 1 < chars.len() => {
+                    text.push(decode_string_escape(chars[index + 1]));
+                    index += 2;
+                }
+                character => {
+                    text.push(character);
+                    index += 1;
+                }
+            }
+        }
+        Ok((text, interpolations))
+    }
+
+    fn find_f_string_end(&self, chars: &[char], start: usize) -> Option<usize> {
+        let mut nested_braces = 0;
+        let mut quote = None;
+        let mut escaped = false;
+        for (index, character) in chars.iter().enumerate().skip(start) {
+            if escaped {
+                escaped = false;
+                continue;
+            }
+            if *character == '\\' && quote.is_some() {
+                escaped = true;
+                continue;
+            }
+            if let Some(active_quote) = quote {
+                if *character == active_quote {
+                    quote = None;
+                }
+                continue;
+            }
+            match character {
+                '"' | '\'' => quote = Some(*character),
+                '{' => nested_braces += 1,
+                '}' if nested_braces == 0 => return Some(index),
+                '}' => nested_braces -= 1,
+                _ => {}
+            }
+        }
+        None
+    }
+}
+
+/// Parse one f-string expression fragment and shift its local token spans
+/// into the original source file.
+fn parse_expression_fragment(text: &str, file: u32, origin: Position) -> Result<Expr, FrontendError> {
+    let mut tokens = crate::lexer::lex(crate::lexer::LexInput {
+        file_id: file,
+        text,
+    })?;
+    for token in &mut tokens {
+        token.span = shift_span(token.span, origin);
+    }
+    let mut parser = Parser {
+        tokens: &tokens,
+        pos: 0,
+        errors: Vec::new(),
+    };
+    let expression = parser.parse_expr().map_err(|()| {
+        parser
+            .errors
+            .first()
+            .cloned()
+            .unwrap_or_else(|| FrontendError::at("parse-error", "invalid f-string expression", Span::new(file, origin, origin)))
+    })?;
+    if parser.peek_kind() != TokenKind::Eof {
+        parser.error_at_current("unexpected tokens in f-string interpolation".to_string());
+    }
+    parser.errors.into_iter().next().map_or(Ok(expression), Err)
+}
+
+fn shift_span(span: Span, origin: Position) -> Span {
+    fn shift(position: Position, origin: Position) -> Position {
+        Position::new(
+            origin.line + position.line.saturating_sub(1),
+            if position.line == 1 {
+                origin.col + position.col.saturating_sub(1)
+            } else {
+                position.col
+            },
+        )
+    }
+    Span::new(span.file, shift(span.start, origin), shift(span.end, origin))
+}
+
+fn decode_string_escape(character: char) -> char {
+    match character {
+        'n' => '\n',
+        't' => '\t',
+        'r' => '\r',
+        '\\' => '\\',
+        '"' => '"',
+        '\'' => '\'',
+        other => other,
     }
 }
 

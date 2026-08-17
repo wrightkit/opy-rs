@@ -306,6 +306,13 @@ fn dump_stmt(statement: &Stmt, out: &mut String, level: usize) {
                 dump_stmts(default_body, out, level + 2);
             }
         }
+        Stmt::Break { span } => {
+            out.push_str(&format!(
+                "{}break{}\n",
+                indent(level),
+                span_suffix(span.as_ref())
+            ));
+        }
         Stmt::CallSubroutine { name, span } => {
             out.push_str(&format!(
                 "{}callSubroutine {}{}\n",
