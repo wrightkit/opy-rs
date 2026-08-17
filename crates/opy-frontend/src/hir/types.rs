@@ -183,8 +183,39 @@ pub struct DirectiveRecord {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub value: Option<String>,
     pub scope_col: u32,
+    #[serde(default)]
+    pub scope_depth: u32,
+    #[serde(default)]
+    pub state: PreprocessingSnapshot,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub span: Option<Span>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PreprocessingSnapshot {
+    pub allow_macro_redeclaration: bool,
+    pub optimization: OptimizationState,
+    #[serde(default)]
+    pub rule_prefix: Option<String>,
+    #[serde(default)]
+    pub rule_prefix_template: Option<String>,
+    #[serde(default)]
+    pub translations: Option<Vec<String>>,
+    #[serde(default)]
+    pub replacements: Vec<String>,
+}
+
+impl Default for PreprocessingSnapshot {
+    fn default() -> Self {
+        Self {
+            allow_macro_redeclaration: false,
+            optimization: OptimizationState::default(),
+            rule_prefix: None,
+            rule_prefix_template: None,
+            translations: None,
+            replacements: Vec::new(),
+        }
+    }
 }
 
 /// A custom-game-settings block (`settings { ... }`, #86).
@@ -321,6 +352,8 @@ pub enum RuleEntry {
         #[serde(rename = "kind")]
         kind: String,
         name: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        source_name: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         span: Option<Span>,
         /// The exact span of the defined identifier token in `def name():`.

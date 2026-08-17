@@ -108,6 +108,7 @@ pub enum RuleEntry {
     Rule(Rule),
     SubroutineDef {
         name: String,
+        presentation_name: Option<String>,
         span: Span,
         /// The exact span of the defined identifier token in `def name():`.
         name_span: Span,

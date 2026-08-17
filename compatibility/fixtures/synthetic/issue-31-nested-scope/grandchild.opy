@@ -1,0 +1,3 @@
+#!optimizeStrict
+rule "grandchild":
+    pass

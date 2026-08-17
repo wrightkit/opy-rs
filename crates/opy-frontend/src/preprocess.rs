@@ -46,7 +46,8 @@ use opy_macro_js::{Limits, MacroArg, MacroError, MacroRuntime};
 
 use crate::diag::{FrontendError, FrontendResult, Span};
 use crate::hir::types::{
-    DirectiveRecord, DirectiveValue, OptimizationState, PreprocessingState, TranslationState,
+    DirectiveRecord, DirectiveValue, OptimizationState, PreprocessingSnapshot, PreprocessingState,
+    TranslationState,
 };
 use crate::lexer::{LexInput, Token, TokenKind, lex};
 use crate::settings::SettingsBlock;
@@ -498,7 +499,11 @@ impl Preprocessor {
                     span,
                 ));
             }
-            let template = rest.trim();
+            let template = if rest.trim().is_empty() {
+                r#"f"[{$pathTitle.replace('_', ' ')}] {$rule}" if $rule and not $isDelimiter else $rule"#
+            } else {
+                rest.trim()
+            };
             self.preprocessing.rule_prefix_template = Some(DirectiveValue {
                 value: template.to_string(),
                 span: Some(span.into()),
@@ -541,10 +546,37 @@ impl Preprocessor {
     }
 
     fn record(&mut self, name: &str, value: Option<&str>, span: Span) {
+        let state = PreprocessingSnapshot {
+            allow_macro_redeclaration: self.preprocessing.allow_macro_redeclaration,
+            optimization: self.preprocessing.optimization.clone(),
+            rule_prefix: self
+                .preprocessing
+                .rule_prefix
+                .as_ref()
+                .map(|value| value.value.clone()),
+            rule_prefix_template: self
+                .preprocessing
+                .rule_prefix_template
+                .as_ref()
+                .map(|value| value.value.clone()),
+            translations: self
+                .preprocessing
+                .translations
+                .as_ref()
+                .map(|translations| translations.languages.clone()),
+            replacements: self
+                .preprocessing
+                .replacements
+                .iter()
+                .map(|value| value.value.clone())
+                .collect(),
+        };
         self.preprocessing.directives.push(DirectiveRecord {
             name: name.to_string(),
             value: value.map(str::to_string),
             scope_col: span.start.col,
+            scope_depth: self.include_stack.len() as u32,
+            state,
             span: Some(span.into()),
         });
     }
@@ -639,6 +671,7 @@ impl Preprocessor {
         });
         self.include_stack.push(identity);
         let saved_prefix = self.preprocessing.rule_prefix.clone();
+        let saved_optimization = self.preprocessing.optimization.clone();
         // Settings blocks are only supported in the main file; an included
         // file's block is rejected at its keyword span (file id of the
         // included file, #86).
@@ -659,7 +692,11 @@ impl Preprocessor {
         })?;
         let processed = self.process_directives(&mut included);
         self.preprocessing.rule_prefix = saved_prefix;
-        processed?;
+        self.preprocessing.optimization = saved_optimization;
+        if let Err(error) = processed {
+            self.include_stack.pop();
+            return Err(error);
+        }
         // Drop the included file's Eof token (it terminates the file, not
         // the spliced stream).
         included.retain(|token| token.kind != TokenKind::Eof);
@@ -669,6 +706,7 @@ impl Preprocessor {
         // in diagnostics (include cycles/not-found name the real path).
         out.extend(included);
         self.include_stack.pop();
+        self.record("include", Some(include), span);
         Ok(())
     }
 
@@ -1054,18 +1092,17 @@ fn parse_translations(rest: &str, span: Span) -> FrontendResult<Vec<String>> {
             span,
         ));
     }
-    if values.iter().any(|language| !is_language_tag(language)) {
+    const PINNED_LANGUAGES: &[&str] = &[
+        "de", "en", "es", "es_es", "es_mx", "fr", "it", "ja", "ko", "pl", "pt", "ru", "th", "tr",
+        "zh", "zh_cn", "zh_tw",
+    ];
+    if values
+        .iter()
+        .any(|language| !PINNED_LANGUAGES.contains(&language.as_str()))
+    {
         return Err(FrontendError::at(
             "translations-invalid",
-            "translation languages must use an alphabetic language tag with an optional region",
-            span,
-        ));
-    }
-    let mut seen = std::collections::BTreeSet::new();
-    if values.iter().any(|language| !seen.insert(language)) {
-        return Err(FrontendError::at(
-            "translations-invalid",
-            "translation languages must be unique",
+            "invalid translation language; expected one of the pinned OverPy language codes",
             span,
         ));
     }
@@ -1092,21 +1129,6 @@ fn parse_translations(rest: &str, span: Span) -> FrontendResult<Vec<String>> {
         ));
     }
     Ok(values)
-}
-
-fn is_language_tag(value: &str) -> bool {
-    let mut parts = value.split('_');
-    let Some(language) = parts.next() else {
-        return false;
-    };
-    let language_len = language.chars().count();
-    if !(2..=3).contains(&language_len) || !language.chars().all(|ch| ch.is_ascii_lowercase()) {
-        return false;
-    }
-    parts.all(|region| {
-        (2..=4).contains(&region.chars().count())
-            && region.chars().all(|ch| ch.is_ascii_alphanumeric())
-    })
 }
 
 #[derive(Clone, Copy)]
@@ -1436,6 +1458,61 @@ mod tests {
             "getCapturePercentage"
         );
         assert_eq!(pre.defines.len(), 1);
+    }
+
+    #[test]
+    fn translations_follow_pinned_codes_without_local_deduplication() {
+        let (pre, _) = preprocess(
+            "#!translations EN zh-cn en\nrule \"r\":\n    pass\n",
+            "main.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        assert_eq!(
+            pre.preprocessing.translations.unwrap().languages,
+            vec!["en", "zh_cn", "en"]
+        );
+    }
+
+    #[test]
+    fn translations_reject_codes_outside_the_pinned_oracle_set() {
+        let error = preprocess(
+            "#!translations en_US\nrule \"r\":\n    pass\n",
+            "main.opy",
+            Path::new("."),
+        )
+        .unwrap_err();
+        assert_eq!(error.code, "translations-invalid");
+    }
+
+    #[test]
+    fn directive_records_expose_state_transitions_and_include_depth() {
+        let root =
+            std::env::temp_dir().join(format!("wright-opy-directive-scope-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join("child.opy"),
+            "#!rulePrefix \"inner\"\n#!disableOptimizations\n",
+        )
+        .unwrap();
+        let (pre, _) = preprocess(
+            "#!rulePrefix \"outer\"\n#!include \"child.opy\"\n#!enableOptimizations\n",
+            "main.opy",
+            &root,
+        )
+        .unwrap();
+        let records = &pre.preprocessing.directives;
+        assert_eq!(records[0].state.rule_prefix.as_deref(), Some("outer"));
+        assert_eq!(records[0].scope_depth, 0);
+        assert_eq!(records[1].name, "rulePrefix");
+        assert_eq!(records[1].state.rule_prefix.as_deref(), Some("inner"));
+        assert!(!records[2].state.optimization.enabled);
+        assert_eq!(records[2].scope_depth, 1);
+        assert_eq!(records[3].name, "include");
+        assert_eq!(records[3].state.rule_prefix.as_deref(), Some("outer"));
+        assert_eq!(records[4].name, "enableOptimizations");
+        assert!(records[4].state.optimization.enabled);
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

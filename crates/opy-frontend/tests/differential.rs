@@ -207,6 +207,24 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
     );
     resolve(
         &mut cases,
+        "synthetic/issue-31-positive",
+        false,
+        "pinned positive probe for global rulePrefixTemplate, include prefix restoration, AST macro/enum redeclaration, and translation normalization.",
+    );
+    diagnostic(
+        &mut cases,
+        "synthetic/issue-31-negative",
+        Some("translations-invalid"),
+        "pinned negative probe for a language code outside the exact translation set.",
+    );
+    resolve(
+        &mut cases,
+        "synthetic/issue-31-nested-scope",
+        false,
+        "nested include optimization directives are retained as observable scoped state; optimizer execution remains outside opy-rs.",
+    );
+    resolve(
+        &mut cases,
         "synthetic/settings",
         true,
         "top-of-file settings block parsed into the typed HIR payload; validation is structural only (group shape, span validity, non-empty key names) — key-existence/leaf-kind checks were removed from the core and are lowering-dependent (#8); oracle status success.",

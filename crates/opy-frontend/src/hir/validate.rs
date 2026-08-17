@@ -246,9 +246,16 @@ pub(crate) fn validate_program(program: &Program) -> Result<(), HirError> {
         match entry {
             RuleEntry::Rule(rule) => validate_rule(rule, program, &tables)?,
             RuleEntry::SubroutineDef {
-                name, span, body, ..
+                name,
+                source_name,
+                span,
+                body,
+                ..
             } => {
                 check_name(name, "subroutine definition", *span)?;
+                if !source_name.is_empty() {
+                    check_name(source_name, "subroutine source", *span)?;
+                }
                 validate_stmts(body, program, &tables, |statement| {
                     statement.span().copied()
                 })?;
@@ -374,7 +381,16 @@ fn validate_stmts(
         match statement {
             Stmt::CallSubroutine { name, span } => {
                 let known = tables.subroutines.contains(&name.as_str())
-                    || program.rules.iter().any(|entry| matches!(entry, RuleEntry::SubroutineDef { name: n, .. } if n == name));
+                    || program.rules.iter().any(|entry| {
+                        matches!(
+                            entry,
+                            RuleEntry::SubroutineDef {
+                                name: presentation,
+                                source_name,
+                                ..
+                            } if presentation == name || source_name == name
+                        )
+                    });
                 if !known {
                     errors.push(invalid(
                         "unresolved-reference",

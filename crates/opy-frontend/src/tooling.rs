@@ -97,7 +97,10 @@ pub fn check_with_overlay(
             };
         }
     };
-    let parsed = crate::parser::parse(&preprocessed.tokens);
+    let parsed = crate::parser::parse_with_options(
+        &preprocessed.tokens,
+        preprocessed.preprocessing.allow_macro_redeclaration,
+    );
     let Some(mut program) = parsed.program else {
         // The parser recovers at statement boundaries; every collected error
         // is reported (the compile pipeline reads only the first).
@@ -143,7 +146,12 @@ pub fn check_with_overlay(
             path: file.path.clone(),
         })
         .collect();
-    match crate::lower::lower(&program, hir_files, defines) {
+    match crate::lower::lower_with_preprocessing(
+        &program,
+        hir_files,
+        defines,
+        &preprocessed.preprocessing,
+    ) {
         Ok(mut hir) => {
             hir.preprocessing = preprocessed.preprocessing;
             CheckOutcome {
@@ -404,6 +412,7 @@ impl SemanticModel {
         for entry in &self.hir.rules {
             let RuleEntry::SubroutineDef {
                 name,
+                source_name,
                 name_span,
                 span,
                 ..
@@ -418,7 +427,11 @@ impl SemanticModel {
                 continue;
             };
             self.symbols.push(Symbol {
-                name: name.clone(),
+                name: if source_name.is_empty() {
+                    name.clone()
+                } else {
+                    source_name.clone()
+                },
                 kind: SymbolKind::Def,
                 declaration,
                 references: Vec::new(),

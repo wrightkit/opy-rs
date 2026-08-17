@@ -24,10 +24,16 @@ pub struct ParseOutput {
 
 /// Parse an expanded token stream into a CST program.
 pub fn parse(tokens: &[Token]) -> ParseOutput {
+    parse_with_options(tokens, false)
+}
+
+/// Parse with the global redeclaration policy observed by the pinned oracle.
+pub fn parse_with_options(tokens: &[Token], allow_macro_redeclaration: bool) -> ParseOutput {
     let mut parser = Parser {
         tokens,
         pos: 0,
         errors: Vec::new(),
+        allow_macro_redeclaration,
     };
     let program = parser.parse_program();
     if parser.errors.is_empty() {
@@ -47,6 +53,7 @@ struct Parser<'a> {
     tokens: &'a [Token],
     pos: usize,
     errors: Vec<FrontendError>,
+    allow_macro_redeclaration: bool,
 }
 
 fn is_identifier(text: &str) -> bool {
@@ -296,6 +303,15 @@ impl Parser<'_> {
             if self.peek_kind() == TokenKind::Ident {
                 let member = self.advance();
                 let member_span = member.span;
+                if !self.allow_macro_redeclaration
+                    && members.iter().any(|(name, _)| name == &member.text)
+                {
+                    self.errors.push(FrontendError::at(
+                        "macro-redeclaration",
+                        format!("enum member '{name}.{}' is already defined", member.text),
+                        member_span,
+                    ));
+                }
                 members.push((member.text, member_span));
             } else {
                 self.error_at_current("expected an enum member name".to_string());
@@ -323,6 +339,7 @@ impl Parser<'_> {
 
     fn parse_macro(&mut self, declarations: &mut Vec<Decl>) -> bool {
         let start = self.advance();
+        let name_token = self.peek().clone();
         let name = match self.expect_ident("a macro name") {
             Ok(name) => name,
             Err(()) => return false,
@@ -343,6 +360,17 @@ impl Parser<'_> {
             None => return false,
         };
         let body = self.parse_block(body_indent);
+        if !self.allow_macro_redeclaration
+            && declarations.iter().any(|declaration| {
+                matches!(declaration, Decl::Macro { name: existing, .. } if existing == &name)
+            })
+        {
+            self.errors.push(FrontendError::at(
+                "macro-redeclaration",
+                format!("macro '{name}' is already defined"),
+                name_token.span,
+            ));
+        }
         declarations.push(Decl::Macro {
             name,
             args,
@@ -784,12 +812,11 @@ impl Parser<'_> {
             return false;
         }
         let _ = (disabled, delimiter, new_page);
-        let name = annotations
+        let presentation_name = annotations
             .iter()
             .find(|annotation| annotation.name == "Name")
             .and_then(|annotation| annotation.args.first())
-            .map(|arg| unquote_annotation_arg(&arg.text))
-            .unwrap_or(name);
+            .map(|arg| unquote_annotation_arg(&arg.text));
         let body = self.parse_block(body_indent);
         let span = if name_token.kind == TokenKind::Ident {
             Span::new(start.span.file, start.span.start, name_token.span.end)
@@ -798,6 +825,7 @@ impl Parser<'_> {
         };
         rules.push(RuleEntry::SubroutineDef {
             name,
+            presentation_name,
             span,
             name_span,
             body,
@@ -1515,6 +1543,28 @@ mod tests {
         };
         assert_eq!(args, &vec!["value".to_string()]);
         assert_eq!(body.len(), 1);
+    }
+
+    #[test]
+    fn macro_and_enum_redeclarations_are_checked_at_ast_surfaces() {
+        let text = "enum Kind:\n    First\n    First\nmacro helper():\n    pass\nmacro helper():\n    pass\n";
+        let errors = parse_err(text);
+        assert_eq!(
+            errors
+                .iter()
+                .filter(|error| error.code == "macro-redeclaration")
+                .count(),
+            2
+        );
+
+        let tokens = lex(LexInput { file_id: 0, text }).unwrap();
+        let output = parse_with_options(&tokens, true);
+        assert!(
+            output.errors.is_empty(),
+            "unexpected errors: {:?}",
+            output.errors
+        );
+        assert!(output.program.is_some());
     }
 
     #[test]
