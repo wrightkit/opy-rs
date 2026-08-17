@@ -33,6 +33,8 @@ pub enum TokenKind {
     RParen,
     LBracket,
     RBracket,
+    LBrace,
+    RBrace,
     Comma,
     Colon,
     Dot,
@@ -135,6 +137,8 @@ impl Lexer {
                 ')' => self.single(TokenKind::RParen),
                 '[' => self.single(TokenKind::LBracket),
                 ']' => self.single(TokenKind::RBracket),
+                '{' => self.single(TokenKind::LBrace),
+                '}' => self.single(TokenKind::RBrace),
                 ',' => self.single(TokenKind::Comma),
                 ':' => self.single(TokenKind::Colon),
                 '.' => self.single(TokenKind::Dot),
@@ -280,6 +284,31 @@ impl Lexer {
     fn lex_number(&mut self) -> FrontendResult<()> {
         let start = self.here(1);
         let mut text = String::new();
+        if self.chars[self.pos] == '0' && matches!(self.peek(1), Some('x' | 'X')) {
+            text.push('0');
+            self.advance();
+            text.push(self.chars[self.pos]);
+            self.advance();
+            let digits_start = self.pos;
+            while self.pos < self.chars.len() && self.chars[self.pos].is_ascii_hexdigit() {
+                text.push(self.chars[self.pos]);
+                self.advance();
+            }
+            if self.pos == digits_start {
+                return Err(FrontendError::at(
+                    "lex-error",
+                    "hexadecimal literal requires at least one hexadecimal digit",
+                    Span::new(self.file_id, start.start, self.here(0).start),
+                ));
+            }
+            let end = self.here(0);
+            self.tokens.push(Token::new(
+                TokenKind::Number,
+                text,
+                Span::new(self.file_id, start.start, end.start),
+            ));
+            return Ok(());
+        }
         while self.pos < self.chars.len() && self.chars[self.pos].is_ascii_digit() {
             text.push(self.chars[self.pos]);
             self.advance();

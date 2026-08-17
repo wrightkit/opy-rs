@@ -97,25 +97,93 @@
     },
     {
       "id": "syntax/switch",
-      "name": "switch/case/default, do…while, hex 0x literals, expression-level not in",
+      "name": "switch/case/default",
       "category": "syntax",
-      "state": "planned",
+      "state": "frontend-supported",
       "evidence": [
-        "upstream:src/tests/switches.opy",
+        "fixtures:synthetic/issue-28-syntax",
+        "upstream:src/tests/switches.opy"
+      ],
+      "notes": "Issue #28: switch/case/default preserve arm expressions, bodies, and source spans in the OPY HIR; Workshop lowering remains out of scope."
+    },
+    {
+      "id": "syntax/do-while",
+      "name": "do … while",
+      "category": "syntax",
+      "state": "frontend-supported",
+      "evidence": [
+        "fixtures:synthetic/issue-28-syntax",
+        "fixtures:real-world/overpy-santa/regressions/do-while.opy",
+        "upstream:src/tests/loops.opy"
+      ],
+      "notes": "Issue #28: the body executes before the condition and the condition is retained as an OPY HIR expression; malformed/truncated conditions remain structured parse errors."
+    },
+    {
+      "id": "syntax/hex-literals",
+      "name": "Hexadecimal numeric literals (0x/0X)",
+      "category": "syntax",
+      "state": "frontend-supported",
+      "evidence": [
+        "fixtures:synthetic/issue-28-syntax",
         "upstream:src/tests/operators.opy"
       ],
-      "notes": "Baseline category 1a: evidence-prioritized. Explicitly rejected (documented diagnostics) until implemented."
+      "notes": "Issue #28: hexadecimal source spelling is preserved in the numeric HIR text while the numeric value is decoded independently."
+    },
+    {
+      "id": "syntax/membership",
+      "name": "Expression-level in/not in membership",
+      "category": "syntax",
+      "state": "frontend-supported",
+      "evidence": [
+        "fixtures:synthetic/issue-28-syntax",
+        "upstream:src/tests/operators.opy"
+      ],
+      "notes": "Issue #28: in/not in are represented as source-semantic binary operators; no Workshop Array Contains catalog or lowering is copied here."
     },
     {
       "id": "syntax/string-modifiers",
-      "name": "String modifiers (f/w/l/b/c/t), dict literals, list comprehensions, lambda",
+      "name": "String modifiers (f/w/l/b/c/t)",
       "category": "syntax",
-      "state": "planned",
+      "state": "frontend-supported",
       "evidence": [
-        "upstream:src/tests/dicts.opy",
+        "fixtures:synthetic/issue-28-string-modifiers",
+        "fixtures:synthetic/issue-28-syntax",
         "upstream:src/tests/strings.opy"
       ],
-      "notes": "Baseline category 1b: legacy-quirk/demand-driven for dicts and modifiers, evidence-prioritized for comprehensions; explicit rejection until demand is demonstrated."
+      "notes": "Issue #28: modifiers are preserved as OPY HIR string nodes. f/w/b/c are oracle-corpus evidenced; l/t remain syntax-carried without duplicating translation data."
+    },
+    {
+      "id": "syntax/dicts",
+      "name": "Dictionary literals and keyed access",
+      "category": "syntax",
+      "state": "frontend-supported",
+      "evidence": [
+        "fixtures:synthetic/issue-28-syntax",
+        "upstream:src/tests/dicts.opy"
+      ],
+      "notes": "Issue #28: dictionary entries and keyed access are represented in OPY HIR; bare dictionaries and malformed entries produce structured diagnostics."
+    },
+    {
+      "id": "syntax/comprehensions",
+      "name": "List comprehensions (mapping/filtering, element and index binders)",
+      "category": "syntax",
+      "state": "frontend-supported",
+      "evidence": [
+        "fixtures:synthetic/issue-28-syntax",
+        "upstream:src/tests/dicts.opy"
+      ],
+      "notes": "Issue #28: one-for-clause comprehensions with an optional filter and optional element/index binders preserve local scope in HIR."
+    },
+    {
+      "id": "syntax/lambda",
+      "name": "Lambda expressions for array operations",
+      "category": "syntax",
+      "state": "frontend-supported",
+      "evidence": [
+        "fixtures:synthetic/issue-28-syntax",
+        "upstream:src/tests/dicts.opy"
+      ],
+      "notes": "Issue #28: lambda x: expr forms are carried through sorted/map/filter/any/all argument positions; standalone lambdas remain an explicit diagnostic like the pinned reference."
     },
     {
       "id": "syntax/settings-blocks",
@@ -605,7 +673,7 @@
       "end-to-end-supported": 0
     },
     "byCategory": {
-      "syntax": 7,
+      "syntax": 13,
       "semantics": 14,
       "preprocessing": 4,
       "macros": 3,

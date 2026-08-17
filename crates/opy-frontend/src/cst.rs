@@ -187,9 +187,28 @@ pub enum Stmt {
         body: Vec<Stmt>,
         span: Span,
     },
+    DoWhile {
+        condition: Expr,
+        body: Vec<Stmt>,
+        span: Span,
+    },
+    Switch {
+        value: Expr,
+        cases: Vec<SwitchCase>,
+        r#default: Option<Vec<Stmt>>,
+        span: Span,
+    },
     Pass {
         span: Span,
     },
+}
+
+/// One `case value:` arm in a switch statement.
+#[derive(Debug, Clone)]
+pub struct SwitchCase {
+    pub value: Expr,
+    pub body: Vec<Stmt>,
+    pub span: Span,
 }
 
 /// One condition/body pair of an `if`.
@@ -233,6 +252,29 @@ pub enum Expr {
     },
     Array {
         elements: Vec<Expr>,
+        span: Span,
+    },
+    Dict {
+        entries: Vec<DictEntry>,
+        span: Span,
+    },
+    Comprehension {
+        element: Box<Expr>,
+        variable: String,
+        variable_span: Span,
+        index: Option<(String, Span)>,
+        iterable: Box<Expr>,
+        condition: Option<Box<Expr>>,
+        span: Span,
+    },
+    Lambda {
+        params: Vec<(String, Span)>,
+        body: Box<Expr>,
+        span: Span,
+    },
+    StringModifier {
+        modifier: char,
+        value: String,
         span: Span,
     },
     /// A plain function call.
@@ -279,6 +321,14 @@ pub enum Expr {
     },
 }
 
+/// One key/value pair in an OPY dictionary literal.
+#[derive(Debug, Clone)]
+pub struct DictEntry {
+    pub key: Expr,
+    pub value: Expr,
+    pub span: Span,
+}
+
 impl Expr {
     /// The source span of this expression.
     pub fn span(&self) -> Span {
@@ -288,6 +338,10 @@ impl Expr {
             | Expr::Bool { span, .. }
             | Expr::Null { span }
             | Expr::Array { span, .. }
+            | Expr::Dict { span, .. }
+            | Expr::Comprehension { span, .. }
+            | Expr::Lambda { span, .. }
+            | Expr::StringModifier { span, .. }
             | Expr::Call { span, .. }
             | Expr::ReceiverCall { span, .. }
             | Expr::Name { span, .. }

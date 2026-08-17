@@ -8,7 +8,8 @@
 //! or the collected errors (never both).
 
 use crate::cst::{
-    Annotation, AnnotationArg, CallArg, Decl, Event, Expr, IfBranch, Program, Rule, RuleEntry, Stmt,
+    Annotation, AnnotationArg, CallArg, Decl, DictEntry, Event, Expr, IfBranch, Program, Rule,
+    RuleEntry, Stmt, SwitchCase,
 };
 use crate::diag::{FrontendError, Position, Span};
 use crate::lexer::{Token, TokenKind};
@@ -81,6 +82,10 @@ impl Parser<'_> {
 
     fn peek_kind(&self) -> TokenKind {
         self.peek().kind
+    }
+
+    fn peek_at(&self, offset: usize) -> &Token {
+        &self.tokens[(self.pos + offset).min(self.tokens.len() - 1)]
     }
 
     fn advance(&mut self) -> Token {
@@ -884,6 +889,8 @@ impl Parser<'_> {
                 "if" => return self.parse_if(),
                 "for" => return self.parse_for(),
                 "while" => return self.parse_while(),
+                "do" => return self.parse_do_while(),
+                "switch" => return self.parse_switch(),
                 "pass" => {
                     let start = self.advance();
                     return Ok(Stmt::Pass { span: start.span });
@@ -1008,7 +1015,7 @@ impl Parser<'_> {
 
     fn parse_for(&mut self) -> Result<Stmt, ()> {
         let start = self.advance();
-        let variable = self.parse_expr()?;
+        let variable = self.parse_primary()?;
         if !self.is_ident("in") {
             self.error_at_current("expected `in` in the for statement".to_string());
             return Err(());
@@ -1047,6 +1054,103 @@ impl Parser<'_> {
         Ok(Stmt::While {
             condition,
             body,
+            span: start.span,
+        })
+    }
+
+    fn parse_do_while(&mut self) -> Result<Stmt, ()> {
+        let start = self.advance();
+        if self.expect(TokenKind::Colon, "':' after `do`").is_err() {
+            return Err(());
+        }
+        let body_indent = self.block_indent(start.span.start.col).ok_or(())?;
+        let body = self.parse_block(body_indent);
+        if !self.is_ident("while") {
+            self.error_at_current("expected `while` after the do block".to_string());
+            return Err(());
+        }
+        self.advance();
+        let condition = self.parse_expr()?;
+        if self.peek_kind() != TokenKind::Newline && self.peek_kind() != TokenKind::Eof {
+            self.error_at_current("expected the end of the do-while condition".to_string());
+            return Err(());
+        }
+        Ok(Stmt::DoWhile {
+            condition,
+            body,
+            span: start.span,
+        })
+    }
+
+    fn parse_switch(&mut self) -> Result<Stmt, ()> {
+        let start = self.advance();
+        let value = self.parse_expr()?;
+        if self
+            .expect(TokenKind::Colon, "':' after the switch value")
+            .is_err()
+        {
+            return Err(());
+        }
+        let body_indent = self.block_indent(start.span.start.col).ok_or(())?;
+        let mut cases = Vec::new();
+        let mut r#default = None;
+        loop {
+            self.skip_newlines();
+            if self.peek_kind() == TokenKind::Eof || self.peek().span.start.col < body_indent {
+                break;
+            }
+            if self.peek().span.start.col != body_indent {
+                self.error_at_current("unexpected indentation in switch".to_string());
+                self.recover_line();
+                continue;
+            }
+            if self.is_ident("case") {
+                let case_start = self.advance();
+                let case_value = self.parse_expr()?;
+                if self
+                    .expect(TokenKind::Colon, "':' after the case value")
+                    .is_err()
+                {
+                    return Err(());
+                }
+                let case_body_indent = self.block_indent(body_indent).ok_or(())?;
+                let body = self.parse_block(case_body_indent);
+                cases.push(SwitchCase {
+                    value: case_value,
+                    body,
+                    span: case_start.span,
+                });
+            } else if self.is_ident("default") {
+                let default_start = self.advance();
+                if self
+                    .expect(TokenKind::Colon, "':' after `default`")
+                    .is_err()
+                {
+                    return Err(());
+                }
+                let default_body_indent = self.block_indent(body_indent).ok_or(())?;
+                r#default = Some(self.parse_block(default_body_indent));
+                if default_start.span.start.col != body_indent {
+                    self.error_at_current("invalid default indentation".to_string());
+                    return Err(());
+                }
+            } else {
+                self.error_at_current("expected `case` or `default` in switch".to_string());
+                self.recover_line();
+            }
+        }
+        if cases.is_empty() && r#default.is_none() {
+            self.errors.push(FrontendError::at(
+                "parse-error",
+                "switch must contain at least one case or default arm".to_string(),
+                start.span,
+            ));
+            return Err(());
+        }
+        Ok(Stmt::Switch {
+            value,
+            cases,
+            r#default,
             span: start.span,
         })
     }
@@ -1113,9 +1217,14 @@ impl Parser<'_> {
                 TokenKind::Le => "<=",
                 TokenKind::Gt => ">",
                 TokenKind::Ge => ">=",
+                _ if self.is_ident("in") => "in",
+                _ if self.is_ident("not") && self.peek_at(1).text == "in" => "not in",
                 _ => break,
             };
             self.advance();
+            if op == "not in" {
+                self.advance();
+            }
             let right = self.parse_additive()?;
             let span = Span::new(left.span().file, left.span().start, right.span().end);
             left = Expr::Binary {
@@ -1365,7 +1474,15 @@ impl Parser<'_> {
         match token.kind {
             TokenKind::Number => {
                 let token = self.advance();
-                let value: f64 = token.text.parse().unwrap_or(f64::NAN);
+                let value = if let Some(hex) = token
+                    .text
+                    .strip_prefix("0x")
+                    .or_else(|| token.text.strip_prefix("0X"))
+                {
+                    u64::from_str_radix(hex, 16).map_or(f64::NAN, |value| value as f64)
+                } else {
+                    token.text.parse().unwrap_or(f64::NAN)
+                };
                 Ok(Expr::Number {
                     value,
                     text: token.text.clone(),
@@ -1381,6 +1498,17 @@ impl Parser<'_> {
             }
             TokenKind::Ident => {
                 let token = self.advance();
+                if token.text == "lambda" {
+                    return self.parse_lambda(token.span);
+                }
+                if is_string_modifier(&token.text) && self.peek_kind() == TokenKind::String {
+                    let string = self.advance();
+                    return Ok(Expr::StringModifier {
+                        modifier: token.text.chars().next().unwrap_or_default(),
+                        value: string.text,
+                        span: Span::new(token.span.file, token.span.start, string.span.end),
+                    });
+                }
                 match token.text.as_str() {
                     "true" => Ok(Expr::Bool {
                         value: true,
@@ -1414,11 +1542,43 @@ impl Parser<'_> {
                         span: Span::new(open.span.file, open.span.start, end),
                     });
                 }
-                loop {
-                    match self.parse_expr() {
-                        Ok(expr) => elements.push(expr),
-                        Err(()) => return Err(()),
+                let first = self.parse_expr()?;
+                if self.is_ident("for") {
+                    self.advance();
+                    let variable_token =
+                        self.expect(TokenKind::Ident, "a comprehension variable")?;
+                    let index = if self.peek_kind() == TokenKind::Comma {
+                        self.advance();
+                        let index = self.expect(TokenKind::Ident, "a comprehension index")?;
+                        Some((index.text, index.span))
+                    } else {
+                        None
+                    };
+                    if !self.is_ident("in") {
+                        self.error_at_current("expected `in` in list comprehension".to_string());
+                        return Err(());
                     }
+                    self.advance();
+                    let iterable = self.parse_expr()?;
+                    let condition = if self.is_ident("if") {
+                        self.advance();
+                        Some(Box::new(self.parse_expr()?))
+                    } else {
+                        None
+                    };
+                    let end = self.expect(TokenKind::RBracket, "']'")?.span.end;
+                    return Ok(Expr::Comprehension {
+                        element: Box::new(first),
+                        variable: variable_token.text,
+                        variable_span: variable_token.span,
+                        index,
+                        iterable: Box::new(iterable),
+                        condition,
+                        span: Span::new(open.span.file, open.span.start, end),
+                    });
+                }
+                elements.push(first);
+                loop {
                     self.skip_newlines();
                     if self.peek_kind() == TokenKind::Comma {
                         self.advance();
@@ -1426,6 +1586,7 @@ impl Parser<'_> {
                         if self.peek_kind() == TokenKind::RBracket {
                             break;
                         }
+                        elements.push(self.parse_expr()?);
                     } else {
                         break;
                     }
@@ -1439,12 +1600,72 @@ impl Parser<'_> {
                     span: Span::new(open.span.file, open.span.start, end),
                 })
             }
+            TokenKind::LBrace => self.parse_dict(),
             _ => {
                 self.error_at_current(format!("expected an expression but found '{}'", token.text));
                 Err(())
             }
         }
     }
+
+    fn parse_dict(&mut self) -> Result<Expr, ()> {
+        let open = self.advance();
+        let mut entries = Vec::new();
+        self.skip_newlines();
+        if self.peek_kind() == TokenKind::RBrace {
+            let end = self.advance().span.end;
+            return Ok(Expr::Dict {
+                entries,
+                span: Span::new(open.span.file, open.span.start, end),
+            });
+        }
+        loop {
+            let key = self.parse_expr()?;
+            self.expect(TokenKind::Colon, "':' in a dictionary entry")?;
+            let value = self.parse_expr()?;
+            let span = Span::new(key.span().file, key.span().start, value.span().end);
+            entries.push(DictEntry { key, value, span });
+            self.skip_newlines();
+            if self.peek_kind() == TokenKind::Comma {
+                self.advance();
+                self.skip_newlines();
+                if self.peek_kind() == TokenKind::RBrace {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+        let end = self.expect(TokenKind::RBrace, "'}'")?.span.end;
+        Ok(Expr::Dict {
+            entries,
+            span: Span::new(open.span.file, open.span.start, end),
+        })
+    }
+
+    fn parse_lambda(&mut self, start: Span) -> Result<Expr, ()> {
+        let mut params = Vec::new();
+        loop {
+            let param = self.expect(TokenKind::Ident, "a lambda parameter")?;
+            params.push((param.text, param.span));
+            if self.peek_kind() == TokenKind::Comma {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+        self.expect(TokenKind::Colon, "':' after lambda parameters")?;
+        let body = self.parse_expr()?;
+        Ok(Expr::Lambda {
+            params,
+            body: Box::new(body.clone()),
+            span: Span::new(start.file, start.start, body.span().end),
+        })
+    }
+}
+
+fn is_string_modifier(text: &str) -> bool {
+    matches!(text, "f" | "w" | "l" | "b" | "c" | "t")
 }
 
 #[cfg(test)]
@@ -1504,6 +1725,27 @@ mod tests {
             panic!();
         };
         assert_eq!(body.len(), 2);
+    }
+
+    #[test]
+    fn parses_issue_28_constructs() {
+        let program = parse_ok(
+            "globalvar x\nrule \"r\":\n    @Event global\n    switch x:\n        case 0x10:\n            x = 1 in [1, 2]\n        default:\n            do:\n                x = {\"x\": 1}[\"x\"]\n            while x not in [2, 3]\n    x = [value * 2 for value, index in [1, 2] if value > index]\n    x = sorted([1, 2], key=lambda value: value)\n    x = w\"wide\"\n",
+        );
+        let RuleEntry::Rule(rule) = &program.rules[0] else {
+            panic!("expected rule");
+        };
+        assert!(matches!(rule.actions[0], Stmt::Switch { .. }));
+        assert!(matches!(rule.actions[1], Stmt::Assign { .. }));
+    }
+
+    #[test]
+    fn rejects_incomplete_do_while_and_dictionary_entries() {
+        let errors = parse_err(
+            "rule \"r\":\n    @Event global\n    do:\n        pass\n    while\n    x = {\"x\"}\n",
+        );
+        assert!(!errors.is_empty());
+        assert!(errors.iter().all(|error| error.code == "parse-error"));
     }
 
     #[test]

@@ -1,0 +1,27 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: value\n}\n\nrule (\"issue 28 string modifiers\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(value, Custom String(\"formatted 0\"));\n        Set Global Variable(value, Custom String(\"\uff57\uff49\uff44\uff45\"));\n        Set Global Variable(value, Custom String(\"\u0392ig\"));\n        Set Global Variable(value, Custom String(\"\u0188\u1ea1\u0455\u1eb9-\u0455\u1eb9\u1e47\u0455\u0456\u1e6d\u0456\u03bd\u1eb9\"));\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: value\n}\n\nrule (\"issue 28 string modifiers\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(value, Custom String(\"formatted 0\"));\n        Set Global Variable(value, Custom String(\"\uff57\uff49\uff44\uff45\"));\n        Set Global Variable(value, Custom String(\"\u0392ig\"));\n        Set Global Variable(value, Custom String(\"\u0188\u1ea1\u0455\u1eb9-\u0455\u1eb9\u1e47\u0455\u0456\u1e6d\u0456\u03bd\u1eb9\"));\n    }\n}\n\n",
+    "workshopSha256": "40d3c8c89ed4f8ea181d24a2ef9f639d1e0a394c058b5b8413b9bce32e000005"
+  },
+  "fixture": "synthetic/issue-28-string-modifiers",
+  "input": {
+    "sha256": "a1067d0f682d3baf415c99b980d9b6a253acad47fff340a7b6e06e7af0843c68",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

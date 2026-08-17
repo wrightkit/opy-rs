@@ -66,13 +66,12 @@ implements; "reference" always means the pinned OverPy 9.7.10
 (`889d9749d1def17f146548cbddb94ea1ab015847`).
 
 ### Lexing
-- Identifiers, integer and decimal number literals (source text preserved),
+- Identifiers, integer, decimal, and `0x`/`0X` hexadecimal number literals
+  (source text preserved),
   double-quoted strings with `\n`/`\t`/`\\` escapes, `true`/`false`/`None`.
 - Line comments (`#`), block comments (`/* */`), `#!` directives.
-- Operators: `+ - * / // % ** == != < <= > >= = += -= *= /= //= %= and or not`,
-  plus `.`/`,`/`:`/`(`/`)`/`[`/`]`/`@`. (`in` is only the `for ... in`
-  header keyword; expression-level `in`/`not in` membership operators are not
-  supported; see the deferred list.)
+- Operators: `+ - * / // % ** == != < <= > >= = += -= *= /= //= %= and or not
+  in not in`, plus `.`/`,`/`:`/`(`/`)`/`[`/`]`/`{`/`}`/`@`.
 
 ### Declarations
 - `globalvar name` / `globalvar name = expr` / `globalvar name <index>`
@@ -163,7 +162,8 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
   lowering-dependent; malformed or misplaced annotations fail with structured
   source-located diagnostics.
 - Statements: expression statements, `=` and augmented assignment,
-  `if`/`elif`/`else`, `for x in range(...)`, `while`, `pass`.
+  `if`/`elif`/`else`, `for x in range(...)`, `while`, `do: … while`,
+  `switch`/`case`/`default`, and `pass`.
 - `for`-loop binder resolution: the loop variable must resolve to a global
   variable, either a declared `globalvar`, or an OverPy **default variable
   name** (`A`–`Z`, `AA`–`AZ`, …, `DA`–`DX`), which the pinned reference
@@ -176,7 +176,16 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
   `range(start, stop, step)` are all supported.
 
 ### Expressions and resolution
-- Literals, arrays `[...]`, parenthesized expressions.
+- Literals, arrays `[...]`, dictionaries used through indexed access,
+  parenthesized expressions, list comprehensions with one `for` clause and
+  optional `if`, and the reference's context-bound lambda forms.
+- String modifiers `f`/`w`/`l`/`b`/`c`/`t` are preserved as OPY source
+  semantics. `l`/`t` translation/content behavior remains reference-limited;
+  the committed positive fixture covers the inventory-backed `f`/`w`/`b`/`c`
+  forms.
+- `lambda` is accepted in the reference-supported array-operation contexts
+  (`sorted(..., key=...)` and array `map`/`filter`/`all`/`any`); standalone
+  lambda expressions are rejected with a structured frontend diagnostic.
 - Calls (`range`, `len`, `abs`, `sqrt`, `debug`, `print`, `wait`,
   `createBeam`, `playEffect`, `getAllPlayers`, `disableInspector`, …).
 - `vect(x, y, z)` → HIR `Vector` (3 arguments required; other arities are an
@@ -337,12 +346,16 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
    (alias targets `stopChasing`/`getHero`/`hasStatus`, and enum members
    without a catalogged spelling); these fail at emission with catalog
    diagnostics once integration lands, never silently.
-- Expression-level `in`/`not in` membership operators: rejected at parsing
-  (`for ... in` headers are supported).
+ - Expression-level `in`/`not in` membership operators: rejected at parsing
+   (`for ... in` headers are supported).
+- Rule `disabled` markers (no corpus evidence for the source annotation).
+ - Rule `disabled` markers (no corpus evidence for the source annotation).
 - Backslash line continuation (`\` at end of line inside string
   concatenations / macro bodies): rejected at lexing.
 - Postfix increment/decrement (`++`/`--`): rejected at parsing.
-- Dict literals (`{...}`): rejected at lexing.
+- Dict literals outside an indexed-access context are rejected with a
+  structured `dict-access` diagnostic; dict lowering/emission remains
+  `lowering-dependent`.
 - Triple-quoted strings / docstrings (`"""`): rejected at lexing.
 - Subroutine parameters, default `@Team`/`@Slot` overrides, `raycast`
   `include=`/`exclude=` named-argument forms (no reference/corpus evidence
