@@ -469,6 +469,7 @@ impl Parser<'_> {
         true
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn parse_directive(
         &mut self,
         event: &mut Option<Event>,
