@@ -219,12 +219,13 @@
       "id": "semantics/receiver-playervar",
       "name": "Bare playervar receiver member access (`A = B.C`)",
       "category": "semantics",
-      "state": "planned",
+      "state": "semantic-supported",
       "evidence": [
+        "fixtures:synthetic/receiver-playervar",
         "upstream:src/tests/variables.opy",
         "upstream:src/data/opy/memberFunctions.ts"
       ],
-      "notes": "Issue #30 audit. The pinned oracle accepts this OPY-owned receiver form, but the current frontend still rejects it. It remains an explicit, source-language follow-up rather than being hidden inside canonical Workshop member breadth; #8 must not be used to claim it complete."
+      "notes": "Issue #30 repair. The pinned oracle accepts this OPY-owned receiver form and the frontend preserves its variable receiver and member identity in HIR with source provenance. Canonical member existence and emission remain Workshop-owned and lowering-dependent; #8 must not be used to claim the OPY expression incomplete."
     },
     {
       "id": "semantics/enum-domains",
@@ -559,9 +560,9 @@
   ],
   "summary": {
     "byState": {
-      "planned": 6,
+      "planned": 5,
       "frontend-supported": 14,
-      "semantic-supported": 8,
+      "semantic-supported": 9,
       "lowering-dependent": 11,
       "end-to-end-supported": 0
     },

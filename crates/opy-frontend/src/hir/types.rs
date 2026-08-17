@@ -409,6 +409,17 @@ pub enum Expr {
         #[serde(skip_serializing_if = "Option::is_none")]
         span: Option<Span>,
     },
+    /// An OPY member expression whose canonical Workshop meaning is deferred
+    /// to the integration catalog. The receiver and source member identity
+    /// remain available to tooling and lowering.
+    Member {
+        receiver: Box<Expr>,
+        member: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        member_span: Option<Span>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        span: Option<Span>,
+    },
     EventPlayer {
         #[serde(skip_serializing_if = "Option::is_none")]
         span: Option<Span>,
@@ -486,6 +497,7 @@ impl Expr {
             | Expr::Enum { span, .. }
             | Expr::GlobalVar { span, .. }
             | Expr::PlayerVar { span, .. }
+            | Expr::Member { span, .. }
             | Expr::EventPlayer { span }
             | Expr::Constant { span, .. }
             | Expr::Call { span, .. }
@@ -511,6 +523,7 @@ impl Expr {
             Expr::Enum { .. } => "enum",
             Expr::GlobalVar { .. } => "globalVar",
             Expr::PlayerVar { .. } => "playerVar",
+            Expr::Member { .. } => "member",
             Expr::EventPlayer { .. } => "eventPlayer",
             Expr::Constant { .. } => "constant",
             Expr::Call { .. } => "call",

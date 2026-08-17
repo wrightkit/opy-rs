@@ -224,7 +224,7 @@ mod tests {
                 .iter()
                 .all(|feature| feature.state == "lowering-dependent")
         );
-        assert_eq!(matrix.summary().by_state["planned"], 6);
+        assert_eq!(matrix.summary().by_state["planned"], 5);
         assert_eq!(matrix.summary().by_category["semantics"], 14);
         // Every feature id is unique.
         let mut ids: Vec<&str> = matrix

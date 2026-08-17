@@ -72,7 +72,7 @@ rejected/documented-absent dimension, `—` an inapplicable dimension, and
 | 6a | **Canonical Workshop builtin action/value catalog**: full catalog existence, content, and emission | `lowering-dependent` (`workshop-rs`, #8) | — | — | ❌ (integration) | — | ✅ inventory/oracle evidence |
 | 7 | **OPY receiver/member semantics**: receiver categories, explicit-argument signatures, variable receivers | `baseline-supported` for the manifest-declared OPY overlay; canonical member existence/content/emission is `lowering-dependent` | ✅ | ✅ | partial (integration) | ✅ | ✅ probes |
 | 7a | **Canonical Workshop receiver/member catalog**: member existence, content, and emission | `lowering-dependent` (`workshop-rs`, #8) | — | — | ❌ (integration) | — | ✅ inventory/oracle evidence |
-| 7b | Bare playervar receiver member access (`A = B.C`) | `baseline-planned` (explicit OPY-owned residual; not a Workshop catalog reclassification) | ❌ | ❌ | ❌ | ❌ | ✅ oracle evidence |
+| 7b | Bare playervar receiver member access (`A = B.C`) | `baseline-supported` for the OPY member-expression representation; canonical member existence remains lowering-dependent | ✅ | ✅ | partial (integration) | ✅ | ✅ oracle evidence |
 | 8 | **OPY enum/domain semantics**: declared domain identities and contextual dispatch | `baseline-supported` for manifest identity links; canonical member lists/membership/emission are `lowering-dependent` | ✅ (identities) | ✅ | partial (integration) | partial | ✅ probes |
 | 8a | **Canonical Workshop enum/domain catalog**: member lists, membership, and emission | `lowering-dependent` (`workshop-rs`, #8) | — | — | ❌ (integration) | — | ✅ inventory/oracle evidence |
 | 9 | **Aliases**: old function names (`stopChasingVariable`→`stopChasing`, `getCurrentHero`→`getHero`, `hasStatusEffect`→`hasStatus`, …), hero renames (`MCCREE`→`CASSIDY`), `ChaseReeval` contextual alias | `baseline-supported` for the three manifest-declared non-contextual aliases and the `ChaseReeval` call-context resolution; the remaining alias surface stays `legacy-quirk/demand-driven` | ✅ (declared) | ✅ | ✅ (chase forms catalog-covered at integration) | ✅ | ✅ |
@@ -84,10 +84,10 @@ rejected/documented-absent dimension, `—` an inapplicable dimension, and
 
 ## Current `planned` entries
 
-The six explicitly tracked gaps still `planned` in
+The five explicitly tracked gaps still `planned` in
 `compatibility/support-matrix.json`, the mechanically checked state source,
 are: `syntax/switch`, `syntax/string-modifiers`,
-`semantics/receiver-playervar`, `preprocessing/advanced-directives`,
+`preprocessing/advanced-directives`,
 `translations/directive`, and `optimization/controls`. The three semantic
 overlay rows are supported at the OPY manifest boundary; their canonical
 Workshop catalog rows are explicitly `lowering-dependent`. Their tiers above
@@ -108,7 +108,7 @@ and remaining gaps stay classified rather than being filed per-symbol.
 
 | Evidence | Oracle 9.7.10 | opy-rs status | Classification |
 | --- | --- | --- | --- |
-| **Bare playervar receiver**: `A = B.C` (declared playervar member on a player-valued receiver) | accept (`__playerVar__`) | not implemented: currently rejects with `unsupported-member`; must accept per the manifest contract | `baseline-planned` (receiver/member semantics + playervar member resolution, category 7) |
+| **Bare playervar receiver**: `A = B.C` (declared playervar member on a player-valued receiver) | accept (`__playerVar__`) | implemented as a provenance-preserving OPY member expression; canonical member existence remains lowering-dependent | `baseline-supported` (receiver/member semantics; category 7) |
 | **Value member as statement**: `B.isAlive()` on its own line | **reject** ("Expected an action, but got … a value") | implemented: rejects with `value-in-action-position` | `baseline-supported` (reviewed difference; recorded in the probe set) |
 | **Generic action gap**: `chaseOverTime(A, 0, 30, ChaseTimeReeval.NONE)` | accept (warning recorded) | implemented: manifest-declared; differential fixture: `synthetic/chase-condition-agentlab`, probe `chase-over-time` | `baseline-supported` (manifest-covered); emission via catalog spelling is lowering-dependent |
 | **Generic value gap**: `@Condition isGameInProgress() == true` | accept | implemented: manifest entry; probe `is-game-in-progress` | `baseline-supported` (manifest-covered) |

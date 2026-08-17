@@ -917,6 +917,7 @@ impl Parser<'_> {
                             receiver,
                             member,
                             span,
+                            ..
                         } => Expr::ReceiverCall {
                             receiver,
                             name: member,
@@ -949,15 +950,18 @@ impl Parser<'_> {
                 }
                 TokenKind::Dot => {
                     self.advance();
+                    let member_token = self.peek().clone();
                     let member = match self.expect_ident("a member name after '.'") {
                         Ok(member) => member,
                         Err(()) => return Err(()),
                     };
-                    let end = self.tokens[self.pos.saturating_sub(1)].span.end;
+                    let member_span = member_token.span;
+                    let end = member_span.end;
                     let span = Span::new(base.span().file, base.span().start, end);
                     base = Expr::Member {
                         receiver: Box::new(base),
                         member,
+                        member_span,
                         span,
                     };
                 }

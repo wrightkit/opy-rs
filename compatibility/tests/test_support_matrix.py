@@ -114,7 +114,9 @@ class SupportMatrixTests(unittest.TestCase):
             "semantics/workshop-enum-domains",
         ):
             self.assertEqual(by_id[catalog]["state"], "lowering-dependent")
-        self.assertEqual(by_id["semantics/receiver-playervar"]["state"], "planned")
+        self.assertEqual(
+            by_id["semantics/receiver-playervar"]["state"], "semantic-supported"
+        )
 
 
 if __name__ == "__main__":

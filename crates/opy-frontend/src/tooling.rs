@@ -507,6 +507,7 @@ impl SemanticModel {
                     sites.push((SymbolKind::Player, name.clone(), to_frontend_span(*span)));
                 }
             }
+            HirExpr::Member { receiver, .. } => Self::collect_expr(receiver, sites),
             HirExpr::Array { elements, .. } => {
                 for element in elements {
                     Self::collect_expr(element, sites);
