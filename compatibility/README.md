@@ -45,7 +45,7 @@ compatibility/fixtures/<category>/<name>/
 
 Imported fixtures should also record an immutable `sourceCommit`, a direct
 `sourceUrl`, a `licenseUrl`, and whether the source was modified. The corpus
-contains 26 fixtures: 13 original WrightKit-authored synthetic cases and 13
+contains 27 fixtures: 14 original WrightKit-authored synthetic/census cases and 13
 real-world projects (11 derived from the pinned OverPy `examples/` tree,
 GPL-3.0-only, provenance-recorded evidence, plus the independent BSD-2-Clause
 projects `real-world/ow1-emulator` and `real-world/6v6-adjustments`, full
@@ -56,6 +56,24 @@ provenance record.
 exit code, normalized diagnostics, normalized Workshop text, and normalized
 output hash. The runner normalizes line endings, trailing whitespace, and final
 newline presentation only; it does not remove Workshop operations or values.
+
+`differential-expectations.json` is the independent native-side expectation
+record. Each fixture has a native outcome, an expected relationship to the
+oracle (`match`, `known-gap`, or `unsupported`), a rationale, and evidence.
+The differential runner derives `unexpected-divergence`, `regression`, and
+`inconclusive` results from those records; it never treats a reference-success
+/ native-failure case as a match.
+
+Real-world fixtures retain the complete project as the integration case. A
+fixture may also declare `regressions` pointing to minimized snippets under
+the same directory. Each snippet records its source path, parent source,
+reference status, and oracle provenance; the full project is not replaced by
+the minimized case.
+
+The `census/workshop-feature-census` fixture is the OPY-side representation
+of the future `workshop-rs#10` conformance boundary. Its feature IDs are
+opaque consumer references only. Canonical Workshop identities, catalog
+definitions, and validation remain owned by `workshop-rs`.
 
 ## Commands
 
@@ -140,6 +158,10 @@ The report separates these stages:
 * `normalized-output`, using the versioned snapshot normalization; and
 * `semantic`, when both producers provide semantic evidence.
 
+It also separates relationship outcomes: `match`, `known-gap`, `unsupported`,
+`unexpected-divergence`, `regression`, and `inconclusive`. Known gaps are
+reviewable evidence and are not counted as successful parity.
+
 An exact-output difference with a normalized-output match is reported as a
 presentation difference. A normalized-output or semantic regression exits 1.
 Missing producer results or unavailable semantic evidence are `inconclusive`
@@ -147,7 +169,7 @@ and exit 2 by default, so a CI job cannot silently pass without a producer.
 Use `--allow-inconclusive` only for local contract checks.
 
 The opy-rs producer side of the differential contract is the native Rust
-suite (`crates/opy-frontend/tests/differential.rs`, merged in PR #13), which
-runs in `cargo test` with no Node or OverPy installed; `diff.py` remains the
+suite (`crates/opy-frontend/tests/differential.rs`), which runs in `cargo test`
+with no Node or OverPy installed; `diff.py` remains the
 generic external-producer contract for other producers, exercised locally via
 `run_oracle.py` and the corpus snapshots.

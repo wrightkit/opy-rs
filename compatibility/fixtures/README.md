@@ -3,7 +3,7 @@
 This directory is the opy-rs compatibility corpus: OPY sources with their
 pinned-oracle snapshots (`oracle.json`), ported from the WrightKit project's
 evidence base (wright `compatibility/fixtures/`) and re-verified against the
-pinned OverPy 9.7.10 oracle on 2026-08-16 (all 26 snapshots match).
+pinned OverPy 9.7.10 oracle on 2026-08-17 (all 27 snapshots match).
 
 Corpus policy: every fixture records provenance in its `fixture.json`
 (`kind`, `origin`, `license`, `redistributable`, and — for imported
@@ -82,6 +82,15 @@ oracle behavior (accept/reject, diagnostics, normalized Workshop text) for
 compatibility evidence. See the clean-room policy in
 `docs/compatibility/upstream-references.md`.
 
+The seven current real-world reference-success/native-gap cases also keep a
+minimized regression snippet in the parent fixture's `regressions` metadata.
+Those snippets retain a link to the full-project oracle evidence; they are not
+standalone replacement expectations.
+
+`census/workshop-feature-census` is the OPY consumer-side census fixture. Its
+`workshopFeatureIds` are opaque IDs reserved for the `workshop-rs#10` contract;
+this repository does not copy Workshop catalog definitions or signatures.
+
 ### Independent third-party projects (BSD-2-Clause)
 
 | Fixture | Origin | `expectedStatus` |
@@ -104,7 +113,7 @@ reference diagnostics, exactly like the pinned oracle behaves.
 
 ## Not ported / dropped
 
-* **No fixture was dropped for provenance reasons**: all 26 fixtures in the
+* **No fixture was dropped for provenance reasons**: all 27 fixtures in the
   WrightKit corpus carried complete, reviewed provenance and are ported.
 * Upstream `examples/` not ported (candidates for later expansion once a
   demonstrated need exists): `lucioball_all_heroes.opy`, `skirmish_elim.opy`,

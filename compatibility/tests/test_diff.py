@@ -25,6 +25,14 @@ class DiffTests(unittest.TestCase):
         )
         cls.oracle = json.loads(snapshot.read_text(encoding="utf-8"))
 
+    def test_expectations_cover_every_fixture_with_evidence(self):
+        expectations = diff.load_expectations()
+        fixtures = set(diff.fixture_ids(COMPATIBILITY_DIR / "fixtures"))
+        self.assertEqual(set(expectations), fixtures)
+        for fixture, expectation in expectations.items():
+            self.assertTrue(expectation["evidence"], fixture)
+            self.assertTrue(expectation["note"], fixture)
+
     def write_result(self, root: Path, result: dict):
         path = root / result["fixture"] / "result.json"
         path.parent.mkdir(parents=True)
@@ -78,6 +86,52 @@ class DiffTests(unittest.TestCase):
                 None,
             )
         self.assertEqual(report_result["status"], "regression")
+        self.assertIn("normalized-output", report_result["regressionStages"])
+
+    def test_reference_success_native_failure_is_not_match(self):
+        result = copy.deepcopy(self.oracle)
+        result["compile"]["status"] = "failure"
+        result["compile"]["exitCode"] = 1
+        result["compile"]["diagnostics"] = [{"severity": "error", "text": "Error: gap"}]
+        result["compile"]["workshopExact"] = ""
+        result["compile"]["workshop"] = ""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write_result(root, result)
+            report_result = diff.compare_fixture(
+                COMPATIBILITY_DIR / "fixtures",
+                "synthetic/basic-rule",
+                root,
+                None,
+            )
+        self.assertEqual(report_result["status"], "unexpected-divergence")
+        self.assertTrue(report_result["referenceGap"])
+
+    def test_declared_reference_gap_is_reported_as_known_gap(self):
+        oracle_path = (
+            COMPATIBILITY_DIR
+            / "fixtures"
+            / "real-world"
+            / "overpy-santa"
+            / "oracle.json"
+        )
+        result = json.loads(oracle_path.read_text(encoding="utf-8"))
+        result["compile"]["status"] = "failure"
+        result["compile"]["exitCode"] = 1
+        result["compile"]["diagnostics"] = [{"severity": "error", "text": "Error: do"}]
+        result["compile"]["workshopExact"] = ""
+        result["compile"]["workshop"] = ""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write_result(root, result)
+            report_result = diff.compare_fixture(
+                COMPATIBILITY_DIR / "fixtures",
+                "real-world/overpy-santa",
+                root,
+                None,
+            )
+        self.assertEqual(report_result["status"], "known-gap")
+        self.assertTrue(report_result["referenceGap"])
         self.assertIn("normalized-output", report_result["regressionStages"])
 
     def test_diagnostic_difference_is_regression(self):

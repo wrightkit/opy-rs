@@ -25,5 +25,15 @@
   },
   "runtimeSeconds": 6.1,
   "schemaVersion": 1,
-  "source": "cronch.opy"
+  "source": "cronch.opy",
+  "regressions": [
+    {
+      "id": "real-world/overpy-cronch/postfix-increment",
+      "source": "regressions/postfix-increment.opy",
+      "derivedFrom": "cronch.opy",
+      "expectedReferenceStatus": "success",
+      "kind": "minimized-regression",
+      "provenance": "oracle:real-world/overpy-cronch/oracle.json; source path 31-34"
+    }
+  ]
 }

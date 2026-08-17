@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "census/workshop-feature-census",
+  "category": "workshop-census",
+  "features": ["events", "actions", "values", "control flow"],
+  "workshopFeatureIds": [
+    "event.global",
+    "action.disableInspector",
+    "action.wait",
+    "value.compare",
+    "value.add",
+    "structural.if"
+  ],
+  "source": "workshop-feature-census.opy",
+  "expectedStatus": "success",
+  "provenance": {
+    "kind": "synthetic-original",
+    "origin": "WrightKit OPY census boundary fixture",
+    "license": "AGPL-3.0-or-later",
+    "redistributable": true,
+    "modifications": "none"
+  },
+  "censusContract": {
+    "owner": "workshop-rs",
+    "issue": "https://github.com/wrightkit/workshop-rs/issues/10",
+    "status": "pending",
+    "note": "Feature IDs are opaque consumer references; canonical definitions and validation remain owned by workshop-rs."
+  }
+}

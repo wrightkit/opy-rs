@@ -25,5 +25,15 @@
   },
   "runtimeSeconds": 6.4,
   "schemaVersion": 1,
-  "source": "clientToServer.opy"
+  "source": "clientToServer.opy",
+  "regressions": [
+    {
+      "id": "real-world/overpy-client-to-server/chained-ternary",
+      "source": "regressions/chained-ternary.opy",
+      "derivedFrom": "clientToServer.opy",
+      "expectedReferenceStatus": "success",
+      "kind": "minimized-regression",
+      "provenance": "oracle:real-world/overpy-client-to-server/oracle.json; source path 55"
+    }
+  ]
 }
