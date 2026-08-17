@@ -25,5 +25,15 @@
   },
   "runtimeSeconds": 4.1,
   "schemaVersion": 1,
-  "source": "santa.opy"
+  "source": "santa.opy",
+  "regressions": [
+    {
+      "id": "real-world/overpy-santa/do-while",
+      "source": "regressions/do-while.opy",
+      "derivedFrom": "santa.opy",
+      "expectedReferenceStatus": "success",
+      "kind": "minimized-regression",
+      "provenance": "oracle:real-world/overpy-santa/oracle.json; source path 204-208"
+    }
+  ]
 }

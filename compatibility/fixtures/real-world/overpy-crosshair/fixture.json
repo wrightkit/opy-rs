@@ -25,5 +25,15 @@
   },
   "runtimeSeconds": 3.2,
   "schemaVersion": 1,
-  "source": "crosshair.opy"
+  "source": "crosshair.opy",
+  "regressions": [
+    {
+      "id": "real-world/overpy-crosshair/byte-string-modifier",
+      "source": "regressions/byte-string-modifier.opy",
+      "derivedFrom": "crosshair.opy",
+      "expectedReferenceStatus": "success",
+      "kind": "minimized-regression",
+      "provenance": "oracle:real-world/overpy-crosshair/oracle.json; source path 31"
+    }
+  ]
 }

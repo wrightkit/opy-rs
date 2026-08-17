@@ -26,5 +26,15 @@
   },
   "runtimeSeconds": 3.2,
   "schemaVersion": 1,
-  "source": "inputhud.opy"
+  "source": "inputhud.opy",
+  "regressions": [
+    {
+      "id": "real-world/overpy-inputhud/implicit-string-concatenation",
+      "source": "regressions/implicit-string-concatenation.opy",
+      "derivedFrom": "inputhud.opy",
+      "expectedReferenceStatus": "success",
+      "kind": "minimized-regression",
+      "provenance": "oracle:real-world/overpy-inputhud/oracle.json; source path 40-44"
+    }
+  ]
 }

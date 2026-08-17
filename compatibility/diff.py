@@ -16,6 +16,10 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_FIXTURES = ROOT / "compatibility" / "fixtures"
 DEFAULT_REPORT = ROOT / "compatibility" / "report.json"
+DEFAULT_EXPECTATIONS = ROOT / "compatibility" / "differential-expectations.json"
+
+EXPECTED_NATIVE_STATUSES = {"success", "failure"}
+EXPECTED_CLASSIFICATIONS = {"match", "known-gap", "unsupported"}
 
 
 class DiffError(RuntimeError):
@@ -62,6 +66,45 @@ def fixture_ids(fixtures_root: Path) -> list[str]:
     if len(ids) != len(set(ids)):
         raise DiffError("duplicate fixture id in corpus")
     return ids
+
+
+def load_expectations(path: Path = DEFAULT_EXPECTATIONS) -> dict[str, dict[str, Any]]:
+    data = load_json(path)
+    if data.get("schemaVersion") != 1:
+        raise DiffError(f"unsupported differential expectation schema: {path}")
+    cases = data.get("cases")
+    if not isinstance(cases, list) or not cases:
+        raise DiffError(f"differential expectations must contain cases: {path}")
+
+    by_fixture: dict[str, dict[str, Any]] = {}
+    for case in cases:
+        if not isinstance(case, dict):
+            raise DiffError(f"differential expectation must be an object: {path}")
+        fixture = case.get("fixture")
+        if not isinstance(fixture, str) or not fixture:
+            raise DiffError(f"differential expectation fixture is invalid: {path}")
+        if fixture in by_fixture:
+            raise DiffError(f"duplicate differential expectation: {fixture}")
+        native_status = case.get("nativeStatus")
+        if native_status not in EXPECTED_NATIVE_STATUSES:
+            raise DiffError(f"{fixture}: nativeStatus must be success or failure")
+        classification = case.get("classification")
+        if classification not in EXPECTED_CLASSIFICATIONS:
+            raise DiffError(
+                f"{fixture}: classification must be match, known-gap, or unsupported"
+            )
+        evidence = case.get("evidence")
+        if not isinstance(evidence, list) or not evidence or not all(
+            isinstance(item, str) and item for item in evidence
+        ):
+            raise DiffError(f"{fixture}: evidence must be a non-empty string array")
+        note = case.get("note")
+        if not isinstance(note, str) or not note:
+            raise DiffError(f"{fixture}: note must be a non-empty string")
+        if not isinstance(case.get("ruleNames"), bool):
+            raise DiffError(f"{fixture}: ruleNames must be boolean")
+        by_fixture[fixture] = case
+    return by_fixture
 
 
 def require_result_shape(result: dict[str, Any], label: str) -> None:
@@ -202,6 +245,13 @@ def compare_fixture(
     metadata_path = fixtures_root / fixture_id / "fixture.json"
     oracle_path = fixtures_root / fixture_id / "oracle.json"
     metadata = load_json(metadata_path)
+    expectations_path = fixtures_root.parent / "differential-expectations.json"
+    expectations = load_expectations(
+        expectations_path if expectations_path.is_file() else DEFAULT_EXPECTATIONS
+    )
+    expectation = expectations.get(fixture_id)
+    if expectation is None:
+        raise DiffError(f"missing differential expectation: {fixture_id}")
     oracle = load_json(oracle_path)
     require_result_shape(oracle, f"oracle {fixture_id}")
     if oracle["fixture"] != fixture_id:
@@ -220,6 +270,7 @@ def compare_fixture(
                 "fixture": fixture_id,
                 "category": metadata.get("category", "unknown"),
                 "status": "inconclusive",
+                "expectedNativeStatus": expectation["nativeStatus"],
                 "reason": f"missing producer result: {path}",
                 "stages": [],
             }
@@ -229,6 +280,7 @@ def compare_fixture(
             "fixture": fixture_id,
             "category": metadata.get("category", "unknown"),
             "status": "inconclusive",
+            "expectedNativeStatus": expectation["nativeStatus"],
             "reason": "no producer result root or producer command was provided",
             "stages": [],
         }
@@ -247,7 +299,22 @@ def compare_fixture(
     regression_stages = [item["name"] for item in stages if item["outcome"] == "regression"]
     differences = [item["name"] for item in stages if item["outcome"] == "difference"]
     inconclusive = [item["name"] for item in stages if item["outcome"] == "inconclusive"]
-    if regression_stages:
+    native_status = producer["compile"]["status"]
+    oracle_status = oracle["compile"]["status"]
+    native_status_mismatch = native_status != expectation["nativeStatus"]
+    reference_gap = oracle_status != native_status
+    declared_reference_gap = oracle_status != expectation["nativeStatus"]
+    if native_status_mismatch:
+        status = "unexpected-divergence"
+    elif expectation["classification"] in {"known-gap", "unsupported"}:
+        if not declared_reference_gap:
+            raise DiffError(
+                f"{fixture_id}: {expectation['classification']} must differ from oracle status"
+            )
+        status = expectation["classification"]
+    elif oracle_status != native_status:
+        status = "unexpected-divergence"
+    elif regression_stages:
         status = "regression"
     elif inconclusive:
         status = "inconclusive"
@@ -257,6 +324,13 @@ def compare_fixture(
         "fixture": fixture_id,
         "category": metadata.get("category", "unknown"),
         "status": status,
+        "expectedClassification": expectation["classification"],
+        "expectedNativeStatus": expectation["nativeStatus"],
+        "referenceStatus": oracle_status,
+        "referenceGap": reference_gap,
+        "declaredReferenceGap": declared_reference_gap,
+        "evidence": expectation["evidence"],
+        "note": expectation["note"],
         "regressionStages": regression_stages,
         "differenceStages": differences,
         "inconclusiveStages": inconclusive,
@@ -310,6 +384,19 @@ def run(
     allow_inconclusive: bool,
 ) -> int:
     all_ids = fixture_ids(fixtures_root)
+    expectations_path = fixtures_root.parent / "differential-expectations.json"
+    expectations = load_expectations(
+        expectations_path if expectations_path.is_file() else DEFAULT_EXPECTATIONS
+    )
+    missing = sorted(set(all_ids) - set(expectations))
+    extra = sorted(set(expectations) - set(all_ids))
+    if missing or extra:
+        detail = []
+        if missing:
+            detail.append(f"missing expectations: {', '.join(missing)}")
+        if extra:
+            detail.append(f"expectations for unknown fixtures: {', '.join(extra)}")
+        raise DiffError("; ".join(detail))
     ids = [fixture_id for fixture_id in all_ids if not selected_ids or fixture_id in selected_ids]
     unknown = sorted(selected_ids - set(all_ids))
     if unknown:
@@ -324,15 +411,16 @@ def run(
     report = build_report(results)
     write_json(report_path, report)
     print(json.dumps(report["summary"], indent=2, sort_keys=True))
-    regressions = [result for result in results if result["status"] == "regression"]
+    regressions = [
+        result
+        for result in results
+        if result["status"] in {"regression", "unexpected-divergence"}
+    ]
     inconclusive = [result for result in results if result["status"] == "inconclusive"]
     if regressions:
         for result in regressions:
-            print(
-                f"REGRESSION {result['fixture']}: "
-                f"{', '.join(result['regressionStages'])}",
-                file=sys.stderr,
-            )
+            stages = ", ".join(result.get("regressionStages", [])) or "native outcome"
+            print(f"REGRESSION {result['fixture']}: {stages}", file=sys.stderr)
         return 1
     if inconclusive and not allow_inconclusive:
         for result in inconclusive:

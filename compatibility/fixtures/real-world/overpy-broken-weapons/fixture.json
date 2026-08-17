@@ -24,5 +24,15 @@
   },
   "runtimeSeconds": 4.4,
   "schemaVersion": 1,
-  "source": "broken_weapons.opy"
+  "source": "broken_weapons.opy",
+  "regressions": [
+    {
+      "id": "real-world/overpy-broken-weapons/numeric-range-setting",
+      "source": "regressions/numeric-range-setting.opy",
+      "derivedFrom": "broken_weapons.opy",
+      "expectedReferenceStatus": "success",
+      "kind": "minimized-regression",
+      "provenance": "oracle:real-world/overpy-broken-weapons/oracle.json; source path 53"
+    }
+  ]
 }

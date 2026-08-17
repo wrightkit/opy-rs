@@ -48,7 +48,7 @@
         "upstream:src/tests/strings.opy",
         "upstream:src/tests/arrays.opy"
       ],
-      "notes": "Corpus-evidenced: differential suite runs 26 fixtures; upstream tokenizer surface probed."
+      "notes": "Corpus-evidenced: differential suite runs 27 fixtures; upstream tokenizer surface probed."
     },
     {
       "id": "syntax/expressions",
@@ -466,7 +466,7 @@
         "docs:docs/hir/opy-hir-v1.md",
         "test:opy-frontend-differential"
       ],
-      "notes": "Issues #3-#7. Fully Workshop-independent; the whole corpus is the acceptance corpus. Differential harness wired (issue #7): every fixture runs through the native pipeline in cargo test with structural self-checks (HIR validation, wire round-trip, deterministic dump), status/rule-name parity against the recorded oracle.json snapshots, and a machine-readable report (target/opy-differential-report.json). 14/26 corpus fixtures resolve, 12/26 produce expected diagnostics with documented codes; 7 documented reference gaps (reference accepts, native rejects declared-rejected or not-yet-declared surface)."
+      "notes": "Issues #3-#7 and #25. Fully Workshop-independent; the whole corpus is the acceptance corpus. Differential harness runs every fixture through the native pipeline in cargo test with structural self-checks (HIR validation, wire round-trip, deterministic dump), status/rule-name parity against recorded oracle.json snapshots, explicit native evidence expectations, and a machine-readable report (target/opy-differential-report.json). 15/27 corpus fixtures resolve, 12/27 produce expected diagnostics with documented codes, and 7 reference-success/native-failure cases are reported as known gaps rather than matches."
     },
     {
       "id": "compilation/workshop-lowering",
@@ -486,9 +486,10 @@
       "state": "lowering-dependent",
       "evidence": [
         "fixtures:synthetic",
-        "fixtures:real-world"
+        "fixtures:real-world",
+        "fixtures:census/workshop-feature-census"
       ],
-      "notes": "Becomes end-to-end-supported only after the workshop-rs integration stage (#8); differential harness contract is ready (compatibility/diff.py, issue #7 wiring)."
+      "notes": "Becomes end-to-end-supported only after the workshop-rs integration stage (#8); the OPY-side feature census records opaque workshop-rs#10 identities without duplicating catalog definitions. Differential harness contract is ready (compatibility/diff.py, issue #25)."
     },
     {
       "id": "decompilation/workshop-to-opy",

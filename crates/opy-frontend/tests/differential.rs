@@ -58,14 +58,16 @@
 //! # Report
 //!
 //! A machine-readable report is written to
-//! `target/opy-differential-report.json` listing per-fixture status
-//! (`resolve` / `expected-diagnostic` / `divergence`), the native diagnostic
-//! code, the reference status, rule-name comparison, and the support-matrix
-//! feature ids the fixture evidences.
+//! `target/opy-differential-report.json` listing per-fixture native status and
+//! relationship classification (`match` / `known-gap` /
+//! `unexpected-divergence` / `inconclusive`), the native diagnostic code, the
+//! reference status, rule-name comparison, and the support-matrix feature ids
+//! the fixture evidences. A reference-success/native-failure case is never
+//! classified as a match.
 //!
 //! # Current corpus state
 //!
-//! All 26 declared fixtures run (0 skips, 0 divergences): **14 resolve** and
+//! All declared fixtures run (0 skips, 0 divergences): **15 resolve** and
 //! **12 produce expected diagnostics** with pinned codes; 7 fixtures are
 //! documented reference gaps (the oracle accepts a surface the native
 //! frontend deliberately rejects). Settings key-existence/leaf-kind
@@ -87,6 +89,25 @@ fn workspace_root() -> PathBuf {
 
 fn fixtures_root() -> PathBuf {
     workspace_root().join("compatibility").join("fixtures")
+}
+
+fn differential_expectations() -> Value {
+    serde_json::from_str(
+        &std::fs::read_to_string(
+            workspace_root().join("compatibility/differential-expectations.json"),
+        )
+        .expect("differential-expectations.json must be readable"),
+    )
+    .expect("differential-expectations.json must parse")
+}
+
+fn expectation_for<'a>(expectations: &'a Value, id: &str) -> &'a Value {
+    expectations["cases"]
+        .as_array()
+        .expect("differential expectations must contain cases")
+        .iter()
+        .find(|case| case["fixture"].as_str() == Some(id))
+        .unwrap_or_else(|| panic!("fixture '{id}' is missing from differential expectations"))
 }
 
 /// What the native frontend is expected to do for a fixture on this branch.
@@ -207,6 +228,12 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         "synthetic/diagnostics",
         Some("parse-error"),
         "expected-failure fixture: the native frontend rejects missing-colon with parse-error; oracle status failure (parity).",
+    );
+    resolve(
+        &mut cases,
+        "census/workshop-feature-census",
+        true,
+        "OPy-side Workshop feature census boundary; canonical feature identities remain owned by workshop-rs#10.",
     );
 
     // Real-world fixtures derived from upstream OverPy examples (GPL-3.0-only,
@@ -432,6 +459,7 @@ fn run_native(
 #[test]
 fn native_and_reference_agree_on_the_declared_corpus() {
     let corpus = declared_corpus();
+    let expectations = differential_expectations();
     let matrix: Value = serde_json::from_str(
         &std::fs::read_to_string(workspace_root().join("compatibility/support-matrix.json"))
             .unwrap(),
@@ -440,9 +468,19 @@ fn native_and_reference_agree_on_the_declared_corpus() {
 
     let mut fixtures = BTreeMap::<String, Value>::new();
     let mut divergences: Vec<Value> = Vec::new();
+    let mut known_gaps: Vec<Value> = Vec::new();
     let mut rule_name_mismatches = 0usize;
-    let mut counts =
-        json!({ "total": 0, "resolve": 0, "expectedDiagnostic": 0, "divergence": 0, "skipped": 0 });
+    let mut counts = json!({
+        "total": 0,
+        "resolve": 0,
+        "expectedDiagnostic": 0,
+        "divergence": 0,
+        "match": 0,
+        "knownGap": 0,
+        "unexpectedDivergence": 0,
+        "inconclusive": 0,
+        "skipped": 0
+    });
 
     let mut seen: Vec<String> = Vec::new();
     for manifest_path in discover_fixtures(&fixtures_root()) {
@@ -454,6 +492,29 @@ fn native_and_reference_agree_on_the_declared_corpus() {
                  add an explicit resolve/diagnostic entry with a note"
             )
         });
+        let expectation = expectation_for(&expectations, &id);
+        let expected_native_status = expectation["nativeStatus"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{id}: nativeStatus is required"));
+        let expected_classification = expectation["classification"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{id}: classification is required"));
+        let expected_evidence = expectation["evidence"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{id}: evidence is required"));
+        assert!(
+            !expected_evidence.is_empty(),
+            "{id}: differential expectation evidence cannot be empty"
+        );
+        assert_eq!(
+            expected_native_status,
+            if matches!(case.expect, Expect::Resolve) {
+                "success"
+            } else {
+                "failure"
+            },
+            "{id}: differential expectation disagrees with native expectation table"
+        );
         let fixture_dir = manifest_path.parent().unwrap().to_path_buf();
         let source_path = fixture_dir.join(&source_name);
         let source = std::fs::read_to_string(&source_path)
@@ -490,7 +551,7 @@ fn native_and_reference_agree_on_the_declared_corpus() {
         });
 
         // Status determination against the expectation table.
-        let expect_resolve = matches!(case.expect, Expect::Resolve);
+        let expect_resolve = expected_native_status == "success";
         let status = if native_ok == expect_resolve {
             if expect_resolve {
                 "resolve"
@@ -549,6 +610,21 @@ fn native_and_reference_agree_on_the_declared_corpus() {
             }
         }
 
+        let relationship_holds = match expected_classification {
+            "match" => !reference_gap,
+            "known-gap" | "unsupported" => reference_gap,
+            other => panic!("{id}: unsupported expectation classification '{other}'"),
+        };
+        let classification = if skipped {
+            "inconclusive"
+        } else if status == "divergence" || !relationship_holds {
+            "unexpected-divergence"
+        } else if reference_gap {
+            expected_classification
+        } else {
+            "match"
+        };
+
         // Rule-name parity (informational, opt-in per fixture).
         let rule_names_entry = if case.rule_names && snapshot_present {
             match &native {
@@ -586,12 +662,17 @@ fn native_and_reference_agree_on_the_declared_corpus() {
             "detail": detail,
             "referenceGap": reference_gap,
             "skip": skipped,
+            "classification": classification,
+            "expectedClassification": expected_classification,
+            "evidence": expected_evidence,
         });
         let code = entry["native"].get("code").and_then(Value::as_str);
         let label = if skipped {
             "SKIP"
         } else if status == "divergence" {
             "FAIL"
+        } else if reference_gap {
+            "KNOWN GAP"
         } else {
             "PASS"
         };
@@ -616,6 +697,15 @@ fn native_and_reference_agree_on_the_declared_corpus() {
                 "detail": detail,
             }));
         }
+        if classification == "known-gap" {
+            known_gaps.push(json!({
+                "fixture": id,
+                "native": entry["native"],
+                "reference": entry["reference"],
+                "note": case.note,
+                "detail": detail,
+            }));
+        }
         if let Value::Number(count) = &mut counts[status_key] {
             *count =
                 serde_json::Number::from(count.as_u64().expect("status counts start as u64") + 1);
@@ -631,6 +721,16 @@ fn native_and_reference_agree_on_the_declared_corpus() {
                 );
             }
         }
+        let classification_key = match classification {
+            "known-gap" => "knownGap",
+            "unexpected-divergence" => "unexpectedDivergence",
+            other => other,
+        };
+        if let Value::Number(count) = &mut counts[classification_key] {
+            *count = serde_json::Number::from(
+                count.as_u64().expect("classification counts start as u64") + 1,
+            );
+        }
         fixtures.insert(id.clone(), entry);
     }
 
@@ -644,10 +744,21 @@ fn native_and_reference_agree_on_the_declared_corpus() {
         missing.is_empty(),
         "declared corpus entries missing from compatibility/fixtures: {missing:?}"
     );
+    let extra_expectations: Vec<&str> = expectations["cases"]
+        .as_array()
+        .expect("differential expectations must contain cases")
+        .iter()
+        .filter_map(|case| case["fixture"].as_str())
+        .filter(|id| !seen.iter().any(|seen_id| seen_id == id))
+        .collect();
+    assert!(
+        extra_expectations.is_empty(),
+        "differential expectations reference missing fixtures: {extra_expectations:?}"
+    );
 
     let report = json!({
         "schemaVersion": 1,
-        "artifact": "opy-rs native-vs-reference differential report (issue #7, part B)",
+        "artifact": "opy-rs native-vs-reference differential report (issue #25)",
         "generatedBy": "crates/opy-frontend/tests/differential.rs",
         "frontend": { "name": FRONTEND_NAME, "version": FRONTEND_VERSION },
         "reference": matrix["reference"],
@@ -657,9 +768,14 @@ fn native_and_reference_agree_on_the_declared_corpus() {
             "expectedDiagnostic": counts["expectedDiagnostic"],
             "divergence": counts["divergence"],
             "skipped": counts["skipped"],
+            "match": counts["match"],
+            "knownGap": counts["knownGap"],
+            "unexpectedDivergence": counts["unexpectedDivergence"],
+            "inconclusive": counts["inconclusive"],
             "ruleNameMismatches": rule_name_mismatches,
         },
         "divergences": divergences,
+        "knownGaps": known_gaps,
         "fixtures": Value::Object(fixtures.into_iter().collect()),
     });
     let report_path = workspace_root().join("target/opy-differential-report.json");

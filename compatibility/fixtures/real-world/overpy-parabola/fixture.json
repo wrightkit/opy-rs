@@ -25,5 +25,15 @@
   },
   "runtimeSeconds": 3.0,
   "schemaVersion": 1,
-  "source": "parabola.opy"
+  "source": "parabola.opy",
+  "regressions": [
+    {
+      "id": "real-world/overpy-parabola/numeric-enum-member",
+      "source": "regressions/numeric-enum-member.opy",
+      "derivedFrom": "parabola.opy",
+      "expectedReferenceStatus": "success",
+      "kind": "minimized-regression",
+      "provenance": "oracle:real-world/overpy-parabola/oracle.json; source path 35"
+    }
+  ]
 }
