@@ -103,6 +103,14 @@ implements; "reference" always means the pinned OverPy 9.7.10
 - `#!define name(args) __script__("path.js")`: OverPy-compatible
   **JavaScript macros** (see below).
 - `#!undef NAME`.
+- `#!mainFile "path.opy"` redirects the frontend entry point and preserves
+  file provenance; `#!allowMacroRedeclaration` changes duplicate macro
+  handling; `#!rulePrefix` and `#!rulePrefixTemplate` are retained as source
+  state and prefix subsequent rule/subroutine names.
+- `#!translations`, `#!optimize*`, and `#!replace0By*` forms are parsed,
+  validated, and exposed as frontend preprocessing state. Locale availability,
+  `.po` content, generated translation helpers, optimizer rewrites, and
+  replacement effects are lowering-dependent and are not fabricated here.
 - `#!postCompileHook "hook.js"`: post-compile hook registration (see below).
 - Unsupported directives fail explicitly (`unsupported-directive`).
 
@@ -145,8 +153,11 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
 
 ### Rules and directives
 - `rule "name":` with `@Event global` / `@Event eachPlayer` / `@Condition <expr>`.
-- `@Team`/`@Slot` are accepted only without arguments (corpus events use
-  OverPy defaults); other `@` directives fail explicitly.
+- `@Team`/`@Slot` arguments, `@Hero`, `@Name`, `@Disabled`, `@Delimiter`,
+  `@NewPage`, and `@SuppressWarnings` are parsed, validated, and retained in
+  the OPY HIR. Hero/team/slot domain checks and Workshop UI effects remain
+  lowering-dependent; malformed or misplaced annotations fail with structured
+  source-located diagnostics.
 - Statements: expression statements, `=` and augmented assignment,
   `if`/`elif`/`else`, `for x in range(...)`, `while`, `pass`.
 - `for`-loop binder resolution: the loop variable must resolve to a global
@@ -318,7 +329,10 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
   gaps. Manifest entries without a direct catalog id carry an explicit
   `catalogLink` reason (`special-lowering`, `legacy-alias`, or `catalog-gap`)
   and remain visible to the integration adapter.
-- Rule `disabled` markers (no corpus evidence for the source annotation).
+ - Emission spellings for manifest-valid entries not yet catalog-covered
+   (alias targets `stopChasing`/`getHero`/`hasStatus`, and enum members
+   without a catalogged spelling); these fail at emission with catalog
+   diagnostics once integration lands, never silently.
 - Expression-level `in`/`not in` membership operators: rejected at parsing
   (`for ... in` headers are supported).
 - Backslash line continuation (`\` at end of line inside string

@@ -112,6 +112,8 @@ pub enum RuleEntry {
         /// The exact span of the defined identifier token in `def name():`.
         name_span: Span,
         body: Vec<Stmt>,
+        annotations: Vec<Annotation>,
+        rule_prefix: Option<String>,
     },
 }
 
@@ -123,9 +125,29 @@ pub struct Rule {
     /// The exact span of the rule name inside its string literal.
     pub name_span: Span,
     pub disabled: bool,
+    pub delimiter: bool,
+    pub new_page: Option<String>,
+    pub annotations: Vec<Annotation>,
+    pub rule_prefix: Option<String>,
     pub event: Event,
     pub conditions: Vec<Expr>,
     pub actions: Vec<Stmt>,
+}
+
+/// A source annotation retained for tooling and provenance.
+#[derive(Debug, Clone)]
+pub struct Annotation {
+    pub name: String,
+    pub args: Vec<AnnotationArg>,
+    pub span: Span,
+}
+
+/// One raw annotation argument. Values such as heroes, teams, and slots stay
+/// opaque here because their canonical domains belong to workshop-rs.
+#[derive(Debug, Clone)]
+pub struct AnnotationArg {
+    pub text: String,
+    pub span: Span,
 }
 
 /// A rule event or an `@Event` directive.

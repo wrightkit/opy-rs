@@ -189,6 +189,24 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
     );
     resolve(
         &mut cases,
+        "synthetic/issue-29-directives",
+        true,
+        "advanced directive state and source annotations; oracle status success.",
+    );
+    diagnostic(
+        &mut cases,
+        "synthetic/issue-29-invalid",
+        None,
+        "malformed directive and annotation forms; oracle status failure.",
+    );
+    resolve(
+        &mut cases,
+        "synthetic/issue-29-main-file",
+        true,
+        "mainFile entry-point redirect and child-include scope; oracle status success.",
+    );
+    resolve(
+        &mut cases,
         "synthetic/settings",
         true,
         "top-of-file settings block parsed into the typed HIR payload; validation is structural only (group shape, span validity, non-empty key names) — key-existence/leaf-kind checks were removed from the core and are lowering-dependent (#8); oracle status success.",

@@ -144,16 +144,19 @@ pub fn check_with_overlay(
         })
         .collect();
     match crate::lower::lower(&program, hir_files, defines) {
-        Ok(hir) => CheckOutcome {
-            diagnostics: Vec::new(),
-            model: Some(SemanticModel::build(hir, &program)),
-            files,
-            // The directive was parsed, validated, and recorded by
-            // preprocessing; the frontend never executes the hook (real hook
-            // execution receives the final Workshop text and is
-            // lowering-dependent, issue #8).
-            post_compile_hook: preprocessed.post_compile_hook,
-        },
+        Ok(mut hir) => {
+            hir.preprocessing = preprocessed.preprocessing;
+            CheckOutcome {
+                diagnostics: Vec::new(),
+                model: Some(SemanticModel::build(hir, &program)),
+                files,
+                // The directive was parsed, validated, and recorded by
+                // preprocessing; the frontend never executes the hook (real hook
+                // execution receives the final Workshop text and is
+                // lowering-dependent, issue #8).
+                post_compile_hook: preprocessed.post_compile_hook,
+            }
+        }
         Err(error) => CheckOutcome {
             diagnostics: vec![Diagnostic::from_error(error, &files)],
             model: None,

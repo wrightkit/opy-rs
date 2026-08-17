@@ -28,10 +28,10 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::hir::types::{
-    Declaration, Define, Event, Expr as HirExpr, Generator, IfBranch, Position,
-    Program as HirProgram, Protocol, Rule, RuleEntry, Settings as HirSettings,
-    SettingsNode as HirSettingsNode, SourceFile, Span as HirSpan, Stmt as HirStmt,
-    default_var_index,
+    Annotation as HirAnnotation, AnnotationArg as HirAnnotationArg, Declaration, Define, Event,
+    Expr as HirExpr, Generator, IfBranch, Position, PreprocessingState, Program as HirProgram,
+    Protocol, Rule, RuleEntry, Settings as HirSettings, SettingsNode as HirSettingsNode,
+    SourceFile, Span as HirSpan, Stmt as HirStmt, default_var_index,
 };
 
 use crate::cst::{self, CallArg, Decl, Expr, RuleEntry as CstRuleEntry, Stmt};
@@ -169,13 +169,16 @@ pub fn lower(
                 span,
                 name_span,
                 body,
+                annotations,
+                rule_prefix,
             } => {
                 rules.push(RuleEntry::SubroutineDef {
                     kind: "subroutineDef".to_string(),
-                    name: name.clone(),
+                    name: prefixed_rule_name(name, rule_prefix.as_deref(), false),
                     span: Some(span.into()),
                     name_span: Some(name_span.into()),
                     body: lowerer.lower_block(body, &[]),
+                    annotations: lower_annotations(annotations),
                 });
             }
         }
@@ -200,7 +203,35 @@ pub fn lower(
         declarations,
         rules,
         settings: program.settings.as_ref().map(lower_settings),
+        preprocessing: PreprocessingState::default(),
     })
+}
+
+fn prefixed_rule_name(name: &str, prefix: Option<&str>, delimiter: bool) -> String {
+    match prefix {
+        Some(prefix) if !prefix.is_empty() && !delimiter && !name.is_empty() => {
+            format!("[{prefix}] {name}")
+        }
+        _ => name.to_string(),
+    }
+}
+
+fn lower_annotations(annotations: &[cst::Annotation]) -> Vec<HirAnnotation> {
+    annotations
+        .iter()
+        .map(|annotation| HirAnnotation {
+            name: annotation.name.clone(),
+            args: annotation
+                .args
+                .iter()
+                .map(|arg| HirAnnotationArg {
+                    text: arg.text.clone(),
+                    span: Some(arg.span.into()),
+                })
+                .collect(),
+            span: Some(annotation.span.into()),
+        })
+        .collect()
 }
 
 /// Map a parsed CST settings block onto the protocol settings tree (#86).
@@ -301,10 +332,13 @@ impl Lowerer {
             .collect();
         let actions = self.lower_block(&rule.actions, &[]);
         Rule {
-            name: rule.name.clone(),
+            name: prefixed_rule_name(&rule.name, rule.rule_prefix.as_deref(), rule.delimiter),
             span: Some(rule.span.into()),
             name_span: Some(rule.name_span.into()),
             disabled: rule.disabled,
+            delimiter: rule.delimiter,
+            new_page: rule.new_page.clone(),
+            annotations: lower_annotations(&rule.annotations),
             event: Event {
                 name: rule.event.name.clone(),
                 args: rule
