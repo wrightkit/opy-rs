@@ -104,11 +104,15 @@ implements; "reference" always means the pinned OverPy 9.7.10
   **JavaScript macros** (see below).
 - `#!undef NAME`.
 - `#!mainFile "path.opy"` redirects the frontend entry point and preserves
-  file provenance; `#!allowMacroRedeclaration` changes duplicate macro
-  handling; `#!rulePrefix` and `#!rulePrefixTemplate` are retained as source
-  state and prefix subsequent rule/subroutine names.
+  file provenance; `#!allowMacroRedeclaration` changes duplicate handling at
+  `#!define`, enum-member, and AST-macro surfaces.
+- `#!rulePrefix`/`#!rulePrefixTemplate` are retained as source state and
+  rendered against every rule/subroutine (including rules before the template
+  directive); include prefix state is restored after child includes.
 - `#!translations`, `#!optimize*`, and `#!replace0By*` forms are parsed,
-  validated, and exposed as frontend preprocessing state. Locale availability,
+  validated, and exposed as frontend preprocessing state. Directive records
+  retain include depth and state snapshots, so nested transitions are
+  observable without claiming optimizer execution. Locale availability,
   `.po` content, generated translation helpers, optimizer rewrites, and
   replacement effects are lowering-dependent and are not fabricated here.
 - `#!postCompileHook "hook.js"`: post-compile hook registration (see below).

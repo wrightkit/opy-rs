@@ -27,7 +27,7 @@ fixtures/<category>/<name>/
 
 ## Synthetic fixtures (WrightKit-authored)
 
-`fixtures/synthetic/` — 13 fixtures authored for the WrightKit compatibility
+`fixtures/synthetic/` — 16 fixtures authored for the WrightKit compatibility
 corpus (same organization as opy-rs; AGPL-3.0-or-later, `kind: original`),
 ported unchanged:
 
@@ -39,6 +39,9 @@ ported unchanged:
 | `declarations-numbers` | numeric literal forms and variable-index declarations |
 | `expressions-values` | expressions, arrays, strings, vectors, calls, `.format` |
 | `preprocessing` | `#!include` (with `shared.opy`), `#!define` object/function-like, `#!undef` |
+| `issue-31-positive` | Pinned positive probe for rule-prefix templates, include prefix restoration, macro/enum redeclaration, and normalized translations |
+| `issue-31-negative` | Pinned negative probe for a translation code outside the oracle's exact set |
+| `issue-31-nested-scope` | Pinned nested-include probe for observable optimization state transitions |
 | `diagnostics` | expected-failure fixture with a syntax diagnostic |
 | `settings` | top-of-file `settings { … }` JSONC block |
 | `receiver-calls` | receiver/member call forms (derived from the real-world overpy-meipocalypse corpus; see its `fixture.json` provenance note) |
