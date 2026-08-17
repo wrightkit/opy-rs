@@ -48,7 +48,7 @@
         "upstream:src/tests/strings.opy",
         "upstream:src/tests/arrays.opy"
       ],
-      "notes": "Corpus-evidenced: differential suite runs 27 fixtures; upstream tokenizer surface probed."
+      "notes": "Corpus-evidenced: differential suite runs 40 fixtures; upstream tokenizer surface probed."
     },
     {
       "id": "syntax/expressions",
