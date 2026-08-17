@@ -601,7 +601,7 @@
       "planned": 2,
       "frontend-supported": 14,
       "semantic-supported": 13,
-      "lowering-dependent": 14,
+      "lowering-dependent": 13,
       "end-to-end-supported": 0
     },
     "byCategory": {

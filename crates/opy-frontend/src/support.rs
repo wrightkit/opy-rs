@@ -218,7 +218,7 @@ mod tests {
         assert_eq!(syntax.len(), 7);
         assert!(syntax.iter().all(|feature| feature.category == "syntax"));
         let lowering = matrix.features_by_state("lowering-dependent");
-        assert_eq!(lowering.len(), 14);
+        assert_eq!(lowering.len(), 13);
         assert!(
             lowering
                 .iter()

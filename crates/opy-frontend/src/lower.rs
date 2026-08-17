@@ -189,7 +189,7 @@ pub fn lower_with_preprocessing(
                 let base_name = presentation_name
                     .as_deref()
                     .map(str::to_string)
-                    .unwrap_or_else(|| format!("Subroutine {name}"));
+                    .unwrap_or_else(|| name.clone());
                 let generated_name = render_rule_name(
                     &base_name,
                     rule_prefix.as_deref(),
@@ -1782,7 +1782,6 @@ mod tests {
         };
         assert_eq!(name, "[Main] Friendly");
         assert_eq!(source_name, "source_name");
-    }
     }
 
     #[test]
