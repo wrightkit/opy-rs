@@ -1172,11 +1172,7 @@ impl Lowerer {
                 let lowered = HirExpr::Call {
                     name: name.to_string(),
                     args: self.lower_arg_values_with_lambda(args, macro_params, |index, arg| {
-                        index == 1
-                            || arg
-                                .keyword
-                                .as_ref()
-                                .is_some_and(|(name, _)| name == "key")
+                        index == 1 || arg.keyword.as_ref().is_some_and(|(name, _)| name == "key")
                     }),
                     span: Some(span.into()),
                 };
@@ -1614,8 +1610,7 @@ impl Lowerer {
         macro_params: &[String],
         position: CallPosition,
     ) -> HirExpr {
-        if matches!(name, "map" | "filter" | "all" | "any")
-        {
+        if matches!(name, "map" | "filter" | "all" | "any") {
             let lowered = HirExpr::ReceiverCall {
                 receiver: Box::new(self.lower_expr(receiver, macro_params, CallPosition::Value)),
                 name: name.to_string(),

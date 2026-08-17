@@ -1509,7 +1509,8 @@ impl Parser<'_> {
                     let string = self.advance();
                     let (format_text, interpolations) = if token.text == "f" {
                         let raw = string.raw.as_deref().unwrap_or(&string.text);
-                        let (format_text, interpolations) = self.parse_f_string(raw, string.span)?;
+                        let (format_text, interpolations) =
+                            self.parse_f_string(raw, string.span)?;
                         (Some(format_text), interpolations)
                     } else {
                         (None, Vec::new())
@@ -1793,7 +1794,11 @@ impl Parser<'_> {
 
 /// Parse one f-string expression fragment and shift its local token spans
 /// into the original source file.
-fn parse_expression_fragment(text: &str, file: u32, origin: Position) -> Result<Expr, FrontendError> {
+fn parse_expression_fragment(
+    text: &str,
+    file: u32,
+    origin: Position,
+) -> Result<Expr, FrontendError> {
     let mut tokens = crate::lexer::lex(crate::lexer::LexInput {
         file_id: file,
         text,
@@ -1807,11 +1812,13 @@ fn parse_expression_fragment(text: &str, file: u32, origin: Position) -> Result<
         errors: Vec::new(),
     };
     let expression = parser.parse_expr().map_err(|()| {
-        parser
-            .errors
-            .first()
-            .cloned()
-            .unwrap_or_else(|| FrontendError::at("parse-error", "invalid f-string expression", Span::new(file, origin, origin)))
+        parser.errors.first().cloned().unwrap_or_else(|| {
+            FrontendError::at(
+                "parse-error",
+                "invalid f-string expression",
+                Span::new(file, origin, origin),
+            )
+        })
     })?;
     if parser.peek_kind() != TokenKind::Eof {
         parser.error_at_current("unexpected tokens in f-string interpolation".to_string());
@@ -1830,7 +1837,11 @@ fn shift_span(span: Span, origin: Position) -> Span {
             },
         )
     }
-    Span::new(span.file, shift(span.start, origin), shift(span.end, origin))
+    Span::new(
+        span.file,
+        shift(span.start, origin),
+        shift(span.end, origin),
+    )
 }
 
 fn decode_string_escape(character: char) -> char {
