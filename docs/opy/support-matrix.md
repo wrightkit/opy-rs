@@ -24,7 +24,8 @@ machine-readable semantic contract for builtins is specified in
 ## Current implementation state
 
 The standalone frontend foundation is merged on `main` (PRs #9–#14; issues
-#2–#6 complete and #7 partially delivered): the native pipeline (lexer →
+#2–#6 complete; #7 readiness is represented by the #28/#29/#30 Draft PR
+series): the native pipeline (lexer →
 preprocess → CST/parser → semantic resolution → Opy HIR v1), the bounded
 JavaScript macro runtime, the tooling API/CLI, and the native differential
 suite are implemented and CI-covered. The rows they evidence are flipped to
@@ -66,12 +67,11 @@ implements; "reference" always means the pinned OverPy 9.7.10
 (`889d9749d1def17f146548cbddb94ea1ab015847`).
 
 ### Lexing
-- Identifiers, integer, decimal, and `0x`/`0X` hexadecimal number literals
-  (source text preserved),
+- Identifiers, integer and decimal number literals (source text preserved),
   double-quoted strings with `\n`/`\t`/`\\` escapes, `true`/`false`/`None`.
 - Line comments (`#`), block comments (`/* */`), `#!` directives.
-- Operators: `+ - * / // % ** == != < <= > >= = += -= *= /= //= %= and or not
-  in not in`, plus `.`/`,`/`:`/`(`/`)`/`[`/`]`/`{`/`}`/`@`.
+- Operators: `+ - * / // % ** == != < <= > >= = += -= *= /= //= %= and or not`,
+  `in`/`not in`, plus `.`/`,`/`:`/`(`/`)`/`[`/`]`/`@`.
 
 ### Declarations
 - `globalvar name` / `globalvar name = expr` / `globalvar name <index>`
@@ -162,9 +162,7 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
   lowering-dependent; malformed or misplaced annotations fail with structured
   source-located diagnostics.
 - Statements: expression statements, `=` and augmented assignment,
-  `if`/`elif`/`else`, `for x in range(...)`, `while`, `do: … while`,
-  `switch`/`case`/`default`, `break`, and `pass`. Switch arms execute in
-  source order and fall through; `break` exits the innermost switch or loop.
+  `if`/`elif`/`else`, `for x in range(...)`, `while`, `pass`.
 - `for`-loop binder resolution: the loop variable must resolve to a global
   variable, either a declared `globalvar`, or an OverPy **default variable
   name** (`A`–`Z`, `AA`–`AZ`, …, `DA`–`DX`), which the pinned reference
@@ -177,17 +175,7 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
   `range(start, stop, step)` are all supported.
 
 ### Expressions and resolution
-- Literals, arrays `[...]`, dictionaries used through indexed access,
-  parenthesized expressions, list comprehensions with one `for` clause and
-  optional `if`, and the reference's context-bound lambda forms.
-- String modifiers `f`/`w`/`l`/`b`/`c`/`t` are preserved as OPY source
-  semantics. f-string interpolation is lowered to a semantic format node,
-  retaining source spans for each expression; `l`/`t` translation/content
-  behavior remains reference-limited.
-- `lambda` is accepted only in signature-approved positions
-  (`sorted(..., key=...)` or positional slot 1, and array
-  `map`/`filter`/`all`/`any` slot 0); standalone and other argument positions
-  are rejected with a structured frontend diagnostic.
+- Literals, arrays `[...]`, parenthesized expressions.
 - Calls (`range`, `len`, `abs`, `sqrt`, `debug`, `print`, `wait`,
   `createBeam`, `playEffect`, `getAllPlayers`, `disableInspector`, …).
 - `vect(x, y, z)` → HIR `Vector` (3 arguments required; other arities are an
@@ -348,16 +336,9 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
    (alias targets `stopChasing`/`getHero`/`hasStatus`, and enum members
    without a catalogged spelling); these fail at emission with catalog
    diagnostics once integration lands, never silently.
- - Expression-level `in`/`not in` membership operators: rejected at parsing
-   (`for ... in` headers are supported).
-- Rule `disabled` markers (no corpus evidence for the source annotation).
- - Rule `disabled` markers (no corpus evidence for the source annotation).
 - Backslash line continuation (`\` at end of line inside string
   concatenations / macro bodies): rejected at lexing.
 - Postfix increment/decrement (`++`/`--`): rejected at parsing.
-- Dict literals outside an indexed-access context are rejected with a
-  structured `dict-access` diagnostic; dict lowering/emission remains
-  `lowering-dependent`.
 - Triple-quoted strings / docstrings (`"""`): rejected at lexing.
 - Subroutine parameters, default `@Team`/`@Slot` overrides, `raycast`
   `include=`/`exclude=` named-argument forms (no reference/corpus evidence

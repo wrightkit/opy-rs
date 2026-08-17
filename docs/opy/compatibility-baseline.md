@@ -17,7 +17,8 @@ The reference identity is the pinned OverPy 9.7.10 content
 (`889d9749d1def17f146548cbddb94ea1ab015847`); see
 [`docs/compatibility/upstream-references.md`](../compatibility/upstream-references.md)
 for provenance. Evidence claims in this document were verified against the
-pinned oracle (all 27 corpus snapshots match on 2026-08-17). The opy-rs
+pinned oracle (the declared corpus now contains 34 provenance-linked
+snapshots). The opy-rs
 frontend foundation is implemented and merged on `main` (issues #3–#7
 partially delivered via PRs #9–#14); the category table below is the
 **tier assignment contract** for the remaining surface. The state column of
@@ -60,8 +61,8 @@ rejected/documented-absent dimension, `—` an inapplicable dimension, and
 | # | Category | Tier | Parse | Sem | Comp | Tooling | Ref |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | **Expression/postfix/member/call grammar**: operators and precedence, `[]` indexing, `.` member, calls, `++`/`--`, `del`, `in`/`not in`, hex `0x` | `baseline-supported` for the corpus subset (operators, indexing, calls, member/call); sub-forms below | ✅ corpus | ✅ | ✅ (integration) | ✅ | ✅ differential (issue #7) |
-| 1a | `switch`/`case`/`default`, `do…while`, `not in`, `0x` hex literals | `evidence-prioritized` | ❌ (rejected, documented) | ❌ | ❌ | ❌ | ✅ oracle probes |
-| 1b | String modifiers (`f`/`w`/`l`/`b`/`c`/`t`), dict literals, list comprehensions, `lambda` beyond `.map`/`sorted` | `legacy-quirk/demand-driven` (dicts, modifiers) / `evidence-prioritized` (comprehensions) | ❌ | ❌ | ❌ | ❌ | ✅ oracle probes |
+| 1a | `switch`/`case`/`default`, `break`, `do…while`, `in`/`not in`, `0x` hex literals | `baseline-supported` for the pinned frontend surface; Workshop control-flow lowering remains integration-owned | ✅ | ✅ | partial (integration) | ✅ | ✅ oracle probes |
+| 1b | String modifiers (`f`/`w`/`l`/`b`/`c`/`t`), dict literals, list comprehensions, signature-gated `lambda` | `baseline-supported` for the pinned frontend surface; formatting/emission remains lowering-dependent | ✅ | ✅ | partial (integration) | ✅ | ✅ oracle probes |
 | 2 | **Declarations**: `globalvar`/`playervar` (index + initializer forms), `subroutine`, `enum`, `macro` constants (incl. member constants) | `baseline-supported` | ✅ | ✅ | ✅ (integration) | ✅ | ✅ |
 | 3 | **Assignments & control flow**: `=`, augmented (`+= … **=`, `min=`, `max=`), `if`/`elif`/`else`, `for … in range(...)`, `while`, `pass` | `baseline-supported` | ✅ | ✅ | ✅ (integration) | ✅ | ✅ |
 | 4 | **Rule directives & annotations**: `@Event`, `@Condition`, bare `@Team`/`@Slot`, rule name, event defaults (`global`, `all` team/player) | `baseline-supported` (bare forms) | ✅ | ✅ | ✅ (integration) | ✅ | ✅ |
@@ -84,10 +85,10 @@ rejected/documented-absent dimension, `—` an inapplicable dimension, and
 
 ## Current `planned` entries
 
-The two explicitly tracked OPY-language gaps still `planned` in
-`compatibility/support-matrix.json`, the mechanically checked state source,
-are: `syntax/switch` and `syntax/string-modifiers`. Directive, annotation, translation, and
-optimizer frontend state is implemented; their Workshop effects remain
+There are no remaining `planned` entries in
+`compatibility/support-matrix.json`. The pinned OPY frontend surface from
+#28/#29/#30/#33 is represented as frontend- or semantic-supported; Workshop
+catalog, emission, and runtime effects remain explicitly
 `lowering-dependent`. Their tiers above
 distinguish **evidence-prioritized** work (broad or high-fan-out surface with
 clear tooling value, ordered by corpus/consumer evidence) from

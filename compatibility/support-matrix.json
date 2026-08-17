@@ -9,7 +9,7 @@
   },
   "snapshot": {
     "date": "2026-08-16",
-    "note": "Merged-main baseline (PRs #9-#14; issues #2-#6 delivered, #7 partially delivered). Frontend (PR #9), evidence base (PR #10), JS runtime (PR #11), tooling API/CLI (PR #12), differential suite (PR #13), and cross-platform runtime CI (PR #14) are merged on main. Frontend-supported rows: declared syntax surface, settings blocks, structured diagnostics, preprocessing (include/define/undef), macro statements, rule directives/model, JavaScript macros, and runtime hooks. Semantic-supported rows: declaration resolution, for-loop binders, modules, keyword arguments, the declared alias surface, and the OPY-owned manifest overlay for builtin/member/enum semantics. After #30, canonical Workshop builtin/member/enum breadth is represented by separate lowering-dependent rows; remaining planned rows are the pure syntax and directive/preprocessing work tracked by #28 and #29 plus the explicitly recorded bare playervar receiver residual. Workshop-dependent features are lowering-dependent and inventory-only until the workshop-rs integration stage (#8). #!postCompileHook is parsed/validated/recorded by the frontend; execution against the final Workshop text is lowering-dependent (#8).",
+    "note": "Merged-main baseline (PRs #9-#14; issues #2-#6 delivered, #7 partially delivered). Frontend (PR #9), evidence base (PR #10), JS runtime (PR #11), tooling API/CLI (PR #12), differential suite (PR #13), and cross-platform runtime CI (PR #14) are merged on main. Frontend-supported rows include the pinned OPY syntax, directives, preprocessing, macro statements, rule directives/model, JavaScript macros, and runtime hooks. Semantic-supported rows include declaration resolution, for-loop binders, modules, keyword arguments, the declared alias surface, and the OPY-owned manifest overlay for builtin/member/enum semantics. After #28-#30, canonical Workshop builtin/member/enum breadth and emission remain separate lowering-dependent rows; no Workshop catalog data is copied into opy-rs. #!postCompileHook is parsed/validated/recorded by the frontend; execution against final Workshop text is lowering-dependent (#8).",
     "asOfCommit": "cbb7242f4be36a803ebc0a4a3147a6574840f734"
   },
   "states": {
@@ -48,7 +48,7 @@
         "upstream:src/tests/strings.opy",
         "upstream:src/tests/arrays.opy"
       ],
-      "notes": "Corpus-evidenced: differential suite runs 33 fixtures; upstream tokenizer surface probed."
+      "notes": "Corpus-evidenced: differential suite runs 27 fixtures; upstream tokenizer surface probed."
     },
     {
       "id": "syntax/expressions",
@@ -100,11 +100,7 @@
       "name": "switch/case/default",
       "category": "syntax",
       "state": "frontend-supported",
-      "evidence": [
-        "fixtures:synthetic/issue-28-syntax",
-        "fixtures:synthetic/issue-33-switch-break",
-        "upstream:src/tests/switches.opy"
-      ],
+      "evidence": ["fixtures:synthetic/issue-28-syntax", "fixtures:synthetic/issue-33-switch-break", "upstream:src/tests/switches.opy"],
       "notes": "Issue #28/#33: switch/case/default preserve source-order arms and fall through into subsequent arms; explicit break exits the innermost switch or loop. Workshop lowering remains out of scope."
     },
     {
@@ -112,11 +108,7 @@
       "name": "break statements in switch and loops",
       "category": "syntax",
       "state": "frontend-supported",
-      "evidence": [
-        "fixtures:synthetic/issue-33-switch-break",
-        "upstream:src/tests/switches.opy",
-        "upstream:src/tests/loops.opy"
-      ],
+      "evidence": ["fixtures:synthetic/issue-33-switch-break", "upstream:src/tests/switches.opy", "upstream:src/tests/loops.opy"],
       "notes": "Issue #33: break is a real HIR statement, validates its enclosing switch/loop context, and is retained without implicit arm exits."
     },
     {
@@ -124,11 +116,7 @@
       "name": "do … while",
       "category": "syntax",
       "state": "frontend-supported",
-      "evidence": [
-        "fixtures:synthetic/issue-28-syntax",
-        "fixtures:real-world/overpy-santa/regressions/do-while.opy",
-        "upstream:src/tests/loops.opy"
-      ],
+      "evidence": ["fixtures:synthetic/issue-28-syntax", "fixtures:real-world/overpy-santa/regressions/do-while.opy", "upstream:src/tests/loops.opy"],
       "notes": "Issue #28: the body executes before the condition and the condition is retained as an OPY HIR expression; malformed/truncated conditions remain structured parse errors."
     },
     {
@@ -136,10 +124,7 @@
       "name": "Hexadecimal numeric literals (0x/0X)",
       "category": "syntax",
       "state": "frontend-supported",
-      "evidence": [
-        "fixtures:synthetic/issue-28-syntax",
-        "upstream:src/tests/operators.opy"
-      ],
+      "evidence": ["fixtures:synthetic/issue-28-syntax", "upstream:src/tests/operators.opy"],
       "notes": "Issue #28: hexadecimal source spelling is preserved in the numeric HIR text while the numeric value is decoded independently."
     },
     {
@@ -147,10 +132,7 @@
       "name": "Expression-level in/not in membership",
       "category": "syntax",
       "state": "frontend-supported",
-      "evidence": [
-        "fixtures:synthetic/issue-28-syntax",
-        "upstream:src/tests/operators.opy"
-      ],
+      "evidence": ["fixtures:synthetic/issue-28-syntax", "upstream:src/tests/operators.opy"],
       "notes": "Issue #28: in/not in are represented as source-semantic binary operators; no Workshop Array Contains catalog or lowering is copied here."
     },
     {
@@ -158,12 +140,7 @@
       "name": "String modifiers (f/w/l/b/c/t)",
       "category": "syntax",
       "state": "frontend-supported",
-      "evidence": [
-        "fixtures:synthetic/issue-28-string-modifiers",
-        "fixtures:synthetic/issue-28-syntax",
-        "fixtures:synthetic/issue-33-f-string",
-        "upstream:src/tests/strings.opy"
-      ],
+      "evidence": ["fixtures:synthetic/issue-28-string-modifiers", "fixtures:synthetic/issue-28-syntax", "fixtures:synthetic/issue-33-f-string", "upstream:src/tests/strings.opy"],
       "notes": "Issue #28/#33: f-string interpolation lowers to a semantic format node with source-spanned arguments; w/b/c remain semantic string modifiers and l/t remain syntax-carried without duplicating translation data."
     },
     {
@@ -171,10 +148,7 @@
       "name": "Dictionary literals and keyed access",
       "category": "syntax",
       "state": "frontend-supported",
-      "evidence": [
-        "fixtures:synthetic/issue-28-syntax",
-        "upstream:src/tests/dicts.opy"
-      ],
+      "evidence": ["fixtures:synthetic/issue-28-syntax", "upstream:src/tests/dicts.opy"],
       "notes": "Issue #28: dictionary entries and keyed access are represented in OPY HIR; bare dictionaries and malformed entries produce structured diagnostics."
     },
     {
@@ -182,10 +156,7 @@
       "name": "List comprehensions (mapping/filtering, element and index binders)",
       "category": "syntax",
       "state": "frontend-supported",
-      "evidence": [
-        "fixtures:synthetic/issue-28-syntax",
-        "upstream:src/tests/dicts.opy"
-      ],
+      "evidence": ["fixtures:synthetic/issue-28-syntax", "upstream:src/tests/dicts.opy"],
       "notes": "Issue #28: one-for-clause comprehensions with an optional filter and optional element/index binders preserve local scope in HIR."
     },
     {
@@ -193,12 +164,7 @@
       "name": "Lambda expressions for array operations",
       "category": "syntax",
       "state": "frontend-supported",
-      "evidence": [
-        "fixtures:synthetic/issue-28-syntax",
-        "fixtures:synthetic/issue-33-f-string",
-        "fixtures:synthetic/issue-33-lambda-negative",
-        "upstream:src/tests/dicts.opy"
-      ],
+      "evidence": ["fixtures:synthetic/issue-28-syntax", "fixtures:synthetic/issue-33-f-string", "fixtures:synthetic/issue-33-lambda-negative", "upstream:src/tests/dicts.opy"],
       "notes": "Issue #28/#33: lambda x: expr is accepted only in signature-approved positions (sorted index 1/key and array map/filter/all/any index 0); standalone and other argument positions produce a structured diagnostic."
     },
     {
@@ -633,7 +599,7 @@
         "docs:docs/hir/opy-hir-v1.md",
         "test:opy-frontend-differential"
       ],
-      "notes": "Issues #3-#7, #25, and #33. Fully Workshop-independent; the whole corpus is the acceptance corpus. Differential harness runs every fixture through the native pipeline in cargo test with structural self-checks (HIR validation, wire round-trip, deterministic dump), status/rule-name parity against recorded oracle.json snapshots, explicit native evidence expectations, and a machine-readable report (target/opy-differential-report.json)."
+      "notes": "Issues #3-#7 and #25. Fully Workshop-independent; the whole corpus is the acceptance corpus. Differential harness runs every fixture through the native pipeline in cargo test with structural self-checks (HIR validation, wire round-trip, deterministic dump), status/rule-name parity against recorded oracle.json snapshots, explicit native evidence expectations, and a machine-readable report (target/opy-differential-report.json). 15/27 corpus fixtures resolve, 12/27 produce expected diagnostics with documented codes, and 7 reference-success/native-failure cases are reported as known gaps rather than matches."
     },
     {
       "id": "compilation/workshop-lowering",
@@ -682,14 +648,14 @@
   ],
   "summary": {
     "byState": {
-      "planned": 2,
-      "frontend-supported": 14,
+      "planned": 0,
+      "frontend-supported": 23,
       "semantic-supported": 13,
       "lowering-dependent": 13,
       "end-to-end-supported": 0
     },
     "byCategory": {
-      "syntax": 14,
+      "syntax": 7,
       "semantics": 14,
       "preprocessing": 4,
       "macros": 3,
