@@ -1168,16 +1168,13 @@ impl Lowerer {
             }
         }
         match name {
-            "sorted" => {
-                let lowered = HirExpr::Call {
-                    name: name.to_string(),
-                    args: self.lower_arg_values_with_lambda(args, macro_params, |index, arg| {
-                        index == 1 || arg.keyword.as_ref().is_some_and(|(name, _)| name == "key")
-                    }),
-                    span: Some(span.into()),
-                };
-                lowered
-            }
+            "sorted" => HirExpr::Call {
+                name: name.to_string(),
+                args: self.lower_arg_values_with_lambda(args, macro_params, |index, arg| {
+                    index == 1 || arg.keyword.as_ref().is_some_and(|(name, _)| name == "key")
+                }),
+                span: Some(span.into()),
+            },
             "vect" => {
                 // `vect` goes through the generic argument binder so its
                 // keyword forms (`vect(x=1, y=2, z=3)`) bind like any other

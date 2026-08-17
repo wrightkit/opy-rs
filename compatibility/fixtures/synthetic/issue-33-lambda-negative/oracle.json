@@ -15,7 +15,7 @@
   },
   "fixture": "synthetic/issue-33-lambda-negative",
   "input": {
-    "sha256": "ca4887606d28b86ad781c5fdc0e6e7ccb5337ab83e361c64230d8e900294a0c2",
+    "sha256": "38ece46703ba1dd69dfc3140151f430dc5e195fd9abef134206f9dc602b80175",
     "source": "source.opy"
   },
   "oracle": {

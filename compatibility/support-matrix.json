@@ -48,7 +48,7 @@
         "upstream:src/tests/strings.opy",
         "upstream:src/tests/arrays.opy"
       ],
-      "notes": "Corpus-evidenced: differential suite runs 27 fixtures; upstream tokenizer surface probed."
+      "notes": "Corpus-evidenced: differential suite runs 33 fixtures; upstream tokenizer surface probed."
     },
     {
       "id": "syntax/expressions",
@@ -633,7 +633,7 @@
         "docs:docs/hir/opy-hir-v1.md",
         "test:opy-frontend-differential"
       ],
-      "notes": "Issues #3-#7 and #25. Fully Workshop-independent; the whole corpus is the acceptance corpus. Differential harness runs every fixture through the native pipeline in cargo test with structural self-checks (HIR validation, wire round-trip, deterministic dump), status/rule-name parity against recorded oracle.json snapshots, explicit native evidence expectations, and a machine-readable report (target/opy-differential-report.json). 15/27 corpus fixtures resolve, 12/27 produce expected diagnostics with documented codes, and 7 reference-success/native-failure cases are reported as known gaps rather than matches."
+      "notes": "Issues #3-#7, #25, and #33. Fully Workshop-independent; the whole corpus is the acceptance corpus. Differential harness runs every fixture through the native pipeline in cargo test with structural self-checks (HIR validation, wire round-trip, deterministic dump), status/rule-name parity against recorded oracle.json snapshots, explicit native evidence expectations, and a machine-readable report (target/opy-differential-report.json)."
     },
     {
       "id": "compilation/workshop-lowering",

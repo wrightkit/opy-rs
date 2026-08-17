@@ -10,7 +10,7 @@
   },
   "fixture": "synthetic/issue-33-switch-break",
   "input": {
-    "sha256": "a4fe06ada89ce89563128481e07c65356806e0c1e4c813933dd1b64680194e2b",
+    "sha256": "fd00440c1b07806b8e2f8aa3757e37b9b4375a6f0b9717eda0f89a01c95167f1",
     "source": "source.opy"
   },
   "oracle": {

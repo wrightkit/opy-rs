@@ -10,7 +10,7 @@
   },
   "fixture": "synthetic/issue-33-f-string",
   "input": {
-    "sha256": "7ccbb48a6e68fb80f0e21c0d290697ba12f0fb77ca87bed5019a09f6c9b5f86d",
+    "sha256": "b314c0b598a5c5286b51b1ebaa5edebc8d192e65a6a091c75ec1dd4ba403a95d",
     "source": "source.opy"
   },
   "oracle": {
