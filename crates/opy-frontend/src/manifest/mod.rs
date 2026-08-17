@@ -78,6 +78,20 @@ pub enum FunctionKind {
     MemberValue,
 }
 
+/// How the frontend-owned function identity connects to Workshop lowering.
+///
+/// `canonical` entries carry a `catalogId`; the other variants are explicit
+/// reasons why a source-level function does not have a direct catalog entry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum CatalogLink {
+    #[default]
+    Canonical,
+    SpecialLowering,
+    LegacyAlias,
+    CatalogGap,
+}
+
 impl FunctionKind {
     /// Whether this kind is an action (statement-position builtin).
     pub fn is_action(self) -> bool {
@@ -241,6 +255,9 @@ pub struct Function {
     #[serde(default)]
     #[serde(rename = "catalogId")]
     pub catalog_id: Option<String>,
+    /// The explicit reason a source-level function has no direct catalog id.
+    #[serde(default)]
+    pub catalog_link: CatalogLink,
     /// The probe ids that validate this entry against the pinned oracle.
     #[serde(default)]
     pub evidence: Vec<String>,
@@ -474,6 +491,24 @@ impl Manifest {
                     }
                 }
             }
+            match (&function.catalog_id, function.catalog_link) {
+                (Some(_), CatalogLink::Canonical)
+                | (None, CatalogLink::SpecialLowering)
+                | (None, CatalogLink::LegacyAlias)
+                | (None, CatalogLink::CatalogGap) => {}
+                (Some(id), link) => {
+                    return Err(ManifestError(format!(
+                        "function '{}' has catalogId '{id}' but catalogLink is {:?}",
+                        function.id, link
+                    )));
+                }
+                (None, CatalogLink::Canonical) => {
+                    return Err(ManifestError(format!(
+                        "function '{}' has no catalogId or explicit catalogLink reason",
+                        function.id
+                    )));
+                }
+            }
             if let Some(contextual) = &function.contextual_domain {
                 let by_param = function
                     .params
@@ -673,6 +708,10 @@ mod tests {
         assert_eq!(manifest.schema_version, 1);
         assert_eq!(manifest.reference.name, "overpy");
         assert_eq!(manifest.reference.version, "9.7.10");
+        assert_eq!(
+            manifest.reference.content_commit,
+            "889d9749d1def17f146548cbddb94ea1ab015847"
+        );
         assert!(!manifest.functions.is_empty());
         assert!(!manifest.aliases.is_empty());
         // Enum-domain *identities* come from the function signatures
@@ -682,6 +721,20 @@ mod tests {
         for domain in ["Invis", "ChaseTimeReeval", "Team", "LosCheck", "Color"] {
             assert!(manifest.domain_identity(domain), "{domain}");
         }
+        assert_eq!(
+            manifest
+                .function("chase")
+                .expect("chase entry")
+                .catalog_link,
+            CatalogLink::SpecialLowering
+        );
+        assert_eq!(
+            manifest
+                .member("getHero")
+                .expect("getHero entry")
+                .catalog_link,
+            CatalogLink::CatalogGap
+        );
         assert!(
             !manifest.domain_identity("ChaseReeval"),
             "contextual domains are not standalone identities"
@@ -718,6 +771,10 @@ mod tests {
         let error = mutate(|file| file.functions.push(file.functions[0].clone()))
             .expect_err("duplicate function id must fail");
         assert!(error.0.contains("duplicate function id"));
+        // A direct catalog link must be explicit about being canonical.
+        let error = mutate(|file| file.functions[0].catalog_link = CatalogLink::CatalogGap)
+            .expect_err("canonical catalog id must not carry a gap reason");
+        assert!(error.0.contains("catalogLink"));
         // entry without evidence
         let error = mutate(|file| file.functions[0].evidence.clear())
             .expect_err("missing evidence must fail");
