@@ -369,6 +369,7 @@ impl Preprocessor {
                 out.push(Token {
                     kind: TokenKind::RulePrefixMarker,
                     text: prefix,
+                    raw: None,
                     span: token.span,
                 });
                 out.push(token);

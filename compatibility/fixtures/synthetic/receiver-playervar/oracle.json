@@ -3,7 +3,7 @@
     "diagnostics": [],
     "exitCode": 0,
     "status": "success",
-    "stdout": "\u2713 Lockfile passes supply-chain policies (verified 1d ago)\nLockfile is up to date, resolution step is skipped\nProgress: resolved 1, reused 0, downloaded 0, added 0\nPackages: +1\n+\nProgress: resolved 1, reused 1, downloaded 0, added 1, done\n\ndependencies:\n+ overpy 9.7.10\n\nDone in 334ms using pnpm v11.10.0\n",
+    "stdout": "",
     "workshop": "variables {\n    global:\n        0: A\n        1: B\n    player:\n        0: B\n        2: C\n}\n\nrule (\"receiver\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Set Global Variable(A, (Global.B).C);\n    }\n}\n",
     "workshopExact": "variables {\n    global:\n        0: A\n        1: B\n    player:\n        0: B\n        2: C\n}\n\nrule (\"receiver\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Set Global Variable(A, (Global.B).C);\n    }\n}\n\n",
     "workshopSha256": "8273c1fcb0e1e6c2f2bece1cc5f4730d1f93e62d65a629cfb8c6f0f06382fb6c"

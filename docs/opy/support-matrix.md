@@ -73,6 +73,18 @@ implements; "reference" always means the pinned OverPy 9.7.10
 - Operators: `+ - * / // % ** == != < <= > >= = += -= *= /= //= %= and or not`,
   `in`/`not in`, plus `.`/`,`/`:`/`(`/`)`/`[`/`]`/`@`.
 
+### Pure OPY syntax and source semantics
+- `switch`/`case`/`default` preserve source-order fallthrough; `break` is a
+  real HIR statement valid in the innermost switch or loop.
+- `do ... while`, hexadecimal literals, and expression-level `in`/`not in`
+  are represented in the source-language HIR.
+- String modifiers, including f-string interpolation, preserve semantic
+  format text, interpolation expressions, and source spans; dict literals,
+  keyed access, list comprehensions, and lambda binders preserve local scope.
+- Lambda expressions are accepted only in the pinned signature-approved
+  positions (`sorted` key and array `map`/`filter`/`all`/`any`); other
+  positions produce structured diagnostics.
+
 ### Declarations
 - `globalvar name` / `globalvar name = expr` / `globalvar name <index>`
   (the bare-integer form is an explicit Workshop variable index, matching the

@@ -1809,6 +1809,7 @@ fn parse_expression_fragment(
     let mut parser = Parser {
         tokens: &tokens,
         pos: 0,
+        allow_macro_redeclaration: false,
         errors: Vec::new(),
     };
     let expression = parser.parse_expr().map_err(|()| {

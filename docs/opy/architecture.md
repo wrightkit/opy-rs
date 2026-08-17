@@ -132,24 +132,24 @@ only. The frontend never executes it and never fabricates a Workshop payload.
 
 ## Current capability and readiness
 
-Implemented and CI-covered on `main` (issues #2–#6 complete; issue #7
-partially delivered):
+Implemented and CI-covered in the #7 readiness Draft PR series (issues #2–#6
+complete; #28/#29/#30/#33 executed):
 
 * the full Workshop-independent frontend pipeline to Opy HIR v1;
 * the OPY semantic compatibility manifest with oracle-validated probes;
 * JavaScript macro execution and record-only post-compile hooks;
 * the `check`/`inspect`/`support` tooling API and `opy-cli`;
-* the 26-fixture compatibility corpus with pinned oracle snapshots and the
+* the 40-fixture compatibility corpus with pinned oracle snapshots and the
   native differential suite (`cargo test -p opy-frontend --test
   differential`).
 
-Readiness: issue #7 is the active Workshop-independent compatibility gate.
-Issue #30 has separated the manifest-declared OPY semantic overlay from the
-canonical Workshop catalog; the remaining `planned` rows are the pure syntax
-and directive work tracked by #28/#29 plus the explicitly recorded bare
-playervar receiver residual. Issue #8 (Workshop lowering, catalog, emission,
-and post-compile-hook execution against Workshop text) is blocked on #7 and
-the `wrightkit/workshop-rs#2` contracts and is not started here.
+Readiness: issue #7's Workshop-independent compatibility gate is implemented
+in the four Draft PR tracks. Issue #30 separates the manifest-declared OPY
+semantic overlay from the canonical Workshop catalog; the receiver residual
+`A = B.C` is represented with provenance-preserving member HIR, and the
+support matrix has no remaining `planned` entries. Issue #8 (Workshop
+lowering, catalog, emission, and post-compile-hook execution against Workshop
+text) remains explicitly not started here.
 
 ## Validation
 

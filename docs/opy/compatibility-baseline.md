@@ -17,7 +17,7 @@ The reference identity is the pinned OverPy 9.7.10 content
 (`889d9749d1def17f146548cbddb94ea1ab015847`); see
 [`docs/compatibility/upstream-references.md`](../compatibility/upstream-references.md)
 for provenance. Evidence claims in this document were verified against the
-pinned oracle (the declared corpus now contains 34 provenance-linked
+pinned oracle (the declared corpus now contains 40 provenance-linked
 snapshots). The opy-rs
 frontend foundation is implemented and merged on `main` (issues #3–#7
 partially delivered via PRs #9–#14); the category table below is the
