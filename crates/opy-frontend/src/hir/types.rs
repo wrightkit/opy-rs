@@ -191,7 +191,7 @@ pub struct DirectiveRecord {
     pub span: Option<Span>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct PreprocessingSnapshot {
     pub allow_macro_redeclaration: bool,
     pub optimization: OptimizationState,
@@ -203,19 +203,6 @@ pub struct PreprocessingSnapshot {
     pub translations: Option<Vec<String>>,
     #[serde(default)]
     pub replacements: Vec<String>,
-}
-
-impl Default for PreprocessingSnapshot {
-    fn default() -> Self {
-        Self {
-            allow_macro_redeclaration: false,
-            optimization: OptimizationState::default(),
-            rule_prefix: None,
-            rule_prefix_template: None,
-            translations: None,
-            replacements: Vec::new(),
-        }
-    }
 }
 
 /// A custom-game-settings block (`settings { ... }`, #86).
