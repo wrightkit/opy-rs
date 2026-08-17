@@ -3,52 +3,19 @@ name: CI
 on:
   push:
     branches: ["main"]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
   pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
 
 permissions:
   contents: read
 
 jobs:
-  changes:
-    name: Classify changes
-    runs-on: ubuntu-latest
-    outputs:
-      rust: ${{ steps.classify.outputs.rust }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - name: Classify changed paths
-        id: classify
-        shell: bash
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PUSH_BASE_SHA: ${{ github.event.before }}
-        run: |
-          set -euo pipefail
-          if [[ "$EVENT_NAME" == "pull_request" ]]; then
-            base="$PR_BASE_SHA"
-          else
-            base="$PUSH_BASE_SHA"
-          fi
-
-          if [[ -z "$base" || "$base" =~ ^0+$ ]]; then
-            echo "rust=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          files="$(git diff --name-only "$base" "$GITHUB_SHA")"
-          printf '%s\n' "$files"
-          if grep -Eq '^(crates/|compatibility/|Cargo\.(toml|lock)$|rust-toolchain\.toml$|\.github/workflows/ci\.yml$)' <<< "$files"; then
-            echo "rust=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "rust=false" >> "$GITHUB_OUTPUT"
-          fi
-
   rust-quality:
-    needs: changes
-    if: needs.changes.outputs.rust == 'true'
     name: Rust quality (${{ matrix.toolchain }})
     runs-on: ubuntu-latest
     strategy:
@@ -99,8 +66,6 @@ jobs:
         run: echo "No workspace crates on this branch; Rust quality gates skipped."
 
   macro-runtime-ports:
-    needs: changes
-    if: needs.changes.outputs.rust == 'true'
     name: JS runtime on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
