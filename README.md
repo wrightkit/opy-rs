@@ -31,6 +31,7 @@ The standalone CLI exposes the current tooling surface:
 opy-cli check main.opy       # diagnostics; exit 0 clean / 1 diagnostics
 opy-cli inspect main.opy     # resolved semantic model as JSON
 opy-cli support --json       # detailed machine-readable support data
+opy-cli completion bash      # static completion (zsh/fish/powershell also supported)
 opy-cli version
 ```
 

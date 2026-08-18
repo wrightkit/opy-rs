@@ -17,7 +17,13 @@ const MULTI_MAIN: &str = concat!(
 );
 
 fn run(args: &[&str]) -> std::process::Output {
-    bin().args(args).output().expect("the binary runs")
+    run_with_env(args, &[])
+}
+
+fn run_with_env(args: &[&str], vars: &[(&str, &str)]) -> std::process::Output {
+    let mut command = bin();
+    command.env_clear().args(args).envs(vars.iter().copied());
+    command.output().expect("the binary runs")
 }
 
 /// A fresh temp directory for per-test source files (recoverable and
@@ -71,6 +77,24 @@ fn check_missing_file_is_an_io_usage_error() {
 fn check_without_arguments_is_a_usage_error() {
     let output = run(&["check"]);
     assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("<MAIN.OPY>"));
+    assert!(output.stdout.is_empty());
+}
+
+#[test]
+fn check_json_input_errors_stay_human_stderr_only() {
+    for args in [
+        vec!["check", "--format", "json"],
+        vec!["check", "--format", "json", "/nonexistent/opy/nope.opy"],
+    ] {
+        let output = run(&args);
+        assert_eq!(output.status.code(), Some(2), "args: {args:?}");
+        assert!(output.stdout.is_empty(), "args: {args:?}");
+        assert!(!output.stderr.is_empty(), "args: {args:?}");
+    }
+
+    let unreadable = run(&["check", "--format", "json", "/nonexistent/opy/nope.opy"]);
+    assert!(String::from_utf8_lossy(&unreadable.stderr).contains("cannot read"));
 }
 
 #[test]
@@ -161,4 +185,192 @@ fn unknown_command_is_a_usage_error() {
     let output = run(&["frobnicate"]);
     assert_eq!(output.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&output.stderr).contains("unknown command"));
+}
+
+#[test]
+fn help_and_parse_are_driven_by_the_structured_command_model() {
+    let help = run(&["--help"]);
+    assert_eq!(help.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&help.stdout);
+    for expected in [
+        "opy-cli",
+        "check",
+        "inspect",
+        "support",
+        "completion",
+        "--renderer",
+        "--color",
+    ] {
+        assert!(
+            stdout.contains(expected),
+            "help missing {expected}: {stdout}"
+        );
+    }
+    assert!(help.stderr.is_empty(), "help belongs on stdout");
+
+    let invalid = run(&["completion", "invalid-shell"]);
+    assert_eq!(invalid.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&invalid.stderr).contains("possible values"));
+}
+
+#[test]
+fn all_static_completion_shells_are_generated_from_the_same_model() {
+    let cases = [
+        ("bash", "_opy__cli"),
+        ("zsh", "#compdef opy-cli"),
+        ("fish", "complete"),
+        ("powershell", "Register-ArgumentCompleter"),
+    ];
+    for (shell, marker) in cases {
+        let output = run(&["completion", shell]);
+        assert_eq!(output.status.code(), Some(0), "shell: {shell}");
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(stdout.contains(marker), "shell {shell}: {stdout}");
+        assert!(
+            stdout.contains("completion"),
+            "model command missing: {shell}"
+        );
+        assert!(output.stderr.is_empty(), "completion stderr: {shell}");
+    }
+}
+
+#[test]
+fn github_actions_renderer_uses_annotations_and_step_summary_without_stdout() {
+    let dir = temp_dir("github");
+    let main = dir.join("bad.opy");
+    let summary = dir.join("summary.md");
+    std::fs::write(&main, "rule \"r\":\n    @Event global\n    frobnicate()\n").unwrap();
+    let main = main.to_str().unwrap();
+    let summary = summary.to_str().unwrap();
+    let output = run_with_env(
+        &["check", main],
+        &[
+            ("GITHUB_ACTIONS", "true"),
+            ("CI", "true"),
+            ("GITHUB_STEP_SUMMARY", summary),
+        ],
+    );
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stdout.is_empty(), "GitHub presentation uses stderr");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("::error file="), "annotation: {stderr}");
+    assert!(stderr.contains("::group::opy-cli check"), "group: {stderr}");
+    assert!(stderr.contains("ERROR check"), "status: {stderr}");
+    assert!(
+        String::from_utf8_lossy(&std::fs::read(summary).unwrap()).contains("**ERROR**"),
+        "step summary"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn explicit_renderer_and_color_override_injected_environment() {
+    let terminal = run_with_env(
+        &[
+            "check",
+            "--renderer",
+            "terminal",
+            "--color",
+            "always",
+            MULTI_MAIN,
+        ],
+        &[
+            ("GITHUB_ACTIONS", "true"),
+            ("CI", "true"),
+            ("NO_COLOR", "1"),
+        ],
+    );
+    assert_eq!(terminal.status.code(), Some(0));
+    assert!(terminal.stdout.starts_with(b"\x1b[32m"));
+    assert!(!String::from_utf8_lossy(&terminal.stdout).contains("::"));
+
+    let plain = run_with_env(
+        &[
+            "check",
+            "--renderer",
+            "plain",
+            "--color",
+            "always",
+            MULTI_MAIN,
+        ],
+        &[("GITHUB_ACTIONS", "true"), ("CI", "true")],
+    );
+    assert_eq!(plain.status.code(), Some(0));
+    assert!(!String::from_utf8_lossy(&plain.stdout).contains("\x1b["));
+    assert!(!String::from_utf8_lossy(&plain.stdout).contains("::"));
+
+    let no_color = run_with_env(
+        &[
+            "check",
+            "--renderer",
+            "terminal",
+            "--color",
+            "auto",
+            MULTI_MAIN,
+        ],
+        &[("NO_COLOR", "1")],
+    );
+    assert_eq!(no_color.status.code(), Some(0));
+    assert!(!String::from_utf8_lossy(&no_color.stdout).contains("\x1b["));
+}
+
+#[test]
+fn machine_json_stays_pure_under_github_and_color_environment() {
+    let dir = temp_dir("json-purity");
+    let main = dir.join("bad.opy");
+    std::fs::write(&main, "rule \"r\":\n    @Event global\n    frobnicate()\n").unwrap();
+    let output = run_with_env(
+        &[
+            "check",
+            "--format",
+            "json",
+            "--renderer",
+            "github-actions",
+            "--color",
+            "always",
+            main.to_str().unwrap(),
+        ],
+        &[("GITHUB_ACTIONS", "true"), ("NO_COLOR", "")],
+    );
+    assert_eq!(output.status.code(), Some(1));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("pure JSON");
+    assert_eq!(json["ok"], false);
+    assert!(!json["diagnostics"].as_array().unwrap().is_empty());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!stdout.contains("\x1b["));
+    assert!(!stdout.contains("::"));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn github_workflow_path_properties_are_escaped() {
+    let dir = temp_dir("workflow-%,:");
+    let main = dir.join("bad.opy");
+    std::fs::write(&main, "rule \"r\":\n    @Event global\n    frobnicate()\n").unwrap();
+    let output = run_with_env(
+        &[
+            "check",
+            "--renderer",
+            "github-actions",
+            main.to_str().unwrap(),
+        ],
+        &[("GITHUB_ACTIONS", "true")],
+    );
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let encoded = main
+        .to_str()
+        .unwrap()
+        .replace('%', "%25")
+        .replace(':', "%3A")
+        .replace(',', "%2C");
+    assert!(
+        stderr.contains(&format!("file={encoded}")),
+        "escaped path: {stderr}"
+    );
+    assert!(
+        output.stdout.is_empty(),
+        "workflow output must stay off stdout"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
 }
