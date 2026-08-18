@@ -66,6 +66,7 @@ It is **language-compatibility metadata**, distinct from:
           "default": "DESTINATION_AND_DURATION" }
       ],
       "catalogId": "chaseOverTime",   // link to the Workshop emission catalog id
+      "catalogLink": "canonical",      // canonical | special-lowering | legacy-alias | catalog-gap
       "evidence": ["chase-over-time"] // oracle probes validating this entry
     },
     {
@@ -153,10 +154,15 @@ Entry semantics:
   rejected like the reference rejects it.
 * `context`: a call-context restriction; `"forIterable"` (`range`) is only
   valid as a `for ... in` iterable.
-* `catalogId`: the canonical Workshop emission catalog id; absent for
-  special emission forms (`debug`/`print`, `append` via Modify) or emission
-  surfaces not yet catalog-covered (documented gaps). Catalog linkage is a
-  `workshop-rs` integration concern.
+* `catalogId`: the canonical Workshop emission catalog id. A direct catalog
+  entry uses `catalogLink: "canonical"` (the default); a missing `catalogId`
+  must carry an explicit `catalogLink` reason: `special-lowering` for a
+  frontend form with custom lowering (`debug`, `print`, `chase`, `range`, or
+  `append`), `legacy-alias` for a source identity whose compatibility is
+  represented by an alias path (`stopChasing`), or `catalog-gap` for a
+  probe-evidenced source member without a current canonical catalog entry
+  (`getHero`, `hasStatus`). Catalog linkage is a `workshop-rs` integration
+  concern; opy-rs must not guess an id for a non-canonical entry.
 * `evidence`: every entry must reference at least one probe recording
   oracle acceptance (deterministic `check` failure otherwise).
 
@@ -188,7 +194,9 @@ hash, and, for rejections, the diagnostic category fragment).
   integrity (the contextual domain is not a standalone declared identity, the
   selector parameter exists and its keyword spellings cover the options,
   every option domain is declared), and entries lacking oracle evidence all
-  fail deterministically; a canonical-rewrite test pins the data file to its
+  fail deterministically. A function with `catalogId` must use
+  `catalogLink: "canonical"`; a function without one must state a non-canonical
+  reason. A canonical-rewrite test pins the data file to its
   byte-canonical form, and a cross-check test pins every `catalogId` (and
   contextual option target) to the Workshop emission catalog once the
   `workshop-rs` catalog contract exists.
@@ -224,6 +232,39 @@ hash, and, for rejections, the diagnostic category fragment).
   and the oracle-required probe validator);
 * documentation, agents, and future release metadata can consume the same
   declared boundary.
+
+## Integration cross-check contract (#30, consumed by #8)
+
+The manifest is the frontend-owned side of the integration contract. The
+consumer receives the resolved Opy HIR plus this validated manifest; it does
+not need to import OverPy data or add a parser/frontend dependency. HIR
+`call`/`receiverCall` names are resolved against the manifest before lowering,
+so source spans and OPY diagnostics remain owned by `opy-rs`.
+
+The adapter pins the `workshop-rs` `CatalogIdentity` (implementation version,
+catalog version, content digest, target, and locale coverage) in its own
+integration evidence. For every manifest function entry with `catalogId`, the
+adapter must verify all of the following against that canonical catalog:
+
+1. the id exists;
+2. `action`/`memberAction` map to Workshop `Action`, while
+   `value`/`memberValue` map to Workshop `Value`;
+3. a member entry's receiver category is compatible with the canonical
+   signature; and
+4. each `Param.domain` is checked at its explicit-argument index (the member
+   receiver is not counted as a parameter) against the catalog's expected
+   domain.
+
+The adapter performs the same canonical-id check for alias targets and
+contextual-domain option targets. A contextual merged domain such as
+`ChaseReeval` is not passed to `Catalog::enum_domain`; its concrete option
+domains are. A `domain` is only an identity link in this manifest: the
+canonical member list, domain membership, localized spelling, settings keys,
+and content values are validated by `workshop-rs` at lowering. Entries without
+`catalogId` follow their explicit `catalogLink` reason and must not be assigned
+guessed ids. A failed cross-check is a structured integration error, never a
+silent success. This keeps Workshop catalog/member/enum/settings/locale data
+in its owning repository.
 
 ## Non-goals
 

@@ -462,8 +462,9 @@ impl Lowerer {
             Expr::Member {
                 receiver,
                 member,
+                member_span,
                 span,
-            } => self.lower_member(receiver, member, *span, macro_params),
+            } => self.lower_member(receiver, member, *member_span, *span, macro_params),
             Expr::Index { array, index, span } => HirExpr::Index {
                 array: Box::new(self.lower_expr(array, macro_params, CallPosition::Value)),
                 index: Box::new(self.lower_expr(index, macro_params, CallPosition::Value)),
@@ -550,6 +551,7 @@ impl Lowerer {
         &mut self,
         receiver: &Expr,
         member: &str,
+        member_span: Span,
         span: Span,
         _macro_params: &[String],
     ) -> HirExpr {
@@ -600,6 +602,21 @@ impl Lowerer {
                     span,
                 );
                 return HirExpr::Null { span: None };
+            }
+            // A bare variable receiver member is valid OPY source syntax even
+            // when canonical member existence is deferred to Workshop. Keep
+            // both the resolved variable receiver and the source member
+            // identity in HIR instead of treating it as an unknown member.
+            if self.globals.contains(name)
+                || self.players.contains(name)
+                || default_var_index(name).is_some()
+            {
+                return HirExpr::Member {
+                    receiver: Box::new(self.lower_name(name, receiver.span(), &[])),
+                    member: member.to_string(),
+                    member_span: Some(member_span.into()),
+                    span: Some(span.into()),
+                };
             }
         }
         self.error_at(
@@ -974,6 +991,7 @@ impl Lowerer {
                     receiver,
                     member,
                     span,
+                    ..
                 } = &arg.value
                 {
                     if let Expr::Name { name, .. } = receiver.as_ref() {
@@ -1363,6 +1381,34 @@ mod tests {
             matches!(receiver.as_ref(), HirExpr::GlobalVar { name, .. } if name == "target"),
             "globalvar receiver must resolve to a GlobalVar"
         );
+    }
+
+    #[test]
+    fn bare_variable_member_expression_preserves_receiver_and_member() {
+        let hir = lower_ok(
+            "globalvar A\nplayervar B\nrule \"receiver\":\n    @Event eachPlayer\n    A = B.C\n",
+        );
+        let HirStmt::Assign { value, .. } = &hir
+            .rules
+            .iter()
+            .find_map(|entry| {
+                let RuleEntry::Rule(rule) = entry else {
+                    return None;
+                };
+                rule.actions.first()
+            })
+            .expect("assignment")
+        else {
+            panic!("expected assignment");
+        };
+        let HirExpr::Member {
+            receiver, member, ..
+        } = value.as_ref()
+        else {
+            panic!("expected opaque member expression, got {value:?}");
+        };
+        assert_eq!(member, "C");
+        assert!(matches!(receiver.as_ref(), HirExpr::PlayerVar { name, .. } if name == "B"));
     }
 
     #[test]

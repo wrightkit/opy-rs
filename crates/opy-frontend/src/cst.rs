@@ -234,6 +234,8 @@ pub enum Expr {
     Member {
         receiver: Box<Expr>,
         member: String,
+        /// The exact span of the member identifier after `.`.
+        member_span: Span,
         span: Span,
     },
     Index {

@@ -201,6 +201,12 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
     );
     resolve(
         &mut cases,
+        "synthetic/receiver-playervar",
+        true,
+        "bare variable member expression is preserved as an OPY HIR member node; canonical Workshop member validation remains lowering-dependent.",
+    );
+    resolve(
+        &mut cases,
         "synthetic/chase-enums",
         true,
         "ChaseTimeReeval/ChaseRateReeval member accesses resolve as opaque Workshop enum identities (member-existence/domain validation was removed from the core and is lowering-dependent, #8); oracle status success.",

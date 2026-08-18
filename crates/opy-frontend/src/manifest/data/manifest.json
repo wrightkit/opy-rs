@@ -55,6 +55,7 @@
       "params": []
     },
     {
+      "catalogLink": "special-lowering",
       "evidence": [
         "generic-builtins"
       ],
@@ -67,6 +68,7 @@
       ]
     },
     {
+      "catalogLink": "special-lowering",
       "evidence": [
         "generic-builtins"
       ],
@@ -138,6 +140,7 @@
       ]
     },
     {
+      "catalogLink": "special-lowering",
       "contextualDomain": {
         "by": "rate",
         "domain": "ChaseReeval",
@@ -208,6 +211,7 @@
       ]
     },
     {
+      "catalogLink": "legacy-alias",
       "evidence": [
         "aliases"
       ],
@@ -299,6 +303,7 @@
       ]
     },
     {
+      "catalogLink": "special-lowering",
       "context": "forIterable",
       "evidence": [
         "range-for-header"
@@ -395,6 +400,7 @@
       ]
     },
     {
+      "catalogLink": "special-lowering",
       "evidence": [
         "receiver-calls"
       ],
@@ -620,6 +626,7 @@
       "receiver": "Player"
     },
     {
+      "catalogLink": "catalog-gap",
       "evidence": [
         "member-aliases"
       ],
@@ -629,6 +636,7 @@
       "receiver": "Player"
     },
     {
+      "catalogLink": "catalog-gap",
       "evidence": [
         "member-aliases"
       ],
@@ -661,7 +669,7 @@
     "reviewed": true
   },
   "reference": {
-    "contentCommit": "889d974",
+    "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
     "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
     "name": "overpy",
     "version": "9.7.10"

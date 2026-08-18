@@ -58,6 +58,34 @@ stage (issue #8).
 or a temporary Workshop IR; those checks are deferred (`lowering-dependent`,
 #8) rather than approximated.
 
+## Integration input contract (#8)
+
+The frontend-to-Workshop boundary has two inputs, both already available
+without a `workshop-rs` dependency in this repository:
+
+* the resolved Opy HIR v1 program, whose `call` and `receiverCall` nodes retain
+  the OPY source identity and source span; and
+* the validated OPY semantic manifest (`Manifest::builtin()`), whose function
+  entries provide the call kind, receiver category, parameter binding/defaults,
+  aliases, contextual dispatch, and optional canonical `catalogId`.
+
+The #8 adapter combines those inputs by looking up a call's resolved OPY
+identity in the manifest. It does not require parser or HIR redesign and it
+does not infer Workshop content from an absent entry. For an entry with a
+`catalogId`, `workshop-rs` must cross-check that the canonical id exists in its
+catalog and has the compatible action/value/member kind. It must also
+cross-check manifest alias targets and contextual dispatch targets against the
+same canonical-id namespace. Parameter `domain` values and contextual option
+domains are identity links; member lists, domain membership, localized
+spellings, and settings/content data remain `workshop-rs` inputs.
+
+Entries without a `catalogId` are explicit frontend special forms or
+integration gaps (`debug`, `print`, `chase`, `stopChasing`, `range`, `append`,
+`getHero`, and `hasStatus` in the current manifest). The adapter must handle
+those cases by their documented source semantics or report a structured
+lowering-dependent gap; it must not synthesize a catalog id or copy Workshop
+data into `opy-rs`.
+
 ## Stable contracts
 
 The following contracts are stable and preserved verbatim across the
@@ -115,12 +143,13 @@ partially delivered):
   native differential suite (`cargo test -p opy-frontend --test
   differential`).
 
-Readiness: issue #7 is the active Workshop-independent compatibility gate
-(the eight remaining `planned` features and the full builtin/enum/receiver
-surface beyond the manifest-declared evidence); issue #8 (Workshop lowering,
-catalog, emission, and post-compile-hook execution against Workshop text) is
-blocked on `#7` and the `wrightkit/workshop-rs#2` contracts and is not
-started here.
+Readiness: issue #7 is the active Workshop-independent compatibility gate.
+Issue #30 has separated the manifest-declared OPY semantic overlay from the
+canonical Workshop catalog; the remaining `planned` rows are the pure syntax
+and directive work tracked by #28/#29 plus the explicitly recorded bare
+playervar receiver residual. Issue #8 (Workshop lowering, catalog, emission,
+and post-compile-hook execution against Workshop text) is blocked on #7 and
+the `wrightkit/workshop-rs#2` contracts and is not started here.
 
 ## Validation
 

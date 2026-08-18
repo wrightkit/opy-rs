@@ -53,6 +53,7 @@ const EXPR_KINDS: &[&str] = &[
     "enum",
     "globalVar",
     "playerVar",
+    "member",
     "eventPlayer",
     "constant",
     "call",
@@ -600,6 +601,7 @@ fn for_each_expr<'a>(expr: &'a Expr, f: &mut impl FnMut(&'a Expr)) {
             for_each_expr(z, f);
         }
         Expr::PlayerVar { player, .. } => for_each_expr(player, f),
+        Expr::Member { receiver, .. } => for_each_expr(receiver, f),
         Expr::Call { args, .. } | Expr::MacroCall { args, .. } | Expr::Format { args, .. } => {
             for arg in args {
                 for_each_expr(arg, f);

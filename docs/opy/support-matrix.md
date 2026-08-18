@@ -171,7 +171,7 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
   `random.choice` → `random.<name>` calls; `eventPlayer.member` →
   `PlayerVar`/receiver call on `EventPlayer`; variable receivers
   (`points.append`, `candlePos[i2]`) → `ReceiverCall`/`Index`.
-- Builtin action/value/member identity, signatures, receiver categories,
+- OPY-owned builtin action/value/member identity, signatures, receiver categories,
   parameter enum domains, and non-contextual aliases resolve through the OPY
   semantic compatibility manifest (`crates/opy-frontend/src/manifest/`, schema
   v1; spec in [`compat-manifest-spec.md`](compat-manifest-spec.md)), the
@@ -197,7 +197,7 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
   `eventPlayer.teleport(eventPlayer.getPosition())`,
   `target.setMoveSpeed(50)` on a player-valued global) lower to
   `ReceiverCall`; their Workshop emission resolves through the `workshop-rs`
-  catalog, **lowering-dependent** (inventory-only until integration). The
+  catalog, **lowering-dependent** (inventory-only until integration); the
   corpus-evidenced receiver methods are the `synthetic/receiver-calls`
   fixture methods plus the enum-gated members (en-US spellings per the
   oracle-transcribed evidence).
@@ -228,8 +228,9 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
   removed from the frontend core and is **lowering-dependent** (#8). The
   checks are never approximated (custom, user-declared enum members are
   OPY-level source semantics and stay frontend-validated). Enum
-  domains/members beyond the declared baseline remain `baseline-planned`;
-  emission coverage stays corpus-scoped and is **lowering-dependent**.
+  complete Workshop domain/member catalog remains `lowering-dependent` and is
+  owned by `workshop-rs`; the manifest carries identity links only and never a
+  copied member allowlist.
 - `wait()` / `wait(time)` default-argument filling: the reference appends
   `Wait.IGNORE_CONDITION` (and `0.016` for the no-argument form).
 - **Named/keyword arguments** (`name = expr` call arguments) bind against the
@@ -312,12 +313,11 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
   post-compile hooks" above); the remaining runtime surface is
   `lowering-dependent`: hook output into Workshop emission and catalog
   constant population (`Map`/`Hero`/… objects stay empty).
-- OverPy enum domains/members beyond the manifest's declared baseline (a
-  data change, `baseline-planned` in the compatibility baseline).
-- Emission spellings for manifest-valid entries not yet catalog-covered
-  (alias targets `stopChasing`/`getHero`/`hasStatus`, and enum members
-  without a catalogged spelling); these fail at emission with catalog
-  diagnostics once integration lands, never silently.
+- Canonical Workshop enum domains/members and emission spellings are
+  `lowering-dependent` and owned by `workshop-rs`; they are not OPY frontend
+  gaps. Manifest entries without a direct catalog id carry an explicit
+  `catalogLink` reason (`special-lowering`, `legacy-alias`, or `catalog-gap`)
+  and remain visible to the integration adapter.
 - Rule `disabled` markers (no corpus evidence for the source annotation).
 - Expression-level `in`/`not in` membership operators: rejected at parsing
   (`for ... in` headers are supported).

@@ -100,6 +100,24 @@ class SupportMatrixTests(unittest.TestCase):
             len(self.features),
         )
 
+    def test_semantic_ownership_split_is_explicit(self):
+        by_id = {feature["id"]: feature for feature in self.features}
+        for overlay in (
+            "semantics/builtin-actions-values",
+            "semantics/receiver-members",
+            "semantics/enum-domains",
+        ):
+            self.assertEqual(by_id[overlay]["state"], "semantic-supported")
+        for catalog in (
+            "semantics/workshop-builtin-catalog",
+            "semantics/workshop-receiver-catalog",
+            "semantics/workshop-enum-domains",
+        ):
+            self.assertEqual(by_id[catalog]["state"], "lowering-dependent")
+        self.assertEqual(
+            by_id["semantics/receiver-playervar"]["state"], "semantic-supported"
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

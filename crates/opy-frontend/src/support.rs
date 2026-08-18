@@ -218,14 +218,14 @@ mod tests {
         assert_eq!(syntax.len(), 7);
         assert!(syntax.iter().all(|feature| feature.category == "syntax"));
         let lowering = matrix.features_by_state("lowering-dependent");
-        assert_eq!(lowering.len(), 8);
+        assert_eq!(lowering.len(), 11);
         assert!(
             lowering
                 .iter()
                 .all(|feature| feature.state == "lowering-dependent")
         );
-        assert_eq!(matrix.summary().by_state["planned"], 8);
-        assert_eq!(matrix.summary().by_category["semantics"], 10);
+        assert_eq!(matrix.summary().by_state["planned"], 5);
+        assert_eq!(matrix.summary().by_category["semantics"], 14);
         // Every feature id is unique.
         let mut ids: Vec<&str> = matrix
             .features

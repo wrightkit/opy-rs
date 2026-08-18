@@ -9,7 +9,7 @@
   },
   "snapshot": {
     "date": "2026-08-16",
-    "note": "Merged-main baseline (PRs #9-#14; issues #2-#6 delivered, #7 partially delivered). Frontend (PR #9), evidence base (PR #10), JS runtime (PR #11), tooling API/CLI (PR #12), differential suite (PR #13), and cross-platform runtime CI (PR #14) are merged on main. Frontend-supported rows: declared syntax surface, settings blocks, structured diagnostics, preprocessing (include/define/undef), macro statements, rule directives/model, JavaScript macros, and runtime hooks. Semantic-supported rows: declaration resolution, for-loop binders, modules, keyword arguments, and the declared alias surface. Remaining planned rows: full builtin/enum/receiver surfaces beyond the manifest-declared evidence, advanced directives, translations, and optimization controls. Workshop-dependent features are lowering-dependent and inventory-only until the workshop-rs integration stage (#8). #!postCompileHook is parsed/validated/recorded by the frontend; execution against the final Workshop text is lowering-dependent (#8).",
+    "note": "Merged-main baseline (PRs #9-#14; issues #2-#6 delivered, #7 partially delivered). Frontend (PR #9), evidence base (PR #10), JS runtime (PR #11), tooling API/CLI (PR #12), differential suite (PR #13), and cross-platform runtime CI (PR #14) are merged on main. Frontend-supported rows: declared syntax surface, settings blocks, structured diagnostics, preprocessing (include/define/undef), macro statements, rule directives/model, JavaScript macros, and runtime hooks. Semantic-supported rows: declaration resolution, for-loop binders, modules, keyword arguments, the declared alias surface, and the OPY-owned manifest overlay for builtin/member/enum semantics. After #30, canonical Workshop builtin/member/enum breadth is represented by separate lowering-dependent rows; remaining planned rows are the pure syntax and directive/preprocessing work tracked by #28 and #29 plus the explicitly recorded bare playervar receiver residual. Workshop-dependent features are lowering-dependent and inventory-only until the workshop-rs integration stage (#8). #!postCompileHook is parsed/validated/recorded by the frontend; execution against the final Workshop text is lowering-dependent (#8).",
     "asOfCommit": "cbb7242f4be36a803ebc0a4a3147a6574840f734"
   },
   "states": {
@@ -157,9 +157,9 @@
     },
     {
       "id": "semantics/builtin-actions-values",
-      "name": "Builtin actions and values (manifest-declared surface; full 225 action / 267 value Workshop surface)",
+      "name": "OPY builtin actions and values: manifest identities, signatures, aliases, and call semantics",
       "category": "semantics",
-      "state": "planned",
+      "state": "semantic-supported",
       "evidence": [
         "probes:generic-builtins",
         "probes:chase-over-time",
@@ -173,13 +173,24 @@
         "fixtures:synthetic/basic-rule",
         "fixtures:synthetic/chase-condition-agentlab"
       ],
-      "notes": "Issue #4. Resolves through the opy-rs semantic compatibility manifest (crates/opy-frontend/src/manifest/, spec: docs/opy/compat-manifest-spec.md); every entry probe-validated against the pinned oracle. Full surface stays baseline-planned."
+      "notes": "Issue #30. The manifest-declared OPY overlay is semantic-supported: source identities, action/value position, signatures, keyword binding, aliases, and canonical catalogId links are probe-validated against the pinned oracle. Canonical Workshop existence/content/emission breadth is tracked separately as lowering-dependent."
+    },
+    {
+      "id": "semantics/workshop-builtin-catalog",
+      "name": "Canonical Workshop builtin action/value catalog existence, content, and emission",
+      "category": "semantics",
+      "state": "lowering-dependent",
+      "evidence": [
+        "probes:catalog-only-names",
+        "upstream:src/data/opy/functions.ts"
+      ],
+      "notes": "Issue #30/#8. Canonical Workshop action/value catalog breadth, catalog existence, content domains, localized spellings, and emission are owned by workshop-rs. The integration adapter cross-checks manifest catalogId links; opy-rs does not copy the catalog or claim full 225/267 coverage."
     },
     {
       "id": "semantics/receiver-members",
-      "name": "Receiver/member functions: receiver categories, explicit-argument signatures, variable receivers",
+      "name": "OPY receiver/member semantics: receiver categories and explicit-argument signatures",
       "category": "semantics",
-      "state": "planned",
+      "state": "semantic-supported",
       "evidence": [
         "probes:receiver-calls",
         "probes:enum-gated-members",
@@ -191,13 +202,36 @@
         "fixtures:synthetic/receiver-calls",
         "upstream:src/data/opy/memberFunctions.ts"
       ],
-      "notes": "Issue #4. Includes the bare-playervar-receiver residual item (A = B.C, baseline-planned). Workshop emission of member calls through the catalog is lowering-dependent."
+      "notes": "Issue #30. The manifest-declared OPY member overlay is semantic-supported: receiver syntax/category semantics, explicit-argument signatures, variable receiver rules, aliases, and catalogId links are probe-validated. Canonical member existence/content and Workshop emission remain lowering-dependent."
+    },
+    {
+      "id": "semantics/workshop-receiver-catalog",
+      "name": "Canonical Workshop receiver/member catalog existence, content, and emission",
+      "category": "semantics",
+      "state": "lowering-dependent",
+      "evidence": [
+        "probes:receiver-calls",
+        "upstream:src/data/opy/memberFunctions.ts"
+      ],
+      "notes": "Issue #30/#8. Canonical receiver member lists, member existence, content-specific receiver/domain validation, localized spellings, and emission are Workshop-owned. The frontend preserves unknown/member diagnostics that can be decided from OPY metadata and defers catalog checks to integration."
+    },
+    {
+      "id": "semantics/receiver-playervar",
+      "name": "Bare playervar receiver member access (`A = B.C`)",
+      "category": "semantics",
+      "state": "semantic-supported",
+      "evidence": [
+        "fixtures:synthetic/receiver-playervar",
+        "upstream:src/tests/variables.opy",
+        "upstream:src/data/opy/memberFunctions.ts"
+      ],
+      "notes": "Issue #30 repair. The pinned oracle accepts this OPY-owned receiver form and the frontend preserves its variable receiver and member identity in HIR with source provenance. Canonical member existence and emission remain Workshop-owned and lowering-dependent; #8 must not be used to claim the OPY expression incomplete."
     },
     {
       "id": "semantics/enum-domains",
-      "name": "Builtin enum/constant domains and members (declared domains; 46 upstream domains incl. Hero/Map/Gamemode)",
+      "name": "OPY enum/domain semantics: declared domain identities and contextual dispatch",
       "category": "semantics",
-      "state": "planned",
+      "state": "semantic-supported",
       "evidence": [
         "probes:unknown-enum",
         "fixtures:synthetic/chase-enums",
@@ -205,7 +239,18 @@
         "upstream:src/tests/builtinenums.opy",
         "upstream:src/data/opy/constants.ts"
       ],
-      "notes": "Issue #4. Workshop enum member/domain validation (member existence, domain mismatch) was removed from the core and is lowering-dependent (#8): member accesses on declared domain identities resolve as opaque identities, and the checks are never approximated. Full domain surface stays baseline-planned; emission spellings are lowering-dependent."
+      "notes": "Issue #30. Manifest parameter domains and contextual dispatch are semantic-supported OPY identity links with oracle/corpus evidence. Domain member lists, member existence, domain membership, localized spellings, and emission remain Workshop-owned and are never approximated in opy-rs."
+    },
+    {
+      "id": "semantics/workshop-enum-domains",
+      "name": "Canonical Workshop enum/domain member lists, membership, and emission",
+      "category": "semantics",
+      "state": "lowering-dependent",
+      "evidence": [
+        "probes:unknown-enum",
+        "upstream:src/data/opy/constants.ts"
+      ],
+      "notes": "Issue #30/#8. Canonical enum domains and members (including Hero, Map, Gamemode, Team, and settings/content domains) are Workshop catalog data. opy-rs carries identity links only; workshop-rs performs member existence and domain compatibility checks at lowering."
     },
     {
       "id": "semantics/aliases",
@@ -515,15 +560,15 @@
   ],
   "summary": {
     "byState": {
-      "planned": 8,
+      "planned": 5,
       "frontend-supported": 14,
-      "semantic-supported": 5,
-      "lowering-dependent": 8,
+      "semantic-supported": 9,
+      "lowering-dependent": 11,
       "end-to-end-supported": 0
     },
     "byCategory": {
       "syntax": 7,
-      "semantics": 10,
+      "semantics": 14,
       "preprocessing": 3,
       "macros": 3,
       "directives": 2,
