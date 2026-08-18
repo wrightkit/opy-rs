@@ -31,10 +31,10 @@ JavaScript macro runtime, the tooling API/CLI, and the native differential
 suite are implemented and CI-covered. The rows they evidence are flipped to
 `frontend-supported`/`semantic-supported` in
 `compatibility/support-matrix.json`, the mechanically checked state source;
-features whose completion requires canonical Workshop semantics are
-`lowering-dependent` and are inventory-only until the `workshop-rs`
-integration stage (#8), which remains the active Workshop-independent
-readiness gate. Per-fixture differential status (resolve /
+features whose completion requires the full canonical Workshop surface remain
+`lowering-dependent`; the bounded #35 adapter is separately recorded as
+`end-to-end-supported` and does not reclassify broader Workshop-owned rows.
+The wider #8 lowering stage remains outside this frontend gate. Per-fixture differential status (resolve /
 expected-diagnostic / divergence) is recorded in
 `target/opy-differential-report.json` by `cargo test -p opy-frontend
 --test differential`.
@@ -53,6 +53,7 @@ Workshop-independent up to the documented integration boundary toward
 | `compatibility/fixtures/real-world/overpy-*/` | Real-world surface from the pinned OverPy `examples/` tree (arrays, macros, effects, settings, subroutines, include closures; provenance in `compatibility/fixtures/README.md`) |
 | `compatibility/fixtures/real-world/{ow1-emulator,6v6-adjustments}/` | Independent third-party projects (BSD-2-Clause), full include closures |
 | `compatibility/fixtures/**/oracle.json` | Pinned OverPy 9.7.10 reference snapshots (normalized Workshop output, diagnostics, exit codes) |
+| `compatibility/fixtures/synthetic/issue-35-integration/` | #35 OPY-to-Workshop vertical-slice evidence; oracle provenance remains separate from implementation-specific WIR/emission assertions |
 | `compatibility/support-matrix.json` | Machine-readable state tracking of every declared feature (the mechanically checkable artifact) |
  | `crates/opy-frontend/src/manifest/` | The opy-rs-owned semantic compatibility manifest and its oracle probes (ported with the frontend, issue #3/#4) |
  | `crates/opy-frontend/tests/differential.rs` + `compatibility/diff.py` | Native-vs-reference differential parity (issue #7): the rust suite runs every corpus fixture through the native pipeline in `cargo test` (no Node), compares status/rule-name evidence against the recorded `oracle.json` snapshots, and writes `target/opy-differential-report.json` |

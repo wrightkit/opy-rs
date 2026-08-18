@@ -3,7 +3,7 @@
 This directory is the opy-rs compatibility corpus: OPY sources with their
 pinned-oracle snapshots (`oracle.json`), ported from the WrightKit project's
 evidence base (wright `compatibility/fixtures/`) and re-verified against the
-pinned OverPy 9.7.10 oracle on 2026-08-17 (all 40 snapshots match).
+pinned OverPy 9.7.10 oracle on 2026-08-17 (all 41 snapshots match).
 
 Corpus policy: every fixture records provenance in its `fixture.json`
 (`kind`, `origin`, `license`, `redistributable`, and — for imported
@@ -27,7 +27,7 @@ fixtures/<category>/<name>/
 
 ## Synthetic fixtures (WrightKit-authored)
 
-`fixtures/synthetic/` — 26 fixtures authored for the WrightKit compatibility
+`fixtures/synthetic/` — 27 fixtures authored for the WrightKit compatibility
 corpus (same organization as opy-rs; AGPL-3.0-or-later, `kind: original`),
 ported unchanged:
 
@@ -50,6 +50,7 @@ ported unchanged:
 | `chase-keywords` | named/keyword arguments and the `chase`/`ChaseReeval` contextual forms |
 | `for-range-agentlab` | `for` with implicit default-variable binder (agent-lab regression, `kind: derived`) |
 | `issue-28-*` | pure OPY syntax probes for switch, do-while, hex, membership, modifiers, dicts, comprehensions, lambda, and negative diagnostics |
+| `issue-35-integration` | minimal OPY HIR to canonical Workshop WIR validation and deterministic emission slice |
 | `issue-29-*` | directive/include/main-file preprocessing probes |
 | `issue-33-*` | switch break/fallthrough, f-string interpolation, and lambda negative probes |
 | `receiver-playervar` | bare variable member expression `A = B.C` with preserved receiver/member provenance |
@@ -120,7 +121,7 @@ reference diagnostics, exactly like the pinned oracle behaves.
 
 ## Not ported / dropped
 
-* **No fixture was dropped for provenance reasons**: all 40 fixtures in the
+* **No fixture was dropped for provenance reasons**: all 41 fixtures in the
   WrightKit corpus carried complete, reviewed provenance and are ported.
 * Upstream `examples/` not ported (candidates for later expansion once a
   demonstrated need exists): `lucioball_all_heroes.opy`, `skirmish_elim.opy`,

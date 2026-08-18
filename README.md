@@ -20,7 +20,7 @@ this repository.
   bounded embedded QuickJS-NG runtime without Node.js.
 - **Tooling APIs:** `check`, semantic inspection, source-aware queries, and
   [validated source-edit foundations](docs/opy/trivia-retention-policy.md).
-- **Compatibility evidence:** a [26-fixture corpus](compatibility/README.md),
+- **Compatibility evidence:** a [41-fixture corpus](compatibility/README.md),
   pinned oracle snapshots, semantic probes, and native differential tests.
 
 ## CLI and library
@@ -60,7 +60,7 @@ reference.[^overpy-reference]
 | Enums & constants | 🟡 Partial | Declared enum domains resolve; the full domain surface is not implemented yet |
 | `switch` / string modifiers | ⏳ Not yet | |
 | Advanced directives, translations & optimization controls | ⏳ Not yet | `#!translations`, the `#!optimize` family, `#!mainFile`, and similar |
-| OPY → Workshop compilation | ⏳ Not yet | Requires the `workshop-rs` integration path |
+| OPY → Workshop compilation | 🟡 First slice | `opy-compiler` lowers the bounded #35 fixture through workshop-rs v0.1.1; broader lowering remains deferred |
 | Workshop → OPY reconstruction | ⏳ Not yet | Requires the `workshop-rs` integration path |
 
 Exact per-feature evidence remains available in the

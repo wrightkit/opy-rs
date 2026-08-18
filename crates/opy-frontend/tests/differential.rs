@@ -187,6 +187,12 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         true,
         "Issue #33 f-string interpolation preserves source-spanned expressions and the approved sorted lambda argument slot.",
     );
+    resolve(
+        &mut cases,
+        "synthetic/issue-35-integration",
+        true,
+        "Issue #35 OPY-to-Workshop integration fixture; the frontend resolves the source and the opy-compiler crate independently validates the canonical WIR slice.",
+    );
     diagnostic(
         &mut cases,
         "synthetic/issue-33-lambda-negative",

@@ -23,15 +23,16 @@ OPY source ──▶ lexer ──▶ preprocess ──▶ CST/parser ──▶ s
                                    member/domain/settings/locale data)
 ```
 
-The pipeline is fully Workshop-independent up to the integration boundary.
-`opy-rs` produces the Opy HIR v1 semantic model
+The frontend pipeline is fully Workshop-independent up to the integration
+boundary. `opy-rs` produces the Opy HIR v1 semantic model
 ([`docs/hir/opy-hir-v1.md`](../hir/opy-hir-v1.md)) with structured,
 source-located diagnostics, and stops there. Anything that requires canonical
-Workshop semantics (emission, catalog spellings, member/domain existence,
-settings-schema content, locale data, and `#!postCompileHook` execution
-against the final Workshop text) is classified `lowering-dependent` in the
-support matrix and is inventory-only until the `workshop-rs` integration
-stage (issue #8).
+Anything that requires the complete canonical Workshop surface (catalog
+spellings, member/domain existence beyond the linked slice, settings-schema
+content, locale data, optimizer effects, and `#!postCompileHook` execution
+against final Workshop text) remains `lowering-dependent` in the support
+matrix. The first compiler slice is implemented in `opy-compiler`; the wider
+lowering track remains outside issue #35 and must not be silently reclassified.
 
 ## Ownership boundary
 
@@ -57,6 +58,42 @@ stage (issue #8).
 `opy-rs` never approximates Workshop-owned validation with a local allowlist
 or a temporary Workshop IR; those checks are deferred (`lowering-dependent`,
 #8) rather than approximated.
+
+## First integration boundary (#35)
+
+The repository now contains a dedicated `opy-compiler` crate with this
+dependency direction:
+
+```
+opy-frontend (OPY lexer/parser/semantic HIR)
+        │
+        ▼
+opy-compiler (OPY HIR adapter and integration diagnostics)
+        │
+        ▼
+workshop-rs v0.1.1 (Catalog, WIR, validation, emission)
+```
+
+`opy-frontend` remains buildable and testable without `workshop-rs`. The
+integration crate pins the tagged `workshop-rs` v0.1.1 contract and constructs
+its compiler only after mechanically checking every manifest `catalogId` and
+enum/domain link against the canonical `Catalog`. The resulting compilation
+artifact exposes the canonical catalog identity and digest for downstream
+consumers.
+
+The accepted vertical slice consumes resolved HIR for global and each-player
+rules, global-variable literal assignments, and catalog-backed generic action
+or value calls. It copies HIR source files into the Workshop source-file arena,
+maps all lowered spans to those typed file ids, validates canonical WIR, and
+emits deterministic en-US Workshop. Unsupported HIR constructs fail with a
+source-attributed integration diagnostic; they are not treated as frontend or
+Workshop catalog support.
+
+The slice is evidenced by
+`compatibility/fixtures/synthetic/issue-35-integration` and the
+`opy-compiler` tests. It establishes the boundary, not full OPY compilation:
+settings/content, locale selection, optimizer effects, hook execution, and
+the remaining OPY lowering surface remain explicit follow-up work.
 
 ## Integration input contract (#8)
 
@@ -139,7 +176,7 @@ complete; #28/#29/#30/#33 executed):
 * the OPY semantic compatibility manifest with oracle-validated probes;
 * JavaScript macro execution and record-only post-compile hooks;
 * the `check`/`inspect`/`support` tooling API and `opy-cli`;
-* the 40-fixture compatibility corpus with pinned oracle snapshots and the
+* the 41-fixture compatibility corpus with pinned oracle snapshots and the
   native differential suite (`cargo test -p opy-frontend --test
   differential`).
 
@@ -147,9 +184,11 @@ Readiness: issue #7's Workshop-independent compatibility gate is implemented
 in the four Draft PR tracks. Issue #30 separates the manifest-declared OPY
 semantic overlay from the canonical Workshop catalog; the receiver residual
 `A = B.C` is represented with provenance-preserving member HIR, and the
-support matrix has no remaining `planned` entries. Issue #8 (Workshop
-lowering, catalog, emission, and post-compile-hook execution against Workshop
-text) remains explicitly not started here.
+support matrix has no remaining `planned` entries. Issue #35 establishes the
+first OPY-to-canonical-WIR boundary on workshop-rs v0.1.1. The broader #8
+lowering surface (full catalog/content breadth, settings, locales, optimizer
+effects, decompilation, and post-compile-hook execution against Workshop text)
+remains explicitly not started here.
 
 ## Validation
 
