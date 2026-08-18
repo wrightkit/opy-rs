@@ -97,7 +97,10 @@ pub fn check_with_overlay(
             };
         }
     };
-    let parsed = crate::parser::parse(&preprocessed.tokens);
+    let parsed = crate::parser::parse_with_options(
+        &preprocessed.tokens,
+        preprocessed.preprocessing.allow_macro_redeclaration,
+    );
     let Some(mut program) = parsed.program else {
         // The parser recovers at statement boundaries; every collected error
         // is reported (the compile pipeline reads only the first).
@@ -143,17 +146,25 @@ pub fn check_with_overlay(
             path: file.path.clone(),
         })
         .collect();
-    match crate::lower::lower(&program, hir_files, defines) {
-        Ok(hir) => CheckOutcome {
-            diagnostics: Vec::new(),
-            model: Some(SemanticModel::build(hir, &program)),
-            files,
-            // The directive was parsed, validated, and recorded by
-            // preprocessing; the frontend never executes the hook (real hook
-            // execution receives the final Workshop text and is
-            // lowering-dependent, issue #8).
-            post_compile_hook: preprocessed.post_compile_hook,
-        },
+    match crate::lower::lower_with_preprocessing(
+        &program,
+        hir_files,
+        defines,
+        &preprocessed.preprocessing,
+    ) {
+        Ok(mut hir) => {
+            hir.preprocessing = preprocessed.preprocessing;
+            CheckOutcome {
+                diagnostics: Vec::new(),
+                model: Some(SemanticModel::build(hir, &program)),
+                files,
+                // The directive was parsed, validated, and recorded by
+                // preprocessing; the frontend never executes the hook (real hook
+                // execution receives the final Workshop text and is
+                // lowering-dependent, issue #8).
+                post_compile_hook: preprocessed.post_compile_hook,
+            }
+        }
         Err(error) => CheckOutcome {
             diagnostics: vec![Diagnostic::from_error(error, &files)],
             model: None,
@@ -401,6 +412,7 @@ impl SemanticModel {
         for entry in &self.hir.rules {
             let RuleEntry::SubroutineDef {
                 name,
+                source_name,
                 name_span,
                 span,
                 ..
@@ -415,7 +427,11 @@ impl SemanticModel {
                 continue;
             };
             self.symbols.push(Symbol {
-                name: name.clone(),
+                name: if source_name.is_empty() {
+                    name.clone()
+                } else {
+                    source_name.clone()
+                },
                 kind: SymbolKind::Def,
                 declaration,
                 references: Vec::new(),

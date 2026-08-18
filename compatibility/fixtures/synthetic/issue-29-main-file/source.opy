@@ -1,0 +1,1 @@
+#!mainFile "entry.opy"

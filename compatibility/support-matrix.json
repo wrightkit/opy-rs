@@ -353,13 +353,26 @@
       "id": "preprocessing/advanced-directives",
       "name": "#!mainFile, #!allowMacroRedeclaration, #!optimize*/#!replace0By* family, #!rulePrefix*",
       "category": "preprocessing",
-      "state": "planned",
+      "state": "semantic-supported",
       "evidence": [
+        "fixtures:synthetic/issue-29-directives",
+        "fixtures:synthetic/issue-29-main-file",
         "upstream:src/tests/rulePrefix.opy",
         "upstream:src/tests/compression.opy",
         "upstream:src/data/opy/preprocessing.ts"
       ],
-      "notes": "Baseline category 5a: legacy-quirk/demand-driven; explicit rejection until the declared compatibility target requires them."
+      "notes": "Issue #29: frontend records directive state, macro-redeclaration policy, main-file provenance, and rule-prefix application. Optimizer and generated Workshop effects remain separate."
+    },
+    {
+      "id": "preprocessing/directive-effects",
+      "name": "Preprocessing directive effects on Workshop emission and optimization",
+      "category": "preprocessing",
+      "state": "lowering-dependent",
+      "evidence": [
+        "fixtures:synthetic/issue-29-directives",
+        "upstream:src/data/opy/preprocessing.ts"
+      ],
+      "notes": "#8/workshop-rs owns optimizer execution, replacement rewrites, generated translation helpers, and final Workshop output; opy-rs does not approximate them."
     },
     {
       "id": "macros/definitions",
@@ -411,7 +424,7 @@
     },
     {
       "id": "directives/rule-annotations",
-      "name": "Rule annotations: @Event, @Condition, bare @Team/@Slot; evidence-prioritized: @Team/@Slot args, @Name, @Hero, @Disabled, @Delimiter, @NewPage, @SuppressWarnings",
+      "name": "Rule annotations: @Event, @Condition, bare @Team/@Slot",
       "category": "directives",
       "state": "frontend-supported",
       "evidence": [
@@ -421,7 +434,19 @@
         "upstream:src/tests/rules.opy",
         "upstream:README.md"
       ],
-      "notes": "Bare @Event/@Condition/@Team/@Slot; argument forms and @Name/@Hero/@Disabled etc. remain planned (no corpus evidence in declared surface)."
+      "notes": "Core rule annotations and event/condition structure are frontend-owned."
+    },
+    {
+      "id": "directives/advanced-rule-annotations",
+      "name": "Rule annotations: @Team/@Slot args, @Name, @Hero, @Disabled, @Delimiter, @NewPage, @SuppressWarnings",
+      "category": "directives",
+      "state": "semantic-supported",
+      "evidence": [
+        "fixtures:synthetic/issue-29-directives",
+        "fixtures:synthetic/issue-29-invalid",
+        "upstream:src/data/opy/annotations.ts"
+      ],
+      "notes": "Issue #29: annotation arguments, rule metadata, and source diagnostics are retained in OPY HIR; hero/team/slot domain validation and Workshop UI effects remain lowering-dependent."
     },
     {
       "id": "directives/rule-model",
@@ -441,15 +466,16 @@
       "id": "translations/directive",
       "name": "#!translations directive recognition and .po generation surface",
       "category": "translations",
-      "state": "planned",
+      "state": "semantic-supported",
       "evidence": [
+        "fixtures:synthetic/issue-29-directives",
         "upstream:src/tests/translations.opy",
         "upstream:src/tests/translations2.opy",
         "upstream:src/tests/translations.es.po",
         "upstream:src/tests/translations2.fr.po",
         "upstream:src/compiler/translations.ts"
       ],
-      "notes": "Baseline category 5a: legacy-quirk/demand-driven; directive recognition is frontend-owned; the emitted locale data path is lowering-dependent."
+      "notes": "Issue #29: language-tag syntax, uniqueness/conflict validation, provenance, and translation state are frontend-owned; locale availability, .po content, and generated Workshop helpers remain lowering-dependent."
     },
     {
       "id": "translations/locale-emission",
@@ -466,12 +492,24 @@
       "id": "optimization/controls",
       "name": "#!optimize*/#!replace0By* family and compression controls",
       "category": "optimization",
-      "state": "planned",
+      "state": "semantic-supported",
       "evidence": [
+        "fixtures:synthetic/issue-29-directives",
         "upstream:src/tests/compression.opy",
         "upstream:src/data/opy/preprocessing.ts"
       ],
-      "notes": "Baseline category 5a: legacy-quirk/demand-driven. Optimizer choices are not a compatibility contract; only observable semantics count."
+      "notes": "Issue #29: optimizer/replacement controls are parsed, validated, ordered, and exposed as frontend state; transformation execution is not part of opy-rs."
+    },
+    {
+      "id": "optimization/backend-effects",
+      "name": "Optimizer transformations and replacement rewrites",
+      "category": "optimization",
+      "state": "lowering-dependent",
+      "evidence": [
+        "fixtures:synthetic/issue-29-directives",
+        "upstream:src/data/opy/preprocessing.ts"
+      ],
+      "notes": "#8/workshop-rs owns optimizer execution and any Workshop element-count or replacement consequences; output-text identity is not required."
     },
     {
       "id": "optimization/emission-form",
@@ -560,20 +598,20 @@
   ],
   "summary": {
     "byState": {
-      "planned": 5,
+      "planned": 2,
       "frontend-supported": 14,
-      "semantic-supported": 9,
-      "lowering-dependent": 11,
+      "semantic-supported": 13,
+      "lowering-dependent": 13,
       "end-to-end-supported": 0
     },
     "byCategory": {
       "syntax": 7,
       "semantics": 14,
-      "preprocessing": 3,
+      "preprocessing": 4,
       "macros": 3,
-      "directives": 2,
+      "directives": 3,
       "translations": 2,
-      "optimization": 2,
+      "optimization": 3,
       "runtime": 1,
       "compilation": 3,
       "decompilation": 2

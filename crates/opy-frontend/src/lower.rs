@@ -28,10 +28,10 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::hir::types::{
-    Declaration, Define, Event, Expr as HirExpr, Generator, IfBranch, Position,
-    Program as HirProgram, Protocol, Rule, RuleEntry, Settings as HirSettings,
-    SettingsNode as HirSettingsNode, SourceFile, Span as HirSpan, Stmt as HirStmt,
-    default_var_index,
+    Annotation as HirAnnotation, AnnotationArg as HirAnnotationArg, Declaration, Define, Event,
+    Expr as HirExpr, Generator, IfBranch, Position, PreprocessingState, Program as HirProgram,
+    Protocol, Rule, RuleEntry, Settings as HirSettings, SettingsNode as HirSettingsNode,
+    SourceFile, Span as HirSpan, Stmt as HirStmt, default_var_index,
 };
 
 use crate::cst::{self, CallArg, Decl, Expr, RuleEntry as CstRuleEntry, Stmt};
@@ -73,6 +73,15 @@ pub fn lower(
     program: &cst::Program,
     files: Vec<SourceFile>,
     defines: Vec<Define>,
+) -> FrontendResult<HirProgram> {
+    lower_with_preprocessing(program, files, defines, &PreprocessingState::default())
+}
+
+pub fn lower_with_preprocessing(
+    program: &cst::Program,
+    files: Vec<SourceFile>,
+    defines: Vec<Define>,
+    preprocessing: &PreprocessingState,
 ) -> FrontendResult<HirProgram> {
     let manifest = match Manifest::builtin() {
         Ok(manifest) => manifest,
@@ -163,19 +172,40 @@ pub fn lower(
     let mut rules = Vec::new();
     for entry in &program.rules {
         match entry {
-            CstRuleEntry::Rule(rule) => rules.push(RuleEntry::Rule(lowerer.lower_rule(rule))),
+            CstRuleEntry::Rule(rule) => rules.push(RuleEntry::Rule(lowerer.lower_rule(
+                rule,
+                files.as_slice(),
+                preprocessing,
+            )?)),
             CstRuleEntry::SubroutineDef {
                 name,
+                presentation_name,
                 span,
                 name_span,
                 body,
+                annotations,
+                rule_prefix,
             } => {
+                let base_name = presentation_name
+                    .as_deref()
+                    .map(str::to_string)
+                    .unwrap_or_else(|| name.clone());
+                let generated_name = render_rule_name(
+                    &base_name,
+                    rule_prefix.as_deref(),
+                    false,
+                    *span,
+                    files.as_slice(),
+                    preprocessing,
+                )?;
                 rules.push(RuleEntry::SubroutineDef {
                     kind: "subroutineDef".to_string(),
-                    name: name.clone(),
+                    name: generated_name,
+                    source_name: name.clone(),
                     span: Some(span.into()),
                     name_span: Some(name_span.into()),
                     body: lowerer.lower_block(body, &[]),
+                    annotations: lower_annotations(annotations),
                 });
             }
         }
@@ -200,7 +230,285 @@ pub fn lower(
         declarations,
         rules,
         settings: program.settings.as_ref().map(lower_settings),
+        preprocessing: preprocessing.clone(),
     })
+}
+
+fn prefixed_rule_name(name: &str, prefix: Option<&str>, delimiter: bool) -> String {
+    match prefix {
+        Some(prefix) if !prefix.is_empty() && !delimiter && !name.is_empty() => {
+            format!("[{prefix}] {name}")
+        }
+        _ => name.to_string(),
+    }
+}
+
+#[derive(Clone, Debug)]
+enum TemplateValue {
+    String(String),
+    Bool(bool),
+}
+
+fn render_rule_name(
+    name: &str,
+    prefix: Option<&str>,
+    delimiter: bool,
+    span: Span,
+    files: &[SourceFile],
+    preprocessing: &PreprocessingState,
+) -> FrontendResult<String> {
+    let Some(template) = preprocessing
+        .rule_prefix_template
+        .as_ref()
+        .map(|value| value.value.as_str())
+    else {
+        return Ok(prefixed_rule_name(name, prefix, delimiter));
+    };
+    let (file, path) = rule_file_parts(span.file, files);
+    let prefix = prefix.unwrap_or_default();
+    let values = [
+        ("$rule", TemplateValue::String(name.to_string())),
+        ("$prefix", TemplateValue::String(prefix.to_string())),
+        ("$file", TemplateValue::String(file.clone())),
+        ("$path", TemplateValue::String(path.clone())),
+        ("$isDelimiter", TemplateValue::Bool(delimiter)),
+        ("$prefixTitle", TemplateValue::String(title_case(prefix))),
+        ("$prefixUpper", TemplateValue::String(prefix.to_uppercase())),
+        ("$prefixLower", TemplateValue::String(prefix.to_lowercase())),
+        ("$fileTitle", TemplateValue::String(title_case(&file))),
+        ("$fileUpper", TemplateValue::String(file.to_uppercase())),
+        ("$fileLower", TemplateValue::String(file.to_lowercase())),
+        ("$pathTitle", TemplateValue::String(title_case(&path))),
+        ("$pathUpper", TemplateValue::String(path.to_uppercase())),
+        ("$pathLower", TemplateValue::String(path.to_lowercase())),
+    ];
+    evaluate_template(template, &values).map_err(|message| {
+        FrontendError::at(
+            "rule-prefix-template-invalid",
+            format!("could not resolve rule prefix template: {message}"),
+            span,
+        )
+    })
+}
+
+fn rule_file_parts(file_id: u32, files: &[SourceFile]) -> (String, String) {
+    let path = files
+        .iter()
+        .find(|file| file.id == file_id)
+        .map(|file| file.path.replace('\\', "/"))
+        .unwrap_or_default();
+    let without_extension = path
+        .strip_suffix(".opy")
+        .or_else(|| path.strip_suffix(".OPY"))
+        .unwrap_or(&path)
+        .to_string();
+    let file = without_extension
+        .rsplit('/')
+        .next()
+        .unwrap_or_default()
+        .to_string();
+    (file, without_extension)
+}
+
+fn title_case(value: &str) -> String {
+    let mut result = String::with_capacity(value.len());
+    let mut capitalize = true;
+    for ch in value.chars() {
+        if ch == '_' {
+            result.push(' ');
+            capitalize = true;
+        } else if capitalize && ch.is_ascii_alphabetic() {
+            result.push(ch.to_ascii_uppercase());
+            capitalize = false;
+        } else {
+            result.push(ch);
+            if !ch.is_whitespace() && ch != '/' {
+                capitalize = false;
+            }
+        }
+        if ch == '/' || ch.is_whitespace() {
+            capitalize = true;
+        }
+    }
+    result
+}
+
+fn evaluate_template(template: &str, values: &[(&str, TemplateValue)]) -> Result<String, String> {
+    if let Some((then_value, condition, else_value)) = split_conditional(template) {
+        let branch = if evaluate_condition(condition, values)? {
+            then_value
+        } else {
+            else_value
+        };
+        return evaluate_string(branch, values);
+    }
+    evaluate_string(template, values)
+}
+
+fn split_conditional(value: &str) -> Option<(&str, &str, &str)> {
+    let mut quote = None;
+    let mut depth = 0usize;
+    let mut if_start = None;
+    let mut else_start = None;
+    for (index, ch) in value.char_indices() {
+        match (ch, quote) {
+            ('"' | '\'', None) => quote = Some(ch),
+            (ch, Some(current)) if ch == current => quote = None,
+            ('{', None) => depth += 1,
+            ('}', None) => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+        if quote.is_none() && depth == 0 {
+            if value[index..].starts_with(" if ") && if_start.is_none() {
+                if_start = Some(index);
+            } else if value[index..].starts_with(" else ") && else_start.is_none() {
+                else_start = Some(index);
+            }
+        }
+    }
+    let (Some(if_start), Some(else_start)) = (if_start, else_start) else {
+        return None;
+    };
+    Some((
+        value[..if_start].trim(),
+        value[if_start + 4..else_start].trim(),
+        value[else_start + 6..].trim(),
+    ))
+}
+
+fn evaluate_condition(value: &str, values: &[(&str, TemplateValue)]) -> Result<bool, String> {
+    let value = value.trim();
+    if let Some(rest) = value.strip_prefix("not ") {
+        return Ok(!evaluate_condition(rest, values)?);
+    }
+    if let Some((left, right)) = value.split_once(" or ") {
+        return Ok(evaluate_condition(left, values)? || evaluate_condition(right, values)?);
+    }
+    if let Some((left, right)) = value.split_once(" and ") {
+        return Ok(evaluate_condition(left, values)? && evaluate_condition(right, values)?);
+    }
+    match lookup_template_value(value, values)? {
+        TemplateValue::Bool(value) => Ok(value),
+        TemplateValue::String(value) => Ok(!value.is_empty()),
+    }
+}
+
+fn evaluate_string(value: &str, values: &[(&str, TemplateValue)]) -> Result<String, String> {
+    let value = value.trim();
+    if let Some(body) = value
+        .strip_prefix("f\"")
+        .and_then(|body| body.strip_suffix('"'))
+    {
+        return interpolate_fstring(body, values);
+    }
+    if let Some(body) = value
+        .strip_prefix("f'")
+        .and_then(|body| body.strip_suffix('\''))
+    {
+        return interpolate_fstring(body, values);
+    }
+    if value.len() >= 2
+        && ((value.starts_with('"') && value.ends_with('"'))
+            || (value.starts_with('\'') && value.ends_with('\'')))
+    {
+        return Ok(value[1..value.len() - 1].to_string());
+    }
+    match lookup_template_value(value, values)? {
+        TemplateValue::String(value) => Ok(value),
+        TemplateValue::Bool(value) => Ok(value.to_string()),
+    }
+}
+
+fn interpolate_fstring(body: &str, values: &[(&str, TemplateValue)]) -> Result<String, String> {
+    let mut result = String::new();
+    let mut remaining = body;
+    while let Some(start) = remaining.find('{') {
+        result.push_str(&remaining[..start]);
+        let end = remaining[start + 1..]
+            .find('}')
+            .ok_or_else(|| "unterminated interpolation".to_string())?
+            + start
+            + 1;
+        result.push_str(&evaluate_string(&remaining[start + 1..end], values)?);
+        remaining = &remaining[end + 1..];
+    }
+    result.push_str(remaining);
+    Ok(result)
+}
+
+fn lookup_template_value(
+    value: &str,
+    values: &[(&str, TemplateValue)],
+) -> Result<TemplateValue, String> {
+    let value = value.trim();
+    let (base, mut methods) = value
+        .split_once('.')
+        .map_or((value, ""), |(base, methods)| (base, methods));
+    let mut result = values
+        .iter()
+        .find(|(name, _)| *name == base)
+        .map(|(_, value)| value.clone())
+        .ok_or_else(|| format!("unsupported expression '{value}'"))?;
+    while !methods.is_empty() {
+        let (method, rest) = methods
+            .split_once('.')
+            .map_or((methods, ""), |(method, rest)| (method, rest));
+        if method == "upper()" {
+            result = TemplateValue::String(as_string(&result).to_uppercase());
+        } else if method == "lower()" {
+            result = TemplateValue::String(as_string(&result).to_lowercase());
+        } else if let Some(args) = method
+            .strip_prefix("replace(")
+            .and_then(|v| v.strip_suffix(')'))
+        {
+            let (from, to) = args
+                .split_once(',')
+                .ok_or_else(|| "replace expects two arguments".to_string())?;
+            let from = unquote_template_arg(from.trim())?;
+            let to = unquote_template_arg(to.trim())?;
+            result = TemplateValue::String(as_string(&result).replace(&from, &to));
+        } else {
+            return Err(format!("unsupported method '{method}'"));
+        }
+        methods = rest;
+    }
+    Ok(result)
+}
+
+fn as_string(value: &TemplateValue) -> String {
+    match value {
+        TemplateValue::String(value) => value.clone(),
+        TemplateValue::Bool(value) => value.to_string(),
+    }
+}
+
+fn unquote_template_arg(value: &str) -> Result<String, String> {
+    if value.len() >= 2
+        && ((value.starts_with('"') && value.ends_with('"'))
+            || (value.starts_with('\'') && value.ends_with('\'')))
+    {
+        Ok(value[1..value.len() - 1].to_string())
+    } else {
+        Err(format!("expected a quoted string argument, got '{value}'"))
+    }
+}
+
+fn lower_annotations(annotations: &[cst::Annotation]) -> Vec<HirAnnotation> {
+    annotations
+        .iter()
+        .map(|annotation| HirAnnotation {
+            name: annotation.name.clone(),
+            args: annotation
+                .args
+                .iter()
+                .map(|arg| HirAnnotationArg {
+                    text: arg.text.clone(),
+                    span: Some(arg.span.into()),
+                })
+                .collect(),
+            span: Some(annotation.span.into()),
+        })
+        .collect()
 }
 
 /// Map a parsed CST settings block onto the protocol settings tree (#86).
@@ -293,18 +601,33 @@ impl Lowerer {
         }
     }
 
-    fn lower_rule(&mut self, rule: &cst::Rule) -> Rule {
+    fn lower_rule(
+        &mut self,
+        rule: &cst::Rule,
+        files: &[SourceFile],
+        preprocessing: &PreprocessingState,
+    ) -> FrontendResult<Rule> {
         let conditions = rule
             .conditions
             .iter()
             .map(|condition| self.lower_expr(condition, &[], CallPosition::Value))
             .collect();
         let actions = self.lower_block(&rule.actions, &[]);
-        Rule {
-            name: rule.name.clone(),
+        Ok(Rule {
+            name: render_rule_name(
+                &rule.name,
+                rule.rule_prefix.as_deref(),
+                rule.delimiter,
+                rule.span,
+                files,
+                preprocessing,
+            )?,
             span: Some(rule.span.into()),
             name_span: Some(rule.name_span.into()),
             disabled: rule.disabled,
+            delimiter: rule.delimiter,
+            new_page: rule.new_page.clone(),
+            annotations: lower_annotations(&rule.annotations),
             event: Event {
                 name: rule.event.name.clone(),
                 args: rule
@@ -317,7 +640,7 @@ impl Lowerer {
             },
             conditions,
             actions,
-        }
+        })
     }
 
     /// Lower a statement block; `macro_params` names resolve to `MacroParam`.
@@ -1409,6 +1732,56 @@ mod tests {
         };
         assert_eq!(member, "C");
         assert!(matches!(receiver.as_ref(), HirExpr::PlayerVar { name, .. } if name == "B"));
+    }
+
+    #[test]
+    fn rule_prefix_template_is_global_and_subroutine_identity_is_preserved() {
+        let text = "rule \"before\":\n    pass\ndef source_name():\n    @Name \"Friendly\"\n    pass\nrule \"after\":\n    pass\n";
+        let tokens = lex(LexInput { file_id: 0, text }).expect("lexes");
+        let output = parse(&tokens);
+        assert!(
+            output.errors.is_empty(),
+            "unexpected parse errors: {:?}",
+            output.errors
+        );
+        let program = output.program.expect("program");
+        let preprocessing = PreprocessingState {
+            rule_prefix_template: Some(crate::hir::types::DirectiveValue {
+                value: "f\"[{$pathTitle.replace('_', ' ')}] {$rule}\" if $rule and not $isDelimiter else $rule".to_string(),
+                span: None,
+            }),
+            ..PreprocessingState::default()
+        };
+        let hir = lower_with_preprocessing(
+            &program,
+            vec![SourceFile {
+                id: 0,
+                path: "main.opy".to_string(),
+            }],
+            vec![],
+            &preprocessing,
+        )
+        .expect("lowers");
+        let names: Vec<_> = hir
+            .rules
+            .iter()
+            .map(|entry| match entry {
+                HirRuleEntry::Rule(rule) => rule.name.clone(),
+                HirRuleEntry::SubroutineDef { name, .. } => name.clone(),
+            })
+            .collect();
+        assert_eq!(
+            names,
+            vec!["[Main] before", "[Main] Friendly", "[Main] after"]
+        );
+        let HirRuleEntry::SubroutineDef {
+            name, source_name, ..
+        } = &hir.rules[1]
+        else {
+            panic!("expected subroutine definition");
+        };
+        assert_eq!(name, "[Main] Friendly");
+        assert_eq!(source_name, "source_name");
     }
 
     #[test]

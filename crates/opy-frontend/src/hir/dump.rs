@@ -56,12 +56,21 @@ pub fn dump(program: &Program) -> String {
         match entry {
             RuleEntry::Rule(rule) => dump_rule(rule, &mut out, 1),
             RuleEntry::SubroutineDef {
-                name, span, body, ..
+                name,
+                source_name,
+                span,
+                body,
+                ..
             } => {
                 out.push_str(&format!(
-                    "{}subroutineDef {}{}\n",
+                    "{}subroutineDef {} source={}{}\n",
                     indent(1),
                     name,
+                    if source_name.is_empty() {
+                        name
+                    } else {
+                        source_name
+                    },
                     span_suffix(span.as_ref())
                 ));
                 dump_stmts(body, &mut out, 2);

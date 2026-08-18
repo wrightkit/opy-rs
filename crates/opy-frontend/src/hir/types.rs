@@ -109,6 +109,100 @@ pub struct Program {
     /// The typed custom-game-settings block, when the source had one (#86).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub settings: Option<Settings>,
+    /// Frontend preprocessing state. Workshop execution of optimizer,
+    /// translation, and replacement choices remains lowering-dependent.
+    #[serde(default)]
+    pub preprocessing: PreprocessingState,
+}
+
+/// The source-level preprocessing state observed by the frontend.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct PreprocessingState {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub main_file: Option<DirectiveValue>,
+    pub allow_macro_redeclaration: bool,
+    #[serde(default)]
+    pub rule_prefix: Option<DirectiveValue>,
+    #[serde(default)]
+    pub rule_prefix_template: Option<DirectiveValue>,
+    #[serde(default)]
+    pub translations: Option<TranslationState>,
+    #[serde(default)]
+    pub optimization: OptimizationState,
+    #[serde(default)]
+    pub replacements: Vec<DirectiveValue>,
+    #[serde(default)]
+    pub suppressed_warnings: Vec<String>,
+    #[serde(default)]
+    pub directives: Vec<DirectiveRecord>,
+}
+
+/// A directive value plus its source provenance.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DirectiveValue {
+    pub value: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub span: Option<Span>,
+}
+
+/// Translation language selection. Locale/catalog data is intentionally not
+/// represented here.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TranslationState {
+    pub languages: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub span: Option<Span>,
+}
+
+/// Frontend-visible optimization controls. The optimizer itself is outside
+/// this repository and remains lowering-dependent.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct OptimizationState {
+    pub enabled: bool,
+    pub for_size: bool,
+    pub for_size_aggressive: bool,
+    pub strict: bool,
+}
+
+impl Default for OptimizationState {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            for_size: false,
+            for_size_aggressive: false,
+            strict: false,
+        }
+    }
+}
+
+/// One preprocessing event, retained so block-scoped state transitions remain
+/// inspectable without executing a backend optimizer.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DirectiveRecord {
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
+    pub scope_col: u32,
+    #[serde(default)]
+    pub scope_depth: u32,
+    #[serde(default)]
+    pub state: PreprocessingSnapshot,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub span: Option<Span>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct PreprocessingSnapshot {
+    pub allow_macro_redeclaration: bool,
+    pub optimization: OptimizationState,
+    #[serde(default)]
+    pub rule_prefix: Option<String>,
+    #[serde(default)]
+    pub rule_prefix_template: Option<String>,
+    #[serde(default)]
+    pub translations: Option<Vec<String>>,
+    #[serde(default)]
+    pub replacements: Vec<String>,
 }
 
 /// A custom-game-settings block (`settings { ... }`, #86).
@@ -245,6 +339,8 @@ pub enum RuleEntry {
         #[serde(rename = "kind")]
         kind: String,
         name: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        source_name: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         span: Option<Span>,
         /// The exact span of the defined identifier token in `def name():`.
@@ -252,6 +348,8 @@ pub enum RuleEntry {
         name_span: Option<Span>,
         #[serde(default)]
         body: Vec<Stmt>,
+        #[serde(default)]
+        annotations: Vec<Annotation>,
     },
 }
 
@@ -266,11 +364,34 @@ pub struct Rule {
     pub name_span: Option<Span>,
     #[serde(default)]
     pub disabled: bool,
+    #[serde(default)]
+    pub delimiter: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub new_page: Option<String>,
+    #[serde(default)]
+    pub annotations: Vec<Annotation>,
     pub event: Event,
     #[serde(default)]
     pub conditions: Vec<Expr>,
     #[serde(default)]
     pub actions: Vec<Stmt>,
+}
+
+/// A source annotation retained on a rule or subroutine definition.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Annotation {
+    pub name: String,
+    #[serde(default)]
+    pub args: Vec<AnnotationArg>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub span: Option<Span>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AnnotationArg {
+    pub text: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub span: Option<Span>,
 }
 
 /// A rule event.

@@ -36,7 +36,7 @@ class RunnerTests(unittest.TestCase):
         fixtures = run_oracle.discover_fixtures(
             COMPATIBILITY_DIR / "fixtures"
         )
-        self.assertEqual(len(fixtures), 28)
+        self.assertEqual(len(fixtures), 34)
         for fixture_path, fixture in fixtures:
             snapshot = fixture_path.parent / "oracle.json"
             self.assertTrue(snapshot.is_file(), fixture["id"])

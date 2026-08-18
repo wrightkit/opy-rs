@@ -65,9 +65,9 @@ rejected/documented-absent dimension, `—` an inapplicable dimension, and
 | 2 | **Declarations**: `globalvar`/`playervar` (index + initializer forms), `subroutine`, `enum`, `macro` constants (incl. member constants) | `baseline-supported` | ✅ | ✅ | ✅ (integration) | ✅ | ✅ |
 | 3 | **Assignments & control flow**: `=`, augmented (`+= … **=`, `min=`, `max=`), `if`/`elif`/`else`, `for … in range(...)`, `while`, `pass` | `baseline-supported` | ✅ | ✅ | ✅ (integration) | ✅ | ✅ |
 | 4 | **Rule directives & annotations**: `@Event`, `@Condition`, bare `@Team`/`@Slot`, rule name, event defaults (`global`, `all` team/player) | `baseline-supported` (bare forms) | ✅ | ✅ | ✅ (integration) | ✅ | ✅ |
-| 4a | `@Team`/`@Slot` with arguments, `@Name`, `@Hero`, `@Disabled`, `@Delimiter`, `@NewPage`, `@SuppressWarnings` | `evidence-prioritized` | ❌ | ❌ | ❌ | ❌ | ✅ oracle probes |
+| 4a | `@Team`/`@Slot` with arguments, `@Name`, `@Hero`, `@Disabled`, `@Delimiter`, `@NewPage`, `@SuppressWarnings` | `baseline-supported` for frontend state; Workshop domain/UI effects remain lowering-dependent | ✅ | ✅ | partial | ✅ | ✅ oracle probes |
 | 5 | **Preprocessing/include/macro**: `#!include`, `#!define` (object- and function-like), `#!undef`, include cycle detection | `baseline-supported` | ✅ | ✅ | ✅ (integration) | ✅ | ✅ |
-| 5a | `#!mainFile`, `#!allowMacroRedeclaration`, `#!optimize*`/`#!replace0By*` family, `#!translations`, `#!rulePrefix*`, `__script__` JS hooks | `legacy-quirk/demand-driven` | ❌ | ❌ | ❌ | ❌ | partial |
+| 5a | `#!mainFile`, `#!allowMacroRedeclaration`, `#!optimize*`/`#!replace0By*` family, `#!translations`, `#!rulePrefix*`, `__script__` JS hooks | `baseline-supported` for frontend state; optimizer/locale/hook effects remain lowering-dependent | ✅ | ✅ | partial | ✅ | ✅ oracle probes |
 | 6 | **OPY builtin actions & values (generic)**: manifest identities, signatures, aliases, and call semantics | `baseline-supported` for the probe-validated manifest overlay; canonical Workshop existence/content/emission is `lowering-dependent` | ✅ | ✅ | partial (integration) | ✅ | ✅ probes |
 | 6a | **Canonical Workshop builtin action/value catalog**: full catalog existence, content, and emission | `lowering-dependent` (`workshop-rs`, #8) | — | — | ❌ (integration) | — | ✅ inventory/oracle evidence |
 | 7 | **OPY receiver/member semantics**: receiver categories, explicit-argument signatures, variable receivers | `baseline-supported` for the manifest-declared OPY overlay; canonical member existence/content/emission is `lowering-dependent` | ✅ | ✅ | partial (integration) | ✅ | ✅ probes |
@@ -84,13 +84,11 @@ rejected/documented-absent dimension, `—` an inapplicable dimension, and
 
 ## Current `planned` entries
 
-The five explicitly tracked gaps still `planned` in
+The two explicitly tracked OPY-language gaps still `planned` in
 `compatibility/support-matrix.json`, the mechanically checked state source,
-are: `syntax/switch`, `syntax/string-modifiers`,
-`preprocessing/advanced-directives`,
-`translations/directive`, and `optimization/controls`. The three semantic
-overlay rows are supported at the OPY manifest boundary; their canonical
-Workshop catalog rows are explicitly `lowering-dependent`. Their tiers above
+are: `syntax/switch` and `syntax/string-modifiers`. Directive, annotation, translation, and
+optimizer frontend state is implemented; their Workshop effects remain
+`lowering-dependent`. Their tiers above
 distinguish **evidence-prioritized** work (broad or high-fan-out surface with
 clear tooling value, ordered by corpus/consumer evidence) from
 **legacy-quirk/demand-driven** compatibility (rare historical quirks and

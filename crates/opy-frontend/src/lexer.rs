@@ -18,6 +18,9 @@ pub enum TokenKind {
     String,
     /// A `#!` directive line (`text` holds everything after `#!`).
     Directive,
+    /// A preprocessing marker carrying the rule-prefix state active at the
+    /// following top-level rule or subroutine.
+    RulePrefixMarker,
     /// `@Event` / `@Condition` / other `@` directives.
     At,
     Newline,

@@ -45,6 +45,10 @@ use std::path::{Path, PathBuf};
 use opy_macro_js::{Limits, MacroArg, MacroError, MacroRuntime};
 
 use crate::diag::{FrontendError, FrontendResult, Span};
+use crate::hir::types::{
+    DirectiveRecord, DirectiveValue, OptimizationState, PreprocessingSnapshot, PreprocessingState,
+    TranslationState,
+};
 use crate::lexer::{LexInput, Token, TokenKind, lex};
 use crate::settings::SettingsBlock;
 
@@ -92,6 +96,8 @@ pub struct Preprocessed {
     pub settings: Option<SettingsBlock>,
     /// The registered `#!postCompileHook` script, when declared.
     pub post_compile_hook: Option<PostCompileHook>,
+    /// Frontend-visible preprocessing state; backend effects are not run.
+    pub preprocessing: PreprocessingState,
 }
 
 /// The output file registry: the main file only (reference convention).
@@ -151,11 +157,98 @@ pub fn preprocess_with_overlay_outcome(
         macros: Vec::new(),
         defines: Vec::new(),
         post_compile_hook: None,
+        preprocessing: PreprocessingState::default(),
     };
+    let mut owned_main_text = None;
+    let mut source_file_id = 0;
+    let first_line = main_text.lines().next().unwrap_or_default();
+    if first_line.trim_start().starts_with("#!mainFile")
+        && first_main_file_directive(main_text).is_none()
+    {
+        let span = Span::new(
+            0,
+            crate::diag::Position::new(1, 1),
+            crate::diag::Position::new(1, first_line.chars().count() as u32 + 1),
+        );
+        return PreprocessOutcome {
+            result: Err(FrontendError::at(
+                "main-file-invalid",
+                "`#!mainFile` expects one quoted path on the first line",
+                span,
+            )),
+            files: pre.files,
+        };
+    }
+    if let Some((main_file, span)) = first_main_file_directive(main_text) {
+        let candidate = root.join(&main_file);
+        let canonical = std::fs::canonicalize(&candidate).ok();
+        let overlay_text = overlay
+            .get(&main_file)
+            .or_else(|| {
+                canonical
+                    .as_ref()
+                    .and_then(|path| overlay.get(&path.to_string_lossy().into_owned()))
+            })
+            .cloned();
+        let (text, display_path, new_root) = match overlay_text {
+            Some(text) => {
+                let display_path = candidate.to_string_lossy().into_owned();
+                let new_root = candidate
+                    .parent()
+                    .map(Path::to_path_buf)
+                    .unwrap_or_else(|| root.to_path_buf());
+                (text, display_path, new_root)
+            }
+            None => {
+                let Some(canonical) = canonical else {
+                    return PreprocessOutcome {
+                        result: Err(FrontendError::at(
+                            "main-file-not-found",
+                            format!("cannot find main file '{main_file}'"),
+                            span,
+                        )),
+                        files: pre.files,
+                    };
+                };
+                let text = match std::fs::read_to_string(&canonical) {
+                    Ok(text) => text,
+                    Err(error) => {
+                        return PreprocessOutcome {
+                            result: Err(FrontendError::at(
+                                "main-file-not-found",
+                                format!("cannot read main file '{main_file}': {error}"),
+                                span,
+                            )),
+                            files: pre.files,
+                        };
+                    }
+                };
+                let new_root = canonical
+                    .parent()
+                    .map(Path::to_path_buf)
+                    .unwrap_or_else(|| root.to_path_buf());
+                (text, canonical.to_string_lossy().into_owned(), new_root)
+            }
+        };
+        owned_main_text = Some(text);
+        source_file_id = 1;
+        pre.files.push(FileRecord {
+            id: source_file_id,
+            path: display_path,
+        });
+        pre.next_file_id = 2;
+        pre.root = new_root;
+        pre.preprocessing.main_file = Some(DirectiveValue {
+            value: main_file.clone(),
+            span: Some(span.into()),
+        });
+        pre.record("mainFile", Some(&main_file), span);
+    }
+    let source_text = owned_main_text.as_deref().unwrap_or(main_text);
     // The top-of-file settings block is extracted before lexing and blanked
     // out of the lexed text, so the lexer never sees the block's braces
     // (scoped settings lexing, #86).
-    let settings = match crate::settings::find_blocks(main_text, 0) {
+    let settings = match crate::settings::find_blocks(source_text, source_file_id) {
         Ok(mut blocks) => blocks.pop(),
         Err(error) => {
             return PreprocessOutcome {
@@ -166,15 +259,15 @@ pub fn preprocess_with_overlay_outcome(
     };
     let tokens = match &settings {
         Some(block) => {
-            let sanitized = crate::settings::sanitize_for_lex(main_text, block);
+            let sanitized = crate::settings::sanitize_for_lex(source_text, block);
             lex(LexInput {
-                file_id: 0,
+                file_id: source_file_id,
                 text: &sanitized,
             })
         }
         None => lex(LexInput {
-            file_id: 0,
-            text: main_text,
+            file_id: source_file_id,
+            text: source_text,
         }),
     };
     let mut tokens = match tokens {
@@ -200,6 +293,7 @@ pub fn preprocess_with_overlay_outcome(
                     defines: pre.defines,
                     settings,
                     post_compile_hook: pre.post_compile_hook,
+                    preprocessing: pre.preprocessing,
                 },
                 pre.files.clone(),
             ));
@@ -224,6 +318,7 @@ struct Preprocessor {
     macros: Vec<MacroDef>,
     defines: Vec<DefineRecord>,
     post_compile_hook: Option<PostCompileHook>,
+    preprocessing: PreprocessingState,
 }
 
 /// A registered macro: object-like, function-like, or a script macro.
@@ -237,6 +332,22 @@ struct MacroDef {
     script: Option<ScriptMacro>,
 }
 
+fn first_main_file_directive(text: &str) -> Option<(String, Span)> {
+    let line = text.lines().next()?.trim_end_matches('\r');
+    let rest = line.strip_prefix("#!mainFile")?;
+    let value = rest.trim();
+    let value = strip_quoted(value)?.to_string();
+    let end_col = line.chars().count() as u32 + 1;
+    Some((
+        value,
+        Span::new(
+            0,
+            crate::diag::Position::new(1, 1),
+            crate::diag::Position::new(1, end_col),
+        ),
+    ))
+}
+
 impl Preprocessor {
     /// Process `#!` directive tokens, splicing includes and registering
     /// defines. Non-directive tokens are kept in place.
@@ -245,6 +356,22 @@ impl Preprocessor {
         for token in tokens.drain(..) {
             if token.kind == TokenKind::Directive {
                 self.handle_directive(token, &mut out)?;
+            } else if token.kind == TokenKind::Ident
+                && matches!(token.text.as_str(), "rule" | "def")
+                && self.preprocessing.rule_prefix.is_some()
+            {
+                let prefix = self
+                    .preprocessing
+                    .rule_prefix
+                    .as_ref()
+                    .map(|value| value.value.clone())
+                    .unwrap_or_default();
+                out.push(Token {
+                    kind: TokenKind::RulePrefixMarker,
+                    text: prefix,
+                    span: token.span,
+                });
+                out.push(token);
             } else {
                 out.push(token);
             }
@@ -256,7 +383,8 @@ impl Preprocessor {
     fn handle_directive(&mut self, token: Token, out: &mut Vec<Token>) -> FrontendResult<()> {
         let text = token.text.trim();
         let span = token.span;
-        if let Some(rest) = text.strip_prefix("include") {
+        let (name, rest) = split_directive(text);
+        if name == "include" {
             let rest = rest.trim();
             let include = rest
                 .strip_prefix('"')
@@ -274,16 +402,25 @@ impl Preprocessor {
             self.include(include, span, out)?;
             return Ok(());
         }
-        if let Some(rest) = text.strip_prefix("define") {
+        if name == "define" {
             self.define(rest.trim(), span)?;
             return Ok(());
         }
-        if let Some(rest) = text.strip_prefix("undef") {
+        if name == "undef" {
             let name = rest.trim();
+            if name.is_empty() || name.chars().any(|ch| !is_identifier_char(ch)) {
+                return Err(FrontendError::at(
+                    "undef-invalid",
+                    "malformed `#!undef` directive: expected one macro name",
+                    span,
+                ));
+            }
             self.macros.retain(|m| m.name != name);
+            self.defines.retain(|define| define.name != name);
+            self.record("undef", Some(name), span);
             return Ok(());
         }
-        if let Some(rest) = text.strip_prefix("postCompileHook") {
+        if name == "postCompileHook" {
             let rest = rest.trim();
             let Some(path) = strip_quoted(rest) else {
                 return Err(FrontendError::at(
@@ -307,6 +444,98 @@ impl Preprocessor {
                 source: hook.source,
                 span,
             });
+            self.record("postCompileHook", Some(path), span);
+            return Ok(());
+        }
+        if name == "mainFile" {
+            return Err(FrontendError::at(
+                "main-file-placement",
+                "`#!mainFile` must be the first directive in the main source",
+                span,
+            ));
+        }
+        if name == "allowMacroRedeclaration" {
+            self.preprocessing.allow_macro_redeclaration = true;
+            self.record(name, None, span);
+            return Ok(());
+        }
+        if name == "translations" {
+            let languages = parse_translations(rest.trim(), span)?;
+            self.preprocessing.translations = Some(TranslationState {
+                languages: languages.clone(),
+                span: Some(span.into()),
+            });
+            self.record(name, Some(&languages.join(" ")), span);
+            return Ok(());
+        }
+        if name == "suppressWarnings" {
+            let warnings = parse_words(rest, "suppressWarnings", span)?;
+            self.preprocessing
+                .suppressed_warnings
+                .extend(warnings.clone());
+            self.record(name, Some(&warnings.join(" ")), span);
+            return Ok(());
+        }
+        if name == "rulePrefix" {
+            let prefix = strip_quoted(rest.trim()).ok_or_else(|| {
+                FrontendError::at(
+                    "rule-prefix-invalid",
+                    "`#!rulePrefix` expects one quoted string",
+                    span,
+                )
+            })?;
+            self.preprocessing.rule_prefix = Some(DirectiveValue {
+                value: prefix.to_string(),
+                span: Some(span.into()),
+            });
+            self.record(name, Some(prefix), span);
+            return Ok(());
+        }
+        if name == "rulePrefixTemplate" {
+            if self.preprocessing.rule_prefix_template.is_some() {
+                return Err(FrontendError::at(
+                    "rule-prefix-template-duplicate",
+                    "a rule prefix template is already defined",
+                    span,
+                ));
+            }
+            let template = if rest.trim().is_empty() {
+                r#"f"[{$pathTitle.replace('_', ' ')}] {$rule}" if $rule and not $isDelimiter else $rule"#
+            } else {
+                rest.trim()
+            };
+            self.preprocessing.rule_prefix_template = Some(DirectiveValue {
+                value: template.to_string(),
+                span: Some(span.into()),
+            });
+            self.record(name, Some(template), span);
+            return Ok(());
+        }
+        if let Some((directive, control)) = optimization_directive(name) {
+            apply_optimization(&mut self.preprocessing.optimization, control);
+            self.record(directive, None, span);
+            return Ok(());
+        }
+        if let Some(replacement) = replacement_directive(name) {
+            let family = replacement_family(name).expect("replacement directive family");
+            if self
+                .preprocessing
+                .directives
+                .iter()
+                .filter_map(|item| replacement_family(&item.name))
+                .any(|item_family| item_family == family)
+            {
+                return Err(FrontendError::at(
+                    "replacement-duplicate",
+                    format!("a replacement for `{family}` is already defined"),
+                    span,
+                ));
+            }
+            self.preprocessing.replacements.push(DirectiveValue {
+                value: replacement.to_string(),
+                span: Some(span.into()),
+            });
+            self.record(name, Some(replacement), span);
             return Ok(());
         }
         Err(FrontendError::at(
@@ -314,6 +543,42 @@ impl Preprocessor {
             format!("unsupported preprocessing directive `#!{text}`"),
             span,
         ))
+    }
+
+    fn record(&mut self, name: &str, value: Option<&str>, span: Span) {
+        let state = PreprocessingSnapshot {
+            allow_macro_redeclaration: self.preprocessing.allow_macro_redeclaration,
+            optimization: self.preprocessing.optimization.clone(),
+            rule_prefix: self
+                .preprocessing
+                .rule_prefix
+                .as_ref()
+                .map(|value| value.value.clone()),
+            rule_prefix_template: self
+                .preprocessing
+                .rule_prefix_template
+                .as_ref()
+                .map(|value| value.value.clone()),
+            translations: self
+                .preprocessing
+                .translations
+                .as_ref()
+                .map(|translations| translations.languages.clone()),
+            replacements: self
+                .preprocessing
+                .replacements
+                .iter()
+                .map(|value| value.value.clone())
+                .collect(),
+        };
+        self.preprocessing.directives.push(DirectiveRecord {
+            name: name.to_string(),
+            value: value.map(str::to_string),
+            scope_col: span.start.col,
+            scope_depth: self.include_stack.len() as u32,
+            state,
+            span: Some(span.into()),
+        });
     }
 
     /// Resolve a script path root-relative (the reference's
@@ -405,6 +670,8 @@ impl Preprocessor {
             path: include.to_string(),
         });
         self.include_stack.push(identity);
+        let saved_prefix = self.preprocessing.rule_prefix.clone();
+        let saved_optimization = self.preprocessing.optimization.clone();
         // Settings blocks are only supported in the main file; an included
         // file's block is rejected at its keyword span (file id of the
         // included file, #86).
@@ -423,7 +690,13 @@ impl Preprocessor {
             file_id,
             text: &text,
         })?;
-        self.process_directives(&mut included)?;
+        let processed = self.process_directives(&mut included);
+        self.preprocessing.rule_prefix = saved_prefix;
+        self.preprocessing.optimization = saved_optimization;
+        if let Err(error) = processed {
+            self.include_stack.pop();
+            return Err(error);
+        }
         // Drop the included file's Eof token (it terminates the file, not
         // the spliced stream).
         included.retain(|token| token.kind != TokenKind::Eof);
@@ -433,6 +706,7 @@ impl Preprocessor {
         // in diagnostics (include cycles/not-found name the real path).
         out.extend(included);
         self.include_stack.pop();
+        self.record("include", Some(include), span);
         Ok(())
     }
 
@@ -480,6 +754,17 @@ impl Preprocessor {
                 span,
             ));
         }
+        if self.macros.iter().any(|macro_def| macro_def.name == name) {
+            if !self.preprocessing.allow_macro_redeclaration {
+                return Err(FrontendError::at(
+                    "macro-redeclaration",
+                    format!("macro '{name}' is already defined"),
+                    span,
+                ));
+            }
+            self.macros.retain(|macro_def| macro_def.name != name);
+            self.defines.retain(|define| define.name != name);
+        }
         let script = if is_function_like && body_text.starts_with("__script__(") {
             // The OverPy script-macro ABI: the replacement is exactly
             // `__script__("path.js")`; the reference extracts the path from
@@ -517,7 +802,7 @@ impl Preprocessor {
             .into_iter()
             .filter(|t| t.kind != TokenKind::Eof)
             .collect();
-        let is_function = !params.is_empty();
+        let is_function = is_function_like;
         self.defines.push(DefineRecord {
             name: name.clone(),
             is_function,
@@ -764,6 +1049,149 @@ impl Preprocessor {
     }
 }
 
+fn split_directive(text: &str) -> (&str, &str) {
+    text.split_once(char::is_whitespace)
+        .map_or((text, ""), |(name, rest)| (name, rest))
+}
+
+fn is_identifier_char(ch: char) -> bool {
+    ch.is_ascii_alphanumeric() || ch == '_'
+}
+
+fn parse_words(rest: &str, directive: &str, span: Span) -> FrontendResult<Vec<String>> {
+    let words: Vec<String> = rest.split_whitespace().map(str::to_string).collect();
+    if words.is_empty() {
+        return Err(FrontendError::at(
+            "directive-invalid",
+            format!("`#!{directive}` expects at least one argument"),
+            span,
+        ));
+    }
+    if words
+        .iter()
+        .any(|word| word.chars().any(|ch| !is_identifier_char(ch)))
+    {
+        return Err(FrontendError::at(
+            "directive-invalid",
+            format!("`#!{directive}` arguments must be identifiers"),
+            span,
+        ));
+    }
+    Ok(words)
+}
+
+fn parse_translations(rest: &str, span: Span) -> FrontendResult<Vec<String>> {
+    let values: Vec<String> = rest
+        .split_whitespace()
+        .map(|language| language.replace('-', "_").to_lowercase())
+        .collect();
+    if values.is_empty() {
+        return Err(FrontendError::at(
+            "translations-invalid",
+            "`#!translations` expects at least one language",
+            span,
+        ));
+    }
+    const PINNED_LANGUAGES: &[&str] = &[
+        "de", "en", "es", "es_es", "es_mx", "fr", "it", "ja", "ko", "pl", "pt", "ru", "th", "tr",
+        "zh", "zh_cn", "zh_tw",
+    ];
+    if values
+        .iter()
+        .any(|language| !PINNED_LANGUAGES.contains(&language.as_str()))
+    {
+        return Err(FrontendError::at(
+            "translations-invalid",
+            "invalid translation language; expected one of the pinned OverPy language codes",
+            span,
+        ));
+    }
+    if values.iter().any(|value| value == "es")
+        && values
+            .iter()
+            .any(|value| value == "es_es" || value == "es_mx")
+    {
+        return Err(FrontendError::at(
+            "translations-invalid",
+            "cannot combine `es` with `es_es` or `es_mx`",
+            span,
+        ));
+    }
+    if values.iter().any(|value| value == "zh")
+        && values
+            .iter()
+            .any(|value| value == "zh_cn" || value == "zh_tw")
+    {
+        return Err(FrontendError::at(
+            "translations-invalid",
+            "cannot combine `zh` with `zh_cn` or `zh_tw`",
+            span,
+        ));
+    }
+    Ok(values)
+}
+
+#[derive(Clone, Copy)]
+enum OptimizationControl {
+    Enable,
+    Disable,
+    ForSize,
+    DisableForSize,
+    ForSizeAggressive,
+    Strict,
+    DisableStrict,
+}
+
+fn optimization_directive(name: &str) -> Option<(&str, OptimizationControl)> {
+    Some(match name {
+        "disableOptimizations" => (name, OptimizationControl::Disable),
+        "enableOptimizations" => (name, OptimizationControl::Enable),
+        "optimizeForSize" => (name, OptimizationControl::ForSize),
+        "disableOptimizeForSize" => (name, OptimizationControl::DisableForSize),
+        "optimizeForSizeAggressive" => (name, OptimizationControl::ForSizeAggressive),
+        "optimizeStrict" => (name, OptimizationControl::Strict),
+        "disableOptimizeStrict" => (name, OptimizationControl::DisableStrict),
+        _ => return None,
+    })
+}
+
+fn apply_optimization(state: &mut OptimizationState, control: OptimizationControl) {
+    match control {
+        OptimizationControl::Enable => state.enabled = true,
+        OptimizationControl::Disable => state.enabled = false,
+        OptimizationControl::ForSize => state.for_size = true,
+        OptimizationControl::DisableForSize => state.for_size = false,
+        OptimizationControl::ForSizeAggressive => state.for_size_aggressive = true,
+        OptimizationControl::Strict => state.strict = true,
+        OptimizationControl::DisableStrict => state.strict = false,
+    }
+}
+
+fn replacement_directive(name: &str) -> Option<&str> {
+    Some(match name {
+        "replace0ByCapturePercentage" => "getCapturePercentage",
+        "replace0ByPayloadProgressPercentage" => "getPayloadProgressPercentage",
+        "replace0ByIsMatchComplete" => "isMatchComplete",
+        "replace1ByMatchRound" => "getMatchRound",
+        "replaceTeam1ByControlScoringTeam" => "getControlScoringTeam",
+        "replaceEmptyStringByEmptyArray" => "emptyArray",
+        "replaceEmptyStringByVariable" => "variable",
+        _ => return None,
+    })
+}
+
+fn replacement_family(name: &str) -> Option<&str> {
+    Some(match name {
+        "replace0ByCapturePercentage"
+        | "replace0ByPayloadProgressPercentage"
+        | "replace0ByIsMatchComplete" => "0",
+        "replace1ByMatchRound" => "1",
+        "replaceTeam1ByControlScoringTeam" => "team1",
+        "replaceEmptyStringByEmptyArray" | "replaceEmptyStringByVariable" => "emptyString",
+        _ => return None,
+    })
+}
+
 /// Strips a matched `"…"` or `'…'` pair, returning the inner text.
 fn strip_quoted(text: &str) -> Option<&str> {
     text.strip_prefix('"')
@@ -998,5 +1426,99 @@ mod tests {
         assert_eq!(error.code, "lex-error");
         assert!(error.message.contains("unexpected character '{'"));
         assert_eq!(error.span.unwrap().start.line, 2);
+    }
+
+    #[test]
+    fn advanced_directives_preserve_frontend_state_without_catalog_data() {
+        let (pre, _) = preprocess(
+            "#!allowMacroRedeclaration\n#!translations en fr\n#!rulePrefix \"Effects\"\n#!optimizeForSize\n#!optimizeStrict\n#!replace0ByCapturePercentage\n#!define VALUE 1\n#!define VALUE 2\nrule \"r\":\n    x = VALUE\n",
+            "main.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        assert!(pre.preprocessing.allow_macro_redeclaration);
+        assert_eq!(
+            pre.preprocessing
+                .translations
+                .as_ref()
+                .map(|state| state.languages.as_slice()),
+            Some(["en".to_string(), "fr".to_string()].as_slice())
+        );
+        assert_eq!(
+            pre.preprocessing
+                .rule_prefix
+                .as_ref()
+                .map(|value| value.value.as_str()),
+            Some("Effects")
+        );
+        assert!(pre.preprocessing.optimization.for_size);
+        assert!(pre.preprocessing.optimization.strict);
+        assert_eq!(
+            pre.preprocessing.replacements[0].value,
+            "getCapturePercentage"
+        );
+        assert_eq!(pre.defines.len(), 1);
+    }
+
+    #[test]
+    fn translations_follow_pinned_codes_without_local_deduplication() {
+        let (pre, _) = preprocess(
+            "#!translations EN zh-cn en\nrule \"r\":\n    pass\n",
+            "main.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        assert_eq!(
+            pre.preprocessing.translations.unwrap().languages,
+            vec!["en", "zh_cn", "en"]
+        );
+    }
+
+    #[test]
+    fn translations_reject_codes_outside_the_pinned_oracle_set() {
+        let error = preprocess(
+            "#!translations en_US\nrule \"r\":\n    pass\n",
+            "main.opy",
+            Path::new("."),
+        )
+        .unwrap_err();
+        assert_eq!(error.code, "translations-invalid");
+    }
+
+    #[test]
+    fn directive_records_expose_state_transitions_and_include_depth() {
+        let root =
+            std::env::temp_dir().join(format!("wright-opy-directive-scope-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join("child.opy"),
+            "#!rulePrefix \"inner\"\n#!disableOptimizations\n",
+        )
+        .unwrap();
+        let (pre, _) = preprocess(
+            "#!rulePrefix \"outer\"\n#!include \"child.opy\"\n#!enableOptimizations\n",
+            "main.opy",
+            &root,
+        )
+        .unwrap();
+        let records = &pre.preprocessing.directives;
+        assert_eq!(records[0].state.rule_prefix.as_deref(), Some("outer"));
+        assert_eq!(records[0].scope_depth, 0);
+        assert_eq!(records[1].name, "rulePrefix");
+        assert_eq!(records[1].state.rule_prefix.as_deref(), Some("inner"));
+        assert!(!records[2].state.optimization.enabled);
+        assert_eq!(records[2].scope_depth, 1);
+        assert_eq!(records[3].name, "include");
+        assert_eq!(records[3].state.rule_prefix.as_deref(), Some("outer"));
+        assert_eq!(records[4].name, "enableOptimizations");
+        assert!(records[4].state.optimization.enabled);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn malformed_translation_state_is_source_located() {
+        let error = preprocess("#!translations\n", "main.opy", Path::new(".")).unwrap_err();
+        assert_eq!(error.code, "translations-invalid");
+        assert!(error.span.is_some());
     }
 }
