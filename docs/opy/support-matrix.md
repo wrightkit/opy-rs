@@ -23,9 +23,8 @@ machine-readable semantic contract for builtins is specified in
 
 ## Current implementation state
 
-The standalone frontend foundation is merged on `main` (PRs #9–#14; issues
-#2–#6 complete; #7 readiness is represented by the #28/#29/#30 Draft PR
-series): the native pipeline (lexer →
+The standalone frontend foundation and #7 readiness work are merged on `main`
+(issues #2–#7, #28–#30, and #33): the native pipeline (lexer →
 preprocess → CST/parser → semantic resolution → Opy HIR v1), the bounded
 JavaScript macro runtime, the tooling API/CLI, and the native differential
 suite are implemented and CI-covered. The rows they evidence are flipped to

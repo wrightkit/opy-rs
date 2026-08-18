@@ -17,7 +17,6 @@ use workshop_rs::wir::{self, Action, Event, Program, Value, ValueNode};
 
 /// The exact released dependency contract consumed by this crate.
 pub const WORKSHOP_RS_VERSION: &str = "0.1.1";
-pub const WORKSHOP_RS_TAG: &str = "v0.1.1";
 
 /// A source-attributed integration diagnostic.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -627,7 +626,7 @@ fn workshop_error_span(error: &workshop_rs::WorkshopError) -> Option<WorkshopSpa
 
 #[cfg(test)]
 mod tests {
-    use super::{Compiler, WORKSHOP_RS_TAG, WORKSHOP_RS_VERSION, cross_check_manifest};
+    use super::{Compiler, WORKSHOP_RS_VERSION, cross_check_manifest};
     use opy_frontend::manifest::Manifest;
     use std::path::Path;
     use workshop_rs::catalog::Catalog;
@@ -636,7 +635,6 @@ mod tests {
     fn public_contract_is_pinned_and_manifest_links_are_checked() {
         let compiler = Compiler::new().expect("released workshop contract must load");
         let identity = compiler.catalog_identity();
-        assert_eq!(WORKSHOP_RS_TAG, "v0.1.1");
         assert_eq!(identity.implementation_version, WORKSHOP_RS_VERSION);
         assert!(compiler.link_report().catalog_ids_checked > 0);
         assert!(compiler.link_report().domains_checked > 0);
