@@ -113,11 +113,13 @@ enum/action surfaces; their snapshots keep `expectedStatus: failure` with the
 reference diagnostics, exactly like the pinned oracle behaves.
 
 > Note on `acquisitionMethod` in imported `fixture.json` files: imported
-> fixtures record `scripts/acquire-corpus.py` (the WrightKit acquisition
-> pipeline) as the historical acquisition method. That script lives in the
-> wright repository; the opy-rs corpus keeps the field as a truthful
-> provenance record, and the byte-identity and snapshot verification above is
-> the opy-rs-side re-validation.
+> fixtures preserve `scripts/acquire-corpus.py` as the **historical** Wright
+> acquisition method. That one-off M11 helper and its corpus manifest were
+> retired after live OPY compatibility ownership moved to opy-rs. The field is
+> retained only as provenance and is not an executable instruction. Current
+> corpus/oracle acquisition and re-validation are owned by this repository;
+> do not reintroduce the old Wright helper unless new evidence demonstrates a
+> concrete need for an equivalent owner-side acquisition workflow.
 
 ## Not ported / dropped
 
