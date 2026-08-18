@@ -34,7 +34,9 @@ suite are implemented and CI-covered. The rows they evidence are flipped to
 features whose completion requires the full canonical Workshop surface remain
 `lowering-dependent`; the bounded #35 adapter is separately recorded as
 `end-to-end-supported` and does not reclassify broader Workshop-owned rows.
-The wider #8 lowering stage remains outside this frontend gate. Per-fixture differential status (resolve /
+Here, `end-to-end-supported` is scoped to the explicitly evidenced feature or
+vertical slice; it never means full-language OPY-to-Workshop parity. The wider
+#8 lowering stage remains outside this frontend gate. Per-fixture differential status (resolve /
 expected-diagnostic / divergence) is recorded in
 `target/opy-differential-report.json` by `cargo test -p opy-frontend
 --test differential`.

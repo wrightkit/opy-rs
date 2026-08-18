@@ -58,8 +58,8 @@ reference.[^overpy-reference]
 | Builtin actions & values | 🟡 Partial | The declared subset works; the full OverPy surface is not implemented yet |
 | Receiver/member functions | 🟡 Partial | Declared members work; the full member surface is not implemented yet |
 | Enums & constants | 🟡 Partial | Declared enum domains resolve; the full domain surface is not implemented yet |
-| `switch` / string modifiers | ⏳ Not yet | |
-| Advanced directives, translations & optimization controls | ⏳ Not yet | `#!translations`, the `#!optimize` family, `#!mainFile`, and similar |
+| `switch` / string modifiers | ✅ Supported | Source-order switch/fallthrough, `break`, and the corpus-evidenced string modifier forms |
+| Advanced directives, translations & optimization controls | 🟡 Partial | Frontend parsing, validation, and state are supported; Workshop locale/optimizer effects remain lowering-dependent |
 | OPY → Workshop compilation | 🟡 First slice | `opy-compiler` lowers the bounded #35 fixture through workshop-rs v0.1.1; broader lowering remains deferred |
 | Workshop → OPY reconstruction | ⏳ Not yet | Requires the `workshop-rs` integration path |
 

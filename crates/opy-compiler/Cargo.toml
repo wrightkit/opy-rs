@@ -11,4 +11,4 @@ workspace = true
 
 [dependencies]
 opy-frontend = { path = "../opy-frontend" }
-workshop-rs = { git = "https://github.com/wrightkit/workshop-rs.git", tag = "v0.1.1", package = "workshop-rs" }
+workshop-rs = "=0.1.1"

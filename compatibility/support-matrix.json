@@ -8,16 +8,16 @@
     "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw=="
   },
   "snapshot": {
-    "date": "2026-08-16",
+    "date": "2026-08-18",
     "note": "Readiness baseline for #7 through the #28/#29/#30/#33 Draft PR series plus the bounded #35 integration slice. Frontend-supported rows include the pinned OPY syntax, directives, preprocessing, macro statements, rule directives/model, JavaScript macros, and runtime hooks. Semantic-supported rows include declaration resolution, for-loop binders, modules, keyword arguments, the declared alias surface, and the OPY-owned manifest overlay for builtin/member/enum semantics. Canonical Workshop builtin/member/enum breadth and emission remain separate lowering-dependent rows; no Workshop catalog data is copied into opy-rs. The 41-fixture differential corpus currently reports 34 matches, 7 explicit known gaps, 0 unexpected divergences, and 0 inconclusive results. #!postCompileHook is parsed/validated/recorded by the frontend; execution against final Workshop text is lowering-dependent (#8).",
-    "asOfCommit": "cbb7242f4be36a803ebc0a4a3147a6574840f734"
+    "asOfCommit": "4d88daf4e3445af37ce06774d789a94c5bcbe355"
   },
   "states": {
     "planned": "Declared surface, not yet implemented in opy-rs; evidence/provenance recorded for the implementing issue.",
     "frontend-supported": "Frontend behavior (lex/parse/preprocess/macro expansion) implemented in opy-rs and corpus-evidenced.",
     "semantic-supported": "Semantic resolution implemented in opy-rs (names, members, enums, call semantics covered by the semantic model).",
     "lowering-dependent": "Completion requires canonical Workshop semantics/catalog/emission owned by workshop-rs; inventory-only until the integration stage.",
-    "end-to-end-supported": "Full OPY to Workshop compile parity through the workshop-rs integration boundary."
+    "end-to-end-supported": "A declared feature or bounded integration slice has explicit OPY -> HIR -> WIR -> validated Workshop emission evidence for that scope; this state does not imply full-language OPY-to-Workshop parity."
   },
   "categories": [
     "syntax",
@@ -611,7 +611,7 @@
         "test:opy-compiler-vertical-slice",
         "contract:workshop-rs-v0.1.1"
       ],
-      "notes": "Issue #35. The dedicated opy-compiler crate consumes resolved OPY HIR, preserves source files/spans in workshop-rs WIR, cross-checks manifest catalogId/domain links against Catalog, validates canonical WIR, and emits deterministic en-US Workshop through the tagged workshop-rs v0.1.1 contract. This is a bounded first slice; broader OPY lowering remains lowering-dependent and is not reclassified by this fixture."
+      "notes": "Issue #35. The dedicated opy-compiler crate consumes resolved OPY HIR, preserves source files/spans in workshop-rs WIR, cross-checks manifest catalogId/domain links against Catalog, validates canonical WIR, and emits deterministic en-US Workshop through the published workshop-rs v0.1.1 contract. This is a bounded first slice; broader OPY lowering remains lowering-dependent and is not reclassified by this fixture."
     },
     {
       "id": "compilation/workshop-lowering",

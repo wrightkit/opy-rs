@@ -75,15 +75,15 @@ workshop-rs v0.1.1 (Catalog, WIR, validation, emission)
 ```
 
 `opy-frontend` remains buildable and testable without `workshop-rs`. The
-integration crate pins the tagged `workshop-rs` v0.1.1 contract and constructs
+integration crate pins the published `workshop-rs` v0.1.1 contract and constructs
 its compiler only after mechanically checking every manifest `catalogId` and
 enum/domain link against the canonical `Catalog`. The resulting compilation
 artifact exposes the canonical catalog identity and digest for downstream
 consumers.
 
-The accepted vertical slice consumes resolved HIR for global and each-player
-rules, global-variable literal assignments, and catalog-backed generic action
-or value calls. It copies HIR source files into the Workshop source-file arena,
+The accepted vertical slice consumes resolved HIR for a global rule,
+global-variable literal assignments, and a catalog-backed generic action call.
+It copies HIR source files into the Workshop source-file arena,
 maps all lowered spans to those typed file ids, validates canonical WIR, and
 emits deterministic en-US Workshop. Unsupported HIR constructs fail with a
 source-attributed integration diagnostic; they are not treated as frontend or
