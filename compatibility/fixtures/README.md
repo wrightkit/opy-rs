@@ -3,7 +3,7 @@
 This directory is the opy-rs compatibility corpus: OPY sources with their
 pinned-oracle snapshots (`oracle.json`), ported from the WrightKit project's
 evidence base (wright `compatibility/fixtures/`) and re-verified against the
-pinned OverPy 9.7.10 oracle on 2026-08-17 (all 41 snapshots match).
+pinned OverPy 9.7.10 oracle on 2026-08-17 (all 42 snapshots match).
 
 Corpus policy: every fixture records provenance in its `fixture.json`
 (`kind`, `origin`, `license`, `redistributable`, and — for imported
@@ -121,7 +121,7 @@ reference diagnostics, exactly like the pinned oracle behaves.
 
 ## Not ported / dropped
 
-* **No fixture was dropped for provenance reasons**: all 41 fixtures in the
+* **No fixture was dropped for provenance reasons**: all 42 fixtures in the
   WrightKit corpus carried complete, reviewed provenance and are ported.
 * Upstream `examples/` not ported (candidates for later expansion once a
   demonstrated need exists): `lucioball_all_heroes.opy`, `skirmish_elim.opy`,

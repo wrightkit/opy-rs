@@ -518,27 +518,12 @@ impl<'a> Lowering<'a> {
                 name_span.or(span),
             ));
         }
-        if let Some(declaration) = self.wir.subroutines.get_mut(subroutine) {
-            declaration.name = name.to_string();
-        }
-        if let Some(existing) = self.subroutines.get(name) {
-            if *existing != subroutine {
-                return Err(self.unsupported(
-                    format!(
-                        "subroutine presentation name '{name}' collides with another subroutine"
-                    ),
-                    name_span.or(span),
-                ));
-            }
-        } else {
-            self.subroutines.insert(name.to_string(), subroutine);
-        }
         let actions = body
             .iter()
             .map(|stmt| self.lower_action(stmt))
             .collect::<Result<Vec<_>, _>>()?;
         self.wir.rules.push(wir::Rule {
-            name: format!("Subroutine {name}"),
+            name: self.subroutine_rule_name(name),
             span: self.wir_span(span)?,
             name_span: self.wir_span(name_span)?,
             disabled: false,
@@ -576,7 +561,8 @@ impl<'a> Lowering<'a> {
         }
         for annotation in &rule.annotations {
             match annotation.name.as_str() {
-                "Event" | "Condition" | "Team" | "Slot" | "Hero" | "Disabled" => {}
+                "Event" | "Condition" | "Team" | "Slot" | "Hero" | "Disabled"
+                | "SuppressWarnings" => {}
                 _ => {
                     return Err(self.unsupported(
                         format!(
@@ -597,7 +583,7 @@ impl<'a> Lowering<'a> {
     ) -> Result<(), IntegrationError> {
         for annotation in annotations {
             match annotation.name.as_str() {
-                "Name" => {}
+                "Name" | "SuppressWarnings" => {}
                 _ => {
                     return Err(self.unsupported(
                         format!(
@@ -610,6 +596,14 @@ impl<'a> Lowering<'a> {
             }
         }
         Ok(())
+    }
+
+    fn subroutine_rule_name(&self, generated_name: &str) -> String {
+        if self.hir.preprocessing.rule_prefix_template.is_some() {
+            generated_name.to_string()
+        } else {
+            format!("Subroutine {generated_name}")
+        }
     }
 
     fn lower_event(
@@ -1171,7 +1165,7 @@ mod tests {
     fn structural_subroutines_lower_to_canonical_wir() {
         let compiler = Compiler::new().unwrap();
         let hir = opy_frontend::compile(
-            "globalvar score\nsubroutine showStatus\ndef showStatus():\n    @Name \"Friendly\"\n    disableInspector()\nrule \"caller\":\n    @Event global\n    showStatus()\n",
+            "globalvar score\nsubroutine showStatus\ndef showStatus():\n    @Name \"Friendly\"\n    @SuppressWarnings unusedVariable\n    disableInspector()\nrule \"caller\":\n    @Event global\n    showStatus()\n",
             "structure.opy",
             Path::new("."),
         )
@@ -1182,19 +1176,22 @@ mod tests {
             .subroutines
             .get(workshop_rs::wir::SubroutineId::from_index(0))
             .unwrap();
-        assert_eq!(subroutine.name, "Friendly");
+        assert_eq!(subroutine.name, "showStatus");
         assert_eq!(subroutine.index, 0);
         assert_eq!(subroutine.name_span.unwrap().start.line, 2);
         assert_eq!(artifact.wir.rules.len(), 2);
-        assert!(matches!(
-            artifact
-                .wir
-                .rules
-                .get(workshop_rs::wir::RuleId::from_index(0))
-                .unwrap()
-                .event,
-            workshop_rs::wir::Event::Subroutine(_)
-        ));
+        let subroutine_rule = artifact
+            .wir
+            .rules
+            .get(workshop_rs::wir::RuleId::from_index(0))
+            .unwrap();
+        let workshop_rs::wir::Event::Subroutine(subroutine_id) = subroutine_rule.event else {
+            panic!("expected a subroutine event");
+        };
+        assert_eq!(
+            artifact.wir.subroutines.get(subroutine_id).unwrap().name,
+            "showStatus"
+        );
         assert!(matches!(
             artifact
                 .wir
@@ -1266,5 +1263,53 @@ mod tests {
         };
         assert_eq!(error.diagnostic.code, "unsupported-integration-surface");
         assert_eq!(error.diagnostic.span.unwrap().start.line, 3);
+    }
+
+    #[test]
+    fn issue_40_oracle_fixture_and_wir_lowering_agree() {
+        let compiler = Compiler::new().unwrap();
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../compatibility/fixtures/synthetic/issue-40-structural");
+        let source = std::fs::read_to_string(fixture.join("source.opy")).unwrap();
+        let hir = opy_frontend::compile(&source, "source.opy", &fixture).unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        let oracle: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(fixture.join("oracle.json")).unwrap())
+                .unwrap();
+        let oracle_workshop = oracle["compile"]["workshop"].as_str().unwrap();
+
+        assert!(oracle_workshop.contains("0: reserved"));
+        assert!(oracle_workshop.contains("1: first"));
+        assert!(oracle_workshop.contains("2: explicit"));
+        assert!(oracle_workshop.contains("3: next"));
+        assert!(oracle_workshop.contains("0: helper"));
+        assert!(oracle_workshop.contains("Subroutine;\n        helper;"));
+        assert!(oracle_workshop.contains("Player Joined Match;\n        Team 1;\n        Slot 2;"));
+
+        let indices = artifact
+            .wir
+            .global_variables
+            .iter()
+            .map(|variable| variable.index)
+            .collect::<Vec<_>>();
+        assert_eq!(indices, vec![0, 1, 2, 3]);
+        assert_eq!(
+            artifact.wir.subroutines.iter().next().unwrap().name,
+            "helper"
+        );
+        assert!(artifact.emitted.contains("[Source] renamed helper"));
+        assert!(matches!(
+            artifact
+                .wir
+                .rules
+                .get(workshop_rs::wir::RuleId::from_index(1))
+                .unwrap()
+                .event,
+            workshop_rs::wir::Event::Player {
+                kind: workshop_rs::wir::PlayerEventKind::Joined,
+                team: workshop_rs::wir::EventTeam::Team1,
+                target: workshop_rs::wir::EventTarget::Slot(2),
+            }
+        ));
     }
 }

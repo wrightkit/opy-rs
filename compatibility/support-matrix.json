@@ -9,7 +9,7 @@
   },
   "snapshot": {
     "date": "2026-08-18",
-    "note": "Readiness baseline for #7 through the #28/#29/#30/#33 Draft PR series plus the bounded #35 and #40 integration slices. Frontend-supported rows include the pinned OPY syntax, directives, preprocessing, macro statements, rule directives/model, JavaScript macros, and runtime hooks. Semantic-supported rows include declaration resolution, for-loop binders, modules, keyword arguments, the declared alias surface, and the OPY-owned manifest overlay for builtin/member/enum semantics. Canonical Workshop builtin/member/enum breadth and emission remain separate lowering-dependent rows; no Workshop catalog data is copied into opy-rs. The 41-fixture differential corpus currently reports 34 matches, 7 explicit known gaps, 0 unexpected divergences, and 0 inconclusive results. #!postCompileHook is parsed/validated/recorded by the frontend; execution against final Workshop text is lowering-dependent (#8).",
+    "note": "Readiness baseline for #7 through the #28/#29/#30/#33 Draft PR series plus the bounded #35 and #40 integration slices. Frontend-supported rows include the pinned OPY syntax, directives, preprocessing, macro statements, rule directives/model, JavaScript macros, and runtime hooks. Semantic-supported rows include declaration resolution, for-loop binders, modules, keyword arguments, the declared alias surface, and the OPY-owned manifest overlay for builtin/member/enum semantics. Canonical Workshop builtin/member/enum breadth and emission remain separate lowering-dependent rows; no Workshop catalog data is copied into opy-rs. The 42-fixture differential corpus currently reports 35 matches, 7 explicit known gaps, 0 unexpected divergences, and 0 inconclusive results. #!postCompileHook is parsed/validated/recorded by the frontend; execution against final Workshop text is lowering-dependent (#8).",
     "asOfCommit": "4d88daf4e3445af37ce06774d789a94c5bcbe355"
   },
   "states": {
@@ -599,7 +599,7 @@
         "docs:docs/hir/opy-hir-v1.md",
         "test:opy-frontend-differential"
       ],
-      "notes": "Issues #3-#7, #25, and the #28/#29/#30/#33 readiness tracks. Fully Workshop-independent; the 41-fixture corpus is the acceptance corpus. Differential harness runs every fixture through the native pipeline in cargo test with structural self-checks (HIR validation, wire round-trip, deterministic dump), status/rule-name parity against recorded oracle.json snapshots, explicit native evidence expectations, and a machine-readable report (target/opy-differential-report.json). The current report has 34 matches, 7 reference-success/native-failure cases classified as known gaps, and no unexpected divergence or inconclusive result."
+      "notes": "Issues #3-#7, #25, and the #28/#29/#30/#33 readiness tracks. Fully Workshop-independent; the 42-fixture corpus is the acceptance corpus. Differential harness runs every fixture through the native pipeline in cargo test with structural self-checks (HIR validation, wire round-trip, deterministic dump), status/rule-name parity against recorded oracle.json snapshots, explicit native evidence expectations, and a machine-readable report (target/opy-differential-report.json). The current report has 35 matches, 7 reference-success/native-failure cases classified as known gaps, and no unexpected divergence or inconclusive result."
     },
     {
       "id": "compilation/opy-integration-vertical-slice",
@@ -620,6 +620,7 @@
       "state": "end-to-end-supported",
       "evidence": [
         "fixtures:synthetic/issue-35-integration",
+        "fixtures:synthetic/issue-40-structural",
         "test:opy-compiler-structural-lowering",
         "contract:workshop-rs-v0.1.1"
       ],

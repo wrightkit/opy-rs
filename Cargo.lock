@@ -255,6 +255,7 @@ name = "opy-compiler"
 version = "0.1.0"
 dependencies = [
  "opy-frontend",
+ "serde_json",
  "workshop-rs",
 ]
 
