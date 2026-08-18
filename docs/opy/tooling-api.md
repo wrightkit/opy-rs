@@ -125,8 +125,10 @@ documented in the matrix itself. Workshop-dependent items stay
 
 ```
 opy-cli check <main.opy>                          # diagnostics → stderr; 0 clean / 1 diagnostics
+opy-cli check --format json <main.opy>             # machine JSON result/diagnostics on stdout
 opy-cli inspect <main.opy>                        # resolved model as JSON on stdout
 opy-cli support [--json] [<category|feature-id>]  # embedded matrix (or slice) as JSON
+opy-cli completion bash|zsh|fish|powershell       # static completion from the command model
 opy-cli version                                   # crate + frontend protocol identity
 ```
 
@@ -135,6 +137,32 @@ errors. `check`/`inspect` resolve includes against the main file's parent
 directory. The CLI runs anywhere the binary runs: no Node, no Workshop
 backend, no runtime data files (the matrix and the semantic manifest are
 embedded).
+
+### Presentation candidate for Issue #43
+
+The following additive CLI surface is implemented as a candidate pending the
+main-thread contract review; existing command defaults and exit codes remain
+unchanged:
+
+* `--renderer auto|terminal|plain|github-actions` selects presentation. In
+  `auto`, truthy `GITHUB_ACTIONS` selects GitHub Actions, then truthy `CI` or a
+  non-TTY selects plain output, and an interactive terminal selects terminal
+  output. An explicit renderer overrides this detection.
+* `--color auto|always|never` controls ANSI color. An explicit color policy
+  overrides `NO_COLOR`; `auto` disables color when `NO_COLOR` is present.
+  GitHub Actions never receives ANSI even when `always` is requested.
+* `--format json` is currently available on `check`. It writes only `{ok,
+  diagnostics}` JSON to stdout and returns the same 0/1 result code. `inspect`
+  and `support` remain JSON by default and bypass presentation entirely.
+  If the required input path is missing, or the path cannot be read, the CLI
+  cannot produce a machine result: it returns exit `2`, writes the human I/O
+  error to stderr, and leaves stdout empty.
+
+The GitHub Actions renderer writes source-located diagnostics as escaped
+workflow annotations on stderr, groups a concise PASS/ERROR status, and
+appends `opy-cli` status to `GITHUB_STEP_SUMMARY` when that variable names a
+usable file. Human and workflow presentation never contaminates machine JSON
+stdout.
 
 ## Known limitations
 
