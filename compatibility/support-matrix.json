@@ -655,7 +655,7 @@
       "end-to-end-supported": 0
     },
     "byCategory": {
-      "syntax": 7,
+      "syntax": 14,
       "semantics": 14,
       "preprocessing": 4,
       "macros": 3,

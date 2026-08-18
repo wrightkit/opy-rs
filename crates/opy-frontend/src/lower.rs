@@ -28,11 +28,11 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::hir::types::{
-    Annotation as HirAnnotation, AnnotationArg as HirAnnotationArg, Declaration, Define, Event,
-    DictEntry as HirDictEntry, Expr as HirExpr, Generator, IfBranch, Position,
-    PreprocessingState, Program as HirProgram, Protocol, Rule, RuleEntry,
-    Settings as HirSettings, SettingsNode as HirSettingsNode, SourceFile, Span as HirSpan,
-    Stmt as HirStmt, SwitchCase as HirSwitchCase, default_var_index,
+    Annotation as HirAnnotation, AnnotationArg as HirAnnotationArg, Declaration, Define,
+    DictEntry as HirDictEntry, Event, Expr as HirExpr, Generator, IfBranch, Position,
+    PreprocessingState, Program as HirProgram, Protocol, Rule, RuleEntry, Settings as HirSettings,
+    SettingsNode as HirSettingsNode, SourceFile, Span as HirSpan, Stmt as HirStmt,
+    SwitchCase as HirSwitchCase, default_var_index,
 };
 
 use crate::cst::{self, CallArg, Decl, Expr, RuleEntry as CstRuleEntry, Stmt};
