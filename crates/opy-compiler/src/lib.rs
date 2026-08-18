@@ -3,17 +3,17 @@
 //! `opy-frontend` remains a standalone OPY/HIR producer. This crate is the
 //! consumer-owned compiler layer: it pins the released `workshop-rs` v0.1.1
 //! contract, checks the OPY manifest links against the canonical catalog, and
-//! lowers the small validated vertical slice into canonical WIR before
+//! lowers the supported OPY program structure into canonical WIR before
 //! validation and deterministic Workshop emission.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use opy_frontend::hir::{self, Expr, RuleEntry, Span as HirSpan, Stmt};
 use opy_frontend::manifest::{FunctionKind, Manifest};
 use workshop_rs::catalog::{Catalog, CatalogIdentity, Kind, Locale};
 use workshop_rs::source::{Position as WorkshopPosition, SourceFile, Span as WorkshopSpan};
-use workshop_rs::wir::{self, Action, Event, Program, Value, ValueNode};
+use workshop_rs::wir::{self, Action, Event, PlayerEventKind, Program, Value, ValueNode};
 
 /// The exact released dependency contract consumed by this crate.
 pub const WORKSHOP_RS_VERSION: &str = "0.1.1";
@@ -217,7 +217,8 @@ impl Compiler {
     /// against the canonical catalog, and emit deterministic en-US Workshop.
     pub fn compile_hir(&self, hir: &hir::Program) -> Result<CompilationArtifact, IntegrationError> {
         let mut lowering = Lowering::new(self, hir)?;
-        lowering.copy_files();
+        lowering.copy_files()?;
+        lowering.reject_unsupported_metadata()?;
         lowering.lower_declarations()?;
         lowering.lower_rules()?;
 
@@ -267,6 +268,8 @@ struct Lowering<'a> {
     wir_to_hir_files: Vec<u32>,
     globals: HashMap<String, wir::GlobalVarId>,
     players: HashMap<String, wir::PlayerVarId>,
+    subroutines: HashMap<String, wir::SubroutineId>,
+    defined_subroutines: HashSet<wir::SubroutineId>,
 }
 
 impl<'a> Lowering<'a> {
@@ -279,71 +282,165 @@ impl<'a> Lowering<'a> {
             wir_to_hir_files: Vec::new(),
             globals: HashMap::new(),
             players: HashMap::new(),
+            subroutines: HashMap::new(),
+            defined_subroutines: HashSet::new(),
         })
     }
 
-    fn copy_files(&mut self) {
+    fn copy_files(&mut self) -> Result<(), IntegrationError> {
         for file in &self.hir.files {
+            if self.files.contains_key(&file.id) {
+                return Err(IntegrationError::new(
+                    "source-file",
+                    format!("duplicate HIR source file id {}", file.id),
+                    None,
+                ));
+            }
             let id = self.wir.files.push(SourceFile::new(file.path.clone()));
             self.files.insert(file.id, id);
             self.wir_to_hir_files.push(file.id);
         }
+        Ok(())
+    }
+
+    fn reject_unsupported_metadata(&self) -> Result<(), IntegrationError> {
+        if let Some(settings) = &self.hir.settings {
+            return Err(self.unsupported(
+                "custom-game settings lowering is outside #40",
+                settings.span,
+            ));
+        }
+        Ok(())
     }
 
     fn lower_declarations(&mut self) -> Result<(), IntegrationError> {
-        let mut next_global = 0;
-        let mut next_player = 0;
+        let globals = self
+            .hir
+            .declarations
+            .iter()
+            .filter_map(|declaration| match declaration {
+                hir::Declaration::GlobalVariable { index, span, .. } => Some((*index, *span)),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let players = self
+            .hir
+            .declarations
+            .iter()
+            .filter_map(|declaration| match declaration {
+                hir::Declaration::PlayerVariable { index, span, .. } => Some((*index, *span)),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let subroutines = self
+            .hir
+            .declarations
+            .iter()
+            .filter_map(|declaration| match declaration {
+                hir::Declaration::Subroutine { index, span, .. } => Some((*index, *span)),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        let global_indices = allocate_indices(&globals, "global variable")?;
+        let player_indices = allocate_indices(&players, "player variable")?;
+        let subroutine_indices = allocate_indices(&subroutines, "subroutine")?;
+        let mut global_index = 0;
+        let mut player_index = 0;
+        let mut subroutine_index = 0;
         for declaration in &self.hir.declarations {
             match declaration {
                 hir::Declaration::GlobalVariable {
                     name,
-                    index,
+                    index: _,
                     span,
                     name_span,
                     initializer,
                 } => {
                     if initializer.is_some() {
-                        return Err(self.unsupported(
-                            "global variable initializers are outside the #35 vertical slice",
-                            *span,
-                        ));
+                        return Err(
+                            self.unsupported("global variable initializers are outside #40", *span)
+                        );
                     }
-                    let assigned = index.unwrap_or(next_global);
-                    next_global = next_global.max(assigned.saturating_add(1));
+                    let assigned = global_indices[global_index];
+                    global_index += 1;
                     let id = self.wir.global_variables.push(wir::WorkshopVariable {
                         name: name.clone(),
                         index: assigned,
                         span: self.wir_span(*span)?,
                         name_span: self.wir_span(*name_span)?,
                     });
-                    self.globals.insert(name.clone(), id);
+                    if self.globals.insert(name.clone(), id).is_some() {
+                        return Err(IntegrationError::new(
+                            "symbol-collision",
+                            format!("duplicate global variable '{name}'"),
+                            *span,
+                        ));
+                    }
                 }
                 hir::Declaration::PlayerVariable {
                     name,
-                    index,
+                    index: _,
                     span,
                     name_span,
                     initializer,
                 } => {
                     if initializer.is_some() {
-                        return Err(self.unsupported(
-                            "player variable initializers are outside the #35 vertical slice",
-                            *span,
-                        ));
+                        return Err(
+                            self.unsupported("player variable initializers are outside #40", *span)
+                        );
                     }
-                    let assigned = index.unwrap_or(next_player);
-                    next_player = next_player.max(assigned.saturating_add(1));
+                    let assigned = player_indices[player_index];
+                    player_index += 1;
                     let id = self.wir.player_variables.push(wir::WorkshopVariable {
                         name: name.clone(),
                         index: assigned,
                         span: self.wir_span(*span)?,
                         name_span: self.wir_span(*name_span)?,
                     });
-                    self.players.insert(name.clone(), id);
+                    if self.players.insert(name.clone(), id).is_some() {
+                        return Err(IntegrationError::new(
+                            "symbol-collision",
+                            format!("duplicate player variable '{name}'"),
+                            *span,
+                        ));
+                    }
                 }
-                hir::Declaration::Subroutine { .. }
-                | hir::Declaration::Constant { .. }
-                | hir::Declaration::Macro { .. } => {}
+                hir::Declaration::Subroutine {
+                    name,
+                    span,
+                    name_span,
+                    ..
+                } => {
+                    let assigned = subroutine_indices[subroutine_index];
+                    subroutine_index += 1;
+                    let id = self.wir.subroutines.push(wir::WorkshopSubroutine {
+                        name: name.clone(),
+                        index: assigned,
+                        span: self.wir_span(*span)?,
+                        name_span: self.wir_span(*name_span)?,
+                    });
+                    if self.subroutines.insert(name.clone(), id).is_some() {
+                        return Err(IntegrationError::new(
+                            "symbol-collision",
+                            format!("duplicate subroutine '{name}'"),
+                            *span,
+                        ));
+                    }
+                }
+                hir::Declaration::Constant { name, span, .. } => {
+                    return Err(self.unsupported(
+                        format!(
+                            "constant declaration '{name}' is not representable in canonical WIR"
+                        ),
+                        *span,
+                    ));
+                }
+                hir::Declaration::Macro { name, span, .. } => {
+                    return Err(self.unsupported(
+                        format!("macro declaration '{name}' is not representable in canonical WIR"),
+                        *span,
+                    ));
+                }
             }
         }
         Ok(())
@@ -353,11 +450,16 @@ impl<'a> Lowering<'a> {
         for entry in &self.hir.rules {
             match entry {
                 RuleEntry::Rule(rule) => self.lower_rule(rule)?,
-                RuleEntry::SubroutineDef { span, .. } => {
-                    return Err(self.unsupported(
-                        "subroutine rule lowering is outside the #35 vertical slice",
-                        *span,
-                    ));
+                RuleEntry::SubroutineDef {
+                    name,
+                    source_name,
+                    span,
+                    name_span,
+                    body,
+                    annotations,
+                    ..
+                } => {
+                    self.lower_subroutine(name, source_name, *span, *name_span, body, annotations)?
                 }
             }
         }
@@ -365,19 +467,8 @@ impl<'a> Lowering<'a> {
     }
 
     fn lower_rule(&mut self, rule: &hir::Rule) -> Result<(), IntegrationError> {
-        let event = match rule.event.name.as_str() {
-            "global" => Event::Global,
-            "eachPlayer" => Event::EachPlayer,
-            _ => {
-                return Err(self.unsupported(
-                    format!(
-                        "event '{}' is outside the #35 vertical slice",
-                        rule.event.name
-                    ),
-                    rule.event.span,
-                ));
-            }
-        };
+        self.reject_rule_metadata(rule)?;
+        let event = self.lower_event(&rule.event, &rule.annotations)?;
         let conditions = rule
             .conditions
             .iter()
@@ -400,6 +491,304 @@ impl<'a> Lowering<'a> {
         Ok(())
     }
 
+    fn lower_subroutine(
+        &mut self,
+        name: &str,
+        source_name: &str,
+        span: Option<HirSpan>,
+        name_span: Option<HirSpan>,
+        body: &[Stmt],
+        annotations: &[hir::Annotation],
+    ) -> Result<(), IntegrationError> {
+        self.reject_subroutine_metadata(annotations)?;
+        let source_name = if source_name.is_empty() {
+            name
+        } else {
+            source_name
+        };
+        let subroutine = *self.subroutines.get(source_name).ok_or_else(|| {
+            self.unsupported(
+                format!("subroutine definition '{source_name}' has no declaration"),
+                name_span.or(span),
+            )
+        })?;
+        if !self.defined_subroutines.insert(subroutine) {
+            return Err(self.unsupported(
+                format!("subroutine '{source_name}' has multiple definitions"),
+                name_span.or(span),
+            ));
+        }
+        let actions = body
+            .iter()
+            .map(|stmt| self.lower_action(stmt))
+            .collect::<Result<Vec<_>, _>>()?;
+        self.wir.rules.push(wir::Rule {
+            name: self.subroutine_rule_name(name),
+            span: self.wir_span(span)?,
+            name_span: self.wir_span(name_span)?,
+            disabled: false,
+            event: Event::Subroutine(subroutine),
+            conditions: Vec::new(),
+            actions,
+        });
+        Ok(())
+    }
+
+    fn reject_rule_metadata(&self, rule: &hir::Rule) -> Result<(), IntegrationError> {
+        if rule.delimiter {
+            let span = rule
+                .annotations
+                .iter()
+                .find(|annotation| annotation.name == "Delimiter")
+                .and_then(|annotation| annotation.span)
+                .or(rule.span);
+            return Err(self.unsupported(
+                "rule delimiter metadata is not representable in canonical WIR",
+                span,
+            ));
+        }
+        if rule.new_page.is_some() {
+            let span = rule
+                .annotations
+                .iter()
+                .find(|annotation| annotation.name == "NewPage")
+                .and_then(|annotation| annotation.span)
+                .or(rule.span);
+            return Err(self.unsupported(
+                "rule new-page metadata is not representable in canonical WIR",
+                span,
+            ));
+        }
+        for annotation in &rule.annotations {
+            match annotation.name.as_str() {
+                "Event" | "Condition" | "Team" | "Slot" | "Hero" | "Disabled"
+                | "SuppressWarnings" => {}
+                _ => {
+                    return Err(self.unsupported(
+                        format!(
+                            "rule annotation '{}' is not representable in canonical WIR",
+                            annotation.name
+                        ),
+                        annotation.span.or(rule.span),
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn reject_subroutine_metadata(
+        &self,
+        annotations: &[hir::Annotation],
+    ) -> Result<(), IntegrationError> {
+        for annotation in annotations {
+            match annotation.name.as_str() {
+                "Name" | "SuppressWarnings" => {}
+                _ => {
+                    return Err(self.unsupported(
+                        format!(
+                            "subroutine annotation '{}' is not representable in canonical WIR",
+                            annotation.name
+                        ),
+                        annotation.span,
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn subroutine_rule_name(&self, generated_name: &str) -> String {
+        if self.hir.preprocessing.rule_prefix_template.is_some() {
+            generated_name.to_string()
+        } else {
+            format!("Subroutine {generated_name}")
+        }
+    }
+
+    fn lower_event(
+        &self,
+        event: &hir::Event,
+        annotations: &[hir::Annotation],
+    ) -> Result<Event, IntegrationError> {
+        if !event.args.is_empty() {
+            return Err(self.unsupported(
+                "event arguments are not representable in canonical WIR; use structural event filters",
+                event.span,
+            ));
+        }
+        let team = self.lower_event_team(annotations)?;
+        let target = self.lower_event_target(annotations)?;
+        let has_filters =
+            !matches!(team, wir::EventTeam::All) || !matches!(target, wir::EventTarget::All);
+        match event.name.as_str() {
+            "global" => {
+                if has_filters {
+                    return Err(
+                        self.unsupported("global events cannot have player filters", event.span)
+                    );
+                }
+                Ok(Event::Global)
+            }
+            "eachPlayer" => {
+                if has_filters {
+                    Ok(Event::EachPlayerWithFilters { team, target })
+                } else {
+                    Ok(Event::EachPlayer)
+                }
+            }
+            name => player_event_kind(name).map_or_else(
+                || {
+                    Err(self.unsupported(
+                        format!("event '{name}' is not supported by canonical WIR"),
+                        event.span,
+                    ))
+                },
+                |kind| Ok(Event::Player { kind, team, target }),
+            ),
+        }
+    }
+
+    fn lower_event_team(
+        &self,
+        annotations: &[hir::Annotation],
+    ) -> Result<wir::EventTeam, IntegrationError> {
+        let team_annotations = annotations
+            .iter()
+            .filter(|annotation| annotation.name == "Team")
+            .collect::<Vec<_>>();
+        if team_annotations.len() > 1 {
+            return Err(self.unsupported(
+                "an event cannot have multiple @Team filters",
+                team_annotations[1].span.or(team_annotations[0].span),
+            ));
+        }
+        let Some(annotation) = team_annotations.first() else {
+            return Ok(wir::EventTeam::All);
+        };
+        let argument = annotation
+            .args
+            .first()
+            .ok_or_else(|| self.unsupported("@Team requires one filter value", annotation.span))?;
+        if annotation.args.len() != 1 {
+            return Err(
+                self.unsupported("@Team requires exactly one filter value", annotation.span)
+            );
+        }
+        let spelling = match argument.text.as_str() {
+            "1" => "Team 1",
+            "2" => "Team 2",
+            value => value,
+        };
+        let (_, member) = self
+            .compiler
+            .catalog
+            .resolve_enum_member("EventTeam", &Locale::new("en-US"), spelling)
+            .ok_or_else(|| {
+                self.unsupported(
+                    format!("unknown EventTeam filter '{spelling}'"),
+                    argument.span.or(annotation.span),
+                )
+            })?;
+        match member.as_str() {
+            "ALL" => Ok(wir::EventTeam::All),
+            "TEAM_1" => Ok(wir::EventTeam::Team1),
+            "TEAM_2" => Ok(wir::EventTeam::Team2),
+            _ => Err(self.unsupported(
+                format!("catalog EventTeam member '{member}' is not supported by canonical WIR"),
+                argument.span.or(annotation.span),
+            )),
+        }
+    }
+
+    fn lower_event_target(
+        &self,
+        annotations: &[hir::Annotation],
+    ) -> Result<wir::EventTarget, IntegrationError> {
+        let mut filters = Vec::new();
+        for name in ["Slot", "Hero"] {
+            let matches = annotations
+                .iter()
+                .filter(|annotation| annotation.name == name)
+                .collect::<Vec<_>>();
+            if matches.len() > 1 {
+                return Err(self.unsupported(
+                    format!("an event cannot have multiple @{name} filters"),
+                    matches[1].span.or(matches[0].span),
+                ));
+            }
+            filters.extend(matches);
+        }
+        if filters.len() > 1 {
+            return Err(self.unsupported(
+                "an event cannot combine @Slot and @Hero filters",
+                filters[1].span.or(filters[0].span),
+            ));
+        }
+        let Some(annotation) = filters.first() else {
+            return Ok(wir::EventTarget::All);
+        };
+        let argument = annotation.args.first().ok_or_else(|| {
+            self.unsupported(
+                format!("@{} requires one filter value", annotation.name),
+                annotation.span,
+            )
+        })?;
+        if annotation.args.len() != 1 {
+            return Err(self.unsupported(
+                format!("@{} requires exactly one filter value", annotation.name),
+                annotation.span,
+            ));
+        }
+        let spelling = if annotation.name == "Slot" {
+            match argument.text.as_str() {
+                value if value.parse::<u8>().is_ok() => {
+                    format!("Slot {}", value.parse::<u8>().unwrap_or_default())
+                }
+                value => value.to_string(),
+            }
+        } else {
+            argument.text.clone()
+        };
+        let domain = if annotation.name == "Slot" {
+            "EventPlayer"
+        } else {
+            "Hero"
+        };
+        let (_, member) = self
+            .compiler
+            .catalog
+            .resolve_enum_member(domain, &Locale::new("en-US"), &spelling)
+            .ok_or_else(|| {
+                self.unsupported(
+                    format!("unknown {domain} filter '{spelling}'"),
+                    argument.span.or(annotation.span),
+                )
+            })?;
+        if domain == "EventPlayer" {
+            if member == "ALL" {
+                Ok(wir::EventTarget::All)
+            } else if let Some(slot) = member.strip_prefix("SLOT_") {
+                let slot = slot.parse::<u8>().map_err(|_| {
+                    self.unsupported(
+                        format!("catalog EventPlayer member '{member}' is not a slot"),
+                        argument.span.or(annotation.span),
+                    )
+                })?;
+                Ok(wir::EventTarget::Slot(slot))
+            } else {
+                Err(self.unsupported(
+                    format!(
+                        "catalog EventPlayer member '{member}' is not supported by canonical WIR"
+                    ),
+                    argument.span.or(annotation.span),
+                ))
+            }
+        } else {
+            Ok(wir::EventTarget::Hero(member))
+        }
+    }
+
     fn lower_action(&mut self, stmt: &Stmt) -> Result<wir::ActionId, IntegrationError> {
         match stmt {
             Stmt::Assign {
@@ -413,7 +802,7 @@ impl<'a> Lowering<'a> {
                 } = target.as_ref()
                 else {
                     return Err(self.unsupported(
-                        "only global-variable assignment is in the #35 vertical slice",
+                        "only global-variable assignment is currently representable in canonical WIR",
                         *span,
                     ));
                 };
@@ -431,14 +820,25 @@ impl<'a> Lowering<'a> {
             Stmt::Expr { expr, span } => {
                 let Expr::Call { name, args, .. } = expr.as_ref() else {
                     return Err(self.unsupported(
-                        "only builtin action calls are in the #35 vertical slice",
+                        "only builtin action calls are currently representable in canonical WIR",
                         *span,
                     ));
                 };
                 self.lower_action_call(name, args, *span)
             }
+            Stmt::CallSubroutine { name, span } => {
+                let subroutine = *self.subroutines.get(name).ok_or_else(|| {
+                    self.unsupported(format!("unknown subroutine '{name}'"), *span)
+                })?;
+                let span = self.wir_span(*span)?;
+                Ok(self.wir.actions.push(Action::CallSubroutine {
+                    subroutine,
+                    span,
+                    callee_span: span,
+                }))
+            }
             _ => Err(self.unsupported(
-                "the statement is outside the #35 vertical slice",
+                "the statement is not currently representable in canonical WIR",
                 stmt.span().copied(),
             )),
         }
@@ -461,7 +861,7 @@ impl<'a> Lowering<'a> {
         let catalog_id = function.catalog_id.as_ref().ok_or_else(|| {
             self.unsupported(
                 format!(
-                    "action '{}' requires a special lowering not in #35",
+                    "action '{}' requires a special lowering not in #40",
                     function.id
                 ),
                 span,
@@ -536,7 +936,7 @@ impl<'a> Lowering<'a> {
                 let catalog_id = function.catalog_id.as_ref().ok_or_else(|| {
                     self.unsupported(
                         format!(
-                            "value '{}' requires a special lowering not in #35",
+                            "value '{}' requires a special lowering not in #40",
                             function.id
                         ),
                         span,
@@ -563,7 +963,7 @@ impl<'a> Lowering<'a> {
             _ => {
                 return Err(self.unsupported(
                     format!(
-                        "expression '{}' is outside the #35 vertical slice",
+                        "expression '{}' is not currently representable in canonical WIR",
                         expr.kind_name()
                     ),
                     span,
@@ -612,6 +1012,71 @@ impl<'a> Lowering<'a> {
     fn unsupported(&self, message: impl Into<String>, span: Option<HirSpan>) -> IntegrationError {
         IntegrationError::new("unsupported-integration-surface", message, span)
     }
+}
+
+fn allocate_indices(
+    entries: &[(Option<u32>, Option<HirSpan>)],
+    kind: &str,
+) -> Result<Vec<u32>, IntegrationError> {
+    let mut reserved = HashSet::new();
+    for (index, span) in entries {
+        let Some(index) = index else {
+            continue;
+        };
+        if !reserved.insert(*index) {
+            return Err(IntegrationError::new(
+                "index-collision",
+                format!("duplicate explicit {kind} index {index}"),
+                *span,
+            ));
+        }
+    }
+
+    let mut next = 0;
+    let mut allocated = Vec::with_capacity(entries.len());
+    for (index, span) in entries {
+        let assigned = if let Some(index) = index {
+            *index
+        } else {
+            while reserved.contains(&next) {
+                next = next.checked_add(1).ok_or_else(|| {
+                    IntegrationError::new(
+                        "index-exhausted",
+                        format!("no available {kind} index remains"),
+                        *span,
+                    )
+                })?;
+            }
+            reserved.insert(next);
+            let assigned = next;
+            next = next.checked_add(1).ok_or_else(|| {
+                IntegrationError::new(
+                    "index-exhausted",
+                    format!("no available {kind} index remains"),
+                    *span,
+                )
+            })?;
+            assigned
+        };
+        next = next.max(assigned.saturating_add(1));
+        allocated.push(assigned);
+    }
+    Ok(allocated)
+}
+
+fn player_event_kind(name: &str) -> Option<PlayerEventKind> {
+    Some(match name {
+        "playerDealtDamage" => PlayerEventKind::DealtDamage,
+        "playerDealtFinalBlow" => PlayerEventKind::DealtFinalBlow,
+        "playerDealtHealing" => PlayerEventKind::DealtHealing,
+        "playerDied" => PlayerEventKind::Died,
+        "playerEarnedElimination" => PlayerEventKind::EarnedElimination,
+        "playerJoined" => PlayerEventKind::Joined,
+        "playerLeft" => PlayerEventKind::Left,
+        "playerReceivedHealing" => PlayerEventKind::ReceivedHealing,
+        "playerTookDamage" => PlayerEventKind::TookDamage,
+        _ => return None,
+    })
 }
 
 fn workshop_error_span(error: &workshop_rs::WorkshopError) -> Option<WorkshopSpan> {
@@ -694,5 +1159,157 @@ mod tests {
         };
         assert_eq!(error.diagnostic.code, "unsupported-integration-surface");
         assert_eq!(error.diagnostic.span.unwrap().start.line, 3);
+    }
+
+    #[test]
+    fn structural_subroutines_lower_to_canonical_wir() {
+        let compiler = Compiler::new().unwrap();
+        let hir = opy_frontend::compile(
+            "globalvar score\nsubroutine showStatus\ndef showStatus():\n    @Name \"Friendly\"\n    @SuppressWarnings unusedVariable\n    disableInspector()\nrule \"caller\":\n    @Event global\n    showStatus()\n",
+            "structure.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        let subroutine = artifact
+            .wir
+            .subroutines
+            .get(workshop_rs::wir::SubroutineId::from_index(0))
+            .unwrap();
+        assert_eq!(subroutine.name, "showStatus");
+        assert_eq!(subroutine.index, 0);
+        assert_eq!(subroutine.name_span.unwrap().start.line, 2);
+        assert_eq!(artifact.wir.rules.len(), 2);
+        let subroutine_rule = artifact
+            .wir
+            .rules
+            .get(workshop_rs::wir::RuleId::from_index(0))
+            .unwrap();
+        let workshop_rs::wir::Event::Subroutine(subroutine_id) = subroutine_rule.event else {
+            panic!("expected a subroutine event");
+        };
+        assert_eq!(
+            artifact.wir.subroutines.get(subroutine_id).unwrap().name,
+            "showStatus"
+        );
+        assert!(matches!(
+            artifact
+                .wir
+                .actions
+                .get(workshop_rs::wir::ActionId::from_index(1))
+                .unwrap(),
+            workshop_rs::wir::Action::CallSubroutine { .. }
+        ));
+        assert!(artifact.emitted.contains("Subroutine Friendly"));
+    }
+
+    #[test]
+    fn player_event_filters_resolve_through_canonical_catalog() {
+        let compiler = Compiler::new().unwrap();
+        let hir = opy_frontend::compile(
+            "rule \"joined\":\n    @Event playerJoined\n    @Team 1\n    @Slot 2\n    disableInspector()\n",
+            "filters.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        assert!(matches!(
+            &artifact
+                .wir
+                .rules
+                .get(workshop_rs::wir::RuleId::from_index(0))
+                .unwrap()
+                .event,
+            workshop_rs::wir::Event::Player {
+                kind: workshop_rs::wir::PlayerEventKind::Joined,
+                team: workshop_rs::wir::EventTeam::Team1,
+                target: workshop_rs::wir::EventTarget::Slot(2),
+            }
+        ));
+        assert!(artifact.emitted.contains("Player Joined Match;"));
+    }
+
+    #[test]
+    fn explicit_indices_are_reserved_before_deterministic_allocation() {
+        let compiler = Compiler::new().unwrap();
+        let hir = opy_frontend::compile(
+            "globalvar first\nglobalvar reserved 0\nglobalvar next\nrule \"indices\":\n    @Event global\n    disableInspector()\n",
+            "indices.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        let indices = artifact
+            .wir
+            .global_variables
+            .iter()
+            .map(|variable| variable.index)
+            .collect::<Vec<_>>();
+        assert_eq!(indices, vec![1, 0, 2]);
+    }
+
+    #[test]
+    fn unsupported_rule_metadata_is_explicit_and_source_attributed() {
+        let compiler = Compiler::new().unwrap();
+        let hir = opy_frontend::compile(
+            "rule \"metadata\":\n    @Event global\n    @NewPage \"section\"\n    disableInspector()\n",
+            "metadata.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let error = match compiler.compile_hir(&hir) {
+            Ok(_) => panic!("unsupported metadata unexpectedly succeeded"),
+            Err(error) => error,
+        };
+        assert_eq!(error.diagnostic.code, "unsupported-integration-surface");
+        assert_eq!(error.diagnostic.span.unwrap().start.line, 3);
+    }
+
+    #[test]
+    fn issue_40_oracle_fixture_and_wir_lowering_agree() {
+        let compiler = Compiler::new().unwrap();
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../compatibility/fixtures/synthetic/issue-40-structural");
+        let source = std::fs::read_to_string(fixture.join("source.opy")).unwrap();
+        let hir = opy_frontend::compile(&source, "source.opy", &fixture).unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        let oracle: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(fixture.join("oracle.json")).unwrap())
+                .unwrap();
+        let oracle_workshop = oracle["compile"]["workshop"].as_str().unwrap();
+
+        assert!(oracle_workshop.contains("0: reserved"));
+        assert!(oracle_workshop.contains("1: first"));
+        assert!(oracle_workshop.contains("2: explicit"));
+        assert!(oracle_workshop.contains("3: next"));
+        assert!(oracle_workshop.contains("0: helper"));
+        assert!(oracle_workshop.contains("Subroutine;\n        helper;"));
+        assert!(oracle_workshop.contains("Player Joined Match;\n        Team 1;\n        Slot 2;"));
+
+        let indices = artifact
+            .wir
+            .global_variables
+            .iter()
+            .map(|variable| variable.index)
+            .collect::<Vec<_>>();
+        assert_eq!(indices, vec![0, 1, 2, 3]);
+        assert_eq!(
+            artifact.wir.subroutines.iter().next().unwrap().name,
+            "helper"
+        );
+        assert!(artifact.emitted.contains("[Source] renamed helper"));
+        assert!(matches!(
+            artifact
+                .wir
+                .rules
+                .get(workshop_rs::wir::RuleId::from_index(1))
+                .unwrap()
+                .event,
+            workshop_rs::wir::Event::Player {
+                kind: workshop_rs::wir::PlayerEventKind::Joined,
+                team: workshop_rs::wir::EventTeam::Team1,
+                target: workshop_rs::wir::EventTarget::Slot(2),
+            }
+        ));
     }
 }

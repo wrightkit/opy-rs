@@ -176,7 +176,7 @@ complete; #28/#29/#30/#33 executed):
 * the OPY semantic compatibility manifest with oracle-validated probes;
 * JavaScript macro execution and record-only post-compile hooks;
 * the `check`/`inspect`/`support` tooling API and `opy-cli`;
-* the 41-fixture compatibility corpus with pinned oracle snapshots and the
+* the 42-fixture compatibility corpus with pinned oracle snapshots and the
   native differential suite (`cargo test -p opy-frontend --test
   differential`).
 

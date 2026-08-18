@@ -67,7 +67,7 @@
 //!
 //! # Current corpus state
 //!
-//! All declared fixtures run (0 skips, 0 divergences): **15 resolve** and
+//! All declared fixtures run (0 skips, 0 divergences): **16 resolve** and
 //! **12 produce expected diagnostics** with pinned codes; 7 fixtures are
 //! documented reference gaps (the oracle accepts a surface the native
 //! frontend deliberately rejects). Settings key-existence/leaf-kind
@@ -192,6 +192,12 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         "synthetic/issue-35-integration",
         true,
         "Issue #35 OPY-to-Workshop integration fixture; the frontend resolves the source and the opy-compiler crate independently validates the canonical WIR slice.",
+    );
+    resolve(
+        &mut cases,
+        "synthetic/issue-40-structural",
+        false,
+        "Issue #40 oracle-backed structural probe; the frontend resolves the source while opy-compiler independently checks canonical WIR identity, allocation, and event filters.",
     );
     diagnostic(
         &mut cases,
