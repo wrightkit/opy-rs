@@ -312,6 +312,9 @@ whose `kind` the consumer does not recognize is an *unsupported node* (§7.3).
 | `if` | `branches`, `else`, `span` | Conditional. `branches` is an array of `{ "condition", "body" }`; `else` is an array of statements or `null`. |
 | `for` | `variable`, `iterable`, `body`, `span` | Iteration. `variable` is an expression naming the loop variable (a `globalVar` reference). |
 | `while` | `condition`, `body`, `span` | Loop. |
+| `doWhile` | `body`, `condition`, `span` | Loop whose body executes before its condition. |
+| `switch` | `value`, `cases`, `default`, `span` | Source-order arms; execution falls through until a `break` or the end of the switch. |
+| `break` | `span` | Exit the innermost switch or loop; invalid contexts are rejected by the frontend. |
 | `callSubroutine` | `name`, `span` | Call a subroutine by name. |
 | `pass` | `span` | A no-op emitted by the frontend. |
 

@@ -369,6 +369,7 @@ impl Preprocessor {
                 out.push(Token {
                     kind: TokenKind::RulePrefixMarker,
                     text: prefix,
+                    raw: None,
                     span: token.span,
                 });
                 out.push(token);
@@ -1414,18 +1415,24 @@ mod tests {
     }
 
     #[test]
-    fn dict_literal_braces_still_lex_error() {
-        // Scoped settings lexing must not mask expression-level braces:
-        // meipocalypse-style dict literals keep failing as a lex-error.
-        let error = preprocess(
+    fn dict_literal_braces_reach_the_parser() {
+        // Scoped settings lexing must not consume expression-level braces.
+        let (pre, _) = preprocess(
             "rule \"r\":\n    money += {\n        Mei.GENERIC: 10,\n    }\n",
             "main.opy",
             Path::new("."),
         )
-        .unwrap_err();
-        assert_eq!(error.code, "lex-error");
-        assert!(error.message.contains("unexpected character '{'"));
-        assert_eq!(error.span.unwrap().start.line, 2);
+        .unwrap();
+        assert!(
+            pre.tokens
+                .iter()
+                .any(|token| token.kind == TokenKind::LBrace)
+        );
+        assert!(
+            pre.tokens
+                .iter()
+                .any(|token| token.kind == TokenKind::RBrace)
+        );
     }
 
     #[test]

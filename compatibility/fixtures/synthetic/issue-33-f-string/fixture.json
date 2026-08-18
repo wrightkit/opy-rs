@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/issue-33-f-string",
+  "category": "syntax",
+  "features": ["syntax/string-modifiers", "syntax/lambda"],
+  "source": "source.opy",
+  "expectedStatus": "success",
+  "provenance": {
+    "kind": "original",
+    "origin": "opy-rs Issue #33 pinned f-string interpolation and lambda-slot probe",
+    "license": "AGPL-3.0-or-later",
+    "redistributable": true
+  }
+}

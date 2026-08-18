@@ -24,7 +24,8 @@ machine-readable semantic contract for builtins is specified in
 ## Current implementation state
 
 The standalone frontend foundation is merged on `main` (PRs #9–#14; issues
-#2–#6 complete and #7 partially delivered): the native pipeline (lexer →
+#2–#6 complete; #7 readiness is represented by the #28/#29/#30 Draft PR
+series): the native pipeline (lexer →
 preprocess → CST/parser → semantic resolution → Opy HIR v1), the bounded
 JavaScript macro runtime, the tooling API/CLI, and the native differential
 suite are implemented and CI-covered. The rows they evidence are flipped to
@@ -70,9 +71,19 @@ implements; "reference" always means the pinned OverPy 9.7.10
   double-quoted strings with `\n`/`\t`/`\\` escapes, `true`/`false`/`None`.
 - Line comments (`#`), block comments (`/* */`), `#!` directives.
 - Operators: `+ - * / // % ** == != < <= > >= = += -= *= /= //= %= and or not`,
-  plus `.`/`,`/`:`/`(`/`)`/`[`/`]`/`@`. (`in` is only the `for ... in`
-  header keyword; expression-level `in`/`not in` membership operators are not
-  supported; see the deferred list.)
+  `in`/`not in`, plus `.`/`,`/`:`/`(`/`)`/`[`/`]`/`@`.
+
+### Pure OPY syntax and source semantics
+- `switch`/`case`/`default` preserve source-order fallthrough; `break` is a
+  real HIR statement valid in the innermost switch or loop.
+- `do ... while`, hexadecimal literals, and expression-level `in`/`not in`
+  are represented in the source-language HIR.
+- String modifiers, including f-string interpolation, preserve semantic
+  format text, interpolation expressions, and source spans; dict literals,
+  keyed access, list comprehensions, and lambda binders preserve local scope.
+- Lambda expressions are accepted only in the pinned signature-approved
+  positions (`sorted` key and array `map`/`filter`/`all`/`any`); other
+  positions produce structured diagnostics.
 
 ### Declarations
 - `globalvar name` / `globalvar name = expr` / `globalvar name <index>`
@@ -337,12 +348,9 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
    (alias targets `stopChasing`/`getHero`/`hasStatus`, and enum members
    without a catalogged spelling); these fail at emission with catalog
    diagnostics once integration lands, never silently.
-- Expression-level `in`/`not in` membership operators: rejected at parsing
-  (`for ... in` headers are supported).
 - Backslash line continuation (`\` at end of line inside string
   concatenations / macro bodies): rejected at lexing.
 - Postfix increment/decrement (`++`/`--`): rejected at parsing.
-- Dict literals (`{...}`): rejected at lexing.
 - Triple-quoted strings / docstrings (`"""`): rejected at lexing.
 - Subroutine parameters, default `@Team`/`@Slot` overrides, `raycast`
   `include=`/`exclude=` named-argument forms (no reference/corpus evidence

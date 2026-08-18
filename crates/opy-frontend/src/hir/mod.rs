@@ -18,10 +18,10 @@ mod validate;
 
 pub use error::HirError;
 pub use types::{
-    Annotation, AnnotationArg, Declaration, DirectiveRecord, DirectiveValue, Event, Expr,
-    Generator, OptimizationState, Position, PreprocessingSnapshot, PreprocessingState, Program,
-    Protocol, Rule, RuleEntry, Settings, SettingsListElement, SettingsNode, SourceFile, Span, Stmt,
-    TranslationState, default_var_index,
+    Annotation, AnnotationArg, Declaration, DictEntry, DirectiveRecord, DirectiveValue, Event,
+    Expr, Generator, OptimizationState, Position, PreprocessingSnapshot, PreprocessingState,
+    Program, Protocol, Rule, RuleEntry, Settings, SettingsListElement, SettingsNode, SourceFile,
+    Span, Stmt, SwitchCase, TranslationState, default_var_index,
 };
 
 use serde_json::Value;

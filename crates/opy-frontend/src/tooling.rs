@@ -507,7 +507,9 @@ impl SemanticModel {
             | HirExpr::Null { .. }
             | HirExpr::Enum { .. }
             | HirExpr::EventPlayer { .. }
-            | HirExpr::MacroParam { .. } => {}
+            | HirExpr::MacroParam { .. }
+            | HirExpr::StringModifier { .. }
+            | HirExpr::Local { .. } => {}
             HirExpr::GlobalVar { name, span } | HirExpr::Constant { name, span } => {
                 let kind = if matches!(expr, HirExpr::GlobalVar { .. }) {
                     SymbolKind::Global
@@ -529,6 +531,25 @@ impl SemanticModel {
                     Self::collect_expr(element, sites);
                 }
             }
+            HirExpr::Dict { entries, .. } => {
+                for entry in entries {
+                    Self::collect_expr(&entry.key, sites);
+                    Self::collect_expr(&entry.value, sites);
+                }
+            }
+            HirExpr::Comprehension {
+                element,
+                iterable,
+                condition,
+                ..
+            } => {
+                Self::collect_expr(iterable, sites);
+                Self::collect_expr(element, sites);
+                if let Some(condition) = condition {
+                    Self::collect_expr(condition, sites);
+                }
+            }
+            HirExpr::Lambda { body, .. } => Self::collect_expr(body, sites),
             HirExpr::Vector { x, y, z, .. } => {
                 Self::collect_expr(x, sites);
                 Self::collect_expr(y, sites);
@@ -626,6 +647,34 @@ impl SemanticModel {
                     Self::collect_stmt(stmt, sites);
                 }
             }
+            HirStmt::DoWhile {
+                condition, body, ..
+            } => {
+                Self::collect_expr(condition, sites);
+                for stmt in body {
+                    Self::collect_stmt(stmt, sites);
+                }
+            }
+            HirStmt::Switch {
+                value,
+                cases,
+                r#default,
+                ..
+            } => {
+                Self::collect_expr(value, sites);
+                for case in cases {
+                    Self::collect_expr(&case.value, sites);
+                    for stmt in &case.body {
+                        Self::collect_stmt(stmt, sites);
+                    }
+                }
+                if let Some(default_body) = r#default {
+                    for stmt in default_body {
+                        Self::collect_stmt(stmt, sites);
+                    }
+                }
+            }
+            HirStmt::Break { .. } => {}
             HirStmt::CallSubroutine { name, span } => {
                 if let Some(span) = span {
                     sites.push((

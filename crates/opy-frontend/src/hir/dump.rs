@@ -271,6 +271,48 @@ fn dump_stmt(statement: &Stmt, out: &mut String, level: usize) {
             out.push_str(&format!("{}\n", span_suffix(span.as_ref())));
             dump_stmts(body, out, level + 1);
         }
+        Stmt::DoWhile {
+            condition,
+            body,
+            span,
+        } => {
+            out.push_str(&format!(
+                "{}doWhile{}\n",
+                indent(level),
+                span_suffix(span.as_ref())
+            ));
+            dump_stmts(body, out, level + 1);
+            out.push_str(&format!("{}while ", indent(level)));
+            render_expr(condition, out);
+            out.push('\n');
+        }
+        Stmt::Switch {
+            value,
+            cases,
+            r#default,
+            span,
+        } => {
+            out.push_str(&format!("{}switch ", indent(level)));
+            render_expr(value, out);
+            out.push_str(&format!("{}\n", span_suffix(span.as_ref())));
+            for case in cases {
+                out.push_str(&format!("{}case ", indent(level + 1)));
+                render_expr(&case.value, out);
+                out.push_str(&format!("{}\n", span_suffix(case.span.as_ref())));
+                dump_stmts(&case.body, out, level + 2);
+            }
+            if let Some(default_body) = r#default {
+                out.push_str(&format!("{}default\n", indent(level + 1)));
+                dump_stmts(default_body, out, level + 2);
+            }
+        }
+        Stmt::Break { span } => {
+            out.push_str(&format!(
+                "{}break{}\n",
+                indent(level),
+                span_suffix(span.as_ref())
+            ));
+        }
         Stmt::CallSubroutine { name, span } => {
             out.push_str(&format!(
                 "{}callSubroutine {}{}\n",
@@ -373,6 +415,60 @@ fn render_expr(expr: &Expr, out: &mut String) {
             }
             out.push(']');
         }
+        Expr::Dict { entries, .. } => {
+            out.push('{');
+            for (index, entry) in entries.iter().enumerate() {
+                if index > 0 {
+                    out.push_str(", ");
+                }
+                render_expr(&entry.key, out);
+                out.push_str(": ");
+                render_expr(&entry.value, out);
+            }
+            out.push('}');
+        }
+        Expr::Comprehension {
+            element,
+            variable,
+            index,
+            iterable,
+            condition,
+            ..
+        } => {
+            out.push('[');
+            render_expr(element, out);
+            out.push_str(" for ");
+            out.push_str(variable);
+            if let Some(index) = index {
+                out.push_str(", ");
+                out.push_str(index);
+            }
+            out.push_str(" in ");
+            render_expr(iterable, out);
+            if let Some(condition) = condition {
+                out.push_str(" if ");
+                render_expr(condition, out);
+            }
+            out.push(']');
+        }
+        Expr::Lambda { params, body, .. } => {
+            out.push_str("lambda ");
+            for (index, param) in params.iter().enumerate() {
+                if index > 0 {
+                    out.push_str(", ");
+                }
+                out.push_str(param);
+            }
+            out.push_str(": ");
+            render_expr(body, out);
+        }
+        Expr::StringModifier {
+            modifier, value, ..
+        } => {
+            out.push(modifier.chars().next().unwrap_or_default());
+            out.push_str(&format!("{:?}", value));
+        }
+        Expr::Local { name, .. } => out.push_str(name),
         Expr::Vector { x, y, z, .. } => {
             out.push_str("vect(");
             render_expr(x, out);

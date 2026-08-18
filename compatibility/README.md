@@ -45,7 +45,8 @@ compatibility/fixtures/<category>/<name>/
 
 Imported fixtures should also record an immutable `sourceCommit`, a direct
 `sourceUrl`, a `licenseUrl`, and whether the source was modified. The corpus
-contains 27 fixtures: 14 original WrightKit-authored synthetic/census cases and 13
+contains 40 fixtures: 26 WrightKit-authored synthetic cases, one census boundary
+fixture, and 13
 real-world projects (11 derived from the pinned OverPy `examples/` tree,
 GPL-3.0-only, provenance-recorded evidence, plus the independent BSD-2-Clause
 projects `real-world/ow1-emulator` and `real-world/6v6-adjustments`, full

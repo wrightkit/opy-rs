@@ -28,10 +28,11 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::hir::types::{
-    Annotation as HirAnnotation, AnnotationArg as HirAnnotationArg, Declaration, Define, Event,
-    Expr as HirExpr, Generator, IfBranch, Position, PreprocessingState, Program as HirProgram,
-    Protocol, Rule, RuleEntry, Settings as HirSettings, SettingsNode as HirSettingsNode,
-    SourceFile, Span as HirSpan, Stmt as HirStmt, default_var_index,
+    Annotation as HirAnnotation, AnnotationArg as HirAnnotationArg, Declaration, Define,
+    DictEntry as HirDictEntry, Event, Expr as HirExpr, Generator, IfBranch, Position,
+    PreprocessingState, Program as HirProgram, Protocol, Rule, RuleEntry, Settings as HirSettings,
+    SettingsNode as HirSettingsNode, SourceFile, Span as HirSpan, Stmt as HirStmt,
+    SwitchCase as HirSwitchCase, default_var_index,
 };
 
 use crate::cst::{self, CallArg, Decl, Expr, RuleEntry as CstRuleEntry, Stmt};
@@ -54,6 +55,8 @@ enum CallPosition {
     Value,
     /// A `for ... in` iterable (only `range` is a valid builtin here).
     ForIterable,
+    /// An expression occupying a signature-approved lambda argument slot.
+    LambdaArgument,
 }
 
 /// The lowerer's symbol context, built from the CST declarations.
@@ -63,6 +66,8 @@ struct Lowerer {
     subroutines: HashSet<String>,
     macros: HashSet<String>,
     enums: HashMap<String, Vec<String>>,
+    locals: Vec<String>,
+    allow_dict_literal: bool,
     /// The authoritative builtin semantic table (issue #109).
     manifest: &'static Manifest,
     errors: Vec<FrontendError>,
@@ -98,6 +103,8 @@ pub fn lower_with_preprocessing(
         subroutines: HashSet::new(),
         macros: HashSet::new(),
         enums: HashMap::new(),
+        locals: Vec::new(),
+        allow_dict_literal: false,
         manifest,
         errors: Vec::new(),
     };
@@ -204,7 +211,7 @@ pub fn lower_with_preprocessing(
                     source_name: name.clone(),
                     span: Some(span.into()),
                     name_span: Some(name_span.into()),
-                    body: lowerer.lower_block(body, &[]),
+                    body: lowerer.lower_block(body, &[], false),
                     annotations: lower_annotations(annotations),
                 });
             }
@@ -612,7 +619,7 @@ impl Lowerer {
             .iter()
             .map(|condition| self.lower_expr(condition, &[], CallPosition::Value))
             .collect();
-        let actions = self.lower_block(&rule.actions, &[]);
+        let actions = self.lower_block(&rule.actions, &[], false);
         Ok(Rule {
             name: render_rule_name(
                 &rule.name,
@@ -644,14 +651,19 @@ impl Lowerer {
     }
 
     /// Lower a statement block; `macro_params` names resolve to `MacroParam`.
-    fn lower_block(&mut self, stmts: &[Stmt], macro_params: &[String]) -> Vec<HirStmt> {
+    fn lower_block(
+        &mut self,
+        stmts: &[Stmt],
+        macro_params: &[String],
+        breakable: bool,
+    ) -> Vec<HirStmt> {
         stmts
             .iter()
-            .map(|stmt| self.lower_stmt(stmt, macro_params))
+            .map(|stmt| self.lower_stmt(stmt, macro_params, breakable))
             .collect()
     }
 
-    fn lower_stmt(&mut self, stmt: &Stmt, macro_params: &[String]) -> HirStmt {
+    fn lower_stmt(&mut self, stmt: &Stmt, macro_params: &[String], breakable: bool) -> HirStmt {
         match stmt {
             Stmt::Expr { expr, span } => {
                 // A bare call of a declared subroutine becomes
@@ -693,12 +705,12 @@ impl Lowerer {
                             macro_params,
                             CallPosition::Value,
                         )),
-                        body: self.lower_block(&branch.body, macro_params),
+                        body: self.lower_block(&branch.body, macro_params, breakable),
                     })
                     .collect(),
                 r#else: r#else
                     .as_ref()
-                    .map(|body| self.lower_block(body, macro_params)),
+                    .map(|body| self.lower_block(body, macro_params, breakable)),
                 span: Some(span.into()),
             },
             Stmt::For {
@@ -728,7 +740,7 @@ impl Lowerer {
                         CallPosition::Value,
                     )),
                     iterable: Box::new(self.lower_expr(iterable, macro_params, iterable_position)),
-                    body: self.lower_block(body, macro_params),
+                    body: self.lower_block(body, macro_params, true),
                     span: Some(span.into()),
                 }
             }
@@ -738,9 +750,54 @@ impl Lowerer {
                 span,
             } => HirStmt::While {
                 condition: Box::new(self.lower_expr(condition, macro_params, CallPosition::Value)),
-                body: self.lower_block(body, macro_params),
+                body: self.lower_block(body, macro_params, true),
                 span: Some(span.into()),
             },
+            Stmt::DoWhile {
+                condition,
+                body,
+                span,
+            } => HirStmt::DoWhile {
+                condition: Box::new(self.lower_expr(condition, macro_params, CallPosition::Value)),
+                body: self.lower_block(body, macro_params, true),
+                span: Some(span.into()),
+            },
+            Stmt::Switch {
+                value,
+                cases,
+                r#default,
+                span,
+            } => HirStmt::Switch {
+                value: Box::new(self.lower_expr(value, macro_params, CallPosition::Value)),
+                cases: cases
+                    .iter()
+                    .map(|case| HirSwitchCase {
+                        value: Box::new(self.lower_expr(
+                            &case.value,
+                            macro_params,
+                            CallPosition::Value,
+                        )),
+                        body: self.lower_block(&case.body, macro_params, true),
+                        span: Some(case.span.into()),
+                    })
+                    .collect(),
+                r#default: r#default
+                    .as_ref()
+                    .map(|body| self.lower_block(body, macro_params, true)),
+                span: Some(span.into()),
+            },
+            Stmt::Break { span } => {
+                if !breakable {
+                    self.error_at(
+                        "break-context",
+                        "break is only valid inside a switch or loop".to_string(),
+                        *span,
+                    );
+                }
+                HirStmt::Break {
+                    span: Some(span.into()),
+                }
+            }
             Stmt::Pass { span } => HirStmt::Pass {
                 span: Some(span.into()),
             },
@@ -748,7 +805,7 @@ impl Lowerer {
     }
 
     fn lower_macro_body(&mut self, body: &[Stmt], params: &[String]) -> Vec<HirStmt> {
-        self.lower_block(body, params)
+        self.lower_block(body, params, false)
     }
 
     fn lower_expr(
@@ -781,6 +838,123 @@ impl Lowerer {
                     .collect(),
                 span: Some(span.into()),
             },
+            Expr::Dict { entries, span } => {
+                if !self.allow_dict_literal {
+                    self.error_at(
+                        "dict-access",
+                        "dictionary literals must be accessed by a key".to_string(),
+                        *span,
+                    );
+                    return HirExpr::Null { span: None };
+                }
+                HirExpr::Dict {
+                    entries: entries
+                        .iter()
+                        .map(|entry| HirDictEntry {
+                            key: Box::new(self.lower_expr(
+                                &entry.key,
+                                macro_params,
+                                CallPosition::Value,
+                            )),
+                            value: Box::new(self.lower_expr(
+                                &entry.value,
+                                macro_params,
+                                CallPosition::Value,
+                            )),
+                            span: Some(entry.span.into()),
+                        })
+                        .collect(),
+                    span: Some(span.into()),
+                }
+            }
+            Expr::Comprehension {
+                element,
+                variable,
+                variable_span,
+                index,
+                iterable,
+                condition,
+                span,
+            } => {
+                let iterable = self.lower_expr(iterable, macro_params, CallPosition::Value);
+                let previous = std::mem::take(&mut self.locals);
+                self.locals.push(variable.clone());
+                if let Some((index, _)) = index {
+                    self.locals.push(index.clone());
+                }
+                let element = self.lower_expr(element, macro_params, CallPosition::Value);
+                let condition = condition.as_ref().map(|condition| {
+                    Box::new(self.lower_expr(condition, macro_params, CallPosition::Value))
+                });
+                self.locals = previous;
+                HirExpr::Comprehension {
+                    element: Box::new(element),
+                    variable: variable.clone(),
+                    variable_span: Some(variable_span.into()),
+                    index: index.as_ref().map(|(name, _)| name.clone()),
+                    index_span: index.as_ref().map(|(_, span)| (*span).into()),
+                    iterable: Box::new(iterable),
+                    condition,
+                    span: Some(span.into()),
+                }
+            }
+            Expr::Lambda { params, body, span } => {
+                if position != CallPosition::LambdaArgument {
+                    self.error_at(
+                        "lambda-context",
+                        "lambda expressions are only valid as array operation arguments"
+                            .to_string(),
+                        *span,
+                    );
+                    return HirExpr::Null { span: None };
+                }
+                let previous = std::mem::take(&mut self.locals);
+                self.locals = params.iter().map(|(name, _)| name.clone()).collect();
+                let body = self.lower_expr(body, macro_params, CallPosition::Value);
+                self.locals = previous;
+                HirExpr::Lambda {
+                    params: params.iter().map(|(name, _)| name.clone()).collect(),
+                    param_spans: params
+                        .iter()
+                        .map(|(_, span)| Some((*span).into()))
+                        .collect(),
+                    body: Box::new(body),
+                    span: Some(span.into()),
+                }
+            }
+            Expr::StringModifier {
+                modifier,
+                value,
+                format_text,
+                interpolations,
+                span,
+            } => {
+                if *modifier == 'f' {
+                    if let Some(format_text) = format_text {
+                        if !interpolations.is_empty() {
+                            return HirExpr::Format {
+                                text: format_text.clone(),
+                                args: interpolations
+                                    .iter()
+                                    .map(|expr| {
+                                        self.lower_expr(expr, macro_params, CallPosition::Value)
+                                    })
+                                    .collect(),
+                                span: Some(span.into()),
+                            };
+                        }
+                        return HirExpr::String {
+                            value: format_text.clone(),
+                            span: Some(span.into()),
+                        };
+                    }
+                }
+                HirExpr::StringModifier {
+                    modifier: modifier.to_string(),
+                    value: value.clone(),
+                    span: Some(span.into()),
+                }
+            }
             Expr::Name { name, span } => self.lower_name(name, *span, macro_params),
             Expr::Member {
                 receiver,
@@ -788,11 +962,17 @@ impl Lowerer {
                 member_span,
                 span,
             } => self.lower_member(receiver, member, *member_span, *span, macro_params),
-            Expr::Index { array, index, span } => HirExpr::Index {
-                array: Box::new(self.lower_expr(array, macro_params, CallPosition::Value)),
-                index: Box::new(self.lower_expr(index, macro_params, CallPosition::Value)),
-                span: Some(span.into()),
-            },
+            Expr::Index { array, index, span } => {
+                let previous = self.allow_dict_literal;
+                self.allow_dict_literal = true;
+                let array = self.lower_expr(array, macro_params, CallPosition::Value);
+                self.allow_dict_literal = previous;
+                HirExpr::Index {
+                    array: Box::new(array),
+                    index: Box::new(self.lower_expr(index, macro_params, CallPosition::Value)),
+                    span: Some(span.into()),
+                }
+            }
             Expr::Call { name, args, span } => {
                 self.lower_call(name, args, *span, macro_params, position)
             }
@@ -824,6 +1004,12 @@ impl Lowerer {
     fn lower_name(&mut self, name: &str, span: Span, macro_params: &[String]) -> HirExpr {
         if macro_params.iter().any(|param| param == name) {
             return HirExpr::MacroParam {
+                name: name.to_string(),
+                span: Some(span.into()),
+            };
+        }
+        if self.locals.iter().any(|local| local == name) {
+            return HirExpr::Local {
                 name: name.to_string(),
                 span: Some(span.into()),
             };
@@ -960,7 +1146,7 @@ impl Lowerer {
     ) -> HirExpr {
         // Builtin identity and position checks run before the special forms
         // so that a misplaced `wait`/`vect` still diagnoses its position.
-        if !self.macros.contains(name) && !self.subroutines.contains(name) {
+        if !self.macros.contains(name) && !self.subroutines.contains(name) && name != "sorted" {
             match self.manifest.resolve_function(name) {
                 Some(entry) => self.check_call_position(name, entry, position, span),
                 None => {
@@ -973,12 +1159,22 @@ impl Lowerer {
                             "invalid-iterable",
                             format!("for-loop iterable '{name}' must be a range(...) call"),
                         ),
+                        CallPosition::LambdaArgument => {
+                            ("unknown-value", format!("unknown value '{name}'"))
+                        }
                     };
                     self.error_at(code, message, span);
                 }
             }
         }
         match name {
+            "sorted" => HirExpr::Call {
+                name: name.to_string(),
+                args: self.lower_arg_values_with_lambda(args, macro_params, |index, arg| {
+                    index == 1 || arg.keyword.as_ref().is_some_and(|(name, _)| name == "key")
+                }),
+                span: Some(span.into()),
+            },
             "vect" => {
                 // `vect` goes through the generic argument binder so its
                 // keyword forms (`vect(x=1, y=2, z=3)`) bind like any other
@@ -1063,8 +1259,25 @@ impl Lowerer {
     /// Lower call arguments to HIR values in source order (used for macro
     /// calls and unresolved names; keyword values lose their name).
     fn lower_arg_values(&mut self, args: &[cst::CallArg], macro_params: &[String]) -> Vec<HirExpr> {
+        self.lower_arg_values_with_lambda(args, macro_params, |_, _| false)
+    }
+
+    fn lower_arg_values_with_lambda(
+        &mut self,
+        args: &[cst::CallArg],
+        macro_params: &[String],
+        allows_lambda: impl Fn(usize, &cst::CallArg) -> bool,
+    ) -> Vec<HirExpr> {
         args.iter()
-            .map(|arg| self.lower_expr(&arg.value, macro_params, CallPosition::Value))
+            .enumerate()
+            .map(|(index, arg)| {
+                let position = if allows_lambda(index, arg) {
+                    CallPosition::LambdaArgument
+                } else {
+                    CallPosition::Value
+                };
+                self.lower_expr(&arg.value, macro_params, position)
+            })
             .collect()
     }
 
@@ -1394,6 +1607,15 @@ impl Lowerer {
         macro_params: &[String],
         position: CallPosition,
     ) -> HirExpr {
+        if matches!(name, "map" | "filter" | "all" | "any") {
+            let lowered = HirExpr::ReceiverCall {
+                receiver: Box::new(self.lower_expr(receiver, macro_params, CallPosition::Value)),
+                name: name.to_string(),
+                args: self.lower_arg_values_with_lambda(args, macro_params, |index, _| index == 0),
+                span: Some(span.into()),
+            };
+            return lowered;
+        }
         // `random.uniform(...)` etc. are dotted generic calls.
         if let Expr::Name { name: root, .. } = receiver {
             if root == "random" {
@@ -1517,6 +1739,21 @@ impl Lowerer {
                     self.error_at(
                         "invalid-iterable",
                         format!("for-loop iterable '{name}' must be a range(...) call"),
+                        span,
+                    );
+                }
+            }
+            CallPosition::LambdaArgument => {
+                if entry.kind.is_action() {
+                    self.error_at(
+                        "action-in-value-position",
+                        format!("action function '{name}' cannot be used as a value"),
+                        span,
+                    );
+                } else if entry.context == Some(FunctionContext::ForIterable) {
+                    self.error_at(
+                        "invalid-call-context",
+                        format!("'{name}' is only valid as a for-loop iterable"),
                         span,
                     );
                 }
@@ -2624,5 +2861,59 @@ mod tests {
         assert_eq!(error.code, "unknown-identifier");
         let span = error.span.expect("the error is source-located");
         assert_eq!(span.start.line, 3);
+    }
+
+    #[test]
+    fn issue_28_constructs_lower_to_provenance_preserving_hir() {
+        let hir = lower_ok(
+            "globalvar x\nrule \"r\":\n    @Event global\n    switch x:\n        case 0x10:\n            x = 1 in [1, 2]\n        default:\n            do:\n                x = {\"x\": 1}[\"x\"]\n            while x not in [2, 3]\n    x = [value * 2 for value, index in [1, 2] if value > index]\n    x = sorted([1, 2], key=lambda value: value)\n    x = w\"wide\"\n",
+        );
+        let (_, actions) = rule_conditions_and_actions(&hir);
+        let HirStmt::Switch {
+            cases, r#default, ..
+        } = &actions[0]
+        else {
+            panic!("expected switch");
+        };
+        assert_eq!(cases.len(), 1);
+        assert!(r#default.is_some());
+        let HirStmt::Assign { value, .. } = &cases[0].body[0] else {
+            panic!("expected case assignment");
+        };
+        assert!(matches!(value.as_ref(), HirExpr::Binary { op, .. } if op == "in"));
+        let HirStmt::DoWhile { condition, .. } = &r#default.as_ref().unwrap()[0] else {
+            panic!("expected do-while");
+        };
+        assert!(matches!(condition.as_ref(), HirExpr::Binary { op, .. } if op == "not in"));
+        let HirStmt::Assign { value, .. } = &actions[1] else {
+            panic!("expected comprehension assignment");
+        };
+        assert!(matches!(value.as_ref(), HirExpr::Comprehension { .. }));
+        let HirStmt::Assign { value, .. } = &actions[2] else {
+            panic!("expected sorted assignment");
+        };
+        assert!(
+            matches!(value.as_ref(), HirExpr::Call { name, args, .. } if name == "sorted" && matches!(&args[1], HirExpr::Lambda { body, .. } if matches!(body.as_ref(), HirExpr::Local { name, .. } if name == "value")))
+        );
+        let HirStmt::Assign { value, .. } = &actions[3] else {
+            panic!("expected string assignment");
+        };
+        assert!(
+            matches!(value.as_ref(), HirExpr::StringModifier { modifier, .. } if modifier == "w")
+        );
+    }
+
+    #[test]
+    fn issue_28_rejects_reference_invalid_bare_dict_and_lambda() {
+        let dict_error = compile_error(
+            "globalvar x\nrule \"r\":\n    @Event global\n    x = {\"x\": 1}\n",
+            4,
+        );
+        assert_eq!(dict_error.code, "dict-access");
+        let lambda_error = compile_error(
+            "globalvar x\nrule \"r\":\n    @Event global\n    x = lambda value: value\n",
+            4,
+        );
+        assert_eq!(lambda_error.code, "lambda-context");
     }
 }

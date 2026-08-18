@@ -215,7 +215,7 @@ mod tests {
     fn category_and_state_filters_match_the_summary() {
         let matrix = SupportMatrix::builtin().unwrap();
         let syntax = matrix.features_by_category("syntax");
-        assert_eq!(syntax.len(), 7);
+        assert_eq!(syntax.len(), 14);
         assert!(syntax.iter().all(|feature| feature.category == "syntax"));
         let lowering = matrix.features_by_state("lowering-dependent");
         assert_eq!(lowering.len(), 13);
@@ -224,7 +224,7 @@ mod tests {
                 .iter()
                 .all(|feature| feature.state == "lowering-dependent")
         );
-        assert_eq!(matrix.summary().by_state["planned"], 2);
+        assert_eq!(matrix.summary().by_state["planned"], 0);
         assert_eq!(matrix.summary().by_category["semantics"], 14);
         // Every feature id is unique.
         let mut ids: Vec<&str> = matrix

@@ -441,6 +441,26 @@ pub enum Stmt {
         #[serde(skip_serializing_if = "Option::is_none")]
         span: Option<Span>,
     },
+    DoWhile {
+        condition: Box<Expr>,
+        #[serde(default)]
+        body: Vec<Stmt>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        span: Option<Span>,
+    },
+    Switch {
+        value: Box<Expr>,
+        #[serde(default)]
+        cases: Vec<SwitchCase>,
+        #[serde(default, rename = "default")]
+        r#default: Option<Vec<Stmt>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        span: Option<Span>,
+    },
+    Break {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        span: Option<Span>,
+    },
     CallSubroutine {
         name: String,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -469,10 +489,24 @@ impl Stmt {
             | Stmt::If { span, .. }
             | Stmt::For { span, .. }
             | Stmt::While { span, .. }
+            | Stmt::DoWhile { span, .. }
+            | Stmt::Switch { span, .. }
+            | Stmt::Break { span }
             | Stmt::CallSubroutine { span, .. }
             | Stmt::Pass { span } => span.as_ref(),
         }
     }
+}
+
+/// One switch case in the OPY HIR. Cases execute in source order and fall
+/// through to subsequent cases until a `break` statement is encountered.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SwitchCase {
+    pub value: Box<Expr>,
+    #[serde(default)]
+    pub body: Vec<Stmt>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub span: Option<Span>,
 }
 
 /// An expression.
@@ -502,6 +536,47 @@ pub enum Expr {
     Array {
         #[serde(default)]
         elements: Vec<Expr>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        span: Option<Span>,
+    },
+    Dict {
+        #[serde(default)]
+        entries: Vec<DictEntry>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        span: Option<Span>,
+    },
+    Comprehension {
+        element: Box<Expr>,
+        variable: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        variable_span: Option<Span>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        index: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        index_span: Option<Span>,
+        iterable: Box<Expr>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        condition: Option<Box<Expr>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        span: Option<Span>,
+    },
+    Lambda {
+        #[serde(default)]
+        params: Vec<String>,
+        #[serde(default)]
+        param_spans: Vec<Option<Span>>,
+        body: Box<Expr>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        span: Option<Span>,
+    },
+    StringModifier {
+        modifier: String,
+        value: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        span: Option<Span>,
+    },
+    Local {
+        name: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         span: Option<Span>,
     },
@@ -605,6 +680,15 @@ pub enum Expr {
     },
 }
 
+/// One key/value pair in an OPY dictionary.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DictEntry {
+    pub key: Box<Expr>,
+    pub value: Box<Expr>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub span: Option<Span>,
+}
+
 impl Expr {
     /// The source span of this expression, if any.
     pub fn span(&self) -> Option<&Span> {
@@ -614,6 +698,11 @@ impl Expr {
             | Expr::Bool { span, .. }
             | Expr::Null { span }
             | Expr::Array { span, .. }
+            | Expr::Dict { span, .. }
+            | Expr::Comprehension { span, .. }
+            | Expr::Lambda { span, .. }
+            | Expr::StringModifier { span, .. }
+            | Expr::Local { span, .. }
             | Expr::Vector { span, .. }
             | Expr::Enum { span, .. }
             | Expr::GlobalVar { span, .. }
@@ -640,6 +729,11 @@ impl Expr {
             Expr::Bool { .. } => "bool",
             Expr::Null { .. } => "null",
             Expr::Array { .. } => "array",
+            Expr::Dict { .. } => "dict",
+            Expr::Comprehension { .. } => "comprehension",
+            Expr::Lambda { .. } => "lambda",
+            Expr::StringModifier { .. } => "stringModifier",
+            Expr::Local { .. } => "local",
             Expr::Vector { .. } => "vector",
             Expr::Enum { .. } => "enum",
             Expr::GlobalVar { .. } => "globalVar",

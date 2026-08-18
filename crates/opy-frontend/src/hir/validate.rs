@@ -39,6 +39,9 @@ const STMT_KINDS: &[&str] = &[
     "if",
     "for",
     "while",
+    "doWhile",
+    "switch",
+    "break",
     "callSubroutine",
     "pass",
 ];
@@ -49,6 +52,11 @@ const EXPR_KINDS: &[&str] = &[
     "bool",
     "null",
     "array",
+    "dict",
+    "comprehension",
+    "lambda",
+    "stringModifier",
+    "local",
     "vector",
     "enum",
     "globalVar",
@@ -511,7 +519,28 @@ fn statement_exprs(statements: &[Stmt]) -> Vec<&Expr> {
                 exprs.push(condition.as_ref());
                 exprs.extend(statement_exprs(body));
             }
-            Stmt::CallSubroutine { .. } | Stmt::Pass { .. } => {}
+            Stmt::DoWhile {
+                condition, body, ..
+            } => {
+                exprs.push(condition.as_ref());
+                exprs.extend(statement_exprs(body));
+            }
+            Stmt::Switch {
+                value,
+                cases,
+                r#default,
+                ..
+            } => {
+                exprs.push(value.as_ref());
+                for case in cases {
+                    exprs.push(case.value.as_ref());
+                    exprs.extend(statement_exprs(&case.body));
+                }
+                if let Some(default_body) = r#default {
+                    exprs.extend(statement_exprs(default_body));
+                }
+            }
+            Stmt::Break { .. } | Stmt::CallSubroutine { .. } | Stmt::Pass { .. } => {}
         }
     }
     exprs
@@ -593,9 +622,22 @@ fn for_each_stmt<'a>(statements: &'a [Stmt], f: &mut impl FnMut(&'a Stmt)) {
                     for_each_stmt(else_body, f);
                 }
             }
-            Stmt::For { body, .. } | Stmt::While { body, .. } => for_each_stmt(body, f),
+            Stmt::For { body, .. } | Stmt::While { body, .. } | Stmt::DoWhile { body, .. } => {
+                for_each_stmt(body, f)
+            }
+            Stmt::Switch {
+                cases, r#default, ..
+            } => {
+                for case in cases {
+                    for_each_stmt(&case.body, f);
+                }
+                if let Some(default_body) = r#default {
+                    for_each_stmt(default_body, f);
+                }
+            }
             Stmt::Expr { .. }
             | Stmt::Assign { .. }
+            | Stmt::Break { .. }
             | Stmt::CallSubroutine { .. }
             | Stmt::Pass { .. } => {}
         }
@@ -611,6 +653,25 @@ fn for_each_expr<'a>(expr: &'a Expr, f: &mut impl FnMut(&'a Expr)) {
                 for_each_expr(element, f);
             }
         }
+        Expr::Dict { entries, .. } => {
+            for entry in entries {
+                for_each_expr(&entry.key, f);
+                for_each_expr(&entry.value, f);
+            }
+        }
+        Expr::Comprehension {
+            element,
+            iterable,
+            condition,
+            ..
+        } => {
+            for_each_expr(iterable, f);
+            for_each_expr(element, f);
+            if let Some(condition) = condition {
+                for_each_expr(condition, f);
+            }
+        }
+        Expr::Lambda { body, .. } => for_each_expr(body, f),
         Expr::Vector { x, y, z, .. } => {
             for_each_expr(x, f);
             for_each_expr(y, f);
@@ -646,7 +707,9 @@ fn for_each_expr<'a>(expr: &'a Expr, f: &mut impl FnMut(&'a Expr)) {
         | Expr::GlobalVar { .. }
         | Expr::EventPlayer { .. }
         | Expr::Constant { .. }
-        | Expr::MacroParam { .. } => {}
+        | Expr::MacroParam { .. }
+        | Expr::StringModifier { .. }
+        | Expr::Local { .. } => {}
     }
 }
 
@@ -741,6 +804,18 @@ fn check_stmt(value: &Value) -> Result<(), HirError> {
             }
         }
     }
+    if let Some(cases) = object.get("cases").and_then(Value::as_array) {
+        for case in cases {
+            if let Some(value) = case.get("value") {
+                check_expr(value)?;
+            }
+            if let Some(body) = case.get("body").and_then(Value::as_array) {
+                for statement in body {
+                    check_stmt(statement)?;
+                }
+            }
+        }
+    }
     for field in ["body", "else"] {
         if let Some(statements) = object.get(field).and_then(Value::as_array) {
             for statement in statements {
@@ -772,6 +847,22 @@ fn check_expr(value: &Value) -> Result<(), HirError> {
                 check_expr(child)?;
             }
         }
+    }
+    if let Some(entries) = object.get("entries").and_then(Value::as_array) {
+        for entry in entries {
+            if let Some(key) = entry.get("key") {
+                check_expr(key)?;
+            }
+            if let Some(entry_value) = entry.get("value") {
+                check_expr(entry_value)?;
+            }
+        }
+    }
+    if let Some(condition) = object.get("condition") {
+        check_expr(condition)?;
+    }
+    if let Some(body) = object.get("body") {
+        check_expr(body)?;
     }
     Ok(())
 }

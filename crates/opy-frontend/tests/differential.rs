@@ -165,6 +165,42 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
     );
     resolve(
         &mut cases,
+        "synthetic/issue-28-syntax",
+        true,
+        "Issue #28 pure OPY syntax: switch, do-while, hex, membership, dict indexing, comprehensions, lambda arguments, and string modifiers.",
+    );
+    resolve(
+        &mut cases,
+        "synthetic/issue-28-string-modifiers",
+        true,
+        "Issue #28 inventory-backed string modifiers; translation-dependent l/t are syntax-carried outside the fixture.",
+    );
+    resolve(
+        &mut cases,
+        "synthetic/issue-33-switch-break",
+        true,
+        "Issue #33 switch arms preserve source-order fallthrough and explicit break statements validate nested switch/loop context.",
+    );
+    resolve(
+        &mut cases,
+        "synthetic/issue-33-f-string",
+        true,
+        "Issue #33 f-string interpolation preserves source-spanned expressions and the approved sorted lambda argument slot.",
+    );
+    diagnostic(
+        &mut cases,
+        "synthetic/issue-33-lambda-negative",
+        Some("lambda-context"),
+        "Issue #33 standalone lambda use remains rejected outside a signature-approved argument position.",
+    );
+    diagnostic(
+        &mut cases,
+        "synthetic/issue-28-invalid-syntax",
+        Some("parse-error"),
+        "Issue #28 malformed do-while and dictionary syntax remains a structured parse failure.",
+    );
+    resolve(
+        &mut cases,
         "synthetic/declarations-numbers",
         true,
         "numeric literals and variable-index declarations; oracle status success.",

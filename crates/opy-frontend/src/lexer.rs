@@ -33,6 +33,8 @@ pub enum TokenKind {
     RParen,
     LBracket,
     RBracket,
+    LBrace,
+    RBrace,
     Comma,
     Colon,
     Dot,
@@ -67,6 +69,11 @@ pub struct Token {
     /// The source text of this token (numbers keep their spelling; strings
     /// keep their unescaped value; identifiers keep their name).
     pub text: String,
+    /// The exact characters between string quotes, before escape decoding.
+    /// Other token kinds leave this unset. It is retained so source-language
+    /// constructs such as f-string interpolations can recover expression
+    /// spans without losing provenance during preprocessing.
+    pub raw: Option<String>,
     pub span: Span,
 }
 
@@ -75,6 +82,7 @@ impl Token {
         Token {
             kind,
             text: text.into(),
+            raw: None,
             span,
         }
     }
@@ -135,6 +143,8 @@ impl Lexer {
                 ')' => self.single(TokenKind::RParen),
                 '[' => self.single(TokenKind::LBracket),
                 ']' => self.single(TokenKind::RBracket),
+                '{' => self.single(TokenKind::LBrace),
+                '}' => self.single(TokenKind::RBrace),
                 ',' => self.single(TokenKind::Comma),
                 ':' => self.single(TokenKind::Colon),
                 '.' => self.single(TokenKind::Dot),
@@ -230,24 +240,29 @@ impl Lexer {
         let start = self.here(1);
         self.advance();
         let mut value = String::new();
+        let mut raw = String::new();
         while self.pos < self.chars.len() {
             let ch = self.chars[self.pos];
             if ch == quote {
                 self.advance();
                 let end = self.here(0);
-                self.tokens.push(Token::new(
+                let mut token = Token::new(
                     TokenKind::String,
                     value,
                     Span::new(self.file_id, start.start, end.start),
-                ));
+                );
+                token.raw = Some(raw);
+                self.tokens.push(token);
                 return Ok(());
             }
             if ch == '\\' {
+                raw.push(ch);
                 self.advance();
                 if self.pos >= self.chars.len() {
                     break;
                 }
                 let escaped = self.chars[self.pos];
+                raw.push(escaped);
                 value.push(match escaped {
                     'n' => '\n',
                     't' => '\t',
@@ -267,6 +282,7 @@ impl Lexer {
                     start,
                 ));
             }
+            raw.push(ch);
             value.push(ch);
             self.advance();
         }
@@ -280,6 +296,31 @@ impl Lexer {
     fn lex_number(&mut self) -> FrontendResult<()> {
         let start = self.here(1);
         let mut text = String::new();
+        if self.chars[self.pos] == '0' && matches!(self.peek(1), Some('x' | 'X')) {
+            text.push('0');
+            self.advance();
+            text.push(self.chars[self.pos]);
+            self.advance();
+            let digits_start = self.pos;
+            while self.pos < self.chars.len() && self.chars[self.pos].is_ascii_hexdigit() {
+                text.push(self.chars[self.pos]);
+                self.advance();
+            }
+            if self.pos == digits_start {
+                return Err(FrontendError::at(
+                    "lex-error",
+                    "hexadecimal literal requires at least one hexadecimal digit",
+                    Span::new(self.file_id, start.start, self.here(0).start),
+                ));
+            }
+            let end = self.here(0);
+            self.tokens.push(Token::new(
+                TokenKind::Number,
+                text,
+                Span::new(self.file_id, start.start, end.start),
+            ));
+            return Ok(());
+        }
         while self.pos < self.chars.len() && self.chars[self.pos].is_ascii_digit() {
             text.push(self.chars[self.pos]);
             self.advance();

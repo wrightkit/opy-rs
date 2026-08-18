@@ -153,9 +153,9 @@ fn multi_file_project_checks_and_resolves_end_to_end() {
 /// machine contract: codes and source locations, not wording).
 #[rustfmt::skip]
 const STABLE_DIAGNOSTICS: &[(&str, &str)] = &[
-    // Expression-level dict braces stay a lex error (scoped settings lexing
-    // must not mask them).
-    ("rule \"r\":\n    @Event global\n    money += {\n        Mei.GENERIC: 10,\n    }\n", "lex-error"),
+    // A bare dictionary is now lexed and rejected at the OPY semantic
+    // boundary rather than being mistaken for settings content.
+    ("globalvar money\nrule \"r\":\n    @Event global\n    money += {\n        Mei.GENERIC: 10,\n    }\n", "dict-access"),
     // Missing colon after the rule name.
     ("rule \"x\"\n    @Event global\n", "parse-error"),
     // Unknown builtin in statement position.

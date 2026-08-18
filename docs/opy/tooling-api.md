@@ -75,6 +75,8 @@ Span layout: `file_id` indexes the registry, positions are 1-based
 | Code | Stage | Meaning |
 | --- | --- | --- |
 | `lex-error` | lex | Tokenization failure (e.g. expression-level `{}`) |
+| `break-context` | lower | `break` is outside the innermost switch/loop context |
+| `lambda-context` | lower | `lambda` is outside a signature-approved argument position |
 | `include-invalid` | preprocess | Malformed `#!include` directive |
 | `include-not-found` | preprocess | Included file missing under the root |
 | `include-cycle` | preprocess | Include cycle detected |
