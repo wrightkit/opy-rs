@@ -1,0 +1,14 @@
+[package]
+name = "opy-compiler"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "OPy HIR to canonical Workshop WIR integration compiler"
+
+[lints]
+workspace = true
+
+[dependencies]
+opy-frontend = { path = "../opy-frontend" }
+workshop-rs = "=0.1.1"

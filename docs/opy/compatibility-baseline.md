@@ -17,10 +17,9 @@ The reference identity is the pinned OverPy 9.7.10 content
 (`889d9749d1def17f146548cbddb94ea1ab015847`); see
 [`docs/compatibility/upstream-references.md`](../compatibility/upstream-references.md)
 for provenance. Evidence claims in this document were verified against the
-pinned oracle (the declared corpus now contains 40 provenance-linked
-snapshots). The opy-rs
-frontend foundation is implemented and merged on `main` (issues #3–#7
-partially delivered via PRs #9–#14); the category table below is the
+pinned oracle (the declared corpus now contains 41 provenance-linked
+snapshots). The opy-rs frontend foundation and #7 readiness work are
+implemented on `main` (issues #3–#7, #28–#30, and #33); the category table is the
 **tier assignment contract** for the remaining surface. The state column of
 `compatibility/support-matrix.json` tracks actual implementation progress
 against it, and rows marked `baseline-supported` in this document are
@@ -44,8 +43,10 @@ For each category the following dimensions are distinguished:
 * **Semantic resolution**: resolved to a meaningful HIR/semantic value
   (names, members, enums, call semantics);
 * **Compilation**: standalone compile/emission through the `workshop-rs`
-  backend succeeds with reference-equivalent semantics (**lowering-dependent**;
-  inventory-only until integration, issue #8);
+backend succeeds with reference-equivalent semantics. The bounded #35
+vertical slice is now evidenced through workshop-rs v0.1.1; the remaining
+surface is **lowering-dependent** and stays inventory-only until later #8
+work;
 * **Tooling/analysis**: `check`/`analyze`/`lint`/`inspect` and language
   services can operate on the construct;
 * **Reference coverage**: oracle probes/fixtures validate the behavior.
@@ -102,7 +103,7 @@ Verified against the pinned oracle. Each item is classified with the tier it
 belongs to; none is a per-symbol implementation request. Items marked
 *manifest-covered* resolve through the OPY semantic compatibility manifest
 (`crates/opy-frontend/src/manifest/`), which is merged on `main`; rows below
-record their current opy-rs status as of the merged baseline (PRs #9–#14),
+record their current opy-rs status against the current support-matrix baseline,
 and remaining gaps stay classified rather than being filed per-symbol.
 
 | Evidence | Oracle 9.7.10 | opy-rs status | Classification |
