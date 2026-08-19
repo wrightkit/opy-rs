@@ -6,8 +6,11 @@ architecture, compatibility evidence, APIs, and internal contracts live here.
 
 ## Architecture and APIs
 
-- [Architecture](opy/architecture.md): repository responsibilities, source
-  pipeline, and the integration boundary with `workshop-rs`.
+- [Implementation role](opy/implementation-role.md): standalone OverPy
+  implementation identity, relationship with `workshop-rs`, and Wright
+  integration terminology.
+- [Architecture](opy/architecture.md): internal source frontend, semantic HIR,
+  compiler/reconstruction boundaries, and dependency direction.
 - [Tooling API](opy/tooling-api.md): Rust library and CLI contracts for checking,
   inspection, overlays, diagnostics, and support queries.
 - [Source-edit policy](opy/trivia-retention-policy.md): provenance and trivia
@@ -26,8 +29,7 @@ architecture, compatibility evidence, APIs, and internal contracts live here.
 
 ## Internals
 
-- [Opy HIR v1](hir/opy-hir-v1.md): semantic interchange representation and
-  wire contract.
+- [Opy HIR v1](hir/opy-hir-v1.md): semantic representation and wire contract.
 - [Semantic compatibility manifest](opy/compat-manifest-spec.md): builtin,
   signature, alias, and catalog-link metadata owned by the OPY implementation.
 - [Tooling notes](opy/tooling-notes.md): focused implementation notes that do
