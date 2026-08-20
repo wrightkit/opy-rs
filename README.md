@@ -1,14 +1,43 @@
 # opy-rs
 
-`opy-rs` is WrightKit's Rust implementation of the OverPy `.opy` language. It
-provides a standalone library and CLI for parsing, checking, inspecting, and
-resolving `.opy` projects with structured diagnostics and source provenance.
-No Node.js or upstream OverPy runtime is required.
+`opy-rs` is WrightKit's standalone Rust implementation of the OverPy `.opy`
+language. It is intended to be useful on its own as a library and CLI for
+parsing, preprocessing, checking, inspecting, compiling, and eventually
+reconstructing supported OverPy projects.
 
-The implementation is Workshop-independent until the documented
-[Workshop integration boundary](docs/opy/architecture.md): canonical Workshop
-semantics and emission are provided by `workshop-rs` rather than duplicated in
-this repository.
+Wright is a downstream consumer that integrates `opy-rs` with broader tooling
+such as linting, analysis, source editing, agent workflows, CI, and language
+services. The term **frontend** in this repository refers only to the
+Workshop-independent source-to-semantic stage inside the implementation; it is
+not the product identity of the repository. Likewise, an LPP **provider** is an
+integration role that `opy-rs` may expose to Wright and other tooling clients,
+not the reason this repository exists.
+
+Canonical raw Workshop semantics are shared instead of reimplemented here.
+`opy-rs` owns OverPy syntax, preprocessing, macros, semantic resolution,
+OverPy-specific lowering, compiler behavior, diagnostics, provenance, and
+Workshop-to-OPY reconstruction. `workshop-rs` owns canonical Workshop catalog
+identities, WIR, validation, settings/localization data, raw Workshop parsing,
+and emission.
+
+```text
+OPY source
+   ↓
+opy-rs source frontend
+   ↓
+OPY semantic model / HIR
+   ↓
+opy-rs compiler + reconstruction logic
+   ↓
+workshop-rs canonical WIR / validation / emission
+   ↓
+Workshop text
+```
+
+The reverse path starts from Workshop text parsed by `workshop-rs`, then uses
+`opy-rs`-owned reconstruction logic to produce useful OverPy source. This
+architecture lets `opy-rs` remain a complete OverPy implementation without
+maintaining a second raw Workshop implementation.
 
 ## Features
 
@@ -19,31 +48,35 @@ this repository.
 - **JavaScript macros:** OverPy-compatible `__script__("...")` macros run in a
   bounded embedded QuickJS-NG runtime without Node.js.
 - **Tooling APIs:** `check`, semantic inspection, source-aware queries, and
-  [validated source-edit foundations](docs/opy/trivia-retention-policy.md).
-- **Compatibility evidence:** a [41-fixture corpus](compatibility/README.md),
-  pinned oracle snapshots, semantic probes, and native differential tests.
+  validated source-edit foundations.
+- **Compiler integration:** OPY semantic lowering into canonical
+  `workshop-rs` WIR, with unsupported behavior kept explicit.
+- **Compatibility evidence:** corpus fixtures, pinned oracle snapshots,
+  semantic probes, and native differential tests.
 
 ## CLI and library
 
-The standalone CLI exposes the current tooling surface:
+The standalone CLI currently exposes the Workshop-independent tooling surface:
 
 ```sh
-opy-cli check main.opy       # diagnostics; exit 0 clean / 1 diagnostics
-opy-cli inspect main.opy     # resolved semantic model as JSON
-opy-cli support --json       # detailed machine-readable support data
-opy-cli completion bash      # static completion (zsh/fish/powershell also supported)
+opy-cli check main.opy
+opy-cli inspect main.opy
+opy-cli support --json
+opy-cli completion bash
 opy-cli version
 ```
 
-The Rust library surface lives in `crates/opy-frontend`; see the
-[tooling API reference](docs/opy/tooling-api.md) for integration details.
+The Rust library surface lives in `crates/opy-frontend`, while Workshop-dependent
+compilation lives in `crates/opy-compiler`. See the
+[tooling API reference](docs/opy/tooling-api.md) and
+[implementation role](docs/opy/implementation-role.md) for the durable boundary.
 
 ## Compatibility
 
 Compatibility targets observable OverPy semantics for the declared support
-surface, not byte-identical output, optimizer choices, or formatting. Support
-claims are backed by the compatibility corpus and a pinned OverPy 9.7.10
-reference.[^overpy-reference]
+surface, not byte-identical output, optimizer choices, formatting, temporary
+variables, or upstream internal architecture. Support claims are backed by the
+compatibility corpus and pinned OverPy reference evidence.
 
 > [!IMPORTANT]
 > `opy-rs` follows the OverPy language. It does not introduce a WrightKit-only
@@ -51,22 +84,29 @@ reference.[^overpy-reference]
 
 | Capability | Status | Notes |
 | --- | --- | --- |
-| Core syntax & control flow | ✅ Supported | Lexing, expressions, assignments, `if`/`elif`/`else`, `for`/`while`, settings blocks |
+| Core syntax & control flow | ✅ Supported | Workshop-independent parsing and semantic representation |
 | Declarations | ✅ Supported | `globalvar`/`playervar`, `subroutine`, `def`, `enum`, `macro` |
-| Preprocessing & macros | ✅ Supported | `#!include`, `#!define`, `#!undef` |
-| JavaScript macros | ✅ Supported | `#!define name(...) __script__("...")` with a bounded embedded runtime |
-| Rules & directives | ✅ Supported | `rule` blocks, `@Event`, `@Condition`, bare `@Team`/`@Slot` |
-| Builtin actions & values | 🟡 Partial | The declared subset works; the full OverPy surface is not implemented yet |
-| Receiver/member functions | 🟡 Partial | Declared members work; the full member surface is not implemented yet |
-| Enums & constants | 🟡 Partial | Declared enum domains resolve; the full domain surface is not implemented yet |
-| `switch` / string modifiers | ✅ Supported | Source-order switch/fallthrough, `break`, and the corpus-evidenced string modifier forms |
-| Advanced directives, translations & optimization controls | 🟡 Partial | Frontend parsing, validation, and state are supported; Workshop locale/optimizer effects remain lowering-dependent |
-| OPY → Workshop compilation | 🟡 First slice | `opy-compiler` lowers the bounded #35 fixture through workshop-rs v0.1.1; broader lowering remains deferred |
-| Workshop → OPY reconstruction | ⏳ Not yet | Requires the `workshop-rs` integration path |
+| Preprocessing & macros | ✅ Supported | `#!include`, `#!define`, `#!undef`, bounded JavaScript macros |
+| Rules & directives | ✅ Supported | Rules, events, conditions, team/slot context in the declared surface |
+| Builtin actions & values | 🟡 Partial | Declared semantic subset works; full catalog-backed breadth is still being closed |
+| Receiver/member functions | 🟡 Partial | Declared members work; full member breadth is not yet complete |
+| Enums & constants | 🟡 Partial | Declared domains resolve; full domain breadth is not yet complete |
+| Advanced directives, translations & optimizer controls | 🟡 Partial | Frontend state exists; Workshop-dependent effects remain incomplete |
+| OPY → Workshop compilation | 🟡 Partial | The compiler boundary exists and lowering is expanding through `workshop-rs`; full real-project compilation is not yet claimed |
+| Workshop → OPY reconstruction | ⏳ Not yet | Will consume canonical `workshop-rs` semantics and remain owned by `opy-rs` |
 
 Exact per-feature evidence remains available in the
 [human-readable support reference](docs/opy/support-matrix.md) and
 [machine-readable support matrix](compatibility/support-matrix.json).
+
+## Relationship with Wright
+
+`opy-rs` can be used independently. Wright adds a unified product layer across
+OverPy, DEL/OSTW, and raw Workshop and may consume `opy-rs` through native Rust
+APIs and/or the Language Provider Protocol depending on the integration path.
+Wright-specific lint, analysis, agent, CI, LSP, and orchestration behavior does
+not belong in this repository unless it exposes a missing OverPy semantic
+capability that `opy-rs` itself should own.
 
 ## Validation
 
@@ -89,13 +129,9 @@ references are indexed in [`docs/README.md`](docs/README.md).
 ## Contributing
 
 This repository is part of the WrightKit multi-repository workspace. Follow the
-workspace-level `AGENTS.md` first, then this repository's local rules when
-contributing changes.
+workspace-level `AGENTS.md` first, then this repository's local rules.
 
 ## License
 
 `opy-rs` is distributed under the GNU Affero General Public License v3.0 or
 later. See [`LICENSE`](LICENSE).
-
-[^overpy-reference]: The exact package identity, source revision, and provenance
-    are recorded in the [upstream reference record](docs/compatibility/upstream-references.md).
