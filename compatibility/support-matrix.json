@@ -609,9 +609,9 @@
       "evidence": [
         "fixtures:synthetic/issue-35-integration",
         "test:opy-compiler-vertical-slice",
-        "contract:workshop-rs-v0.1.1"
+        "contract:workshop-rs-v0.1.5"
       ],
-      "notes": "Issue #35. The dedicated opy-compiler crate consumes resolved OPY HIR, preserves source files/spans in workshop-rs WIR, cross-checks manifest catalogId/domain links against Catalog, validates canonical WIR, and emits deterministic en-US Workshop through the published workshop-rs v0.1.1 contract. This is a bounded first slice; broader OPY lowering remains lowering-dependent and is not reclassified by this fixture."
+      "notes": "Issue #35. The dedicated opy-compiler crate consumes resolved OPY HIR, preserves source files/spans in workshop-rs WIR, cross-checks manifest catalogId/domain links against Catalog, validates canonical WIR, and emits deterministic en-US Workshop through the published workshop-rs v0.1.5 contract. This is a bounded first slice; broader OPY lowering remains lowering-dependent and is not reclassified by this fixture."
     },
     {
       "id": "compilation/opy-structural-lowering",
@@ -622,7 +622,7 @@
         "fixtures:synthetic/issue-35-integration",
         "fixtures:synthetic/issue-40-structural",
         "test:opy-compiler-structural-lowering",
-        "contract:workshop-rs-v0.1.1"
+        "contract:workshop-rs-v0.1.5"
       ],
       "notes": "Issue #40. Global/player variables and subroutines use deterministic canonical indices with source/name spans; subroutine definitions and calls, rule disabled state, conditions, supported event/filter identities, and source-file provenance lower directly into workshop-rs WIR. Unsupported settings, declarations, annotations, events, filters, and statement forms remain explicit source-attributed integration diagnostics. This does not claim full statement/expression, catalog/member/enum, settings, locale, optimizer, hook, or decompilation coverage."
     },
@@ -635,7 +635,7 @@
         "fixtures:synthetic",
         "fixtures:real-world"
       ],
-      "notes": "Issue #8 remains the broader lowering track. The released workshop-rs v0.1.1 public contract now supports the bounded #35 adapter and the #40 structural skeleton; full OPY statement/expression lowering, catalog/member/enum breadth, settings/content, locales, optimizer effects, and hooks remain lowering-dependent follow-up work. Oracle snapshots (fixtures/**/oracle.json) remain preserved reference evidence; no temporary Workshop IR is introduced here."
+      "notes": "Issue #8 remains the broader lowering track. The released workshop-rs v0.1.5 public contract now supports the bounded #35 adapter and the #40 structural skeleton; full OPY statement/expression lowering, catalog/member/enum breadth, settings/content, locales, optimizer effects, and hooks remain lowering-dependent follow-up work. Oracle snapshots (fixtures/**/oracle.json) remain preserved reference evidence; no temporary Workshop IR is introduced here."
     },
     {
       "id": "compilation/end-to-end",
