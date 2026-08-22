@@ -25,10 +25,10 @@
 //! Workshop text produced by lowering and is lowering-dependent (workshop-rs
 //! emission, issue #8); the frontend never fabricates a Workshop payload.
 //!
-//! This crate is the extraction of the mature Wright frontend
-//! (`crates/wright-opy`); module provenance and issue references follow the
-//! original implementation. Workshop→OPY reconstruction and the differential
-//! harness are not part of this crate (see the opy-rs roadmap).
+//! This crate was extracted from the mature Wright frontend (the wright
+//! repository's `crates/wright-opy`); module provenance and issue references
+//! follow the original implementation. Workshop→OPY reconstruction and the
+//! differential harness are not part of this crate (see the opy-rs roadmap).
 
 pub mod cst;
 pub mod diag;

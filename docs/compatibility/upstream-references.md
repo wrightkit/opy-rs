@@ -49,8 +49,11 @@ never `latest` or a range (see the pinning policy below).
   pinned `pnpm-lock.yaml`; `pnpm install` resolves `overpy@9.7.10` by its
   integrity hash.
 * The compatibility corpus was re-run against a fresh install of the pinned
-  package on 2026-08-17: all 27 fixture snapshots (`compatibility/fixtures/**/oracle.json`)
-  match byte-for-byte (run `python3 compatibility/run_oracle.py`).
+  package on 2026-08-17: all 27 fixture snapshots that existed at that date
+  (`compatibility/fixtures/**/oracle.json`) matched byte-for-byte. The corpus
+  has since grown to 42 fixtures, each carrying its own oracle snapshot from
+  the same pinned package; rerun `python3 compatibility/run_oracle.py` to
+  re-verify the full corpus.
 * The imported example fixtures were verified byte-identical to the pinned
   tree's `examples/` content (see `compatibility/fixtures/README.md`).
 

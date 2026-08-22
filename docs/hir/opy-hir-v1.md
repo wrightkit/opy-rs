@@ -2,14 +2,16 @@
 
 Status: accepted baseline for v0.1; opy-rs-owned contract (adopted from the
 WrightKit evidence base, issue #2)
-Scope: the interchange format between the reference OverPy frontend adapter
-and the opy-rs Rust core (and, later, WrightKit tooling consumers)
+Scope: the interchange format produced by the opy-rs native frontend and
+consumed by opy-rs tooling (and, later, WrightKit tooling consumers)
 
 This document is the normative specification for the Opy HIR protocol version
-`1.1.0`. It defines the JSON payload that the compatibility adapter emits and
-that the Rust core (`crates/`) validates and consumes. The adapter is the only
-component allowed to know how an OverPy AST maps onto this schema; the Rust
-core sees only this protocol.
+`1.1.0`. It defines the JSON payload that the native frontend in
+`crates/opy-frontend` (the lowering stage) emits and that the Rust consumer
+in the same crate validates and consumes. The frontend parses `.opy` source
+directly and owns the mapping from OPY syntax onto this schema; no component
+imports or wraps the reference implementation's AST (clean-room boundary,
+[`upstream-references.md`](../compatibility/upstream-references.md)).
 
 The protocol is an opy-rs-owned contract. It is not `JSON.stringify()` of an
 OverPy AST, and no node in it is named after an OverPy-internal class. Node
@@ -29,11 +31,11 @@ The protocol must:
    declarations, rules, events, conditions, statements, and expressions;
 2. preserve file, line, and column provenance so later stages can report
    diagnostics against source;
-3. be deterministic: the same source, frontend version, and adapter version
-   produce byte-identical JSON;
+3. be deterministic: the same source and frontend version produce
+   byte-identical JSON;
 4. be versioned so a producer and consumer can agree on compatibility without
    inspecting each other's implementation;
-5. fail loudly on constructs the adapter cannot map, and be rejected or
+5. fail loudly on constructs the frontend cannot map, and be rejected or
    reported by the consumer rather than silently ignored.
 
 ## 2. Protocol envelope
@@ -183,8 +185,8 @@ are kept, and the oracle comparison itself uses status, rule-name, and
 diagnostic evidence rather than span data.
 
 Spans are for diagnostics and identity, not for byte-accurate reconstruction.
-The adapter is responsible for producing them; the consumer validates them
-(§8). A span whose end would precede its start (for example a node expanded
+The frontend producer is responsible for emitting them; the consumer
+validates them (§8). A span whose end would precede its start (for example a node expanded
 from a preprocessor macro that mixes call-site and definition-site positions)
 must be normalized to a degenerate interval anchored at the start, so every
 emitted span is structurally valid.
@@ -381,9 +383,9 @@ Operators are opy-rs spellings for the semantics the frontend parsed:
 * comparison: `== != < <= > >=` (non-strict, Workshop semantics);
 * logical: `and or`, with `not` as a unary operator.
 
-The adapter maps frontend nodes (`__add__`, `__equals__`, `__lessThan__`,
-... ) onto these spellings. The consumer treats `op` as an opaque string and
-validates it only structurally (§8).
+The frontend maps parsed OPY operator syntax onto these fixed spellings. The
+consumer treats `op` as an opaque string and validates it only structurally
+(§8).
 
 ## 7. Versioning and compatibility rules
 
@@ -418,7 +420,7 @@ the program body.
 A node with an unknown `kind` (or an unknown statement/expression variant) is
 an *unsupported node*. The consumer reports a structured error that names the
 node kind and its span, so a regression report is explicit. Unsupported is
-never a silent pass: the adapter refuses to emit nodes it cannot map, and the
+never a silent pass: the frontend refuses to emit nodes it cannot map, and the
 consumer refuses to consume nodes it cannot understand.
 
 ## 8. Validation requirements
@@ -452,7 +454,7 @@ of the stable contract; the code and structured fields are.
 
 ## 9. Determinism and debug output
 
-For the same input, frontend version, and adapter version, the producer must
+For the same input and frontend version, the producer must
 emit byte-identical JSON: object keys are emitted in a fixed order and
 collections (files, declarations, rules, branches, args) preserve source
 order. The consumer's debug dump (§10) must be stable for the same validated
@@ -473,7 +475,7 @@ implementation-defined presentation, not part of the wire contract. It must:
 ## 11. Out of scope for v1
 
 The following are intentionally not modeled in v1 and are rejected by the
-adapter as unsupported when encountered:
+frontend as unsupported when encountered:
 
 * rule labels and relative gotos (`__skip__` / `__distanceTo__` forms);
 * decompilation-only constructs;
@@ -487,11 +489,12 @@ reason to extend the schema silently.
 ## 12. Ownership
 
 * The protocol contract is owned by opy-rs and lives in this document.
-* The adapter owns all knowledge of how OverPy ASTs map to this schema. It is
-  an optional, external-frontend component: the Rust core never imports it
-  and never depends on OverPy types.
-* Changes to the node grammar require a review of this document, the adapter,
-  the Rust consumer, and the corpus fixtures together (see
+* The native frontend owns all knowledge of how OPY source maps to this
+  schema. It never imports or depends on the reference implementation's
+  types (clean-room boundary,
+  [`upstream-references.md`](../compatibility/upstream-references.md)).
+* Changes to the node grammar require a review of this document, the frontend
+  producer, the Rust consumer, and the corpus fixtures together (see
   [`docs/opy/support-matrix.md`](../opy/support-matrix.md) and
   [`docs/compatibility/upstream-references.md`](../compatibility/upstream-references.md)).
 

@@ -3,7 +3,9 @@
 This directory is the opy-rs compatibility corpus: OPY sources with their
 pinned-oracle snapshots (`oracle.json`), ported from the WrightKit project's
 evidence base (wright `compatibility/fixtures/`) and re-verified against the
-pinned OverPy 9.7.10 oracle on 2026-08-17 (all 42 snapshots match).
+pinned OverPy 9.7.10 oracle (all 42 snapshots match; see
+[`docs/compatibility/upstream-references.md`](../../docs/compatibility/upstream-references.md)
+for the dated verification record).
 
 Corpus policy: every fixture records provenance in its `fixture.json`
 (`kind`, `origin`, `license`, `redistributable`, and — for imported
@@ -27,9 +29,10 @@ fixtures/<category>/<name>/
 
 ## Synthetic fixtures (WrightKit-authored)
 
-`fixtures/synthetic/` — 27 fixtures authored for the WrightKit compatibility
-corpus (same organization as opy-rs; AGPL-3.0-or-later, `kind: original`),
-ported unchanged:
+`fixtures/synthetic/` — 28 fixtures authored for the WrightKit compatibility
+corpus (AGPL-3.0-or-later, `kind: original`): an initial set ported unchanged
+from the wright repository corpus, extended by fixtures added in this
+repository:
 
 | Fixture | Covers |
 | --- | --- |
