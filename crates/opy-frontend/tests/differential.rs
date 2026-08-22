@@ -199,6 +199,12 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         false,
         "Issue #40 oracle-backed structural probe; the frontend resolves the source while opy-compiler independently checks canonical WIR identity, allocation, and event filters.",
     );
+    resolve(
+        &mut cases,
+        "synthetic/issue-46-primitives",
+        false,
+        "Issue #46 oracle-backed non-control-flow primitives probe; the frontend resolves the source while opy-compiler independently checks canonical WIR lowering for assignments, expressions, format, and initializers.",
+    );
     diagnostic(
         &mut cases,
         "synthetic/issue-33-lambda-negative",
