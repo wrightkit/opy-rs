@@ -7,7 +7,6 @@
 //! validation and deterministic Workshop emission.
 
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
 
 use opy_frontend::hir::{self, Expr, RuleEntry, Span as HirSpan, Stmt};
 use opy_frontend::manifest::{FunctionKind, Manifest};
@@ -57,24 +56,6 @@ impl std::fmt::Display for IntegrationError {
 }
 
 impl std::error::Error for IntegrationError {}
-
-/// Errors from the source convenience API, retaining the frontend boundary.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum CompileError {
-    Frontend(opy_frontend::FrontendError),
-    Integration(IntegrationError),
-}
-
-impl std::fmt::Display for CompileError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Frontend(error) => error.fmt(f),
-            Self::Integration(error) => error.fmt(f),
-        }
-    }
-}
-
-impl std::error::Error for CompileError {}
 
 /// Results of the manifest-to-catalog cross-check.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -200,19 +181,6 @@ impl Compiler {
         self.links
     }
 
-    /// Compile source through the standalone frontend and this integration
-    /// layer. The frontend dependency remains one-way: it does not know this
-    /// crate or workshop-rs.
-    pub fn compile_source(
-        &self,
-        source: &str,
-        main_path: &str,
-        root: &Path,
-    ) -> Result<CompilationArtifact, CompileError> {
-        let hir = opy_frontend::compile(source, main_path, root).map_err(CompileError::Frontend)?;
-        self.compile_hir(&hir).map_err(CompileError::Integration)
-    }
-
     /// Lower a resolved OPY HIR program into canonical WIR, validate it
     /// against the canonical catalog, and emit deterministic en-US Workshop.
     pub fn compile_hir(&self, hir: &hir::Program) -> Result<CompilationArtifact, IntegrationError> {
@@ -247,7 +215,6 @@ impl Compiler {
             wir: lowering.wir,
             emitted,
             catalog_identity: self.catalog.identity(),
-            link_report: self.links,
         })
     }
 }
@@ -257,7 +224,6 @@ pub struct CompilationArtifact {
     pub wir: Program,
     pub emitted: String,
     pub catalog_identity: CatalogIdentity,
-    pub link_report: LinkReport,
 }
 
 struct Lowering<'a> {
