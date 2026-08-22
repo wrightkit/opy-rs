@@ -27,6 +27,7 @@ pub struct CheckOutcome {
     pub diagnostics: Vec<Diagnostic>,   // empty ⟺ clean
     pub model: Option<SemanticModel>,   // present exactly when clean
     pub files: Vec<FileRecord>,         // file registry, retained on failure
+    pub post_compile_hook: Option<PostCompileHook>, // declared hook record
 }
 ```
 
@@ -34,6 +35,10 @@ pub struct CheckOutcome {
   source-attributed (see the diagnostics contract below).
 * `SourceLocation { file_id, path, start, end }`: a span resolved through
   the file registry to `(file id, path, line/col)`.
+* `PostCompileHook`: the declared `#!postCompileHook` script (root-relative
+  path plus directive span), present only when the source declared one and
+  the project checked clean. It is a declaration record only — the frontend
+  never executes the hook (execution is lowering-dependent, issue #8).
 
 `SemanticModel` wraps the resolved program and answers queries:
 

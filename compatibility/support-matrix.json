@@ -357,7 +357,7 @@
         "fixtures:synthetic/declarations-rules",
         "upstream:runTests.mjs"
       ],
-      "notes": "Structured stable-code diagnostics with 1-based spans; 13-code contract tested in opy-frontend tooling tests."
+      "notes": "Structured stable-code diagnostics with 1-based spans; the stable-code contract is documented in docs/opy/tooling-api.md and tested in opy-frontend tooling tests."
     },
     {
       "id": "semantics/settings-emission",

@@ -142,9 +142,14 @@ per fixture:
 
 ```sh
 python3 compatibility/diff.py \
-  --producer-command 'opy-rs compat --fixture {fixture_id} --input {source} --output {result}' \
+  --producer-command 'your-producer --fixture {fixture_id} --input {source} --output {result}' \
   --report compatibility/report.json
 ```
+
+`your-producer` is a placeholder: this repository ships no producer for
+`diff.py`. The native frontend comparison runs inside `cargo test`
+(`crates/opy-frontend/tests/differential.rs`) against the recorded oracle
+snapshots directly.
 
 The producer must write a result with the same schema as the oracle's
 `compile` record and the fixture id. It may additionally provide a top-level

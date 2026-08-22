@@ -51,7 +51,7 @@ Workshop-independent up to the documented integration boundary toward
 
 | Source | Use |
 | --- | --- |
-| `compatibility/fixtures/{basic-rule,control-flow,declarations-rules,declarations-numbers,expressions-values,preprocessing,diagnostics,settings,receiver-calls,chase-*}/source.opy` | Synthetic corpus surface (WrightKit-authored; oracle snapshots in the same directory) |
+| `compatibility/fixtures/synthetic/{basic-rule,control-flow,declarations-rules,declarations-numbers,expressions-values,preprocessing,diagnostics,settings,receiver-calls,chase-*}/source.opy` | Synthetic corpus surface (WrightKit-authored; oracle snapshots in the same directory) |
 | `compatibility/fixtures/real-world/overpy-*/` | Real-world surface from the pinned OverPy `examples/` tree (arrays, macros, effects, settings, subroutines, include closures; provenance in `compatibility/fixtures/README.md`) |
 | `compatibility/fixtures/real-world/{ow1-emulator,6v6-adjustments}/` | Independent third-party projects (BSD-2-Clause), full include closures |
 | `compatibility/fixtures/**/oracle.json` | Pinned OverPy 9.7.10 reference snapshots (normalized Workshop output, diagnostics, exit codes) |

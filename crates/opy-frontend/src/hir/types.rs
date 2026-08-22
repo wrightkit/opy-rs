@@ -1,7 +1,7 @@
-//! Serde protocol types for `wright/opy-hir` version `1.0.0`.
+//! Serde protocol types for the `wright/opy-hir` protocol, major version 1.
 //!
-//! These types mirror the Opy HIR v1 specification (`docs/hir/opy-hir-v1.md`
-//! in the wright repository, `wright/opy-hir` v1.1.0 wire payloads). Unknown
+//! These types mirror the Opy HIR v1 specification (`docs/hir/opy-hir-v1.md`,
+//! `wright/opy-hir` v1.1.0 wire payloads). Unknown
 //! fields on known nodes are tolerated so an additive producer change inside
 //! the same major version does not break the consumer; unknown node *kinds*
 //! are rejected during validation (see [`super::validate`]).
