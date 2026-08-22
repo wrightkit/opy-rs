@@ -627,6 +627,30 @@
       "notes": "Issue #40. Global/player variables and subroutines use deterministic canonical indices with source/name spans; subroutine definitions and calls, rule disabled state, conditions, supported event/filter identities, and source-file provenance lower directly into workshop-rs WIR. Unsupported settings, declarations, annotations, events, filters, and statement forms remain explicit source-attributed integration diagnostics. This does not claim full statement/expression, catalog/member/enum, settings, locale, optimizer, hook, or decompilation coverage."
     },
     {
+      "id": "compilation/opy-assignment-lowering",
+      "name": "OPY assignment and modification HIR -> canonical WIR lowering",
+      "category": "compilation",
+      "state": "end-to-end-supported",
+      "evidence": [
+        "fixtures:synthetic/issue-46-primitives",
+        "test:opy-compiler-primitive-lowering",
+        "contract:workshop-rs-v0.1.5"
+      ],
+      "notes": "Issue #46. Global/player assignments and augmented assignments (+=, -=, *=, /=, %=, **=), array index assignments (setGlobalVariableAtIndex, modifyGlobalVariableAtIndex, setPlayerVariableAtIndex, modifyPlayerVariableAtIndex), pass no-op statements, and variable declaration initializers lower into canonical workshop-rs WIR with full source/target span provenance."
+    },
+    {
+      "id": "compilation/opy-expression-lowering",
+      "name": "OPY non-control-flow value expression HIR -> canonical WIR lowering",
+      "category": "compilation",
+      "state": "end-to-end-supported",
+      "evidence": [
+        "fixtures:synthetic/issue-46-primitives",
+        "test:opy-compiler-primitive-lowering",
+        "contract:workshop-rs-v0.1.5"
+      ],
+      "notes": "Issue #46. Literals (numbers, strings, booleans, null), arrays, vectors (vect), enum constants, global/player/eventPlayer variable references, array indexing (valueInArray), string formatting (customString), arithmetic/comparison/logical binary operations, and unary operations (not, -) lower into canonical workshop-rs WIR."
+    },
+    {
       "id": "compilation/workshop-lowering",
       "name": "HIR -> Workshop lowering and emission through workshop-rs",
       "category": "compilation",
@@ -677,7 +701,7 @@
       "frontend-supported": 23,
       "semantic-supported": 13,
       "lowering-dependent": 13,
-      "end-to-end-supported": 2
+      "end-to-end-supported": 4
     },
     "byCategory": {
       "syntax": 14,
@@ -688,7 +712,7 @@
       "translations": 2,
       "optimization": 3,
       "runtime": 1,
-      "compilation": 5,
+      "compilation": 7,
       "decompilation": 2
     }
   }

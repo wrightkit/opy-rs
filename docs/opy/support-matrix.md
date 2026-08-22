@@ -57,7 +57,8 @@ Workshop-independent up to the documented integration boundary toward
 | `compatibility/fixtures/**/oracle.json` | Pinned OverPy 9.7.10 reference snapshots (normalized Workshop output, diagnostics, exit codes) |
 | `compatibility/fixtures/synthetic/issue-35-integration/` | #35 OPY-to-Workshop vertical-slice evidence; oracle provenance remains separate from implementation-specific WIR/emission assertions |
 | `compatibility/fixtures/synthetic/issue-40-structural/` | #40 pinned OverPy oracle evidence for subroutine identity, deterministic variable allocation, and player event filters |
-| `crates/opy-compiler/src/lib.rs` structural tests | #40 declarations, subroutines, rules, event filters, deterministic indices, and source-attributed negative lowering evidence |
+| `compatibility/fixtures/synthetic/issue-46-primitives/` | #46 pinned OverPy oracle evidence for non-control-flow statement and value primitive lowering |
+| `crates/opy-compiler/src/lib.rs` structural tests | #40/#46 declarations, subroutines, rules, event filters, assignments, expressions, indexing, format, pass, and source-attributed negative lowering evidence |
 | `compatibility/support-matrix.json` | Machine-readable state tracking of every declared feature (the mechanically checkable artifact) |
  | `crates/opy-frontend/src/manifest/` | The opy-rs-owned semantic compatibility manifest and its oracle probes (ported with the frontend, issue #3/#4) |
  | `crates/opy-frontend/tests/differential.rs` + `compatibility/diff.py` | Native-vs-reference differential parity (issue #7): the rust suite runs every corpus fixture through the native pipeline in `cargo test` (no Node), compares status/rule-name evidence against the recorded `oracle.json` snapshots, and writes `target/opy-differential-report.json` |
