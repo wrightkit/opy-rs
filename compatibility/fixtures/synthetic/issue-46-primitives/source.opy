@@ -19,6 +19,7 @@ rule "update player":
     @Condition 20 in scores
     @Condition not (timer == 0)
     timer += 1
+    timer **= 2
     total = timer * 2 + scores[1]
     scores[0] = 99
     scores[2] += 5
@@ -27,6 +28,9 @@ rule "update player":
     eventPlayer.points /= 2
     eventPlayer.points %= 50
     eventPlayer.rank = State.ACTIVE
-    print("Player points: {}".format(eventPlayer.points))
-    debug(vect(1, 2, 3))
+    total = "Player points: {}".format(eventPlayer.points)
+    scores[1] = vect(1, 2, 3)
+    A = total != 0
+    B = A
+    DX = scores[0] + 1
     resetStats()

@@ -634,9 +634,33 @@
       "evidence": [
         "fixtures:synthetic/issue-46-primitives",
         "test:opy-compiler-primitive-lowering",
+        "test:opy-compiler-issue-46-oracle-equivalence",
         "contract:workshop-rs-v0.1.5"
       ],
-      "notes": "Issue #46. Global/player assignments and augmented assignments (+=, -=, *=, /=, %=, **=), array index assignments (setGlobalVariableAtIndex, modifyGlobalVariableAtIndex, setPlayerVariableAtIndex, modifyPlayerVariableAtIndex), pass no-op statements, and variable declaration initializers lower into canonical workshop-rs WIR with full source/target span provenance."
+      "notes": "Issue #46. Global/player assignments and augmented assignments (+=, -=, *=, /=, %=, **=), array index assignments and modifications (setGlobalVariableAtIndex, modifyGlobalVariableAtIndex, setPlayerVariableAtIndex, modifyPlayerVariableAtIndex), pass no-op statements, and variable declaration initializers lower into canonical workshop-rs WIR. Direct global/player assignments and modifications carry full statement and target-variable span provenance; the indexed forms lower to canonical Call actions, which carry only the statement-level source span (the canonical WIR Call shape has no separate target-span field)."
+    },
+    {
+      "id": "compilation/opy-implicit-default-variables",
+      "name": "OverPy implicit default global variables (A-DX) at fixed Workshop slots",
+      "category": "compilation",
+      "state": "end-to-end-supported",
+      "evidence": [
+        "fixtures:synthetic/issue-46-primitives",
+        "test:opy-compiler-implicit-default-variables",
+        "contract:workshop-rs-v0.1.5"
+      ],
+      "notes": "Issue #46. Undeclared A-Z, AA-AZ, ..., DA-DX references resolve through the frontend default_var_index contract and lower to Workshop variables at their fixed reference slots (A=0 ... DX=127); used implicit slots are reserved for declared-variable allocation, an explicit declared index colliding with a used implicit slot fails with the stable source-attributed index-collision diagnostic, and a declared name always wins over its default slot. The pinned oracle snapshot for the issue-46 fixture constrains these slots through structural equivalence."
+    },
+    {
+      "id": "compilation/opy-primitive-lowering-limits",
+      "name": "Negative primitive-lowering diagnostics for forms outside canonical WIR",
+      "category": "compilation",
+      "state": "end-to-end-supported",
+      "evidence": [
+        "fixtures:synthetic/issue-46-unsupported",
+        "test:opy-compiler-primitive-lowering-limits"
+      ],
+      "notes": "Issue #46 negative contract. A non-control-flow primitive the canonical WIR surface cannot represent (the fixture uses a dict-indexed assignment, which the pinned oracle compiles by constant folding) is rejected with the stable unsupported-integration-surface diagnostic attributed to the source statement; no unsupported HIR node is silently discarded or guessed."
     },
     {
       "id": "compilation/opy-expression-lowering",
@@ -648,7 +672,7 @@
         "test:opy-compiler-primitive-lowering",
         "contract:workshop-rs-v0.1.5"
       ],
-      "notes": "Issue #46. Literals (numbers, strings, booleans, null), arrays, vectors (vect), enum constants, global/player/eventPlayer variable references, array indexing (valueInArray), string formatting (customString), arithmetic/comparison/logical binary operations, and unary operations (not, -) lower into canonical workshop-rs WIR."
+      "notes": "Issue #46. Literals (numbers, strings, booleans, null), arrays, vectors (vect), enum constants, global/player/eventPlayer variable references, array indexing (valueInArray; a literal zero index lowers to firstOf, matching the pinned oracle), string formatting (customString), arithmetic/comparison/logical binary operations, and unary operations (not, -; not on a comparison lowers to the negated comparison, matching the pinned oracle) lower into canonical workshop-rs WIR. Value-position power (a ** b) and indexed power modification (a[i] **= b) are rejected with the stable source-attributed unsupported-integration-surface diagnostic because the pinned workshop-rs 0.1.5 emitter has no en-US spelling for the raiseToPower value; the direct modification form (a **= b) is supported."
     },
     {
       "id": "compilation/workshop-lowering",
@@ -701,7 +725,7 @@
       "frontend-supported": 23,
       "semantic-supported": 13,
       "lowering-dependent": 13,
-      "end-to-end-supported": 4
+      "end-to-end-supported": 6
     },
     "byCategory": {
       "syntax": 14,
@@ -712,7 +736,7 @@
       "translations": 2,
       "optimization": 3,
       "runtime": 1,
-      "compilation": 7,
+      "compilation": 9,
       "decompilation": 2
     }
   }

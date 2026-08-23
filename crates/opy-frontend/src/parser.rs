@@ -924,7 +924,8 @@ impl Parser<'_> {
             | TokenKind::StarAssign
             | TokenKind::SlashAssign
             | TokenKind::DoubleSlashAssign
-            | TokenKind::PercentAssign => {
+            | TokenKind::PercentAssign
+            | TokenKind::DoubleStarAssign => {
                 let op = match self.peek_kind() {
                     TokenKind::PlusAssign => "+",
                     TokenKind::MinusAssign => "-",
@@ -932,6 +933,7 @@ impl Parser<'_> {
                     TokenKind::SlashAssign => "/",
                     TokenKind::DoubleSlashAssign => "//",
                     TokenKind::PercentAssign => "%",
+                    TokenKind::DoubleStarAssign => "**",
                     _ => unreachable!(),
                 }
                 .to_string();
@@ -1892,6 +1894,38 @@ mod tests {
         assert_eq!(rule.name, "setup");
         assert_eq!(rule.event.name, "global");
         assert_eq!(rule.actions.len(), 1);
+    }
+
+    #[test]
+    fn parses_power_augmented_assignment() {
+        // The pinned OverPy 9.7.10 reference accepts `**=` as the power
+        // augmented assignment (`a **= b` ⇔ `a = a ** b`).
+        let program =
+            parse_ok("globalvar a\nrule \"r\":\n    @Event global\n    a = 2\n    a **= 3\n");
+        let RuleEntry::Rule(rule) = &program.rules[0] else {
+            panic!("expected rule");
+        };
+        let Stmt::Assign {
+            value,
+            target: assigned_target,
+            ..
+        } = &rule.actions[1]
+        else {
+            panic!("expected an assignment");
+        };
+        let Expr::Binary {
+            op, left, right, ..
+        } = value
+        else {
+            panic!("expected a binary modification, got {value:?}");
+        };
+        assert_eq!(op, "**");
+        assert!(matches!(&**left, Expr::Name { .. }));
+        assert!(matches!(
+            assigned_target,
+            Expr::Name { name, .. } if name == "a"
+        ));
+        assert!(matches!(right.as_ref(), Expr::Number { .. }));
     }
 
     #[test]

@@ -52,6 +52,7 @@ pub enum TokenKind {
     SlashAssign,
     DoubleSlashAssign,
     PercentAssign,
+    DoubleStarAssign,
     Eq,
     Ne,
     Lt,
@@ -154,8 +155,21 @@ impl Lexer {
                 '-' => self.lex_two(TokenKind::Minus, TokenKind::MinusAssign, '='),
                 '*' => {
                     if self.peek(1) == Some('*') {
-                        self.advance();
-                        self.single(TokenKind::DoubleStar)
+                        if self.peek(2) == Some('=') {
+                            let start = self.here(3);
+                            self.advance();
+                            self.advance();
+                            self.advance();
+                            let end = self.here(0);
+                            self.tokens.push(Token::new(
+                                TokenKind::DoubleStarAssign,
+                                "**=",
+                                Span::new(self.file_id, start.start, end.start),
+                            ));
+                        } else {
+                            self.advance();
+                            self.single(TokenKind::DoubleStar)
+                        }
                     } else {
                         self.lex_two(TokenKind::Star, TokenKind::StarAssign, '=')
                     }
@@ -532,6 +546,32 @@ mod tests {
                 "missing {expected:?} in {kinds:?}"
             );
         }
+    }
+
+    #[test]
+    fn power_operators_disambiguate() {
+        // The pinned OverPy 9.7.10 reference lexes `**=` as one power-assign
+        // operator distinct from `**` and `*=`.
+        let tokens = lex_ok("a **= b ** c *= d");
+        let kinds: Vec<TokenKind> = tokens.iter().map(|t| t.kind).collect();
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::Ident,
+                TokenKind::DoubleStarAssign,
+                TokenKind::Ident,
+                TokenKind::DoubleStar,
+                TokenKind::Ident,
+                TokenKind::StarAssign,
+                TokenKind::Ident,
+                TokenKind::Eof,
+            ]
+        );
+        let assign = tokens
+            .iter()
+            .find(|t| t.kind == TokenKind::DoubleStarAssign)
+            .unwrap();
+        assert_eq!(assign.text, "**=");
     }
 
     #[test]

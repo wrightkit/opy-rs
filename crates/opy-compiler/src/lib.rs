@@ -6,9 +6,9 @@
 //! lowers the supported OPY program structure into canonical WIR before
 //! validation and deterministic Workshop emission.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
-use opy_frontend::hir::{self, Expr, RuleEntry, Span as HirSpan, Stmt};
+use opy_frontend::hir::{self, Expr, RuleEntry, Span as HirSpan, Stmt, default_var_index};
 use opy_frontend::manifest::{FunctionKind, Manifest};
 use workshop_rs::catalog::{Catalog, CatalogIdentity, Kind, Locale};
 use workshop_rs::source::{Position as WorkshopPosition, SourceFile, Span as WorkshopSpan};
@@ -282,6 +282,29 @@ impl<'a> Lowering<'a> {
     }
 
     fn lower_declarations(&mut self) -> Result<(), IntegrationError> {
+        let implicit = implicit_default_globals(self.hir);
+        for declaration in &self.hir.declarations {
+            if let hir::Declaration::GlobalVariable {
+                name,
+                index: Some(index),
+                span,
+                ..
+            } = declaration
+            {
+                for (implicit_name, implicit_span) in &implicit {
+                    if default_var_index(implicit_name) == Some(*index) {
+                        return Err(IntegrationError::new(
+                            "index-collision",
+                            format!(
+                                "duplicate use of index {index} for global variables '{implicit_name}' and '{name}'"
+                            ),
+                            implicit_span.or(*span),
+                        ));
+                    }
+                }
+            }
+        }
+
         let globals = self
             .hir
             .declarations
@@ -309,15 +332,28 @@ impl<'a> Lowering<'a> {
                 _ => None,
             })
             .collect::<Vec<_>>();
-        let global_indices = allocate_indices(&globals, "global variable")?;
-        let player_indices = allocate_indices(&players, "player variable")?;
-        let subroutine_indices = allocate_indices(&subroutines, "subroutine")?;
+        let implicit_reserved = implicit
+            .keys()
+            .map(|name| default_var_index(name).expect("implicit default variable names resolve"))
+            .collect::<HashSet<_>>();
+        let empty = HashSet::new();
+        let global_indices = allocate_indices(&globals, &implicit_reserved, "global variable")?;
+        let player_indices = allocate_indices(&players, &empty, "player variable")?;
+        let subroutine_indices = allocate_indices(&subroutines, &empty, "subroutine")?;
         let mut global_index = 0;
         let mut player_index = 0;
         let mut subroutine_index = 0;
 
+        // Declared variables in source order (for duplicate detection and
+        // initializer action order), then merged with the implicit default
+        // variables and created in Workshop index order so the emitted
+        // variable tables are reference-compatible.
+        let mut declared_globals: Vec<(&str, u32, Option<HirSpan>, Option<HirSpan>)> = Vec::new();
         let mut global_initializers = Vec::new();
+        let mut declared_players: Vec<(&str, u32, Option<HirSpan>, Option<HirSpan>)> = Vec::new();
         let mut player_initializers = Vec::new();
+        let mut declared_subroutines: Vec<(&str, u32, Option<HirSpan>, Option<HirSpan>)> =
+            Vec::new();
 
         for declaration in &self.hir.declarations {
             match declaration {
@@ -330,22 +366,20 @@ impl<'a> Lowering<'a> {
                 } => {
                     let assigned = global_indices[global_index];
                     global_index += 1;
-                    let id = self.wir.global_variables.push(wir::WorkshopVariable {
-                        name: name.clone(),
-                        index: assigned,
-                        span: self.wir_span(*span)?,
-                        name_span: self.wir_span(*name_span)?,
-                    });
-                    if self.globals.insert(name.clone(), id).is_some() {
+                    if declared_globals
+                        .iter()
+                        .any(|(existing, ..)| *existing == name)
+                    {
                         return Err(IntegrationError::new(
                             "symbol-collision",
                             format!("duplicate global variable '{name}'"),
                             *span,
                         ));
                     }
+                    declared_globals.push((name, assigned, *span, *name_span));
                     if let Some(init) = initializer {
                         if !is_zero_initializer(init) {
-                            global_initializers.push((id, init, *span, *name_span));
+                            global_initializers.push((name, init, *span, *name_span));
                         }
                     }
                 }
@@ -358,22 +392,20 @@ impl<'a> Lowering<'a> {
                 } => {
                     let assigned = player_indices[player_index];
                     player_index += 1;
-                    let id = self.wir.player_variables.push(wir::WorkshopVariable {
-                        name: name.clone(),
-                        index: assigned,
-                        span: self.wir_span(*span)?,
-                        name_span: self.wir_span(*name_span)?,
-                    });
-                    if self.players.insert(name.clone(), id).is_some() {
+                    if declared_players
+                        .iter()
+                        .any(|(existing, ..)| *existing == name)
+                    {
                         return Err(IntegrationError::new(
                             "symbol-collision",
                             format!("duplicate player variable '{name}'"),
                             *span,
                         ));
                     }
+                    declared_players.push((name, assigned, *span, *name_span));
                     if let Some(init) = initializer {
                         if !is_zero_initializer(init) {
-                            player_initializers.push((id, init, *span, *name_span));
+                            player_initializers.push((name, init, *span, *name_span));
                         }
                     }
                 }
@@ -385,19 +417,17 @@ impl<'a> Lowering<'a> {
                 } => {
                     let assigned = subroutine_indices[subroutine_index];
                     subroutine_index += 1;
-                    let id = self.wir.subroutines.push(wir::WorkshopSubroutine {
-                        name: name.clone(),
-                        index: assigned,
-                        span: self.wir_span(*span)?,
-                        name_span: self.wir_span(*name_span)?,
-                    });
-                    if self.subroutines.insert(name.clone(), id).is_some() {
+                    if declared_subroutines
+                        .iter()
+                        .any(|(existing, ..)| *existing == name)
+                    {
                         return Err(IntegrationError::new(
                             "symbol-collision",
                             format!("duplicate subroutine '{name}'"),
                             *span,
                         ));
                     }
+                    declared_subroutines.push((name, assigned, *span, *name_span));
                 }
                 hir::Declaration::Constant { name, value, span } => {
                     if self.constants.insert(name.clone(), value).is_some() {
@@ -414,9 +444,56 @@ impl<'a> Lowering<'a> {
             }
         }
 
+        let mut planned_globals: Vec<(String, u32, Option<HirSpan>, Option<HirSpan>)> =
+            declared_globals
+                .into_iter()
+                .map(|(name, index, span, name_span)| (name.to_string(), index, span, name_span))
+                .collect();
+        planned_globals.extend(implicit.iter().map(|(name, span)| {
+            (
+                name.clone(),
+                default_var_index(name).expect("implicit default variable names resolve"),
+                *span,
+                None,
+            )
+        }));
+        planned_globals.sort_by_key(|(_, index, ..)| *index);
+        for (name, assigned, span, name_span) in planned_globals {
+            let id = self.wir.global_variables.push(wir::WorkshopVariable {
+                name: name.clone(),
+                index: assigned,
+                span: self.wir_span(span)?,
+                name_span: self.wir_span(name_span)?,
+            });
+            self.globals.insert(name.clone(), id);
+        }
+
+        declared_players.sort_by_key(|(_, index, ..)| *index);
+        for (name, assigned, span, name_span) in declared_players {
+            let id = self.wir.player_variables.push(wir::WorkshopVariable {
+                name: name.to_string(),
+                index: assigned,
+                span: self.wir_span(span)?,
+                name_span: self.wir_span(name_span)?,
+            });
+            self.players.insert(name.to_string(), id);
+        }
+
+        declared_subroutines.sort_by_key(|(_, index, ..)| *index);
+        for (name, assigned, span, name_span) in declared_subroutines {
+            let id = self.wir.subroutines.push(wir::WorkshopSubroutine {
+                name: name.to_string(),
+                index: assigned,
+                span: self.wir_span(span)?,
+                name_span: self.wir_span(name_span)?,
+            });
+            self.subroutines.insert(name.to_string(), id);
+        }
+
         if !global_initializers.is_empty() {
             let mut actions = Vec::with_capacity(global_initializers.len());
-            for (variable, init_expr, span, target_span) in global_initializers {
+            for (name, init_expr, span, target_span) in global_initializers {
+                let variable = *self.globals.get(name).expect("declared global is created");
                 let value = self.lower_value(init_expr)?;
                 actions.push(self.wir.actions.push(Action::SetGlobalVariable {
                     variable,
@@ -438,7 +515,11 @@ impl<'a> Lowering<'a> {
 
         if !player_initializers.is_empty() {
             let mut actions = Vec::with_capacity(player_initializers.len());
-            for (variable, init_expr, span, target_span) in player_initializers {
+            for (name, init_expr, span, target_span) in player_initializers {
+                let variable = *self
+                    .players
+                    .get(name)
+                    .expect("declared player variable is created");
                 let player = self
                     .wir
                     .values
@@ -984,6 +1065,7 @@ impl<'a> Lowering<'a> {
                             if left_arr.as_ref() == array.as_ref()
                                 && left_idx.as_ref() == index.as_ref()
                             {
+                                reject_unemittable_modify_op(op, span)?;
                                 if let Some(op_id) = modify_catalog_name_from_str(op) {
                                     let op_node = self.wir.values.push(ValueNode::new(
                                         Value::Call {
@@ -1039,6 +1121,7 @@ impl<'a> Lowering<'a> {
                             if left_arr.as_ref() == array.as_ref()
                                 && left_idx.as_ref() == index.as_ref()
                             {
+                                reject_unemittable_modify_op(op, span)?;
                                 if let Some(op_id) = modify_catalog_name_from_str(op) {
                                     let op_node = self.wir.values.push(ValueNode::new(
                                         Value::Call {
@@ -1048,9 +1131,13 @@ impl<'a> Lowering<'a> {
                                         None,
                                     ));
                                     let right_val = self.lower_value(right)?;
+                                    // The canonical signature takes the
+                                    // player-variable value node (which
+                                    // carries the player) as its first
+                                    // argument.
                                     return Ok(self.wir.actions.push(Action::Call {
                                         name: "modifyPlayerVariableAtIndex".to_string(),
-                                        args: vec![player_val, var_node, index_val, op_node, right_val],
+                                        args: vec![var_node, index_val, op_node, right_val],
                                         span: self.wir_span(span)?,
                                     }));
                                 }
@@ -1058,9 +1145,12 @@ impl<'a> Lowering<'a> {
                         }
                     }
                     let val = self.lower_value(value)?;
+                    // The canonical signature takes the player-variable
+                    // value node (which carries the player) as its first
+                    // argument.
                     Ok(self.wir.actions.push(Action::Call {
                         name: "setPlayerVariableAtIndex".to_string(),
-                        args: vec![player_val, var_node, index_val, val],
+                        args: vec![var_node, index_val, val],
                         span: self.wir_span(span)?,
                     }))
                 }
@@ -1161,10 +1251,22 @@ impl<'a> Lowering<'a> {
                     .ok_or_else(|| self.unsupported(format!("unknown constant '{name}'"), span))?;
                 return self.lower_value(const_expr);
             }
-            Expr::Index { array, index, .. } => Value::Call {
-                name: "valueInArray".to_string(),
-                args: vec![self.lower_value(array)?, self.lower_value(index)?],
-            },
+            Expr::Index { array, index, .. } => {
+                // The pinned OverPy oracle lowers a literal zero-index read
+                // (`arr[0]`, `arr[0.0]`) to `firstOf(arr)`; non-zero indexes
+                // and indexed writes keep the indexed forms.
+                if matches!(index.as_ref(), Expr::Number { value, .. } if *value == 0.0) {
+                    Value::Call {
+                        name: "firstOf".to_string(),
+                        args: vec![self.lower_value(array)?],
+                    }
+                } else {
+                    Value::Call {
+                        name: "valueInArray".to_string(),
+                        args: vec![self.lower_value(array)?, self.lower_value(index)?],
+                    }
+                }
+            }
             Expr::Format { text, args, .. } => {
                 let text_node = self.wir.values.push(ValueNode::new(
                     Value::String(text.clone()),
@@ -1206,10 +1308,19 @@ impl<'a> Lowering<'a> {
                     name: "modulo".to_string(),
                     args: vec![self.lower_value(left)?, self.lower_value(right)?],
                 },
-                "**" | "^" => Value::Call {
-                    name: "raiseToPower".to_string(),
-                    args: vec![self.lower_value(left)?, self.lower_value(right)?],
-                },
+                // Value-position power (`a ** b`) has no emittable canonical
+                // form under the pinned workshop-rs 0.1.5 contract: the
+                // catalog's en-US tables have no raiseToPower value spelling
+                // (the reference emits `Raise To Power(a, b)`). Reject at the
+                // integration boundary with a stable source-attributed
+                // diagnostic instead of failing later in emission; the
+                // modify form (`a **= b`) stays supported via ModifyOp.
+                "**" | "^" => {
+                    return Err(self.unsupported(
+                        "power value expressions are not representable in canonical WIR under the pinned workshop-rs contract; use the **= modification form",
+                        span,
+                    ));
+                }
                 "and" | "&&" => Value::Call {
                     name: "and".to_string(),
                     args: vec![self.lower_value(left)?, self.lower_value(right)?],
@@ -1248,10 +1359,36 @@ impl<'a> Lowering<'a> {
                 }
             },
             Expr::Unary { op, operand, .. } => match op.as_str() {
-                "not" | "!" => Value::Call {
-                    name: "not".to_string(),
-                    args: vec![self.lower_value(operand)?],
-                },
+                "not" | "!" => {
+                    // The pinned OverPy 9.7.10 oracle lowers `not (a == b)`
+                    // to the negated comparison (`a != b`), flipping every
+                    // ordering comparison; `in` membership stays wrapped in
+                    // `not`. Mirror that observable lowering.
+                    if let Expr::Binary {
+                        op: comparison,
+                        left,
+                        right,
+                        ..
+                    } = operand.as_ref()
+                    {
+                        if let Some(negated) = negated_comparison(comparison) {
+                            Value::Call {
+                                name: negated.to_string(),
+                                args: vec![self.lower_value(left)?, self.lower_value(right)?],
+                            }
+                        } else {
+                            Value::Call {
+                                name: "not".to_string(),
+                                args: vec![self.lower_value(operand)?],
+                            }
+                        }
+                    } else {
+                        Value::Call {
+                            name: "not".to_string(),
+                            args: vec![self.lower_value(operand)?],
+                        }
+                    }
+                }
                 "-" => Value::Call {
                     name: "-".to_string(),
                     args: vec![self.lower_value(operand)?],
@@ -1356,11 +1493,202 @@ impl<'a> Lowering<'a> {
     }
 }
 
+/// Collect the OverPy implicit default global variables (undeclared `A`–`DX`
+/// spellings) referenced anywhere in the program, mapped to each name's first
+/// source span.
+///
+/// The pinned OverPy 9.7.10 reference accepts these names without a
+/// `globalvar` declaration anywhere a variable may appear and assigns each
+/// its fixed Workshop slot (`A` = 0, …, `DX` = 127); a used implicit variable
+/// reserves that slot for declared-variable allocation. A name that is also
+/// declared keeps the declaration's index, so declared names are excluded
+/// here (the declaration wins).
+fn implicit_default_globals(hir: &hir::Program) -> BTreeMap<String, Option<HirSpan>> {
+    let declared = hir
+        .declarations
+        .iter()
+        .filter_map(|declaration| match declaration {
+            hir::Declaration::GlobalVariable { name, .. } => Some(name.as_str()),
+            _ => None,
+        })
+        .collect::<HashSet<_>>();
+    let mut implicit = BTreeMap::new();
+    for declaration in &hir.declarations {
+        let initializer = match declaration {
+            hir::Declaration::GlobalVariable { initializer, .. }
+            | hir::Declaration::PlayerVariable { initializer, .. } => initializer.as_ref(),
+            hir::Declaration::Constant { value, .. } => Some(value),
+            _ => None,
+        };
+        if let Some(expr) = initializer {
+            collect_implicit_expr(expr, &declared, &mut implicit);
+        }
+    }
+    for entry in &hir.rules {
+        match entry {
+            RuleEntry::Rule(rule) => {
+                for condition in &rule.conditions {
+                    collect_implicit_expr(condition, &declared, &mut implicit);
+                }
+                collect_implicit_stmts(&rule.actions, &declared, &mut implicit);
+            }
+            RuleEntry::SubroutineDef { body, .. } => {
+                collect_implicit_stmts(body, &declared, &mut implicit);
+            }
+        }
+    }
+    implicit
+}
+
+fn collect_implicit_stmts(
+    statements: &[Stmt],
+    declared: &HashSet<&str>,
+    implicit: &mut BTreeMap<String, Option<HirSpan>>,
+) {
+    for statement in statements {
+        match statement {
+            Stmt::Expr { expr, .. } => collect_implicit_expr(expr, declared, implicit),
+            Stmt::Assign { target, value, .. } => {
+                collect_implicit_expr(target, declared, implicit);
+                collect_implicit_expr(value, declared, implicit);
+            }
+            Stmt::If {
+                branches, r#else, ..
+            } => {
+                for branch in branches {
+                    collect_implicit_expr(&branch.condition, declared, implicit);
+                    collect_implicit_stmts(&branch.body, declared, implicit);
+                }
+                if let Some(default_body) = r#else {
+                    collect_implicit_stmts(default_body, declared, implicit);
+                }
+            }
+            Stmt::For {
+                variable,
+                iterable,
+                body,
+                ..
+            } => {
+                collect_implicit_expr(variable, declared, implicit);
+                collect_implicit_expr(iterable, declared, implicit);
+                collect_implicit_stmts(body, declared, implicit);
+            }
+            Stmt::While {
+                condition, body, ..
+            }
+            | Stmt::DoWhile {
+                condition, body, ..
+            } => {
+                collect_implicit_expr(condition, declared, implicit);
+                collect_implicit_stmts(body, declared, implicit);
+            }
+            Stmt::Switch {
+                value,
+                cases,
+                r#default,
+                ..
+            } => {
+                collect_implicit_expr(value, declared, implicit);
+                for case in cases {
+                    collect_implicit_expr(&case.value, declared, implicit);
+                    collect_implicit_stmts(&case.body, declared, implicit);
+                }
+                if let Some(default) = r#default {
+                    collect_implicit_stmts(default, declared, implicit);
+                }
+            }
+            Stmt::Break { .. } | Stmt::CallSubroutine { .. } | Stmt::Pass { .. } => {}
+        }
+    }
+}
+
+fn collect_implicit_expr(
+    expr: &Expr,
+    declared: &HashSet<&str>,
+    implicit: &mut BTreeMap<String, Option<HirSpan>>,
+) {
+    match expr {
+        Expr::GlobalVar { name, span } => {
+            if !declared.contains(name.as_str()) && default_var_index(name).is_some() {
+                implicit.entry(name.clone()).or_insert(*span);
+            }
+        }
+        Expr::Array { elements, .. } => {
+            for element in elements {
+                collect_implicit_expr(element, declared, implicit);
+            }
+        }
+        Expr::Dict { entries, .. } => {
+            for entry in entries {
+                collect_implicit_expr(&entry.key, declared, implicit);
+                collect_implicit_expr(&entry.value, declared, implicit);
+            }
+        }
+        Expr::Comprehension {
+            element,
+            iterable,
+            condition,
+            ..
+        } => {
+            collect_implicit_expr(element, declared, implicit);
+            collect_implicit_expr(iterable, declared, implicit);
+            if let Some(condition) = condition {
+                collect_implicit_expr(condition, declared, implicit);
+            }
+        }
+        Expr::Lambda { body, .. } => collect_implicit_expr(body, declared, implicit),
+        Expr::Vector { x, y, z, .. } => {
+            collect_implicit_expr(x, declared, implicit);
+            collect_implicit_expr(y, declared, implicit);
+            collect_implicit_expr(z, declared, implicit);
+        }
+        Expr::PlayerVar { player, .. } => collect_implicit_expr(player, declared, implicit),
+        Expr::Member { receiver, .. } => collect_implicit_expr(receiver, declared, implicit),
+        Expr::Call { args, .. } | Expr::MacroCall { args, .. } => {
+            for arg in args {
+                collect_implicit_expr(arg, declared, implicit);
+            }
+        }
+        Expr::ReceiverCall { receiver, args, .. } => {
+            collect_implicit_expr(receiver, declared, implicit);
+            for arg in args {
+                collect_implicit_expr(arg, declared, implicit);
+            }
+        }
+        Expr::Binary { left, right, .. } => {
+            collect_implicit_expr(left, declared, implicit);
+            collect_implicit_expr(right, declared, implicit);
+        }
+        Expr::Unary { operand, .. } => collect_implicit_expr(operand, declared, implicit),
+        Expr::Index { array, index, .. } => {
+            collect_implicit_expr(array, declared, implicit);
+            collect_implicit_expr(index, declared, implicit);
+        }
+        Expr::Format { args, .. } => {
+            for arg in args {
+                collect_implicit_expr(arg, declared, implicit);
+            }
+        }
+        // Leaf expressions carry no variable references.
+        Expr::Number { .. }
+        | Expr::String { .. }
+        | Expr::Bool { .. }
+        | Expr::Null { .. }
+        | Expr::StringModifier { .. }
+        | Expr::Local { .. }
+        | Expr::Enum { .. }
+        | Expr::EventPlayer { .. }
+        | Expr::Constant { .. }
+        | Expr::MacroParam { .. } => {}
+    }
+}
+
 fn allocate_indices(
     entries: &[(Option<u32>, Option<HirSpan>)],
+    pre_reserved: &HashSet<u32>,
     kind: &str,
 ) -> Result<Vec<u32>, IntegrationError> {
-    let mut reserved = HashSet::new();
+    let mut reserved = pre_reserved.clone();
     for (index, span) in entries {
         let Some(index) = index else {
             continue;
@@ -1374,6 +1702,10 @@ fn allocate_indices(
         }
     }
 
+    // The pinned OverPy reference fills the remaining free slots in
+    // ascending order for auto-allocated entries, regardless of where the
+    // explicit indices sit in declaration order; an early explicit index
+    // does not push later auto allocations above it.
     let mut next = 0;
     let mut allocated = Vec::with_capacity(entries.len());
     for (index, span) in entries {
@@ -1400,7 +1732,6 @@ fn allocate_indices(
             })?;
             assigned
         };
-        next = next.max(assigned.saturating_add(1));
         allocated.push(assigned);
     }
     Ok(allocated)
@@ -1428,6 +1759,18 @@ fn is_zero_initializer(expr: &hir::Expr) -> bool {
     }
 }
 
+fn negated_comparison(op: &str) -> Option<&'static str> {
+    Some(match op {
+        "==" => "!=",
+        "!=" => "==",
+        "<" => ">=",
+        ">" => "<=",
+        "<=" => ">",
+        ">=" => "<",
+        _ => return None,
+    })
+}
+
 fn modify_op_from_str(op: &str) -> Option<wir::ModifyOp> {
     match op {
         "+" => Some(wir::ModifyOp::Add),
@@ -1438,6 +1781,21 @@ fn modify_op_from_str(op: &str) -> Option<wir::ModifyOp> {
         "**" | "^" => Some(wir::ModifyOp::RaiseToPower),
         _ => None,
     }
+}
+
+/// The indexed modify forms pass the operator as a value node; the pinned
+/// workshop-rs 0.1.5 emitter has no en-US spelling for the raiseToPower
+/// value, so indexed power modification fails stably at the integration
+/// boundary instead of surfacing as a span-less emission error.
+fn reject_unemittable_modify_op(op: &str, span: Option<HirSpan>) -> Result<(), IntegrationError> {
+    if op == "**" || op == "^" {
+        return Err(IntegrationError::new(
+            "unsupported-integration-surface",
+            "indexed power modification is not representable in canonical WIR under the pinned workshop-rs contract; use the **= modification form on the variable itself",
+            span,
+        ));
+    }
+    Ok(())
 }
 
 fn modify_catalog_name_from_str(op: &str) -> Option<&'static str> {
@@ -1612,13 +1970,220 @@ mod tests {
         )
         .unwrap();
         let artifact = compiler.compile_hir(&hir).unwrap();
+        let by_name = artifact
+            .wir
+            .global_variables
+            .iter()
+            .map(|variable| (variable.name.as_str(), variable.index))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        assert_eq!(
+            by_name,
+            std::collections::BTreeMap::from([("first", 1), ("reserved", 0), ("next", 2)])
+        );
+        // Variable tables are emitted in Workshop index order.
         let indices = artifact
             .wir
             .global_variables
             .iter()
             .map(|variable| variable.index)
             .collect::<Vec<_>>();
-        assert_eq!(indices, vec![1, 0, 2]);
+        assert_eq!(indices, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn implicit_default_variables_use_reference_fixed_slots() {
+        let compiler = Compiler::new().unwrap();
+        let hir = opy_frontend::compile(
+            r#"
+globalvar timer
+globalvar extra 5
+
+rule "implicit":
+    @Event global
+    A = timer + 1
+    B = A
+    B += 2
+    A[0] = 7
+    DX = B * A
+"#,
+            "implicit.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        let globals = artifact
+            .wir
+            .global_variables
+            .iter()
+            .map(|variable| (variable.name.clone(), variable.index))
+            .collect::<Vec<_>>();
+        // The implicit A (0), B (1), and DX (127) names keep their fixed
+        // Workshop slots and reserve them for declared-variable allocation
+        // (pinned OverPy evidence); `timer` auto-allocates around them and
+        // `extra` keeps its explicit index.
+        assert_eq!(
+            globals,
+            vec![
+                ("A".to_string(), 0),
+                ("B".to_string(), 1),
+                ("timer".to_string(), 2),
+                ("extra".to_string(), 5),
+                ("DX".to_string(), 127),
+            ]
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Set Global Variable(A, Add(Global.timer, 1));")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Set Global Variable(B, Global.A);")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Modify Global Variable(B, Add, 2);")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Set Global Variable At Index(A, 0, 7);")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Set Global Variable(DX, Multiply(Global.B, Global.A));")
+        );
+    }
+
+    #[test]
+    fn implicit_default_variable_slot_collision_is_source_attributed() {
+        let compiler = Compiler::new().unwrap();
+        let hir = opy_frontend::compile(
+            "globalvar x 0\nrule \"collision\":\n    @Event global\n    x = 1\n    A = 2\n",
+            "collision.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let error = match compiler.compile_hir(&hir) {
+            Ok(_) => panic!("slot collision unexpectedly succeeded"),
+            Err(error) => error,
+        };
+        assert_eq!(error.diagnostic.code, "index-collision");
+        assert_eq!(error.diagnostic.span.unwrap().start.line, 5);
+        assert!(error.diagnostic.message.contains("'A' and 'x'"));
+    }
+
+    #[test]
+    fn power_augmented_assignment_lowers_from_source() {
+        let compiler = Compiler::new().unwrap();
+        let hir = opy_frontend::compile(
+            "globalvar g\nrule \"power\":\n    @Event global\n    g = 2\n    g **= 3\n",
+            "power.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        assert!(artifact.emitted.contains("Set Global Variable(g, 2);"));
+        assert!(
+            artifact
+                .emitted
+                .contains("Modify Global Variable(g, Raise To Power, 3);")
+        );
+    }
+
+    #[test]
+    fn unsupported_primitive_lowering_is_stable_and_source_attributed() {
+        let compiler = Compiler::new().unwrap();
+        let hir = opy_frontend::compile(
+            "globalvar total\nrule \"negative\":\n    @Event global\n    total = {\"a\": 1, \"b\": 2}[\"a\"]\n",
+            "negative.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let error = match compiler.compile_hir(&hir) {
+            Ok(_) => panic!("dict primitive lowering unexpectedly succeeded"),
+            Err(error) => error,
+        };
+        assert_eq!(error.diagnostic.code, "unsupported-integration-surface");
+        assert!(error.diagnostic.message.contains("dict"));
+        assert_eq!(error.diagnostic.span.unwrap().start.line, 4);
+    }
+
+    #[test]
+    fn auto_allocation_fills_free_slots_below_early_explicit_indices() {
+        let compiler = Compiler::new().unwrap();
+        let hir = opy_frontend::compile(
+            r#"
+globalvar reserved 5
+globalvar auto1
+globalvar auto2
+
+rule "allocation":
+    @Event global
+    auto1 = 1
+    auto2 = 2
+    B = 3
+"#,
+            "allocation.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        let by_name = artifact
+            .wir
+            .global_variables
+            .iter()
+            .map(|variable| (variable.name.clone(), variable.index))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        // The implicit B keeps its fixed slot 1; the auto-allocated variables
+        // fill the remaining free slots below the explicit 5 instead of
+        // jumping past it, matching the pinned OverPy oracle (slot 0 stays
+        // free here because the implicit A is never used).
+        assert_eq!(
+            by_name,
+            std::collections::BTreeMap::from([
+                ("B".to_string(), 1),
+                ("auto1".to_string(), 0),
+                ("auto2".to_string(), 2),
+                ("reserved".to_string(), 5),
+            ])
+        );
+    }
+
+    #[test]
+    fn power_value_expressions_fail_stably_at_the_pinned_boundary() {
+        let compiler = Compiler::new().unwrap();
+        let hir = opy_frontend::compile(
+            "globalvar x\nglobalvar out\nrule \"power value\":\n    @Event global\n    out = x ** 2\n",
+            "powervalue.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let error = match compiler.compile_hir(&hir) {
+            Ok(_) => panic!("value-position power unexpectedly lowered"),
+            Err(error) => error,
+        };
+        assert_eq!(error.diagnostic.code, "unsupported-integration-surface");
+        assert!(error.diagnostic.message.contains("power value"));
+        assert_eq!(error.diagnostic.span.unwrap().start.line, 5);
+
+        // The indexed modify form hits the same pinned emitter gap.
+        let hir = opy_frontend::compile(
+            "globalvar arr = [2, 4]\nrule \"indexed\":\n    @Event global\n    arr[0] **= 2\n",
+            "indexed.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let error = match compiler.compile_hir(&hir) {
+            Ok(_) => panic!("indexed power modification unexpectedly lowered"),
+            Err(error) => error,
+        };
+        assert_eq!(error.diagnostic.code, "unsupported-integration-surface");
+        assert!(error.diagnostic.message.contains("indexed power"));
+        assert_eq!(error.diagnostic.span.unwrap().start.line, 4);
     }
 
     #[test]
@@ -1694,6 +2259,7 @@ mod tests {
 globalvar g1
 globalvar g2
 playervar p1
+playervar p2 = [1, 2, 3]
 
 rule "assignments":
     @Event eachPlayer
@@ -1709,6 +2275,8 @@ rule "assignments":
     eventPlayer.p1 = 42
     eventPlayer.p1 += 8
     eventPlayer.p1 *= 2
+    eventPlayer.p2[2] = 7
+    eventPlayer.p2[0] -= 3
 "#,
             "assign.opy",
             Path::new("."),
@@ -1766,6 +2334,49 @@ rule "assignments":
                 .emitted
                 .contains("Modify Player Variable(Event Player, p1, Multiply, 2);")
         );
+        assert!(
+            artifact
+                .emitted
+                .contains("Set Player Variable At Index((Event Player).p2, 2, 7);")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Modify Player Variable At Index((Event Player).p2, 0, Subtract, 3);")
+        );
+
+        // Direct assignments carry both the statement span and the separate
+        // target-variable span; indexed forms lower to Call actions that
+        // carry only the statement span.
+        let rule = artifact
+            .wir
+            .rules
+            .get(workshop_rs::wir::RuleId::from_index(1))
+            .unwrap();
+        let direct = artifact.wir.actions.get(rule.actions[0]).unwrap();
+        match direct {
+            workshop_rs::wir::Action::SetGlobalVariable {
+                span,
+                target_span,
+                variable,
+                ..
+            } => {
+                assert_eq!(span.unwrap().start.line, 9);
+                assert_eq!(target_span.unwrap().start.line, 9);
+                assert_eq!(
+                    artifact.wir.global_variables.get(*variable).unwrap().name,
+                    "g1"
+                );
+            }
+            other => panic!("expected a direct global assignment, got {other:?}"),
+        }
+        let indexed = artifact.wir.actions.get(rule.actions[7]).unwrap();
+        match indexed {
+            workshop_rs::wir::Action::Call { span, .. } => {
+                assert_eq!(span.unwrap().start.line, 16);
+            }
+            other => panic!("expected an indexed assignment call, got {other:?}"),
+        }
     }
 
     #[test]
@@ -1795,11 +2406,9 @@ rule "expressions":
         .unwrap();
         let artifact = compiler.compile_hir(&hir).unwrap();
         assert!(artifact.emitted.contains("Global.total == 0;"));
-        assert!(
-            artifact
-                .emitted
-                .contains("Not(Compare(Global.pos, ==, Vector(0, 0, 0))) == True;")
-        );
+        // `not (pos == vect(0, 0, 0))` lowers to the negated comparison,
+        // mirroring the pinned OverPy oracle.
+        assert!(artifact.emitted.contains("Global.pos != Vector(0, 0, 0);"));
         assert!(
             artifact
                 .emitted
@@ -1904,79 +2513,6 @@ rule "main":
             !artifact
                 .emitted
                 .contains("Set Player Variable(Event Player, q,")
-        );
-    }
-
-    #[test]
-    fn issue_46_oracle_fixture_and_wir_lowering_agree() {
-        let compiler = Compiler::new().unwrap();
-        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../compatibility/fixtures/synthetic/issue-46-primitives");
-        let source = std::fs::read_to_string(fixture.join("source.opy")).unwrap();
-        let hir = opy_frontend::compile(&source, "source.opy", &fixture).unwrap();
-        let artifact = compiler.compile_hir(&hir).unwrap();
-        let oracle: serde_json::Value =
-            serde_json::from_str(&std::fs::read_to_string(fixture.join("oracle.json")).unwrap())
-                .unwrap();
-        let oracle_workshop = oracle["compile"]["workshop"].as_str().unwrap();
-
-        assert!(oracle_workshop.contains("0: timer"));
-        assert!(oracle_workshop.contains("1: total"));
-        assert!(oracle_workshop.contains("2: scores"));
-        assert!(oracle_workshop.contains("0: points"));
-        assert!(oracle_workshop.contains("1: rank"));
-        assert!(oracle_workshop.contains("0: resetStats"));
-        assert!(oracle_workshop.contains("rule (\"Initialize global variables\")"));
-        assert!(oracle_workshop.contains("rule (\"Initialize player variables\")"));
-        assert!(oracle_workshop.contains("rule (\"update player\")"));
-        assert!(oracle_workshop.contains("Modify Global Variable(timer, Add, 1);"));
-        assert!(oracle_workshop.contains("Set Global Variable At Index(scores, 0, 99);"));
-        assert!(oracle_workshop.contains("Modify Global Variable At Index(scores, 2, Add, 5);"));
-        assert!(
-            oracle_workshop.contains("Modify Player Variable(Event Player, points, Multiply, 2);")
-        );
-        assert!(oracle_workshop.contains("Set Player Variable(Event Player, rank, 1);"));
-
-        // Check canonical WIR structures
-        assert_eq!(artifact.wir.global_variables.len(), 3);
-        assert_eq!(artifact.wir.player_variables.len(), 2);
-        assert_eq!(artifact.wir.subroutines.len(), 1);
-        assert_eq!(artifact.wir.rules.len(), 4); // Init global, Init player, subroutine def, update player
-        assert_eq!(
-            artifact
-                .wir
-                .rules
-                .get(workshop_rs::wir::RuleId::from_index(0))
-                .unwrap()
-                .name,
-            "Initialize global variables"
-        );
-        assert_eq!(
-            artifact
-                .wir
-                .rules
-                .get(workshop_rs::wir::RuleId::from_index(1))
-                .unwrap()
-                .name,
-            "Initialize player variables"
-        );
-        assert_eq!(
-            artifact
-                .wir
-                .rules
-                .get(workshop_rs::wir::RuleId::from_index(2))
-                .unwrap()
-                .name,
-            "Subroutine resetStats"
-        );
-        assert_eq!(
-            artifact
-                .wir
-                .rules
-                .get(workshop_rs::wir::RuleId::from_index(3))
-                .unwrap()
-                .name,
-            "update player"
         );
     }
 }
