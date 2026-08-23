@@ -10,8 +10,8 @@ description = "OPy HIR to canonical Workshop WIR integration compiler"
 workspace = true
 
 [dependencies]
-opy-frontend = { path = "../opy-frontend" }
-workshop-rs = "=0.1.5"
+opy-frontend.workspace = true
+workshop-rs.workspace = true
 
 [dev-dependencies]
-serde_json = "1"
+serde_json.workspace = true
