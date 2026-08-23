@@ -5,6 +5,8 @@ enum State:
 globalvar timer = 10
 globalvar total = 0
 globalvar scores = [10, 20, 30]
+globalvar a = [2, 4]
+globalvar out = 0
 playervar points = 5
 playervar rank = 0
 subroutine resetStats
@@ -33,4 +35,7 @@ rule "update player":
     A = total != 0
     B = A
     DX = scores[0] + 1
+    out = a ** 2
+    a **= 2
+    a[0] **= 2
     resetStats()

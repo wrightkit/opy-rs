@@ -1,7 +1,7 @@
 //! The first OPY-to-Workshop integration boundary.
 //!
 //! `opy-frontend` remains a standalone OPY/HIR producer. This crate is the
-//! consumer-owned compiler layer: it pins the released `workshop-rs` v0.1.5
+//! consumer-owned compiler layer: it pins the released `workshop-rs` v0.1.8
 //! contract, checks the OPY manifest links against the canonical catalog, and
 //! lowers the supported OPY program structure into canonical WIR before
 //! validation and deterministic Workshop emission.
@@ -15,7 +15,7 @@ use workshop_rs::source::{Position as WorkshopPosition, SourceFile, Span as Work
 use workshop_rs::wir::{self, Action, Event, PlayerEventKind, Program, Value, ValueNode};
 
 /// The exact released dependency contract consumed by this crate.
-pub const WORKSHOP_RS_VERSION: &str = "0.1.5";
+pub const WORKSHOP_RS_VERSION: &str = "0.1.8";
 
 /// A source-attributed integration diagnostic.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1065,7 +1065,6 @@ impl<'a> Lowering<'a> {
                             if left_arr.as_ref() == array.as_ref()
                                 && left_idx.as_ref() == index.as_ref()
                             {
-                                reject_unemittable_modify_op(op, span)?;
                                 if let Some(op_id) = modify_catalog_name_from_str(op) {
                                     let op_node = self.wir.values.push(ValueNode::new(
                                         Value::Call {
@@ -1121,7 +1120,6 @@ impl<'a> Lowering<'a> {
                             if left_arr.as_ref() == array.as_ref()
                                 && left_idx.as_ref() == index.as_ref()
                             {
-                                reject_unemittable_modify_op(op, span)?;
                                 if let Some(op_id) = modify_catalog_name_from_str(op) {
                                     let op_node = self.wir.values.push(ValueNode::new(
                                         Value::Call {
@@ -1308,19 +1306,10 @@ impl<'a> Lowering<'a> {
                     name: "modulo".to_string(),
                     args: vec![self.lower_value(left)?, self.lower_value(right)?],
                 },
-                // Value-position power (`a ** b`) has no emittable canonical
-                // form under the pinned workshop-rs 0.1.5 contract: the
-                // catalog's en-US tables have no raiseToPower value spelling
-                // (the reference emits `Raise To Power(a, b)`). Reject at the
-                // integration boundary with a stable source-attributed
-                // diagnostic instead of failing later in emission; the
-                // modify form (`a **= b`) stays supported via ModifyOp.
-                "**" | "^" => {
-                    return Err(self.unsupported(
-                        "power value expressions are not representable in canonical WIR under the pinned workshop-rs contract; use the **= modification form",
-                        span,
-                    ));
-                }
+                "**" | "^" => Value::Call {
+                    name: "raiseToPower".to_string(),
+                    args: vec![self.lower_value(left)?, self.lower_value(right)?],
+                },
                 "and" | "&&" => Value::Call {
                     name: "and".to_string(),
                     args: vec![self.lower_value(left)?, self.lower_value(right)?],
@@ -1783,21 +1772,6 @@ fn modify_op_from_str(op: &str) -> Option<wir::ModifyOp> {
     }
 }
 
-/// The indexed modify forms pass the operator as a value node; the pinned
-/// workshop-rs 0.1.5 emitter has no en-US spelling for the raiseToPower
-/// value, so indexed power modification fails stably at the integration
-/// boundary instead of surfacing as a span-less emission error.
-fn reject_unemittable_modify_op(op: &str, span: Option<HirSpan>) -> Result<(), IntegrationError> {
-    if op == "**" || op == "^" {
-        return Err(IntegrationError::new(
-            "unsupported-integration-surface",
-            "indexed power modification is not representable in canonical WIR under the pinned workshop-rs contract; use the **= modification form on the variable itself",
-            span,
-        ));
-    }
-    Ok(())
-}
-
 fn modify_catalog_name_from_str(op: &str) -> Option<&'static str> {
     match op {
         "+" => Some("add"),
@@ -1863,7 +1837,7 @@ mod tests {
         assert_eq!(rule.span.unwrap().file.index(), 0);
         assert_eq!(rule.name_span.unwrap().start.line, 2);
         assert!(artifact.emitted.contains("Disable Inspector Recording;"));
-        assert_eq!(artifact.catalog_identity.implementation_version, "0.1.5");
+        assert_eq!(artifact.catalog_identity.implementation_version, "0.1.8");
     }
 
     #[test]
@@ -2154,36 +2128,30 @@ rule "allocation":
     }
 
     #[test]
-    fn power_value_expressions_fail_stably_at_the_pinned_boundary() {
+    fn power_expressions_lower_through_the_canonical_contract() {
         let compiler = Compiler::new().unwrap();
         let hir = opy_frontend::compile(
-            "globalvar x\nglobalvar out\nrule \"power value\":\n    @Event global\n    out = x ** 2\n",
-            "powervalue.opy",
+            "globalvar a = [2, 4]\nglobalvar out\nrule \"power\":\n    @Event global\n    out = a ** 2\n    a **= 2\n    a[0] **= 2\n",
+            "power.opy",
             Path::new("."),
         )
         .unwrap();
-        let error = match compiler.compile_hir(&hir) {
-            Ok(_) => panic!("value-position power unexpectedly lowered"),
-            Err(error) => error,
-        };
-        assert_eq!(error.diagnostic.code, "unsupported-integration-surface");
-        assert!(error.diagnostic.message.contains("power value"));
-        assert_eq!(error.diagnostic.span.unwrap().start.line, 5);
-
-        // The indexed modify form hits the same pinned emitter gap.
-        let hir = opy_frontend::compile(
-            "globalvar arr = [2, 4]\nrule \"indexed\":\n    @Event global\n    arr[0] **= 2\n",
-            "indexed.opy",
-            Path::new("."),
-        )
-        .unwrap();
-        let error = match compiler.compile_hir(&hir) {
-            Ok(_) => panic!("indexed power modification unexpectedly lowered"),
-            Err(error) => error,
-        };
-        assert_eq!(error.diagnostic.code, "unsupported-integration-surface");
-        assert!(error.diagnostic.message.contains("indexed power"));
-        assert_eq!(error.diagnostic.span.unwrap().start.line, 4);
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        assert!(
+            artifact
+                .emitted
+                .contains("Set Global Variable(out, Raise To Power(Global.a, 2));")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Modify Global Variable(a, Raise To Power, 2);")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Modify Global Variable At Index(a, 0, Raise To Power, 2);")
+        );
     }
 
     #[test]
