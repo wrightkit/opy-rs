@@ -18,7 +18,7 @@ architecture, compatibility evidence, APIs, and internal contracts live here.
 
 ## Compatibility
 
-- [Support reference](opy/support-matrix.md): detailed, corpus-evidenced OverPy
+- [OverPy support contract](overpy-support.md): audited, human-readable OverPy
   feature coverage.
 - [Compatibility baseline](opy/compatibility-baseline.md): planning/reference
   inventory for remaining OverPy surface and compatibility priorities.
