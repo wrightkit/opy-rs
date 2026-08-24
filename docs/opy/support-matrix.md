@@ -31,8 +31,9 @@ suite are implemented and CI-covered. The rows they evidence are flipped to
 `frontend-supported`/`semantic-supported` in
 `compatibility/support-matrix.json`, the mechanically checked state source;
 features whose completion requires the full canonical Workshop surface remain
-`lowering-dependent`; the bounded #35 adapter and #40 structural HIR →
-canonical WIR lowering are separately recorded as `end-to-end-supported` and
+`lowering-dependent`; the bounded #35 adapter, the #40 structural HIR →
+canonical WIR lowering, and the #46 non-control-flow primitive lowering are
+separately recorded as `end-to-end-supported` and
 do not reclassify broader Workshop-owned rows.
 Here, `end-to-end-supported` is scoped to the explicitly evidenced feature or
 vertical slice; it never means full-language OPY-to-Workshop parity. The wider
@@ -57,7 +58,10 @@ Workshop-independent up to the documented integration boundary toward
 | `compatibility/fixtures/**/oracle.json` | Pinned OverPy 9.7.10 reference snapshots (normalized Workshop output, diagnostics, exit codes) |
 | `compatibility/fixtures/synthetic/issue-35-integration/` | #35 OPY-to-Workshop vertical-slice evidence; oracle provenance remains separate from implementation-specific WIR/emission assertions |
 | `compatibility/fixtures/synthetic/issue-40-structural/` | #40 pinned OverPy oracle evidence for subroutine identity, deterministic variable allocation, and player event filters |
-| `crates/opy-compiler/src/lib.rs` structural tests | #40 declarations, subroutines, rules, event filters, deterministic indices, and source-attributed negative lowering evidence |
+| `compatibility/fixtures/synthetic/issue-46-primitives/` | #46 pinned OverPy oracle evidence for non-control-flow statement and value primitive lowering (assignments and modifications including `**=`, global/player implicit default variables at fixed slots, hex-number normalization, index-0 `firstOf` read normalization, negated-comparison lowering); the oracle snapshot constrains the native compiler through the canonical `workshop-rs` parser and structural equivalence |
+| `compatibility/fixtures/synthetic/issue-46-unsupported/` | #46 negative primitive-lowering evidence: the frontend and pinned oracle accept a dict-indexed assignment while the compiler rejects it with the stable source-attributed `unsupported-integration-surface` diagnostic |
+| `crates/opy-compiler/src/lib.rs` structural tests | #40/#46 declarations, subroutines, rules, event filters, assignments, expressions, indexing, format, pass, and source-attributed negative lowering evidence |
+| `crates/opy-compiler/tests/issue_46_oracle.rs` | #46 oracle-constrained differential equivalence: native output and the pinned oracle Workshop text both reparse through the canonical `workshop-rs` parser and must satisfy `roundtrip::equivalent` |
 | `compatibility/support-matrix.json` | Machine-readable state tracking of every declared feature (the mechanically checkable artifact) |
  | `crates/opy-frontend/src/manifest/` | The opy-rs-owned semantic compatibility manifest and its oracle probes (ported with the frontend, issue #3/#4) |
  | `crates/opy-frontend/tests/differential.rs` + `compatibility/diff.py` | Native-vs-reference differential parity (issue #7): the rust suite runs every corpus fixture through the native pipeline in `cargo test` (no Node), compares status/rule-name evidence against the recorded `oracle.json` snapshots, and writes `target/opy-differential-report.json` |
@@ -75,7 +79,7 @@ implements; "reference" always means the pinned OverPy 9.7.10
 - Identifiers, integer and decimal number literals (source text preserved),
   double-quoted strings with `\n`/`\t`/`\\` escapes, `true`/`false`/`None`.
 - Line comments (`#`), block comments (`/* */`), `#!` directives.
-- Operators: `+ - * / // % ** == != < <= > >= = += -= *= /= //= %= and or not`,
+- Operators: `+ - * / % ** == != < <= > >= = += -= *= /= %= **= and or not`,
   `in`/`not in`, plus `.`/`,`/`:`/`(`/`)`/`[`/`]`/`@`.
 
 ### Pure OPY syntax and source semantics
@@ -96,9 +100,11 @@ implements; "reference" always means the pinned OverPy 9.7.10
   reference; integer-`0` literal initializers are dropped from HIR (matching
   the reference); non-zero and non-integer numeric initializers are
   preserved, e.g. `j = 5` and `k = 0.0` keep the source spelling).
-  Initializer semantics are **lowering-dependent**: the Initialize rules are
-  synthesized by the HIR → Workshop lowering, which is inventory-only until
-  the `workshop-rs` integration stage.
+  Initializer semantics are **lowering-dependent**: the #46 evidence covers
+  non-null initializers, while OverPy's null-default initializer quirk is
+  tracked separately in #58. The Initialize rules are synthesized by the HIR
+  → Workshop lowering, which is inventory-only until the `workshop-rs`
+  integration stage.
 - `playervar name` (same forms).
 - `subroutine name`.
 - `def name():` subroutine bodies (parameters are outside the declared
@@ -181,7 +187,8 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
   disabled state, canonical event identities, and catalog-resolved team/slot/
   hero filters. Delimiter, new-page, suppression, and other metadata without a
   canonical WIR carrier remain explicit integration diagnostics.
-- Statements: expression statements, `=` and augmented assignment,
+- Statements: expression statements, `=` and the evidenced augmented
+  assignment subset (`+= -= *= /= %= **=`),
   `if`/`elif`/`else`, `for x in range(...)`, `while`, `pass`.
 - `for`-loop binder resolution: the loop variable must resolve to a global
   variable, either a declared `globalvar`, or an OverPy **default variable

@@ -61,11 +61,11 @@ rejected/documented-absent dimension, `—` an inapplicable dimension, and
 
 | # | Category | Tier | Parse | Sem | Comp | Tooling | Ref |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | **Expression/postfix/member/call grammar**: operators and precedence, `[]` indexing, `.` member, calls, `++`/`--`, `del`, `in`/`not in`, hex `0x` | `baseline-supported` for the corpus subset (operators, indexing, calls, member/call); sub-forms below | ✅ corpus | ✅ | ✅ (integration) | ✅ | ✅ differential (issue #7) |
+| 1 | **Expression/postfix/member/call grammar**: operators and precedence, `[]` indexing, `.` member, calls, `del`, `in`/`not in`, hex `0x` | `baseline-supported` for the corpus subset (operators, indexing, calls, member/call); `++`/`--` remain tracked by opy-rs#59 | ✅ corpus | ✅ | ✅ (integration) | ✅ | ✅ differential (issue #7) |
 | 1a | `switch`/`case`/`default`, `break`, `do…while`, `in`/`not in`, `0x` hex literals | `baseline-supported` for the pinned frontend surface; Workshop control-flow lowering remains integration-owned | ✅ | ✅ | partial (integration) | ✅ | ✅ oracle probes |
 | 1b | String modifiers (`f`/`w`/`l`/`b`/`c`/`t`), dict literals, list comprehensions, signature-gated `lambda` | `baseline-supported` for the pinned frontend surface; formatting/emission remains lowering-dependent | ✅ | ✅ | partial (integration) | ✅ | ✅ oracle probes |
 | 2 | **Declarations**: `globalvar`/`playervar` (index + initializer forms), `subroutine`, `enum`, `macro` constants (incl. member constants) | `baseline-supported` | ✅ | ✅ | ✅ (integration) | ✅ | ✅ |
-| 3 | **Assignments & control flow**: `=`, augmented (`+= … **=`, `min=`, `max=`), `if`/`elif`/`else`, `for … in range(...)`, `while`, `pass` | `baseline-supported` | ✅ | ✅ | ✅ (integration) | ✅ | ✅ |
+| 3 | **Assignments & control flow**: `=`, evidenced augmented (`+= -= *= /= %= **=`), `if`/`elif`/`else`, `for … in range(...)`, `while`, `pass` | `baseline-supported`; `min=`/`max=` remain workshop-rs#95 follow-up | ✅ | ✅ | ✅ (integration) | ✅ | ✅ |
 | 4 | **Rule directives & annotations**: `@Event`, `@Condition`, bare `@Team`/`@Slot`, rule name, event defaults (`global`, `all` team/player) | `baseline-supported` (bare forms) | ✅ | ✅ | ✅ (integration) | ✅ | ✅ |
 | 4a | `@Team`/`@Slot` with arguments, `@Name`, `@Hero`, `@Disabled`, `@Delimiter`, `@NewPage`, `@SuppressWarnings` | `baseline-supported` for frontend state; Workshop domain/UI effects remain lowering-dependent | ✅ | ✅ | partial | ✅ | ✅ oracle probes |
 | 5 | **Preprocessing/include/macro**: `#!include`, `#!define` (object- and function-like), `#!undef`, include cycle detection | `baseline-supported` | ✅ | ✅ | ✅ (integration) | ✅ | ✅ |

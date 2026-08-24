@@ -43,22 +43,21 @@ pub enum TokenKind {
     Minus,
     Star,
     Slash,
-    DoubleSlash,
     Percent,
     DoubleStar,
     PlusAssign,
     MinusAssign,
     StarAssign,
     SlashAssign,
-    DoubleSlashAssign,
     PercentAssign,
+    DoubleStarAssign,
     Eq,
     Ne,
     Lt,
     Le,
     Gt,
     Ge,
-    /// A bare `!` that is not `!=` (error unless followed by `=`).
+    /// A bare `!` that is not `!=`; the parser rejects it as unsupported OPY.
     LexBang,
 }
 
@@ -154,20 +153,26 @@ impl Lexer {
                 '-' => self.lex_two(TokenKind::Minus, TokenKind::MinusAssign, '='),
                 '*' => {
                     if self.peek(1) == Some('*') {
-                        self.advance();
-                        self.single(TokenKind::DoubleStar)
+                        if self.peek(2) == Some('=') {
+                            let start = self.here(3);
+                            self.advance();
+                            self.advance();
+                            self.advance();
+                            let end = self.here(0);
+                            self.tokens.push(Token::new(
+                                TokenKind::DoubleStarAssign,
+                                "**=",
+                                Span::new(self.file_id, start.start, end.start),
+                            ));
+                        } else {
+                            self.advance();
+                            self.single(TokenKind::DoubleStar)
+                        }
                     } else {
                         self.lex_two(TokenKind::Star, TokenKind::StarAssign, '=')
                     }
                 }
-                '/' => {
-                    if self.peek(1) == Some('/') {
-                        self.advance();
-                        self.single(TokenKind::DoubleSlash)
-                    } else {
-                        self.lex_two(TokenKind::Slash, TokenKind::SlashAssign, '=')
-                    }
-                }
+                '/' => self.lex_two(TokenKind::Slash, TokenKind::SlashAssign, '='),
                 '%' => self.lex_two(TokenKind::Percent, TokenKind::PercentAssign, '='),
                 '<' => self.two(TokenKind::Lt, TokenKind::Le, '='),
                 '>' => self.two(TokenKind::Gt, TokenKind::Ge, '='),
@@ -518,20 +523,46 @@ mod tests {
 
     #[test]
     fn operators() {
-        let tokens = lex_ok("a += b == c <= d != e // f");
+        let tokens = lex_ok("a += b == c <= d != e / f");
         let kinds: Vec<TokenKind> = tokens.iter().map(|t| t.kind).collect();
         for expected in [
             TokenKind::PlusAssign,
             TokenKind::Eq,
             TokenKind::Le,
             TokenKind::Ne,
-            TokenKind::DoubleSlash,
+            TokenKind::Slash,
         ] {
             assert!(
                 kinds.contains(&expected),
                 "missing {expected:?} in {kinds:?}"
             );
         }
+    }
+
+    #[test]
+    fn power_operators_disambiguate() {
+        // The pinned OverPy 9.7.10 reference lexes `**=` as one power-assign
+        // operator distinct from `**` and `*=`.
+        let tokens = lex_ok("a **= b ** c *= d");
+        let kinds: Vec<TokenKind> = tokens.iter().map(|t| t.kind).collect();
+        assert_eq!(
+            kinds,
+            vec![
+                TokenKind::Ident,
+                TokenKind::DoubleStarAssign,
+                TokenKind::Ident,
+                TokenKind::DoubleStar,
+                TokenKind::Ident,
+                TokenKind::StarAssign,
+                TokenKind::Ident,
+                TokenKind::Eof,
+            ]
+        );
+        let assign = tokens
+            .iter()
+            .find(|t| t.kind == TokenKind::DoubleStarAssign)
+            .unwrap();
+        assert_eq!(assign.text, "**=");
     }
 
     #[test]

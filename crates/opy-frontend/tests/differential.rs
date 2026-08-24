@@ -67,8 +67,8 @@
 //!
 //! # Current corpus state
 //!
-//! All declared fixtures run (0 skips, 0 divergences): **16 resolve** and
-//! **12 produce expected diagnostics** with pinned codes; 7 fixtures are
+//! All declared fixtures run (0 skips, 0 divergences): **28 resolve** and
+//! **16 produce expected diagnostics** with pinned codes; 7 fixtures are
 //! documented reference gaps (the oracle accepts a surface the native
 //! frontend deliberately rejects). Settings key-existence/leaf-kind
 //! validation and Workshop enum member/domain validation were removed from
@@ -198,6 +198,18 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         "synthetic/issue-40-structural",
         false,
         "Issue #40 oracle-backed structural probe; the frontend resolves the source while opy-compiler independently checks canonical WIR identity, allocation, and event filters.",
+    );
+    resolve(
+        &mut cases,
+        "synthetic/issue-46-primitives",
+        false,
+        "Issue #46 oracle-backed non-control-flow primitives probe; the frontend resolves the source while the opy-compiler test suite constrains the native lowering against the pinned oracle through the canonical workshop-rs parser and structural equivalence.",
+    );
+    resolve(
+        &mut cases,
+        "synthetic/issue-46-unsupported",
+        false,
+        "Issue #46 negative primitive-lowering probe; the frontend and the pinned oracle accept the dict-indexed assignment while the opy-compiler rejects it with the stable source-attributed unsupported-integration-surface diagnostic.",
     );
     diagnostic(
         &mut cases,

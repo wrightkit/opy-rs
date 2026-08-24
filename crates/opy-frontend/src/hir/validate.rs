@@ -460,7 +460,10 @@ fn validate_exprs(
                         *span,
                     ));
                 }
-                Expr::PlayerVar { name, span, .. } if !tables.players.contains(&name.as_str()) => {
+                Expr::PlayerVar { player, name, span }
+                    if !tables.players.contains(&name.as_str())
+                        && !is_implicit_player_variable(player, name) =>
+                {
                     errors.push(invalid(
                         "unresolved-reference",
                         format!("reference to unknown player variable '{name}'"),
@@ -479,6 +482,10 @@ fn validate_exprs(
         });
     }
     errors.into_iter().next().map_or(Ok(()), Err)
+}
+
+fn is_implicit_player_variable(player: &Expr, name: &str) -> bool {
+    matches!(player, Expr::EventPlayer { .. }) && default_var_index(name).is_some()
 }
 
 /// The expressions directly contained in a statement list (used to feed

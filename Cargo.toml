@@ -13,7 +13,7 @@ repository = "https://github.com/wrightkit/opy-rs"
 opy-frontend = { path = "crates/opy-frontend" }
 serde = "1"
 serde_json = "1"
-workshop-rs = "=0.1.5"
+workshop-rs = "=0.1.8"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

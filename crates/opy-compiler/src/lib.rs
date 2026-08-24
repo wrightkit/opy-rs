@@ -1,21 +1,21 @@
 //! The first OPY-to-Workshop integration boundary.
 //!
 //! `opy-frontend` remains a standalone OPY/HIR producer. This crate is the
-//! consumer-owned compiler layer: it pins the released `workshop-rs` v0.1.5
+//! consumer-owned compiler layer: it pins the released `workshop-rs` v0.1.8
 //! contract, checks the OPY manifest links against the canonical catalog, and
 //! lowers the supported OPY program structure into canonical WIR before
 //! validation and deterministic Workshop emission.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
-use opy_frontend::hir::{self, Expr, RuleEntry, Span as HirSpan, Stmt};
+use opy_frontend::hir::{self, Expr, RuleEntry, Span as HirSpan, Stmt, default_var_index};
 use opy_frontend::manifest::{FunctionKind, Manifest};
 use workshop_rs::catalog::{Catalog, CatalogIdentity, Kind, Locale};
 use workshop_rs::source::{Position as WorkshopPosition, SourceFile, Span as WorkshopSpan};
 use workshop_rs::wir::{self, Action, Event, PlayerEventKind, Program, Value, ValueNode};
 
 /// The exact released dependency contract consumed by this crate.
-pub const WORKSHOP_RS_VERSION: &str = "0.1.5";
+pub const WORKSHOP_RS_VERSION: &str = "0.1.8";
 
 /// A source-attributed integration diagnostic.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -235,6 +235,7 @@ struct Lowering<'a> {
     globals: HashMap<String, wir::GlobalVarId>,
     players: HashMap<String, wir::PlayerVarId>,
     subroutines: HashMap<String, wir::SubroutineId>,
+    constants: HashMap<String, &'a Expr>,
     defined_subroutines: HashSet<wir::SubroutineId>,
 }
 
@@ -249,6 +250,7 @@ impl<'a> Lowering<'a> {
             globals: HashMap::new(),
             players: HashMap::new(),
             subroutines: HashMap::new(),
+            constants: HashMap::new(),
             defined_subroutines: HashSet::new(),
         })
     }
@@ -272,7 +274,7 @@ impl<'a> Lowering<'a> {
     fn reject_unsupported_metadata(&self) -> Result<(), IntegrationError> {
         if let Some(settings) = &self.hir.settings {
             return Err(self.unsupported(
-                "custom-game settings lowering is outside #40",
+                "custom-game settings lowering is outside #46",
                 settings.span,
             ));
         }
@@ -280,6 +282,48 @@ impl<'a> Lowering<'a> {
     }
 
     fn lower_declarations(&mut self) -> Result<(), IntegrationError> {
+        let (implicit_globals, implicit_players) = implicit_default_variables(self.hir);
+        for declaration in &self.hir.declarations {
+            if let hir::Declaration::GlobalVariable {
+                name,
+                index: Some(index),
+                span,
+                ..
+            } = declaration
+            {
+                for (implicit_name, implicit_span) in &implicit_globals {
+                    if default_var_index(implicit_name) == Some(*index) {
+                        return Err(IntegrationError::new(
+                            "index-collision",
+                            format!(
+                                "duplicate use of index {index} for global variables '{implicit_name}' and '{name}'"
+                            ),
+                            implicit_span.or(*span),
+                        ));
+                    }
+                }
+            }
+            if let hir::Declaration::PlayerVariable {
+                name,
+                index: Some(index),
+                span,
+                ..
+            } = declaration
+            {
+                for (implicit_name, implicit_span) in &implicit_players {
+                    if default_var_index(implicit_name) == Some(*index) {
+                        return Err(IntegrationError::new(
+                            "index-collision",
+                            format!(
+                                "duplicate use of index {index} for player variables '{implicit_name}' and '{name}'"
+                            ),
+                            implicit_span.or(*span),
+                        ));
+                    }
+                }
+            }
+        }
+
         let globals = self
             .hir
             .declarations
@@ -307,12 +351,34 @@ impl<'a> Lowering<'a> {
                 _ => None,
             })
             .collect::<Vec<_>>();
-        let global_indices = allocate_indices(&globals, "global variable")?;
-        let player_indices = allocate_indices(&players, "player variable")?;
-        let subroutine_indices = allocate_indices(&subroutines, "subroutine")?;
+        let implicit_reserved = implicit_globals
+            .keys()
+            .map(|name| default_var_index(name).expect("implicit default variable names resolve"))
+            .collect::<HashSet<_>>();
+        let implicit_player_reserved = implicit_players
+            .keys()
+            .map(|name| default_var_index(name).expect("implicit default player names resolve"))
+            .collect::<HashSet<_>>();
+        let empty = HashSet::new();
+        let global_indices = allocate_indices(&globals, &implicit_reserved, "global variable")?;
+        let player_indices =
+            allocate_indices(&players, &implicit_player_reserved, "player variable")?;
+        let subroutine_indices = allocate_indices(&subroutines, &empty, "subroutine")?;
         let mut global_index = 0;
         let mut player_index = 0;
         let mut subroutine_index = 0;
+
+        // Declared variables in source order (for duplicate detection and
+        // initializer action order), then merged with the implicit default
+        // variables and created in Workshop index order so the emitted
+        // variable tables are reference-compatible.
+        let mut declared_globals: Vec<(&str, u32, Option<HirSpan>, Option<HirSpan>)> = Vec::new();
+        let mut global_initializers = Vec::new();
+        let mut declared_players: Vec<(&str, u32, Option<HirSpan>, Option<HirSpan>)> = Vec::new();
+        let mut player_initializers = Vec::new();
+        let mut declared_subroutines: Vec<(&str, u32, Option<HirSpan>, Option<HirSpan>)> =
+            Vec::new();
+
         for declaration in &self.hir.declarations {
             match declaration {
                 hir::Declaration::GlobalVariable {
@@ -322,25 +388,23 @@ impl<'a> Lowering<'a> {
                     name_span,
                     initializer,
                 } => {
-                    if initializer.is_some() {
-                        return Err(
-                            self.unsupported("global variable initializers are outside #40", *span)
-                        );
-                    }
                     let assigned = global_indices[global_index];
                     global_index += 1;
-                    let id = self.wir.global_variables.push(wir::WorkshopVariable {
-                        name: name.clone(),
-                        index: assigned,
-                        span: self.wir_span(*span)?,
-                        name_span: self.wir_span(*name_span)?,
-                    });
-                    if self.globals.insert(name.clone(), id).is_some() {
+                    if declared_globals
+                        .iter()
+                        .any(|(existing, ..)| *existing == name)
+                    {
                         return Err(IntegrationError::new(
                             "symbol-collision",
                             format!("duplicate global variable '{name}'"),
                             *span,
                         ));
+                    }
+                    declared_globals.push((name, assigned, *span, *name_span));
+                    if let Some(init) = initializer {
+                        if !is_zero_initializer(init) {
+                            global_initializers.push((name, init, *span, *name_span));
+                        }
                     }
                 }
                 hir::Declaration::PlayerVariable {
@@ -350,25 +414,23 @@ impl<'a> Lowering<'a> {
                     name_span,
                     initializer,
                 } => {
-                    if initializer.is_some() {
-                        return Err(
-                            self.unsupported("player variable initializers are outside #40", *span)
-                        );
-                    }
                     let assigned = player_indices[player_index];
                     player_index += 1;
-                    let id = self.wir.player_variables.push(wir::WorkshopVariable {
-                        name: name.clone(),
-                        index: assigned,
-                        span: self.wir_span(*span)?,
-                        name_span: self.wir_span(*name_span)?,
-                    });
-                    if self.players.insert(name.clone(), id).is_some() {
+                    if declared_players
+                        .iter()
+                        .any(|(existing, ..)| *existing == name)
+                    {
                         return Err(IntegrationError::new(
                             "symbol-collision",
                             format!("duplicate player variable '{name}'"),
                             *span,
                         ));
+                    }
+                    declared_players.push((name, assigned, *span, *name_span));
+                    if let Some(init) = initializer {
+                        if !is_zero_initializer(init) {
+                            player_initializers.push((name, init, *span, *name_span));
+                        }
                     }
                 }
                 hir::Declaration::Subroutine {
@@ -379,36 +441,146 @@ impl<'a> Lowering<'a> {
                 } => {
                     let assigned = subroutine_indices[subroutine_index];
                     subroutine_index += 1;
-                    let id = self.wir.subroutines.push(wir::WorkshopSubroutine {
-                        name: name.clone(),
-                        index: assigned,
-                        span: self.wir_span(*span)?,
-                        name_span: self.wir_span(*name_span)?,
-                    });
-                    if self.subroutines.insert(name.clone(), id).is_some() {
+                    if declared_subroutines
+                        .iter()
+                        .any(|(existing, ..)| *existing == name)
+                    {
                         return Err(IntegrationError::new(
                             "symbol-collision",
                             format!("duplicate subroutine '{name}'"),
                             *span,
                         ));
                     }
+                    declared_subroutines.push((name, assigned, *span, *name_span));
                 }
-                hir::Declaration::Constant { name, span, .. } => {
-                    return Err(self.unsupported(
-                        format!(
-                            "constant declaration '{name}' is not representable in canonical WIR"
-                        ),
-                        *span,
-                    ));
+                hir::Declaration::Constant { name, value, span } => {
+                    if self.constants.insert(name.clone(), value).is_some() {
+                        return Err(IntegrationError::new(
+                            "symbol-collision",
+                            format!("duplicate constant '{name}'"),
+                            *span,
+                        ));
+                    }
                 }
-                hir::Declaration::Macro { name, span, .. } => {
-                    return Err(self.unsupported(
-                        format!("macro declaration '{name}' is not representable in canonical WIR"),
-                        *span,
-                    ));
+                hir::Declaration::Macro { .. } => {
+                    // Macro definitions are expanded by the frontend; ignored during WIR lowering.
                 }
             }
         }
+
+        let mut planned_globals: Vec<(String, u32, Option<HirSpan>, Option<HirSpan>)> =
+            declared_globals
+                .into_iter()
+                .map(|(name, index, span, name_span)| (name.to_string(), index, span, name_span))
+                .collect();
+        planned_globals.extend(implicit_globals.iter().map(|(name, span)| {
+            (
+                name.clone(),
+                default_var_index(name).expect("implicit default variable names resolve"),
+                *span,
+                None,
+            )
+        }));
+        planned_globals.sort_by_key(|(_, index, ..)| *index);
+        for (name, assigned, span, name_span) in planned_globals {
+            let id = self.wir.global_variables.push(wir::WorkshopVariable {
+                name: name.clone(),
+                index: assigned,
+                span: self.wir_span(span)?,
+                name_span: self.wir_span(name_span)?,
+            });
+            self.globals.insert(name.clone(), id);
+        }
+
+        let mut planned_players: Vec<(String, u32, Option<HirSpan>, Option<HirSpan>)> =
+            declared_players
+                .into_iter()
+                .map(|(name, index, span, name_span)| (name.to_string(), index, span, name_span))
+                .collect();
+        planned_players.extend(implicit_players.iter().map(|(name, span)| {
+            (
+                name.clone(),
+                default_var_index(name).expect("implicit default player names resolve"),
+                *span,
+                None,
+            )
+        }));
+        planned_players.sort_by_key(|(_, index, ..)| *index);
+        for (name, assigned, span, name_span) in planned_players {
+            let id = self.wir.player_variables.push(wir::WorkshopVariable {
+                name: name.clone(),
+                index: assigned,
+                span: self.wir_span(span)?,
+                name_span: self.wir_span(name_span)?,
+            });
+            self.players.insert(name, id);
+        }
+
+        declared_subroutines.sort_by_key(|(_, index, ..)| *index);
+        for (name, assigned, span, name_span) in declared_subroutines {
+            let id = self.wir.subroutines.push(wir::WorkshopSubroutine {
+                name: name.to_string(),
+                index: assigned,
+                span: self.wir_span(span)?,
+                name_span: self.wir_span(name_span)?,
+            });
+            self.subroutines.insert(name.to_string(), id);
+        }
+
+        if !global_initializers.is_empty() {
+            let mut actions = Vec::with_capacity(global_initializers.len());
+            for (name, init_expr, span, target_span) in global_initializers {
+                let variable = *self.globals.get(name).expect("declared global is created");
+                let value = self.lower_value(init_expr)?;
+                actions.push(self.wir.actions.push(Action::SetGlobalVariable {
+                    variable,
+                    value,
+                    span: self.wir_span(span)?,
+                    target_span: self.wir_span(target_span)?,
+                }));
+            }
+            self.wir.rules.push(wir::Rule {
+                name: "Initialize global variables".to_string(),
+                span: None,
+                name_span: None,
+                disabled: false,
+                event: Event::Global,
+                conditions: Vec::new(),
+                actions,
+            });
+        }
+
+        if !player_initializers.is_empty() {
+            let mut actions = Vec::with_capacity(player_initializers.len());
+            for (name, init_expr, span, target_span) in player_initializers {
+                let variable = *self
+                    .players
+                    .get(name)
+                    .expect("declared player variable is created");
+                let player = self
+                    .wir
+                    .values
+                    .push(ValueNode::new(Value::EventPlayer, None));
+                let value = self.lower_value(init_expr)?;
+                actions.push(self.wir.actions.push(Action::SetPlayerVariable {
+                    player,
+                    variable,
+                    value,
+                    span: self.wir_span(span)?,
+                    target_span: self.wir_span(target_span)?,
+                }));
+            }
+            self.wir.rules.push(wir::Rule {
+                name: "Initialize player variables".to_string(),
+                span: None,
+                name_span: None,
+                disabled: false,
+                event: Event::EachPlayer,
+                conditions: Vec::new(),
+                actions,
+            });
+        }
+
         Ok(())
     }
 
@@ -440,11 +612,12 @@ impl<'a> Lowering<'a> {
             .iter()
             .map(|expr| self.lower_value(expr))
             .collect::<Result<Vec<_>, _>>()?;
-        let actions = rule
-            .actions
-            .iter()
-            .map(|stmt| self.lower_action(stmt))
-            .collect::<Result<Vec<_>, _>>()?;
+        let mut actions = Vec::new();
+        for stmt in &rule.actions {
+            if let Some(action) = self.lower_action(stmt)? {
+                actions.push(action);
+            }
+        }
         self.wir.rules.push(wir::Rule {
             name: rule.name.clone(),
             span: self.wir_span(rule.span)?,
@@ -484,10 +657,12 @@ impl<'a> Lowering<'a> {
                 name_span.or(span),
             ));
         }
-        let actions = body
-            .iter()
-            .map(|stmt| self.lower_action(stmt))
-            .collect::<Result<Vec<_>, _>>()?;
+        let mut actions = Vec::new();
+        for stmt in body {
+            if let Some(action) = self.lower_action(stmt)? {
+                actions.push(action);
+            }
+        }
         self.wir.rules.push(wir::Rule {
             name: self.subroutine_rule_name(name),
             span: self.wir_span(span)?,
@@ -755,57 +930,273 @@ impl<'a> Lowering<'a> {
         }
     }
 
-    fn lower_action(&mut self, stmt: &Stmt) -> Result<wir::ActionId, IntegrationError> {
+    fn lower_action(&mut self, stmt: &Stmt) -> Result<Option<wir::ActionId>, IntegrationError> {
         match stmt {
+            Stmt::Pass { .. } => Ok(None),
             Stmt::Assign {
                 target,
                 value,
                 span,
-            } => {
-                let Expr::GlobalVar {
-                    name,
-                    span: target_span,
-                } = target.as_ref()
-                else {
-                    return Err(self.unsupported(
-                        "only global-variable assignment is currently representable in canonical WIR",
-                        *span,
-                    ));
-                };
-                let variable = *self.globals.get(name).ok_or_else(|| {
-                    self.unsupported(format!("unknown global variable '{name}'"), *target_span)
-                })?;
-                let value = self.lower_value(value)?;
-                Ok(self.wir.actions.push(Action::SetGlobalVariable {
-                    variable,
-                    value,
-                    span: self.wir_span(*span)?,
-                    target_span: self.wir_span(*target_span)?,
-                }))
-            }
-            Stmt::Expr { expr, span } => {
-                let Expr::Call { name, args, .. } = expr.as_ref() else {
-                    return Err(self.unsupported(
-                        "only builtin action calls are currently representable in canonical WIR",
-                        *span,
-                    ));
-                };
-                self.lower_action_call(name, args, *span)
-            }
+            } => self.lower_assign(target, value, *span).map(Some),
+            Stmt::Expr { expr, span } => match expr.as_ref() {
+                Expr::Call { name, args, .. } => {
+                    if name == "disableInspector" && args.is_empty() {
+                        Ok(Some(self.wir.actions.push(Action::Call {
+                            name: "disableInspector".to_string(),
+                            args: Vec::new(),
+                            span: self.wir_span(*span)?,
+                        })))
+                    } else if name == "debug" && args.len() == 1 {
+                        let val = self.lower_value(&args[0])?;
+                        Ok(Some(self.wir.actions.push(Action::Debug {
+                            value: val,
+                            span: self.wir_span(*span)?,
+                        })))
+                    } else if name == "print" && args.len() == 1 {
+                        let msg = self.lower_value(&args[0])?;
+                        Ok(Some(self.wir.actions.push(Action::Print {
+                            message: msg,
+                            span: self.wir_span(*span)?,
+                        })))
+                    } else {
+                        self.lower_action_call(name, args, *span).map(Some)
+                    }
+                }
+                _ => Err(self.unsupported(
+                    "only action calls are currently representable as expression statements in canonical WIR",
+                    *span,
+                )),
+            },
             Stmt::CallSubroutine { name, span } => {
                 let subroutine = *self.subroutines.get(name).ok_or_else(|| {
                     self.unsupported(format!("unknown subroutine '{name}'"), *span)
                 })?;
                 let span = self.wir_span(*span)?;
-                Ok(self.wir.actions.push(Action::CallSubroutine {
+                Ok(Some(self.wir.actions.push(Action::CallSubroutine {
                     subroutine,
                     span,
                     callee_span: span,
-                }))
+                })))
             }
             _ => Err(self.unsupported(
                 "the statement is not currently representable in canonical WIR",
                 stmt.span().copied(),
+            )),
+        }
+    }
+
+    fn lower_assign(
+        &mut self,
+        target: &Expr,
+        value: &Expr,
+        span: Option<HirSpan>,
+    ) -> Result<wir::ActionId, IntegrationError> {
+        match target {
+            Expr::GlobalVar {
+                name,
+                span: target_span,
+            } => {
+                let variable = *self.globals.get(name).ok_or_else(|| {
+                    self.unsupported(format!("unknown global variable '{name}'"), *target_span)
+                })?;
+                if let Expr::Binary {
+                    op, left, right, ..
+                } = value
+                {
+                    if let Expr::GlobalVar {
+                        name: left_name, ..
+                    } = left.as_ref()
+                    {
+                        if left_name == name {
+                            if let Some(modify_op) = modify_op_from_str(op) {
+                                let val = self.lower_value(right)?;
+                                return Ok(self.wir.actions.push(Action::ModifyGlobalVariable {
+                                    variable,
+                                    op: modify_op,
+                                    value: val,
+                                    span: self.wir_span(span)?,
+                                    target_span: self.wir_span(*target_span)?,
+                                }));
+                            }
+                        }
+                    }
+                }
+                let val = self.lower_value(value)?;
+                Ok(self.wir.actions.push(Action::SetGlobalVariable {
+                    variable,
+                    value: val,
+                    span: self.wir_span(span)?,
+                    target_span: self.wir_span(*target_span)?,
+                }))
+            }
+            Expr::PlayerVar {
+                player,
+                name,
+                span: target_span,
+            } => {
+                let variable = *self.players.get(name).ok_or_else(|| {
+                    self.unsupported(format!("unknown player variable '{name}'"), *target_span)
+                })?;
+                let player_val = self.lower_value(player)?;
+                if let Expr::Binary {
+                    op, left, right, ..
+                } = value
+                {
+                    if let Expr::PlayerVar {
+                        player: left_player,
+                        name: left_name,
+                        ..
+                    } = left.as_ref()
+                    {
+                        if left_name == name && left_player.as_ref() == player.as_ref() {
+                            if let Some(modify_op) = modify_op_from_str(op) {
+                                let val = self.lower_value(right)?;
+                                return Ok(self.wir.actions.push(Action::ModifyPlayerVariable {
+                                    player: player_val,
+                                    variable,
+                                    op: modify_op,
+                                    value: val,
+                                    span: self.wir_span(span)?,
+                                    target_span: self.wir_span(*target_span)?,
+                                }));
+                            }
+                        }
+                    }
+                }
+                let val = self.lower_value(value)?;
+                Ok(self.wir.actions.push(Action::SetPlayerVariable {
+                    player: player_val,
+                    variable,
+                    value: val,
+                    span: self.wir_span(span)?,
+                    target_span: self.wir_span(*target_span)?,
+                }))
+            }
+            Expr::Index {
+                array,
+                index,
+                span: target_span,
+            } => match array.as_ref() {
+                Expr::GlobalVar {
+                    name,
+                    span: arr_span,
+                } => {
+                    let variable = *self.globals.get(name).ok_or_else(|| {
+                        self.unsupported(format!("unknown global variable '{name}'"), *arr_span)
+                    })?;
+                    let var_node = self.wir.values.push(ValueNode::new(
+                        Value::GlobalVariable(variable),
+                        self.wir_span(*arr_span)?,
+                    ));
+                    let index_val = self.lower_value(index)?;
+                    if let Expr::Binary {
+                        op, left, right, ..
+                    } = value
+                    {
+                        if let Expr::Index {
+                            array: left_arr,
+                            index: left_idx,
+                            ..
+                        } = left.as_ref()
+                        {
+                            if left_arr.as_ref() == array.as_ref()
+                                && left_idx.as_ref() == index.as_ref()
+                            {
+                                if let Some(op_id) = modify_catalog_name_from_str(op) {
+                                    let op_node = self.wir.values.push(ValueNode::new(
+                                        Value::Call {
+                                            name: op_id.to_string(),
+                                            args: Vec::new(),
+                                        },
+                                        None,
+                                    ));
+                                    let right_val = self.lower_value(right)?;
+                                    return Ok(self.wir.actions.push(Action::Call {
+                                        name: "modifyGlobalVariableAtIndex".to_string(),
+                                        args: vec![var_node, index_val, op_node, right_val],
+                                        span: self.wir_span(span)?,
+                                    }));
+                                }
+                            }
+                        }
+                    }
+                    let val = self.lower_value(value)?;
+                    Ok(self.wir.actions.push(Action::Call {
+                        name: "setGlobalVariableAtIndex".to_string(),
+                        args: vec![var_node, index_val, val],
+                        span: self.wir_span(span)?,
+                    }))
+                }
+                Expr::PlayerVar {
+                    player,
+                    name,
+                    span: arr_span,
+                } => {
+                    let player_val = self.lower_value(player)?;
+                    let variable = *self.players.get(name).ok_or_else(|| {
+                        self.unsupported(format!("unknown player variable '{name}'"), *arr_span)
+                    })?;
+                    let var_node = self.wir.values.push(ValueNode::new(
+                        Value::PlayerVariable {
+                            player: player_val,
+                            variable,
+                        },
+                        self.wir_span(*arr_span)?,
+                    ));
+                    let index_val = self.lower_value(index)?;
+                    if let Expr::Binary {
+                        op, left, right, ..
+                    } = value
+                    {
+                        if let Expr::Index {
+                            array: left_arr,
+                            index: left_idx,
+                            ..
+                        } = left.as_ref()
+                        {
+                            if left_arr.as_ref() == array.as_ref()
+                                && left_idx.as_ref() == index.as_ref()
+                            {
+                                if let Some(op_id) = modify_catalog_name_from_str(op) {
+                                    let op_node = self.wir.values.push(ValueNode::new(
+                                        Value::Call {
+                                            name: op_id.to_string(),
+                                            args: Vec::new(),
+                                        },
+                                        None,
+                                    ));
+                                    let right_val = self.lower_value(right)?;
+                                    // The canonical signature takes the
+                                    // player-variable value node (which
+                                    // carries the player) as its first
+                                    // argument.
+                                    return Ok(self.wir.actions.push(Action::Call {
+                                        name: "modifyPlayerVariableAtIndex".to_string(),
+                                        args: vec![var_node, index_val, op_node, right_val],
+                                        span: self.wir_span(span)?,
+                                    }));
+                                }
+                            }
+                        }
+                    }
+                    let val = self.lower_value(value)?;
+                    // The canonical signature takes the player-variable
+                    // value node (which carries the player) as its first
+                    // argument.
+                    Ok(self.wir.actions.push(Action::Call {
+                        name: "setPlayerVariableAtIndex".to_string(),
+                        args: vec![var_node, index_val, val],
+                        span: self.wir_span(span)?,
+                    }))
+                }
+                _ => Err(self.unsupported(
+                    "indexing assignment is only representable for global or player variables",
+                    *target_span,
+                )),
+            },
+            _ => Err(self.unsupported(
+                "only global-variable, player-variable, or index assignment is currently representable in canonical WIR",
+                span,
             )),
         }
     }
@@ -827,7 +1218,7 @@ impl<'a> Lowering<'a> {
         let catalog_id = function.catalog_id.as_ref().ok_or_else(|| {
             self.unsupported(
                 format!(
-                    "action '{}' requires a special lowering not in #40",
+                    "action '{}' requires a special lowering not in #46",
                     function.id
                 ),
                 span,
@@ -849,7 +1240,7 @@ impl<'a> Lowering<'a> {
         let value = match expr {
             Expr::Number { value, text, .. } => Value::Number {
                 value: *value,
-                text: text.clone(),
+                text: canonical_number_text(*value, text),
             },
             Expr::String { value, .. } => Value::String(value.clone()),
             Expr::Bool { value, .. } => Value::Bool(*value),
@@ -888,44 +1279,192 @@ impl<'a> Lowering<'a> {
                 y: self.lower_value(y)?,
                 z: self.lower_value(z)?,
             },
-            Expr::Call { name, args, .. } => {
-                let function = self
-                    .compiler
-                    .manifest
-                    .resolve_function(name)
-                    .ok_or_else(|| self.unsupported(format!("unknown value '{name}'"), span))?;
-                if !matches!(function.kind, FunctionKind::Value) {
-                    return Err(
-                        self.unsupported(format!("'{name}' is not a generic OPY value"), span)
-                    );
+            Expr::Constant { name, .. } => {
+                let const_expr = *self
+                    .constants
+                    .get(name)
+                    .ok_or_else(|| self.unsupported(format!("unknown constant '{name}'"), span))?;
+                return self.lower_value(const_expr);
+            }
+            Expr::Index { array, index, .. } => {
+                // The pinned OverPy oracle lowers a literal zero-index read
+                // (`arr[0]`, `arr[0.0]`) to `firstOf(arr)`; non-zero indexes
+                // and indexed writes keep the indexed forms.
+                if matches!(index.as_ref(), Expr::Number { value, .. } if *value == 0.0) {
+                    Value::Call {
+                        name: "firstOf".to_string(),
+                        args: vec![self.lower_value(array)?],
+                    }
+                } else {
+                    Value::Call {
+                        name: "valueInArray".to_string(),
+                        args: vec![self.lower_value(array)?, self.lower_value(index)?],
+                    }
                 }
-                let catalog_id = function.catalog_id.as_ref().ok_or_else(|| {
-                    self.unsupported(
-                        format!(
-                            "value '{}' requires a special lowering not in #40",
-                            function.id
-                        ),
-                        span,
-                    )
-                })?;
+            }
+            Expr::Format { text, args, .. } => {
+                let text_node = self.wir.values.push(ValueNode::new(
+                    Value::String(text.clone()),
+                    self.wir_span(span)?,
+                ));
+                let mut call_args = vec![text_node];
+                for arg in args {
+                    call_args.push(self.lower_value(arg)?);
+                }
                 Value::Call {
-                    name: catalog_id.clone(),
-                    args: args
-                        .iter()
-                        .map(|arg| self.lower_value(arg))
-                        .collect::<Result<Vec<_>, _>>()?,
+                    name: "customString".to_string(),
+                    args: call_args,
                 }
             }
             Expr::Binary {
                 op, left, right, ..
-            } => Value::Call {
-                name: op.clone(),
-                args: vec![self.lower_value(left)?, self.lower_value(right)?],
+            } => match op.as_str() {
+                "==" | "!=" | "<" | "<=" | ">" | ">=" => Value::Call {
+                    name: op.clone(),
+                    args: vec![self.lower_value(left)?, self.lower_value(right)?],
+                },
+                "+" => Value::Call {
+                    name: "add".to_string(),
+                    args: vec![self.lower_value(left)?, self.lower_value(right)?],
+                },
+                "-" => Value::Call {
+                    name: "subtract".to_string(),
+                    args: vec![self.lower_value(left)?, self.lower_value(right)?],
+                },
+                "*" => Value::Call {
+                    name: "multiply".to_string(),
+                    args: vec![self.lower_value(left)?, self.lower_value(right)?],
+                },
+                "/" => Value::Call {
+                    name: "divide".to_string(),
+                    args: vec![self.lower_value(left)?, self.lower_value(right)?],
+                },
+                "%" => Value::Call {
+                    name: "modulo".to_string(),
+                    args: vec![self.lower_value(left)?, self.lower_value(right)?],
+                },
+                "**" => Value::Call {
+                    name: "raiseToPower".to_string(),
+                    args: vec![self.lower_value(left)?, self.lower_value(right)?],
+                },
+                "and" => Value::Call {
+                    name: "and".to_string(),
+                    args: vec![self.lower_value(left)?, self.lower_value(right)?],
+                },
+                "or" => Value::Call {
+                    name: "or".to_string(),
+                    args: vec![self.lower_value(left)?, self.lower_value(right)?],
+                },
+                "in" => Value::Call {
+                    name: "arrayContains".to_string(),
+                    args: vec![self.lower_value(right)?, self.lower_value(left)?],
+                },
+                "not in" => {
+                    let right_val = self.lower_value(right)?;
+                    let left_val = self.lower_value(left)?;
+                    let wir_span = self.wir_span(span)?;
+                    let contains = self.wir.values.push(ValueNode::new(
+                        Value::Call {
+                            name: "arrayContains".to_string(),
+                            args: vec![right_val, left_val],
+                        },
+                        wir_span,
+                    ));
+                    Value::Call {
+                        name: "not".to_string(),
+                        args: vec![contains],
+                    }
+                }
+                _ => {
+                    return Err(self.unsupported(
+                        format!(
+                            "binary operator '{op}' is not currently representable in canonical WIR"
+                        ),
+                        span,
+                    ));
+                }
             },
-            Expr::Unary { op, operand, .. } => Value::Call {
-                name: op.clone(),
-                args: vec![self.lower_value(operand)?],
+            Expr::Unary { op, operand, .. } => match op.as_str() {
+                "not" => {
+                    // The pinned OverPy 9.7.10 oracle lowers `not (a == b)`
+                    // to the negated comparison (`a != b`), flipping every
+                    // ordering comparison; `in` membership stays wrapped in
+                    // `not`. Mirror that observable lowering.
+                    if let Expr::Binary {
+                        op: comparison,
+                        left,
+                        right,
+                        ..
+                    } = operand.as_ref()
+                    {
+                        if let Some(negated) = negated_comparison(comparison) {
+                            Value::Call {
+                                name: negated.to_string(),
+                                args: vec![self.lower_value(left)?, self.lower_value(right)?],
+                            }
+                        } else {
+                            Value::Call {
+                                name: "not".to_string(),
+                                args: vec![self.lower_value(operand)?],
+                            }
+                        }
+                    } else {
+                        Value::Call {
+                            name: "not".to_string(),
+                            args: vec![self.lower_value(operand)?],
+                        }
+                    }
+                }
+                "-" => Value::Call {
+                    name: "-".to_string(),
+                    args: vec![self.lower_value(operand)?],
+                },
+                "+" => return self.lower_value(operand),
+                _ => {
+                    return Err(self.unsupported(
+                        format!(
+                            "unary operator '{op}' is not currently representable in canonical WIR"
+                        ),
+                        span,
+                    ));
+                }
             },
+            Expr::Call { name, args, .. } => {
+                if name == "vect" && args.len() == 3 {
+                    Value::Vector {
+                        x: self.lower_value(&args[0])?,
+                        y: self.lower_value(&args[1])?,
+                        z: self.lower_value(&args[2])?,
+                    }
+                } else {
+                    let function = self
+                        .compiler
+                        .manifest
+                        .resolve_function(name)
+                        .ok_or_else(|| self.unsupported(format!("unknown value '{name}'"), span))?;
+                    if !matches!(function.kind, FunctionKind::Value) {
+                        return Err(
+                            self.unsupported(format!("'{name}' is not a generic OPY value"), span)
+                        );
+                    }
+                    let catalog_id = function.catalog_id.as_ref().ok_or_else(|| {
+                        self.unsupported(
+                            format!(
+                                "value '{}' requires a special lowering not in #46",
+                                function.id
+                            ),
+                            span,
+                        )
+                    })?;
+                    Value::Call {
+                        name: catalog_id.clone(),
+                        args: args
+                            .iter()
+                            .map(|arg| self.lower_value(arg))
+                            .collect::<Result<Vec<_>, _>>()?,
+                    }
+                }
+            }
             _ => {
                 return Err(self.unsupported(
                     format!(
@@ -980,11 +1519,354 @@ impl<'a> Lowering<'a> {
     }
 }
 
+/// Collect the pinned OverPy implicit default global and player variables.
+/// Global and player namespaces each have independent fixed Workshop slots;
+/// only `eventPlayer.<name>` creates an implicit player variable.
+fn implicit_default_variables(
+    hir: &hir::Program,
+) -> (
+    BTreeMap<String, Option<HirSpan>>,
+    BTreeMap<String, Option<HirSpan>>,
+) {
+    let declared_globals = hir
+        .declarations
+        .iter()
+        .filter_map(|declaration| match declaration {
+            hir::Declaration::GlobalVariable { name, .. } => Some(name.as_str()),
+            _ => None,
+        })
+        .collect::<HashSet<_>>();
+    let declared_players = hir
+        .declarations
+        .iter()
+        .filter_map(|declaration| match declaration {
+            hir::Declaration::PlayerVariable { name, .. } => Some(name.as_str()),
+            _ => None,
+        })
+        .collect::<HashSet<_>>();
+    let mut globals = BTreeMap::new();
+    let mut players = BTreeMap::new();
+    for declaration in &hir.declarations {
+        let initializer = match declaration {
+            hir::Declaration::GlobalVariable { initializer, .. }
+            | hir::Declaration::PlayerVariable { initializer, .. } => initializer.as_ref(),
+            hir::Declaration::Constant { value, .. } => Some(value),
+            _ => None,
+        };
+        if let Some(expr) = initializer {
+            collect_implicit_expr(
+                expr,
+                &declared_globals,
+                &declared_players,
+                &mut globals,
+                &mut players,
+            );
+        }
+    }
+    for entry in &hir.rules {
+        match entry {
+            RuleEntry::Rule(rule) => {
+                for condition in &rule.conditions {
+                    collect_implicit_expr(
+                        condition,
+                        &declared_globals,
+                        &declared_players,
+                        &mut globals,
+                        &mut players,
+                    );
+                }
+                collect_implicit_stmts(
+                    &rule.actions,
+                    &declared_globals,
+                    &declared_players,
+                    &mut globals,
+                    &mut players,
+                );
+            }
+            RuleEntry::SubroutineDef { body, .. } => collect_implicit_stmts(
+                body,
+                &declared_globals,
+                &declared_players,
+                &mut globals,
+                &mut players,
+            ),
+        }
+    }
+    (globals, players)
+}
+
+fn collect_implicit_stmts(
+    statements: &[Stmt],
+    declared_globals: &HashSet<&str>,
+    declared_players: &HashSet<&str>,
+    globals: &mut BTreeMap<String, Option<HirSpan>>,
+    players: &mut BTreeMap<String, Option<HirSpan>>,
+) {
+    for statement in statements {
+        match statement {
+            Stmt::Expr { expr, .. } => {
+                collect_implicit_expr(expr, declared_globals, declared_players, globals, players)
+            }
+            Stmt::Assign { target, value, .. } => {
+                collect_implicit_expr(target, declared_globals, declared_players, globals, players);
+                collect_implicit_expr(value, declared_globals, declared_players, globals, players);
+            }
+            Stmt::If {
+                branches, r#else, ..
+            } => {
+                for branch in branches {
+                    collect_implicit_expr(
+                        &branch.condition,
+                        declared_globals,
+                        declared_players,
+                        globals,
+                        players,
+                    );
+                    collect_implicit_stmts(
+                        &branch.body,
+                        declared_globals,
+                        declared_players,
+                        globals,
+                        players,
+                    );
+                }
+                if let Some(default_body) = r#else {
+                    collect_implicit_stmts(
+                        default_body,
+                        declared_globals,
+                        declared_players,
+                        globals,
+                        players,
+                    );
+                }
+            }
+            Stmt::For {
+                variable,
+                iterable,
+                body,
+                ..
+            } => {
+                collect_implicit_expr(
+                    variable,
+                    declared_globals,
+                    declared_players,
+                    globals,
+                    players,
+                );
+                collect_implicit_expr(
+                    iterable,
+                    declared_globals,
+                    declared_players,
+                    globals,
+                    players,
+                );
+                collect_implicit_stmts(body, declared_globals, declared_players, globals, players);
+            }
+            Stmt::While {
+                condition, body, ..
+            }
+            | Stmt::DoWhile {
+                condition, body, ..
+            } => {
+                collect_implicit_expr(
+                    condition,
+                    declared_globals,
+                    declared_players,
+                    globals,
+                    players,
+                );
+                collect_implicit_stmts(body, declared_globals, declared_players, globals, players);
+            }
+            Stmt::Switch {
+                value,
+                cases,
+                r#default,
+                ..
+            } => {
+                collect_implicit_expr(value, declared_globals, declared_players, globals, players);
+                for case in cases {
+                    collect_implicit_expr(
+                        &case.value,
+                        declared_globals,
+                        declared_players,
+                        globals,
+                        players,
+                    );
+                    collect_implicit_stmts(
+                        &case.body,
+                        declared_globals,
+                        declared_players,
+                        globals,
+                        players,
+                    );
+                }
+                if let Some(default) = r#default {
+                    collect_implicit_stmts(
+                        default,
+                        declared_globals,
+                        declared_players,
+                        globals,
+                        players,
+                    );
+                }
+            }
+            Stmt::Break { .. } | Stmt::CallSubroutine { .. } | Stmt::Pass { .. } => {}
+        }
+    }
+}
+
+fn collect_implicit_expr(
+    expr: &Expr,
+    declared_globals: &HashSet<&str>,
+    declared_players: &HashSet<&str>,
+    globals: &mut BTreeMap<String, Option<HirSpan>>,
+    players: &mut BTreeMap<String, Option<HirSpan>>,
+) {
+    match expr {
+        Expr::GlobalVar { name, span } => {
+            if !declared_globals.contains(name.as_str()) && default_var_index(name).is_some() {
+                globals.entry(name.clone()).or_insert(*span);
+            }
+        }
+        Expr::Array { elements, .. } => {
+            for element in elements {
+                collect_implicit_expr(
+                    element,
+                    declared_globals,
+                    declared_players,
+                    globals,
+                    players,
+                );
+            }
+        }
+        Expr::Dict { entries, .. } => {
+            for entry in entries {
+                collect_implicit_expr(
+                    &entry.key,
+                    declared_globals,
+                    declared_players,
+                    globals,
+                    players,
+                );
+                collect_implicit_expr(
+                    &entry.value,
+                    declared_globals,
+                    declared_players,
+                    globals,
+                    players,
+                );
+            }
+        }
+        Expr::Comprehension {
+            element,
+            iterable,
+            condition,
+            ..
+        } => {
+            collect_implicit_expr(
+                element,
+                declared_globals,
+                declared_players,
+                globals,
+                players,
+            );
+            collect_implicit_expr(
+                iterable,
+                declared_globals,
+                declared_players,
+                globals,
+                players,
+            );
+            if let Some(condition) = condition {
+                collect_implicit_expr(
+                    condition,
+                    declared_globals,
+                    declared_players,
+                    globals,
+                    players,
+                );
+            }
+        }
+        Expr::Lambda { body, .. } => {
+            collect_implicit_expr(body, declared_globals, declared_players, globals, players)
+        }
+        Expr::Vector { x, y, z, .. } => {
+            collect_implicit_expr(x, declared_globals, declared_players, globals, players);
+            collect_implicit_expr(y, declared_globals, declared_players, globals, players);
+            collect_implicit_expr(z, declared_globals, declared_players, globals, players);
+        }
+        Expr::PlayerVar { player, name, span } => {
+            if matches!(player.as_ref(), Expr::EventPlayer { .. })
+                && !declared_players.contains(name.as_str())
+                && default_var_index(name).is_some()
+            {
+                players.entry(name.clone()).or_insert(*span);
+            }
+            collect_implicit_expr(player, declared_globals, declared_players, globals, players);
+        }
+        Expr::Member { receiver, .. } => collect_implicit_expr(
+            receiver,
+            declared_globals,
+            declared_players,
+            globals,
+            players,
+        ),
+        Expr::Call { args, .. } | Expr::MacroCall { args, .. } => {
+            for arg in args {
+                collect_implicit_expr(arg, declared_globals, declared_players, globals, players);
+            }
+        }
+        Expr::ReceiverCall { receiver, args, .. } => {
+            collect_implicit_expr(
+                receiver,
+                declared_globals,
+                declared_players,
+                globals,
+                players,
+            );
+            for arg in args {
+                collect_implicit_expr(arg, declared_globals, declared_players, globals, players);
+            }
+        }
+        Expr::Binary { left, right, .. } => {
+            collect_implicit_expr(left, declared_globals, declared_players, globals, players);
+            collect_implicit_expr(right, declared_globals, declared_players, globals, players);
+        }
+        Expr::Unary { operand, .. } => collect_implicit_expr(
+            operand,
+            declared_globals,
+            declared_players,
+            globals,
+            players,
+        ),
+        Expr::Index { array, index, .. } => {
+            collect_implicit_expr(array, declared_globals, declared_players, globals, players);
+            collect_implicit_expr(index, declared_globals, declared_players, globals, players);
+        }
+        Expr::Format { args, .. } => {
+            for arg in args {
+                collect_implicit_expr(arg, declared_globals, declared_players, globals, players);
+            }
+        }
+        Expr::Number { .. }
+        | Expr::String { .. }
+        | Expr::Bool { .. }
+        | Expr::Null { .. }
+        | Expr::StringModifier { .. }
+        | Expr::Local { .. }
+        | Expr::Enum { .. }
+        | Expr::EventPlayer { .. }
+        | Expr::Constant { .. }
+        | Expr::MacroParam { .. } => {}
+    }
+}
+
 fn allocate_indices(
     entries: &[(Option<u32>, Option<HirSpan>)],
+    pre_reserved: &HashSet<u32>,
     kind: &str,
 ) -> Result<Vec<u32>, IntegrationError> {
-    let mut reserved = HashSet::new();
+    let mut reserved = pre_reserved.clone();
     for (index, span) in entries {
         let Some(index) = index else {
             continue;
@@ -998,6 +1880,10 @@ fn allocate_indices(
         }
     }
 
+    // The pinned OverPy reference fills the remaining free slots in
+    // ascending order for auto-allocated entries, regardless of where the
+    // explicit indices sit in declaration order; an early explicit index
+    // does not push later auto allocations above it.
     let mut next = 0;
     let mut allocated = Vec::with_capacity(entries.len());
     for (index, span) in entries {
@@ -1024,7 +1910,6 @@ fn allocate_indices(
             })?;
             assigned
         };
-        next = next.max(assigned.saturating_add(1));
         allocated.push(assigned);
     }
     Ok(allocated)
@@ -1043,6 +1928,57 @@ fn player_event_kind(name: &str) -> Option<PlayerEventKind> {
         "playerTookDamage" => PlayerEventKind::TookDamage,
         _ => return None,
     })
+}
+
+fn is_zero_initializer(expr: &hir::Expr) -> bool {
+    match expr {
+        hir::Expr::Number { text, value, .. } => text == "0" && *value == 0.0,
+        _ => false,
+    }
+}
+
+fn canonical_number_text(value: f64, text: &str) -> String {
+    if text.starts_with("0x") || text.starts_with("0X") {
+        value.to_string()
+    } else {
+        text.to_string()
+    }
+}
+
+fn negated_comparison(op: &str) -> Option<&'static str> {
+    Some(match op {
+        "==" => "!=",
+        "!=" => "==",
+        "<" => ">=",
+        ">" => "<=",
+        "<=" => ">",
+        ">=" => "<",
+        _ => return None,
+    })
+}
+
+fn modify_op_from_str(op: &str) -> Option<wir::ModifyOp> {
+    match op {
+        "+" => Some(wir::ModifyOp::Add),
+        "-" => Some(wir::ModifyOp::Subtract),
+        "*" => Some(wir::ModifyOp::Multiply),
+        "/" => Some(wir::ModifyOp::Divide),
+        "%" => Some(wir::ModifyOp::Modulo),
+        "**" => Some(wir::ModifyOp::RaiseToPower),
+        _ => None,
+    }
+}
+
+fn modify_catalog_name_from_str(op: &str) -> Option<&'static str> {
+    match op {
+        "+" => Some("add"),
+        "-" => Some("subtract"),
+        "*" => Some("multiply"),
+        "/" => Some("divide"),
+        "%" => Some("modulo"),
+        "**" => Some("raiseToPower"),
+        _ => None,
+    }
 }
 
 fn workshop_error_span(error: &workshop_rs::WorkshopError) -> Option<WorkshopSpan> {
@@ -1098,7 +2034,7 @@ mod tests {
         assert_eq!(rule.span.unwrap().file.index(), 0);
         assert_eq!(rule.name_span.unwrap().start.line, 2);
         assert!(artifact.emitted.contains("Disable Inspector Recording;"));
-        assert_eq!(artifact.catalog_identity.implementation_version, "0.1.5");
+        assert_eq!(artifact.catalog_identity.implementation_version, "0.1.8");
     }
 
     #[test]
@@ -1114,7 +2050,7 @@ mod tests {
     fn unsupported_lowering_remains_source_attributed() {
         let compiler = Compiler::new().unwrap();
         let hir = opy_frontend::compile(
-            "rule \"unsupported\":\n    @Event global\n    pass\n",
+            "rule \"unsupported\":\n    @Event global\n    while true:\n        disableInspector()\n",
             "unsupported.opy",
             Path::new("."),
         )
@@ -1205,13 +2141,321 @@ mod tests {
         )
         .unwrap();
         let artifact = compiler.compile_hir(&hir).unwrap();
+        let by_name = artifact
+            .wir
+            .global_variables
+            .iter()
+            .map(|variable| (variable.name.as_str(), variable.index))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        assert_eq!(
+            by_name,
+            std::collections::BTreeMap::from([("first", 1), ("reserved", 0), ("next", 2)])
+        );
+        // Variable tables are emitted in Workshop index order.
         let indices = artifact
             .wir
             .global_variables
             .iter()
             .map(|variable| variable.index)
             .collect::<Vec<_>>();
-        assert_eq!(indices, vec![1, 0, 2]);
+        assert_eq!(indices, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn implicit_default_variables_use_reference_fixed_slots() {
+        let compiler = Compiler::new().unwrap();
+        let hir = opy_frontend::compile(
+            r#"
+globalvar timer
+globalvar extra 5
+
+rule "implicit":
+    @Event global
+    A = timer + 1
+    B = A
+    B += 2
+    A[0] = 7
+    DX = B * A
+"#,
+            "implicit.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        let globals = artifact
+            .wir
+            .global_variables
+            .iter()
+            .map(|variable| (variable.name.clone(), variable.index))
+            .collect::<Vec<_>>();
+        // The implicit A (0), B (1), and DX (127) names keep their fixed
+        // Workshop slots and reserve them for declared-variable allocation
+        // (pinned OverPy evidence); `timer` auto-allocates around them and
+        // `extra` keeps its explicit index.
+        assert_eq!(
+            globals,
+            vec![
+                ("A".to_string(), 0),
+                ("B".to_string(), 1),
+                ("timer".to_string(), 2),
+                ("extra".to_string(), 5),
+                ("DX".to_string(), 127),
+            ]
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Set Global Variable(A, Add(Global.timer, 1));")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Set Global Variable(B, Global.A);")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Modify Global Variable(B, Add, 2);")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Set Global Variable At Index(A, 0, 7);")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Set Global Variable(DX, Multiply(Global.B, Global.A));")
+        );
+    }
+
+    #[test]
+    fn implicit_default_variable_slot_collision_is_source_attributed() {
+        let compiler = Compiler::new().unwrap();
+        let hir = opy_frontend::compile(
+            "globalvar x 0\nrule \"collision\":\n    @Event global\n    x = 1\n    A = 2\n",
+            "collision.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let error = match compiler.compile_hir(&hir) {
+            Ok(_) => panic!("slot collision unexpectedly succeeded"),
+            Err(error) => error,
+        };
+        assert_eq!(error.diagnostic.code, "index-collision");
+        assert_eq!(error.diagnostic.span.unwrap().start.line, 5);
+        assert!(error.diagnostic.message.contains("'A' and 'x'"));
+    }
+
+    #[test]
+    fn implicit_default_player_variables_use_independent_reference_slots() {
+        let compiler = Compiler::new().unwrap();
+        let hir = opy_frontend::compile(
+            r#"
+playervar declaredPlayer
+
+rule "implicit player variables":
+    @Event eachPlayer
+    A = 1
+    eventPlayer.A = 1
+    eventPlayer.A += 2
+    eventPlayer.E = eventPlayer.A
+    eventPlayer.DX = eventPlayer.E
+    eventPlayer.declaredPlayer = eventPlayer.A
+"#,
+            "implicit-player.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        let globals = artifact
+            .wir
+            .global_variables
+            .iter()
+            .map(|variable| (variable.name.as_str(), variable.index))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        let players = artifact
+            .wir
+            .player_variables
+            .iter()
+            .map(|variable| (variable.name.as_str(), variable.index))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        assert_eq!(globals.get("A"), Some(&0));
+        assert_eq!(players.get("A"), Some(&0));
+        assert_eq!(players.get("declaredPlayer"), Some(&1));
+        assert_eq!(players.get("E"), Some(&4));
+        assert_eq!(players.get("DX"), Some(&127));
+        assert!(
+            artifact
+                .emitted
+                .contains("Set Player Variable(Event Player, A, 1);")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Modify Player Variable(Event Player, A, Add, 2);")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Set Player Variable(Event Player, E, (Event Player).A);")
+        );
+    }
+
+    #[test]
+    fn implicit_default_player_slot_collision_is_source_attributed() {
+        let compiler = Compiler::new().unwrap();
+        let hir = opy_frontend::compile(
+            "playervar declared 0\nrule \"collision\":\n    @Event eachPlayer\n    eventPlayer.A = 1\n",
+            "player-collision.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let error = match compiler.compile_hir(&hir) {
+            Ok(_) => panic!("player slot collision unexpectedly succeeded"),
+            Err(error) => error,
+        };
+        assert_eq!(error.diagnostic.code, "index-collision");
+        assert!(
+            error
+                .diagnostic
+                .message
+                .contains("player variables 'A' and 'declared'")
+        );
+        assert_eq!(error.diagnostic.span.unwrap().start.line, 4);
+    }
+
+    #[test]
+    fn power_augmented_assignment_lowers_from_source() {
+        let compiler = Compiler::new().unwrap();
+        let hir = opy_frontend::compile(
+            "globalvar g\nrule \"power\":\n    @Event global\n    g = 2\n    g **= 3\n",
+            "power.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        assert!(artifact.emitted.contains("Set Global Variable(g, 2);"));
+        assert!(
+            artifact
+                .emitted
+                .contains("Modify Global Variable(g, Raise To Power, 3);")
+        );
+    }
+
+    #[test]
+    fn opy_hex_numbers_are_normalized_at_the_wir_boundary() {
+        let compiler = Compiler::new().unwrap();
+        let hir = opy_frontend::compile(
+            "globalvar large = 0x124BC\nglobalvar small = 0x124\nglobalvar scientific = 1e10\n",
+            "numbers.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        assert!(
+            artifact
+                .emitted
+                .contains("Set Global Variable(large, 74940);")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Set Global Variable(small, 292);")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Set Global Variable(scientific, 1e10);")
+        );
+        assert!(!artifact.emitted.contains("0x124BC"));
+        assert!(!artifact.emitted.contains("0x124"));
+    }
+
+    #[test]
+    fn unsupported_primitive_lowering_is_stable_and_source_attributed() {
+        let compiler = Compiler::new().unwrap();
+        let hir = opy_frontend::compile(
+            "globalvar total\nrule \"negative\":\n    @Event global\n    total = {\"a\": 1, \"b\": 2}[\"a\"]\n",
+            "negative.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let error = match compiler.compile_hir(&hir) {
+            Ok(_) => panic!("dict primitive lowering unexpectedly succeeded"),
+            Err(error) => error,
+        };
+        assert_eq!(error.diagnostic.code, "unsupported-integration-surface");
+        assert!(error.diagnostic.message.contains("dict"));
+        assert_eq!(error.diagnostic.span.unwrap().start.line, 4);
+    }
+
+    #[test]
+    fn auto_allocation_fills_free_slots_below_early_explicit_indices() {
+        let compiler = Compiler::new().unwrap();
+        let hir = opy_frontend::compile(
+            r#"
+globalvar reserved 5
+globalvar auto1
+globalvar auto2
+
+rule "allocation":
+    @Event global
+    auto1 = 1
+    auto2 = 2
+    B = 3
+"#,
+            "allocation.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        let by_name = artifact
+            .wir
+            .global_variables
+            .iter()
+            .map(|variable| (variable.name.clone(), variable.index))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        // The implicit B keeps its fixed slot 1; the auto-allocated variables
+        // fill the remaining free slots below the explicit 5 instead of
+        // jumping past it, matching the pinned OverPy oracle (slot 0 stays
+        // free here because the implicit A is never used).
+        assert_eq!(
+            by_name,
+            std::collections::BTreeMap::from([
+                ("B".to_string(), 1),
+                ("auto1".to_string(), 0),
+                ("auto2".to_string(), 2),
+                ("reserved".to_string(), 5),
+            ])
+        );
+    }
+
+    #[test]
+    fn power_expressions_lower_through_the_canonical_contract() {
+        let compiler = Compiler::new().unwrap();
+        let hir = opy_frontend::compile(
+            "globalvar a = [2, 4]\nglobalvar out\nrule \"power\":\n    @Event global\n    out = a ** 2\n    a **= 2\n    a[0] **= 2\n",
+            "power.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        assert!(
+            artifact
+                .emitted
+                .contains("Set Global Variable(out, Raise To Power(Global.a, 2));")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Modify Global Variable(a, Raise To Power, 2);")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Modify Global Variable At Index(a, 0, Raise To Power, 2);")
+        );
     }
 
     #[test]
@@ -1277,5 +2521,270 @@ mod tests {
                 target: workshop_rs::wir::EventTarget::Slot(2),
             }
         ));
+    }
+
+    #[test]
+    fn assignments_and_modifications_lower_to_canonical_wir() {
+        let compiler = Compiler::new().unwrap();
+        let hir = opy_frontend::compile(
+            r#"
+globalvar g1
+globalvar g2
+playervar p1
+playervar p2 = [1, 2, 3]
+
+rule "assignments":
+    @Event eachPlayer
+    g1 = 10
+    g1 += 5
+    g1 -= 2
+    g1 *= 3
+    g1 /= 2
+    g1 %= 4
+    g2 = [1, 2, 3]
+    g2[0] = 99
+    g2[1] += 1
+    eventPlayer.p1 = 42
+    eventPlayer.p1 += 8
+    eventPlayer.p1 *= 2
+    eventPlayer.p2[2] = 7
+    eventPlayer.p2[0] -= 3
+"#,
+            "assign.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        assert!(artifact.emitted.contains("Set Global Variable(g1, 10);"));
+        assert!(
+            artifact
+                .emitted
+                .contains("Modify Global Variable(g1, Add, 5);")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Modify Global Variable(g1, Subtract, 2);")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Modify Global Variable(g1, Multiply, 3);")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Modify Global Variable(g1, Divide, 2);")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Modify Global Variable(g1, Modulo, 4);")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Set Global Variable At Index(g2, 0, 99);")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Modify Global Variable At Index(g2, 1, Add, 1);")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Set Player Variable(Event Player, p1, 42);")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Modify Player Variable(Event Player, p1, Add, 8);")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Modify Player Variable(Event Player, p1, Multiply, 2);")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Set Player Variable At Index((Event Player).p2, 2, 7);")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Modify Player Variable At Index((Event Player).p2, 0, Subtract, 3);")
+        );
+
+        // Direct assignments carry both the statement span and the separate
+        // target-variable span; indexed forms lower to Call actions that
+        // carry only the statement span.
+        let rule = artifact
+            .wir
+            .rules
+            .get(workshop_rs::wir::RuleId::from_index(1))
+            .unwrap();
+        let direct = artifact.wir.actions.get(rule.actions[0]).unwrap();
+        match direct {
+            workshop_rs::wir::Action::SetGlobalVariable {
+                span,
+                target_span,
+                variable,
+                ..
+            } => {
+                assert_eq!(span.unwrap().start.line, 9);
+                assert_eq!(target_span.unwrap().start.line, 9);
+                assert_eq!(
+                    artifact.wir.global_variables.get(*variable).unwrap().name,
+                    "g1"
+                );
+            }
+            other => panic!("expected a direct global assignment, got {other:?}"),
+        }
+        let indexed = artifact.wir.actions.get(rule.actions[7]).unwrap();
+        match indexed {
+            workshop_rs::wir::Action::Call { span, .. } => {
+                assert_eq!(span.unwrap().start.line, 16);
+            }
+            other => panic!("expected an indexed assignment call, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn expressions_and_values_lower_to_canonical_wir() {
+        let compiler = Compiler::new().unwrap();
+        let hir = opy_frontend::compile(
+            r#"
+enum Consts:
+    BASE
+
+globalvar total
+globalvar arr = [1, 2, 3]
+globalvar pos = vect(1, 2, 3)
+
+rule "expressions":
+    @Event global
+    @Condition total == 0
+    @Condition not (pos == vect(0, 0, 0))
+    @Condition 2 in arr
+    total = Consts.BASE + arr[1] * 2 - (10 / 2) + (5 % 2)
+    print("Total: {}".format(total))
+    debug(pos)
+"#,
+            "expr.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        assert!(artifact.emitted.contains("Global.total == 0;"));
+        // `not (pos == vect(0, 0, 0))` lowers to the negated comparison,
+        // mirroring the pinned OverPy oracle.
+        assert!(artifact.emitted.contains("Global.pos != Vector(0, 0, 0);"));
+        assert!(
+            artifact
+                .emitted
+                .contains("Array Contains(Global.arr, 2) == True;")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Custom String(\"Total: {0}\", Global.total)")
+        );
+    }
+
+    #[test]
+    fn pass_is_supported_as_source_level_noop() {
+        let compiler = Compiler::new().unwrap();
+        let hir = opy_frontend::compile(
+            r#"
+subroutine emptySub
+
+def emptySub():
+    pass
+
+rule "empty rule":
+    @Event global
+    pass
+"#,
+            "pass.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        let rule0 = artifact
+            .wir
+            .rules
+            .get(workshop_rs::wir::RuleId::from_index(0))
+            .unwrap();
+        assert!(rule0.actions.is_empty());
+        let rule1 = artifact
+            .wir
+            .rules
+            .get(workshop_rs::wir::RuleId::from_index(1))
+            .unwrap();
+        assert!(rule1.actions.is_empty());
+    }
+
+    #[test]
+    fn variable_initializers_synthesize_initialize_rules() {
+        let compiler = Compiler::new().unwrap();
+        let hir = opy_frontend::compile(
+            r#"
+globalvar j = 5
+globalvar h = 0
+globalvar k = 0.0
+playervar p = 7
+playervar q = 0
+
+rule "main":
+    @Event global
+    disableInspector()
+"#,
+            "init.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        assert_eq!(
+            artifact
+                .wir
+                .rules
+                .get(workshop_rs::wir::RuleId::from_index(0))
+                .unwrap()
+                .name,
+            "Initialize global variables"
+        );
+        assert_eq!(
+            artifact
+                .wir
+                .rules
+                .get(workshop_rs::wir::RuleId::from_index(1))
+                .unwrap()
+                .name,
+            "Initialize player variables"
+        );
+        assert_eq!(
+            artifact
+                .wir
+                .rules
+                .get(workshop_rs::wir::RuleId::from_index(2))
+                .unwrap()
+                .name,
+            "main"
+        );
+        assert!(artifact.emitted.contains("Set Global Variable(j, 5);"));
+        assert!(artifact.emitted.contains("Set Global Variable(k, 0.0);"));
+        assert!(!artifact.emitted.contains("Set Global Variable(h,"));
+        assert!(
+            artifact
+                .emitted
+                .contains("Set Player Variable(Event Player, p, 7);")
+        );
+        assert!(
+            !artifact
+                .emitted
+                .contains("Set Player Variable(Event Player, q,")
+        );
     }
 }
