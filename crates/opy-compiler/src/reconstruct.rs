@@ -1429,9 +1429,12 @@ impl<'a> Emitter<'a> {
     }
 
     fn enum_member_in_domain(&self, domain: &str, member: &str) -> bool {
-        self.catalog
-            .enum_domain(domain)
-            .is_some_and(|domain| domain.members.iter().any(|candidate| candidate.member == member))
+        self.catalog.enum_domain(domain).is_some_and(|domain| {
+            domain
+                .members
+                .iter()
+                .any(|candidate| candidate.member == member)
+        })
     }
 
     // ---- value emission ----

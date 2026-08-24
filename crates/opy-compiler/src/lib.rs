@@ -8,9 +8,7 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use opy_rs::hir::{
-    self, Expr, RuleEntry, Span as HirSpan, Stmt, SwitchArm, default_var_index,
-};
+use opy_rs::hir::{self, Expr, RuleEntry, Span as HirSpan, Stmt, SwitchArm, default_var_index};
 use opy_rs::manifest::{FunctionKind, Manifest};
 use workshop_rs::catalog::{Catalog, CatalogIdentity, Kind, Locale};
 use workshop_rs::source::{Position as WorkshopPosition, SourceFile, Span as WorkshopSpan};
