@@ -211,6 +211,18 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         false,
         "Issue #46 negative primitive-lowering probe; the frontend and the pinned oracle accept the dict-indexed assignment while the opy-compiler rejects it with the stable source-attributed unsupported-integration-surface diagnostic.",
     );
+    resolve(
+        &mut cases,
+        "synthetic/issue-47-control-flow",
+        false,
+        "Issue #47 oracle-backed control-flow lowering probe; the frontend resolves the source while opy-compiler independently constrains canonical WIR against the pinned oracle.",
+    );
+    resolve(
+        &mut cases,
+        "synthetic/issue-47-unsupported",
+        false,
+        "Issue #47 negative probe; the frontend preserves the nested conditional switch-break HIR while the compiler rejects it at the canonical WIR integration boundary.",
+    );
     diagnostic(
         &mut cases,
         "synthetic/issue-33-lambda-negative",

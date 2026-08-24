@@ -3,7 +3,7 @@
 This directory is the opy-rs compatibility corpus: OPY sources with their
 pinned-oracle snapshots (`oracle.json`), ported from the WrightKit project's
 evidence base (wright `compatibility/fixtures/`) and re-verified against the
-pinned OverPy 9.7.10 oracle (all 44 snapshots match; see
+pinned OverPy 9.7.10 oracle (all 46 snapshots match; see
 [`docs/compatibility/upstream-references.md`](../../docs/compatibility/upstream-references.md)
 for the dated verification record).
 
@@ -29,7 +29,7 @@ fixtures/<category>/<name>/
 
 ## Synthetic fixtures (WrightKit-authored)
 
-`fixtures/synthetic/` — 30 fixtures authored for the WrightKit compatibility
+`fixtures/synthetic/` — 32 fixtures authored for the WrightKit compatibility
 corpus (AGPL-3.0-or-later, `kind: original`): an initial set ported unchanged
 from the wright repository corpus, extended by fixtures added in this
 repository:
@@ -56,6 +56,8 @@ repository:
 | `issue-35-integration` | minimal OPY HIR to canonical Workshop WIR validation and deterministic emission slice |
 | `issue-46-primitives` | #46 oracle-backed primitive lowering probe: assignments and modifications (including `**=`), expressions, indexing, format, initializers, implicit default variables at fixed slots; the snapshot constrains the native compiler through structural equivalence |
 | `issue-46-unsupported` | #46 negative probe: a dict-indexed assignment the compiler rejects with the stable source-attributed diagnostic while the oracle compiles it |
+| `issue-47-control-flow` | #47 pinned oracle-backed control-flow lowering probe: if/elif/else, while, range-for, do-while expansion, switch fallthrough/default, and direct break |
+| `issue-47-unsupported` | #47 negative probe: a break hidden inside a conditional switch arm is accepted by the frontend/oracle but rejected by the compiler with a stable source-attributed diagnostic |
 | `issue-29-*` | directive/include/main-file preprocessing probes |
 | `issue-33-*` | switch break/fallthrough, f-string interpolation, and lambda negative probes |
 | `receiver-playervar` | bare variable member expression `A = B.C` with preserved receiver/member provenance |
@@ -128,7 +130,7 @@ reference diagnostics, exactly like the pinned oracle behaves.
 
 ## Not ported / dropped
 
-* **No fixture was dropped for provenance reasons**: all 44 fixtures in the
+* **No fixture was dropped for provenance reasons**: all 46 fixtures in the
   WrightKit corpus carried complete, reviewed provenance and are ported.
 * Upstream `examples/` not ported (candidates for later expansion once a
   demonstrated need exists): `lucioball_all_heroes.opy`, `skirmish_elim.opy`,
