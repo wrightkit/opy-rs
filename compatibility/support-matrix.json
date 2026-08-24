@@ -83,7 +83,7 @@
     },
     {
       "id": "syntax/assignments-control-flow",
-      "name": "Assignments and control flow: =, augmented ops, if/elif/else, for-in-range, while, pass",
+      "name": "Assignments and control flow: =, +=, -=, *=, /=, %=, **=, if/elif/else, for-in-range, while, pass",
       "category": "syntax",
       "state": "frontend-supported",
       "evidence": [
@@ -93,7 +93,7 @@
         "upstream:src/tests/loops.opy",
         "upstream:src/tests/conditions.opy"
       ],
-      "notes": "Corpus-evidenced: control-flow fixtures resolve; parser rejects out-of-surface forms structurally."
+      "notes": "Corpus-evidenced: the supported augmented assignment subset is +=, -=, *=, /=, %=, and **=; control-flow fixtures resolve; parser rejects out-of-surface forms structurally. min=/max= and ++/-- remain explicit follow-ups (#59, wrightkit/workshop-rs#95)."
     },
     {
       "id": "syntax/switch",
@@ -637,7 +637,7 @@
         "test:opy-compiler-issue-46-oracle-equivalence",
         "contract:workshop-rs-v0.1.8"
       ],
-      "notes": "Issue #46. Global/player assignments and augmented assignments (+=, -=, *=, /=, %=, **=), array index assignments and modifications (setGlobalVariableAtIndex, modifyGlobalVariableAtIndex, setPlayerVariableAtIndex, modifyPlayerVariableAtIndex), pass no-op statements, and variable declaration initializers lower into canonical workshop-rs WIR. Direct global/player assignments and modifications carry full statement and target-variable span provenance; the indexed forms lower to canonical Call actions, which carry only the statement-level source span (the canonical WIR Call shape has no separate target-span field)."
+      "notes": "Issue #46. Global/player assignments and augmented assignments (+=, -=, *=, /=, %=, **=), single-level indexed variable assignments and modifications (setGlobalVariableAtIndex, modifyGlobalVariableAtIndex, setPlayerVariableAtIndex, modifyPlayerVariableAtIndex), and pass no-op statements lower into canonical workshop-rs WIR. Declaration initializer evidence covers non-null initializers; OverPy null-default initializer semantics remain tracked by #58. Deeper indexed writes remain tracked by #60. Direct global/player assignments and modifications carry full statement and target-variable span provenance; the single-level indexed forms lower to canonical Call actions, which carry only the statement-level source span (the canonical WIR Call shape has no separate target-span field)."
     },
     {
       "id": "compilation/opy-implicit-default-variables",

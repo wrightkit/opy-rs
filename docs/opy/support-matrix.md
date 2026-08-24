@@ -79,7 +79,7 @@ implements; "reference" always means the pinned OverPy 9.7.10
 - Identifiers, integer and decimal number literals (source text preserved),
   double-quoted strings with `\n`/`\t`/`\\` escapes, `true`/`false`/`None`.
 - Line comments (`#`), block comments (`/* */`), `#!` directives.
-- Operators: `+ - * / % ** == != < <= > >= = += -= *= /= %= and or not`,
+- Operators: `+ - * / % ** == != < <= > >= = += -= *= /= %= **= and or not`,
   `in`/`not in`, plus `.`/`,`/`:`/`(`/`)`/`[`/`]`/`@`.
 
 ### Pure OPY syntax and source semantics
@@ -100,9 +100,11 @@ implements; "reference" always means the pinned OverPy 9.7.10
   reference; integer-`0` literal initializers are dropped from HIR (matching
   the reference); non-zero and non-integer numeric initializers are
   preserved, e.g. `j = 5` and `k = 0.0` keep the source spelling).
-  Initializer semantics are **lowering-dependent**: the Initialize rules are
-  synthesized by the HIR → Workshop lowering, which is inventory-only until
-  the `workshop-rs` integration stage.
+  Initializer semantics are **lowering-dependent**: the #46 evidence covers
+  non-null initializers, while OverPy's null-default initializer quirk is
+  tracked separately in #58. The Initialize rules are synthesized by the HIR
+  → Workshop lowering, which is inventory-only until the `workshop-rs`
+  integration stage.
 - `playervar name` (same forms).
 - `subroutine name`.
 - `def name():` subroutine bodies (parameters are outside the declared
@@ -185,7 +187,8 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
   disabled state, canonical event identities, and catalog-resolved team/slot/
   hero filters. Delimiter, new-page, suppression, and other metadata without a
   canonical WIR carrier remain explicit integration diagnostics.
-- Statements: expression statements, `=` and augmented assignment,
+- Statements: expression statements, `=` and the evidenced augmented
+  assignment subset (`+= -= *= /= %= **=`),
   `if`/`elif`/`else`, `for x in range(...)`, `while`, `pass`.
 - `for`-loop binder resolution: the loop variable must resolve to a global
   variable, either a declared `globalvar`, or an OverPy **default variable
