@@ -10,7 +10,7 @@
   "snapshot": {
     "date": "2026-08-24",
     "note": "Readiness baseline for #7 through the #28/#29/#30/#33 Draft PR series plus the bounded #35 and #40 integration slices. Frontend-supported rows include the pinned OPY syntax, directives, preprocessing, macro statements, rule directives/model, JavaScript macros, and runtime hooks. Semantic-supported rows include declaration resolution, for-loop binders, modules, keyword arguments, the declared alias surface, and the OPY-owned manifest overlay for builtin/member/enum semantics. Canonical Workshop builtin/member/enum breadth and emission remain separate lowering-dependent rows; no Workshop catalog data is copied into opy-rs. The differential corpus currently reports 0 unexpected divergences and 0 inconclusive results; its exact match and known-gap counts are generated evidence, not a support claim. #!postCompileHook is parsed/validated/recorded by the frontend; execution against final Workshop text is lowering-dependent (#8).",
-    "asOfCommit": "6956eed025536a201f769402306eb28090a5135d"
+    "asOfCommit": "279209455e80a5f2569167d4151a20b13940473f"
   },
   "states": {
     "planned": "Declared surface, not yet implemented in opy-rs; evidence/provenance recorded for the implementing issue.",
@@ -682,11 +682,15 @@
       "evidence": [
         "fixtures:synthetic/issue-47-control-flow",
         "fixtures:synthetic/issue-47-unsupported",
+        "fixtures:synthetic/issue-47-switch-order",
+        "fixtures:synthetic/issue-47-switch-multiple-break",
+        "fixtures:synthetic/issue-47-do-while-shapes",
+        "fixtures:synthetic/issue-47-do-while-invalid-placement",
         "fixtures:synthetic/issue-33-switch-break",
         "test:opy-compiler-issue-47-oracle-equivalence",
         "contract:workshop-rs-v0.1.8"
       ],
-      "notes": "Issue #47. If/elif/else, while, supported range-for, do-while expansion, switch fallthrough/default, and direct loop/switch/do-while break lower into canonical workshop-rs WIR. The nested switch shape is oracle-equivalent; a break hidden inside a conditional switch arm remains a stable source-attributed unsupported-integration-surface diagnostic because the current canonical WIR has no equivalent structured break carrier."
+      "notes": "Issue #47. If/elif/else, while, global-binder range-for, do-while expansion, source-ordered switch fallthrough/default, and direct loop/switch/do-while break lower into canonical workshop-rs WIR. Direct, conditional, and nested do-while break shapes are pinned and oracle-equivalent. A nested conditional switch break and a multi-break switch with later reachable actions remain stable source-attributed unsupported-integration-surface diagnostics because workshop-rs v0.1.8 has no lossless multi-target switch carrier."
     },
     {
       "id": "compilation/workshop-lowering",

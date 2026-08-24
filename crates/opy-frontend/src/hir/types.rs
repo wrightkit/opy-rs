@@ -452,9 +452,7 @@ pub enum Stmt {
     Switch {
         value: Box<Expr>,
         #[serde(default)]
-        cases: Vec<SwitchCase>,
-        #[serde(default, rename = "default")]
-        r#default: Option<Vec<Stmt>>,
+        arms: Vec<SwitchArm>,
         #[serde(skip_serializing_if = "Option::is_none")]
         span: Option<Span>,
     },
@@ -499,15 +497,24 @@ impl Stmt {
     }
 }
 
-/// One switch case in the OPY HIR. Cases execute in source order and fall
-/// through to subsequent cases until a `break` statement is encountered.
+/// One source-ordered arm in the OPY HIR. Arms execute in source order and
+/// fall through to subsequent arms until a `break` statement is encountered.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SwitchCase {
-    pub value: Box<Expr>,
-    #[serde(default)]
-    pub body: Vec<Stmt>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub span: Option<Span>,
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum SwitchArm {
+    Case {
+        value: Box<Expr>,
+        #[serde(default)]
+        body: Vec<Stmt>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        span: Option<Span>,
+    },
+    Default {
+        #[serde(default)]
+        body: Vec<Stmt>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        span: Option<Span>,
+    },
 }
 
 /// An expression.

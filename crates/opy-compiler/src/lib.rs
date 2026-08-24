@@ -8,7 +8,9 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use opy_frontend::hir::{self, Expr, RuleEntry, Span as HirSpan, Stmt, default_var_index};
+use opy_frontend::hir::{
+    self, Expr, RuleEntry, Span as HirSpan, Stmt, SwitchArm, default_var_index,
+};
 use opy_frontend::manifest::{FunctionKind, Manifest};
 use workshop_rs::catalog::{Catalog, CatalogIdentity, Kind, Locale};
 use workshop_rs::source::{Position as WorkshopPosition, SourceFile, Span as WorkshopSpan};
@@ -245,6 +247,9 @@ enum BreakTarget {
     DoWhile,
     Switch,
 }
+
+type SwitchBreak = (usize, HirSpan);
+type LoweredSwitchBody = (Vec<wir::ActionId>, Option<SwitchBreak>);
 
 impl<'a> Lowering<'a> {
     fn new(compiler: &'a Compiler, hir: &'a hir::Program) -> Result<Self, IntegrationError> {
@@ -1041,10 +1046,9 @@ impl<'a> Lowering<'a> {
             }
             Stmt::Switch {
                 value,
-                cases,
-                r#default,
+                arms,
                 span,
-            } => self.lower_switch(value, cases, r#default.as_deref(), *span).map(|action| vec![action]),
+            } => self.lower_switch(value, arms, *span).map(|action| vec![action]),
             Stmt::Break { span } => match break_target {
                 Some(BreakTarget::Loop) => Ok(vec![self.wir.actions.push(Action::Call {
                     name: "break".to_string(),
@@ -1127,7 +1131,7 @@ impl<'a> Lowering<'a> {
 
             if direct_break || conditional_break {
                 let tail = self.lower_do_while_body(&statements[index + 1..])?;
-                let distance = tail.len() + 1;
+                let distance = self.normalized_action_width(&tail)? + 1;
                 let (name, args, span) = if let Stmt::Break { span } = statement {
                     ("skip", Vec::new(), *span)
                 } else if let Stmt::If { branches, span, .. } = statement {
@@ -1211,28 +1215,59 @@ impl<'a> Lowering<'a> {
     fn lower_switch(
         &mut self,
         value: &Expr,
-        cases: &[hir::SwitchCase],
-        default: Option<&[Stmt]>,
+        arms: &[SwitchArm],
         span: Option<HirSpan>,
     ) -> Result<wir::ActionId, IntegrationError> {
         let selector = self.lower_value(value)?;
-        let mut case_values = Vec::with_capacity(cases.len());
-        let mut lowered_cases = Vec::with_capacity(cases.len());
-        let mut offsets = Vec::with_capacity(cases.len() + 1);
+        let mut case_values = Vec::new();
+        let mut lowered_arms = Vec::with_capacity(arms.len());
+        let mut case_offsets = Vec::new();
         let mut offset = 0usize;
+        let mut default_offset = None;
 
-        for case in cases {
-            case_values.push(self.lower_value(&case.value)?);
-            let (body, breaks) = self.lower_switch_body(&case.body)?;
-            offsets.push(offset);
-            offset += body.len() + usize::from(breaks);
-            lowered_cases.push((body, breaks));
+        for arm in arms {
+            let (value, (body, break_at)) = match arm {
+                SwitchArm::Case { value, body, .. } => {
+                    case_values.push(self.lower_value(value)?);
+                    (Some(value), self.lower_switch_body(body)?)
+                }
+                SwitchArm::Default { body, span } => {
+                    if default_offset.is_some() {
+                        return Err(
+                            self.unsupported("a switch may contain at most one default arm", *span)
+                        );
+                    }
+                    default_offset = Some(offset);
+                    (None, self.lower_switch_body(body)?)
+                }
+            };
+            if value.is_some() {
+                case_offsets.push(offset);
+            }
+            offset += self.normalized_action_width(&body)? + usize::from(break_at.is_some());
+            lowered_arms.push((value, body, break_at));
         }
-        let default_offset = offset;
+        let default_offset = default_offset.unwrap_or(offset);
 
-        let default_body = default
-            .map(|body| self.lower_switch_body(body).map(|(actions, _)| actions))
-            .transpose()?;
+        let break_arms: Vec<_> = lowered_arms
+            .iter()
+            .enumerate()
+            .filter_map(|(index, (_, _, break_at))| break_at.map(|break_at| (index, break_at)))
+            .collect();
+        if break_arms.len() > 1 {
+            let (first_index, first_break) = break_arms[0];
+            let has_actions_after_first = lowered_arms[first_index].1.len() > first_break.0
+                || lowered_arms
+                    .iter()
+                    .skip(first_index + 1)
+                    .any(|(_, body, _)| !body.is_empty());
+            if has_actions_after_first {
+                return Err(self.unsupported(
+                    "multiple switch breaks with later reachable actions require canonical switch targets",
+                    Some(break_arms[1].1.1),
+                ));
+            }
+        }
 
         let case_values = self.wir.values.push(ValueNode::new(
             Value::Array(case_values),
@@ -1240,7 +1275,7 @@ impl<'a> Lowering<'a> {
         ));
         let value_span = self.wir_span(span)?;
         let offset_values = std::iter::once(default_offset)
-            .chain(offsets)
+            .chain(case_offsets)
             .map(|value| {
                 self.wir.values.push(ValueNode::new(
                     Value::Number {
@@ -1293,32 +1328,28 @@ impl<'a> Lowering<'a> {
             .values
             .push(ValueNode::new(Value::Bool(true), self.wir_span(span)?));
 
+        let first_break = break_arms.first().copied();
         let mut branch_body = vec![skip];
-        let mut else_body = None;
-        for (body, breaks) in lowered_cases {
-            if else_body.is_none() {
-                branch_body.extend(body);
-                if breaks {
-                    else_body = Some(Vec::new());
-                }
-            } else if let Some(tail) = &mut else_body {
-                tail.extend(body);
-                // A second direct break is a structural Else in the pinned
-                // oracle. The canonical WIR has one else carrier, so the
-                // first boundary is the representable semantic boundary and
-                // later unreachable boundaries contribute no action.
-                if breaks {
-                    break;
+        let else_body = if let Some((break_index, (break_at, _))) = first_break {
+            for (index, (_, body, _)) in lowered_arms.iter().enumerate() {
+                if index < break_index {
+                    branch_body.extend(body.iter().copied());
+                } else if index == break_index {
+                    branch_body.extend(body[..break_at].iter().copied());
                 }
             }
-        }
-        if let Some(tail) = &mut else_body {
-            if let Some(default_body) = default_body {
-                tail.extend(default_body);
+            let mut tail = Vec::new();
+            tail.extend(lowered_arms[break_index].1[break_at..].iter().copied());
+            for (_, body, _) in lowered_arms.iter().skip(break_index + 1) {
+                tail.extend(body.iter().copied());
             }
+            Some(tail)
         } else {
-            else_body = default_body;
-        }
+            for (_, body, _) in &lowered_arms {
+                branch_body.extend(body.iter().copied());
+            }
+            None
+        };
 
         Ok(self.wir.actions.push(Action::If {
             branches: vec![wir::IfBranch {
@@ -1333,15 +1364,77 @@ impl<'a> Lowering<'a> {
     fn lower_switch_body(
         &mut self,
         statements: &[Stmt],
-    ) -> Result<(Vec<wir::ActionId>, bool), IntegrationError> {
+    ) -> Result<LoweredSwitchBody, IntegrationError> {
         let mut actions = Vec::new();
+        let mut break_at = None;
         for statement in statements {
-            if matches!(statement, Stmt::Break { .. }) {
-                return Ok((actions, true));
+            if let Stmt::Break { span } = statement {
+                if break_at.is_some() {
+                    return Err(self.unsupported(
+                        "multiple switch breaks in one arm require canonical switch targets",
+                        *span,
+                    ));
+                }
+                break_at = Some((
+                    actions.len(),
+                    span.ok_or_else(|| {
+                        self.unsupported("switch break is missing source provenance", None)
+                    })?,
+                ));
+                continue;
             }
             actions.extend(self.lower_action(statement, Some(BreakTarget::Switch))?);
         }
-        Ok((actions, false))
+        Ok((actions, break_at))
+    }
+
+    /// Count the Workshop action lines emitted by canonical WIR, including
+    /// structural headers and terminators. This is the normalization used by
+    /// jump-producing source constructs; arena-node counts are not offsets.
+    fn normalized_action_width(
+        &self,
+        actions: &[wir::ActionId],
+    ) -> Result<usize, IntegrationError> {
+        actions.iter().try_fold(0usize, |total, id| {
+            let action = self
+                .wir
+                .actions
+                .get(*id)
+                .ok_or_else(|| self.unsupported("canonical WIR action id is invalid", None))?;
+            let width = match action {
+                Action::If {
+                    branches,
+                    else_body,
+                    ..
+                } => {
+                    let branches_width = branches.iter().try_fold(0usize, |width, branch| {
+                        Ok::<_, IntegrationError>(
+                            width + 1 + self.normalized_action_width(&branch.body)?,
+                        )
+                    })?;
+                    branches_width
+                        + else_body
+                            .as_ref()
+                            .map(|body| self.normalized_action_width(body).map(|width| width + 1))
+                            .transpose()?
+                            .unwrap_or(0)
+                        + 1
+                }
+                Action::While { body, .. }
+                | Action::ForGlobalVariable { body, .. }
+                | Action::ForPlayerVariable { body, .. } => self.normalized_action_width(body)? + 2,
+                Action::SetGlobalVariable { .. }
+                | Action::ModifyGlobalVariable { .. }
+                | Action::SetPlayerVariable { .. }
+                | Action::ModifyPlayerVariable { .. }
+                | Action::AssignMember { .. }
+                | Action::CallSubroutine { .. }
+                | Action::Debug { .. }
+                | Action::Print { .. }
+                | Action::Call { .. } => 1,
+            };
+            Ok(total + width)
+        })
     }
 
     fn lower_assign(
@@ -2036,37 +2129,36 @@ fn collect_implicit_stmts(
                 );
                 collect_implicit_stmts(body, declared_globals, declared_players, globals, players);
             }
-            Stmt::Switch {
-                value,
-                cases,
-                r#default,
-                ..
-            } => {
+            Stmt::Switch { value, arms, .. } => {
                 collect_implicit_expr(value, declared_globals, declared_players, globals, players);
-                for case in cases {
-                    collect_implicit_expr(
-                        &case.value,
-                        declared_globals,
-                        declared_players,
-                        globals,
-                        players,
-                    );
-                    collect_implicit_stmts(
-                        &case.body,
-                        declared_globals,
-                        declared_players,
-                        globals,
-                        players,
-                    );
-                }
-                if let Some(default) = r#default {
-                    collect_implicit_stmts(
-                        default,
-                        declared_globals,
-                        declared_players,
-                        globals,
-                        players,
-                    );
+                for arm in arms {
+                    match arm {
+                        SwitchArm::Case { value, body, .. } => {
+                            collect_implicit_expr(
+                                value,
+                                declared_globals,
+                                declared_players,
+                                globals,
+                                players,
+                            );
+                            collect_implicit_stmts(
+                                body,
+                                declared_globals,
+                                declared_players,
+                                globals,
+                                players,
+                            );
+                        }
+                        SwitchArm::Default { body, .. } => {
+                            collect_implicit_stmts(
+                                body,
+                                declared_globals,
+                                declared_players,
+                                globals,
+                                players,
+                            );
+                        }
+                    }
                 }
             }
             Stmt::Break { .. } | Stmt::CallSubroutine { .. } | Stmt::Pass { .. } => {}

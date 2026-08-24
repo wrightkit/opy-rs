@@ -63,9 +63,13 @@ Workshop-independent up to the documented integration boundary toward
 | `compatibility/fixtures/synthetic/issue-46-unsupported/` | #46 negative primitive-lowering evidence: the frontend and pinned oracle accept a dict-indexed assignment while the compiler rejects it with the stable source-attributed `unsupported-integration-surface` diagnostic |
 | `compatibility/fixtures/synthetic/issue-47-control-flow/` | #47 pinned OverPy oracle evidence for if/elif/else, while, range-for, do-while expansion, switch fallthrough/default, and direct break lowering; native output is reparsed through `workshop-rs` and compared structurally |
 | `compatibility/fixtures/synthetic/issue-47-unsupported/` | #47 negative evidence: nested conditional switch-break is preserved by the frontend/oracle and rejected at the canonical WIR boundary with a source-attributed diagnostic |
-| `crates/opy-compiler/src/lib.rs` structural tests | #40/#46 declarations, subroutines, rules, event filters, assignments, expressions, indexing, format, pass, and source-attributed negative lowering evidence |
+| `compatibility/fixtures/synthetic/issue-47-switch-order/` | #47 pinned oracle evidence for default-before-case source order and fallthrough; native output is reparsed through `workshop-rs` and compared structurally |
+| `compatibility/fixtures/synthetic/issue-47-switch-multiple-break/` | #47 multi-break evidence: frontend/oracle preserve the source, while later reachable actions are rejected explicitly at the canonical WIR boundary because v0.1.8 has no lossless multi-target switch carrier |
+| `compatibility/fixtures/synthetic/issue-47-do-while-shapes/` | #47 pinned oracle evidence for direct, conditional, nested, and structured-tail do-while breaks; native output is reparsed through `workshop-rs` and compared structurally |
+| `compatibility/fixtures/synthetic/issue-47-do-while-invalid-placement/` | #47 negative evidence for the stable source-attributed do-while placement diagnostic |
+| `crates/opy-compiler/src/lib.rs` structural tests | #40/#46/#47 declarations, subroutines, rules, event filters, assignments, expressions, indexing, format, pass, control-flow lowering, and source-attributed negative lowering evidence |
 | `crates/opy-compiler/tests/issue_46_oracle.rs` | #46 oracle-constrained differential equivalence: native output and the pinned oracle Workshop text both reparse through the canonical `workshop-rs` parser and must satisfy `roundtrip::equivalent` |
-| `crates/opy-compiler/tests/issue_47_oracle.rs` | #47 oracle-constrained control-flow equivalence plus a nested switch-break negative diagnostic |
+| `crates/opy-compiler/tests/issue_47_oracle.rs` | #47 oracle-constrained control-flow equivalence for ordered switches and do-while break shapes, plus source-attributed negative diagnostics for unsupported switch targets and invalid do-while placement |
 | `compatibility/support-matrix.json` | Machine-readable state tracking of every declared feature (the mechanically checkable artifact) |
  | `crates/opy-frontend/src/manifest/` | The opy-rs-owned semantic compatibility manifest and its oracle probes (ported with the frontend, issue #3/#4) |
  | `crates/opy-frontend/tests/differential.rs` + `compatibility/diff.py` | Native-vs-reference differential parity (issue #7): the rust suite runs every corpus fixture through the native pipeline in `cargo test` (no Node), compares status/rule-name evidence against the recorded `oracle.json` snapshots, and writes `target/opy-differential-report.json` |
@@ -91,9 +95,13 @@ implements; "reference" always means the pinned OverPy 9.7.10
   real HIR statement valid in the innermost switch or loop.
 - `do ... while`, hexadecimal literals, and expression-level `in`/`not in`
   are represented in the source-language HIR. The #47 integration slice lowers
-  if/elif/else, while, range-for, do-while, switch fallthrough/default, and
-  direct loop/switch break into canonical WIR; an evidence-insufficient nested
-  conditional switch break remains a source-attributed diagnostic.
+  if/elif/else, while, global-binder range-for, do-while, switch
+  fallthrough/default, and direct loop/switch break into canonical WIR. Do-while
+  is accepted only at the beginning of a rule/definition or nested do-while
+  body (preceded only by `pass`). Multiple switch breaks with later reachable
+  actions, and an evidence-insufficient nested conditional switch break, remain
+  source-attributed diagnostics because the pinned canonical WIR has no
+  lossless multi-target switch carrier.
 - String modifiers, including f-string interpolation, preserve semantic
   format text, interpolation expressions, and source spans; dict literals,
   keyed access, list comprehensions, and lambda binders preserve local scope.

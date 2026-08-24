@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/issue-47-switch-multiple-break",
+  "category": "compilation",
+  "features": ["switch", "case", "default", "break"],
+  "source": "source.opy",
+  "expectedStatus": "success",
+  "provenance": {
+    "kind": "original",
+    "origin": "opy-rs Issue #47 pinned multi-break lowering probe",
+    "license": "AGPL-3.0-or-later",
+    "redistributable": true
+  }
+}

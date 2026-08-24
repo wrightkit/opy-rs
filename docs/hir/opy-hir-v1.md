@@ -315,7 +315,7 @@ whose `kind` the consumer does not recognize is an *unsupported node* (§7.3).
 | `for` | `variable`, `iterable`, `body`, `span` | Iteration. `variable` is an expression naming the loop variable (a `globalVar` reference). |
 | `while` | `condition`, `body`, `span` | Loop. |
 | `doWhile` | `body`, `condition`, `span` | Loop whose body executes before its condition. |
-| `switch` | `value`, `cases`, `default`, `span` | Source-order arms; execution falls through until a `break` or the end of the switch. |
+| `switch` | `value`, `arms`, `span` | Source-order arms; execution falls through until a `break` or the end of the switch. Each arm is tagged `case` or `default`; a case has `value` and `body`, while a default has `body`, and each arm may carry `span`. At most one default arm is valid. |
 | `break` | `span` | Exit the innermost switch or loop; invalid contexts are rejected by the frontend. |
 | `callSubroutine` | `name`, `span` | Call a subroutine by name. |
 | `pass` | `span` | A no-op emitted by the frontend. |

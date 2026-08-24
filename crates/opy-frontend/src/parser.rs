@@ -9,7 +9,7 @@
 
 use crate::cst::{
     Annotation, AnnotationArg, CallArg, Decl, DictEntry, Event, Expr, IfBranch, Program, Rule,
-    RuleEntry, Stmt, SwitchCase,
+    RuleEntry, Stmt, SwitchArm,
 };
 use crate::diag::{FrontendError, Position, Span};
 use crate::lexer::{Token, TokenKind};
@@ -1096,8 +1096,7 @@ impl Parser<'_> {
             return Err(());
         }
         let body_indent = self.block_indent(start.span.start.col).ok_or(())?;
-        let mut cases = Vec::new();
-        let mut r#default = None;
+        let mut arms = Vec::new();
         loop {
             self.skip_newlines();
             if self.peek_kind() == TokenKind::Eof || self.peek().span.start.col < body_indent {
@@ -1119,7 +1118,7 @@ impl Parser<'_> {
                 }
                 let case_body_indent = self.block_indent(body_indent).ok_or(())?;
                 let body = self.parse_block(case_body_indent);
-                cases.push(SwitchCase {
+                arms.push(SwitchArm::Case {
                     value: case_value,
                     body,
                     span: case_start.span,
@@ -1133,7 +1132,10 @@ impl Parser<'_> {
                     return Err(());
                 }
                 let default_body_indent = self.block_indent(body_indent).ok_or(())?;
-                r#default = Some(self.parse_block(default_body_indent));
+                arms.push(SwitchArm::Default {
+                    body: self.parse_block(default_body_indent),
+                    span: default_start.span,
+                });
                 if default_start.span.start.col != body_indent {
                     self.error_at_current("invalid default indentation".to_string());
                     return Err(());
@@ -1143,7 +1145,7 @@ impl Parser<'_> {
                 self.recover_line();
             }
         }
-        if cases.is_empty() && r#default.is_none() {
+        if arms.is_empty() {
             self.errors.push(FrontendError::at(
                 "parse-error",
                 "switch must contain at least one case or default arm".to_string(),
@@ -1153,8 +1155,7 @@ impl Parser<'_> {
         }
         Ok(Stmt::Switch {
             value,
-            cases,
-            r#default,
+            arms,
             span: start.span,
         })
     }

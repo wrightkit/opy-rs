@@ -4,7 +4,9 @@
 //! issue reports. It is not part of the wire contract: the same validated
 //! payload always produces the same dump, in payload order.
 
-use super::types::{Declaration, Event, Expr, Program, Rule, RuleEntry, SettingsNode, Span, Stmt};
+use super::types::{
+    Declaration, Event, Expr, Program, Rule, RuleEntry, SettingsNode, Span, Stmt, SwitchArm,
+};
 
 /// Render a validated program as a deterministic text dump.
 pub fn dump(program: &Program) -> String {
@@ -286,24 +288,27 @@ fn dump_stmt(statement: &Stmt, out: &mut String, level: usize) {
             render_expr(condition, out);
             out.push('\n');
         }
-        Stmt::Switch {
-            value,
-            cases,
-            r#default,
-            span,
-        } => {
+        Stmt::Switch { value, arms, span } => {
             out.push_str(&format!("{}switch ", indent(level)));
             render_expr(value, out);
             out.push_str(&format!("{}\n", span_suffix(span.as_ref())));
-            for case in cases {
-                out.push_str(&format!("{}case ", indent(level + 1)));
-                render_expr(&case.value, out);
-                out.push_str(&format!("{}\n", span_suffix(case.span.as_ref())));
-                dump_stmts(&case.body, out, level + 2);
-            }
-            if let Some(default_body) = r#default {
-                out.push_str(&format!("{}default\n", indent(level + 1)));
-                dump_stmts(default_body, out, level + 2);
+            for arm in arms {
+                match arm {
+                    SwitchArm::Case { value, body, span } => {
+                        out.push_str(&format!("{}case ", indent(level + 1)));
+                        render_expr(value, out);
+                        out.push_str(&format!("{}\n", span_suffix(span.as_ref())));
+                        dump_stmts(body, out, level + 2);
+                    }
+                    SwitchArm::Default { body, span } => {
+                        out.push_str(&format!(
+                            "{}default{}\n",
+                            indent(level + 1),
+                            span_suffix(span.as_ref())
+                        ));
+                        dump_stmts(body, out, level + 2);
+                    }
+                }
             }
         }
         Stmt::Break { span } => {

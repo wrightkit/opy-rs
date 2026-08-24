@@ -223,6 +223,30 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         false,
         "Issue #47 negative probe; the frontend preserves the nested conditional switch-break HIR while the compiler rejects it at the canonical WIR integration boundary.",
     );
+    resolve(
+        &mut cases,
+        "synthetic/issue-47-switch-order",
+        false,
+        "Issue #47 source-order switch probe; default-before-case fallthrough remains represented in ordered HIR arms.",
+    );
+    resolve(
+        &mut cases,
+        "synthetic/issue-47-switch-multiple-break",
+        false,
+        "Issue #47 multi-break probe; the frontend preserves all authored arms and breaks while the compiler reports the canonical WIR capability gap.",
+    );
+    resolve(
+        &mut cases,
+        "synthetic/issue-47-do-while-shapes",
+        false,
+        "Issue #47 do-while probe; direct, conditional, and nested break shapes resolve in the frontend and are constrained by compiler oracle tests.",
+    );
+    diagnostic(
+        &mut cases,
+        "synthetic/issue-47-do-while-invalid-placement",
+        Some("do-while-placement"),
+        "Issue #47 invalid do-while placement remains a stable source-attributed frontend diagnostic.",
+    );
     diagnostic(
         &mut cases,
         "synthetic/issue-33-lambda-negative",

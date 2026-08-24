@@ -21,7 +21,7 @@ use serde_json::Value;
 use super::error::{HirError, invalid};
 use super::types::{
     Declaration, Expr, PROTOCOL_MAJOR, PROTOCOL_NAME, Position, Program, Rule, RuleEntry, Settings,
-    SettingsNode, Span, Stmt, default_var_index,
+    SettingsNode, Span, Stmt, SwitchArm, default_var_index,
 };
 
 /// Declaration `kind` values understood by this consumer.
@@ -425,6 +425,37 @@ fn validate_stmts(
                     *span,
                 )),
             },
+            Stmt::Switch { arms, .. } => {
+                if arms.is_empty() {
+                    errors.push(invalid(
+                        "invalid-structure",
+                        "a switch must contain at least one arm",
+                        None,
+                    ));
+                }
+                let mut defaults = 0;
+                for arm in arms {
+                    let arm_span = match arm {
+                        SwitchArm::Case { span, body, .. } | SwitchArm::Default { span, body } => {
+                            let _ = body;
+                            span
+                        }
+                    };
+                    if let Err(error) = check_span(*arm_span, program.files.len()) {
+                        errors.push(error);
+                    }
+                    if matches!(arm, SwitchArm::Default { .. }) {
+                        defaults += 1;
+                        if defaults > 1 {
+                            errors.push(invalid(
+                                "invalid-structure",
+                                "a switch may contain at most one default arm",
+                                *arm_span,
+                            ));
+                        }
+                    }
+                }
+            }
             _ => {}
         }
     });
@@ -532,19 +563,18 @@ fn statement_exprs(statements: &[Stmt]) -> Vec<&Expr> {
                 exprs.push(condition.as_ref());
                 exprs.extend(statement_exprs(body));
             }
-            Stmt::Switch {
-                value,
-                cases,
-                r#default,
-                ..
-            } => {
+            Stmt::Switch { value, arms, .. } => {
                 exprs.push(value.as_ref());
-                for case in cases {
-                    exprs.push(case.value.as_ref());
-                    exprs.extend(statement_exprs(&case.body));
-                }
-                if let Some(default_body) = r#default {
-                    exprs.extend(statement_exprs(default_body));
+                for arm in arms {
+                    match arm {
+                        SwitchArm::Case { value, body, .. } => {
+                            exprs.push(value.as_ref());
+                            exprs.extend(statement_exprs(body));
+                        }
+                        SwitchArm::Default { body, .. } => {
+                            exprs.extend(statement_exprs(body));
+                        }
+                    }
                 }
             }
             Stmt::Break { .. } | Stmt::CallSubroutine { .. } | Stmt::Pass { .. } => {}
@@ -632,14 +662,13 @@ fn for_each_stmt<'a>(statements: &'a [Stmt], f: &mut impl FnMut(&'a Stmt)) {
             Stmt::For { body, .. } | Stmt::While { body, .. } | Stmt::DoWhile { body, .. } => {
                 for_each_stmt(body, f)
             }
-            Stmt::Switch {
-                cases, r#default, ..
-            } => {
-                for case in cases {
-                    for_each_stmt(&case.body, f);
-                }
-                if let Some(default_body) = r#default {
-                    for_each_stmt(default_body, f);
+            Stmt::Switch { arms, .. } => {
+                for arm in arms {
+                    match arm {
+                        SwitchArm::Case { body, .. } | SwitchArm::Default { body, .. } => {
+                            for_each_stmt(body, f);
+                        }
+                    }
                 }
             }
             Stmt::Expr { .. }
@@ -811,12 +840,22 @@ fn check_stmt(value: &Value) -> Result<(), HirError> {
             }
         }
     }
-    if let Some(cases) = object.get("cases").and_then(Value::as_array) {
-        for case in cases {
-            if let Some(value) = case.get("value") {
-                check_expr(value)?;
+    if let Some(arms) = object.get("arms").and_then(Value::as_array) {
+        for arm in arms {
+            let Some(arm_object) = arm.as_object() else {
+                return Err(unsupported_node("", object));
+            };
+            let arm_kind = arm_object.get("kind").and_then(Value::as_str).unwrap_or("");
+            match arm_kind {
+                "case" => {
+                    if let Some(value) = arm_object.get("value") {
+                        check_expr(value)?;
+                    }
+                }
+                "default" => {}
+                _ => return Err(unsupported_node(arm_kind, arm_object)),
             }
-            if let Some(body) = case.get("body").and_then(Value::as_array) {
+            if let Some(body) = arm_object.get("body").and_then(Value::as_array) {
                 for statement in body {
                     check_stmt(statement)?;
                 }
