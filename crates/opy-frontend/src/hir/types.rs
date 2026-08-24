@@ -1,7 +1,7 @@
-//! Serde protocol types for the `wright/opy-hir` protocol, major version 1.
+//! Serde protocol types for the `wright/opy-hir` protocol, major version 2.
 //!
-//! These types mirror the Opy HIR v1 specification (`docs/hir/opy-hir-v1.md`,
-//! `wright/opy-hir` v1.1.0 wire payloads). Unknown
+//! These types mirror the Opy HIR v2 specification (`docs/hir/opy-hir-v2.md`,
+//! `wright/opy-hir` v2.0.0 wire payloads). Unknown
 //! fields on known nodes are tolerated so an additive producer change inside
 //! the same major version does not break the consumer; unknown node *kinds*
 //! are rejected during validation (see [`super::validate`]).
@@ -11,7 +11,9 @@ use serde::{Deserialize, Serialize};
 /// The `wright/opy-hir` protocol name.
 pub const PROTOCOL_NAME: &str = "wright/opy-hir";
 /// The protocol major version this consumer understands.
-pub const PROTOCOL_MAJOR: u32 = 1;
+pub const PROTOCOL_MAJOR: u32 = 2;
+/// The protocol version emitted by this producer.
+pub const PROTOCOL_VERSION: &str = "2.0.0";
 
 /// The number of Workshop variable slots per variable set.
 ///

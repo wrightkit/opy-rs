@@ -205,7 +205,7 @@ addition to focused tests.
 - [`../../compatibility/support-matrix.json`](../../compatibility/support-matrix.json)
   — machine-readable support state.
 - [`compat-manifest-spec.md`](compat-manifest-spec.md) — OPY semantic manifest.
-- [`../hir/opy-hir-v1.md`](../hir/opy-hir-v1.md) — Opy HIR contract.
+- [`../hir/opy-hir-v2.md`](../hir/opy-hir-v2.md) — current Opy HIR contract.
 - [`tooling-api.md`](tooling-api.md) — standalone semantic/tooling API.
 - [`../compatibility/upstream-references.md`](../compatibility/upstream-references.md)
   — pinned reference and provenance.

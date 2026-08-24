@@ -111,7 +111,7 @@ cargo test -p opy-frontend --test differential
 ```
 
 It compiles every fixture through the native pipeline (preprocess → parse →
-lower), verifies the Opy HIR v1 structure (validation, wire round-trip,
+lower), verifies the Opy HIR v2 structure (validation, wire round-trip,
 deterministic dump), and compares the outcome against the recorded
 `oracle.json` evidence: status parity (resolve vs expected diagnostic),
 ordered authored rule names (normalized to drop reference-synthesized

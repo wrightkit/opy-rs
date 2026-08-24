@@ -1,7 +1,7 @@
-//! Opy HIR v1 validation.
+//! Opy HIR v2 validation.
 //!
-//! Validation follows the order of the Opy HIR v1 specification (`docs/hir/
-//! opy-hir-v1.md` in the wright repository) §8: the protocol envelope is
+//! Validation follows the order of the Opy HIR v2 specification (`docs/hir/
+//! opy-hir-v2.md`) §8: the protocol envelope is
 //! checked first (in [`super::parse_value`]), then unknown node kinds are
 //! rejected with the offending kind name and span, then the payload is
 //! deserialized, then structural invariants (spans, identifiers, references)

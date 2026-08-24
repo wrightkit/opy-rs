@@ -1,4 +1,4 @@
-//! Deterministic debug/pretty dump for Opy HIR v1 programs.
+//! Deterministic debug/pretty dump for Opy HIR v2 programs.
 //!
 //! The dump is a stable, human-readable rendering intended for tests and
 //! issue reports. It is not part of the wire contract: the same validated

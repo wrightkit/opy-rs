@@ -1,4 +1,4 @@
-//! Structured errors for Opy HIR v1 ingestion.
+//! Structured errors for Opy HIR v2 ingestion.
 //!
 //! Every failure carries a stable code, a message, and — when the offending
 //! source position is known — a span. Human-readable wording is not part of
@@ -6,7 +6,7 @@
 
 use crate::hir::types::Span;
 
-/// A structured Opy HIR v1 ingestion error.
+/// A structured Opy HIR v2 ingestion error.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HirError {
     /// The payload is not valid JSON or does not fit the protocol envelope.

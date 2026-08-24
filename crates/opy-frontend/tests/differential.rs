@@ -22,7 +22,7 @@
 //!   silent failure; behavior that leaves the table is a `divergence` and
 //!   fails the suite (regressions break CI, mirroring the wright contract).
 //! * **Structural self-check** (always runs) — a resolved program must pass
-//!   Opy HIR v1 validation, must round-trip through the wire payload
+//!   Opy HIR v2 validation, must round-trip through the wire payload
 //!   (`parse_value(serde_json::to_value(program))`), and its debug dump must
 //!   be deterministic.
 //! * **Rule-name parity** (informational) — the ordered authored rule names
@@ -228,6 +228,12 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         "synthetic/issue-47-switch-order",
         false,
         "Issue #47 source-order switch probe; default-before-case fallthrough remains represented in ordered HIR arms.",
+    );
+    resolve(
+        &mut cases,
+        "synthetic/issue-47-switch-structured-target",
+        false,
+        "Issue #47 structured switch-target probe; nested canonical control-flow widths preserve later case/default targets.",
     );
     resolve(
         &mut cases,

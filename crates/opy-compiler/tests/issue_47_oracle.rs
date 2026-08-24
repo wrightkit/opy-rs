@@ -78,6 +78,24 @@ fn issue_47_switch_order_matches_the_pinned_oracle() {
 }
 
 #[test]
+fn issue_47_structured_switch_target_matches_the_pinned_oracle() {
+    let dir = fixture_dir("issue-47-switch-structured-target");
+    let source = std::fs::read_to_string(dir.join("source.opy")).unwrap();
+    let hir = opy_frontend::compile(&source, "source.opy", &dir).expect("fixture must resolve");
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+    let catalog = Catalog::builtin().unwrap();
+    let locale = Locale::new("en-US");
+    let native = workshop_rs::parser::parse(&artifact.emitted, &catalog, &locale).unwrap();
+    let oracle = workshop_rs::parser::parse(&oracle_workshop(&dir), &catalog, &locale).unwrap();
+
+    assert!(
+        equivalent(&native, &oracle),
+        "structured switch target diverged\n{}",
+        artifact.emitted
+    );
+}
+
+#[test]
 fn issue_47_do_while_break_shapes_match_the_pinned_oracle() {
     let dir = fixture_dir("issue-47-do-while-shapes");
     let source = std::fs::read_to_string(dir.join("source.opy")).unwrap();

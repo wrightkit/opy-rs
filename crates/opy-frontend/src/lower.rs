@@ -29,10 +29,10 @@ use std::collections::{HashMap, HashSet};
 
 use crate::hir::types::{
     Annotation as HirAnnotation, AnnotationArg as HirAnnotationArg, Declaration, Define,
-    DictEntry as HirDictEntry, Event, Expr as HirExpr, Generator, IfBranch, Position,
-    PreprocessingState, Program as HirProgram, Protocol, Rule, RuleEntry, Settings as HirSettings,
-    SettingsNode as HirSettingsNode, SourceFile, Span as HirSpan, Stmt as HirStmt,
-    SwitchArm as HirSwitchArm, default_var_index,
+    DictEntry as HirDictEntry, Event, Expr as HirExpr, Generator, IfBranch, PROTOCOL_VERSION,
+    Position, PreprocessingState, Program as HirProgram, Protocol, Rule, RuleEntry,
+    Settings as HirSettings, SettingsNode as HirSettingsNode, SourceFile, Span as HirSpan,
+    Stmt as HirStmt, SwitchArm as HirSwitchArm, default_var_index,
 };
 
 use crate::cst::{self, CallArg, Decl, Expr, RuleEntry as CstRuleEntry, Stmt};
@@ -43,7 +43,6 @@ use crate::manifest::{
 
 /// The protocol envelope this frontend produces.
 const PROTOCOL_NAME: &str = "wright/opy-hir";
-const PROTOCOL_VERSION: &str = "1.1.0";
 
 /// The call-position context of an expression being lowered; builtin
 /// resolution checks action/value identity against this context.
@@ -1914,6 +1913,20 @@ mod tests {
             panic!("expected a rule");
         };
         (&rule.conditions, &rule.actions)
+    }
+
+    #[test]
+    fn producer_emits_the_v2_ordered_switch_contract() {
+        let hir = lower_ok(
+            "globalvar value\nrule \"r\":\n    @Event global\n    switch value:\n        default:\n            value = 1\n        case 2:\n            value = 2\n",
+        );
+        assert_eq!(hir.protocol.name, "wright/opy-hir");
+        assert_eq!(hir.protocol.version, "2.0.0");
+        let value = serde_json::to_value(&hir).expect("HIR must serialize");
+        let switch = &value["rules"][0]["actions"][0];
+        assert!(switch.get("arms").is_some());
+        assert!(switch.get("cases").is_none());
+        assert!(switch.get("default").is_none());
     }
 
     #[test]

@@ -25,7 +25,7 @@ machine-readable semantic contract for builtins is specified in
 
 The standalone frontend foundation and #7 readiness work are merged on `main`
 (issues #2–#7, #28–#30, and #33): the native pipeline (lexer →
-preprocess → CST/parser → semantic resolution → Opy HIR v1), the bounded
+preprocess → CST/parser → semantic resolution → Opy HIR v2), the bounded
 JavaScript macro runtime, the tooling API/CLI, and the native differential
 suite are implemented and CI-covered. The rows they evidence are flipped to
 `frontend-supported`/`semantic-supported` in
@@ -44,8 +44,8 @@ expected-diagnostic / divergence) is recorded in
 --test differential`.
 
 The declared pipeline is `lexer → preprocess → CST/parser → semantic
-resolution → OPY semantic model (Opy HIR v1, see
-[`docs/hir/opy-hir-v1.md`](../hir/opy-hir-v1.md))`, fully
+resolution → OPY semantic model (Opy HIR v2, see
+[`docs/hir/opy-hir-v2.md`](../hir/opy-hir-v2.md))`, fully
 Workshop-independent up to the documented integration boundary toward
 `workshop-rs` (see [`architecture.md`](architecture.md)).
 
@@ -64,7 +64,7 @@ Workshop-independent up to the documented integration boundary toward
 | `compatibility/fixtures/synthetic/issue-47-control-flow/` | #47 pinned OverPy oracle evidence for if/elif/else, while, range-for, do-while expansion, switch fallthrough/default, and direct break lowering; native output is reparsed through `workshop-rs` and compared structurally |
 | `compatibility/fixtures/synthetic/issue-47-unsupported/` | #47 negative evidence: nested conditional switch-break is preserved by the frontend/oracle and rejected at the canonical WIR boundary with a source-attributed diagnostic |
 | `compatibility/fixtures/synthetic/issue-47-switch-order/` | #47 pinned oracle evidence for default-before-case source order and fallthrough; native output is reparsed through `workshop-rs` and compared structurally |
-| `compatibility/fixtures/synthetic/issue-47-switch-multiple-break/` | #47 multi-break evidence: frontend/oracle preserve the source, while later reachable actions are rejected explicitly at the canonical WIR boundary because v0.1.8 has no lossless multi-target switch carrier |
+| `compatibility/fixtures/synthetic/issue-47-switch-multiple-break/` | #47 multi-break evidence: frontend/oracle preserve the source, while later reachable actions are rejected explicitly at the canonical WIR boundary because v0.1.11 has no lossless multi-target switch carrier |
 | `compatibility/fixtures/synthetic/issue-47-do-while-shapes/` | #47 pinned oracle evidence for direct, conditional, nested, and structured-tail do-while breaks; native output is reparsed through `workshop-rs` and compared structurally |
 | `compatibility/fixtures/synthetic/issue-47-do-while-invalid-placement/` | #47 negative evidence for the stable source-attributed do-while placement diagnostic |
 | `crates/opy-compiler/src/lib.rs` structural tests | #40/#46/#47 declarations, subroutines, rules, event filters, assignments, expressions, indexing, format, pass, control-flow lowering, and source-attributed negative lowering evidence |
@@ -398,8 +398,8 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
 
 ## Boundary contract
 
-The frontend produces the Opy HIR v1 program model
-([`docs/hir/opy-hir-v1.md`](../hir/opy-hir-v1.md)) with the protocol envelope,
+The frontend produces the Opy HIR v2 program model
+([`docs/hir/opy-hir-v2.md`](../hir/opy-hir-v2.md)) with the protocol envelope,
 file registry, declarations, and rules as specified there. It never requires
 Node or OverPy at build/runtime; the oracle remains available as an explicit
 `pnpm install --dir compatibility/oracle` step for the compatibility harness

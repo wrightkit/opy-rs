@@ -1,7 +1,7 @@
 //! The first OPY-to-Workshop integration boundary.
 //!
 //! `opy-frontend` remains a standalone OPY/HIR producer. This crate is the
-//! consumer-owned compiler layer: it pins the released `workshop-rs` v0.1.8
+//! consumer-owned compiler layer: it pins the released `workshop-rs` v0.1.11
 //! contract, checks the OPY manifest links against the canonical catalog, and
 //! lowers the supported OPY program structure into canonical WIR before
 //! validation and deterministic Workshop emission.
@@ -17,7 +17,7 @@ use workshop_rs::source::{Position as WorkshopPosition, SourceFile, Span as Work
 use workshop_rs::wir::{self, Action, Event, PlayerEventKind, Program, Value, ValueNode};
 
 /// The exact released dependency contract consumed by this crate.
-pub const WORKSHOP_RS_VERSION: &str = "0.1.8";
+pub const WORKSHOP_RS_VERSION: &str = "0.1.11";
 
 /// A source-attributed integration diagnostic.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1131,7 +1131,7 @@ impl<'a> Lowering<'a> {
 
             if direct_break || conditional_break {
                 let tail = self.lower_do_while_body(&statements[index + 1..])?;
-                let distance = self.normalized_action_width(&tail)? + 1;
+                let distance = self.canonical_action_width(&tail, statement.span().copied())? + 1;
                 let (name, args, span) = if let Stmt::Break { span } = statement {
                     ("skip", Vec::new(), *span)
                 } else if let Stmt::If { branches, span, .. } = statement {
@@ -1244,7 +1244,7 @@ impl<'a> Lowering<'a> {
             if value.is_some() {
                 case_offsets.push(offset);
             }
-            offset += self.normalized_action_width(&body)? + usize::from(break_at.is_some());
+            offset += self.canonical_action_width(&body, span)? + usize::from(break_at.is_some());
             lowered_arms.push((value, body, break_at));
         }
         let default_offset = default_offset.unwrap_or(offset);
@@ -1388,52 +1388,30 @@ impl<'a> Lowering<'a> {
         Ok((actions, break_at))
     }
 
-    /// Count the Workshop action lines emitted by canonical WIR, including
-    /// structural headers and terminators. This is the normalization used by
-    /// jump-producing source constructs; arena-node counts are not offsets.
-    fn normalized_action_width(
+    /// Query the Workshop-owned native action layout for a relative jump.
+    fn canonical_action_width(
         &self,
         actions: &[wir::ActionId],
+        fallback_span: Option<HirSpan>,
     ) -> Result<usize, IntegrationError> {
-        actions.iter().try_fold(0usize, |total, id| {
-            let action = self
-                .wir
-                .actions
-                .get(*id)
-                .ok_or_else(|| self.unsupported("canonical WIR action id is invalid", None))?;
-            let width = match action {
-                Action::If {
-                    branches,
-                    else_body,
-                    ..
-                } => {
-                    let branches_width = branches.iter().try_fold(0usize, |width, branch| {
-                        Ok::<_, IntegrationError>(
-                            width + 1 + self.normalized_action_width(&branch.body)?,
-                        )
-                    })?;
-                    branches_width
-                        + else_body
-                            .as_ref()
-                            .map(|body| self.normalized_action_width(body).map(|width| width + 1))
-                            .transpose()?
-                            .unwrap_or(0)
-                        + 1
+        workshop_rs::emitter::action_width(
+            &self.wir,
+            &self.compiler.catalog,
+            &Locale::new("en-US"),
+            actions,
+        )
+        .map(|layout| layout.width)
+        .map_err(|error| {
+            let workshop_span = match &error {
+                workshop_rs::emitter::ActionLayoutError::InvalidWIR(error) => error.span(),
+                workshop_rs::emitter::ActionLayoutError::Emission(error) => {
+                    workshop_error_span(error)
                 }
-                Action::While { body, .. }
-                | Action::ForGlobalVariable { body, .. }
-                | Action::ForPlayerVariable { body, .. } => self.normalized_action_width(body)? + 2,
-                Action::SetGlobalVariable { .. }
-                | Action::ModifyGlobalVariable { .. }
-                | Action::SetPlayerVariable { .. }
-                | Action::ModifyPlayerVariable { .. }
-                | Action::AssignMember { .. }
-                | Action::CallSubroutine { .. }
-                | Action::Debug { .. }
-                | Action::Print { .. }
-                | Action::Call { .. } => 1,
             };
-            Ok(total + width)
+            let span = workshop_span
+                .and_then(|span| self.hir_span_from_workshop(span))
+                .or(fallback_span);
+            IntegrationError::new("workshop-action-layout", error.to_string(), span)
         })
     }
 
@@ -2485,7 +2463,7 @@ mod tests {
         assert_eq!(rule.span.unwrap().file.index(), 0);
         assert_eq!(rule.name_span.unwrap().start.line, 2);
         assert!(artifact.emitted.contains("Disable Inspector Recording;"));
-        assert_eq!(artifact.catalog_identity.implementation_version, "0.1.8");
+        assert_eq!(artifact.catalog_identity.implementation_version, "0.1.11");
     }
 
     #[test]
