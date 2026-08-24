@@ -9,7 +9,7 @@ architecture, compatibility evidence, APIs, and internal contracts live here.
 - [Implementation role](opy/implementation-role.md): standalone OverPy
   implementation identity, relationship with `workshop-rs`, and Wright
   integration terminology.
-- [Architecture](opy/architecture.md): internal source frontend, semantic HIR,
+- [Architecture](opy/architecture.md): source parsing, semantic HIR,
   compiler/reconstruction boundaries, and dependency direction.
 - [Tooling API](opy/tooling-api.md): Rust library and CLI contracts for checking,
   inspection, overlays, diagnostics, and support queries.

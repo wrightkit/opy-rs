@@ -36,7 +36,7 @@ use crate::hir::types::{
 };
 
 use crate::cst::{self, CallArg, Decl, Expr, RuleEntry as CstRuleEntry, Stmt};
-use crate::diag::{FrontendError, FrontendResult, Span};
+use crate::diag::{OpyError, OpyResult, Span};
 use crate::manifest::{
     Function, FunctionContext, FunctionKind, Manifest, Param, ParamDefault, ReceiverCategory,
 };
@@ -69,7 +69,7 @@ struct Lowerer {
     allow_dict_literal: bool,
     /// The authoritative builtin semantic table (issue #109).
     manifest: &'static Manifest,
-    errors: Vec<FrontendError>,
+    errors: Vec<OpyError>,
 }
 
 /// Lower a parsed program into the Opy HIR contract.
@@ -77,7 +77,7 @@ pub fn lower(
     program: &cst::Program,
     files: Vec<SourceFile>,
     defines: Vec<Define>,
-) -> FrontendResult<HirProgram> {
+) -> OpyResult<HirProgram> {
     lower_with_preprocessing(program, files, defines, &PreprocessingState::default())
 }
 
@@ -86,11 +86,11 @@ pub fn lower_with_preprocessing(
     files: Vec<SourceFile>,
     defines: Vec<Define>,
     preprocessing: &PreprocessingState,
-) -> FrontendResult<HirProgram> {
+) -> OpyResult<HirProgram> {
     let manifest = match Manifest::builtin() {
         Ok(manifest) => manifest,
         Err(error) => {
-            return Err(FrontendError::new(
+            return Err(OpyError::new(
                 "manifest-error",
                 format!("cannot load the OPY semantic compatibility manifest: {error}"),
             ));
@@ -227,9 +227,9 @@ pub fn lower_with_preprocessing(
             version: PROTOCOL_VERSION.to_string(),
         },
         generator: Generator {
-            name: crate::FRONTEND_NAME.to_string(),
-            version: crate::FRONTEND_VERSION.to_string(),
-            frontend: "wright-native".to_string(),
+            name: crate::LANGUAGE_NAME.to_string(),
+            version: crate::LANGUAGE_VERSION.to_string(),
+            frontend: crate::LANGUAGE_NAME.to_string(),
         },
         files,
         defines,
@@ -262,7 +262,7 @@ fn render_rule_name(
     span: Span,
     files: &[SourceFile],
     preprocessing: &PreprocessingState,
-) -> FrontendResult<String> {
+) -> OpyResult<String> {
     let Some(template) = preprocessing
         .rule_prefix_template
         .as_ref()
@@ -289,7 +289,7 @@ fn render_rule_name(
         ("$pathLower", TemplateValue::String(path.to_lowercase())),
     ];
     evaluate_template(template, &values).map_err(|message| {
-        FrontendError::at(
+        OpyError::at(
             "rule-prefix-template-invalid",
             format!("could not resolve rule prefix template: {message}"),
             span,
@@ -612,7 +612,7 @@ impl Lowerer {
         rule: &cst::Rule,
         files: &[SourceFile],
         preprocessing: &PreprocessingState,
-    ) -> FrontendResult<Rule> {
+    ) -> OpyResult<Rule> {
         let conditions = rule
             .conditions
             .iter()
@@ -1832,7 +1832,7 @@ impl Lowerer {
     }
 
     fn error_at(&mut self, code: &str, message: String, span: Span) {
-        self.errors.push(FrontendError::at(code, message, span));
+        self.errors.push(OpyError::at(code, message, span));
     }
 }
 
@@ -2191,7 +2191,7 @@ mod tests {
     // --- Builtin semantic manifest coverage (#109) ---
 
     /// Assert a compile failure has the given code at the given line.
-    fn compile_error(source: &str, line: u32) -> FrontendError {
+    fn compile_error(source: &str, line: u32) -> OpyError {
         let error = crate::compile(source, "test.opy", std::path::Path::new(""))
             .expect_err("expected a compile failure");
         let span = error.span.expect("the error is source-located");

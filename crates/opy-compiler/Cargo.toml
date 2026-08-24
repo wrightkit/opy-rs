@@ -10,7 +10,7 @@ description = "OPy HIR to canonical Workshop WIR integration compiler"
 workspace = true
 
 [dependencies]
-opy-frontend.workspace = true
+opy-rs.workspace = true
 workshop-rs.workspace = true
 
 [dev-dependencies]

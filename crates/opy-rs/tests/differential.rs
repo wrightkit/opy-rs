@@ -80,7 +80,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use opy_frontend::{FRONTEND_NAME, FRONTEND_VERSION, compile};
+use opy_rs::{LANGUAGE_NAME, LANGUAGE_VERSION, compile};
 use serde_json::{Value, json};
 
 fn workspace_root() -> PathBuf {
@@ -498,15 +498,15 @@ fn load_fixture(path: &Path) -> (String, String, String) {
 }
 
 /// Collect authored rule names from the native HIR in program order.
-fn native_rule_names(program: &opy_frontend::hir::Program) -> Vec<String> {
+fn native_rule_names(program: &opy_rs::hir::Program) -> Vec<String> {
     program
         .rules
         .iter()
         .filter_map(|entry| match entry {
-            opy_frontend::hir::RuleEntry::Rule(rule) => Some(rule.name.clone()),
+            opy_rs::hir::RuleEntry::Rule(rule) => Some(rule.name.clone()),
             // Subroutines are emitted as synthesized `rule ("Subroutine …")`
             // entries by the reference; both sides are normalized away.
-            opy_frontend::hir::RuleEntry::SubroutineDef { .. } => None,
+            opy_rs::hir::RuleEntry::SubroutineDef { .. } => None,
         })
         .collect()
 }
@@ -575,13 +575,13 @@ fn run_native(
     source_name: &str,
     fixture_dir: &Path,
     id: &str,
-) -> Result<opy_frontend::hir::Program, opy_frontend::FrontendError> {
+) -> Result<opy_rs::hir::Program, opy_rs::OpyError> {
     let program = compile(source, source_name, fixture_dir)?;
     program
         .validate()
         .expect("native HIR must satisfy the v1 invariants");
     let wire = serde_json::to_value(&program).expect("HIR serialization is infallible");
-    let round_trip = opy_frontend::hir::parse_value(wire)
+    let round_trip = opy_rs::hir::parse_value(wire)
         .expect("the native wire payload must be consumable by parse_value");
     round_trip.validate().expect("round-trip HIR must validate");
     let dump = program.dump();
@@ -903,8 +903,8 @@ fn native_and_reference_agree_on_the_declared_corpus() {
     let report = json!({
         "schemaVersion": 1,
         "artifact": "opy-rs native-vs-reference differential report (issue #25)",
-        "generatedBy": "crates/opy-frontend/tests/differential.rs",
-        "frontend": { "name": FRONTEND_NAME, "version": FRONTEND_VERSION },
+        "generatedBy": "crates/opy-rs/tests/differential.rs",
+        "frontend": { "name": LANGUAGE_NAME, "version": LANGUAGE_VERSION },
         "reference": matrix["reference"],
         "summary": {
             "total": counts["total"],

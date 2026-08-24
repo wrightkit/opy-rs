@@ -26,8 +26,8 @@
 
 use std::path::{Path, PathBuf};
 
-use opy_frontend::compile;
-use opy_frontend::compile_with_overlay_outcome;
+use opy_rs::compile;
+use opy_rs::compile_with_overlay_outcome;
 
 fn fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -35,13 +35,13 @@ fn fixture_dir() -> PathBuf {
         .to_path_buf()
 }
 
-fn compile_fixture(name: &str) -> Result<opy_frontend::hir::Program, opy_frontend::FrontendError> {
+fn compile_fixture(name: &str) -> Result<opy_rs::hir::Program, opy_rs::OpyError> {
     let dir = fixture_dir();
     let source = std::fs::read_to_string(dir.join(name)).unwrap();
     compile(&source, name, &dir)
 }
 
-fn outcome(name: &str) -> opy_frontend::CompileOutcome {
+fn outcome(name: &str) -> opy_rs::CompileOutcome {
     let dir = fixture_dir();
     let source = std::fs::read_to_string(dir.join(name)).unwrap();
     compile_with_overlay_outcome(&source, name, &dir, &Default::default())

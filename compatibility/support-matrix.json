@@ -10,12 +10,12 @@
   },
   "snapshot": {
     "date": "2026-08-24",
-    "note": "Readiness baseline for #7 through the #28/#33 Draft PR series plus the bounded #35, #40, #46, and #47 integration slices. Frontend-supported rows include the pinned OPY syntax, directives, preprocessing, macro statements, rule directives/model, JavaScript macros, and runtime hooks. Semantic-supported rows include declaration resolution, for-loop binders, modules, keyword arguments, the declared alias surface, and the OPY-owned manifest overlay for builtin/member/enum semantics. Canonical Workshop builtin/member/enum breadth and emission remain separate lowering-dependent rows; no Workshop catalog data is copied into opy-rs. The differential corpus currently reports 0 unexpected divergences and 0 inconclusive results; its exact match and known-gap counts are generated evidence, not a support claim. #!postCompileHook is parsed/validated/recorded by the frontend; execution against final Workshop text is lowering-dependent (#8).",
+    "note": "Readiness baseline for #7 through the #28/#33 Draft PR series plus the bounded #35, #40, #46, and #47 integration slices. Source implementation-supported rows include the pinned OPY syntax, directives, preprocessing, macro statements, rule directives/model, JavaScript macros, and runtime hooks. Semantic-supported rows include declaration resolution, for-loop binders, modules, keyword arguments, the declared alias surface, and the OPY-owned manifest overlay for builtin/member/enum semantics. Canonical Workshop builtin/member/enum breadth and emission remain separate lowering-dependent rows; no Workshop catalog data is copied into opy-rs. The differential corpus currently reports 0 unexpected divergences and 0 inconclusive results; its exact match and known-gap counts are generated evidence, not a support claim. #!postCompileHook is parsed/validated/recorded by the source implementation; execution against final Workshop text is lowering-dependent (#8).",
     "asOfCommit": "c5714a4028464f19f236f54d390e7b7237e434bd"
   },
   "states": {
     "planned": "Declared surface, not yet implemented in opy-rs; evidence/provenance recorded for the implementing issue.",
-    "frontend-supported": "Frontend behavior (lex/parse/preprocess/macro expansion) implemented in opy-rs and corpus-evidenced.",
+    "source-supported": "Source implementation behavior (lex/parse/preprocess/macro expansion) implemented in opy-rs and corpus-evidenced.",
     "semantic-supported": "Semantic resolution implemented in opy-rs (names, members, enums, call semantics covered by the semantic model).",
     "lowering-dependent": "Completion requires canonical Workshop semantics/catalog/emission owned by workshop-rs; inventory-only until the integration stage.",
     "end-to-end-supported": "A declared feature or bounded integration slice has explicit OPY -> HIR -> WIR -> validated Workshop emission evidence for that scope; this state does not imply full-language OPY-to-Workshop parity."
@@ -37,7 +37,7 @@
       "id": "syntax/lexing",
       "name": "Lexer: identifiers, literals, strings, comments, #! directives, operators",
       "category": "syntax",
-      "state": "frontend-supported",
+      "state": "source-supported",
       "evidence": [
         "fixtures:synthetic/basic-rule",
         "fixtures:synthetic/control-flow",
@@ -55,7 +55,7 @@
       "id": "syntax/expressions",
       "name": "Expression/postfix/member/call grammar, precedence, indexing",
       "category": "syntax",
-      "state": "frontend-supported",
+      "state": "source-supported",
       "evidence": [
         "fixtures:synthetic/expressions-values",
         "fixtures:synthetic/receiver-calls",
@@ -70,7 +70,7 @@
       "id": "syntax/declarations",
       "name": "Declarations: globalvar/playervar (index + initializer), subroutine, def, enum, macro constants",
       "category": "syntax",
-      "state": "frontend-supported",
+      "state": "source-supported",
       "evidence": [
         "fixtures:synthetic/declarations-rules",
         "fixtures:synthetic/declarations-numbers",
@@ -86,7 +86,7 @@
       "id": "syntax/assignments-control-flow",
       "name": "Assignments and control flow: =, +=, -=, *=, /=, %=, **=, if/elif/else, for-in-range, while, pass",
       "category": "syntax",
-      "state": "frontend-supported",
+      "state": "source-supported",
       "evidence": [
         "fixtures:synthetic/control-flow",
         "fixtures:synthetic/for-range-agentlab",
@@ -100,7 +100,7 @@
       "id": "syntax/switch",
       "name": "switch/case/default",
       "category": "syntax",
-      "state": "frontend-supported",
+      "state": "source-supported",
       "evidence": ["fixtures:synthetic/issue-28-syntax", "fixtures:synthetic/issue-33-switch-break", "upstream:src/tests/switches.opy"],
       "notes": "Issue #28/#33: switch/case/default preserve source-order arms and fall through into subsequent arms; explicit break exits the innermost switch or loop. Workshop lowering remains out of scope."
     },
@@ -108,7 +108,7 @@
       "id": "syntax/break",
       "name": "break statements in switch and loops",
       "category": "syntax",
-      "state": "frontend-supported",
+      "state": "source-supported",
       "evidence": ["fixtures:synthetic/issue-33-switch-break", "upstream:src/tests/switches.opy", "upstream:src/tests/loops.opy"],
       "notes": "Issue #33: break is a real HIR statement, validates its enclosing switch/loop context, and is retained without implicit arm exits."
     },
@@ -116,7 +116,7 @@
       "id": "syntax/do-while",
       "name": "do … while",
       "category": "syntax",
-      "state": "frontend-supported",
+      "state": "source-supported",
       "evidence": ["fixtures:synthetic/issue-28-syntax", "fixtures:real-world/overpy-santa/regressions/do-while.opy", "upstream:src/tests/loops.opy"],
       "notes": "Issue #28: the body executes before the condition and the condition is retained as an OPY HIR expression; malformed/truncated conditions remain structured parse errors."
     },
@@ -124,7 +124,7 @@
       "id": "syntax/hex-literals",
       "name": "Hexadecimal numeric literals (0x/0X)",
       "category": "syntax",
-      "state": "frontend-supported",
+      "state": "source-supported",
       "evidence": ["fixtures:synthetic/issue-28-syntax", "upstream:src/tests/operators.opy"],
       "notes": "Issue #28: hexadecimal source spelling is preserved in the numeric HIR text while the numeric value is decoded independently."
     },
@@ -132,7 +132,7 @@
       "id": "syntax/membership",
       "name": "Expression-level in/not in membership",
       "category": "syntax",
-      "state": "frontend-supported",
+      "state": "source-supported",
       "evidence": ["fixtures:synthetic/issue-28-syntax", "upstream:src/tests/operators.opy"],
       "notes": "Issue #28: in/not in are represented as source-semantic binary operators; no Workshop Array Contains catalog or lowering is copied here."
     },
@@ -140,7 +140,7 @@
       "id": "syntax/string-modifiers",
       "name": "String modifiers (f/w/l/b/c/t)",
       "category": "syntax",
-      "state": "frontend-supported",
+      "state": "source-supported",
       "evidence": ["fixtures:synthetic/issue-28-string-modifiers", "fixtures:synthetic/issue-28-syntax", "fixtures:synthetic/issue-33-f-string", "upstream:src/tests/strings.opy"],
       "notes": "Issue #28/#33: f-string interpolation lowers to a semantic format node with source-spanned arguments; w/b/c remain semantic string modifiers and l/t remain syntax-carried without duplicating translation data."
     },
@@ -148,7 +148,7 @@
       "id": "syntax/dicts",
       "name": "Dictionary literals and keyed access",
       "category": "syntax",
-      "state": "frontend-supported",
+      "state": "source-supported",
       "evidence": ["fixtures:synthetic/issue-28-syntax", "upstream:src/tests/dicts.opy"],
       "notes": "Issue #28: dictionary entries and keyed access are represented in OPY HIR; bare dictionaries and malformed entries produce structured diagnostics."
     },
@@ -156,7 +156,7 @@
       "id": "syntax/comprehensions",
       "name": "List comprehensions (mapping/filtering, element and index binders)",
       "category": "syntax",
-      "state": "frontend-supported",
+      "state": "source-supported",
       "evidence": ["fixtures:synthetic/issue-28-syntax", "upstream:src/tests/dicts.opy"],
       "notes": "Issue #28: one-for-clause comprehensions with an optional filter and optional element/index binders preserve local scope in HIR."
     },
@@ -164,7 +164,7 @@
       "id": "syntax/lambda",
       "name": "Lambda expressions for array operations",
       "category": "syntax",
-      "state": "frontend-supported",
+      "state": "source-supported",
       "evidence": ["fixtures:synthetic/issue-28-syntax", "fixtures:synthetic/issue-33-f-string", "fixtures:synthetic/issue-33-lambda-negative", "upstream:src/tests/dicts.opy"],
       "notes": "Issue #28/#33: lambda x: expr is accepted only in signature-approved positions (sorted index 1/key and array map/filter/all/any index 0); standalone and other argument positions produce a structured diagnostic."
     },
@@ -172,7 +172,7 @@
       "id": "syntax/settings-blocks",
       "name": "settings { ... } custom-game-settings blocks: JSONC parse into the typed HIR payload",
       "category": "syntax",
-      "state": "frontend-supported",
+      "state": "source-supported",
       "evidence": [
         "fixtures:synthetic/settings",
         "fixtures:real-world/overpy-meipocalypse/settings.opy",
@@ -264,7 +264,7 @@
         "probes:receiver-calls",
         "upstream:src/data/opy/memberFunctions.ts"
       ],
-      "notes": "Issue #30/#8. Canonical receiver member lists, member existence, content-specific receiver/domain validation, localized spellings, and emission are Workshop-owned. The frontend preserves unknown/member diagnostics that can be decided from OPY metadata and defers catalog checks to integration."
+      "notes": "Issue #30/#8. Canonical receiver member lists, member existence, content-specific receiver/domain validation, localized spellings, and emission are Workshop-owned. The source implementation preserves unknown/member diagnostics that can be decided from OPY metadata and defers catalog checks to integration."
     },
     {
       "id": "semantics/receiver-playervar",
@@ -276,7 +276,7 @@
         "upstream:src/tests/variables.opy",
         "upstream:src/data/opy/memberFunctions.ts"
       ],
-      "notes": "Issue #30 repair. The pinned oracle accepts this OPY-owned receiver form and the frontend preserves its variable receiver and member identity in HIR with source provenance. Canonical member existence and emission remain Workshop-owned and lowering-dependent; #8 must not be used to claim the OPY expression incomplete."
+      "notes": "Issue #30 repair. The pinned oracle accepts this OPY-owned receiver form and the source implementation preserves its variable receiver and member identity in HIR with source provenance. Canonical member existence and emission remain Workshop-owned and lowering-dependent; #8 must not be used to claim the OPY expression incomplete."
     },
     {
       "id": "semantics/enum-domains",
@@ -350,15 +350,15 @@
     },
     {
       "id": "semantics/diagnostics",
-      "name": "Source identity and diagnostics: structured, source-located frontend errors, wright-result/v1 envelope",
+      "name": "Source identity and diagnostics: structured, source-located source implementation errors, wright-result/v1 envelope",
       "category": "semantics",
-      "state": "frontend-supported",
+      "state": "source-supported",
       "evidence": [
         "fixtures:synthetic/diagnostics",
         "fixtures:synthetic/declarations-rules",
         "upstream:runTests.mjs"
       ],
-      "notes": "Structured stable-code diagnostics with 1-based spans; the stable-code contract is documented in docs/opy/tooling-api.md and tested in opy-frontend tooling tests."
+      "notes": "Structured stable-code diagnostics with 1-based spans; the stable-code contract is documented in docs/opy/tooling-api.md and tested in opy-rs tooling tests."
     },
     {
       "id": "semantics/settings-emission",
@@ -370,13 +370,13 @@
         "fixtures:real-world/6v6-adjustments/lobby/lobby.opy",
         "upstream:src/tests/customGameSettings.opy"
       ],
-      "notes": "The typed settings payload is frontend-owned; the emission table and its domains are Workshop data owned by workshop-rs. Key-existence and leaf-kind settings validation is Workshop schema content and lowering-dependent (#8) — the core validates structure only. Emitted settings are deliberately not reparseable (round-trip boundary)."
+      "notes": "The typed settings payload is source implementation-owned; the emission table and its domains are Workshop data owned by workshop-rs. Key-existence and leaf-kind settings validation is Workshop schema content and lowering-dependent (#8) — the core validates structure only. Emitted settings are deliberately not reparseable (round-trip boundary)."
     },
     {
       "id": "preprocessing/include",
       "name": "#!include: root-relative resolution, cycle detection, missing-file diagnostics, file registry",
       "category": "preprocessing",
-      "state": "frontend-supported",
+      "state": "source-supported",
       "evidence": [
         "fixtures:synthetic/preprocessing",
         "fixtures:real-world/ow1-emulator",
@@ -391,7 +391,7 @@
       "id": "preprocessing/define-undef",
       "name": "#!define (object- and function-like), #!undef, recursive expansion, recursion guard",
       "category": "preprocessing",
-      "state": "frontend-supported",
+      "state": "source-supported",
       "evidence": [
         "fixtures:synthetic/preprocessing",
         "fixtures:real-world/overpy-cake",
@@ -412,7 +412,7 @@
         "upstream:src/tests/compression.opy",
         "upstream:src/data/opy/preprocessing.ts"
       ],
-      "notes": "Issue #29: frontend records directive state, macro-redeclaration policy, main-file provenance, and rule-prefix application. Optimizer and generated Workshop effects remain separate."
+      "notes": "Issue #29: source implementation records directive state, macro-redeclaration policy, main-file provenance, and rule-prefix application. Optimizer and generated Workshop effects remain separate."
     },
     {
       "id": "preprocessing/directive-effects",
@@ -429,7 +429,7 @@
       "id": "macros/definitions",
       "name": "macro name(params): statement bodies with MacroParam references, macro constants",
       "category": "macros",
-      "state": "frontend-supported",
+      "state": "source-supported",
       "evidence": [
         "fixtures:synthetic/preprocessing",
         "fixtures:real-world/overpy-cake",
@@ -445,7 +445,7 @@
       "id": "macros/javascript",
       "name": "__script__ JavaScript macros (QuickJS runtime); #!postCompileHook parsed and recorded",
       "category": "macros",
-      "state": "frontend-supported",
+      "state": "source-supported",
       "evidence": [
         "upstream:runTests.mjs",
         "upstream:src/tests/postCompileHook.opy",
@@ -453,12 +453,12 @@
         "upstream:src/tests/quickjs-invalid-return.js",
         "upstream:src/tests/quickjs-runaway.js",
         "upstream:src/quickjs.ts",
-        "test:opy-frontend-macro-integration",
-        "test-fixture:crates/opy-frontend/tests/fixtures/macros",
-        "test:opy-frontend-differential",
+        "test:opy-rs-macro-integration",
+        "test-fixture:crates/opy-rs/tests/fixtures/macros",
+        "test:opy-rs-differential",
         "fixtures:real-world/overpy-meipocalypse"
       ],
-      "notes": "Issue #6 + #7 part B. `#!define name(args) __script__(\"path.js\")` parsed (root-relative script resolution, script-not-found at the define site like the reference's ENOENT), expanded through opy_macro_js::MacroRuntime with the reference's var-injection ABI, indentation rule, and string-only completion contract — compile-time expansion executes and is frontend-supported. `#!postCompileHook` is parsed, validated, and recorded (duplicate rejection); the frontend never executes the hook, so no Workshop payload is fabricated. Structured script-* diagnostics carry script provenance. Catalog constants and post-compile-hook Workshop-output execution stay lowering-dependent (see hooks/post-compile-workshop, issue #8); `#!require` does not exist in the pinned reference."
+      "notes": "Issue #6 + #7 part B. `#!define name(args) __script__(\"path.js\")` parsed (root-relative script resolution, script-not-found at the define site like the reference's ENOENT), expanded through opy_macro_js::MacroRuntime with the reference's var-injection ABI, indentation rule, and string-only completion contract — compile-time expansion executes and is source-supported. `#!postCompileHook` is parsed, validated, and recorded (duplicate rejection); the source implementation never executes the hook, so no Workshop payload is fabricated. Structured script-* diagnostics carry script provenance. Catalog constants and post-compile-hook Workshop-output execution stay lowering-dependent (see hooks/post-compile-workshop, issue #8); `#!require` does not exist in the pinned reference."
     },
     {
       "id": "hooks/post-compile-workshop",
@@ -469,15 +469,15 @@
         "upstream:src/tests/postCompileHook.opy",
         "upstream:src/quickjs.ts",
         "test:opy-macro-js-hooks",
-        "test:opy-frontend-macro-integration"
+        "test:opy-rs-macro-integration"
       ],
-      "notes": "Issue #6 + #8. The runtime's hook ABI (content injection, console capture, result/error semantics, 2000 ms budget) is implemented and tested on synthetic content in opy-macro-js; the frontend parses, validates, and records #!postCompileHook but never executes it. Real hook execution receives the final Workshop text from lowering and is inventory-only until the workshop-rs integration stage (#8); the frontend never fabricates a Workshop payload."
+      "notes": "Issue #6 + #8. The runtime's hook ABI (content injection, console capture, result/error semantics, 2000 ms budget) is implemented and tested on synthetic content in opy-macro-js; the source implementation parses, validates, and records #!postCompileHook but never executes it. Real hook execution receives the final Workshop text from lowering and is inventory-only until the workshop-rs integration stage (#8); the source implementation never fabricates a Workshop payload."
     },
     {
       "id": "directives/rule-annotations",
       "name": "Rule annotations: @Event, @Condition, bare @Team/@Slot",
       "category": "directives",
-      "state": "frontend-supported",
+      "state": "source-supported",
       "evidence": [
         "fixtures:synthetic/basic-rule",
         "fixtures:synthetic/declarations-rules",
@@ -485,7 +485,7 @@
         "upstream:src/tests/rules.opy",
         "upstream:README.md"
       ],
-      "notes": "Core rule annotations and event/condition structure are frontend-owned."
+      "notes": "Core rule annotations and event/condition structure are source implementation-owned."
     },
     {
       "id": "directives/advanced-rule-annotations",
@@ -503,7 +503,7 @@
       "id": "directives/rule-model",
       "name": "Rule model: rule \"name\": with events (global, eachPlayer), conditions list, statements",
       "category": "directives",
-      "state": "frontend-supported",
+      "state": "source-supported",
       "evidence": [
         "fixtures:synthetic/basic-rule",
         "fixtures:synthetic/chase-condition-agentlab",
@@ -526,7 +526,7 @@
         "upstream:src/tests/translations2.fr.po",
         "upstream:src/compiler/translations.ts"
       ],
-      "notes": "Issue #29: language-tag syntax, uniqueness/conflict validation, provenance, and translation state are frontend-owned; locale availability, .po content, and generated Workshop helpers remain lowering-dependent."
+      "notes": "Issue #29: language-tag syntax, uniqueness/conflict validation, provenance, and translation state are source implementation-owned; locale availability, .po content, and generated Workshop helpers remain lowering-dependent."
     },
     {
       "id": "translations/locale-emission",
@@ -549,7 +549,7 @@
         "upstream:src/tests/compression.opy",
         "upstream:src/data/opy/preprocessing.ts"
       ],
-      "notes": "Issue #29: optimizer/replacement controls are parsed, validated, ordered, and exposed as frontend state; transformation execution is not part of opy-rs."
+      "notes": "Issue #29: optimizer/replacement controls are parsed, validated, ordered, and exposed as source implementation state; transformation execution is not part of opy-rs."
     },
     {
       "id": "optimization/backend-effects",
@@ -577,7 +577,7 @@
       "id": "runtime/js-hooks",
       "name": "QuickJS runtime for __script__ macro and hook execution (synthetic-content hook ABI)",
       "category": "runtime",
-      "state": "frontend-supported",
+      "state": "source-supported",
       "evidence": [
         "upstream:runTests.mjs",
         "upstream:src/quickjs.ts",
@@ -585,20 +585,20 @@
         "test:opy-macro-js-abi",
         "test:opy-macro-js-hooks",
         "test:opy-macro-js-limits",
-        "test:opy-frontend-macro-integration"
+        "test:opy-rs-macro-integration"
       ],
-      "notes": "Issue #6 + #7 part B. Bounded runtime surface wired into the frontend: macro execution with argument injection, `vect` helper, empty constant objects, console capture, reference-compatible accept/reject and result semantics, resource limits defaulting to the pinned reference constants (1000 ms macro / 2000 ms hook budgets, 64 MiB memory, 512 KiB stack). The hook ABI runs against synthetic content in opy-macro-js; hook execution against the Workshop output is lowering-dependent (see hooks/post-compile-workshop, issue #8). Browser/WASM execution remains unsupported (native embedding only), matching the declared boundary."
+      "notes": "Issue #6 + #7 part B. Bounded runtime surface wired into the source implementation: macro execution with argument injection, `vect` helper, empty constant objects, console capture, reference-compatible accept/reject and result semantics, resource limits defaulting to the pinned reference constants (1000 ms macro / 2000 ms hook budgets, 64 MiB memory, 512 KiB stack). The hook ABI runs against synthetic content in opy-macro-js; hook execution against the Workshop output is lowering-dependent (see hooks/post-compile-workshop, issue #8). Browser/WASM execution remains unsupported (native embedding only), matching the declared boundary."
     },
     {
-      "id": "compilation/frontend-pipeline",
-      "name": "Frontend pipeline: lexer -> preprocess -> CST/parser -> semantic resolution -> Opy HIR v2",
+      "id": "compilation/source implementation-pipeline",
+      "name": "Source implementation pipeline: lexer -> preprocess -> CST/parser -> semantic resolution -> Opy HIR v2",
       "category": "compilation",
-      "state": "frontend-supported",
+      "state": "source-supported",
       "evidence": [
         "fixtures:synthetic",
         "fixtures:real-world",
         "docs:docs/hir/opy-hir-v2.md",
-        "test:opy-frontend-differential"
+        "test:opy-rs-differential"
       ],
       "notes": "Issues #3-#7, #25, and the #28/#29/#30/#33 readiness tracks. Fully Workshop-independent; the pinned differential corpus is the acceptance corpus. Differential harness runs every fixture through the native pipeline in cargo test with structural self-checks (HIR validation, wire round-trip, deterministic dump), status/rule-name parity against recorded oracle.json snapshots, explicit native evidence expectations, and a machine-readable report (target/opy-differential-report.json). The generated report records per-fixture matches and known gaps; no unexpected divergence or inconclusive result is a support claim."
     },
@@ -650,7 +650,7 @@
         "test:opy-compiler-implicit-default-variables",
         "contract:workshop-rs-v0.1.11"
       ],
-      "notes": "Issue #46. Undeclared A-Z, AA-AZ, ..., DA-DX global references and eventPlayer.<name> player references resolve through the frontend default_var_index contract and lower to separate Workshop variable namespaces at their fixed reference slots (A=0 ... DX=127); used implicit slots are reserved independently for declared global/player allocation, an explicit declared index colliding with a used implicit slot fails with the stable source-attributed index-collision diagnostic, and a declared name wins in its own namespace. The pinned oracle snapshot for the issue-46 fixture constrains global and player slots through structural equivalence."
+      "notes": "Issue #46. Undeclared A-Z, AA-AZ, ..., DA-DX global references and eventPlayer.<name> player references resolve through the source implementation default_var_index contract and lower to separate Workshop variable namespaces at their fixed reference slots (A=0 ... DX=127); used implicit slots are reserved independently for declared global/player allocation, an explicit declared index colliding with a used implicit slot fails with the stable source-attributed index-collision diagnostic, and a declared name wins in its own namespace. The pinned oracle snapshot for the issue-46 fixture constrains global and player slots through structural equivalence."
     },
     {
       "id": "compilation/opy-primitive-lowering-limits",
@@ -742,7 +742,7 @@
   "summary": {
     "byState": {
       "planned": 0,
-      "frontend-supported": 23,
+      "source-supported": 23,
       "semantic-supported": 13,
       "lowering-dependent": 13,
       "end-to-end-supported": 7

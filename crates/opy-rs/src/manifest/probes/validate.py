@@ -19,7 +19,7 @@ the `compatibility/` harness rules (`python3 compatibility/run_oracle.py`).
 
 Stdlib-only; run from anywhere:
 
-    python3 crates/opy-frontend/src/manifest/probes/validate.py
+    python3 crates/opy-rs/src/manifest/probes/validate.py
 
 Exit code 0 only when every probe matches the recorded oracle evidence.
 """
@@ -31,7 +31,7 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-# crates/opy-frontend/src/manifest/probes -> repository root (5 levels up).
+# crates/opy-rs/src/manifest/probes -> repository root (5 levels up).
 WORKSPACE = os.path.abspath(os.path.join(HERE, "..", "..", "..", "..", ".."))
 ORACLE = os.path.join(
     WORKSPACE, "compatibility", "oracle", "node_modules", "overpy", "cli.js"

@@ -13,7 +13,7 @@ fn bin() -> Command {
 /// The WrightKit-authored multi-file fixture shared with the frontend tests.
 const MULTI_MAIN: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../opy-frontend/tests/fixtures/multi-file/main.opy"
+    "/../opy-rs/tests/fixtures/multi-file/main.opy"
 );
 
 fn run(args: &[&str]) -> std::process::Output {
@@ -174,10 +174,7 @@ fn version_prints_crate_and_protocol_identity() {
         stdout.contains("wright/opy-hir"),
         "protocol identity: {stdout}"
     );
-    assert!(
-        stdout.contains("wright/opy-native"),
-        "frontend identity: {stdout}"
-    );
+    assert!(stdout.contains("opy-rs"), "language identity: {stdout}");
 }
 
 #[test]

@@ -5,7 +5,7 @@
 //! captured as a single directive token for the preprocessor. Positions are
 //! 1-based line/column, matching the Opy HIR protocol.
 
-use crate::diag::{FrontendError, FrontendResult, Position, Span};
+use crate::diag::{OpyError, OpyResult, Position, Span};
 
 /// The kind of a token.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -94,7 +94,7 @@ pub struct LexInput<'a> {
 }
 
 /// Lex one source file into a token stream.
-pub fn lex(input: LexInput<'_>) -> FrontendResult<Vec<Token>> {
+pub fn lex(input: LexInput<'_>) -> OpyResult<Vec<Token>> {
     Lexer::new(input.file_id, input.text).run()
 }
 
@@ -119,7 +119,7 @@ impl Lexer {
         }
     }
 
-    fn run(mut self) -> FrontendResult<Vec<Token>> {
+    fn run(mut self) -> OpyResult<Vec<Token>> {
         while self.pos < self.chars.len() {
             let ch = self.chars[self.pos];
             match ch {
@@ -178,7 +178,7 @@ impl Lexer {
                 '>' => self.two(TokenKind::Gt, TokenKind::Ge, '='),
                 '!' => self.two(TokenKind::LexBang, TokenKind::Ne, '='),
                 other => {
-                    return Err(FrontendError::at(
+                    return Err(OpyError::at(
                         "lex-error",
                         format!("unexpected character '{other}'"),
                         self.here(1),
@@ -192,7 +192,7 @@ impl Lexer {
     }
 
     /// `#` starts a `#!` directive (captured as one token) or a comment.
-    fn lex_hash(&mut self) -> FrontendResult<()> {
+    fn lex_hash(&mut self) -> OpyResult<()> {
         if self.peek(1) == Some('!') {
             let start = self.here(2);
             self.advance();
@@ -216,7 +216,7 @@ impl Lexer {
         Ok(())
     }
 
-    fn skip_block_comment(&mut self) -> FrontendResult<()> {
+    fn skip_block_comment(&mut self) -> OpyResult<()> {
         let start = self.here(2);
         self.advance();
         self.advance();
@@ -234,14 +234,14 @@ impl Lexer {
                 self.advance();
             }
         }
-        Err(FrontendError::at(
+        Err(OpyError::at(
             "lex-error",
             "unterminated block comment",
             start,
         ))
     }
 
-    fn lex_string(&mut self, quote: char) -> FrontendResult<()> {
+    fn lex_string(&mut self, quote: char) -> OpyResult<()> {
         let start = self.here(1);
         self.advance();
         let mut value = String::new();
@@ -281,7 +281,7 @@ impl Lexer {
                 continue;
             }
             if ch == '\n' {
-                return Err(FrontendError::at(
+                return Err(OpyError::at(
                     "lex-error",
                     "unterminated string literal",
                     start,
@@ -291,14 +291,14 @@ impl Lexer {
             value.push(ch);
             self.advance();
         }
-        Err(FrontendError::at(
+        Err(OpyError::at(
             "lex-error",
             "unterminated string literal",
             start,
         ))
     }
 
-    fn lex_number(&mut self) -> FrontendResult<()> {
+    fn lex_number(&mut self) -> OpyResult<()> {
         let start = self.here(1);
         let mut text = String::new();
         if self.chars[self.pos] == '0' && matches!(self.peek(1), Some('x' | 'X')) {
@@ -312,7 +312,7 @@ impl Lexer {
                 self.advance();
             }
             if self.pos == digits_start {
-                return Err(FrontendError::at(
+                return Err(OpyError::at(
                     "lex-error",
                     "hexadecimal literal requires at least one hexadecimal digit",
                     Span::new(self.file_id, start.start, self.here(0).start),

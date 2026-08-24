@@ -9,7 +9,7 @@
   "expectedStatus": "success",
   "provenance": {
     "kind": "original",
-    "origin": "opy-rs Issue #46 negative primitive-lowering probe (frontend resolves; compiler rejects the dict primitive with a stable source-attributed diagnostic)",
+    "origin": "opy-rs Issue #46 negative primitive-lowering probe (source implementation resolves; compiler rejects the dict primitive with a stable source-attributed diagnostic)",
     "license": "AGPL-3.0-or-later",
     "redistributable": true
   }

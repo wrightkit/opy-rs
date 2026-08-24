@@ -1,6 +1,6 @@
-//! `opy-cli` — the standalone Workshop-independent OPY frontend CLI.
+//! `opy-cli` — the standalone Workshop-independent OPY CLI.
 //!
-//! The CLI owns command parsing and presentation. `opy-frontend` owns OPY
+//! The CLI owns command parsing and presentation. `opy-rs` owns OPY
 //! parsing, semantic resolution, and structured diagnostics.
 //!
 //! Exit codes remain: 0 clean/success, 1 source diagnostics, and 2 usage or
@@ -15,9 +15,9 @@ use std::process::ExitCode;
 
 use clap::{CommandFactory, Parser, error::ErrorKind};
 use clap_complete::{generate, shells};
-use opy_frontend::support::{self, SupportMatrixError};
-use opy_frontend::tooling::{CheckOutcome, Diagnostic as FrontendDiagnostic, check};
-use opy_frontend::{FRONTEND_NAME, FRONTEND_VERSION};
+use opy_rs::support::{self, SupportMatrixError};
+use opy_rs::tooling::{CheckOutcome, Diagnostic as OpyDiagnostic, check};
+use opy_rs::{LANGUAGE_NAME, LANGUAGE_VERSION};
 use serde::Serialize;
 
 use crate::cli::{CheckArgs, Cli, Command, FileArgs, OutputFormatArg, SupportArgs};
@@ -180,11 +180,11 @@ fn cmd_completion(shell: cli::ShellArg) -> ExitCode {
 
 fn cmd_version() -> ExitCode {
     println!("opy-cli {}", env!("CARGO_PKG_VERSION"));
-    println!("frontend: {FRONTEND_NAME} {FRONTEND_VERSION}");
+    println!("language: {LANGUAGE_NAME} {LANGUAGE_VERSION}");
     println!(
         "protocol: {} v{}",
-        opy_frontend::hir::types::PROTOCOL_NAME,
-        opy_frontend::hir::types::PROTOCOL_MAJOR
+        opy_rs::hir::types::PROTOCOL_NAME,
+        opy_rs::hir::types::PROTOCOL_MAJOR
     );
     ExitCode::SUCCESS
 }
@@ -192,7 +192,7 @@ fn cmd_version() -> ExitCode {
 #[derive(Serialize)]
 struct CheckReport<'a> {
     ok: bool,
-    diagnostics: &'a [FrontendDiagnostic],
+    diagnostics: &'a [OpyDiagnostic],
 }
 
 fn check_view(outcome: &CheckOutcome) -> CheckView {
@@ -215,7 +215,7 @@ fn check_view(outcome: &CheckOutcome) -> CheckView {
     }
 }
 
-fn diagnostic_view(diagnostic: &FrontendDiagnostic) -> DiagnosticView {
+fn diagnostic_view(diagnostic: &OpyDiagnostic) -> DiagnosticView {
     DiagnosticView {
         severity: DiagnosticSeverity::Error,
         code: diagnostic.code.clone(),

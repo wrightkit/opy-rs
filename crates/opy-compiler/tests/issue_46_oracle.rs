@@ -43,7 +43,7 @@ fn oracle_workshop(dir: &Path) -> String {
 
 fn compile_fixture(dir: &Path) -> opy_compiler::CompilationArtifact {
     let source = std::fs::read_to_string(dir.join("source.opy")).expect("source must be readable");
-    let hir = opy_frontend::compile(&source, "source.opy", dir).expect("fixture must resolve");
+    let hir = opy_rs::compile(&source, "source.opy", dir).expect("fixture must resolve");
     Compiler::new()
         .expect("released workshop contract must load")
         .compile_hir(&hir)
@@ -76,7 +76,7 @@ fn issue_46_native_lowering_matches_the_pinned_oracle() {
 fn issue_46_unsupported_primitive_fails_with_stable_source_attribution() {
     let dir = fixture_dir("issue-46-unsupported");
     let source = std::fs::read_to_string(dir.join("source.opy")).unwrap();
-    let hir = opy_frontend::compile(&source, "source.opy", &dir)
+    let hir = opy_rs::compile(&source, "source.opy", &dir)
         .expect("the frontend resolves the negative fixture");
     let error = match Compiler::new().unwrap().compile_hir(&hir) {
         Ok(_) => panic!("dict primitive lowering unexpectedly succeeded"),

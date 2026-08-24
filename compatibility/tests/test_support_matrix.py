@@ -25,7 +25,7 @@ FIXTURES_DIR = COMPATIBILITY_DIR / "fixtures"
 
 STATES = {
     "planned",
-    "frontend-supported",
+    "source-supported",
     "semantic-supported",
     "lowering-dependent",
     "end-to-end-supported",
