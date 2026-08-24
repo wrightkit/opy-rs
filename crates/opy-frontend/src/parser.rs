@@ -923,7 +923,6 @@ impl Parser<'_> {
             | TokenKind::MinusAssign
             | TokenKind::StarAssign
             | TokenKind::SlashAssign
-            | TokenKind::DoubleSlashAssign
             | TokenKind::PercentAssign
             | TokenKind::DoubleStarAssign => {
                 let op = match self.peek_kind() {
@@ -931,7 +930,6 @@ impl Parser<'_> {
                     TokenKind::MinusAssign => "-",
                     TokenKind::StarAssign => "*",
                     TokenKind::SlashAssign => "/",
-                    TokenKind::DoubleSlashAssign => "//",
                     TokenKind::PercentAssign => "%",
                     TokenKind::DoubleStarAssign => "**",
                     _ => unreachable!(),
@@ -1270,7 +1268,6 @@ impl Parser<'_> {
             let op = match self.peek_kind() {
                 TokenKind::Star => "*",
                 TokenKind::Slash => "/",
-                TokenKind::DoubleSlash => "//",
                 TokenKind::Percent => "%",
                 _ => break,
             };

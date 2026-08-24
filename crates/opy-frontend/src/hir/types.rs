@@ -18,9 +18,10 @@ pub const PROTOCOL_MAJOR: u32 = 1;
 /// OverPy's `defaultVarNames` table covers exactly these slots: the 128
 /// uppercase letter spellings `A`–`Z`, `AA`–`AZ`, …, `DA`–`DX` (bijective
 /// base-26, Excel-style, zero-based). The pinned OverPy 9.7.10 reference
-/// accepts these names as *implicit* global variables anywhere a variable
-/// may appear — including as a `for ... in range(...)` loop binder — without
-/// requiring a `globalvar` declaration, and assigns each its fixed slot.
+/// accepts these names as *implicit* global variables anywhere a variable may
+/// appear — including as a `for ... in range(...)` loop binder — and as
+/// `eventPlayer.<name>` player variables, without declarations, assigning each
+/// namespace its fixed slot.
 /// Names outside the table (lowercase, mixed case, longer spellings) stay
 /// ordinary unresolved identifiers (see `docs/opy/support-matrix.md`).
 const DEFAULT_VAR_SLOTS: u32 = 128;

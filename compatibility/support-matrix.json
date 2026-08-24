@@ -8,9 +8,9 @@
     "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw=="
   },
   "snapshot": {
-    "date": "2026-08-18",
-    "note": "Readiness baseline for #7 through the #28/#29/#30/#33 Draft PR series plus the bounded #35 and #40 integration slices. Frontend-supported rows include the pinned OPY syntax, directives, preprocessing, macro statements, rule directives/model, JavaScript macros, and runtime hooks. Semantic-supported rows include declaration resolution, for-loop binders, modules, keyword arguments, the declared alias surface, and the OPY-owned manifest overlay for builtin/member/enum semantics. Canonical Workshop builtin/member/enum breadth and emission remain separate lowering-dependent rows; no Workshop catalog data is copied into opy-rs. The 42-fixture differential corpus currently reports 35 matches, 7 explicit known gaps, 0 unexpected divergences, and 0 inconclusive results. #!postCompileHook is parsed/validated/recorded by the frontend; execution against final Workshop text is lowering-dependent (#8).",
-    "asOfCommit": "4d88daf4e3445af37ce06774d789a94c5bcbe355"
+    "date": "2026-08-24",
+    "note": "Readiness baseline for #7 through the #28/#29/#30/#33 Draft PR series plus the bounded #35 and #40 integration slices. Frontend-supported rows include the pinned OPY syntax, directives, preprocessing, macro statements, rule directives/model, JavaScript macros, and runtime hooks. Semantic-supported rows include declaration resolution, for-loop binders, modules, keyword arguments, the declared alias surface, and the OPY-owned manifest overlay for builtin/member/enum semantics. Canonical Workshop builtin/member/enum breadth and emission remain separate lowering-dependent rows; no Workshop catalog data is copied into opy-rs. The differential corpus currently reports 0 unexpected divergences and 0 inconclusive results; its exact match and known-gap counts are generated evidence, not a support claim. #!postCompileHook is parsed/validated/recorded by the frontend; execution against final Workshop text is lowering-dependent (#8).",
+    "asOfCommit": "4bf9d52d6dc0c7410a8a515ac318de8dce451fdf"
   },
   "states": {
     "planned": "Declared surface, not yet implemented in opy-rs; evidence/provenance recorded for the implementing issue.",
@@ -599,7 +599,7 @@
         "docs:docs/hir/opy-hir-v1.md",
         "test:opy-frontend-differential"
       ],
-      "notes": "Issues #3-#7, #25, and the #28/#29/#30/#33 readiness tracks. Fully Workshop-independent; the 42-fixture corpus is the acceptance corpus. Differential harness runs every fixture through the native pipeline in cargo test with structural self-checks (HIR validation, wire round-trip, deterministic dump), status/rule-name parity against recorded oracle.json snapshots, explicit native evidence expectations, and a machine-readable report (target/opy-differential-report.json). The current report has 35 matches, 7 reference-success/native-failure cases classified as known gaps, and no unexpected divergence or inconclusive result."
+      "notes": "Issues #3-#7, #25, and the #28/#29/#30/#33 readiness tracks. Fully Workshop-independent; the pinned differential corpus is the acceptance corpus. Differential harness runs every fixture through the native pipeline in cargo test with structural self-checks (HIR validation, wire round-trip, deterministic dump), status/rule-name parity against recorded oracle.json snapshots, explicit native evidence expectations, and a machine-readable report (target/opy-differential-report.json). The generated report records per-fixture matches and known gaps; no unexpected divergence or inconclusive result is a support claim."
     },
     {
       "id": "compilation/opy-integration-vertical-slice",
@@ -641,7 +641,7 @@
     },
     {
       "id": "compilation/opy-implicit-default-variables",
-      "name": "OverPy implicit default global variables (A-DX) at fixed Workshop slots",
+      "name": "OverPy implicit default global and player variables (A-DX) at fixed Workshop slots",
       "category": "compilation",
       "state": "end-to-end-supported",
       "evidence": [
@@ -649,7 +649,7 @@
         "test:opy-compiler-implicit-default-variables",
         "contract:workshop-rs-v0.1.8"
       ],
-      "notes": "Issue #46. Undeclared A-Z, AA-AZ, ..., DA-DX references resolve through the frontend default_var_index contract and lower to Workshop variables at their fixed reference slots (A=0 ... DX=127); used implicit slots are reserved for declared-variable allocation, an explicit declared index colliding with a used implicit slot fails with the stable source-attributed index-collision diagnostic, and a declared name always wins over its default slot. The pinned oracle snapshot for the issue-46 fixture constrains these slots through structural equivalence."
+      "notes": "Issue #46. Undeclared A-Z, AA-AZ, ..., DA-DX global references and eventPlayer.<name> player references resolve through the frontend default_var_index contract and lower to separate Workshop variable namespaces at their fixed reference slots (A=0 ... DX=127); used implicit slots are reserved independently for declared global/player allocation, an explicit declared index colliding with a used implicit slot fails with the stable source-attributed index-collision diagnostic, and a declared name wins in its own namespace. The pinned oracle snapshot for the issue-46 fixture constrains global and player slots through structural equivalence."
     },
     {
       "id": "compilation/opy-primitive-lowering-limits",

@@ -43,14 +43,12 @@ pub enum TokenKind {
     Minus,
     Star,
     Slash,
-    DoubleSlash,
     Percent,
     DoubleStar,
     PlusAssign,
     MinusAssign,
     StarAssign,
     SlashAssign,
-    DoubleSlashAssign,
     PercentAssign,
     DoubleStarAssign,
     Eq,
@@ -59,7 +57,7 @@ pub enum TokenKind {
     Le,
     Gt,
     Ge,
-    /// A bare `!` that is not `!=` (error unless followed by `=`).
+    /// A bare `!` that is not `!=`; the parser rejects it as unsupported OPY.
     LexBang,
 }
 
@@ -174,14 +172,7 @@ impl Lexer {
                         self.lex_two(TokenKind::Star, TokenKind::StarAssign, '=')
                     }
                 }
-                '/' => {
-                    if self.peek(1) == Some('/') {
-                        self.advance();
-                        self.single(TokenKind::DoubleSlash)
-                    } else {
-                        self.lex_two(TokenKind::Slash, TokenKind::SlashAssign, '=')
-                    }
-                }
+                '/' => self.lex_two(TokenKind::Slash, TokenKind::SlashAssign, '='),
                 '%' => self.lex_two(TokenKind::Percent, TokenKind::PercentAssign, '='),
                 '<' => self.two(TokenKind::Lt, TokenKind::Le, '='),
                 '>' => self.two(TokenKind::Gt, TokenKind::Ge, '='),
@@ -532,14 +523,14 @@ mod tests {
 
     #[test]
     fn operators() {
-        let tokens = lex_ok("a += b == c <= d != e // f");
+        let tokens = lex_ok("a += b == c <= d != e / f");
         let kinds: Vec<TokenKind> = tokens.iter().map(|t| t.kind).collect();
         for expected in [
             TokenKind::PlusAssign,
             TokenKind::Eq,
             TokenKind::Le,
             TokenKind::Ne,
-            TokenKind::DoubleSlash,
+            TokenKind::Slash,
         ] {
             assert!(
                 kinds.contains(&expected),

@@ -58,7 +58,7 @@ Workshop-independent up to the documented integration boundary toward
 | `compatibility/fixtures/**/oracle.json` | Pinned OverPy 9.7.10 reference snapshots (normalized Workshop output, diagnostics, exit codes) |
 | `compatibility/fixtures/synthetic/issue-35-integration/` | #35 OPY-to-Workshop vertical-slice evidence; oracle provenance remains separate from implementation-specific WIR/emission assertions |
 | `compatibility/fixtures/synthetic/issue-40-structural/` | #40 pinned OverPy oracle evidence for subroutine identity, deterministic variable allocation, and player event filters |
-| `compatibility/fixtures/synthetic/issue-46-primitives/` | #46 pinned OverPy oracle evidence for non-control-flow statement and value primitive lowering (assignments and modifications including `**=`, implicit default variables at fixed slots, index-0 `firstOf` read normalization, negated-comparison lowering); the oracle snapshot constrains the native compiler through the canonical `workshop-rs` parser and structural equivalence |
+| `compatibility/fixtures/synthetic/issue-46-primitives/` | #46 pinned OverPy oracle evidence for non-control-flow statement and value primitive lowering (assignments and modifications including `**=`, global/player implicit default variables at fixed slots, hex-number normalization, index-0 `firstOf` read normalization, negated-comparison lowering); the oracle snapshot constrains the native compiler through the canonical `workshop-rs` parser and structural equivalence |
 | `compatibility/fixtures/synthetic/issue-46-unsupported/` | #46 negative primitive-lowering evidence: the frontend and pinned oracle accept a dict-indexed assignment while the compiler rejects it with the stable source-attributed `unsupported-integration-surface` diagnostic |
 | `crates/opy-compiler/src/lib.rs` structural tests | #40/#46 declarations, subroutines, rules, event filters, assignments, expressions, indexing, format, pass, and source-attributed negative lowering evidence |
 | `crates/opy-compiler/tests/issue_46_oracle.rs` | #46 oracle-constrained differential equivalence: native output and the pinned oracle Workshop text both reparse through the canonical `workshop-rs` parser and must satisfy `roundtrip::equivalent` |
@@ -79,7 +79,7 @@ implements; "reference" always means the pinned OverPy 9.7.10
 - Identifiers, integer and decimal number literals (source text preserved),
   double-quoted strings with `\n`/`\t`/`\\` escapes, `true`/`false`/`None`.
 - Line comments (`#`), block comments (`/* */`), `#!` directives.
-- Operators: `+ - * / // % ** == != < <= > >= = += -= *= /= //= %= and or not`,
+- Operators: `+ - * / % ** == != < <= > >= = += -= *= /= %= and or not`,
   `in`/`not in`, plus `.`/`,`/`:`/`(`/`)`/`[`/`]`/`@`.
 
 ### Pure OPY syntax and source semantics

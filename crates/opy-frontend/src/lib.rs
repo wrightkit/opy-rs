@@ -50,6 +50,37 @@ pub use lower::lower;
 pub use parser::parse;
 pub use preprocess::{preprocess, preprocess_with_overlay};
 
+#[cfg(test)]
+mod tests {
+    use super::compile;
+    use std::path::Path;
+
+    #[test]
+    fn unsupported_operator_aliases_fail_at_the_frontend_boundary() {
+        for expression in ["a // 2", "a //= 2", "a ^ 2", "a && 2", "a || 2", "a = !2"] {
+            let source = format!(
+                "globalvar a\nrule \"unsupported operator\":\n    @Event global\n    {expression}\n"
+            );
+            let error = compile(&source, "unsupported-operator.opy", Path::new("."))
+                .expect_err("unsupported operator alias unexpectedly compiled");
+            assert!(matches!(error.code.as_str(), "lex-error" | "parse-error"));
+            assert!(error.span.is_some(), "{expression}: missing source span");
+        }
+    }
+
+    #[test]
+    fn implicit_event_player_defaults_satisfy_hir_reference_validation() {
+        let hir = compile(
+            "rule \"implicit player\":\n    @Event eachPlayer\n    eventPlayer.A = 1\n",
+            "implicit-player.opy",
+            Path::new("."),
+        )
+        .expect("implicit event-player default must resolve");
+        hir.validate()
+            .expect("implicit event-player default must satisfy HIR invariants");
+    }
+}
+
 /// The frontend's supported protocol identity for generated HIR.
 ///
 /// The producer identity and the Opy HIR protocol envelope (`wright/opy-hir`

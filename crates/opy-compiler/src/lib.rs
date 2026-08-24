@@ -282,7 +282,7 @@ impl<'a> Lowering<'a> {
     }
 
     fn lower_declarations(&mut self) -> Result<(), IntegrationError> {
-        let implicit = implicit_default_globals(self.hir);
+        let (implicit_globals, implicit_players) = implicit_default_variables(self.hir);
         for declaration in &self.hir.declarations {
             if let hir::Declaration::GlobalVariable {
                 name,
@@ -291,12 +291,31 @@ impl<'a> Lowering<'a> {
                 ..
             } = declaration
             {
-                for (implicit_name, implicit_span) in &implicit {
+                for (implicit_name, implicit_span) in &implicit_globals {
                     if default_var_index(implicit_name) == Some(*index) {
                         return Err(IntegrationError::new(
                             "index-collision",
                             format!(
                                 "duplicate use of index {index} for global variables '{implicit_name}' and '{name}'"
+                            ),
+                            implicit_span.or(*span),
+                        ));
+                    }
+                }
+            }
+            if let hir::Declaration::PlayerVariable {
+                name,
+                index: Some(index),
+                span,
+                ..
+            } = declaration
+            {
+                for (implicit_name, implicit_span) in &implicit_players {
+                    if default_var_index(implicit_name) == Some(*index) {
+                        return Err(IntegrationError::new(
+                            "index-collision",
+                            format!(
+                                "duplicate use of index {index} for player variables '{implicit_name}' and '{name}'"
                             ),
                             implicit_span.or(*span),
                         ));
@@ -332,13 +351,18 @@ impl<'a> Lowering<'a> {
                 _ => None,
             })
             .collect::<Vec<_>>();
-        let implicit_reserved = implicit
+        let implicit_reserved = implicit_globals
             .keys()
             .map(|name| default_var_index(name).expect("implicit default variable names resolve"))
             .collect::<HashSet<_>>();
+        let implicit_player_reserved = implicit_players
+            .keys()
+            .map(|name| default_var_index(name).expect("implicit default player names resolve"))
+            .collect::<HashSet<_>>();
         let empty = HashSet::new();
         let global_indices = allocate_indices(&globals, &implicit_reserved, "global variable")?;
-        let player_indices = allocate_indices(&players, &empty, "player variable")?;
+        let player_indices =
+            allocate_indices(&players, &implicit_player_reserved, "player variable")?;
         let subroutine_indices = allocate_indices(&subroutines, &empty, "subroutine")?;
         let mut global_index = 0;
         let mut player_index = 0;
@@ -449,7 +473,7 @@ impl<'a> Lowering<'a> {
                 .into_iter()
                 .map(|(name, index, span, name_span)| (name.to_string(), index, span, name_span))
                 .collect();
-        planned_globals.extend(implicit.iter().map(|(name, span)| {
+        planned_globals.extend(implicit_globals.iter().map(|(name, span)| {
             (
                 name.clone(),
                 default_var_index(name).expect("implicit default variable names resolve"),
@@ -468,15 +492,28 @@ impl<'a> Lowering<'a> {
             self.globals.insert(name.clone(), id);
         }
 
-        declared_players.sort_by_key(|(_, index, ..)| *index);
-        for (name, assigned, span, name_span) in declared_players {
+        let mut planned_players: Vec<(String, u32, Option<HirSpan>, Option<HirSpan>)> =
+            declared_players
+                .into_iter()
+                .map(|(name, index, span, name_span)| (name.to_string(), index, span, name_span))
+                .collect();
+        planned_players.extend(implicit_players.iter().map(|(name, span)| {
+            (
+                name.clone(),
+                default_var_index(name).expect("implicit default player names resolve"),
+                *span,
+                None,
+            )
+        }));
+        planned_players.sort_by_key(|(_, index, ..)| *index);
+        for (name, assigned, span, name_span) in planned_players {
             let id = self.wir.player_variables.push(wir::WorkshopVariable {
-                name: name.to_string(),
+                name: name.clone(),
                 index: assigned,
                 span: self.wir_span(span)?,
                 name_span: self.wir_span(name_span)?,
             });
-            self.players.insert(name.to_string(), id);
+            self.players.insert(name, id);
         }
 
         declared_subroutines.sort_by_key(|(_, index, ..)| *index);
@@ -1203,7 +1240,7 @@ impl<'a> Lowering<'a> {
         let value = match expr {
             Expr::Number { value, text, .. } => Value::Number {
                 value: *value,
-                text: text.clone(),
+                text: canonical_number_text(*value, text),
             },
             Expr::String { value, .. } => Value::String(value.clone()),
             Expr::Bool { value, .. } => Value::Bool(*value),
@@ -1298,7 +1335,7 @@ impl<'a> Lowering<'a> {
                     name: "multiply".to_string(),
                     args: vec![self.lower_value(left)?, self.lower_value(right)?],
                 },
-                "/" | "//" => Value::Call {
+                "/" => Value::Call {
                     name: "divide".to_string(),
                     args: vec![self.lower_value(left)?, self.lower_value(right)?],
                 },
@@ -1306,15 +1343,15 @@ impl<'a> Lowering<'a> {
                     name: "modulo".to_string(),
                     args: vec![self.lower_value(left)?, self.lower_value(right)?],
                 },
-                "**" | "^" => Value::Call {
+                "**" => Value::Call {
                     name: "raiseToPower".to_string(),
                     args: vec![self.lower_value(left)?, self.lower_value(right)?],
                 },
-                "and" | "&&" => Value::Call {
+                "and" => Value::Call {
                     name: "and".to_string(),
                     args: vec![self.lower_value(left)?, self.lower_value(right)?],
                 },
-                "or" | "||" => Value::Call {
+                "or" => Value::Call {
                     name: "or".to_string(),
                     args: vec![self.lower_value(left)?, self.lower_value(right)?],
                 },
@@ -1348,7 +1385,7 @@ impl<'a> Lowering<'a> {
                 }
             },
             Expr::Unary { op, operand, .. } => match op.as_str() {
-                "not" | "!" => {
+                "not" => {
                     // The pinned OverPy 9.7.10 oracle lowers `not (a == b)`
                     // to the negated comparison (`a != b`), flipping every
                     // ordering comparison; `in` membership stays wrapped in
@@ -1482,18 +1519,16 @@ impl<'a> Lowering<'a> {
     }
 }
 
-/// Collect the OverPy implicit default global variables (undeclared `A`–`DX`
-/// spellings) referenced anywhere in the program, mapped to each name's first
-/// source span.
-///
-/// The pinned OverPy 9.7.10 reference accepts these names without a
-/// `globalvar` declaration anywhere a variable may appear and assigns each
-/// its fixed Workshop slot (`A` = 0, …, `DX` = 127); a used implicit variable
-/// reserves that slot for declared-variable allocation. A name that is also
-/// declared keeps the declaration's index, so declared names are excluded
-/// here (the declaration wins).
-fn implicit_default_globals(hir: &hir::Program) -> BTreeMap<String, Option<HirSpan>> {
-    let declared = hir
+/// Collect the pinned OverPy implicit default global and player variables.
+/// Global and player namespaces each have independent fixed Workshop slots;
+/// only `eventPlayer.<name>` creates an implicit player variable.
+fn implicit_default_variables(
+    hir: &hir::Program,
+) -> (
+    BTreeMap<String, Option<HirSpan>>,
+    BTreeMap<String, Option<HirSpan>>,
+) {
+    let declared_globals = hir
         .declarations
         .iter()
         .filter_map(|declaration| match declaration {
@@ -1501,7 +1536,16 @@ fn implicit_default_globals(hir: &hir::Program) -> BTreeMap<String, Option<HirSp
             _ => None,
         })
         .collect::<HashSet<_>>();
-    let mut implicit = BTreeMap::new();
+    let declared_players = hir
+        .declarations
+        .iter()
+        .filter_map(|declaration| match declaration {
+            hir::Declaration::PlayerVariable { name, .. } => Some(name.as_str()),
+            _ => None,
+        })
+        .collect::<HashSet<_>>();
+    let mut globals = BTreeMap::new();
+    let mut players = BTreeMap::new();
     for declaration in &hir.declarations {
         let initializer = match declaration {
             hir::Declaration::GlobalVariable { initializer, .. }
@@ -1510,46 +1554,90 @@ fn implicit_default_globals(hir: &hir::Program) -> BTreeMap<String, Option<HirSp
             _ => None,
         };
         if let Some(expr) = initializer {
-            collect_implicit_expr(expr, &declared, &mut implicit);
+            collect_implicit_expr(
+                expr,
+                &declared_globals,
+                &declared_players,
+                &mut globals,
+                &mut players,
+            );
         }
     }
     for entry in &hir.rules {
         match entry {
             RuleEntry::Rule(rule) => {
                 for condition in &rule.conditions {
-                    collect_implicit_expr(condition, &declared, &mut implicit);
+                    collect_implicit_expr(
+                        condition,
+                        &declared_globals,
+                        &declared_players,
+                        &mut globals,
+                        &mut players,
+                    );
                 }
-                collect_implicit_stmts(&rule.actions, &declared, &mut implicit);
+                collect_implicit_stmts(
+                    &rule.actions,
+                    &declared_globals,
+                    &declared_players,
+                    &mut globals,
+                    &mut players,
+                );
             }
-            RuleEntry::SubroutineDef { body, .. } => {
-                collect_implicit_stmts(body, &declared, &mut implicit);
-            }
+            RuleEntry::SubroutineDef { body, .. } => collect_implicit_stmts(
+                body,
+                &declared_globals,
+                &declared_players,
+                &mut globals,
+                &mut players,
+            ),
         }
     }
-    implicit
+    (globals, players)
 }
 
 fn collect_implicit_stmts(
     statements: &[Stmt],
-    declared: &HashSet<&str>,
-    implicit: &mut BTreeMap<String, Option<HirSpan>>,
+    declared_globals: &HashSet<&str>,
+    declared_players: &HashSet<&str>,
+    globals: &mut BTreeMap<String, Option<HirSpan>>,
+    players: &mut BTreeMap<String, Option<HirSpan>>,
 ) {
     for statement in statements {
         match statement {
-            Stmt::Expr { expr, .. } => collect_implicit_expr(expr, declared, implicit),
+            Stmt::Expr { expr, .. } => {
+                collect_implicit_expr(expr, declared_globals, declared_players, globals, players)
+            }
             Stmt::Assign { target, value, .. } => {
-                collect_implicit_expr(target, declared, implicit);
-                collect_implicit_expr(value, declared, implicit);
+                collect_implicit_expr(target, declared_globals, declared_players, globals, players);
+                collect_implicit_expr(value, declared_globals, declared_players, globals, players);
             }
             Stmt::If {
                 branches, r#else, ..
             } => {
                 for branch in branches {
-                    collect_implicit_expr(&branch.condition, declared, implicit);
-                    collect_implicit_stmts(&branch.body, declared, implicit);
+                    collect_implicit_expr(
+                        &branch.condition,
+                        declared_globals,
+                        declared_players,
+                        globals,
+                        players,
+                    );
+                    collect_implicit_stmts(
+                        &branch.body,
+                        declared_globals,
+                        declared_players,
+                        globals,
+                        players,
+                    );
                 }
                 if let Some(default_body) = r#else {
-                    collect_implicit_stmts(default_body, declared, implicit);
+                    collect_implicit_stmts(
+                        default_body,
+                        declared_globals,
+                        declared_players,
+                        globals,
+                        players,
+                    );
                 }
             }
             Stmt::For {
@@ -1558,9 +1646,21 @@ fn collect_implicit_stmts(
                 body,
                 ..
             } => {
-                collect_implicit_expr(variable, declared, implicit);
-                collect_implicit_expr(iterable, declared, implicit);
-                collect_implicit_stmts(body, declared, implicit);
+                collect_implicit_expr(
+                    variable,
+                    declared_globals,
+                    declared_players,
+                    globals,
+                    players,
+                );
+                collect_implicit_expr(
+                    iterable,
+                    declared_globals,
+                    declared_players,
+                    globals,
+                    players,
+                );
+                collect_implicit_stmts(body, declared_globals, declared_players, globals, players);
             }
             Stmt::While {
                 condition, body, ..
@@ -1568,8 +1668,14 @@ fn collect_implicit_stmts(
             | Stmt::DoWhile {
                 condition, body, ..
             } => {
-                collect_implicit_expr(condition, declared, implicit);
-                collect_implicit_stmts(body, declared, implicit);
+                collect_implicit_expr(
+                    condition,
+                    declared_globals,
+                    declared_players,
+                    globals,
+                    players,
+                );
+                collect_implicit_stmts(body, declared_globals, declared_players, globals, players);
             }
             Stmt::Switch {
                 value,
@@ -1577,13 +1683,31 @@ fn collect_implicit_stmts(
                 r#default,
                 ..
             } => {
-                collect_implicit_expr(value, declared, implicit);
+                collect_implicit_expr(value, declared_globals, declared_players, globals, players);
                 for case in cases {
-                    collect_implicit_expr(&case.value, declared, implicit);
-                    collect_implicit_stmts(&case.body, declared, implicit);
+                    collect_implicit_expr(
+                        &case.value,
+                        declared_globals,
+                        declared_players,
+                        globals,
+                        players,
+                    );
+                    collect_implicit_stmts(
+                        &case.body,
+                        declared_globals,
+                        declared_players,
+                        globals,
+                        players,
+                    );
                 }
                 if let Some(default) = r#default {
-                    collect_implicit_stmts(default, declared, implicit);
+                    collect_implicit_stmts(
+                        default,
+                        declared_globals,
+                        declared_players,
+                        globals,
+                        players,
+                    );
                 }
             }
             Stmt::Break { .. } | Stmt::CallSubroutine { .. } | Stmt::Pass { .. } => {}
@@ -1593,24 +1717,44 @@ fn collect_implicit_stmts(
 
 fn collect_implicit_expr(
     expr: &Expr,
-    declared: &HashSet<&str>,
-    implicit: &mut BTreeMap<String, Option<HirSpan>>,
+    declared_globals: &HashSet<&str>,
+    declared_players: &HashSet<&str>,
+    globals: &mut BTreeMap<String, Option<HirSpan>>,
+    players: &mut BTreeMap<String, Option<HirSpan>>,
 ) {
     match expr {
         Expr::GlobalVar { name, span } => {
-            if !declared.contains(name.as_str()) && default_var_index(name).is_some() {
-                implicit.entry(name.clone()).or_insert(*span);
+            if !declared_globals.contains(name.as_str()) && default_var_index(name).is_some() {
+                globals.entry(name.clone()).or_insert(*span);
             }
         }
         Expr::Array { elements, .. } => {
             for element in elements {
-                collect_implicit_expr(element, declared, implicit);
+                collect_implicit_expr(
+                    element,
+                    declared_globals,
+                    declared_players,
+                    globals,
+                    players,
+                );
             }
         }
         Expr::Dict { entries, .. } => {
             for entry in entries {
-                collect_implicit_expr(&entry.key, declared, implicit);
-                collect_implicit_expr(&entry.value, declared, implicit);
+                collect_implicit_expr(
+                    &entry.key,
+                    declared_globals,
+                    declared_players,
+                    globals,
+                    players,
+                );
+                collect_implicit_expr(
+                    &entry.value,
+                    declared_globals,
+                    declared_players,
+                    globals,
+                    players,
+                );
             }
         }
         Expr::Comprehension {
@@ -1619,46 +1763,91 @@ fn collect_implicit_expr(
             condition,
             ..
         } => {
-            collect_implicit_expr(element, declared, implicit);
-            collect_implicit_expr(iterable, declared, implicit);
+            collect_implicit_expr(
+                element,
+                declared_globals,
+                declared_players,
+                globals,
+                players,
+            );
+            collect_implicit_expr(
+                iterable,
+                declared_globals,
+                declared_players,
+                globals,
+                players,
+            );
             if let Some(condition) = condition {
-                collect_implicit_expr(condition, declared, implicit);
+                collect_implicit_expr(
+                    condition,
+                    declared_globals,
+                    declared_players,
+                    globals,
+                    players,
+                );
             }
         }
-        Expr::Lambda { body, .. } => collect_implicit_expr(body, declared, implicit),
-        Expr::Vector { x, y, z, .. } => {
-            collect_implicit_expr(x, declared, implicit);
-            collect_implicit_expr(y, declared, implicit);
-            collect_implicit_expr(z, declared, implicit);
+        Expr::Lambda { body, .. } => {
+            collect_implicit_expr(body, declared_globals, declared_players, globals, players)
         }
-        Expr::PlayerVar { player, .. } => collect_implicit_expr(player, declared, implicit),
-        Expr::Member { receiver, .. } => collect_implicit_expr(receiver, declared, implicit),
+        Expr::Vector { x, y, z, .. } => {
+            collect_implicit_expr(x, declared_globals, declared_players, globals, players);
+            collect_implicit_expr(y, declared_globals, declared_players, globals, players);
+            collect_implicit_expr(z, declared_globals, declared_players, globals, players);
+        }
+        Expr::PlayerVar { player, name, span } => {
+            if matches!(player.as_ref(), Expr::EventPlayer { .. })
+                && !declared_players.contains(name.as_str())
+                && default_var_index(name).is_some()
+            {
+                players.entry(name.clone()).or_insert(*span);
+            }
+            collect_implicit_expr(player, declared_globals, declared_players, globals, players);
+        }
+        Expr::Member { receiver, .. } => collect_implicit_expr(
+            receiver,
+            declared_globals,
+            declared_players,
+            globals,
+            players,
+        ),
         Expr::Call { args, .. } | Expr::MacroCall { args, .. } => {
             for arg in args {
-                collect_implicit_expr(arg, declared, implicit);
+                collect_implicit_expr(arg, declared_globals, declared_players, globals, players);
             }
         }
         Expr::ReceiverCall { receiver, args, .. } => {
-            collect_implicit_expr(receiver, declared, implicit);
+            collect_implicit_expr(
+                receiver,
+                declared_globals,
+                declared_players,
+                globals,
+                players,
+            );
             for arg in args {
-                collect_implicit_expr(arg, declared, implicit);
+                collect_implicit_expr(arg, declared_globals, declared_players, globals, players);
             }
         }
         Expr::Binary { left, right, .. } => {
-            collect_implicit_expr(left, declared, implicit);
-            collect_implicit_expr(right, declared, implicit);
+            collect_implicit_expr(left, declared_globals, declared_players, globals, players);
+            collect_implicit_expr(right, declared_globals, declared_players, globals, players);
         }
-        Expr::Unary { operand, .. } => collect_implicit_expr(operand, declared, implicit),
+        Expr::Unary { operand, .. } => collect_implicit_expr(
+            operand,
+            declared_globals,
+            declared_players,
+            globals,
+            players,
+        ),
         Expr::Index { array, index, .. } => {
-            collect_implicit_expr(array, declared, implicit);
-            collect_implicit_expr(index, declared, implicit);
+            collect_implicit_expr(array, declared_globals, declared_players, globals, players);
+            collect_implicit_expr(index, declared_globals, declared_players, globals, players);
         }
         Expr::Format { args, .. } => {
             for arg in args {
-                collect_implicit_expr(arg, declared, implicit);
+                collect_implicit_expr(arg, declared_globals, declared_players, globals, players);
             }
         }
-        // Leaf expressions carry no variable references.
         Expr::Number { .. }
         | Expr::String { .. }
         | Expr::Bool { .. }
@@ -1748,6 +1937,14 @@ fn is_zero_initializer(expr: &hir::Expr) -> bool {
     }
 }
 
+fn canonical_number_text(value: f64, text: &str) -> String {
+    if text.starts_with("0x") || text.starts_with("0X") {
+        value.to_string()
+    } else {
+        text.to_string()
+    }
+}
+
 fn negated_comparison(op: &str) -> Option<&'static str> {
     Some(match op {
         "==" => "!=",
@@ -1765,9 +1962,9 @@ fn modify_op_from_str(op: &str) -> Option<wir::ModifyOp> {
         "+" => Some(wir::ModifyOp::Add),
         "-" => Some(wir::ModifyOp::Subtract),
         "*" => Some(wir::ModifyOp::Multiply),
-        "/" | "//" => Some(wir::ModifyOp::Divide),
+        "/" => Some(wir::ModifyOp::Divide),
         "%" => Some(wir::ModifyOp::Modulo),
-        "**" | "^" => Some(wir::ModifyOp::RaiseToPower),
+        "**" => Some(wir::ModifyOp::RaiseToPower),
         _ => None,
     }
 }
@@ -1777,9 +1974,9 @@ fn modify_catalog_name_from_str(op: &str) -> Option<&'static str> {
         "+" => Some("add"),
         "-" => Some("subtract"),
         "*" => Some("multiply"),
-        "/" | "//" => Some("divide"),
+        "/" => Some("divide"),
         "%" => Some("modulo"),
-        "**" | "^" => Some("raiseToPower"),
+        "**" => Some("raiseToPower"),
         _ => None,
     }
 }
@@ -2051,6 +2248,84 @@ rule "implicit":
     }
 
     #[test]
+    fn implicit_default_player_variables_use_independent_reference_slots() {
+        let compiler = Compiler::new().unwrap();
+        let hir = opy_frontend::compile(
+            r#"
+playervar declaredPlayer
+
+rule "implicit player variables":
+    @Event eachPlayer
+    A = 1
+    eventPlayer.A = 1
+    eventPlayer.A += 2
+    eventPlayer.E = eventPlayer.A
+    eventPlayer.DX = eventPlayer.E
+    eventPlayer.declaredPlayer = eventPlayer.A
+"#,
+            "implicit-player.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        let globals = artifact
+            .wir
+            .global_variables
+            .iter()
+            .map(|variable| (variable.name.as_str(), variable.index))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        let players = artifact
+            .wir
+            .player_variables
+            .iter()
+            .map(|variable| (variable.name.as_str(), variable.index))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        assert_eq!(globals.get("A"), Some(&0));
+        assert_eq!(players.get("A"), Some(&0));
+        assert_eq!(players.get("declaredPlayer"), Some(&1));
+        assert_eq!(players.get("E"), Some(&4));
+        assert_eq!(players.get("DX"), Some(&127));
+        assert!(
+            artifact
+                .emitted
+                .contains("Set Player Variable(Event Player, A, 1);")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Modify Player Variable(Event Player, A, Add, 2);")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Set Player Variable(Event Player, E, (Event Player).A);")
+        );
+    }
+
+    #[test]
+    fn implicit_default_player_slot_collision_is_source_attributed() {
+        let compiler = Compiler::new().unwrap();
+        let hir = opy_frontend::compile(
+            "playervar declared 0\nrule \"collision\":\n    @Event eachPlayer\n    eventPlayer.A = 1\n",
+            "player-collision.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let error = match compiler.compile_hir(&hir) {
+            Ok(_) => panic!("player slot collision unexpectedly succeeded"),
+            Err(error) => error,
+        };
+        assert_eq!(error.diagnostic.code, "index-collision");
+        assert!(
+            error
+                .diagnostic
+                .message
+                .contains("player variables 'A' and 'declared'")
+        );
+        assert_eq!(error.diagnostic.span.unwrap().start.line, 4);
+    }
+
+    #[test]
     fn power_augmented_assignment_lowers_from_source() {
         let compiler = Compiler::new().unwrap();
         let hir = opy_frontend::compile(
@@ -2066,6 +2341,35 @@ rule "implicit":
                 .emitted
                 .contains("Modify Global Variable(g, Raise To Power, 3);")
         );
+    }
+
+    #[test]
+    fn opy_hex_numbers_are_normalized_at_the_wir_boundary() {
+        let compiler = Compiler::new().unwrap();
+        let hir = opy_frontend::compile(
+            "globalvar large = 0x124BC\nglobalvar small = 0x124\nglobalvar scientific = 1e10\n",
+            "numbers.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        assert!(
+            artifact
+                .emitted
+                .contains("Set Global Variable(large, 74940);")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Set Global Variable(small, 292);")
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains("Set Global Variable(scientific, 1e10);")
+        );
+        assert!(!artifact.emitted.contains("0x124BC"));
+        assert!(!artifact.emitted.contains("0x124"));
     }
 
     #[test]
