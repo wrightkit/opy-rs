@@ -3,7 +3,7 @@
 This directory is the opy-rs compatibility corpus: OPY sources with their
 pinned-oracle snapshots (`oracle.json`), ported from the WrightKit project's
 evidence base (wright `compatibility/fixtures/`) and re-verified against the
-pinned OverPy 9.7.10 oracle (all 46 snapshots match; see
+pinned OverPy 9.7.10 oracle (see
 [`docs/compatibility/upstream-references.md`](../../docs/compatibility/upstream-references.md)
 for the dated verification record).
 
@@ -29,7 +29,7 @@ fixtures/<category>/<name>/
 
 ## Synthetic fixtures (WrightKit-authored)
 
-`fixtures/synthetic/` — 32 fixtures authored for the WrightKit compatibility
+`fixtures/synthetic/` — fixtures authored for the WrightKit compatibility
 corpus (AGPL-3.0-or-later, `kind: original`): an initial set ported unchanged
 from the wright repository corpus, extended by fixtures added in this
 repository:
@@ -71,8 +71,8 @@ repository:
 
 ### Derived from upstream OverPy `examples/` (GPL-3.0-only)
 
-11 fixtures whose OPY sources are byte-identical to the pinned reference
-tree's `examples/` content (verified by `diff` against the pinned content
+Fixtures whose OPY sources are byte-identical to the pinned reference tree's
+`examples/` content (verified by `diff` against the pinned content
 commit on acquisition; the fixture `fixture.json` files additionally record
 the example-capture commit `eea67adbcf6926c4004e35e25ab4be072624a44e` used
 by the original WrightKit acquisition pipeline — both identities describe
@@ -90,7 +90,7 @@ the same bytes). Mapping to the pinned tree (content commit
 | `overpy-crosshair` | `examples/crosshair.opy` | success |
 | `overpy-inputhud` | `examples/inputhud.opy` | success |
 | `overpy-parabola` | `examples/parabola.opy` | success |
-| `overpy-meipocalypse` | `examples/meipocalypse/*.opy` (11 files; the non-OPY generators `generateWalls.js`, `generateZoneVariables.js`, `elements.md`, `todo.md` are not ported) | failure (reference rejects part of the project; recorded in the snapshot) |
+| `overpy-meipocalypse` | `examples/meipocalypse/*.opy` (the non-OPY generators `generateWalls.js`, `generateZoneVariables.js`, `elements.md`, `todo.md` are not ported) | failure (reference rejects part of the project; recorded in the snapshot) |
 | `overpy-zencopter` | `examples/Zencopter/heli.opy` (`heliturrets.js` is not ported) | failure |
 
 License note: the upstream `examples/` are part of the GPL-3.0-only OverPy
@@ -102,7 +102,7 @@ oracle behavior (accept/reject, diagnostics, normalized Workshop text) for
 compatibility evidence. See the clean-room policy in
 `docs/compatibility/upstream-references.md`.
 
-The seven current real-world reference-success/native-gap cases also keep a
+Current real-world reference-success/native-gap cases also keep a
 minimized regression snippet in the parent fixture's `regressions` metadata.
 Those snippets retain a link to the full-project oracle evidence; they are not
 standalone replacement expectations.
@@ -135,8 +135,8 @@ reference diagnostics, exactly like the pinned oracle behaves.
 
 ## Not ported / dropped
 
-* **No fixture was dropped for provenance reasons**: all 46 fixtures in the
-  WrightKit corpus carried complete, reviewed provenance and are ported.
+* **No fixture was dropped for provenance reasons**: fixtures in the WrightKit
+  corpus carried complete, reviewed provenance and are ported.
 * Upstream `examples/` not ported (candidates for later expansion once a
   demonstrated need exists): `lucioball_all_heroes.opy`, `skirmish_elim.opy`,
   `settings.opy.json` (settings schema data, not an OPY source), and the
