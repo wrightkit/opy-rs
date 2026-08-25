@@ -45,13 +45,11 @@ compatibility/fixtures/<category>/<name>/
 
 Imported fixtures should also record an immutable `sourceCommit`, a direct
 `sourceUrl`, a `licenseUrl`, and whether the source was modified. The corpus
-contains 50 fixtures: 36 WrightKit-authored synthetic cases, one census boundary
-fixture, and 13
-real-world projects (11 derived from the pinned OverPy `examples/` tree,
-GPL-3.0-only, provenance-recorded evidence, plus the independent BSD-2-Clause
-projects `real-world/ow1-emulator` and `real-world/6v6-adjustments`, full
-include closures). See `compatibility/fixtures/README.md` for the complete
-provenance record.
+contains WrightKit-authored synthetic cases, a census boundary fixture, and
+provenance-recorded real-world projects derived from the pinned OverPy
+`examples/` tree or independent BSD-2-Clause projects, with full include
+closures. See `compatibility/fixtures/README.md` for the complete provenance
+record and the fixture manifest for the current machine-readable inventory.
 
 `oracle.json` captures the pinned oracle identity, source hash, compile status,
 exit code, normalized diagnostics, normalized Workshop text, and normalized

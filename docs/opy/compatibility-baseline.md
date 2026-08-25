@@ -17,8 +17,8 @@ The reference identity is the pinned OverPy 9.7.10 content
 (`889d9749d1def17f146548cbddb94ea1ab015847`); see
 [`docs/compatibility/upstream-references.md`](../compatibility/upstream-references.md)
 for provenance. Evidence claims in this document were verified against the
-pinned oracle (the declared corpus now contains 42 provenance-linked
-snapshots). The opy-rs frontend foundation and #7 readiness work are
+pinned oracle; the fixture manifest and runner own the current corpus
+inventory. The opy-rs frontend foundation and #7 readiness work are
 implemented on `main` (issues #3–#7, #28–#30, and #33); the category table is the
 **tier assignment contract** for the remaining surface. The state column of
 `compatibility/support-matrix.json` tracks actual implementation progress
@@ -77,7 +77,7 @@ rejected/documented-absent dimension, `—` an inapplicable dimension, and
 | 7b | Bare playervar receiver member access (`A = B.C`) | `baseline-supported` for the OPY member-expression representation; canonical member existence remains lowering-dependent | ✅ | ✅ | partial (integration) | ✅ | ✅ oracle evidence |
 | 8 | **OPY enum/domain semantics**: declared domain identities and contextual dispatch | `baseline-supported` for manifest identity links; canonical member lists/membership/emission are `lowering-dependent` | ✅ (identities) | ✅ | partial (integration) | partial | ✅ probes |
 | 8a | **Canonical Workshop enum/domain catalog**: member lists, membership, and emission | `lowering-dependent` (`workshop-rs`, #8) | — | — | ❌ (integration) | — | ✅ inventory/oracle evidence |
-| 9 | **Aliases**: old function names (`stopChasingVariable`→`stopChasing`, `getCurrentHero`→`getHero`, `hasStatusEffect`→`hasStatus`, …), hero renames (`MCCREE`→`CASSIDY`), `ChaseReeval` contextual alias | `baseline-supported` for the three manifest-declared non-contextual aliases and the `ChaseReeval` call-context resolution; the remaining alias surface stays `legacy-quirk/demand-driven` | ✅ (declared) | ✅ | ✅ (chase forms catalog-covered at integration) | ✅ | ✅ |
+| 9 | **Aliases**: old function names (`stopChasingVariable`→`stopChasing`, `getCurrentHero`→`getHero`, `hasStatusEffect`→`hasStatus`, …), hero renames (`MCCREE`→`CASSIDY`), `ChaseReeval` contextual alias | `baseline-supported` for the manifest-declared non-contextual aliases and the `ChaseReeval` call-context resolution; the remaining alias surface stays `legacy-quirk/demand-driven` | ✅ (declared) | ✅ | ✅ (chase forms catalog-covered at integration) | ✅ | ✅ |
 | 10 | **Modules**: `random.{randint,uniform,choice,shuffle}` | `baseline-supported` (corpus: `random.uniform`, `random.choice`) | ✅ | ✅ | ✅ (integration) | ✅ | ✅ |
 | 11 | **Named/keyword arguments**: `chase(A, B, rate=30, …)`, generic `name = expr` binding against manifest signatures | `baseline-supported` for the evidence surface (generic keyword binding plus the `chase`/`ChaseReeval` call-context forms); `raycast` `include=`/`exclude=` forms and macro keyword arguments stay `evidence-prioritized` (no corpus/reference evidence in the declared surface) | ✅ | ✅ | ✅ (integration) | ✅ | ✅ probes |
 | 12 | **Settings/content metadata**: `settings { … }` blocks | `baseline-supported` (JSONC subset + typed HIR payload); the Workshop `settings` emission table is **lowering-dependent** | ✅ | ✅ | ❌ (integration) | ✅ | ✅ |
