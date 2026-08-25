@@ -45,7 +45,7 @@ compatibility/fixtures/<category>/<name>/
 
 Imported fixtures should also record an immutable `sourceCommit`, a direct
 `sourceUrl`, a `licenseUrl`, and whether the source was modified. The corpus
-contains 44 fixtures: 30 WrightKit-authored synthetic cases, one census boundary
+contains 50 fixtures: 36 WrightKit-authored synthetic cases, one census boundary
 fixture, and 13
 real-world projects (11 derived from the pinned OverPy `examples/` tree,
 GPL-3.0-only, provenance-recorded evidence, plus the independent BSD-2-Clause
@@ -111,7 +111,7 @@ cargo test -p opy-frontend --test differential
 ```
 
 It compiles every fixture through the native pipeline (preprocess → parse →
-lower), verifies the Opy HIR v1 structure (validation, wire round-trip,
+lower), verifies the Opy HIR v2 structure (validation, wire round-trip,
 deterministic dump), and compares the outcome against the recorded
 `oracle.json` evidence: status parity (resolve vs expected diagnostic),
 ordered authored rule names (normalized to drop reference-synthesized

@@ -22,7 +22,7 @@
 //!   silent failure; behavior that leaves the table is a `divergence` and
 //!   fails the suite (regressions break CI, mirroring the wright contract).
 //! * **Structural self-check** (always runs) — a resolved program must pass
-//!   Opy HIR v1 validation, must round-trip through the wire payload
+//!   Opy HIR v2 validation, must round-trip through the wire payload
 //!   (`parse_value(serde_json::to_value(program))`), and its debug dump must
 //!   be deterministic.
 //! * **Rule-name parity** (informational) — the ordered authored rule names
@@ -210,6 +210,48 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         "synthetic/issue-46-unsupported",
         false,
         "Issue #46 negative primitive-lowering probe; the frontend and the pinned oracle accept the dict-indexed assignment while the opy-compiler rejects it with the stable source-attributed unsupported-integration-surface diagnostic.",
+    );
+    resolve(
+        &mut cases,
+        "synthetic/issue-47-control-flow",
+        false,
+        "Issue #47 oracle-backed control-flow lowering probe; the frontend resolves the source while opy-compiler independently constrains canonical WIR against the pinned oracle.",
+    );
+    resolve(
+        &mut cases,
+        "synthetic/issue-47-unsupported",
+        false,
+        "Issue #47 negative probe; the frontend preserves the nested conditional switch-break HIR while the compiler rejects it at the canonical WIR integration boundary.",
+    );
+    resolve(
+        &mut cases,
+        "synthetic/issue-47-switch-order",
+        false,
+        "Issue #47 source-order switch probe; default-before-case fallthrough remains represented in ordered HIR arms.",
+    );
+    resolve(
+        &mut cases,
+        "synthetic/issue-47-switch-structured-target",
+        false,
+        "Issue #47 structured switch-target probe; nested canonical control-flow widths preserve later case/default targets.",
+    );
+    resolve(
+        &mut cases,
+        "synthetic/issue-47-switch-multiple-break",
+        false,
+        "Issue #47 multi-break probe; the frontend preserves all authored arms and breaks while the compiler reports the canonical WIR capability gap.",
+    );
+    resolve(
+        &mut cases,
+        "synthetic/issue-47-do-while-shapes",
+        false,
+        "Issue #47 do-while probe; direct, conditional, and nested break shapes resolve in the frontend and are constrained by compiler oracle tests.",
+    );
+    diagnostic(
+        &mut cases,
+        "synthetic/issue-47-do-while-invalid-placement",
+        Some("do-while-placement"),
+        "Issue #47 invalid do-while placement remains a stable source-attributed frontend diagnostic.",
     );
     diagnostic(
         &mut cases,

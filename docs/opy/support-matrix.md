@@ -25,14 +25,15 @@ machine-readable semantic contract for builtins is specified in
 
 The standalone frontend foundation and #7 readiness work are merged on `main`
 (issues #2–#7, #28–#30, and #33): the native pipeline (lexer →
-preprocess → CST/parser → semantic resolution → Opy HIR v1), the bounded
+preprocess → CST/parser → semantic resolution → Opy HIR v2), the bounded
 JavaScript macro runtime, the tooling API/CLI, and the native differential
 suite are implemented and CI-covered. The rows they evidence are flipped to
 `frontend-supported`/`semantic-supported` in
 `compatibility/support-matrix.json`, the mechanically checked state source;
 features whose completion requires the full canonical Workshop surface remain
 `lowering-dependent`; the bounded #35 adapter, the #40 structural HIR →
-canonical WIR lowering, and the #46 non-control-flow primitive lowering are
+canonical WIR lowering, the #46 non-control-flow primitive lowering, and the
+#47 control-flow lowering are
 separately recorded as `end-to-end-supported` and
 do not reclassify broader Workshop-owned rows.
 Here, `end-to-end-supported` is scoped to the explicitly evidenced feature or
@@ -43,8 +44,8 @@ expected-diagnostic / divergence) is recorded in
 --test differential`.
 
 The declared pipeline is `lexer → preprocess → CST/parser → semantic
-resolution → OPY semantic model (Opy HIR v1, see
-[`docs/hir/opy-hir-v1.md`](../hir/opy-hir-v1.md))`, fully
+resolution → OPY semantic model (Opy HIR v2, see
+[`docs/hir/opy-hir-v2.md`](../hir/opy-hir-v2.md))`, fully
 Workshop-independent up to the documented integration boundary toward
 `workshop-rs` (see [`architecture.md`](architecture.md)).
 
@@ -60,8 +61,15 @@ Workshop-independent up to the documented integration boundary toward
 | `compatibility/fixtures/synthetic/issue-40-structural/` | #40 pinned OverPy oracle evidence for subroutine identity, deterministic variable allocation, and player event filters |
 | `compatibility/fixtures/synthetic/issue-46-primitives/` | #46 pinned OverPy oracle evidence for non-control-flow statement and value primitive lowering (assignments and modifications including `**=`, global/player implicit default variables at fixed slots, hex-number normalization, index-0 `firstOf` read normalization, negated-comparison lowering); the oracle snapshot constrains the native compiler through the canonical `workshop-rs` parser and structural equivalence |
 | `compatibility/fixtures/synthetic/issue-46-unsupported/` | #46 negative primitive-lowering evidence: the frontend and pinned oracle accept a dict-indexed assignment while the compiler rejects it with the stable source-attributed `unsupported-integration-surface` diagnostic |
-| `crates/opy-compiler/src/lib.rs` structural tests | #40/#46 declarations, subroutines, rules, event filters, assignments, expressions, indexing, format, pass, and source-attributed negative lowering evidence |
+| `compatibility/fixtures/synthetic/issue-47-control-flow/` | #47 pinned OverPy oracle evidence for if/elif/else, while, range-for, do-while expansion, switch fallthrough/default, and direct break lowering; native output is reparsed through `workshop-rs` and compared structurally |
+| `compatibility/fixtures/synthetic/issue-47-unsupported/` | #47 negative evidence: nested conditional switch-break is preserved by the frontend/oracle and rejected at the canonical WIR boundary with a source-attributed diagnostic |
+| `compatibility/fixtures/synthetic/issue-47-switch-order/` | #47 pinned oracle evidence for default-before-case source order and fallthrough; native output is reparsed through `workshop-rs` and compared structurally |
+| `compatibility/fixtures/synthetic/issue-47-switch-multiple-break/` | #47 multi-break evidence: frontend/oracle preserve the source, while later reachable actions are rejected explicitly at the canonical WIR boundary because v0.1.11 has no lossless multi-target switch carrier |
+| `compatibility/fixtures/synthetic/issue-47-do-while-shapes/` | #47 pinned oracle evidence for direct, conditional, nested, and structured-tail do-while breaks; native output is reparsed through `workshop-rs` and compared structurally |
+| `compatibility/fixtures/synthetic/issue-47-do-while-invalid-placement/` | #47 negative evidence for the stable source-attributed do-while placement diagnostic |
+| `crates/opy-compiler/src/lib.rs` structural tests | #40/#46/#47 declarations, subroutines, rules, event filters, assignments, expressions, indexing, format, pass, control-flow lowering, and source-attributed negative lowering evidence |
 | `crates/opy-compiler/tests/issue_46_oracle.rs` | #46 oracle-constrained differential equivalence: native output and the pinned oracle Workshop text both reparse through the canonical `workshop-rs` parser and must satisfy `roundtrip::equivalent` |
+| `crates/opy-compiler/tests/issue_47_oracle.rs` | #47 oracle-constrained control-flow equivalence for ordered switches and do-while break shapes, plus source-attributed negative diagnostics for unsupported switch targets and invalid do-while placement |
 | `compatibility/support-matrix.json` | Machine-readable state tracking of every declared feature (the mechanically checkable artifact) |
  | `crates/opy-frontend/src/manifest/` | The opy-rs-owned semantic compatibility manifest and its oracle probes (ported with the frontend, issue #3/#4) |
  | `crates/opy-frontend/tests/differential.rs` + `compatibility/diff.py` | Native-vs-reference differential parity (issue #7): the rust suite runs every corpus fixture through the native pipeline in `cargo test` (no Node), compares status/rule-name evidence against the recorded `oracle.json` snapshots, and writes `target/opy-differential-report.json` |
@@ -86,7 +94,14 @@ implements; "reference" always means the pinned OverPy 9.7.10
 - `switch`/`case`/`default` preserve source-order fallthrough; `break` is a
   real HIR statement valid in the innermost switch or loop.
 - `do ... while`, hexadecimal literals, and expression-level `in`/`not in`
-  are represented in the source-language HIR.
+  are represented in the source-language HIR. The #47 integration slice lowers
+  if/elif/else, while, global-binder range-for, do-while, switch
+  fallthrough/default, and direct loop/switch break into canonical WIR. Do-while
+  is accepted only at the beginning of a rule/definition or nested do-while
+  body (preceded only by `pass`). Multiple switch breaks with later reachable
+  actions, and an evidence-insufficient nested conditional switch break, remain
+  source-attributed diagnostics because the pinned canonical WIR has no
+  lossless multi-target switch carrier.
 - String modifiers, including f-string interpolation, preserve semantic
   format text, interpolation expressions, and source spans; dict literals,
   keyed access, list comprehensions, and lambda binders preserve local scope.
@@ -383,8 +398,8 @@ The pinned reference ABI (`src/compiler/tokenizer.ts`, `src/quickjs.ts`,
 
 ## Boundary contract
 
-The frontend produces the Opy HIR v1 program model
-([`docs/hir/opy-hir-v1.md`](../hir/opy-hir-v1.md)) with the protocol envelope,
+The frontend produces the Opy HIR v2 program model
+([`docs/hir/opy-hir-v2.md`](../hir/opy-hir-v2.md)) with the protocol envelope,
 file registry, declarations, and rules as specified there. It never requires
 Node or OverPy at build/runtime; the oracle remains available as an explicit
 `pnpm install --dir compatibility/oracle` step for the compatibility harness

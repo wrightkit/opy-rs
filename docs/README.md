@@ -29,7 +29,8 @@ architecture, compatibility evidence, APIs, and internal contracts live here.
 
 ## Internals
 
-- [Opy HIR v1](hir/opy-hir-v1.md): semantic representation and wire contract.
+- [Opy HIR v2](hir/opy-hir-v2.md): current semantic representation and wire contract.
+- [Opy HIR v1](hir/opy-hir-v1.md): prior wire contract and migration baseline.
 - [Semantic compatibility manifest](opy/compat-manifest-spec.md): builtin,
   signature, alias, and catalog-link metadata owned by the OPY implementation.
 - [Tooling notes](opy/tooling-notes.md): focused implementation notes that do

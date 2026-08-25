@@ -84,10 +84,8 @@ mod tests {
 /// The frontend's supported protocol identity for generated HIR.
 ///
 /// The producer identity and the Opy HIR protocol envelope (`wright/opy-hir`
-/// v1) are preserved from the Wright frontend so existing consumers keep
-/// accepting this producer's payloads during the migration; renaming the
-/// producer identity is a protocol decision for the opy-rs docs/architecture
-/// workstream.
+/// v2) is emitted for the ordered switch-arm wire grammar; v1 consumers must
+/// reject it until they migrate to the v2 contract.
 pub const FRONTEND_NAME: &str = "wright/opy-native";
 pub const FRONTEND_VERSION: &str = env!("CARGO_PKG_VERSION");
 
