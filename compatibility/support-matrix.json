@@ -1,5 +1,6 @@
 {
   "schemaVersion": 1,
+  "visibility": "internal-engineering-metadata",
   "artifact": "opy-rs OverPy feature inventory and support matrix",
   "reference": {
     "name": "overpy",

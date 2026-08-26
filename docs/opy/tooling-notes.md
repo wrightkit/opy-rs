@@ -35,10 +35,12 @@ python3 compatibility/diff.py --producer-command '<cmd template>' --report compa
 
 ## Machine-readable support matrix
 
-`compatibility/support-matrix.json` is the mechanically checkable state
-tracking of the declared OverPy feature surface (states `planned`,
-`frontend-supported`, `semantic-supported`, `lowering-dependent`,
-`end-to-end-supported`; see [`docs/opy/support-matrix.md`](../opy/support-matrix.md)).
+The canonical public support contract is [`../language-support.md`](../language-support.md).
+`compatibility/support-matrix.json` is retained as internal, mechanically
+checkable engineering metadata tracking the declared OverPy feature surface
+(states `planned`,
+`source-supported`, `semantic-supported`, `lowering-dependent`,
+`end-to-end-supported`; see [`../language-support.md`](../language-support.md)).
 The consistency check lives in `compatibility/tests/test_support_matrix.py`
 and runs as part of the harness test suite: every feature id is unique, every
 state/category is from the declared domains, and every `fixtures:` evidence
