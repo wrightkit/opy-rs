@@ -21,6 +21,7 @@ from pathlib import Path
 
 COMPATIBILITY_DIR = Path(__file__).resolve().parents[1]
 MATRIX_PATH = COMPATIBILITY_DIR / "support-matrix.json"
+PACKAGED_MATRIX_PATH = COMPATIBILITY_DIR.parent / "crates/opy-rs/support-matrix.json"
 FIXTURES_DIR = COMPATIBILITY_DIR / "fixtures"
 
 STATES = {
@@ -98,6 +99,13 @@ class SupportMatrixTests(unittest.TestCase):
         self.assertEqual(
             sum(self.matrix["summary"]["byState"].values()),
             len(self.features),
+        )
+
+    def test_packaged_matrix_matches_canonical_matrix(self):
+        self.assertEqual(
+            PACKAGED_MATRIX_PATH.read_bytes(),
+            MATRIX_PATH.read_bytes(),
+            "the published opy-rs crate must ship the validated support matrix",
         )
 
     def test_semantic_ownership_split_is_explicit(self):
