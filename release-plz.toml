@@ -1,0 +1,27 @@
+[workspace]
+changelog_update = true
+dependencies_update = true
+git_release_enable = false
+git_tag_enable = false
+pr_labels = ["release"]
+publish_timeout = "10m"
+release_always = false
+semver_check = false
+
+[[package]]
+name = "opy-rs"
+version_group = "opy-rs"
+git_tag_enable = true
+git_tag_name = "v{{ version }}"
+
+[[package]]
+name = "opy-compiler"
+version_group = "opy-rs"
+
+[[package]]
+name = "opy-cli"
+version_group = "opy-rs"
+
+[[package]]
+name = "opy-macro-js"
+version_group = "opy-rs"
