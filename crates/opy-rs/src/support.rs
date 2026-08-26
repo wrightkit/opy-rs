@@ -1,6 +1,6 @@
 //! Compatibility support-matrix accessor (read-only).
 //!
-//! Loads `compatibility/support-matrix.json` (owned by the evidence
+//! Loads the packaged `support-matrix.json` (copied from the evidence
 //! workstream) and exposes feature-state queries by id and category, so
 //! consumers and the CLI can report OPY support status without duplicating
 //! the matrix.
@@ -24,9 +24,8 @@ use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 
-/// The embedded support matrix (`compatibility/support-matrix.json` at the
-/// workspace root).
-const SUPPORT_MATRIX_JSON: &str = include_str!("../../../compatibility/support-matrix.json");
+/// The embedded support matrix shipped with this crate.
+const SUPPORT_MATRIX_JSON: &str = include_str!("../support-matrix.json");
 
 /// The matrix schema version this module understands.
 pub const SUPPORT_MATRIX_SCHEMA_VERSION: u32 = 1;
