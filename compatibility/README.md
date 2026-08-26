@@ -49,7 +49,8 @@ contains WrightKit-authored synthetic cases, a census boundary fixture, and
 provenance-recorded real-world projects derived from the pinned OverPy
 `examples/` tree or independent BSD-2-Clause projects, with full include
 closures. See `compatibility/fixtures/README.md` for the complete provenance
-record and the fixture manifest for the current machine-readable inventory.
+record; the current inventory is the per-fixture metadata discovered and
+validated by [`run_oracle.py`](run_oracle.py).
 
 `oracle.json` captures the pinned oracle identity, source hash, compile status,
 exit code, normalized diagnostics, normalized Workshop text, and normalized
