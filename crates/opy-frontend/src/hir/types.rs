@@ -1,7 +1,7 @@
-//! Serde protocol types for the `wright/opy-hir` protocol, major version 1.
+//! Serde protocol types for the `wright/opy-hir` protocol, major version 2.
 //!
-//! These types mirror the Opy HIR v1 specification (`docs/hir/opy-hir-v1.md`,
-//! `wright/opy-hir` v1.1.0 wire payloads). Unknown
+//! These types mirror the Opy HIR v2 specification (`docs/hir/opy-hir-v2.md`,
+//! `wright/opy-hir` v2.0.0 wire payloads). Unknown
 //! fields on known nodes are tolerated so an additive producer change inside
 //! the same major version does not break the consumer; unknown node *kinds*
 //! are rejected during validation (see [`super::validate`]).
@@ -11,7 +11,9 @@ use serde::{Deserialize, Serialize};
 /// The `wright/opy-hir` protocol name.
 pub const PROTOCOL_NAME: &str = "wright/opy-hir";
 /// The protocol major version this consumer understands.
-pub const PROTOCOL_MAJOR: u32 = 1;
+pub const PROTOCOL_MAJOR: u32 = 2;
+/// The protocol version emitted by this producer.
+pub const PROTOCOL_VERSION: &str = "2.0.0";
 
 /// The number of Workshop variable slots per variable set.
 ///
@@ -452,9 +454,7 @@ pub enum Stmt {
     Switch {
         value: Box<Expr>,
         #[serde(default)]
-        cases: Vec<SwitchCase>,
-        #[serde(default, rename = "default")]
-        r#default: Option<Vec<Stmt>>,
+        arms: Vec<SwitchArm>,
         #[serde(skip_serializing_if = "Option::is_none")]
         span: Option<Span>,
     },
@@ -499,15 +499,24 @@ impl Stmt {
     }
 }
 
-/// One switch case in the OPY HIR. Cases execute in source order and fall
-/// through to subsequent cases until a `break` statement is encountered.
+/// One source-ordered arm in the OPY HIR. Arms execute in source order and
+/// fall through to subsequent arms until a `break` statement is encountered.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SwitchCase {
-    pub value: Box<Expr>,
-    #[serde(default)]
-    pub body: Vec<Stmt>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub span: Option<Span>,
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum SwitchArm {
+    Case {
+        value: Box<Expr>,
+        #[serde(default)]
+        body: Vec<Stmt>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        span: Option<Span>,
+    },
+    Default {
+        #[serde(default)]
+        body: Vec<Stmt>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        span: Option<Span>,
+    },
 }
 
 /// An expression.

@@ -1,21 +1,23 @@
 //! The first OPY-to-Workshop integration boundary.
 //!
 //! `opy-frontend` remains a standalone OPY/HIR producer. This crate is the
-//! consumer-owned compiler layer: it pins the released `workshop-rs` v0.1.8
+//! consumer-owned compiler layer: it pins the released `workshop-rs` v0.1.11
 //! contract, checks the OPY manifest links against the canonical catalog, and
 //! lowers the supported OPY program structure into canonical WIR before
 //! validation and deterministic Workshop emission.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use opy_frontend::hir::{self, Expr, RuleEntry, Span as HirSpan, Stmt, default_var_index};
+use opy_frontend::hir::{
+    self, Expr, RuleEntry, Span as HirSpan, Stmt, SwitchArm, default_var_index,
+};
 use opy_frontend::manifest::{FunctionKind, Manifest};
 use workshop_rs::catalog::{Catalog, CatalogIdentity, Kind, Locale};
 use workshop_rs::source::{Position as WorkshopPosition, SourceFile, Span as WorkshopSpan};
 use workshop_rs::wir::{self, Action, Event, PlayerEventKind, Program, Value, ValueNode};
 
 /// The exact released dependency contract consumed by this crate.
-pub const WORKSHOP_RS_VERSION: &str = "0.1.8";
+pub const WORKSHOP_RS_VERSION: &str = "0.1.11";
 
 /// A source-attributed integration diagnostic.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -238,6 +240,16 @@ struct Lowering<'a> {
     constants: HashMap<String, &'a Expr>,
     defined_subroutines: HashSet<wir::SubroutineId>,
 }
+
+#[derive(Debug, Clone, Copy)]
+enum BreakTarget {
+    Loop,
+    DoWhile,
+    Switch,
+}
+
+type SwitchBreak = (usize, HirSpan);
+type LoweredSwitchBody = (Vec<wir::ActionId>, Option<SwitchBreak>);
 
 impl<'a> Lowering<'a> {
     fn new(compiler: &'a Compiler, hir: &'a hir::Program) -> Result<Self, IntegrationError> {
@@ -613,11 +625,7 @@ impl<'a> Lowering<'a> {
             .map(|expr| self.lower_value(expr))
             .collect::<Result<Vec<_>, _>>()?;
         let mut actions = Vec::new();
-        for stmt in &rule.actions {
-            if let Some(action) = self.lower_action(stmt)? {
-                actions.push(action);
-            }
-        }
+        actions.extend(self.lower_actions(&rule.actions, None)?);
         self.wir.rules.push(wir::Rule {
             name: rule.name.clone(),
             span: self.wir_span(rule.span)?,
@@ -658,11 +666,7 @@ impl<'a> Lowering<'a> {
             ));
         }
         let mut actions = Vec::new();
-        for stmt in body {
-            if let Some(action) = self.lower_action(stmt)? {
-                actions.push(action);
-            }
-        }
+        actions.extend(self.lower_actions(body, None)?);
         self.wir.rules.push(wir::Rule {
             name: self.subroutine_rule_name(name),
             span: self.wir_span(span)?,
@@ -930,36 +934,162 @@ impl<'a> Lowering<'a> {
         }
     }
 
-    fn lower_action(&mut self, stmt: &Stmt) -> Result<Option<wir::ActionId>, IntegrationError> {
+    fn lower_actions(
+        &mut self,
+        statements: &[Stmt],
+        break_target: Option<BreakTarget>,
+    ) -> Result<Vec<wir::ActionId>, IntegrationError> {
+        let mut actions = Vec::new();
+        for statement in statements {
+            actions.extend(self.lower_action(statement, break_target)?);
+        }
+        Ok(actions)
+    }
+
+    fn lower_action(
+        &mut self,
+        stmt: &Stmt,
+        break_target: Option<BreakTarget>,
+    ) -> Result<Vec<wir::ActionId>, IntegrationError> {
         match stmt {
-            Stmt::Pass { .. } => Ok(None),
+            Stmt::Pass { .. } => Ok(Vec::new()),
             Stmt::Assign {
                 target,
                 value,
                 span,
-            } => self.lower_assign(target, value, *span).map(Some),
+            } => self.lower_assign(target, value, *span).map(|action| vec![action]),
+            Stmt::If {
+                branches,
+                r#else,
+                span,
+            } => {
+                let branches = branches
+                    .iter()
+                    .map(|branch| {
+                        Ok(wir::IfBranch {
+                            condition: self.lower_value(&branch.condition)?,
+                            body: self.lower_actions(&branch.body, break_target)?,
+                        })
+                    })
+                    .collect::<Result<Vec<_>, IntegrationError>>()?;
+                let else_body = r#else
+                    .as_ref()
+                    .map(|body| self.lower_actions(body, break_target))
+                    .transpose()?;
+                Ok(vec![self.wir.actions.push(Action::If {
+                    branches,
+                    else_body,
+                    span: self.wir_span(*span)?,
+                })])
+            }
+            Stmt::For {
+                variable,
+                iterable,
+                body,
+                span,
+            } => {
+                let Expr::GlobalVar {
+                    name,
+                    span: target_span,
+                } = variable.as_ref()
+                else {
+                    return Err(self.unsupported(
+                        "range loops require a global-variable binder in canonical WIR",
+                        variable.span().copied(),
+                    ));
+                };
+                let variable_id = *self.globals.get(name).ok_or_else(|| {
+                    self.unsupported(format!("unknown global variable '{name}'"), *target_span)
+                })?;
+                let (start, stop, step) = self.lower_range(iterable)?;
+                let body = self.lower_actions(body, Some(BreakTarget::Loop))?;
+                Ok(vec![self.wir.actions.push(Action::ForGlobalVariable {
+                    variable: variable_id,
+                    start,
+                    stop,
+                    step,
+                    body,
+                    span: self.wir_span(*span)?,
+                    target_span: self.wir_span(*target_span)?,
+                })])
+            }
+            Stmt::While {
+                condition,
+                body,
+                span,
+            } => {
+                let condition = self.lower_value(condition)?;
+                let body = self.lower_actions(body, Some(BreakTarget::Loop))?;
+                Ok(vec![self.wir.actions.push(Action::While {
+                    condition,
+                    body,
+                    span: self.wir_span(*span)?,
+                })])
+            }
+            Stmt::DoWhile {
+                condition,
+                body,
+                span,
+            } => {
+                let body = self.lower_do_while_body(body)?;
+                let condition = self.lower_value(condition)?;
+                let loop_if = self.wir.actions.push(Action::Call {
+                    name: "loopIf".to_string(),
+                    args: vec![condition],
+                    span: self.wir_span(*span)?,
+                });
+                // OverPy's pinned lowering expands do/while into its body
+                // followed by the canonical Loop If action.
+                let mut actions = body;
+                actions.push(loop_if);
+                Ok(actions)
+            }
+            Stmt::Switch {
+                value,
+                arms,
+                span,
+            } => self.lower_switch(value, arms, *span).map(|action| vec![action]),
+            Stmt::Break { span } => match break_target {
+                Some(BreakTarget::Loop) => Ok(vec![self.wir.actions.push(Action::Call {
+                    name: "break".to_string(),
+                    args: Vec::new(),
+                    span: self.wir_span(*span)?,
+                })]),
+                Some(BreakTarget::DoWhile) => Err(self.unsupported(
+                    "break inside a do-while must be a direct statement or a single conditional break",
+                    *span,
+                )),
+                Some(BreakTarget::Switch) => Err(self.unsupported(
+                    "break inside a nested conditional cannot be normalized into canonical switch control flow",
+                    *span,
+                )),
+                None => Err(self.unsupported(
+                    "break has no enclosing canonical loop or switch",
+                    *span,
+                )),
+            },
             Stmt::Expr { expr, span } => match expr.as_ref() {
                 Expr::Call { name, args, .. } => {
                     if name == "disableInspector" && args.is_empty() {
-                        Ok(Some(self.wir.actions.push(Action::Call {
+                        Ok(vec![self.wir.actions.push(Action::Call {
                             name: "disableInspector".to_string(),
                             args: Vec::new(),
                             span: self.wir_span(*span)?,
-                        })))
+                        })])
                     } else if name == "debug" && args.len() == 1 {
                         let val = self.lower_value(&args[0])?;
-                        Ok(Some(self.wir.actions.push(Action::Debug {
+                        Ok(vec![self.wir.actions.push(Action::Debug {
                             value: val,
                             span: self.wir_span(*span)?,
-                        })))
+                        })])
                     } else if name == "print" && args.len() == 1 {
                         let msg = self.lower_value(&args[0])?;
-                        Ok(Some(self.wir.actions.push(Action::Print {
+                        Ok(vec![self.wir.actions.push(Action::Print {
                             message: msg,
                             span: self.wir_span(*span)?,
-                        })))
+                        })])
                     } else {
-                        self.lower_action_call(name, args, *span).map(Some)
+                        self.lower_action_call(name, args, *span).map(|action| vec![action])
                     }
                 }
                 _ => Err(self.unsupported(
@@ -972,17 +1102,317 @@ impl<'a> Lowering<'a> {
                     self.unsupported(format!("unknown subroutine '{name}'"), *span)
                 })?;
                 let span = self.wir_span(*span)?;
-                Ok(Some(self.wir.actions.push(Action::CallSubroutine {
+                Ok(vec![self.wir.actions.push(Action::CallSubroutine {
                     subroutine,
                     span,
                     callee_span: span,
-                })))
+                })])
             }
-            _ => Err(self.unsupported(
-                "the statement is not currently representable in canonical WIR",
-                stmt.span().copied(),
-            )),
         }
+    }
+
+    fn lower_do_while_body(
+        &mut self,
+        statements: &[Stmt],
+    ) -> Result<Vec<wir::ActionId>, IntegrationError> {
+        let mut actions = Vec::new();
+        for (index, statement) in statements.iter().enumerate() {
+            let direct_break = matches!(statement, Stmt::Break { .. });
+            let conditional_break = match statement {
+                Stmt::If {
+                    branches,
+                    r#else: None,
+                    ..
+                } if branches.len() == 1 => {
+                    matches!(branches[0].body.as_slice(), [Stmt::Break { .. }])
+                }
+                _ => false,
+            };
+
+            if direct_break || conditional_break {
+                let tail = self.lower_do_while_body(&statements[index + 1..])?;
+                let distance = self.canonical_action_width(&tail, statement.span().copied())? + 1;
+                let (name, args, span) = if let Stmt::Break { span } = statement {
+                    ("skip", Vec::new(), *span)
+                } else if let Stmt::If { branches, span, .. } = statement {
+                    (
+                        "skipIf",
+                        vec![self.lower_value(&branches[0].condition)?],
+                        *span,
+                    )
+                } else {
+                    unreachable!("break shape was checked above")
+                };
+                let distance = self.wir.values.push(ValueNode::new(
+                    Value::Number {
+                        value: distance as f64,
+                        text: distance.to_string(),
+                    },
+                    self.wir_span(span)?,
+                ));
+                let mut args = args;
+                args.push(distance);
+                actions.push(self.wir.actions.push(Action::Call {
+                    name: name.to_string(),
+                    args,
+                    span: self.wir_span(span)?,
+                }));
+                actions.extend(tail);
+                return Ok(actions);
+            }
+
+            actions.extend(self.lower_action(statement, Some(BreakTarget::DoWhile))?);
+        }
+        Ok(actions)
+    }
+
+    fn lower_range(
+        &mut self,
+        iterable: &Expr,
+    ) -> Result<(wir::ValueId, wir::ValueId, wir::ValueId), IntegrationError> {
+        let Expr::Call { name, args, .. } = iterable else {
+            return Err(self.unsupported(
+                "range loop iterable must be a range(...) call",
+                iterable.span().copied(),
+            ));
+        };
+        if name != "range" || !(1..=3).contains(&args.len()) {
+            return Err(self.unsupported(
+                "range loop requires one to three arguments",
+                iterable.span().copied(),
+            ));
+        }
+        let span = iterable.span().copied();
+        let number = |this: &mut Self, value: f64| -> Result<wir::ValueId, IntegrationError> {
+            Ok(this.wir.values.push(ValueNode::new(
+                Value::Number {
+                    value,
+                    text: value.to_string(),
+                },
+                this.wir_span(span)?,
+            )))
+        };
+        match args.as_slice() {
+            [stop] => Ok((
+                number(self, 0.0)?,
+                self.lower_value(stop)?,
+                number(self, 1.0)?,
+            )),
+            [start, stop] => Ok((
+                self.lower_value(start)?,
+                self.lower_value(stop)?,
+                number(self, 1.0)?,
+            )),
+            [start, stop, step] => Ok((
+                self.lower_value(start)?,
+                self.lower_value(stop)?,
+                self.lower_value(step)?,
+            )),
+            _ => unreachable!("range arity checked above"),
+        }
+    }
+
+    fn lower_switch(
+        &mut self,
+        value: &Expr,
+        arms: &[SwitchArm],
+        span: Option<HirSpan>,
+    ) -> Result<wir::ActionId, IntegrationError> {
+        let selector = self.lower_value(value)?;
+        let mut case_values = Vec::new();
+        let mut lowered_arms = Vec::with_capacity(arms.len());
+        let mut case_offsets = Vec::new();
+        let mut offset = 0usize;
+        let mut default_offset = None;
+
+        for arm in arms {
+            let (value, (body, break_at)) = match arm {
+                SwitchArm::Case { value, body, .. } => {
+                    case_values.push(self.lower_value(value)?);
+                    (Some(value), self.lower_switch_body(body)?)
+                }
+                SwitchArm::Default { body, span } => {
+                    if default_offset.is_some() {
+                        return Err(
+                            self.unsupported("a switch may contain at most one default arm", *span)
+                        );
+                    }
+                    default_offset = Some(offset);
+                    (None, self.lower_switch_body(body)?)
+                }
+            };
+            if value.is_some() {
+                case_offsets.push(offset);
+            }
+            offset += self.canonical_action_width(&body, span)? + usize::from(break_at.is_some());
+            lowered_arms.push((value, body, break_at));
+        }
+        let default_offset = default_offset.unwrap_or(offset);
+
+        let break_arms: Vec<_> = lowered_arms
+            .iter()
+            .enumerate()
+            .filter_map(|(index, (_, _, break_at))| break_at.map(|break_at| (index, break_at)))
+            .collect();
+        if break_arms.len() > 1 {
+            let (first_index, first_break) = break_arms[0];
+            let has_actions_after_first = lowered_arms[first_index].1.len() > first_break.0
+                || lowered_arms
+                    .iter()
+                    .skip(first_index + 1)
+                    .any(|(_, body, _)| !body.is_empty());
+            if has_actions_after_first {
+                return Err(self.unsupported(
+                    "multiple switch breaks with later reachable actions require canonical switch targets",
+                    Some(break_arms[1].1.1),
+                ));
+            }
+        }
+
+        let case_values = self.wir.values.push(ValueNode::new(
+            Value::Array(case_values),
+            self.wir_span(span)?,
+        ));
+        let value_span = self.wir_span(span)?;
+        let offset_values = std::iter::once(default_offset)
+            .chain(case_offsets)
+            .map(|value| {
+                self.wir.values.push(ValueNode::new(
+                    Value::Number {
+                        value: value as f64,
+                        text: value.to_string(),
+                    },
+                    value_span,
+                ))
+            })
+            .collect();
+        let offsets = self
+            .wir
+            .values
+            .push(ValueNode::new(Value::Array(offset_values), value_span));
+        let one = self.wir.values.push(ValueNode::new(
+            Value::Number {
+                value: 1.0,
+                text: "1".to_string(),
+            },
+            self.wir_span(span)?,
+        ));
+        let index = self.wir.values.push(ValueNode::new(
+            Value::Call {
+                name: "indexOfArrayValue".to_string(),
+                args: vec![case_values, selector],
+            },
+            self.wir_span(span)?,
+        ));
+        let case_offset = self.wir.values.push(ValueNode::new(
+            Value::Call {
+                name: "add".to_string(),
+                args: vec![one, index],
+            },
+            self.wir_span(span)?,
+        ));
+        let skip_condition = self.wir.values.push(ValueNode::new(
+            Value::Call {
+                name: "valueInArray".to_string(),
+                args: vec![offsets, case_offset],
+            },
+            self.wir_span(span)?,
+        ));
+        let skip = self.wir.actions.push(Action::Call {
+            name: "skip".to_string(),
+            args: vec![skip_condition],
+            span: self.wir_span(span)?,
+        });
+        let true_value = self
+            .wir
+            .values
+            .push(ValueNode::new(Value::Bool(true), self.wir_span(span)?));
+
+        let first_break = break_arms.first().copied();
+        let mut branch_body = vec![skip];
+        let else_body = if let Some((break_index, (break_at, _))) = first_break {
+            for (index, (_, body, _)) in lowered_arms.iter().enumerate() {
+                if index < break_index {
+                    branch_body.extend(body.iter().copied());
+                } else if index == break_index {
+                    branch_body.extend(body[..break_at].iter().copied());
+                }
+            }
+            let mut tail = Vec::new();
+            tail.extend(lowered_arms[break_index].1[break_at..].iter().copied());
+            for (_, body, _) in lowered_arms.iter().skip(break_index + 1) {
+                tail.extend(body.iter().copied());
+            }
+            Some(tail)
+        } else {
+            for (_, body, _) in &lowered_arms {
+                branch_body.extend(body.iter().copied());
+            }
+            None
+        };
+
+        Ok(self.wir.actions.push(Action::If {
+            branches: vec![wir::IfBranch {
+                condition: true_value,
+                body: branch_body,
+            }],
+            else_body,
+            span: self.wir_span(span)?,
+        }))
+    }
+
+    fn lower_switch_body(
+        &mut self,
+        statements: &[Stmt],
+    ) -> Result<LoweredSwitchBody, IntegrationError> {
+        let mut actions = Vec::new();
+        let mut break_at = None;
+        for statement in statements {
+            if let Stmt::Break { span } = statement {
+                if break_at.is_some() {
+                    return Err(self.unsupported(
+                        "multiple switch breaks in one arm require canonical switch targets",
+                        *span,
+                    ));
+                }
+                break_at = Some((
+                    actions.len(),
+                    span.ok_or_else(|| {
+                        self.unsupported("switch break is missing source provenance", None)
+                    })?,
+                ));
+                continue;
+            }
+            actions.extend(self.lower_action(statement, Some(BreakTarget::Switch))?);
+        }
+        Ok((actions, break_at))
+    }
+
+    /// Query the Workshop-owned native action layout for a relative jump.
+    fn canonical_action_width(
+        &self,
+        actions: &[wir::ActionId],
+        fallback_span: Option<HirSpan>,
+    ) -> Result<usize, IntegrationError> {
+        workshop_rs::emitter::action_width(
+            &self.wir,
+            &self.compiler.catalog,
+            &Locale::new("en-US"),
+            actions,
+        )
+        .map(|layout| layout.width)
+        .map_err(|error| {
+            let workshop_span = match &error {
+                workshop_rs::emitter::ActionLayoutError::InvalidWIR(error) => error.span(),
+                workshop_rs::emitter::ActionLayoutError::Emission(error) => {
+                    workshop_error_span(error)
+                }
+            };
+            let span = workshop_span
+                .and_then(|span| self.hir_span_from_workshop(span))
+                .or(fallback_span);
+            IntegrationError::new("workshop-action-layout", error.to_string(), span)
+        })
     }
 
     fn lower_assign(
@@ -1677,37 +2107,36 @@ fn collect_implicit_stmts(
                 );
                 collect_implicit_stmts(body, declared_globals, declared_players, globals, players);
             }
-            Stmt::Switch {
-                value,
-                cases,
-                r#default,
-                ..
-            } => {
+            Stmt::Switch { value, arms, .. } => {
                 collect_implicit_expr(value, declared_globals, declared_players, globals, players);
-                for case in cases {
-                    collect_implicit_expr(
-                        &case.value,
-                        declared_globals,
-                        declared_players,
-                        globals,
-                        players,
-                    );
-                    collect_implicit_stmts(
-                        &case.body,
-                        declared_globals,
-                        declared_players,
-                        globals,
-                        players,
-                    );
-                }
-                if let Some(default) = r#default {
-                    collect_implicit_stmts(
-                        default,
-                        declared_globals,
-                        declared_players,
-                        globals,
-                        players,
-                    );
+                for arm in arms {
+                    match arm {
+                        SwitchArm::Case { value, body, .. } => {
+                            collect_implicit_expr(
+                                value,
+                                declared_globals,
+                                declared_players,
+                                globals,
+                                players,
+                            );
+                            collect_implicit_stmts(
+                                body,
+                                declared_globals,
+                                declared_players,
+                                globals,
+                                players,
+                            );
+                        }
+                        SwitchArm::Default { body, .. } => {
+                            collect_implicit_stmts(
+                                body,
+                                declared_globals,
+                                declared_players,
+                                globals,
+                                players,
+                            );
+                        }
+                    }
                 }
             }
             Stmt::Break { .. } | Stmt::CallSubroutine { .. } | Stmt::Pass { .. } => {}
@@ -2034,7 +2463,7 @@ mod tests {
         assert_eq!(rule.span.unwrap().file.index(), 0);
         assert_eq!(rule.name_span.unwrap().start.line, 2);
         assert!(artifact.emitted.contains("Disable Inspector Recording;"));
-        assert_eq!(artifact.catalog_identity.implementation_version, "0.1.8");
+        assert_eq!(artifact.catalog_identity.implementation_version, "0.1.11");
     }
 
     #[test]
@@ -2047,20 +2476,25 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_lowering_remains_source_attributed() {
+    fn while_lowering_is_source_attributed() {
         let compiler = Compiler::new().unwrap();
         let hir = opy_frontend::compile(
-            "rule \"unsupported\":\n    @Event global\n    while true:\n        disableInspector()\n",
-            "unsupported.opy",
+            "rule \"while\":\n    @Event global\n    while true:\n        disableInspector()\n",
+            "while.opy",
             Path::new("."),
         )
         .unwrap();
-        let error = match compiler.compile_hir(&hir) {
-            Ok(_) => panic!("unsupported lowering unexpectedly succeeded"),
-            Err(error) => error,
-        };
-        assert_eq!(error.diagnostic.code, "unsupported-integration-surface");
-        assert_eq!(error.diagnostic.span.unwrap().start.line, 3);
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        let rule = artifact
+            .wir
+            .rules
+            .get(workshop_rs::wir::RuleId::from_index(0))
+            .unwrap();
+        assert!(matches!(
+            artifact.wir.actions.get(rule.actions[0]),
+            Some(workshop_rs::wir::Action::While { .. })
+        ));
+        assert!(artifact.emitted.contains("While(True);"));
     }
 
     #[test]

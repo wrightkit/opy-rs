@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/issue-47-switch-order",
+  "category": "compilation",
+  "features": ["switch", "case", "default", "fallthrough"],
+  "source": "source.opy",
+  "expectedStatus": "success",
+  "provenance": {
+    "kind": "original",
+    "origin": "opy-rs Issue #47 pinned switch-order lowering probe",
+    "license": "AGPL-3.0-or-later",
+    "redistributable": true
+  }
+}

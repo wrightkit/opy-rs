@@ -29,10 +29,10 @@ use std::collections::{HashMap, HashSet};
 
 use crate::hir::types::{
     Annotation as HirAnnotation, AnnotationArg as HirAnnotationArg, Declaration, Define,
-    DictEntry as HirDictEntry, Event, Expr as HirExpr, Generator, IfBranch, Position,
-    PreprocessingState, Program as HirProgram, Protocol, Rule, RuleEntry, Settings as HirSettings,
-    SettingsNode as HirSettingsNode, SourceFile, Span as HirSpan, Stmt as HirStmt,
-    SwitchCase as HirSwitchCase, default_var_index,
+    DictEntry as HirDictEntry, Event, Expr as HirExpr, Generator, IfBranch, PROTOCOL_VERSION,
+    Position, PreprocessingState, Program as HirProgram, Protocol, Rule, RuleEntry,
+    Settings as HirSettings, SettingsNode as HirSettingsNode, SourceFile, Span as HirSpan,
+    Stmt as HirStmt, SwitchArm as HirSwitchArm, default_var_index,
 };
 
 use crate::cst::{self, CallArg, Decl, Expr, RuleEntry as CstRuleEntry, Stmt};
@@ -43,7 +43,6 @@ use crate::manifest::{
 
 /// The protocol envelope this frontend produces.
 const PROTOCOL_NAME: &str = "wright/opy-hir";
-const PROTOCOL_VERSION: &str = "1.1.0";
 
 /// The call-position context of an expression being lowered; builtin
 /// resolution checks action/value identity against this context.
@@ -211,7 +210,7 @@ pub fn lower_with_preprocessing(
                     source_name: name.clone(),
                     span: Some(span.into()),
                     name_span: Some(name_span.into()),
-                    body: lowerer.lower_block(body, &[], false),
+                    body: lowerer.lower_block(body, &[], false, true),
                     annotations: lower_annotations(annotations),
                 });
             }
@@ -619,7 +618,7 @@ impl Lowerer {
             .iter()
             .map(|condition| self.lower_expr(condition, &[], CallPosition::Value))
             .collect();
-        let actions = self.lower_block(&rule.actions, &[], false);
+        let actions = self.lower_block(&rule.actions, &[], false, true);
         Ok(Rule {
             name: render_rule_name(
                 &rule.name,
@@ -656,10 +655,26 @@ impl Lowerer {
         stmts: &[Stmt],
         macro_params: &[String],
         breakable: bool,
+        allow_do_while: bool,
     ) -> Vec<HirStmt> {
         stmts
             .iter()
-            .map(|stmt| self.lower_stmt(stmt, macro_params, breakable))
+            .enumerate()
+            .map(|(index, stmt)| {
+                if matches!(stmt, Stmt::DoWhile { .. })
+                    && (!allow_do_while
+                        || stmts[..index]
+                            .iter()
+                            .any(|previous| !matches!(previous, Stmt::Pass { .. })))
+                {
+                    self.error_at(
+                        "do-while-placement",
+                        "do-while must be at the beginning of a rule, subroutine, or do-while body; only pass statements may precede it".to_string(),
+                        stmt.span(),
+                    );
+                }
+                self.lower_stmt(stmt, macro_params, breakable)
+            })
             .collect()
     }
 
@@ -705,12 +720,12 @@ impl Lowerer {
                             macro_params,
                             CallPosition::Value,
                         )),
-                        body: self.lower_block(&branch.body, macro_params, breakable),
+                        body: self.lower_block(&branch.body, macro_params, breakable, false),
                     })
                     .collect(),
                 r#else: r#else
                     .as_ref()
-                    .map(|body| self.lower_block(body, macro_params, breakable)),
+                    .map(|body| self.lower_block(body, macro_params, breakable, false)),
                 span: Some(span.into()),
             },
             Stmt::For {
@@ -740,7 +755,7 @@ impl Lowerer {
                         CallPosition::Value,
                     )),
                     iterable: Box::new(self.lower_expr(iterable, macro_params, iterable_position)),
-                    body: self.lower_block(body, macro_params, true),
+                    body: self.lower_block(body, macro_params, true, false),
                     span: Some(span.into()),
                 }
             }
@@ -750,7 +765,7 @@ impl Lowerer {
                 span,
             } => HirStmt::While {
                 condition: Box::new(self.lower_expr(condition, macro_params, CallPosition::Value)),
-                body: self.lower_block(body, macro_params, true),
+                body: self.lower_block(body, macro_params, true, false),
                 span: Some(span.into()),
             },
             Stmt::DoWhile {
@@ -759,31 +774,29 @@ impl Lowerer {
                 span,
             } => HirStmt::DoWhile {
                 condition: Box::new(self.lower_expr(condition, macro_params, CallPosition::Value)),
-                body: self.lower_block(body, macro_params, true),
+                body: self.lower_block(body, macro_params, true, true),
                 span: Some(span.into()),
             },
-            Stmt::Switch {
-                value,
-                cases,
-                r#default,
-                span,
-            } => HirStmt::Switch {
+            Stmt::Switch { value, arms, span } => HirStmt::Switch {
                 value: Box::new(self.lower_expr(value, macro_params, CallPosition::Value)),
-                cases: cases
+                arms: arms
                     .iter()
-                    .map(|case| HirSwitchCase {
-                        value: Box::new(self.lower_expr(
-                            &case.value,
-                            macro_params,
-                            CallPosition::Value,
-                        )),
-                        body: self.lower_block(&case.body, macro_params, true),
-                        span: Some(case.span.into()),
+                    .map(|arm| match arm {
+                        cst::SwitchArm::Case { value, body, span } => HirSwitchArm::Case {
+                            value: Box::new(self.lower_expr(
+                                value,
+                                macro_params,
+                                CallPosition::Value,
+                            )),
+                            body: self.lower_block(body, macro_params, true, false),
+                            span: Some((*span).into()),
+                        },
+                        cst::SwitchArm::Default { body, span } => HirSwitchArm::Default {
+                            body: self.lower_block(body, macro_params, true, false),
+                            span: Some((*span).into()),
+                        },
                     })
                     .collect(),
-                r#default: r#default
-                    .as_ref()
-                    .map(|body| self.lower_block(body, macro_params, true)),
                 span: Some(span.into()),
             },
             Stmt::Break { span } => {
@@ -805,7 +818,7 @@ impl Lowerer {
     }
 
     fn lower_macro_body(&mut self, body: &[Stmt], params: &[String]) -> Vec<HirStmt> {
-        self.lower_block(body, params, false)
+        self.lower_block(body, params, false, false)
     }
 
     fn lower_expr(
@@ -1903,6 +1916,20 @@ mod tests {
     }
 
     #[test]
+    fn producer_emits_the_v2_ordered_switch_contract() {
+        let hir = lower_ok(
+            "globalvar value\nrule \"r\":\n    @Event global\n    switch value:\n        default:\n            value = 1\n        case 2:\n            value = 2\n",
+        );
+        assert_eq!(hir.protocol.name, "wright/opy-hir");
+        assert_eq!(hir.protocol.version, "2.0.0");
+        let value = serde_json::to_value(&hir).expect("HIR must serialize");
+        let switch = &value["rules"][0]["actions"][0];
+        assert!(switch.get("arms").is_some());
+        assert!(switch.get("cases").is_none());
+        assert!(switch.get("default").is_none());
+    }
+
+    #[test]
     fn receiver_calls_lower_to_receiver_call_hir() {
         // `eventPlayer.setMoveSpeed(100)` lowers to a ReceiverCall on the
         // event player, and `target.setMoveSpeed(50)` to a ReceiverCall on a
@@ -2866,36 +2893,47 @@ mod tests {
     #[test]
     fn issue_28_constructs_lower_to_provenance_preserving_hir() {
         let hir = lower_ok(
-            "globalvar x\nrule \"r\":\n    @Event global\n    switch x:\n        case 0x10:\n            x = 1 in [1, 2]\n        default:\n            do:\n                x = {\"x\": 1}[\"x\"]\n            while x not in [2, 3]\n    x = [value * 2 for value, index in [1, 2] if value > index]\n    x = sorted([1, 2], key=lambda value: value)\n    x = w\"wide\"\n",
+            "globalvar x\nrule \"r\":\n    @Event global\n    do:\n        x = {\"x\": 1}[\"x\"]\n    while x not in [2, 3]\n    switch x:\n        case 0x10:\n            x = 1 in [1, 2]\n        default:\n            x = 2\n    x = [value * 2 for value, index in [1, 2] if value > index]\n    x = sorted([1, 2], key=lambda value: value)\n    x = w\"wide\"\n",
         );
         let (_, actions) = rule_conditions_and_actions(&hir);
-        let HirStmt::Switch {
-            cases, r#default, ..
-        } = &actions[0]
-        else {
-            panic!("expected switch");
-        };
-        assert_eq!(cases.len(), 1);
-        assert!(r#default.is_some());
-        let HirStmt::Assign { value, .. } = &cases[0].body[0] else {
-            panic!("expected case assignment");
-        };
-        assert!(matches!(value.as_ref(), HirExpr::Binary { op, .. } if op == "in"));
-        let HirStmt::DoWhile { condition, .. } = &r#default.as_ref().unwrap()[0] else {
+        let HirStmt::DoWhile { condition, .. } = &actions[0] else {
             panic!("expected do-while");
         };
         assert!(matches!(condition.as_ref(), HirExpr::Binary { op, .. } if op == "not in"));
-        let HirStmt::Assign { value, .. } = &actions[1] else {
+        let HirStmt::Switch { arms, .. } = &actions[1] else {
+            panic!("expected switch");
+        };
+        assert_eq!(arms.len(), 2);
+        let HirSwitchArm::Case {
+            value: case_value,
+            body,
+            ..
+        } = &arms[0]
+        else {
+            panic!("expected case arm");
+        };
+        assert!(
+            matches!(case_value.as_ref(), HirExpr::Number { value, .. } if *value == 0x10 as f64)
+        );
+        let HirStmt::Assign { value, .. } = &body[0] else {
+            panic!("expected case assignment");
+        };
+        assert!(matches!(value.as_ref(), HirExpr::Binary { op, .. } if op == "in"));
+        let HirSwitchArm::Default { body, .. } = &arms[1] else {
+            panic!("expected default arm");
+        };
+        assert!(matches!(body[0], HirStmt::Assign { .. }));
+        let HirStmt::Assign { value, .. } = &actions[2] else {
             panic!("expected comprehension assignment");
         };
         assert!(matches!(value.as_ref(), HirExpr::Comprehension { .. }));
-        let HirStmt::Assign { value, .. } = &actions[2] else {
+        let HirStmt::Assign { value, .. } = &actions[3] else {
             panic!("expected sorted assignment");
         };
         assert!(
             matches!(value.as_ref(), HirExpr::Call { name, args, .. } if name == "sorted" && matches!(&args[1], HirExpr::Lambda { body, .. } if matches!(body.as_ref(), HirExpr::Local { name, .. } if name == "value")))
         );
-        let HirStmt::Assign { value, .. } = &actions[3] else {
+        let HirStmt::Assign { value, .. } = &actions[4] else {
             panic!("expected string assignment");
         };
         assert!(
@@ -2915,5 +2953,18 @@ mod tests {
             4,
         );
         assert_eq!(lambda_error.code, "lambda-context");
+    }
+
+    #[test]
+    fn do_while_requires_rule_or_definition_prefix_position() {
+        let error = compile_error(
+            "globalvar value\nrule \"r\":\n    @Event global\n    value = 1\n    do:\n        value += 1\n    while value < 2\n",
+            5,
+        );
+        assert_eq!(error.code, "do-while-placement");
+        assert_eq!(
+            error.message,
+            "do-while must be at the beginning of a rule, subroutine, or do-while body; only pass statements may precede it"
+        );
     }
 }

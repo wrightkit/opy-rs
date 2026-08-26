@@ -194,8 +194,7 @@ pub enum Stmt {
     },
     Switch {
         value: Expr,
-        cases: Vec<SwitchCase>,
-        r#default: Option<Vec<Stmt>>,
+        arms: Vec<SwitchArm>,
         span: Span,
     },
     Break {
@@ -206,12 +205,18 @@ pub enum Stmt {
     },
 }
 
-/// One `case value:` arm in a switch statement.
+/// One source-ordered arm in a switch statement.
 #[derive(Debug, Clone)]
-pub struct SwitchCase {
-    pub value: Expr,
-    pub body: Vec<Stmt>,
-    pub span: Span,
+pub enum SwitchArm {
+    Case {
+        value: Expr,
+        body: Vec<Stmt>,
+        span: Span,
+    },
+    Default {
+        body: Vec<Stmt>,
+        span: Span,
+    },
 }
 
 /// One condition/body pair of an `if`.
@@ -358,6 +363,23 @@ impl Expr {
             | Expr::Index { span, .. }
             | Expr::Binary { span, .. }
             | Expr::Unary { span, .. } => *span,
+        }
+    }
+}
+
+impl Stmt {
+    /// The source span of this statement.
+    pub fn span(&self) -> Span {
+        match self {
+            Stmt::Expr { span, .. }
+            | Stmt::Assign { span, .. }
+            | Stmt::If { span, .. }
+            | Stmt::For { span, .. }
+            | Stmt::While { span, .. }
+            | Stmt::DoWhile { span, .. }
+            | Stmt::Switch { span, .. }
+            | Stmt::Break { span }
+            | Stmt::Pass { span } => *span,
         }
     }
 }

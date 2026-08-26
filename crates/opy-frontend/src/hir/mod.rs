@@ -1,9 +1,7 @@
-//! Opy HIR v1 — the OPY semantic model owned by `opy-rs`.
+//! Opy HIR v2 — the OPY semantic model owned by `opy-rs`.
 //!
-//! The wire contract is the `wright/opy-hir` protocol, major version 1
-//! (produced as `1.1.0`), specified in the WrightKit HIR protocol document
-//! (`docs/hir/opy-hir-v1.md` in the wright repository; the opy-rs docs
-//! workstream re-homes the specification). This module provides the serde
+//! The wire contract is the `wright/opy-hir` protocol, major version 2
+//! (produced as `2.0.0`), specified in `docs/hir/opy-hir-v2.md`. This module provides the serde
 //! protocol types, envelope and structural validation, and a deterministic
 //! debug dump.
 //!
@@ -21,12 +19,12 @@ pub use types::{
     Annotation, AnnotationArg, Declaration, DictEntry, DirectiveRecord, DirectiveValue, Event,
     Expr, Generator, OptimizationState, Position, PreprocessingSnapshot, PreprocessingState,
     Program, Protocol, Rule, RuleEntry, Settings, SettingsListElement, SettingsNode, SourceFile,
-    Span, Stmt, SwitchCase, TranslationState, default_var_index,
+    Span, Stmt, SwitchArm, TranslationState, default_var_index,
 };
 
 use serde_json::Value;
 
-/// Parse and validate an Opy HIR v1 payload from a JSON string.
+/// Parse and validate an Opy HIR v2 payload from a JSON string.
 ///
 /// Returns a structured [`HirError`] for malformed JSON, an unsupported
 /// protocol identity or major version, unknown node kinds, or invariant
@@ -36,7 +34,7 @@ pub fn parse_str(input: &str) -> Result<Program, HirError> {
     parse_value(value)
 }
 
-/// Parse and validate an Opy HIR v1 payload from a JSON value.
+/// Parse and validate an Opy HIR v2 payload from a JSON value.
 pub fn parse_value(value: Value) -> Result<Program, HirError> {
     validate::check_envelope(&value)?;
     validate::check_unknown_kinds(&value)?;
@@ -57,5 +55,27 @@ impl Program {
     /// reports.
     pub fn dump(&self) -> String {
         dump::dump(self)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::validate::check_envelope;
+
+    #[test]
+    fn v2_envelope_is_accepted_and_v1_is_rejected_before_body_inspection() {
+        let v2 = json!({
+            "protocol": { "name": "wright/opy-hir", "version": "2.0.0" }
+        });
+        assert!(check_envelope(&v2).is_ok());
+
+        let v1 = json!({
+            "protocol": { "name": "wright/opy-hir", "version": "1.1.0" },
+            "rules": [{ "kind": "malformed-v1-body" }]
+        });
+        let error = check_envelope(&v1).expect_err("v1 payload must not enter the v2 parser");
+        assert_eq!(error.code(), "incompatible-protocol");
     }
 }

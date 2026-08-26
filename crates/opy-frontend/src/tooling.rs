@@ -655,22 +655,21 @@ impl SemanticModel {
                     Self::collect_stmt(stmt, sites);
                 }
             }
-            HirStmt::Switch {
-                value,
-                cases,
-                r#default,
-                ..
-            } => {
+            HirStmt::Switch { value, arms, .. } => {
                 Self::collect_expr(value, sites);
-                for case in cases {
-                    Self::collect_expr(&case.value, sites);
-                    for stmt in &case.body {
-                        Self::collect_stmt(stmt, sites);
-                    }
-                }
-                if let Some(default_body) = r#default {
-                    for stmt in default_body {
-                        Self::collect_stmt(stmt, sites);
+                for arm in arms {
+                    match arm {
+                        hir::SwitchArm::Case { value, body, .. } => {
+                            Self::collect_expr(value, sites);
+                            for stmt in body {
+                                Self::collect_stmt(stmt, sites);
+                            }
+                        }
+                        hir::SwitchArm::Default { body, .. } => {
+                            for stmt in body {
+                                Self::collect_stmt(stmt, sites);
+                            }
+                        }
                     }
                 }
             }

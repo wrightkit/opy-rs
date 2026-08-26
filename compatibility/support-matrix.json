@@ -10,8 +10,8 @@
   },
   "snapshot": {
     "date": "2026-08-24",
-    "note": "Readiness baseline for #7 through the #28/#29/#30/#33 Draft PR series plus the bounded #35 and #40 integration slices. Frontend-supported rows include the pinned OPY syntax, directives, preprocessing, macro statements, rule directives/model, JavaScript macros, and runtime hooks. Semantic-supported rows include declaration resolution, for-loop binders, modules, keyword arguments, the declared alias surface, and the OPY-owned manifest overlay for builtin/member/enum semantics. Canonical Workshop builtin/member/enum breadth and emission remain separate lowering-dependent rows; no Workshop catalog data is copied into opy-rs. The differential corpus currently reports 0 unexpected divergences and 0 inconclusive results; its exact match and known-gap counts are generated evidence, not a support claim. #!postCompileHook is parsed/validated/recorded by the frontend; execution against final Workshop text is lowering-dependent (#8).",
-    "asOfCommit": "6956eed025536a201f769402306eb28090a5135d"
+    "note": "Readiness baseline for #7 through the #28/#33 Draft PR series plus the bounded #35, #40, #46, and #47 integration slices. Frontend-supported rows include the pinned OPY syntax, directives, preprocessing, macro statements, rule directives/model, JavaScript macros, and runtime hooks. Semantic-supported rows include declaration resolution, for-loop binders, modules, keyword arguments, the declared alias surface, and the OPY-owned manifest overlay for builtin/member/enum semantics. Canonical Workshop builtin/member/enum breadth and emission remain separate lowering-dependent rows; no Workshop catalog data is copied into opy-rs. The differential corpus currently reports 0 unexpected divergences and 0 inconclusive results; its exact match and known-gap counts are generated evidence, not a support claim. #!postCompileHook is parsed/validated/recorded by the frontend; execution against final Workshop text is lowering-dependent (#8).",
+    "asOfCommit": "c5714a4028464f19f236f54d390e7b7237e434bd"
   },
   "states": {
     "planned": "Declared surface, not yet implemented in opy-rs; evidence/provenance recorded for the implementing issue.",
@@ -591,13 +591,13 @@
     },
     {
       "id": "compilation/frontend-pipeline",
-      "name": "Frontend pipeline: lexer -> preprocess -> CST/parser -> semantic resolution -> Opy HIR v1",
+      "name": "Frontend pipeline: lexer -> preprocess -> CST/parser -> semantic resolution -> Opy HIR v2",
       "category": "compilation",
       "state": "frontend-supported",
       "evidence": [
         "fixtures:synthetic",
         "fixtures:real-world",
-        "docs:docs/hir/opy-hir-v1.md",
+        "docs:docs/hir/opy-hir-v2.md",
         "test:opy-frontend-differential"
       ],
       "notes": "Issues #3-#7, #25, and the #28/#29/#30/#33 readiness tracks. Fully Workshop-independent; the pinned differential corpus is the acceptance corpus. Differential harness runs every fixture through the native pipeline in cargo test with structural self-checks (HIR validation, wire round-trip, deterministic dump), status/rule-name parity against recorded oracle.json snapshots, explicit native evidence expectations, and a machine-readable report (target/opy-differential-report.json). The generated report records per-fixture matches and known gaps; no unexpected divergence or inconclusive result is a support claim."
@@ -610,9 +610,9 @@
       "evidence": [
         "fixtures:synthetic/issue-35-integration",
         "test:opy-compiler-vertical-slice",
-        "contract:workshop-rs-v0.1.8"
+        "contract:workshop-rs-v0.1.11"
       ],
-      "notes": "Issue #35. The dedicated opy-compiler crate consumes resolved OPY HIR, preserves source files/spans in workshop-rs WIR, cross-checks manifest catalogId/domain links against Catalog, validates canonical WIR, and emits deterministic en-US Workshop through the published workshop-rs v0.1.8 contract. This is a bounded first slice; broader OPY lowering remains lowering-dependent and is not reclassified by this fixture."
+      "notes": "Issue #35. The dedicated opy-compiler crate consumes resolved OPY HIR, preserves source files/spans in workshop-rs WIR, cross-checks manifest catalogId/domain links against Catalog, validates canonical WIR, and emits deterministic en-US Workshop through the published workshop-rs v0.1.11 contract. This is a bounded first slice; broader OPY lowering remains lowering-dependent and is not reclassified by this fixture."
     },
     {
       "id": "compilation/opy-structural-lowering",
@@ -623,7 +623,7 @@
         "fixtures:synthetic/issue-35-integration",
         "fixtures:synthetic/issue-40-structural",
         "test:opy-compiler-structural-lowering",
-        "contract:workshop-rs-v0.1.8"
+        "contract:workshop-rs-v0.1.11"
       ],
       "notes": "Issue #40. Global/player variables and subroutines use deterministic canonical indices with source/name spans; subroutine definitions and calls, rule disabled state, conditions, supported event/filter identities, and source-file provenance lower directly into workshop-rs WIR. Unsupported settings, declarations, annotations, events, filters, and statement forms remain explicit source-attributed integration diagnostics. This does not claim full statement/expression, catalog/member/enum, settings, locale, optimizer, hook, or decompilation coverage."
     },
@@ -636,7 +636,7 @@
         "fixtures:synthetic/issue-46-primitives",
         "test:opy-compiler-primitive-lowering",
         "test:opy-compiler-issue-46-oracle-equivalence",
-        "contract:workshop-rs-v0.1.8"
+        "contract:workshop-rs-v0.1.11"
       ],
       "notes": "Issue #46. Global/player assignments and augmented assignments (+=, -=, *=, /=, %=, **=), single-level indexed variable assignments and modifications (setGlobalVariableAtIndex, modifyGlobalVariableAtIndex, setPlayerVariableAtIndex, modifyPlayerVariableAtIndex), and pass no-op statements lower into canonical workshop-rs WIR. Declaration initializer evidence covers non-null initializers; OverPy null-default initializer semantics remain tracked by #58. Deeper indexed writes remain tracked by #60. Direct global/player assignments and modifications carry full statement and target-variable span provenance; the single-level indexed forms lower to canonical Call actions, which carry only the statement-level source span (the canonical WIR Call shape has no separate target-span field)."
     },
@@ -648,7 +648,7 @@
       "evidence": [
         "fixtures:synthetic/issue-46-primitives",
         "test:opy-compiler-implicit-default-variables",
-        "contract:workshop-rs-v0.1.8"
+        "contract:workshop-rs-v0.1.11"
       ],
       "notes": "Issue #46. Undeclared A-Z, AA-AZ, ..., DA-DX global references and eventPlayer.<name> player references resolve through the frontend default_var_index contract and lower to separate Workshop variable namespaces at their fixed reference slots (A=0 ... DX=127); used implicit slots are reserved independently for declared global/player allocation, an explicit declared index colliding with a used implicit slot fails with the stable source-attributed index-collision diagnostic, and a declared name wins in its own namespace. The pinned oracle snapshot for the issue-46 fixture constrains global and player slots through structural equivalence."
     },
@@ -671,9 +671,28 @@
       "evidence": [
         "fixtures:synthetic/issue-46-primitives",
         "test:opy-compiler-primitive-lowering",
-        "contract:workshop-rs-v0.1.8"
+        "contract:workshop-rs-v0.1.11"
       ],
       "notes": "Issue #46. Literals (numbers, strings, booleans, null), arrays, vectors (vect), enum constants, global/player/eventPlayer variable references, array indexing (valueInArray; a literal zero index lowers to firstOf, matching the pinned oracle), string formatting (customString), arithmetic/comparison/logical binary operations, unary operations (not, -; not on a comparison lowers to the negated comparison, matching the pinned oracle), and power operations lower into canonical workshop-rs WIR. Value-position power uses the canonical raiseToPower Value contract; direct and indexed power modifications use the canonical Workshop Operation contract."
+    },
+    {
+      "id": "compilation/opy-control-flow-lowering",
+      "name": "OPY control-flow HIR -> canonical WIR lowering",
+      "category": "compilation",
+      "state": "end-to-end-supported",
+      "evidence": [
+        "fixtures:synthetic/issue-47-control-flow",
+        "fixtures:synthetic/issue-47-unsupported",
+        "fixtures:synthetic/issue-47-switch-order",
+        "fixtures:synthetic/issue-47-switch-structured-target",
+        "fixtures:synthetic/issue-47-switch-multiple-break",
+        "fixtures:synthetic/issue-47-do-while-shapes",
+        "fixtures:synthetic/issue-47-do-while-invalid-placement",
+        "fixtures:synthetic/issue-33-switch-break",
+        "test:opy-compiler-issue-47-oracle-equivalence",
+        "contract:workshop-rs-v0.1.11"
+      ],
+      "notes": "Issue #47. If/elif/else, while, global-binder range-for, do-while expansion, source-ordered switch fallthrough/default, and direct loop/switch/do-while break lower into canonical workshop-rs WIR. Switch offsets and do-while distances use workshop-rs v0.1.11 canonical emitted action widths; direct, conditional, nested, and structured-tail do-while shapes plus structured switch targets are pinned and oracle-equivalent. A nested conditional switch break and a multi-break switch with later reachable actions remain stable source-attributed unsupported-integration-surface diagnostics because workshop-rs v0.1.11 has no lossless multi-target switch carrier."
     },
     {
       "id": "compilation/workshop-lowering",
@@ -684,7 +703,7 @@
         "fixtures:synthetic",
         "fixtures:real-world"
       ],
-      "notes": "Issue #8 remains the broader lowering track. The released workshop-rs v0.1.8 public contract now supports the bounded #35 adapter and the #40 structural skeleton; full OPY statement/expression lowering, catalog/member/enum breadth, settings/content, locales, optimizer effects, and hooks remain lowering-dependent follow-up work. Oracle snapshots (fixtures/**/oracle.json) remain preserved reference evidence; no temporary Workshop IR is introduced here."
+      "notes": "Issue #8 remains the broader lowering track. The released workshop-rs v0.1.11 public contract now supports the bounded #35 adapter, the #40 structural skeleton, and the separately evidenced #47 control-flow slice; full OPY statement/expression lowering, catalog/member/enum breadth, settings/content, locales, optimizer effects, and hooks remain lowering-dependent follow-up work. Oracle snapshots (fixtures/**/oracle.json) remain preserved reference evidence; no temporary Workshop IR is introduced here."
     },
     {
       "id": "compilation/end-to-end",
@@ -726,7 +745,7 @@
       "frontend-supported": 23,
       "semantic-supported": 13,
       "lowering-dependent": 13,
-      "end-to-end-supported": 6
+      "end-to-end-supported": 7
     },
     "byCategory": {
       "syntax": 14,
@@ -737,7 +756,7 @@
       "translations": 2,
       "optimization": 3,
       "runtime": 1,
-      "compilation": 9,
+      "compilation": 10,
       "decompilation": 2
     }
   }
