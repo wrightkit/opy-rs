@@ -1128,6 +1128,17 @@ impl<'a> Emitter<'a> {
                     span,
                 );
             }
+            ModifyOp::Min | ModifyOp::Max => {
+                self.issue(
+                    "unsupported-modify-op",
+                    format!(
+                        "Modify ... {} is outside the reconstruction surface \
+                         (the OPY surface has no equivalent modification form)",
+                        op.as_str()
+                    ),
+                    span,
+                );
+            }
             ModifyOp::Add
             | ModifyOp::Subtract
             | ModifyOp::Multiply
