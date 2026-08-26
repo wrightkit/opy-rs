@@ -13,6 +13,7 @@ name = "opy-rs"
 version_group = "opy-rs"
 git_tag_enable = true
 git_tag_name = "v{{ version }}"
+git_release_enable = true
 
 [[package]]
 name = "opy-compiler"
