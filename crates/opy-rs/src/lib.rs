@@ -1,11 +1,11 @@
-//! The standalone OverPy-compatible `.opy` frontend (opy-rs).
+//! The standalone OverPy-compatible `.opy` implementation (opy-rs).
 //!
 //! Owns the OPY source-language surface of the `opy-rs` repository: a lexer,
 //! an indentation-aware CST/parser with structured diagnostics and recovery,
 //! token-level preprocessing (includes and `#!define` macros), semantic
 //! resolution, and lowering into the opy-rs-owned Opy HIR contract
 //! ([`hir::Program`]). Everything from source through the Opy HIR semantic
-//! model is Workshop-independent: the frontend never depends on `workshop-rs`,
+//! model is Workshop-independent: source analysis never depends on `workshop-rs`,
 //! OverPy, or Node, and the integration boundary toward `workshop-rs` is
 //! documented rather than implemented here.
 //!
@@ -17,18 +17,18 @@
 //! during preprocessing with the reference's argument-injection ABI, and
 //! resource limits mirror the pinned reference constants
 //! (`opy_macro_js::Limits::default()`). Script-macro expansion is
-//! compile-time behavior and is frontend-supported.
+//! compile-time behavior and is source-supported.
 //!
 //! `#!postCompileHook` is recognized, parsed, validated, and recorded only
 //! (see [`preprocess`] and [`CompileOutcome::post_compile_hook`]): the
-//! frontend never executes the hook. Real hook execution receives the final
-//! Workshop text produced by lowering and is lowering-dependent (workshop-rs
-//! emission, issue #8); the frontend never fabricates a Workshop payload.
+//! The source implementation never executes the hook. Real hook execution
+//! receives the final Workshop text produced by lowering and is
+//! lowering-dependent (workshop-rs emission, issue #8); source analysis never
+//! fabricates a Workshop payload.
 //!
-//! This crate was extracted from the mature Wright frontend (the wright
-//! repository's `crates/wright-opy`); module provenance and issue references
-//! follow the original implementation. Workshop→OPY reconstruction and the
-//! differential harness are not part of this crate (see the opy-rs roadmap).
+//! This crate owns the OverPy source-language implementation. Workshop→OPY
+//! reconstruction and the differential harness are not part of this crate
+//! (see the opy-rs roadmap).
 
 pub mod cst;
 pub mod diag;
@@ -45,7 +45,7 @@ pub mod tooling;
 use std::path::Path;
 
 use diag::Span;
-pub use diag::{FrontendError, FrontendResult};
+pub use diag::{OpyError, OpyResult};
 pub use lower::lower;
 pub use parser::parse;
 pub use preprocess::{preprocess, preprocess_with_overlay};
@@ -56,7 +56,7 @@ mod tests {
     use std::path::Path;
 
     #[test]
-    fn unsupported_operator_aliases_fail_at_the_frontend_boundary() {
+    fn unsupported_operator_aliases_fail_at_the_source_boundary() {
         for expression in ["a // 2", "a //= 2", "a ^ 2", "a && 2", "a || 2", "a = !2"] {
             let source = format!(
                 "globalvar a\nrule \"unsupported operator\":\n    @Event global\n    {expression}\n"
@@ -81,20 +81,20 @@ mod tests {
     }
 }
 
-/// The frontend's supported protocol identity for generated HIR.
+/// The producer identity for generated HIR.
 ///
 /// The producer identity and the Opy HIR protocol envelope (`wright/opy-hir`
 /// v2) is emitted for the ordered switch-arm wire grammar; v1 consumers must
 /// reject it until they migrate to the v2 contract.
-pub const FRONTEND_NAME: &str = "wright/opy-native";
-pub const FRONTEND_VERSION: &str = env!("CARGO_PKG_VERSION");
+pub const LANGUAGE_NAME: &str = "opy-rs";
+pub const LANGUAGE_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Compile one `.opy` source end-to-end into the Opy HIR contract:
 /// preprocess (includes/defines) → parse (CST) → lower (HIR).
 ///
 /// `main_path` is the file's display path recorded in the HIR file registry;
 /// `root` is the include base. `compile` never requires Node or OverPy.
-pub fn compile(source: &str, main_path: &str, root: &Path) -> FrontendResult<hir::Program> {
+pub fn compile(source: &str, main_path: &str, root: &Path) -> OpyResult<hir::Program> {
     compile_with_overlay(source, main_path, root, &std::collections::BTreeMap::new())
 }
 
@@ -106,7 +106,7 @@ pub fn compile_with_overlay(
     main_path: &str,
     root: &Path,
     overlay: &std::collections::BTreeMap<String, String>,
-) -> FrontendResult<hir::Program> {
+) -> OpyResult<hir::Program> {
     let outcome = compile_with_overlay_outcome(source, main_path, root, overlay);
     match outcome.hir {
         Some(hir) => Ok(hir),
@@ -118,21 +118,22 @@ pub fn compile_with_overlay(
 
 /// The outcome of a compile with overlays.
 ///
-/// Unlike [`compile_with_overlay`], this retains the frontend file registry
+/// Unlike [`compile_with_overlay`], this retains the source file registry
 /// even when parsing or lowering fails, so language tooling can map span file
 /// ids to their actual source identities without building a diagnostics-only
 /// project model.
 pub struct CompileOutcome {
     pub hir: Option<hir::Program>,
-    pub error: Option<FrontendError>,
+    pub error: Option<OpyError>,
     pub files: Vec<preprocess::FileRecord>,
     /// The declared `#!postCompileHook` script, when the source declared one
     /// and compilation succeeded.
     ///
-    /// This is the declaration record, not an execution result: the frontend
+    /// This is the declaration record, not an execution result: the OPY
+    /// implementation
     /// recognizes, parses, validates, and records the directive, but never
     /// executes the hook. Execution against the final Workshop text is
-    /// lowering-dependent (workshop-rs emission, issue #8); the frontend
+    /// lowering-dependent (workshop-rs emission, issue #8); source analysis
     /// never fabricates a Workshop payload.
     pub post_compile_hook: Option<PostCompileHookRecord>,
 }
@@ -150,8 +151,8 @@ pub struct PostCompileHookRecord {
     pub span: Option<Span>,
 }
 
-/// Compile with open-document overlays while retaining the frontend file
-/// registry on parse/lower failure.
+/// Compile with open-document overlays while retaining the source file registry
+/// on parse/lower failure.
 ///
 /// This is the compile contract view of [`tooling::check_with_overlay`]: the
 /// two share one pipeline, so `check` and `compile` never disagree about
@@ -165,7 +166,7 @@ pub fn compile_with_overlay_outcome(
     let outcome = tooling::check_with_overlay(source, main_path, root, overlay);
     // Every failed check carries at least one diagnostic, so a None model
     // always yields an error (the compile outcome invariant).
-    let error = outcome.diagnostics.first().map(|diagnostic| FrontendError {
+    let error = outcome.diagnostics.first().map(|diagnostic| OpyError {
         code: diagnostic.code.clone(),
         message: diagnostic.message.clone(),
         span: diagnostic
@@ -174,7 +175,7 @@ pub fn compile_with_overlay_outcome(
             .map(tooling::SourceLocation::to_span),
     });
     // The directive was parsed, validated, and recorded by preprocessing; the
-    // frontend never executes the hook (real hook execution receives the
+    // source implementation never executes the hook (real hook execution receives the
     // final Workshop text and is lowering-dependent, issue #8 — see
     // `PostCompileHookRecord`).
     let post_compile_hook = outcome.post_compile_hook.map(|hook| PostCompileHookRecord {

@@ -5,18 +5,8 @@ the workspace-level `AGENTS.md` first, then this repository's local ownership,
 architecture, validation, and delivery rules.
 
 `opy-rs` is WrightKit's standalone Rust implementation of the OverPy `.opy`
-language. It is not an internal Wright frontend repository. Wright is a
-consumer that may integrate `opy-rs` through native APIs or LPP, while
-`opy-rs` must remain independently usable as a library and CLI.
-
-Terminology:
-
-- **frontend** means the internal Workshop-independent source → syntax →
-  semantic/HIR stage inside `opy-rs`;
-- **provider** means an integration role exposed through LPP or another
-  reviewed boundary;
-- neither term replaces the repository's identity as an independent OverPy
-  implementation.
+language. Wright is a consumer that may integrate `opy-rs` through native APIs
+or LPP, while `opy-rs` must remain independently usable as a library and CLI.
 
 ## Ownership boundary
 

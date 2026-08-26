@@ -15,7 +15,7 @@
 //! Workshop integration boundary, never in a local allowlist here.
 
 use crate::cst;
-use crate::diag::{FrontendError, FrontendResult, Position, Span};
+use crate::diag::{OpyError, OpyResult, Position, Span};
 
 /// A top-of-file `settings { ... }` block.
 #[derive(Debug, Clone)]
@@ -42,7 +42,7 @@ pub struct SettingsBlock {
 /// a second/later block is `settings-placement` at its keyword span; brace
 /// matching respects `"`/`'` strings, `\` escapes, and nesting; an
 /// unterminated block is `settings-invalid`.
-pub fn find_blocks(text: &str, file_id: u32) -> FrontendResult<Vec<SettingsBlock>> {
+pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
     let chars: Vec<char> = text.chars().collect();
     let mut scanner = Scanner {
         chars: &chars,
@@ -85,7 +85,7 @@ pub fn find_blocks(text: &str, file_id: u32) -> FrontendResult<Vec<SettingsBlock
             if word == "settings" {
                 let keyword_span = Span::new(file_id, keyword_start, scanner.here());
                 if seen_first_construct || !blocks.is_empty() {
-                    return Err(FrontendError::at(
+                    return Err(OpyError::at(
                         "settings-placement",
                         "settings block must be the first construct in the file".to_string(),
                         keyword_span,
@@ -112,10 +112,10 @@ fn match_block(
     keyword_start: Position,
     keyword_offset: usize,
     keyword_span: Span,
-) -> FrontendResult<SettingsBlock> {
+) -> OpyResult<SettingsBlock> {
     scanner.skip_whitespace();
     if scanner.chars.get(scanner.pos) != Some(&'{') {
-        return Err(FrontendError::at(
+        return Err(OpyError::at(
             "settings-invalid",
             "settings block must be a `settings { ... }` block (the `settings \"file\"` form is not supported)"
                 .to_string(),
@@ -129,7 +129,7 @@ fn match_block(
     let mut text_start = None;
     loop {
         let Some(ch) = scanner.chars.get(scanner.pos).copied() else {
-            return Err(FrontendError::at(
+            return Err(OpyError::at(
                 "settings-invalid",
                 "unterminated settings block (missing closing brace)".to_string(),
                 keyword_span,
@@ -199,7 +199,7 @@ pub fn sanitize_for_lex(text: &str, block: &SettingsBlock) -> String {
 /// (f64), `true`/`false`, arrays of strings, nested objects, trailing commas
 /// in objects and arrays. Rejections (`settings-invalid`): duplicate keys,
 /// non-object root, missing `gamemodes` group, malformed values.
-pub fn parse_block(block: &SettingsBlock) -> FrontendResult<cst::Settings> {
+pub fn parse_block(block: &SettingsBlock) -> OpyResult<cst::Settings> {
     let mut parser = Jsonc {
         text: &block.text,
         pos: 0,
@@ -222,7 +222,7 @@ pub fn parse_block(block: &SettingsBlock) -> FrontendResult<cst::Settings> {
         .iter()
         .any(|node| matches!(node, cst::SettingsNode::Group { name, .. } if name == "gamemodes"))
     {
-        return Err(FrontendError::at(
+        return Err(OpyError::at(
             "settings-invalid",
             "settings block must contain a gamemodes group".to_string(),
             block.span,
@@ -342,19 +342,19 @@ impl Jsonc<'_> {
         }
     }
 
-    fn error(&self, code: &str, message: String) -> FrontendError {
-        FrontendError::at(
+    fn error(&self, code: &str, message: String) -> OpyError {
+        OpyError::at(
             code,
             message,
             Span::new(self.file, self.here(), self.here()),
         )
     }
 
-    fn error_at(&self, code: &str, message: String, span: Span) -> FrontendError {
-        FrontendError::at(code, message, span)
+    fn error_at(&self, code: &str, message: String, span: Span) -> OpyError {
+        OpyError::at(code, message, span)
     }
 
-    fn parse_object(&mut self) -> FrontendResult<(Vec<cst::SettingsNode>, Span)> {
+    fn parse_object(&mut self) -> OpyResult<(Vec<cst::SettingsNode>, Span)> {
         let open = self.here();
         if self.advance() != Some('{') {
             return Err(self.error(
@@ -370,7 +370,7 @@ impl Jsonc<'_> {
     /// Parse `key: value, ...` members. `root` is true when the enclosing
     /// object's braces are the settings block's own braces (the text runs to
     /// the end of the block, and a trailing comma before it is allowed).
-    fn parse_members(&mut self, root: bool) -> FrontendResult<Vec<cst::SettingsNode>> {
+    fn parse_members(&mut self, root: bool) -> OpyResult<Vec<cst::SettingsNode>> {
         let mut nodes = Vec::new();
         let mut names = Vec::new();
         self.skip_whitespace();
@@ -443,7 +443,7 @@ impl Jsonc<'_> {
 
     /// Parse one value; returns the built node (name placeholder) and the
     /// position after it.
-    fn parse_value(&mut self) -> FrontendResult<(cst::SettingsNode, Position)> {
+    fn parse_value(&mut self) -> OpyResult<(cst::SettingsNode, Position)> {
         let start = self.here();
         let ch = self.peek();
         let node = match ch {
@@ -511,7 +511,7 @@ impl Jsonc<'_> {
         Ok((node, end))
     }
 
-    fn expect_word(&mut self, word: &str) -> FrontendResult<()> {
+    fn expect_word(&mut self, word: &str) -> OpyResult<()> {
         let start = self.here();
         for expected in word.chars() {
             if self.advance() != Some(expected) {
@@ -525,7 +525,7 @@ impl Jsonc<'_> {
         Ok(())
     }
 
-    fn parse_number(&mut self) -> FrontendResult<f64> {
+    fn parse_number(&mut self) -> OpyResult<f64> {
         let start = self.here();
         let mut text = String::new();
         if self.peek() == Some('-') {
@@ -557,7 +557,7 @@ impl Jsonc<'_> {
         })
     }
 
-    fn parse_list(&mut self) -> FrontendResult<Vec<cst::SettingsListElement>> {
+    fn parse_list(&mut self) -> OpyResult<Vec<cst::SettingsListElement>> {
         self.advance(); // '['
         let mut elements = Vec::new();
         self.skip_whitespace();

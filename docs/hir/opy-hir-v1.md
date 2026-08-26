@@ -1,14 +1,14 @@
-# Opy HIR v1: opy-rs frontend protocol
+# Opy HIR v1: opy-rs source implementation protocol
 
 Status: accepted baseline for v0.1; opy-rs-owned contract (adopted from the
 WrightKit evidence base, issue #2)
-Scope: the interchange format produced by the opy-rs native frontend and
+Scope: the interchange format produced by the opy-rs native source implementation and
 consumed by opy-rs tooling (and, later, WrightKit tooling consumers)
 
 This document is the normative specification for the Opy HIR protocol version
-`1.1.0`. It defines the JSON payload that the native frontend in
-`crates/opy-frontend` (the lowering stage) emits and that the Rust consumer
-in the same crate validates and consumes. The frontend parses `.opy` source
+`1.1.0`. It defines the JSON payload that the native source implementation in
+`crates/opy-rs` (the lowering stage) emits and that the Rust consumer
+in the same crate validates and consumes. The source implementation parses `.opy` source
 directly and owns the mapping from OPY syntax onto this schema; no component
 imports or wraps the reference implementation's AST (clean-room boundary,
 [`upstream-references.md`](../compatibility/upstream-references.md)).
@@ -31,11 +31,11 @@ The protocol must:
    declarations, rules, events, conditions, statements, and expressions;
 2. preserve file, line, and column provenance so later stages can report
    diagnostics against source;
-3. be deterministic: the same source and frontend version produce
+3. be deterministic: the same source and source implementation version produce
    byte-identical JSON;
 4. be versioned so a producer and consumer can agree on compatibility without
    inspecting each other's implementation;
-5. fail loudly on constructs the frontend cannot map, and be rejected or
+5. fail loudly on constructs the source implementation cannot map, and be rejected or
    reported by the consumer rather than silently ignored.
 
 ## 2. Protocol envelope
@@ -47,7 +47,7 @@ Every payload is a JSON object with the following top-level fields.
 | `protocol` | object | yes | Protocol identity and version. |
 | `generator` | object | yes | Producer identity for provenance. |
 | `files` | array | yes | Source-file registry referenced by spans. |
-| `defines` | array | no | Preprocessor constant/function macros seen by the frontend. |
+| `defines` | array | no | Preprocessor constant/function macros seen by the source implementation. |
 | `declarations` | array | yes | Symbols declared at program scope, grouped by kind, each group in declaration order. |
 | `rules` | array | yes | Rule and subroutine-definition bodies, in source order. |
 | `settings` | object | no | The typed custom-game-settings block, when the source had one (§2.5). |
@@ -70,18 +70,18 @@ Every payload is a JSON object with the following top-level fields.
 
 ```jsonc
 {
-  "name": "wright/opy-native",
+  "name": "opy-rs",
   "version": "0.1.0",
-  "frontend": "overpy@9.7.10"
+  "source implementation": "overpy@9.7.10"
 }
 ```
 
 * `name` identifies the producer.
 * `version` is the producer's own version.
-* `frontend` records the exact external frontend identity (package and
+* `source implementation` records the exact producer identity (package and
   version) the producer translated from, so compatibility evidence can name
-  the reference. The opy-rs native frontend records its own identity here
-  (`FRONTEND_NAME` = `wright/opy-native`, version = the crate version); the
+  the reference. The opy-rs native source implementation records its own identity here
+  (`LANGUAGE_NAME` = `opy-rs`, version = the crate version); the
   pinned reference identity is `overpy@9.7.10` (content commit
   `889d9749d1def17f146548cbddb94ea1ab015847`, see
   [`docs/compatibility/upstream-references.md`](../compatibility/upstream-references.md)).
@@ -96,14 +96,14 @@ Every payload is a JSON object with the following top-level fields.
 ```
 
 * `id` is a non-negative integer, unique within the payload.
-* `path` is the file name as the frontend reported it, unique within the
+* `path` is the file name as the source implementation reported it, unique within the
   payload. Paths are recorded for diagnostics; they are not canonicalized by
   the protocol.
 
 ### 2.4 `defines`
 
 Preprocessing definitions (`#!define` constants and function macros) that the
-frontend expanded before parsing. They are recorded for provenance so a
+source implementation expanded before parsing. They are recorded for provenance so a
 diagnostic can explain where a value came from; they carry no semantic
 payload because expansion already happened.
 
@@ -175,17 +175,17 @@ half-open interval in a file:
 Declaration, rule, and `subroutineDef` nodes additionally carry an optional
 `name_span` field (wire spelling `name_span`): the exact source span of the
 identifier token (the declared or defined identifier, or the rule name inside
-its string literal) when the frontend can record it. It is optional and
+its string literal) when the source implementation can record it. It is optional and
 omitted when absent; it is never emitted as `null`, and it has the same shape
-and validation as any other span (§8). The native frontend records it; the
+and validation as any other span (§8). The native source implementation records it; the
 differential suite's normalization strips `span`-family fields from the
 per-fixture native wire-payload artifact (`target/opy-differential/`) as
-documented frontend-internal provenance. Protocol and generator identities
+documented source implementation-internal provenance. Protocol and generator identities
 are kept, and the oracle comparison itself uses status, rule-name, and
 diagnostic evidence rather than span data.
 
 Spans are for diagnostics and identity, not for byte-accurate reconstruction.
-The frontend producer is responsible for emitting them; the consumer
+The source implementation producer is responsible for emitting them; the consumer
 validates them (§8). A span whose end would precede its start (for example a node expanded
 from a preprocessor macro that mixes call-site and definition-site positions)
 must be normalized to a degenerate interval anchored at the start, so every
@@ -209,9 +209,9 @@ discriminated by `kind`. All kinds carry `name` and `span` unless noted.
 ```
 
 * `index` is the explicit index the source requested (`globalvar x 5`), or
-  `null` when the frontend assigns it later.
+  `null` when the source implementation assigns it later.
 * `initializer` is an expression or `null`. It is present only when the source
-  provided a non-trivial initializer; the frontend's implicit defaults are
+  provided a non-trivial initializer; the source implementation's implicit defaults are
   not emitted.
 * `name_span` is the exact span of the declared identifier token (see §3).
 
@@ -281,7 +281,7 @@ rule object or a `subroutineDef` node (§4.3). Rules appear in source order.
 | --- | --- | --- | --- |
 | `name` | string | yes | The rule name as written (empty is allowed for delimiter rules). |
 | `span` | span | yes | The `rule` line. |
-| `name_span` | span | no | The exact span of the rule name inside its string literal, when the frontend records it. |
+| `name_span` | span | no | The exact span of the rule name inside its string literal, when the source implementation records it. |
 | `disabled` | boolean | yes | `true` when the rule is disabled by annotation. |
 | `event` | event | yes | The rule's event. |
 | `conditions` | array | yes | `@Condition` expressions, in source order. |
@@ -310,15 +310,15 @@ whose `kind` the consumer does not recognize is an *unsupported node* (§7.3).
 | Kind | Fields | Meaning |
 | --- | --- | --- |
 | `expr` | `expr`, `span` | An expression statement (typically a call with side effects). |
-| `assign` | `target`, `value`, `span` | Assignment. Compound assignments are desugared by the frontend. |
+| `assign` | `target`, `value`, `span` | Assignment. Compound assignments are desugared by the source implementation. |
 | `if` | `branches`, `else`, `span` | Conditional. `branches` is an array of `{ "condition", "body" }`; `else` is an array of statements or `null`. |
 | `for` | `variable`, `iterable`, `body`, `span` | Iteration. `variable` is an expression naming the loop variable (a `globalVar` reference). |
 | `while` | `condition`, `body`, `span` | Loop. |
 | `doWhile` | `body`, `condition`, `span` | Loop whose body executes before its condition. |
-| `switch` | `value`, `arms`, `span` | Source-order arms; execution falls through until a `break` or the end of the switch. Each arm is tagged `case` or `default`; a case has `value` and `body`, while a default has `body`, and each arm may carry `span`. At most one default arm is valid. |
-| `break` | `span` | Exit the innermost switch or loop; invalid contexts are rejected by the frontend. |
+| `switch` | `value`, `cases`, `default`, `span` | Source-order arms; execution falls through until a `break` or the end of the switch. |
+| `break` | `span` | Exit the innermost switch or loop; invalid contexts are rejected by the source implementation. |
 | `callSubroutine` | `name`, `span` | Call a subroutine by name. |
-| `pass` | `span` | A no-op emitted by the frontend. |
+| `pass` | `span` | A no-op emitted by the source implementation. |
 
 Example `for` with `if`:
 
@@ -377,13 +377,13 @@ Example `for` with `if`:
 
 ### 6.5 Operator semantics
 
-Operators are opy-rs spellings for the semantics the frontend parsed:
+Operators are opy-rs spellings for the semantics the source implementation parsed:
 
 * arithmetic: `+ - * / % **`;
 * comparison: `== != < <= > >=` (non-strict, Workshop semantics);
 * logical: `and or`, with `not` as a unary operator.
 
-The frontend maps parsed OPY operator syntax onto these fixed spellings. The
+The source implementation maps parsed OPY operator syntax onto these fixed spellings. The
 consumer treats `op` as an opaque string and validates it only structurally
 (§8).
 
@@ -420,7 +420,7 @@ the program body.
 A node with an unknown `kind` (or an unknown statement/expression variant) is
 an *unsupported node*. The consumer reports a structured error that names the
 node kind and its span, so a regression report is explicit. Unsupported is
-never a silent pass: the frontend refuses to emit nodes it cannot map, and the
+never a silent pass: the source implementation refuses to emit nodes it cannot map, and the
 consumer refuses to consume nodes it cannot understand.
 
 ## 8. Validation requirements
@@ -454,7 +454,7 @@ of the stable contract; the code and structured fields are.
 
 ## 9. Determinism and debug output
 
-For the same input and frontend version, the producer must
+For the same input and source implementation version, the producer must
 emit byte-identical JSON: object keys are emitted in a fixed order and
 collections (files, declarations, rules, branches, args) preserve source
 order. The consumer's debug dump (§10) must be stable for the same validated
@@ -475,7 +475,7 @@ implementation-defined presentation, not part of the wire contract. It must:
 ## 11. Out of scope for v1
 
 The following are intentionally not modeled in v1 and are rejected by the
-frontend as unsupported when encountered:
+source implementation as unsupported when encountered:
 
 * rule labels and relative gotos (`__skip__` / `__distanceTo__` forms);
 * decompilation-only constructs;
@@ -489,11 +489,11 @@ reason to extend the schema silently.
 ## 12. Ownership
 
 * The protocol contract is owned by opy-rs and lives in this document.
-* The native frontend owns all knowledge of how OPY source maps to this
+* The native source implementation owns all knowledge of how OPY source maps to this
   schema. It never imports or depends on the reference implementation's
   types (clean-room boundary,
   [`upstream-references.md`](../compatibility/upstream-references.md)).
-* Changes to the node grammar require a review of this document, the frontend
+* Changes to the node grammar require a review of this document, the source implementation
   producer, the Rust consumer, and the corpus fixtures together (see
   [`docs/opy/support-matrix.md`](../opy/support-matrix.md) and
   [`docs/compatibility/upstream-references.md`](../compatibility/upstream-references.md)).
@@ -504,4 +504,4 @@ reason to extend the schema silently.
   typed settings nodes, validation checks (§8 item 6), and a settings dump
   section. No existing node or field changed; consumers of the 1.x major
   accept the payload unchanged (`check_envelope` gates the major only).
-  The opy-rs native frontend emits 1.1.0.
+  The opy-rs native source implementation emits 1.1.0.

@@ -12,7 +12,7 @@
 //! strict read-only consumer — it never writes, rewrites, or caches a
 //! modified copy of the matrix.
 //!
-//! The five declared feature states (`planned`, `frontend-supported`,
+//! The five declared feature states (`planned`, `source-supported`,
 //! `semantic-supported`, `lowering-dependent`, `end-to-end-supported`) are
 //! documented in the matrix itself; Workshop-dependent items stay
 //! `lowering-dependent` and are never approximated here (repo ownership
@@ -34,7 +34,7 @@ pub const SUPPORT_MATRIX_SCHEMA_VERSION: u32 = 1;
 /// The declared feature states (see the matrix's `states` map for wording).
 pub const FEATURE_STATES: [&str; 5] = [
     "planned",
-    "frontend-supported",
+    "source-supported",
     "semantic-supported",
     "lowering-dependent",
     "end-to-end-supported",
@@ -198,10 +198,10 @@ mod tests {
         let matrix = SupportMatrix::builtin().unwrap();
         let lexing = matrix.feature("syntax/lexing").expect("declared feature");
         assert_eq!(lexing.category, "syntax");
-        assert_eq!(lexing.state, "frontend-supported");
+        assert_eq!(lexing.state, "source-supported");
         assert_eq!(
             matrix.feature_state("syntax/lexing"),
-            Some("frontend-supported")
+            Some("source-supported")
         );
         assert_eq!(
             matrix.feature_state("compilation/workshop-lowering"),

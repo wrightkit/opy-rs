@@ -3,7 +3,7 @@
 This directory contains the reproducible compatibility harness described by
 [`docs/opy/tooling-notes.md`](../docs/opy/tooling-notes.md). It is evaluation
 tooling, not a dependency of the opy-rs core, and it is fully independent of
-the Rust crates: no Node toolchain and no frontend crate is required to run
+the Rust crates: no Node toolchain and no source implementation crate is required to run
 the harness tests or the fixture snapshot checks.
 
 ## Pinned oracle
@@ -95,18 +95,18 @@ The harness tests (`compatibility/tests/`) run without the oracle installed:
 (the machine-readable support matrix structure and evidence paths).
 The wright-side npm-packaging tests are not ported (they test wright's release
 tooling). The manifest probe validator
-(`crates/opy-frontend/src/manifest/probes/validate.py`) is frontend-owned and
+(`crates/opy-rs/src/manifest/probes/validate.py`) is source implementation-owned and
 runs standalone against the pinned oracle (Node + pnpm required), like
 `run_oracle.py`; it is not part of the oracle-less harness suite.
 
 ## Native differential runner (issue #7)
 
-The native frontend side of the differential contract lives in
-`crates/opy-frontend/tests/differential.rs` and runs in `cargo test` with no
+The native source implementation side of the differential contract lives in
+`crates/opy-rs/tests/differential.rs` and runs in `cargo test` with no
 Node or OverPy installed:
 
 ```sh
-cargo test -p opy-frontend --test differential
+cargo test -p opy-rs --test differential
 ```
 
 It compiles every fixture through the native pipeline (preprocess → parse →
@@ -146,8 +146,8 @@ python3 compatibility/diff.py \
 ```
 
 `your-producer` is a placeholder: this repository ships no producer for
-`diff.py`. The native frontend comparison runs inside `cargo test`
-(`crates/opy-frontend/tests/differential.rs`) against the recorded oracle
+`diff.py`. The native source implementation comparison runs inside `cargo test`
+(`crates/opy-rs/tests/differential.rs`) against the recorded oracle
 snapshots directly.
 
 The producer must write a result with the same schema as the oracle's
@@ -174,7 +174,7 @@ and exit 2 by default, so a CI job cannot silently pass without a producer.
 Use `--allow-inconclusive` only for local contract checks.
 
 The opy-rs producer side of the differential contract is the native Rust
-suite (`crates/opy-frontend/tests/differential.rs`), which runs in `cargo test`
+suite (`crates/opy-rs/tests/differential.rs`), which runs in `cargo test`
 with no Node or OverPy installed; `diff.py` remains the
 generic external-producer contract for other producers, exercised locally via
 `run_oracle.py` and the corpus snapshots.

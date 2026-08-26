@@ -50,9 +50,9 @@ The first path is partially implemented end-to-end today; the reverse path is
 not yet implemented. The support matrix, tests, and real-project evidence are
 the authority for current support rather than the intended pipeline alone.
 
-## Internal frontend boundary
+## Workshop-independent source path
 
-The **frontend** is the Workshop-independent portion of `opy-rs`:
+The Workshop-independent source path in `opy-rs` is:
 
 ```text
 source → preprocessing → parser → semantic model / HIR
@@ -63,8 +63,6 @@ Workshop emission. This allows diagnostics, semantic queries, source-aware
 analysis, and validated edit foundations to work without forcing every tooling
 request through the compiler backend.
 
-`frontend` is an implementation-stage term, not the product identity of
-`opy-rs`.
 
 ## Ownership
 
@@ -98,14 +96,14 @@ an OverPy-specific interpretation or lowering remains here.
 ## Dependency direction
 
 ```text
-opy-frontend
+opy-rs
     ↓
 opy-compiler
     ↓
 workshop-rs
 ```
 
-`opy-frontend` remains independently buildable and usable for the semantic
+`opy-rs` remains independently buildable and usable for the semantic
 workflows that do not require canonical Workshop output. `opy-compiler` is the
 Workshop-dependent integration layer.
 

@@ -1,7 +1,8 @@
 # opy-rs implementation role
 
 `opy-rs` is an independently usable Rust implementation of the OverPy language.
-Its product boundary is larger than a parser/frontend and larger than an LPP
+Its product boundary includes parsing, preprocessing, semantic HIR, compiler
+integration, diagnostics, tooling, and reconstruction, in addition to any LPP
 provider process.
 
 ## Durable model
@@ -9,7 +10,7 @@ provider process.
 ```text
 OPY source
   ↓
-opy-rs frontend
+opy-rs parsing / preprocessing / semantic HIR
   ↓
 OPY semantic model / HIR
   ↓
@@ -37,18 +38,7 @@ Workshop boundary. It does not need to reimplement raw Workshop to be a complete
 OverPy implementation; it deliberately reuses the canonical Workshop
 implementation in `workshop-rs`.
 
-## Terminology
-
-### Frontend
-
-A frontend is an internal stage: source text → parsed/source model → semantic
-model/HIR. The frontend is intentionally Workshop-independent so diagnostics,
-semantic queries, source tooling, and other non-emission workflows do not need
-the compiler backend.
-
-Do not use **frontend** as shorthand for the repository's overall product role.
-
-### Provider
+## Provider
 
 A provider is a process/API role through which an implementation can expose
 language intelligence to a tooling client such as Wright. LPP may be one such
@@ -80,7 +70,7 @@ The dependency direction is `opy-rs → workshop-rs`; there is no dependency fro
 The repository already exposes standalone check/inspect/support tooling. OPY →
 Workshop compilation is only partially implemented, and Workshop → OPY
 reconstruction is not yet implemented. These are implementation-completeness
-gaps, not reasons to redefine `opy-rs` as a frontend-only repository.
+gaps, not reasons to narrow `opy-rs` to one compiler stage.
 
 Support claims must continue to follow the compatibility matrix and executable
 evidence rather than this architectural intent alone.

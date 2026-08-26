@@ -34,7 +34,7 @@
 //! issue #8); the frontend never fabricates a Workshop payload.
 //!
 //! Boundary: `__script__` macros expand at compile time through the runtime
-//! (frontend-supported); `#!postCompileHook` is recorded and executed only
+//! (source-supported); `#!postCompileHook` is recorded and executed only
 //! against the real Workshop output (lowering-dependent). The runtime's hook
 //! ABI is tested separately on synthetic content in `opy-macro-js` (see its
 //! `hooks` test suite).
@@ -44,7 +44,7 @@ use std::path::{Path, PathBuf};
 
 use opy_macro_js::{Limits, MacroArg, MacroError, MacroRuntime};
 
-use crate::diag::{FrontendError, FrontendResult, Span};
+use crate::diag::{OpyError, OpyResult, Span};
 use crate::hir::types::{
     DirectiveRecord, DirectiveValue, OptimizationState, PreprocessingSnapshot, PreprocessingState,
     TranslationState,
@@ -112,7 +112,7 @@ pub fn preprocess(
     main_text: &str,
     main_path: &str,
     root: &Path,
-) -> FrontendResult<(Preprocessed, Vec<FileRecord>)> {
+) -> OpyResult<(Preprocessed, Vec<FileRecord>)> {
     preprocess_with_overlay(main_text, main_path, root, &BTreeMap::new())
 }
 
@@ -125,7 +125,7 @@ pub fn preprocess_with_overlay(
     main_path: &str,
     root: &Path,
     overlay: &BTreeMap<String, String>,
-) -> FrontendResult<(Preprocessed, Vec<FileRecord>)> {
+) -> OpyResult<(Preprocessed, Vec<FileRecord>)> {
     preprocess_with_overlay_outcome(main_text, main_path, root, overlay).result
 }
 
@@ -133,7 +133,7 @@ pub fn preprocess_with_overlay(
 /// registered so far even when a directive or expansion fails, so callers can
 /// map an error's span file id to its actual source.
 pub struct PreprocessOutcome {
-    pub result: FrontendResult<(Preprocessed, Vec<FileRecord>)>,
+    pub result: OpyResult<(Preprocessed, Vec<FileRecord>)>,
     pub files: Vec<FileRecord>,
 }
 
@@ -171,7 +171,7 @@ pub fn preprocess_with_overlay_outcome(
             crate::diag::Position::new(1, first_line.chars().count() as u32 + 1),
         );
         return PreprocessOutcome {
-            result: Err(FrontendError::at(
+            result: Err(OpyError::at(
                 "main-file-invalid",
                 "`#!mainFile` expects one quoted path on the first line",
                 span,
@@ -202,7 +202,7 @@ pub fn preprocess_with_overlay_outcome(
             None => {
                 let Some(canonical) = canonical else {
                     return PreprocessOutcome {
-                        result: Err(FrontendError::at(
+                        result: Err(OpyError::at(
                             "main-file-not-found",
                             format!("cannot find main file '{main_file}'"),
                             span,
@@ -214,7 +214,7 @@ pub fn preprocess_with_overlay_outcome(
                     Ok(text) => text,
                     Err(error) => {
                         return PreprocessOutcome {
-                            result: Err(FrontendError::at(
+                            result: Err(OpyError::at(
                                 "main-file-not-found",
                                 format!("cannot read main file '{main_file}': {error}"),
                                 span,
@@ -351,7 +351,7 @@ fn first_main_file_directive(text: &str) -> Option<(String, Span)> {
 impl Preprocessor {
     /// Process `#!` directive tokens, splicing includes and registering
     /// defines. Non-directive tokens are kept in place.
-    fn process_directives(&mut self, tokens: &mut Vec<Token>) -> FrontendResult<()> {
+    fn process_directives(&mut self, tokens: &mut Vec<Token>) -> OpyResult<()> {
         let mut out: Vec<Token> = Vec::with_capacity(tokens.len());
         for token in tokens.drain(..) {
             if token.kind == TokenKind::Directive {
@@ -381,7 +381,7 @@ impl Preprocessor {
         Ok(())
     }
 
-    fn handle_directive(&mut self, token: Token, out: &mut Vec<Token>) -> FrontendResult<()> {
+    fn handle_directive(&mut self, token: Token, out: &mut Vec<Token>) -> OpyResult<()> {
         let text = token.text.trim();
         let span = token.span;
         let (name, rest) = split_directive(text);
@@ -392,7 +392,7 @@ impl Preprocessor {
                 .and_then(|r| r.strip_suffix('"'))
                 .or_else(|| rest.strip_prefix('\'').and_then(|r| r.strip_suffix('\'')));
             let Some(include) = include else {
-                return Err(FrontendError::at(
+                return Err(OpyError::at(
                     "include-invalid",
                     format!(
                         "invalid include directive: `{text}` (expected `#!include \"file.opy\"`)"
@@ -410,7 +410,7 @@ impl Preprocessor {
         if name == "undef" {
             let name = rest.trim();
             if name.is_empty() || name.chars().any(|ch| !is_identifier_char(ch)) {
-                return Err(FrontendError::at(
+                return Err(OpyError::at(
                     "undef-invalid",
                     "malformed `#!undef` directive: expected one macro name",
                     span,
@@ -424,7 +424,7 @@ impl Preprocessor {
         if name == "postCompileHook" {
             let rest = rest.trim();
             let Some(path) = strip_quoted(rest) else {
-                return Err(FrontendError::at(
+                return Err(OpyError::at(
                     "script-invalid",
                     format!(
                         "invalid postCompileHook directive: `{text}` (expected `#!postCompileHook \"hook.js\"`)"
@@ -433,7 +433,7 @@ impl Preprocessor {
                 ));
             };
             if self.post_compile_hook.is_some() {
-                return Err(FrontendError::at(
+                return Err(OpyError::at(
                     "post-compile-hook-duplicate",
                     "post-compile hook is already defined".to_string(),
                     span,
@@ -449,7 +449,7 @@ impl Preprocessor {
             return Ok(());
         }
         if name == "mainFile" {
-            return Err(FrontendError::at(
+            return Err(OpyError::at(
                 "main-file-placement",
                 "`#!mainFile` must be the first directive in the main source",
                 span,
@@ -479,7 +479,7 @@ impl Preprocessor {
         }
         if name == "rulePrefix" {
             let prefix = strip_quoted(rest.trim()).ok_or_else(|| {
-                FrontendError::at(
+                OpyError::at(
                     "rule-prefix-invalid",
                     "`#!rulePrefix` expects one quoted string",
                     span,
@@ -494,7 +494,7 @@ impl Preprocessor {
         }
         if name == "rulePrefixTemplate" {
             if self.preprocessing.rule_prefix_template.is_some() {
-                return Err(FrontendError::at(
+                return Err(OpyError::at(
                     "rule-prefix-template-duplicate",
                     "a rule prefix template is already defined",
                     span,
@@ -526,7 +526,7 @@ impl Preprocessor {
                 .filter_map(|item| replacement_family(&item.name))
                 .any(|item_family| item_family == family)
             {
-                return Err(FrontendError::at(
+                return Err(OpyError::at(
                     "replacement-duplicate",
                     format!("a replacement for `{family}` is already defined"),
                     span,
@@ -539,7 +539,7 @@ impl Preprocessor {
             self.record(name, Some(replacement), span);
             return Ok(());
         }
-        Err(FrontendError::at(
+        Err(OpyError::at(
             "unsupported-directive",
             format!("unsupported preprocessing directive `#!{text}`"),
             span,
@@ -584,9 +584,9 @@ impl Preprocessor {
 
     /// Resolve a script path root-relative (the reference's
     /// `getFilePaths(path, rootPath)` convention) and read its text.
-    fn resolve_script(&self, path: &str, span: Span) -> FrontendResult<ScriptMacro> {
+    fn resolve_script(&self, path: &str, span: Span) -> OpyResult<ScriptMacro> {
         let canonical = self.root.join(path).canonicalize().map_err(|_| {
-            FrontendError::at(
+            OpyError::at(
                 "script-not-found",
                 format!(
                     "cannot find script '{path}' under root '{}'",
@@ -596,7 +596,7 @@ impl Preprocessor {
             )
         })?;
         let source = std::fs::read_to_string(&canonical).map_err(|error| {
-            FrontendError::at(
+            OpyError::at(
                 "script-not-found",
                 format!("cannot read script '{path}': {error}"),
                 span,
@@ -609,7 +609,7 @@ impl Preprocessor {
     }
 
     /// Resolve, lex, and splice one included file.
-    fn include(&mut self, include: &str, span: Span, out: &mut Vec<Token>) -> FrontendResult<()> {
+    fn include(&mut self, include: &str, span: Span, out: &mut Vec<Token>) -> OpyResult<()> {
         // The include base is the root; the main file is the only file in the
         // registry (reference convention), so path resolution is root-based.
         let candidate = self.root.join(include);
@@ -631,7 +631,7 @@ impl Preprocessor {
         // otherwise the candidate path (overlays may not have a disk backing).
         let identity = canonical.clone().unwrap_or_else(|| candidate.clone());
         if self.include_stack.contains(&identity) {
-            return Err(FrontendError::at(
+            return Err(OpyError::at(
                 "include-cycle",
                 format!(
                     "include cycle detected: '{}' is already being included",
@@ -645,7 +645,7 @@ impl Preprocessor {
             Some(text) => text,
             None => {
                 let canonical = canonical.ok_or_else(|| {
-                    FrontendError::at(
+                    OpyError::at(
                         "include-not-found",
                         format!(
                             "cannot find included file '{include}' under root '{}'",
@@ -655,7 +655,7 @@ impl Preprocessor {
                     )
                 })?;
                 std::fs::read_to_string(&canonical).map_err(|error| {
-                    FrontendError::at(
+                    OpyError::at(
                         "include-not-found",
                         format!("cannot read included file '{include}': {error}"),
                         span,
@@ -679,7 +679,7 @@ impl Preprocessor {
         match crate::settings::find_blocks(&text, file_id) {
             Err(error) => return Err(error),
             Ok(blocks) if !blocks.is_empty() => {
-                return Err(FrontendError::at(
+                return Err(OpyError::at(
                     "settings-placement",
                     "settings blocks are only supported in the main file".to_string(),
                     blocks[0].keyword_span,
@@ -716,7 +716,7 @@ impl Preprocessor {
     /// A define is function-like when `(` immediately follows the name
     /// (`cakeBeam(start, end)`); a parenthesized object-like value
     /// (`#!define X (a + b)`) keeps its parentheses as value tokens.
-    fn define(&mut self, rest: &str, span: Span) -> FrontendResult<()> {
+    fn define(&mut self, rest: &str, span: Span) -> OpyResult<()> {
         let rest = rest.trim();
         let first_open = rest.find('(').unwrap_or(usize::MAX);
         let first_space = rest.find(char::is_whitespace).unwrap_or(usize::MAX);
@@ -725,7 +725,7 @@ impl Preprocessor {
         let (name, params, body_text) = if is_function_like {
             let name = rest[..first_open].trim();
             let Some(close) = rest[first_open..].find(')') else {
-                return Err(FrontendError::at(
+                return Err(OpyError::at(
                     "define-invalid",
                     format!("malformed function-like define `#!define {rest}`: missing `)`"),
                     span,
@@ -749,7 +749,7 @@ impl Preprocessor {
             (name.to_string(), Vec::new(), body)
         };
         if name.is_empty() {
-            return Err(FrontendError::at(
+            return Err(OpyError::at(
                 "define-invalid",
                 "malformed `#!define` directive: missing macro name",
                 span,
@@ -757,7 +757,7 @@ impl Preprocessor {
         }
         if self.macros.iter().any(|macro_def| macro_def.name == name) {
             if !self.preprocessing.allow_macro_redeclaration {
-                return Err(FrontendError::at(
+                return Err(OpyError::at(
                     "macro-redeclaration",
                     format!("macro '{name}' is already defined"),
                     span,
@@ -773,7 +773,7 @@ impl Preprocessor {
             // at the define site (missing files fail at compile time).
             let inner = &body_text["__script__(".len()..];
             let inner = inner.strip_suffix(')').ok_or_else(|| {
-                FrontendError::at(
+                OpyError::at(
                     "script-invalid",
                     format!(
                         "malformed script macro `#!define {rest}`: expected `__script__(\"path.js\")`"
@@ -782,7 +782,7 @@ impl Preprocessor {
                 )
             })?;
             let Some(path) = strip_quoted(inner.trim()) else {
-                return Err(FrontendError::at(
+                return Err(OpyError::at(
                     "script-invalid",
                     format!(
                         "malformed script macro `#!define {rest}`: expected a quoted script path"
@@ -820,7 +820,7 @@ impl Preprocessor {
     }
 
     /// Expand all macros across the token stream, recursively.
-    fn expand(&self, tokens: Vec<Token>) -> FrontendResult<Vec<Token>> {
+    fn expand(&self, tokens: Vec<Token>) -> OpyResult<Vec<Token>> {
         let mut out = Vec::new();
         let mut index = 0;
         while index < tokens.len() {
@@ -860,11 +860,7 @@ impl Preprocessor {
 
     /// Collect the argument token lists of a function-like macro call,
     /// returning `(args, index_after_closing_paren)`.
-    fn collect_args(
-        &self,
-        tokens: &[Token],
-        open: usize,
-    ) -> FrontendResult<(Vec<Vec<Token>>, usize)> {
+    fn collect_args(&self, tokens: &[Token], open: usize) -> OpyResult<(Vec<Vec<Token>>, usize)> {
         let mut args: Vec<Vec<Token>> = Vec::new();
         let mut current: Vec<Token> = Vec::new();
         let mut depth = 0usize;
@@ -888,7 +884,7 @@ impl Preprocessor {
             }
             cursor += 1;
         }
-        Err(FrontendError::new(
+        Err(OpyError::new(
             "macro-invalid",
             "unterminated macro invocation: missing closing `)`",
         ))
@@ -905,9 +901,9 @@ impl Preprocessor {
         mac: &MacroDef,
         args: Vec<Vec<Token>>,
         use_site: Span,
-    ) -> FrontendResult<Vec<Token>> {
+    ) -> OpyResult<Vec<Token>> {
         if mac.is_function && args.len() != mac.params.len() {
-            return Err(FrontendError::at(
+            return Err(OpyError::at(
                 "macro-arity",
                 format!(
                     "macro '{}' expects {} argument(s) but got {}",
@@ -963,7 +959,7 @@ impl Preprocessor {
         script: &ScriptMacro,
         args: Vec<Vec<Token>>,
         use_site: Span,
-    ) -> FrontendResult<Vec<Token>> {
+    ) -> OpyResult<Vec<Token>> {
         let macro_args: Vec<MacroArg> = mac
             .params
             .iter()
@@ -998,9 +994,9 @@ impl Preprocessor {
         tokens: &mut Vec<Token>,
         stack: &mut Vec<String>,
         depth: usize,
-    ) -> FrontendResult<()> {
+    ) -> OpyResult<()> {
         if depth > 64 {
-            return Err(FrontendError::new(
+            return Err(OpyError::new(
                 "macro-recursion",
                 "macro expansion exceeded the recursion limit (possible recursive define)",
             ));
@@ -1013,7 +1009,7 @@ impl Preprocessor {
                 let name = token.text.clone();
                 if let Some(mac) = self.macros.iter().find(|m| m.name == name) {
                     if stack.iter().any(|s| s == &name) {
-                        return Err(FrontendError::new(
+                        return Err(OpyError::new(
                             "macro-recursion",
                             format!("recursive macro expansion detected for '{name}'"),
                         ));
@@ -1059,10 +1055,10 @@ fn is_identifier_char(ch: char) -> bool {
     ch.is_ascii_alphanumeric() || ch == '_'
 }
 
-fn parse_words(rest: &str, directive: &str, span: Span) -> FrontendResult<Vec<String>> {
+fn parse_words(rest: &str, directive: &str, span: Span) -> OpyResult<Vec<String>> {
     let words: Vec<String> = rest.split_whitespace().map(str::to_string).collect();
     if words.is_empty() {
-        return Err(FrontendError::at(
+        return Err(OpyError::at(
             "directive-invalid",
             format!("`#!{directive}` expects at least one argument"),
             span,
@@ -1072,7 +1068,7 @@ fn parse_words(rest: &str, directive: &str, span: Span) -> FrontendResult<Vec<St
         .iter()
         .any(|word| word.chars().any(|ch| !is_identifier_char(ch)))
     {
-        return Err(FrontendError::at(
+        return Err(OpyError::at(
             "directive-invalid",
             format!("`#!{directive}` arguments must be identifiers"),
             span,
@@ -1081,13 +1077,13 @@ fn parse_words(rest: &str, directive: &str, span: Span) -> FrontendResult<Vec<St
     Ok(words)
 }
 
-fn parse_translations(rest: &str, span: Span) -> FrontendResult<Vec<String>> {
+fn parse_translations(rest: &str, span: Span) -> OpyResult<Vec<String>> {
     let values: Vec<String> = rest
         .split_whitespace()
         .map(|language| language.replace('-', "_").to_lowercase())
         .collect();
     if values.is_empty() {
-        return Err(FrontendError::at(
+        return Err(OpyError::at(
             "translations-invalid",
             "`#!translations` expects at least one language",
             span,
@@ -1101,7 +1097,7 @@ fn parse_translations(rest: &str, span: Span) -> FrontendResult<Vec<String>> {
         .iter()
         .any(|language| !PINNED_LANGUAGES.contains(&language.as_str()))
     {
-        return Err(FrontendError::at(
+        return Err(OpyError::at(
             "translations-invalid",
             "invalid translation language; expected one of the pinned OverPy language codes",
             span,
@@ -1112,7 +1108,7 @@ fn parse_translations(rest: &str, span: Span) -> FrontendResult<Vec<String>> {
             .iter()
             .any(|value| value == "es_es" || value == "es_mx")
     {
-        return Err(FrontendError::at(
+        return Err(OpyError::at(
             "translations-invalid",
             "cannot combine `es` with `es_es` or `es_mx`",
             span,
@@ -1123,7 +1119,7 @@ fn parse_translations(rest: &str, span: Span) -> FrontendResult<Vec<String>> {
             .iter()
             .any(|value| value == "zh_cn" || value == "zh_tw")
     {
-        return Err(FrontendError::at(
+        return Err(OpyError::at(
             "translations-invalid",
             "cannot combine `zh` with `zh_cn` or `zh_tw`",
             span,
@@ -1239,7 +1235,7 @@ fn json_string_literal(value: &str) -> String {
 /// line/column). Non-string completion values are `script-result-not-string`
 /// with the reference's wording, and engine setup failures are
 /// `script-internal`.
-pub(crate) fn map_macro_error(error: &MacroError, script_path: &str, span: Span) -> FrontendError {
+pub(crate) fn map_macro_error(error: &MacroError, script_path: &str, span: Span) -> OpyError {
     match error {
         MacroError::Script(script) => {
             let code = match script.message.as_str() {
@@ -1253,7 +1249,7 @@ pub(crate) fn map_macro_error(error: &MacroError, script_path: &str, span: Span)
                 (Some(line), None) => format!(" (line {line})"),
                 _ => String::new(),
             };
-            FrontendError::at(
+            OpyError::at(
                 code,
                 format!(
                     "script '{}' failed: {}{}",
@@ -1262,14 +1258,14 @@ pub(crate) fn map_macro_error(error: &MacroError, script_path: &str, span: Span)
                 span,
             )
         }
-        MacroError::InvalidResult { type_name } => FrontendError::at(
+        MacroError::InvalidResult { type_name } => OpyError::at(
             "script-result-not-string",
             format!(
                 "JavaScript macro returned value with type of {type_name}, expected string. Try using .toString()"
             ),
             span,
         ),
-        MacroError::Internal(message) => FrontendError::at(
+        MacroError::Internal(message) => OpyError::at(
             "script-internal",
             format!("script '{}' runtime failure: {message}", script_path),
             span,

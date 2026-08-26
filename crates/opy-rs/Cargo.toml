@@ -1,10 +1,10 @@
 [package]
-name = "opy-frontend"
+name = "opy-rs"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Standalone OverPy-compatible .opy frontend: lexer, CST/parser, preprocessing, semantic resolution, and Opy HIR lowering (Workshop-independent)."
+description = "Standalone OverPy-compatible .opy implementation: lexer, CST/parser, preprocessing, semantic resolution, and Opy HIR lowering (Workshop-independent)."
 
 [lints]
 workspace = true

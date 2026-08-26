@@ -2,7 +2,7 @@
 //!
 //! Consumes the expanded token stream from [`crate::preprocess`] and builds a
 //! [`cst::Program`]. Parsing is deterministic and corpus-backed; malformed
-//! input produces structured [`FrontendError`]s rather than panics, and the
+//! input produces structured [`OpyError`]s rather than panics, and the
 //! parser recovers at statement/line boundaries so multiple useful errors are
 //! reported. The returned [`ParseOutput`] carries either a complete program
 //! or the collected errors (never both).
@@ -11,7 +11,7 @@ use crate::cst::{
     Annotation, AnnotationArg, CallArg, Decl, DictEntry, Event, Expr, IfBranch, Program, Rule,
     RuleEntry, Stmt, SwitchArm,
 };
-use crate::diag::{FrontendError, Position, Span};
+use crate::diag::{OpyError, Position, Span};
 use crate::lexer::{Token, TokenKind};
 
 /// The outcome of a parse.
@@ -20,7 +20,7 @@ pub struct ParseOutput {
     /// The parsed program, present only when no errors were collected.
     pub program: Option<Program>,
     /// Every structured error collected during the parse.
-    pub errors: Vec<FrontendError>,
+    pub errors: Vec<OpyError>,
 }
 
 /// Parse an expanded token stream into a CST program.
@@ -53,7 +53,7 @@ pub fn parse_with_options(tokens: &[Token], allow_macro_redeclaration: bool) -> 
 struct Parser<'a> {
     tokens: &'a [Token],
     pos: usize,
-    errors: Vec<FrontendError>,
+    errors: Vec<OpyError>,
     allow_macro_redeclaration: bool,
 }
 
@@ -126,8 +126,7 @@ impl Parser<'_> {
 
     fn error_at_current(&mut self, message: String) {
         let span = self.peek().span;
-        self.errors
-            .push(FrontendError::at("parse-error", message, span));
+        self.errors.push(OpyError::at("parse-error", message, span));
     }
 
     // ---- program ----
@@ -219,7 +218,7 @@ impl Parser<'_> {
             let token = self.advance();
             index = token.text.parse::<u32>().ok();
             if index.is_none() {
-                self.errors.push(FrontendError::at(
+                self.errors.push(OpyError::at(
                     "parse-error",
                     format!(
                         "invalid variable index '{}' (expected an integer)",
@@ -311,7 +310,7 @@ impl Parser<'_> {
                 if !self.allow_macro_redeclaration
                     && members.iter().any(|(name, _)| name == &member.text)
                 {
-                    self.errors.push(FrontendError::at(
+                    self.errors.push(OpyError::at(
                         "macro-redeclaration",
                         format!("enum member '{name}.{}' is already defined", member.text),
                         member_span,
@@ -370,7 +369,7 @@ impl Parser<'_> {
                 matches!(declaration, Decl::Macro { name: existing, .. } if existing == &name)
             })
         {
-            self.errors.push(FrontendError::at(
+            self.errors.push(OpyError::at(
                 "macro-redeclaration",
                 format!("macro '{name}' is already defined"),
                 name_token.span,
@@ -1146,7 +1145,7 @@ impl Parser<'_> {
             }
         }
         if arms.is_empty() {
-            self.errors.push(FrontendError::at(
+            self.errors.push(OpyError::at(
                 "parse-error",
                 "switch must contain at least one case or default arm".to_string(),
                 start.span,
@@ -1342,7 +1341,7 @@ impl Parser<'_> {
                             span: Span::new(span.file, span.start, end),
                         },
                         _other => {
-                            self.errors.push(FrontendError::at(
+                            self.errors.push(OpyError::at(
                                 "parse-error",
                                 "cannot call this expression".to_string(),
                                 self.peek().span,
@@ -1699,7 +1698,7 @@ impl Parser<'_> {
                 '{' => {
                     let end = self.find_f_string_end(&chars, index + 1);
                     let Some(end) = end else {
-                        self.errors.push(FrontendError::at(
+                        self.errors.push(OpyError::at(
                             "parse-error",
                             "unterminated f-string interpolation".to_string(),
                             string_span,
@@ -1708,7 +1707,7 @@ impl Parser<'_> {
                     };
                     let expression: String = chars[index + 1..end].iter().collect();
                     if expression.trim().is_empty() {
-                        self.errors.push(FrontendError::at(
+                        self.errors.push(OpyError::at(
                             "parse-error",
                             "f-string interpolation cannot be empty".to_string(),
                             Span::new(
@@ -1741,7 +1740,7 @@ impl Parser<'_> {
                     index = end + 1;
                 }
                 '}' => {
-                    self.errors.push(FrontendError::at(
+                    self.errors.push(OpyError::at(
                         "parse-error",
                         "single '}' is not valid in an f-string".to_string(),
                         string_span,
@@ -1794,11 +1793,7 @@ impl Parser<'_> {
 
 /// Parse one f-string expression fragment and shift its local token spans
 /// into the original source file.
-fn parse_expression_fragment(
-    text: &str,
-    file: u32,
-    origin: Position,
-) -> Result<Expr, FrontendError> {
+fn parse_expression_fragment(text: &str, file: u32, origin: Position) -> Result<Expr, OpyError> {
     let mut tokens = crate::lexer::lex(crate::lexer::LexInput {
         file_id: file,
         text,
@@ -1814,7 +1809,7 @@ fn parse_expression_fragment(
     };
     let expression = parser.parse_expr().map_err(|()| {
         parser.errors.first().cloned().unwrap_or_else(|| {
-            FrontendError::at(
+            OpyError::at(
                 "parse-error",
                 "invalid f-string expression",
                 Span::new(file, origin, origin),
@@ -1877,7 +1872,7 @@ mod tests {
         output.program.unwrap()
     }
 
-    fn parse_err(text: &str) -> Vec<FrontendError> {
+    fn parse_err(text: &str) -> Vec<OpyError> {
         let tokens = lex(LexInput { file_id: 0, text }).unwrap();
         parse(&tokens).errors
     }

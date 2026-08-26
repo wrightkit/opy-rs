@@ -33,7 +33,7 @@ use std::path::Path;
 use serde::Serialize;
 
 use crate::cst;
-use crate::diag::{FrontendError, Position, Span};
+use crate::diag::{OpyError, Position, Span};
 use crate::hir;
 use crate::hir::types::{
     Declaration, Define, Expr as HirExpr, RuleEntry, SourceFile, Stmt as HirStmt,
@@ -188,7 +188,7 @@ pub struct Diagnostic {
 }
 
 impl Diagnostic {
-    fn from_error(error: FrontendError, files: &[FileRecord]) -> Diagnostic {
+    fn from_error(error: OpyError, files: &[FileRecord]) -> Diagnostic {
         Diagnostic {
             severity: DiagnosticSeverity::Error,
             code: error.code,

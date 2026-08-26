@@ -11,7 +11,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
     disable_version_flag = true,
     disable_help_subcommand = true,
     subcommand_precedence_over_arg = true,
-    about = "Workshop-independent OPY frontend tooling",
+    about = "Workshop-independent OPY tooling",
     after_help = EXIT_CODES
 )]
 pub(crate) struct Cli {
@@ -48,7 +48,7 @@ pub(crate) enum Command {
     Completion(CompletionArgs),
     /// Show the top-level help.
     Help,
-    /// Print crate and frontend protocol identities.
+    /// Print crate and language protocol identities.
     Version,
 }
 

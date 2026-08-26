@@ -7,9 +7,7 @@ reconstructing supported OverPy projects.
 
 Wright is a downstream consumer that integrates `opy-rs` with broader tooling
 such as linting, analysis, source editing, agent workflows, CI, and language
-services. The term **frontend** in this repository refers only to the
-Workshop-independent source-to-semantic stage inside the implementation; it is
-not the product identity of the repository. Likewise, an LPP **provider** is an
+services. An LPP **provider** in this repository is an
 integration role that `opy-rs` may expose to Wright and other tooling clients,
 not the reason this repository exists.
 
@@ -23,7 +21,7 @@ and emission.
 ```text
 OPY source
    ↓
-opy-rs source frontend
+opy-rs parsing, preprocessing, and semantic HIR
    ↓
 OPY semantic model / HIR
    ↓
@@ -66,7 +64,7 @@ opy-cli completion bash
 opy-cli version
 ```
 
-The Rust library surface lives in `crates/opy-frontend`, while Workshop-dependent
+The Rust library surface lives in `crates/opy-rs`, while Workshop-dependent
 compilation lives in `crates/opy-compiler`. See the
 [tooling API reference](docs/opy/tooling-api.md) and
 [implementation role](docs/opy/implementation-role.md) for the durable boundary.
@@ -91,7 +89,7 @@ compatibility corpus and pinned OverPy reference evidence.
 | Builtin actions & values | 🟡 Partial | Declared semantic subset works; full catalog-backed breadth is still being closed |
 | Receiver/member functions | 🟡 Partial | Declared members work; full member breadth is not yet complete |
 | Enums & constants | 🟡 Partial | Declared domains resolve; full domain breadth is not yet complete |
-| Advanced directives, translations & optimizer controls | 🟡 Partial | Frontend state exists; Workshop-dependent effects remain incomplete |
+| Advanced directives, translations & optimizer controls | 🟡 Partial | Source state exists; Workshop-dependent effects remain incomplete |
 | OPY → Workshop compilation | 🟡 Partial | The compiler boundary exists and lowering is expanding through `workshop-rs`; full real-project compilation is not yet claimed |
 | Workshop → OPY reconstruction | ⏳ Not yet | Will consume canonical `workshop-rs` semantics and remain owned by `opy-rs` |
 

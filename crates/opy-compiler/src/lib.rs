@@ -1,6 +1,6 @@
 //! The first OPY-to-Workshop integration boundary.
 //!
-//! `opy-frontend` remains a standalone OPY/HIR producer. This crate is the
+//! `opy-rs` remains a standalone OPY/HIR producer. This crate is the
 //! consumer-owned compiler layer: it pins the released `workshop-rs` v0.1.11
 //! contract, checks the OPY manifest links against the canonical catalog, and
 //! lowers the supported OPY program structure into canonical WIR before
@@ -8,13 +8,13 @@
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use opy_frontend::hir::{
-    self, Expr, RuleEntry, Span as HirSpan, Stmt, SwitchArm, default_var_index,
-};
-use opy_frontend::manifest::{FunctionKind, Manifest};
+use opy_rs::hir::{self, Expr, RuleEntry, Span as HirSpan, Stmt, SwitchArm, default_var_index};
+use opy_rs::manifest::{FunctionKind, Manifest};
 use workshop_rs::catalog::{Catalog, CatalogIdentity, Kind, Locale};
 use workshop_rs::source::{Position as WorkshopPosition, SourceFile, Span as WorkshopSpan};
 use workshop_rs::wir::{self, Action, Event, PlayerEventKind, Program, Value, ValueNode};
+
+pub mod reconstruct;
 
 /// The exact released dependency contract consumed by this crate.
 pub const WORKSHOP_RS_VERSION: &str = "0.1.11";
@@ -475,7 +475,7 @@ impl<'a> Lowering<'a> {
                     }
                 }
                 hir::Declaration::Macro { .. } => {
-                    // Macro definitions are expanded by the frontend; ignored during WIR lowering.
+                    // Macro definitions are expanded by the source implementation; ignored during WIR lowering.
                 }
             }
         }
@@ -2423,7 +2423,7 @@ fn workshop_error_span(error: &workshop_rs::WorkshopError) -> Option<WorkshopSpa
 #[cfg(test)]
 mod tests {
     use super::{Compiler, WORKSHOP_RS_VERSION, cross_check_manifest};
-    use opy_frontend::manifest::Manifest;
+    use opy_rs::manifest::Manifest;
     use std::path::Path;
     use workshop_rs::catalog::Catalog;
 
@@ -2439,7 +2439,7 @@ mod tests {
     #[test]
     fn vertical_slice_preserves_source_files_spans_and_emits_workshop() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_frontend::compile(
+        let hir = opy_rs::compile(
             "globalvar A\nrule \"issue 35 integration\":\n    @Event global\n    A = 1\n    disableInspector()\n",
             "issue-35-integration.opy",
             Path::new("."),
@@ -2478,7 +2478,7 @@ mod tests {
     #[test]
     fn while_lowering_is_source_attributed() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_frontend::compile(
+        let hir = opy_rs::compile(
             "rule \"while\":\n    @Event global\n    while true:\n        disableInspector()\n",
             "while.opy",
             Path::new("."),
@@ -2500,7 +2500,7 @@ mod tests {
     #[test]
     fn structural_subroutines_lower_to_canonical_wir() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_frontend::compile(
+        let hir = opy_rs::compile(
             "globalvar score\nsubroutine showStatus\ndef showStatus():\n    @Name \"Friendly\"\n    @SuppressWarnings unusedVariable\n    disableInspector()\nrule \"caller\":\n    @Event global\n    showStatus()\n",
             "structure.opy",
             Path::new("."),
@@ -2542,7 +2542,7 @@ mod tests {
     #[test]
     fn player_event_filters_resolve_through_canonical_catalog() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_frontend::compile(
+        let hir = opy_rs::compile(
             "rule \"joined\":\n    @Event playerJoined\n    @Team 1\n    @Slot 2\n    disableInspector()\n",
             "filters.opy",
             Path::new("."),
@@ -2568,7 +2568,7 @@ mod tests {
     #[test]
     fn explicit_indices_are_reserved_before_deterministic_allocation() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_frontend::compile(
+        let hir = opy_rs::compile(
             "globalvar first\nglobalvar reserved 0\nglobalvar next\nrule \"indices\":\n    @Event global\n    disableInspector()\n",
             "indices.opy",
             Path::new("."),
@@ -2598,7 +2598,7 @@ mod tests {
     #[test]
     fn implicit_default_variables_use_reference_fixed_slots() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_frontend::compile(
+        let hir = opy_rs::compile(
             r#"
 globalvar timer
 globalvar extra 5
@@ -2666,7 +2666,7 @@ rule "implicit":
     #[test]
     fn implicit_default_variable_slot_collision_is_source_attributed() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_frontend::compile(
+        let hir = opy_rs::compile(
             "globalvar x 0\nrule \"collision\":\n    @Event global\n    x = 1\n    A = 2\n",
             "collision.opy",
             Path::new("."),
@@ -2684,7 +2684,7 @@ rule "implicit":
     #[test]
     fn implicit_default_player_variables_use_independent_reference_slots() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_frontend::compile(
+        let hir = opy_rs::compile(
             r#"
 playervar declaredPlayer
 
@@ -2739,7 +2739,7 @@ rule "implicit player variables":
     #[test]
     fn implicit_default_player_slot_collision_is_source_attributed() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_frontend::compile(
+        let hir = opy_rs::compile(
             "playervar declared 0\nrule \"collision\":\n    @Event eachPlayer\n    eventPlayer.A = 1\n",
             "player-collision.opy",
             Path::new("."),
@@ -2762,7 +2762,7 @@ rule "implicit player variables":
     #[test]
     fn power_augmented_assignment_lowers_from_source() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_frontend::compile(
+        let hir = opy_rs::compile(
             "globalvar g\nrule \"power\":\n    @Event global\n    g = 2\n    g **= 3\n",
             "power.opy",
             Path::new("."),
@@ -2780,7 +2780,7 @@ rule "implicit player variables":
     #[test]
     fn opy_hex_numbers_are_normalized_at_the_wir_boundary() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_frontend::compile(
+        let hir = opy_rs::compile(
             "globalvar large = 0x124BC\nglobalvar small = 0x124\nglobalvar scientific = 1e10\n",
             "numbers.opy",
             Path::new("."),
@@ -2809,7 +2809,7 @@ rule "implicit player variables":
     #[test]
     fn unsupported_primitive_lowering_is_stable_and_source_attributed() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_frontend::compile(
+        let hir = opy_rs::compile(
             "globalvar total\nrule \"negative\":\n    @Event global\n    total = {\"a\": 1, \"b\": 2}[\"a\"]\n",
             "negative.opy",
             Path::new("."),
@@ -2827,7 +2827,7 @@ rule "implicit player variables":
     #[test]
     fn auto_allocation_fills_free_slots_below_early_explicit_indices() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_frontend::compile(
+        let hir = opy_rs::compile(
             r#"
 globalvar reserved 5
 globalvar auto1
@@ -2868,7 +2868,7 @@ rule "allocation":
     #[test]
     fn power_expressions_lower_through_the_canonical_contract() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_frontend::compile(
+        let hir = opy_rs::compile(
             "globalvar a = [2, 4]\nglobalvar out\nrule \"power\":\n    @Event global\n    out = a ** 2\n    a **= 2\n    a[0] **= 2\n",
             "power.opy",
             Path::new("."),
@@ -2895,7 +2895,7 @@ rule "allocation":
     #[test]
     fn unsupported_rule_metadata_is_explicit_and_source_attributed() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_frontend::compile(
+        let hir = opy_rs::compile(
             "rule \"metadata\":\n    @Event global\n    @NewPage \"section\"\n    disableInspector()\n",
             "metadata.opy",
             Path::new("."),
@@ -2915,7 +2915,7 @@ rule "allocation":
         let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../compatibility/fixtures/synthetic/issue-40-structural");
         let source = std::fs::read_to_string(fixture.join("source.opy")).unwrap();
-        let hir = opy_frontend::compile(&source, "source.opy", &fixture).unwrap();
+        let hir = opy_rs::compile(&source, "source.opy", &fixture).unwrap();
         let artifact = compiler.compile_hir(&hir).unwrap();
         let oracle: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(fixture.join("oracle.json")).unwrap())
@@ -2960,7 +2960,7 @@ rule "allocation":
     #[test]
     fn assignments_and_modifications_lower_to_canonical_wir() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_frontend::compile(
+        let hir = opy_rs::compile(
             r#"
 globalvar g1
 globalvar g2
@@ -3088,7 +3088,7 @@ rule "assignments":
     #[test]
     fn expressions_and_values_lower_to_canonical_wir() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_frontend::compile(
+        let hir = opy_rs::compile(
             r#"
 enum Consts:
     BASE
@@ -3130,7 +3130,7 @@ rule "expressions":
     #[test]
     fn pass_is_supported_as_source_level_noop() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_frontend::compile(
+        let hir = opy_rs::compile(
             r#"
 subroutine emptySub
 
@@ -3163,7 +3163,7 @@ rule "empty rule":
     #[test]
     fn variable_initializers_synthesize_initialize_rules() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_frontend::compile(
+        let hir = opy_rs::compile(
             r#"
 globalvar j = 5
 globalvar h = 0

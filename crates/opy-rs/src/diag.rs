@@ -1,6 +1,6 @@
 //! Frontend diagnostics: structured, source-located failures.
 //!
-//! Every frontend failure is a [`FrontendError`] with a stable `code`, a
+//! Every frontend failure is a [`OpyError`] with a stable `code`, a
 //! human message, and an optional source span. The `code` is the machine
 //! contract; wording is not.
 //!
@@ -10,7 +10,7 @@
 
 /// A structured frontend error.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FrontendError {
+pub struct OpyError {
     /// A stable machine-readable code, e.g. `parse-error`.
     pub code: String,
     /// Human-readable message (not part of the machine contract).
@@ -47,12 +47,12 @@ impl Span {
 }
 
 /// A crate-wide result alias.
-pub type FrontendResult<T> = Result<T, FrontendError>;
+pub type OpyResult<T> = Result<T, OpyError>;
 
-impl FrontendError {
+impl OpyError {
     /// An error without a source span.
-    pub fn new(code: impl Into<String>, message: impl Into<String>) -> FrontendError {
-        FrontendError {
+    pub fn new(code: impl Into<String>, message: impl Into<String>) -> OpyError {
+        OpyError {
             code: code.into(),
             message: message.into(),
             span: None,
@@ -60,8 +60,8 @@ impl FrontendError {
     }
 
     /// An error at a source position.
-    pub fn at(code: impl Into<String>, message: impl Into<String>, span: Span) -> FrontendError {
-        FrontendError {
+    pub fn at(code: impl Into<String>, message: impl Into<String>, span: Span) -> OpyError {
+        OpyError {
             code: code.into(),
             message: message.into(),
             span: Some(span),
@@ -69,10 +69,10 @@ impl FrontendError {
     }
 }
 
-impl std::fmt::Display for FrontendError {
+impl std::fmt::Display for OpyError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}: {}", self.code, self.message)
     }
 }
 
-impl std::error::Error for FrontendError {}
+impl std::error::Error for OpyError {}

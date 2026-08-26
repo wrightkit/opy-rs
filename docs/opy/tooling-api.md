@@ -1,7 +1,7 @@
 # opy-rs Tooling API
 
-Workshop-independent tooling surface for the OPY frontend (issue #7): a
-library API in `crates/opy-frontend` (`opy_frontend::tooling`) and a
+Workshop-independent tooling surface for the OPY source implementation (issue #7): a
+library API in `crates/opy-rs` (`opy_rs::tooling`) and a
 standalone CLI in `crates/opy-cli` (`opy-cli`). Both operate on `.opy` source
 only. No Workshop backend, catalog, Node, or OverPy is required or invoked.
 
@@ -17,7 +17,7 @@ points never disagree about a project's verdict. Resolution stops at the
 Workshop-independent Opy HIR semantic model ([`hir::Program`]). There is no
 Workshop emission step.
 
-## Library API (`opy_frontend::tooling`)
+## Library API (`opy_rs::tooling`)
 
 ```rust
 pub fn check(source: &str, main_path: &str, root: &Path) -> CheckOutcome
@@ -37,7 +37,7 @@ pub struct CheckOutcome {
   the file registry to `(file id, path, line/col)`.
 * `PostCompileHook`: the declared `#!postCompileHook` script (root-relative
   path plus directive span), present only when the source declared one and
-  the project checked clean. It is a declaration record only — the frontend
+  the project checked clean. It is a declaration record only — the source implementation
   never executes the hook (execution is lowering-dependent, issue #8).
 
 `SemanticModel` wraps the resolved program and answers queries:
@@ -57,7 +57,7 @@ Symbols are indexed per binding: a `subroutine NAME` declaration and a
 `def NAME():` definition of the same name are separate entries, and call
 sites are attached to both. Rules are listed but are not symbols (rule names
 are not name-resolvable identifiers in OPY). `Constant` is a declared
-binding kind in the contract; the current frontend produces no constant
+binding kind in the contract; the current source implementation produces no constant
 declarations (custom enums fold instead).
 
 Source provenance: the file registry maps every span's file id to its path.
@@ -107,7 +107,7 @@ semantic-resolution diagnostics follow the compile contract and report the
 first error. `check` and `compile` agree on the verdict; only the parse-stage
 reporting depth differs.
 
-## Support-matrix accessor (`opy_frontend::support`)
+## Support-matrix accessor (`opy_rs::support`)
 
 `compatibility/support-matrix.json` is the repository's machine-readable
 support state source (merged with the evidence base, PR #10) and is consumed
@@ -121,7 +121,7 @@ crate rebuilds when the file changes), parsed once, and exposed as
   slices
 * `categories()`, `declared_states()`, `summary()`: declared surface
 
-The five declared states (`planned`, `frontend-supported`,
+The five declared states (`planned`, `source-supported`,
 `semantic-supported`, `lowering-dependent`, `end-to-end-supported`) are
 documented in the matrix itself. Workshop-dependent items stay
 `lowering-dependent`; nothing here approximates them.
@@ -134,7 +134,7 @@ opy-cli check --format json <main.opy>             # machine JSON result/diagnos
 opy-cli inspect <main.opy>                        # resolved model as JSON on stdout
 opy-cli support [--json] [<category|feature-id>]  # embedded matrix (or slice) as JSON
 opy-cli completion bash|zsh|fish|powershell       # static completion from the command model
-opy-cli version                                   # crate + frontend protocol identity
+opy-cli version                                   # crate + source implementation protocol identity
 ```
 
 Exit codes: `0` clean/success, `1` diagnostics found, `2` usage or I/O
@@ -173,13 +173,13 @@ stdout.
 
 * `def NAME():` bodies resolve, but calls resolve only against `subroutine
   NAME` declarations; a def-only subroutine call is an `unknown-action`
-  diagnostic (existing frontend resolution contract; tracked as frontend
+  diagnostic (existing source implementation resolution contract; tracked as source implementation
   follow-up).
 * Custom enums fold to constants in the HIR (reference behavior); enum
   declarations are queryable through `SemanticModel::enums`, not the HIR
   declaration list.
 * Workshop emission, decompilation, settings-section emission, and locale
   data are `lowering-dependent` (see the support matrix). The native
-  differential suite (`crates/opy-frontend/tests/differential.rs`, merged in
+  differential suite (`crates/opy-rs/tests/differential.rs`, merged in
   PR #13) consumes this pipeline end-to-end in `cargo test` against the
   recorded oracle snapshots.

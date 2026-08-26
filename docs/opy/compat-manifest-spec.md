@@ -2,11 +2,11 @@
 
 Status: accepted specification. An opy-rs-owned semantic contract, ported and
 adapted from the WrightKit evidence base (issue #2), implemented by the
-frontend workstream (issues #4/#5) and merged on `main` (PRs #9/#13).
+source implementation workstream (issues #4/#5) and merged on `main` (PRs #9/#13).
 Scope: the opy-rs-owned representation for builtin action/value identities,
 member functions, signatures, parameter enum-domain identities (catalog
 links), and source aliases; reference-validated and consumed by the native
-frontend. The implementation lives in `crates/opy-frontend/src/manifest/`
+source implementation. The implementation lives in `crates/opy-rs/src/manifest/`
 (data in `data/manifest.json`, probe evidence in `probes/`); this document is
 the schema and boundary contract for that data.
 
@@ -17,8 +17,8 @@ opy-rs-owned manifest is justified: the declared parse surface exceeds the
 initial semantic surface, and residual `unknown-action`/`unknown-value`/
 `unsupported-member` gaps are semantic-coverage gaps, not grammar gaps. The
 manifest replaced the hardcoded `KNOWN_ENUMS` table (removed from
-`crates/opy-frontend/src/lower.rs` in the ownership-fixed frontend, PR #9)
-with data and gives the frontend a single, reference-validated source for:
+`crates/opy-rs/src/lower.rs` in the ownership-fixed source implementation, PR #9)
+with data and gives the source implementation a single, reference-validated source for:
 
 * builtin actions and values (generic and member);
 * member-function metadata (receiver + argument signatures);
@@ -35,7 +35,7 @@ It is **language-compatibility metadata**, distinct from:
   (`catalogId`) rather than duplicating spellings;
 * authoritative Workshop enum member lists, hero/map/mode/settings content,
   locale spellings, and canonical member/domain existence. These are
-  Workshop-owned catalog content that the frontend **never approximates**:
+  Workshop-owned catalog content that the source implementation **never approximates**:
   member accesses on a declared domain identity resolve as opaque identities,
   and member/domain/catalog validation stays `lowering-dependent` (#8); and
 * a runtime content registry (heroes/maps/abilities content data, extension
@@ -112,11 +112,11 @@ Entry semantics:
 
 * `kind`: `action`/`value` are generic builtins; `memberAction`/`memberValue`
   are receiver methods whose `params` are the **explicit** arguments (the
-  receiver is separate). The frontend enforces action/value position
+  receiver is separate). The source implementation enforces action/value position
   (`value-in-action-position`, `action-in-value-position`).
 * `receiver`: the declared receiver category. `Player` is metadata for
   player-oriented members (the pinned reference does not type-check those
-  receivers, so the frontend accepts any receiver); `Variable` and `String`
+  receivers, so the source implementation accepts any receiver); `Variable` and `String`
   are enforced where the reference semantics are clear (`.append` requires an
   assignable receiver, `.format` a string literal).
 * `params`: ordered arguments. Arity is `(first defaulted/optional param
@@ -157,7 +157,7 @@ Entry semantics:
 * `catalogId`: the canonical Workshop emission catalog id. A direct catalog
   entry uses `catalogLink: "canonical"` (the default); a missing `catalogId`
   must carry an explicit `catalogLink` reason: `special-lowering` for a
-  frontend form with custom lowering (`debug`, `print`, `chase`, `range`, or
+  source implementation form with custom lowering (`debug`, `print`, `chase`, `range`, or
   `append`), `legacy-alias` for a source identity whose compatibility is
   represented by an alias path (`stopChasing`), or `catalog-gap` for a
   probe-evidenced source member without a current canonical catalog entry
@@ -166,7 +166,7 @@ Entry semantics:
 * `evidence`: every entry must reference at least one probe recording
   oracle acceptance (deterministic `check` failure otherwise).
 
-Entries carry the minimal semantic data the frontend needs to resolve names,
+Entries carry the minimal semantic data the source implementation needs to resolve names,
 check arity, resolve enum domains, and lower; they deliberately omit upstream
 description/localization text.
 
@@ -185,9 +185,9 @@ hash, and, for rejections, the diagnostic category fragment).
 
 ## Validation rules
 
-* `Manifest::load` (`crates/opy-frontend/src/manifest`): schema validation,
+* `Manifest::load` (`crates/opy-rs/src/manifest`): schema validation,
   duplicate/colliding ids, colliding or missing aliases, declared parameter
-  domain identities (tracked for the frontend's opaque member resolution),
+  domain identities (tracked for the source implementation's opaque member resolution),
   enum-member defaults requiring a declared domain, keyword-binding data
   sanity (`keywordOnly`/`positionalOnly` are mutually exclusive, alternate
   spellings do not collide with other parameters), contextual-domain
@@ -203,26 +203,26 @@ hash, and, for rejections, the diagnostic category fragment).
 * `probes/validate.py` performs reference validation. Every probe runs
   against the pinned oracle and must match its recorded accept/reject, normalized
   emission hash, and diagnostic category. The probe set and validator are
-  frontend-workstream-owned; the validator requires the pinned oracle (Node +
+  source implementation-workstream-owned; the validator requires the pinned oracle (Node +
   pnpm) and runs standalone like `compatibility/run_oracle.py`, so it is not
   part of the oracle-less harness suite. The probe names are recorded as
   evidence references in `compatibility/support-matrix.json`, and the native
-  differential suite (`crates/opy-frontend/tests/differential.rs`, merged in
+  differential suite (`crates/opy-rs/tests/differential.rs`, merged in
   PR #13) covers the same surface end-to-end in `cargo test`.
-* The frontend consumes the manifest in `lower.rs`: unknown names, wrong
+* The source implementation consumes the manifest in `lower.rs`: unknown names, wrong
   action/value position, invalid arity, invalid receiver category, and
   named/keyword argument binding (`unknown-keyword`, `duplicate-argument`,
   `missing-argument`, `positional-after-keyword`, `keyword-required`,
   `keyword-unsupported`, `invalid-argument`) produce structured,
-  source-located frontend diagnostics before Workshop emission. Workshop
+  source-located source implementation diagnostics before Workshop emission. Workshop
   enum member/domain mismatch checks were removed from the core in PR #9
   (they require canonical Workshop catalog knowledge) and are
   `lowering-dependent` (#8); custom user-declared enum member validation is
-  OPY-level source semantics and stays frontend-owned.
+  OPY-level source semantics and stays source implementation-owned.
 
 ## Consumers
 
-* the opy-rs frontend (`crates/opy-frontend`): name/member/enum resolution,
+* the opy-rs source implementation (`crates/opy-rs`): name/member/enum resolution,
   arity and signature checks, early resolution of unknown-action/value
   errors;
 * `workshop-rs`: canonical-id linkage to the emission catalog and
@@ -235,9 +235,9 @@ hash, and, for rejections, the diagnostic category fragment).
 
 ## Integration cross-check contract (#30, consumed by #8)
 
-The manifest is the frontend-owned side of the integration contract. The
+The manifest is the source implementation-owned side of the integration contract. The
 consumer receives the resolved Opy HIR plus this validated manifest; it does
-not need to import OverPy data or add a parser/frontend dependency. HIR
+not need to import OverPy data or add a parser/source implementation dependency. HIR
 `call`/`receiverCall` names are resolved against the manifest before lowering,
 so source spans and OPY diagnostics remain owned by `opy-rs`.
 

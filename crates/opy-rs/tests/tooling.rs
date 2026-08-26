@@ -1,12 +1,12 @@
 //! Integration tests for the Workshop-independent tooling API (issue #7):
-//! multi-file project validation through [`opy_frontend::tooling::check`],
+//! multi-file project validation through [`opy_rs::tooling::check`],
 //! semantic queries on the resolved model, and stable diagnostic codes for
 //! representative malformed inputs.
 
 use std::path::Path;
 
-use opy_frontend::diag::{Position, Span};
-use opy_frontend::tooling::{self, SymbolKind, check};
+use opy_rs::diag::{Position, Span};
+use opy_rs::tooling::{self, SymbolKind, check};
 
 /// The WrightKit-authored multi-file fixture: `main.opy` includes
 /// `shared/defs.opy`, declares `playervar P`, and uses symbols declared in
@@ -42,22 +42,22 @@ fn multi_file_project_checks_and_resolves_end_to_end() {
     assert!(model
         .declarations()
         .iter()
-        .any(|decl| matches!(decl, opy_frontend::hir::types::Declaration::GlobalVariable { name, .. } if name == "total")));
+        .any(|decl| matches!(decl, opy_rs::hir::types::Declaration::GlobalVariable { name, .. } if name == "total")));
     assert!(model
         .declarations()
         .iter()
-        .any(|decl| matches!(decl, opy_frontend::hir::types::Declaration::PlayerVariable { name, .. } if name == "P")));
+        .any(|decl| matches!(decl, opy_rs::hir::types::Declaration::PlayerVariable { name, .. } if name == "P")));
 
     // Rule listing: the rule plus the def'd subroutine (the include splices
     // first, so the def entry precedes the rule entry).
     assert_eq!(model.rules().len(), 2);
     assert!(model.rules().iter().any(|entry| matches!(
         entry,
-        opy_frontend::hir::types::RuleEntry::Rule(rule) if rule.name == "collect"
+        opy_rs::hir::types::RuleEntry::Rule(rule) if rule.name == "collect"
     )));
     assert!(model.rules().iter().any(|entry| matches!(
         entry,
-        opy_frontend::hir::types::RuleEntry::SubroutineDef { name, .. } if name == "finish"
+        opy_rs::hir::types::RuleEntry::SubroutineDef { name, .. } if name == "finish"
     )));
 
     // Macro-expansion provenance: the #!define is recorded with its site.
@@ -260,7 +260,7 @@ fn semantic_errors_follow_the_compile_first_error_contract() {
     );
     let diagnostic = outcome.diagnostics.first().expect("first semantic error");
     assert_eq!(diagnostic.code, "unknown-identifier");
-    let compile_error = opy_frontend::compile(
+    let compile_error = opy_rs::compile(
         "rule \"r\":\n    @Event global\n    x = frobnicate()\n",
         "main.opy",
         Path::new(""),

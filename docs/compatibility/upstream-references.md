@@ -59,7 +59,7 @@ never `latest` or a range (see the pinning policy below).
 ### Oracle role
 
 OverPy 9.7.10 (pinned content) is the compatibility **oracle** and **behavior
-reference** for `opy-rs`'s `.opy` frontend. It is not a production runtime
+reference** for `opy-rs`'s `.opy` source implementation. It is not a production runtime
 dependency of `opy-rs` and is never bundled into release artifacts. Concretely,
 it serves as:
 
@@ -71,7 +71,7 @@ it serves as:
   and [`docs/opy/compat-manifest-spec.md`](../opy/compat-manifest-spec.md));
 * the reference for differential parity at the Opy HIR v2 boundary
   ([`docs/hir/opy-hir-v2.md`](../hir/opy-hir-v2.md)): the native differential
-  suite (`crates/opy-frontend/tests/differential.rs`, merged in PR #13) runs
+  suite (`crates/opy-rs/tests/differential.rs`, merged in PR #13) runs
   every corpus fixture through the native pipeline in `cargo test` and
   compares status, rule-name, and diagnostic evidence against the recorded
   oracle snapshots.
@@ -253,7 +253,7 @@ when the oracle is absent.
   `else` is unverified; the version-sensitivity matrix must be re-run before
   any new acceptance is claimed.
 * **Round-trip boundary.** Emitted `settings` sections are deliberately not
-  reparseable by the Workshop frontend; a `.ws` decompiler is a non-goal for
+  reparseable by the Workshop source implementation; a `.ws` decompiler is a non-goal for
   `opy-rs` (Workshop → OPY decompilation is deferred to the `workshop-rs`
   integration stage; see `support-matrix.md`).
 
