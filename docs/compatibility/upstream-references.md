@@ -104,7 +104,7 @@ The harness invokes the oracle only through documented, isolated entry points:
 
 ### Upstream surfaces inspected for the inventory
 
-The feature inventory in [`docs/overpy-support.md`](../overpy-support.md) and
+The feature inventory in [`docs/language-support.md`](../language-support.md) and
 its linked component inventories is
 grounded in the pinned tree, specifically:
 
@@ -260,7 +260,7 @@ when the oracle is absent.
 
 ## Related documents
 
-* [`docs/overpy-support.md`](../overpy-support.md): audited public support contract and current states
+* [`docs/language-support.md`](../language-support.md): audited public support contract and current states
 * [`docs/opy/compatibility-baseline.md`](../opy/compatibility-baseline.md): tiered planning baseline
 * [`docs/opy/compat-manifest-spec.md`](../opy/compat-manifest-spec.md): machine-readable semantic manifest specification
 * [`docs/opy/tooling-notes.md`](../opy/tooling-notes.md): harness usage

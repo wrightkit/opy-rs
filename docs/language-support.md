@@ -38,14 +38,14 @@ having a name in a manifest is not enough to make a compilation row green.
 
 | Area | Status | Detailed inventory |
 | --- | --- | --- |
-| Source syntax, literals and expressions | 🚧 Coming soon | [syntax and project composition](overpy-support/syntax-and-projects.md) |
-| Assignments, declarations, rules and control flow | 🚧 Coming soon | [syntax and project composition](overpy-support/syntax-and-projects.md) |
-| Builtins, member functions, constants and contextual domains | 🚧 Coming soon | [callables and domains](overpy-support/callables-and-domains.md) |
-| Preprocessing, includes, modules and macros | 🚧 Coming soon | [syntax and project composition](overpy-support/syntax-and-projects.md) |
-| Strings, translations and custom-game settings | 🚧 Coming soon | [syntax and project composition](overpy-support/syntax-and-projects.md) |
-| Compiler directives, optimization and post-compile hooks | 🚧 Coming soon | [tooling and backend](overpy-support/tooling-and-backend.md) |
-| Standalone compiler and CLI | ✅ Supported | [tooling and backend](overpy-support/tooling-and-backend.md) |
-| Workshop-to-OPY decompilation | ❌ Unsupported | [tooling and backend](overpy-support/tooling-and-backend.md) |
+| Source syntax, literals and expressions | 🚧 Coming soon | [syntax and project composition](language-support/syntax-and-projects.md) |
+| Assignments, declarations, rules and control flow | 🚧 Coming soon | [syntax and project composition](language-support/syntax-and-projects.md) |
+| Builtins, member functions, constants and contextual domains | 🚧 Coming soon | [callables and domains](language-support/callables-and-domains.md) and [complete registries](language-support/registries.md) |
+| Preprocessing, includes, modules and macros | 🚧 Coming soon | [syntax and project composition](language-support/syntax-and-projects.md) and [complete registries](language-support/registries.md) |
+| Strings, translations and custom-game settings | 🚧 Coming soon | [syntax and project composition](language-support/syntax-and-projects.md) |
+| Compiler directives, optimization and post-compile hooks | 🚧 Coming soon | [tooling and backend](language-support/tooling-and-backend.md) and [complete registries](language-support/registries.md) |
+| Standalone compiler and CLI | ✅ Supported | [tooling and backend](language-support/tooling-and-backend.md) |
+| Workshop-to-OPY decompilation | ❌ Unsupported | [tooling and backend](language-support/tooling-and-backend.md) |
 
 The summary is intentionally conservative: the audited upstream surface is
 larger than the currently evidenced `opy-rs` surface. Detailed rows make gaps

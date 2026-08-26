@@ -96,7 +96,7 @@ compatibility corpus and pinned OverPy reference evidence.
 | Workshop → OPY reconstruction | ⏳ Not yet | Will consume canonical `workshop-rs` semantics and remain owned by `opy-rs` |
 
 Exact per-feature evidence remains available in the
-[canonical human-readable support contract](docs/overpy-support.md). Internal
+[canonical human-readable support contract](docs/language-support.md). Internal
 fixture and implementation metadata remains in
 [compatibility/support-matrix.json](compatibility/support-matrix.json).
 
