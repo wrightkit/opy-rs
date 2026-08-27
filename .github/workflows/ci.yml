@@ -17,7 +17,6 @@ permissions:
 jobs:
   rust-quality:
     name: Rust quality (${{ matrix.toolchain }})
-    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -25,55 +24,15 @@ jobs:
           - stable
           - 1.85.0
 
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v7
-
-      - name: Detect workspace crates
-        id: crates
-        run: |
-          if [ -d crates ] && ls crates/*/Cargo.toml >/dev/null 2>&1; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Install Rust toolchain
-        if: steps.crates.outputs.exists == 'true'
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ matrix.toolchain }}
-          components: clippy, rustfmt
-      - name: Restore Rust cache
-        if: steps.crates.outputs.exists == 'true'
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: linux-quality
-          cache-targets: true
-          cache-all-crates: false
-          cache-workspace-crates: false
-          cache-bin: false
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-          cache-on-failure: false
-
-      - name: Check formatting
-        if: steps.crates.outputs.exists == 'true'
-        run: cargo fmt --all -- --check
-
-      - name: Run Clippy
-        if: steps.crates.outputs.exists == 'true'
-        run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
-
-      - name: Run tests
-        if: steps.crates.outputs.exists == 'true'
-        run: cargo test --locked --workspace --all-targets --all-features
-
-      - name: Note docs-only branch
-        if: steps.crates.outputs.exists == 'false'
-        run: echo "No workspace crates on this branch; Rust quality gates skipped."
+    uses: wrightkit/.github/.github/workflows/rust-quality.yml@66fff829662bf235c7322194b4bafafba2a0f97e
+    with:
+      toolchain: ${{ matrix.toolchain }}
+      cache-shared-key: linux-quality
+      all-features: true
 
   macro-runtime-ports:
     name: JS runtime on ${{ matrix.os }}
+    needs: rust-quality
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
