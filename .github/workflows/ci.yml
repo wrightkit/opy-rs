@@ -24,7 +24,7 @@ jobs:
           - stable
           - 1.85.0
 
-    uses: wrightkit/.github/.github/workflows/rust-quality.yml@66fff829662bf235c7322194b4bafafba2a0f97e
+    uses: wrightkit/.github/.github/workflows/rust-quality.yml@493ad9867b999de27f9ee38e5cde2bc805f3e1ef
     with:
       toolchain: ${{ matrix.toolchain }}
       cache-shared-key: linux-quality

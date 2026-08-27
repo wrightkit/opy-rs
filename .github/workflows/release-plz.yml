@@ -6,7 +6,7 @@ on:
 
 jobs:
   release-plz:
-    uses: wrightkit/.github/.github/workflows/release-plz-crates.yml@66fff829662bf235c7322194b4bafafba2a0f97e
+    uses: wrightkit/.github/.github/workflows/release-plz-crates.yml@493ad9867b999de27f9ee38e5cde2bc805f3e1ef
     permissions:
       contents: write
       pull-requests: write
