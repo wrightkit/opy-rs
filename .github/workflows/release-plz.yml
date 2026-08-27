@@ -5,52 +5,11 @@ on:
     branches: [main]
 
 jobs:
-  release:
-    name: Publish crates and create release tag
-    if: github.repository_owner == 'wrightkit'
-    runs-on: ubuntu-latest
-    environment: release
-    concurrency:
-      group: release-plz-release
-      cancel-in-progress: false
-    permissions:
-      contents: write
-      pull-requests: read
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-          token: ${{ secrets.GH_TOKEN }}
-      - name: Publish crates and create release tag
-        uses: release-plz/action@v0.5
-        with:
-          command: release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-  release-pr:
-    name: Maintain release PR
-    if: github.repository_owner == 'wrightkit'
-    runs-on: ubuntu-latest
-    concurrency:
-      group: release-plz-pr-${{ github.ref }}
-      cancel-in-progress: false
+  release-plz:
+    uses: wrightkit/.github/.github/workflows/release-plz-crates.yml@9a91b5e32cc6d90b79b2b9b47a62b835ab94ec86
     permissions:
       contents: write
       pull-requests: write
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-          token: ${{ secrets.GH_TOKEN }}
-      - name: Update release PR
-        uses: release-plz/action@v0.5
-        with:
-          command: release-pr
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+    secrets:
+      github-token: ${{ secrets.GH_TOKEN }}
+      cargo-registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
