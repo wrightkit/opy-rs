@@ -40,6 +40,7 @@ use crate::diag::{OpyError, OpyResult, Span};
 use crate::manifest::{
     Function, FunctionContext, FunctionKind, Manifest, Param, ParamDefault, ReceiverCategory,
 };
+use workshop_rs::catalog::Catalog;
 
 /// The protocol envelope this frontend produces.
 const PROTOCOL_NAME: &str = "wright/opy-hir";
@@ -69,6 +70,8 @@ struct Lowerer {
     allow_dict_literal: bool,
     /// The authoritative builtin semantic table (issue #109).
     manifest: &'static Manifest,
+    /// The canonical Workshop catalog linked by the manifest.
+    catalog: Catalog,
     errors: Vec<OpyError>,
 }
 
@@ -96,6 +99,15 @@ pub fn lower_with_preprocessing(
             ));
         }
     };
+    let catalog = match Catalog::builtin() {
+        Ok(catalog) => catalog,
+        Err(error) => {
+            return Err(OpyError::new(
+                "catalog-error",
+                format!("cannot load the Workshop catalog: {error}"),
+            ));
+        }
+    };
     let mut lowerer = Lowerer {
         globals: HashSet::new(),
         players: HashSet::new(),
@@ -105,6 +117,7 @@ pub fn lower_with_preprocessing(
         locals: Vec::new(),
         allow_dict_literal: false,
         manifest,
+        catalog,
         errors: Vec::new(),
     };
     lowerer.collect_symbols(program);
@@ -1099,9 +1112,22 @@ impl Lowerer {
             // Builtin Workshop enum: the domain name is a declared OPY
             // signature identity (manifest `param.domain`); the member list
             // is Workshop-owned catalog content, so the member access
-            // resolves as an opaque identity without member validation.
-            // Member-existence checks are lowering-dependent (issue #8).
+            // resolves as an opaque identity after validating the member
+            // against the canonical Workshop catalog.
             if self.manifest.domain_identity(name) {
+                if let Some(domain) = self.catalog.enum_domain(name)
+                    && !domain
+                        .members
+                        .iter()
+                        .any(|candidate| candidate.member == *member)
+                {
+                    self.error_at(
+                        "unknown-enum-member",
+                        format!("enum '{name}' has no member '{member}'"),
+                        span,
+                    );
+                    return HirExpr::Null { span: None };
+                }
                 return HirExpr::Enum {
                     value_type: name.clone(),
                     value: member.to_string(),
@@ -2165,14 +2191,14 @@ mod tests {
     }
 
     #[test]
-    fn unknown_chase_time_reeval_member_resolves_as_an_opaque_enum_identity() {
-        // Member spellings are Workshop catalog content: a member access on
-        // a declared domain identity resolves as an opaque Enum node without
-        // member validation (lowering-dependent, #8).
-        let value = lowered_value(
+    fn unknown_chase_time_reeval_member_is_rejected_by_the_catalog() {
+        let error = crate::compile(
             "globalvar g\nrule \"r\":\n    @Event global\n    g = ChaseTimeReeval.NOPE\n",
-        );
-        assert_enum(&value, "ChaseTimeReeval", "NOPE");
+            "test.opy",
+            std::path::Path::new(""),
+        )
+        .expect_err("unknown catalog member must be rejected");
+        assert_eq!(error.code, "unknown-enum-member");
     }
 
     #[test]
@@ -2770,19 +2796,15 @@ mod tests {
     }
 
     #[test]
-    fn previously_rejected_enum_member_spellings_resolve_as_opaque_identities() {
-        // The KNOWN_ENUMS-era member allowlist is gone: Color.CYAN and
-        // DynamicEffect.SPARKLES are member spellings whose validity is
-        // Workshop-owned knowledge, so they resolve as opaque enum
-        // identities instead of failing (lowering-dependent, #8).
-        let value =
-            lowered_value("globalvar g\nrule \"r\":\n    @Event global\n    g = Color.CYAN\n");
-        assert_enum(&value, "Color", "CYAN");
-
-        let value = lowered_value(
+    fn unknown_catalog_enum_members_are_rejected() {
+        for source in [
+            "globalvar g\nrule \"r\":\n    @Event global\n    g = Color.CYAN\n",
             "globalvar g\nrule \"r\":\n    @Event global\n    g = DynamicEffect.SPARKLES\n",
-        );
-        assert_enum(&value, "DynamicEffect", "SPARKLES");
+        ] {
+            let error = crate::compile(source, "test.opy", std::path::Path::new(""))
+                .expect_err("unknown catalog member must be rejected");
+            assert_eq!(error.code, "unknown-enum-member");
+        }
     }
 
     #[test]

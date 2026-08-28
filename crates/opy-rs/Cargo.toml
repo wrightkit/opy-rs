@@ -13,3 +13,4 @@ workspace = true
 opy-macro-js = { path = "../opy-macro-js", version = "0.1.1" }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
+workshop-rs.workspace = true

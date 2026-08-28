@@ -399,6 +399,7 @@ dependencies = [
  "opy-macro-js",
  "serde",
  "serde_json",
+ "workshop-rs",
 ]
 
 [[package]]
