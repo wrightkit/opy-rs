@@ -67,10 +67,10 @@ The dependency direction is `opy-rs → workshop-rs`; there is no dependency fro
 
 ## Current reality
 
-The repository already exposes standalone check/inspect/support tooling. OPY →
-Workshop compilation is only partially implemented, and Workshop → OPY
-reconstruction is not yet implemented. These are implementation-completeness
-gaps, not reasons to narrow `opy-rs` to one compiler stage.
+The repository exposes standalone check/inspect/support tooling and a bounded
+versioned OPY → Workshop compile surface. Broader corpus gaps remain explicit,
+and Workshop → OPY reconstruction is not yet implemented. These are
+implementation-completeness gaps, not reasons to narrow `opy-rs` to one compiler stage.
 
 Support claims must continue to follow the compatibility matrix and executable
 evidence rather than this architectural intent alone.

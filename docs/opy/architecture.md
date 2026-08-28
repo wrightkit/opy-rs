@@ -46,8 +46,8 @@ opy-rs reconstruction
 OPY source
 ```
 
-The first path is partially implemented end-to-end today; the reverse path is
-not yet implemented. The support matrix, tests, and real-project evidence are
+The first path is implemented for the documented bounded compiler surface; the
+reverse path is not yet implemented. The support matrix, tests, and real-project evidence are
 the authority for current support rather than the intended pipeline alone.
 
 ## Workshop-independent source path
@@ -174,10 +174,10 @@ of `opy-rs`, and standalone library/CLI users do not need Wright.
 
 ## Current capability
 
-The Workshop-independent semantic/tooling foundation is implemented and
-corpus-backed. The OPY→Workshop compiler path exists but broader builtin/member,
-control-flow, settings/locale, directive/hook, and real-project closure remains
-partial. Workshop→OPY reconstruction is not yet implemented.
+The Workshop-independent semantic/tooling foundation and a bounded OPY→Workshop
+compiler surface are implemented and corpus-backed. Broader language coverage
+remains explicit in the compatibility corpus report; Workshop→OPY
+reconstruction is not yet implemented.
 
 Do not infer a stronger claim from this document; use the support matrix and
 current executable evidence.

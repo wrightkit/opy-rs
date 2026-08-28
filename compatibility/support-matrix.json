@@ -10,7 +10,7 @@
   },
   "snapshot": {
     "date": "2026-08-29",
-    "note": "Readiness baseline through the bounded #37 compiler slice. Settings, catalog-declared locale emission, and post-compile hooks have explicit OPY -> HIR -> WIR -> validated Workshop emission evidence. Optimizer controls remain non-blocking presentation differences; semantic replacement directives remain explicit gaps and fail at the compiler boundary until canonical lowering exists. Canonical Workshop catalog data, settings tables, locale spellings, WIR, validation, and emission remain owned by workshop-rs.",
+    "note": "Readiness baseline through the #38 versioned compile API and CLI. Supported settings, catalog-declared locale emission, and post-compile hooks have explicit OPY -> HIR -> WIR -> validated Workshop emission evidence. Compiler and CLI failures remain structured and source-attributed; optimizer controls remain non-blocking presentation differences and semantic replacement directives remain explicit gaps. Canonical Workshop catalog data, settings tables, locale spellings, WIR, validation, and emission remain owned by workshop-rs.",
     "asOfCommit": "9f7c62b1958a3804780a2de7d1bd55e2fb298533"
   },
   "states": {
@@ -710,7 +710,7 @@
         "fixtures:synthetic",
         "fixtures:real-world"
       ],
-      "notes": "Issue #8 remains the broader lowering track. The released workshop-rs v0.1.11 public contract now supports the bounded #35 adapter, the #40 structural skeleton, and the separately evidenced #47 control-flow slice; full OPY statement/expression lowering, catalog/member/enum breadth, settings/content, locales, optimizer effects, and hooks remain lowering-dependent follow-up work. Oracle snapshots (fixtures/**/oracle.json) remain preserved reference evidence; no temporary Workshop IR is introduced here."
+      "notes": "Issue #38 exposes the bounded compiler/library/CLI surface over the released workshop-rs v0.1.11 contract. Full OPY statement/expression lowering, catalog/member/enum breadth, optimizer effects, and remaining real-project gaps stay explicit in the native corpus report; no temporary Workshop IR is introduced here."
     },
     {
       "id": "compilation/end-to-end",
@@ -722,7 +722,7 @@
         "fixtures:real-world",
         "fixtures:census/workshop-feature-census"
       ],
-      "notes": "Full OPY-to-Workshop parity remains lowering-dependent after the bounded #35 first slice; the OPY-side feature census records opaque workshop-rs#10 identities without duplicating catalog definitions. Differential harness contract is ready (compatibility/diff.py, issue #25)."
+      "notes": "Full OPY-to-Workshop parity remains broader than the declared #38 baseline. compatibility/run_native.py compiles every fixture through the versioned CLI contract and records matches, known gaps, expected failures, and inconclusive normalized-output differences without counting any unverified case as success."
     },
     {
       "id": "decompilation/workshop-to-opy",

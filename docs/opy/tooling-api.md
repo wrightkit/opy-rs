@@ -1,21 +1,32 @@
 # opy-rs Tooling API
 
-Workshop-independent tooling surface for the OPY source implementation (issue #7): a
-library API in `crates/opy-rs` (`opy_rs::tooling`) and a
-standalone CLI in `crates/opy-cli` (`opy-cli`). Both operate on `.opy` source
-only. No Workshop backend, catalog, Node, or OverPy is required or invoked.
-
-The integration boundary toward `workshop-rs` remains documented, not
-implemented: anything that needs canonical Workshop semantics is classified
-`lowering-dependent` in the support matrix and never approximated here.
+The OPY source implementation exposes Workshop-independent checking and
+inspection through `crates/opy-rs` (`opy_rs::tooling`). The
+Workshop-dependent compiler is exposed by `crates/opy-compiler`, and
+`crates/opy-cli` provides both surfaces without requiring Node or OverPy.
 
 ## Pipeline contract
 
-`check` runs the same pipeline as `compile` (preprocess (includes,
-`#!define` macros) → parse (CST) → resolve (Opy HIR)), so the two entry
-points never disagree about a project's verdict. Resolution stops at the
-Workshop-independent Opy HIR semantic model ([`hir::Program`]). There is no
-Workshop emission step.
+`check` runs the source pipeline through resolution (preprocess (includes,
+`#!define` macros) → parse (CST) → resolve (Opy HIR)). `compile` continues
+from that resolved model through canonical WIR lowering, validation, and
+localized Workshop emission. A compile report retains the source-attributed
+diagnostic when either the frontend or integration stage fails.
+
+## Compile API
+
+The Workshop-dependent compiler is exposed by opy-compiler. Its
+Compiler::compile_source_report method runs the explicit source → HIR →
+canonical WIR → validation → localized Workshop pipeline and returns a
+versioned CompileReport. Compiler::compile_source remains available when a
+caller needs the typed CompilationArtifact.
+
+The report schema version is 1. It contains compiler and catalog identities,
+compile status, exit code, failure class, source-attributed diagnostics, exact
+Workshop output, and normalized Workshop output. Frontend failures use the
+frontend class; canonical Workshop, locale, directive, and hook failures use
+the integration class. Normalized output removes line-ending and trailing
+presentation noise, while exact output preserves the emitted artifact.
 
 ## Library API (`opy_rs::tooling`)
 
@@ -131,6 +142,9 @@ documented in the matrix itself. Workshop-dependent items stay
 ```
 opy-cli check <main.opy>                          # diagnostics → stderr; 0 clean / 1 diagnostics
 opy-cli check --format json <main.opy>             # machine JSON result/diagnostics on stdout
+opy-cli compile <main.opy>                        # Workshop text → stdout
+opy-cli compile --format json <main.opy>           # versioned compile report → stdout
+opy-cli compile --language zh-CN <main.opy>        # catalog-declared locale
 opy-cli inspect <main.opy>                        # resolved model as JSON on stdout
 opy-cli support [--json] [<category|feature-id>]  # embedded matrix (or slice) as JSON
 opy-cli completion bash|zsh|fish|powershell       # static completion from the command model
@@ -159,7 +173,8 @@ unchanged:
 * `--format json` is currently available on `check`. It writes only `{ok,
   diagnostics}` JSON to stdout and returns the same 0/1 result code. `inspect`
   and `support` remain JSON by default and bypass presentation entirely.
-  If the required input path is missing, or the path cannot be read, the CLI
+  Compile format json writes the versioned compile report described above;
+  compiler failures return 1. If the required input path is missing, or the path cannot be read, the CLI
   cannot produce a machine result: it returns exit `2`, writes the human I/O
   error to stderr, and leaves stdout empty.
 
@@ -178,8 +193,7 @@ stdout.
 * Custom enums fold to constants in the HIR (reference behavior); enum
   declarations are queryable through `SemanticModel::enums`, not the HIR
   declaration list.
-* Workshop emission, decompilation, settings-section emission, and locale
-  data are `lowering-dependent` (see the support matrix). The native
-  differential suite (`crates/opy-rs/tests/differential.rs`, merged in
-  PR #13) consumes this pipeline end-to-end in `cargo test` against the
-  recorded oracle snapshots.
+* Broader Workshop emission, decompilation, and unsupported source constructs
+  remain explicit in the support matrix and the native corpus report. The
+  compile contract never counts an inconclusive normalized-output comparison
+  as successful parity.

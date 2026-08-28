@@ -40,6 +40,8 @@ pub(crate) const EXIT_CODES: &str = "EXIT CODES:
 pub(crate) enum Command {
     /// Parse, preprocess, and resolve; print diagnostics to stderr.
     Check(CheckArgs),
+    /// Compile OPY source into canonical Workshop text.
+    Compile(CompileArgs),
     /// Print the resolved program model as JSON.
     Inspect(FileArgs),
     /// Print the compatibility support matrix or a filtered slice as JSON.
@@ -60,6 +62,20 @@ pub(crate) struct CheckArgs {
     /// Output format; JSON contains only the check result and diagnostics.
     #[arg(long, value_enum, default_value_t = OutputFormatArg::Text)]
     pub(crate) format: OutputFormatArg,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct CompileArgs {
+    #[command(flatten)]
+    pub(crate) file: FileArgs,
+
+    /// Output format; JSON contains the versioned compile report.
+    #[arg(long, value_enum, default_value_t = OutputFormatArg::Text)]
+    pub(crate) format: OutputFormatArg,
+
+    /// Workshop locale declared by the canonical catalog.
+    #[arg(long, default_value = "en-US", value_name = "LOCALE")]
+    pub(crate) language: String,
 }
 
 #[derive(Debug, Args)]
