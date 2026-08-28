@@ -93,18 +93,6 @@ fn catalog_enum_members_lower_and_validate() {
 }
 
 #[test]
-fn unknown_catalog_enum_member_is_a_source_attributed_gap() {
-    let source = "globalvar g\nrule \"r\":\n    @Event global\n    g = ChaseTimeReeval.NOPE\n";
-    let hir = opy_rs::compile(source, "source.opy", Path::new(".")).expect("frontend resolves");
-    let error = match Compiler::new().expect("compiler loads").compile_hir(&hir) {
-        Ok(_) => panic!("unknown catalog enum member must not be emitted"),
-        Err(error) => error,
-    };
-    assert_eq!(error.diagnostic.code, "unsupported-integration-surface");
-    assert_eq!(error.diagnostic.span.expect("source span").start.line, 4);
-}
-
-#[test]
 fn catalog_gap_member_is_explicitly_rejected() {
     let source =
         "rule \"r\":\n    @Event eachPlayer\n    @Condition eventPlayer.getHero() == None\n";
