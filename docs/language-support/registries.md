@@ -42,7 +42,7 @@ Reference: `889d9749d1def17f146548cbddb94ea1ab015847`.
 | `lambda` | ✅ Supported |
 | `macro` | ✅ Supported |
 | `self` | 🚧 Coming soon |
-| `settings` | 🚧 Coming soon |
+| `settings` | ✅ Bounded compiler slice |
 | `main` | 🚧 Coming soon |
 | `gamemodes` | 🚧 Coming soon |
 | `heroes` | 🚧 Coming soon |
@@ -83,8 +83,8 @@ Reference: `889d9749d1def17f146548cbddb94ea1ab015847`.
 | `keepUnusedTranslations` | 🚧 Coming soon |
 | `disableTranslationSourceLines` | 🚧 Coming soon |
 | `writeToOutputFile` | 🚧 Coming soon |
-| `postCompileHook` | 🚧 Coming soon |
-| `rulePrefix`, `rulePrefixTemplate` | 🚧 Coming soon |
+| `postCompileHook` | ✅ Bounded compiler slice |
+| `rulePrefix`, `rulePrefixTemplate` | ✅ Supported |
 
 ## Annotations (`src/data/opy/annotations.ts`)
 

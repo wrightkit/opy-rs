@@ -9,9 +9,9 @@
     "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw=="
   },
   "snapshot": {
-    "date": "2026-08-24",
-    "note": "Readiness baseline for #7 through the #28/#33 Draft PR series plus the bounded #35, #40, #46, and #47 integration slices. Source implementation-supported rows include the pinned OPY syntax, directives, preprocessing, macro statements, rule directives/model, JavaScript macros, and runtime hooks. Semantic-supported rows include declaration resolution, for-loop binders, modules, keyword arguments, the declared alias surface, and the OPY-owned manifest overlay for builtin/member/enum semantics. Canonical Workshop builtin/member/enum breadth and emission remain separate lowering-dependent rows; no Workshop catalog data is copied into opy-rs. The differential corpus currently reports 0 unexpected divergences and 0 inconclusive results; its exact match and known-gap counts are generated evidence, not a support claim. #!postCompileHook is parsed/validated/recorded by the source implementation; execution against final Workshop text is lowering-dependent (#8).",
-    "asOfCommit": "c5714a4028464f19f236f54d390e7b7237e434bd"
+    "date": "2026-08-29",
+    "note": "Readiness baseline through the bounded #37 compiler slice. Settings, catalog-declared locale emission, and post-compile hooks have explicit OPY -> HIR -> WIR -> validated Workshop emission evidence. Optimizer controls remain non-blocking presentation differences; semantic replacement directives remain explicit gaps and fail at the compiler boundary until canonical lowering exists. Canonical Workshop catalog data, settings tables, locale spellings, WIR, validation, and emission remain owned by workshop-rs.",
+    "asOfCommit": "9f7c62b1958a3804780a2de7d1bd55e2fb298533"
   },
   "states": {
     "planned": "Declared surface, not yet implemented in opy-rs; evidence/provenance recorded for the implementing issue.",
@@ -369,13 +369,13 @@
       "id": "semantics/settings-emission",
       "name": "Workshop settings-section emission: key table, enum values, map/hero list elements",
       "category": "semantics",
-      "state": "lowering-dependent",
+      "state": "end-to-end-supported",
       "evidence": [
         "fixtures:synthetic/settings",
         "fixtures:real-world/6v6-adjustments/lobby/lobby.opy",
         "upstream:src/tests/customGameSettings.opy"
       ],
-      "notes": "The typed settings payload is source implementation-owned; the emission table and its domains are Workshop data owned by workshop-rs. Key-existence and leaf-kind settings validation is Workshop schema content and lowering-dependent (#8) — the core validates structure only. Emitted settings are deliberately not reparseable (round-trip boundary)."
+      "notes": "Settings lower directly into the neutral workshop-rs carrier; workshop-rs owns key/value validation, locale spellings, and emission. Emitted settings are deliberately not reparseable (round-trip boundary)."
     },
     {
       "id": "preprocessing/include",
@@ -428,7 +428,7 @@
         "fixtures:synthetic/issue-29-directives",
         "upstream:src/data/opy/preprocessing.ts"
       ],
-      "notes": "#8/workshop-rs owns optimizer execution, replacement rewrites, generated translation helpers, and final Workshop output; opy-rs does not approximate them."
+      "notes": "Rule-prefix metadata is already reflected in HIR rule names. Optimizer controls remain non-blocking presentation differences. The compiler rejects replacement directives at their source anchor until a canonical lowering and corpus evidence exist; it does not silently drop or approximate semantic rewrites."
     },
     {
       "id": "macros/definitions",
@@ -463,20 +463,21 @@
         "test:opy-rs-differential",
         "fixtures:real-world/overpy-meipocalypse"
       ],
-      "notes": "Issue #6 + #7 part B. `#!define name(args) __script__(\"path.js\")` parsed (root-relative script resolution, script-not-found at the define site like the reference's ENOENT), expanded through opy_macro_js::MacroRuntime with the reference's var-injection ABI, indentation rule, and string-only completion contract — compile-time expansion executes and is source-supported. `#!postCompileHook` is parsed, validated, and recorded (duplicate rejection); the source implementation never executes the hook, so no Workshop payload is fabricated. Structured script-* diagnostics carry script provenance. Catalog constants and post-compile-hook Workshop-output execution stay lowering-dependent (see hooks/post-compile-workshop, issue #8); `#!require` does not exist in the pinned reference."
+      "notes": "Issue #6 + #7 part B. `#!define name(args) __script__(\"path.js\")` parsed (root-relative script resolution, script-not-found at the define site like the reference's ENOENT), expanded through opy_macro_js::MacroRuntime with the reference's var-injection ABI, indentation rule, and string-only completion contract — compile-time expansion executes and is source-supported. `#!postCompileHook` is parsed, validated, and recorded (duplicate rejection); compiler execution against final Workshop text is tracked by hooks/post-compile-workshop. Structured script-* diagnostics carry script provenance. Catalog constants remain lowering-dependent; `#!require` does not exist in the pinned reference."
     },
     {
       "id": "hooks/post-compile-workshop",
       "name": "Post-compile hook execution against the final Workshop text",
       "category": "macros",
-      "state": "lowering-dependent",
+      "state": "end-to-end-supported",
       "evidence": [
         "upstream:src/tests/postCompileHook.opy",
         "upstream:src/quickjs.ts",
         "test:opy-macro-js-hooks",
-        "test:opy-rs-macro-integration"
+        "test:opy-rs-macro-integration",
+        "test:opy-compiler"
       ],
-      "notes": "Issue #6 + #8. The runtime's hook ABI (content injection, console capture, result/error semantics, 2000 ms budget) is implemented and tested on synthetic content in opy-macro-js; the source implementation parses, validates, and records #!postCompileHook but never executes it. Real hook execution receives the final Workshop text from lowering and is inventory-only until the workshop-rs integration stage (#8); the source implementation never fabricates a Workshop payload."
+      "notes": "The compiler runs the bounded opy-macro-js hook only after successful workshop-rs emission, passes the exact emitted Workshop text, and exposes the string completion as final output; hook failures retain both the directive anchor and structured script provenance."
     },
     {
       "id": "directives/rule-annotations",
@@ -537,12 +538,13 @@
       "id": "translations/locale-emission",
       "name": "Localized Workshop output (--language flag, localizedStrings data)",
       "category": "translations",
-      "state": "lowering-dependent",
+      "state": "end-to-end-supported",
       "evidence": [
         "upstream:src/data/localizedStrings.ts",
-        "oracle:CLI --language en-US invocation recorded in compatibility/run_oracle.py"
+        "oracle:CLI --language en-US invocation recorded in compatibility/run_oracle.py",
+        "test:opy-compiler"
       ],
-      "notes": "Locale data is Workshop-owned content (workshop-rs); the oracle harness pins en-US as the evidence language."
+      "notes": "Compiler locale selection delegates to workshop-rs catalog coverage and rejects undeclared locales explicitly; missing per-identity mappings remain fail-explicit."
     },
     {
       "id": "optimization/controls",
@@ -565,7 +567,7 @@
         "fixtures:synthetic/issue-29-directives",
         "upstream:src/data/opy/preprocessing.ts"
       ],
-      "notes": "#8/workshop-rs owns optimizer execution and any Workshop element-count or replacement consequences; output-text identity is not required."
+      "notes": "Optimizer transformations and replacement rewrites remain lowering-dependent. Optimizer controls remain non-blocking; replacement directives fail explicitly rather than silently changing Workshop output."
     },
     {
       "id": "optimization/emission-form",
@@ -749,8 +751,8 @@
       "planned": 0,
       "source-supported": 23,
       "semantic-supported": 13,
-      "lowering-dependent": 13,
-      "end-to-end-supported": 7
+      "lowering-dependent": 10,
+      "end-to-end-supported": 10
     },
     "byCategory": {
       "syntax": 14,

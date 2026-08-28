@@ -18,7 +18,7 @@ upstream README, `overpy.d.ts`, `cli.js`, compiler/decompiler sources,
 | `#!extension` and extension-point accounting | 🚧 Coming soon | Output metadata is part of the contract. |
 | `macro name(params)` function/constant macros | ✅ Supported | Defaults, keywords and member macros differ. |
 | `__script__` JavaScript macros | 🚧 Coming soon | QuickJS return ABI and limits are observable. |
-| `#!postCompileHook` | 🚧 Coming soon | Parsing is not execution against final Workshop text. |
+| `#!postCompileHook` | ✅ Supported (compiler) | Runs after successful canonical Workshop emission against the exact emitted text; the string result is final output. |
 
 ## Compilation, CLI and API
 
@@ -28,7 +28,7 @@ upstream README, `overpy.d.ts`, `cli.js`, compiler/decompiler sources,
 | CLI compile/check invocation and structured diagnostics | ✅ Supported | Exit behavior and source attribution are contractual. |
 | Upstream JS `compile(content, language, rootPath, mainFileName)` API | 🚧 Coming soon | API shape audited; Rust parity is incomplete. |
 | Compile metadata: variables, subroutines, warnings, translations, element count | 🚧 Coming soon | Fields have independent completeness requirements. |
-| Localized Workshop text and custom settings emission | 🚧 Coming soon | Canonical Workshop semantics remain in `workshop-rs`. |
+| Localized Workshop text and custom settings emission | ✅ Supported (catalog-declared) | Canonical settings and locale semantics remain in `workshop-rs`. |
 | Observable optimization/replacement effects | 🚧 Coming soon | Formatting is not a target unless observable. |
 
 ## Decompilation and round trips

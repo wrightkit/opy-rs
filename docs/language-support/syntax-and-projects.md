@@ -65,8 +65,8 @@ Source: pinned OverPy `9.7.10`, content commit
 
 | Feature | Status | Notes |
 | --- | --- | --- |
-| `settings { ... }` custom-game-settings block | 🚧 Coming soon | Typed source representation exists; complete behavior is incomplete. |
-| Schema keys, enum values and map/hero list settings | 🚧 Coming soon | Audited against upstream schema/data. |
+| `settings { ... }` custom-game-settings block | ✅ Bounded compiler slice | Lowers through Workshop-owned validation and canonical emission. |
+| Schema keys, enum values and map/hero list settings | ✅ Bounded compiler slice | The compiler delegates the supported slice to Workshop-owned settings tables. |
 | `#!translations` and `.po` translation sources | 🚧 Coming soon | Declaration and output lifecycle are separate. |
 | `_`, `__`, `___` translation functions | 🚧 Coming soon | One- and two-argument modes differ. |
-| Localized output language selection | 🚧 Coming soon | Upstream supports all in-game languages. |
+| Localized output language selection | ✅ Bounded compiler slice | The compiler accepts catalog-declared locales and rejects undeclared locales explicitly. |

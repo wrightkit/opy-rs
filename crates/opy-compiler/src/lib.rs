@@ -25,6 +25,16 @@ pub struct IntegrationDiagnostic {
     pub code: String,
     pub message: String,
     pub span: Option<HirSpan>,
+    pub script: Option<Box<ScriptDiagnostic>>,
+}
+
+/// Script-runtime provenance retained alongside the OPY directive anchor.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScriptDiagnostic {
+    pub source_name: Option<String>,
+    pub line: Option<u32>,
+    pub column: Option<u32>,
+    pub stack: Option<String>,
 }
 
 impl IntegrationDiagnostic {
@@ -33,6 +43,7 @@ impl IntegrationDiagnostic {
             code: code.into(),
             message: message.into(),
             span,
+            script: None,
         }
     }
 }
@@ -47,6 +58,28 @@ impl IntegrationError {
     fn new(code: impl Into<String>, message: impl Into<String>, span: Option<HirSpan>) -> Self {
         Self {
             diagnostic: IntegrationDiagnostic::new(code, message, span),
+        }
+    }
+
+    fn post_compile_hook(error: opy_macro_js::MacroError, span: Option<HirSpan>) -> Self {
+        let message = error.to_string();
+        let script = match error {
+            opy_macro_js::MacroError::Script(error) => Some(Box::new(ScriptDiagnostic {
+                source_name: error.source_name,
+                line: error.line,
+                column: error.column,
+                stack: error.stack,
+            })),
+            opy_macro_js::MacroError::InvalidResult { .. }
+            | opy_macro_js::MacroError::Internal(_) => None,
+        };
+        Self {
+            diagnostic: IntegrationDiagnostic {
+                code: "post-compile-hook".to_string(),
+                message,
+                span,
+                script,
+            },
         }
     }
 }
@@ -186,6 +219,23 @@ impl Compiler {
     /// Lower a resolved OPY HIR program into canonical WIR, validate it
     /// against the canonical catalog, and emit deterministic en-US Workshop.
     pub fn compile_hir(&self, hir: &hir::Program) -> Result<CompilationArtifact, IntegrationError> {
+        self.compile_hir_with_locale(hir, &Locale::new("en-US"))
+    }
+
+    /// Lower and emit using a locale declared by the canonical catalog.
+    pub fn compile_hir_with_locale(
+        &self,
+        hir: &hir::Program,
+        locale: &Locale,
+    ) -> Result<CompilationArtifact, IntegrationError> {
+        if !self.catalog.supports(locale) {
+            return Err(IntegrationError::new(
+                "locale-unsupported",
+                format!("workshop catalog does not declare locale '{locale}'"),
+                None,
+            ));
+        }
+        reject_unlowered_directives(hir)?;
         let mut lowering = Lowering::new(self, hir)?;
         lowering.copy_files()?;
         lowering.lower_declarations()?;
@@ -205,19 +255,96 @@ impl Compiler {
             },
         )?;
         let emitted =
-            workshop_rs::emitter::emit(&lowering.wir, &self.catalog, &Locale::new("en-US"))
-                .map_err(|error| {
-                    let span = workshop_error_span(&error)
-                        .and_then(|span| lowering.hir_span_from_workshop(span));
-                    IntegrationError::new("workshop-emission", error.to_string(), span)
-                })?;
+            workshop_rs::emitter::emit(&lowering.wir, &self.catalog, locale).map_err(|error| {
+                let span = workshop_error_span(&error)
+                    .and_then(|span| lowering.hir_span_from_workshop(span));
+                IntegrationError::new("workshop-emission", error.to_string(), span)
+            })?;
 
         Ok(CompilationArtifact {
             wir: lowering.wir,
+            final_output: emitted.clone(),
             emitted,
             catalog_identity: self.catalog.identity(),
+            hook_console_output: Vec::new(),
         })
     }
+
+    /// Compile source and run a declared post-compile hook only after the
+    /// final Workshop emission has succeeded.
+    pub fn compile_source(
+        &self,
+        source: &str,
+        main_path: &str,
+        root: &std::path::Path,
+        locale: &Locale,
+    ) -> Result<CompilationArtifact, IntegrationError> {
+        let outcome = opy_rs::compile_with_overlay_outcome(
+            source,
+            main_path,
+            root,
+            &std::collections::BTreeMap::new(),
+        );
+        let hir = outcome.hir.ok_or_else(|| {
+            let error = outcome
+                .error
+                .expect("failed frontend compile has diagnostic");
+            IntegrationError::new(
+                error.code,
+                error.message,
+                error.span.map(hir_span_from_diag),
+            )
+        })?;
+        let hook = outcome.post_compile_hook;
+        let mut artifact = self.compile_hir_with_locale(&hir, locale)?;
+        if let Some(hook) = hook {
+            let runtime = opy_macro_js::MacroRuntime::new(opy_macro_js::Limits::default());
+            let result = runtime
+                .run_hook(&hook.source, &artifact.emitted, &hook.script)
+                .map_err(|error| {
+                    IntegrationError::post_compile_hook(error, hook.span.map(hir_span_from_diag))
+                })?;
+            artifact.final_output = result.text;
+            artifact.hook_console_output = result.console_output;
+        }
+        Ok(artifact)
+    }
+}
+
+fn reject_unlowered_directives(hir: &hir::Program) -> Result<(), IntegrationError> {
+    if let Some(replacement) = hir.preprocessing.replacements.first() {
+        let span = hir
+            .preprocessing
+            .directives
+            .iter()
+            .find(|directive| directive.name.starts_with("replace"))
+            .and_then(|directive| directive.span)
+            .or(replacement.span);
+        return Err(IntegrationError::new(
+            "backend-directive-unsupported",
+            format!(
+                "replacement directive '{}' has no canonical workshop-rs lowering",
+                replacement.value
+            ),
+            span,
+        ));
+    }
+    if let Some(replacement) = hir
+        .preprocessing
+        .directives
+        .iter()
+        .find(|directive| directive.name.starts_with("replace"))
+    {
+        return Err(IntegrationError::new(
+            "backend-directive-unsupported",
+            format!(
+                "replacement directive '{}' has no canonical workshop-rs lowering",
+                replacement.name
+            ),
+            replacement.span,
+        ));
+    }
+    Ok(())
 }
 
 /// A validated WIR program and its emitted Workshop artifact.
@@ -225,6 +352,8 @@ pub struct CompilationArtifact {
     pub wir: Program,
     pub emitted: String,
     pub catalog_identity: CatalogIdentity,
+    pub final_output: String,
+    pub hook_console_output: Vec<String>,
 }
 
 fn convert_settings(settings: opy_rs::hir::Settings) -> workshop_rs::settings::Settings {
@@ -2620,6 +2749,20 @@ fn modify_catalog_name_from_str(op: &str) -> Option<&'static str> {
     }
 }
 
+fn hir_span_from_diag(span: opy_rs::diag::Span) -> HirSpan {
+    HirSpan {
+        file: span.file,
+        start: hir::Position {
+            line: span.start.line,
+            col: span.start.col,
+        },
+        end: hir::Position {
+            line: span.end.line,
+            col: span.end.col,
+        },
+    }
+}
+
 fn workshop_error_span(error: &workshop_rs::WorkshopError) -> Option<WorkshopSpan> {
     match error {
         workshop_rs::WorkshopError::Unknown { span, .. }
@@ -2635,7 +2778,7 @@ mod tests {
     use super::{Compiler, WORKSHOP_RS_VERSION, cross_check_manifest};
     use opy_rs::manifest::Manifest;
     use std::path::Path;
-    use workshop_rs::catalog::Catalog;
+    use workshop_rs::catalog::{Catalog, Locale};
 
     #[test]
     fn public_contract_is_pinned_and_manifest_links_are_checked() {
@@ -3429,6 +3572,192 @@ rule "main":
             !artifact
                 .emitted
                 .contains("Set Player Variable(Event Player, q,")
+        );
+    }
+
+    #[test]
+    fn settings_lower_through_workshop_owned_emission() {
+        let compiler = Compiler::new().unwrap();
+        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../compatibility/fixtures/synthetic/settings");
+        let source = std::fs::read_to_string(fixture.join("source.opy")).unwrap();
+        let hir = opy_rs::compile(&source, "source.opy", &fixture).unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        let oracle: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(fixture.join("oracle.json")).unwrap())
+                .unwrap();
+        let expected = oracle["compile"]["workshop"]
+            .as_str()
+            .unwrap()
+            .split("\n\nrule")
+            .next()
+            .unwrap();
+        let actual = artifact.emitted.split("\n\nrule").next().unwrap();
+        assert_eq!(
+            normalize_workshop_structural_whitespace(actual),
+            normalize_workshop_structural_whitespace(expected)
+        );
+    }
+
+    #[test]
+    fn unsupported_locale_has_no_fabricated_source_span() {
+        let compiler = Compiler::new().unwrap();
+        let hir = opy_rs::compile(
+            "#!translations en\nrule \"r\":\n    @Event global\n    pass\n",
+            "locale.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let error = match compiler.compile_hir_with_locale(&hir, &Locale::new("xx-XX")) {
+            Ok(_) => panic!("unsupported locale unexpectedly compiled"),
+            Err(error) => error,
+        };
+        assert_eq!(error.diagnostic.code, "locale-unsupported");
+        assert_eq!(error.diagnostic.span, None);
+    }
+
+    #[test]
+    fn locale_selection_emits_catalog_localized_workshop() {
+        let compiler = Compiler::new().unwrap();
+        let hir = opy_rs::compile(
+            "rule \"locale\":\n    @Event global\n    disableInspector()\n",
+            "locale.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let artifact = compiler
+            .compile_hir_with_locale(&hir, &Locale::new("zh-CN"))
+            .unwrap();
+        assert!(artifact.emitted.contains("规则 (\"locale\")"));
+        assert!(artifact.emitted.contains("禁用查看器录制"));
+    }
+
+    #[test]
+    fn unsupported_backend_directives_fail_at_their_source_anchor() {
+        let compiler = Compiler::new().unwrap();
+        let hir = opy_rs::compile(
+            "#!replace0ByCapturePercentage\nrule \"r\":\n    @Event global\n    pass\n",
+            "directives.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let error = match compiler.compile_hir(&hir) {
+            Ok(_) => panic!("backend directive unexpectedly compiled"),
+            Err(error) => error,
+        };
+        assert_eq!(error.diagnostic.code, "backend-directive-unsupported");
+        assert_eq!(error.diagnostic.span.unwrap().start.line, 1);
+    }
+
+    #[test]
+    fn optimizer_directives_remain_non_blocking_presentation_controls() {
+        let compiler = Compiler::new().unwrap();
+        let hir = opy_rs::compile(
+            "#!disableOptimizations\nrule \"r\":\n    @Event global\n    pass\n",
+            "optimization.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        compiler.compile_hir(&hir).unwrap();
+    }
+
+    #[test]
+    fn replacement_directive_records_are_checked_even_if_final_state_is_restored() {
+        let compiler = Compiler::new().unwrap();
+        let mut hir = opy_rs::compile(
+            "#!replace0ByCapturePercentage\nrule \"r\":\n    @Event global\n    pass\n",
+            "directives.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        hir.preprocessing.replacements.clear();
+        let error = match compiler.compile_hir(&hir) {
+            Ok(_) => panic!("replacement directive unexpectedly compiled"),
+            Err(error) => error,
+        };
+        assert_eq!(error.diagnostic.code, "backend-directive-unsupported");
+        assert_eq!(error.diagnostic.span.unwrap().start.line, 1);
+    }
+
+    #[test]
+    fn active_replacement_state_is_checked_without_directive_history() {
+        let compiler = Compiler::new().unwrap();
+        let mut hir = opy_rs::compile(
+            "#!replace0ByCapturePercentage\nrule \"r\":\n    @Event global\n    pass\n",
+            "directives.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        hir.preprocessing.directives.clear();
+        hir.preprocessing.replacements[0].span = None;
+        let error = match compiler.compile_hir(&hir) {
+            Ok(_) => panic!("active replacement state unexpectedly compiled"),
+            Err(error) => error,
+        };
+        assert_eq!(error.diagnostic.code, "backend-directive-unsupported");
+        assert_eq!(error.diagnostic.span, None);
+    }
+
+    #[test]
+    fn post_compile_hook_receives_exact_emitted_workshop() {
+        let compiler = Compiler::new().unwrap();
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../opy-rs/tests/fixtures/macros");
+        let source = "#!postCompileHook \"hook.js\"\n\nrule \"setup\":\n    pass\n";
+        let artifact = compiler
+            .compile_source(source, "hook.opy", &root, &Locale::new("en-US"))
+            .unwrap();
+        assert!(artifact.emitted.contains("rule (\"setup\")"));
+        assert!(artifact.final_output.contains("rule (\"transformed\")"));
+        assert_ne!(artifact.final_output, artifact.emitted);
+    }
+
+    #[test]
+    fn post_compile_hook_failure_keeps_script_provenance_and_directive_anchor() {
+        let compiler = Compiler::new().unwrap();
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../opy-rs/tests/fixtures/macros");
+        let source = "#!postCompileHook \"hook-boom.js\"\n\nrule \"setup\":\n    pass\n";
+        let error = match compiler.compile_source(source, "hook.opy", &root, &Locale::new("en-US"))
+        {
+            Ok(_) => panic!("failing post-compile hook unexpectedly compiled"),
+            Err(error) => error,
+        };
+        assert_eq!(error.diagnostic.code, "post-compile-hook");
+        assert_eq!(error.diagnostic.span.unwrap().start.line, 1);
+        let script = error.diagnostic.script.unwrap();
+        assert_eq!(script.source_name.as_deref(), Some("hook-boom.js"));
+        assert_eq!(script.line, Some(1));
+        assert!(script.stack.unwrap().contains("hook-boom.js:1"));
+    }
+
+    fn normalize_workshop_structural_whitespace(text: &str) -> String {
+        let mut normalized = String::with_capacity(text.len());
+        let mut quote = None;
+        let mut escaped = false;
+        for character in text.chars() {
+            if let Some(delimiter) = quote {
+                normalized.push(character);
+                if escaped {
+                    escaped = false;
+                } else if character == '\\' {
+                    escaped = true;
+                } else if character == delimiter {
+                    quote = None;
+                }
+            } else if matches!(character, '\"' | '\'') {
+                quote = Some(character);
+                normalized.push(character);
+            } else if !character.is_whitespace() {
+                normalized.push(character);
+            }
+        }
+        normalized
+    }
+
+    #[test]
+    fn settings_whitespace_normalization_preserves_quoted_values() {
+        assert_ne!(
+            normalize_workshop_structural_whitespace("Description: \"a b\""),
+            normalize_workshop_structural_whitespace("Description: \"ab\"")
         );
     }
 }

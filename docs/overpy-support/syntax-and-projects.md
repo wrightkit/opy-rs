@@ -65,8 +65,8 @@ Source: pinned OverPy `9.7.10`, content commit
 
 | Feature | Status | Notes |
 | --- | --- | --- |
-| `settings { ... }` custom-game-settings block | 🚧 Coming soon | Typed source representation exists; complete behavior is incomplete. |
-| Schema keys, enum values and map/hero list settings | 🚧 Coming soon | Audited against upstream schema/data. |
+| `settings { ... }` custom-game-settings block | ✅ Supported | Lowered through the canonical `workshop-rs` settings carrier and emitter. |
+| Schema keys, enum values and map/hero list settings | ✅ Supported (bounded) | Validation and spellings come from the Workshop-owned catalog; unsupported keys remain explicit failures. |
 | `#!translations` and `.po` translation sources | 🚧 Coming soon | Declaration and output lifecycle are separate. |
 | `_`, `__`, `___` translation functions | 🚧 Coming soon | One- and two-argument modes differ. |
-| Localized output language selection | 🚧 Coming soon | Upstream supports all in-game languages. |
+| Localized output language selection | ✅ Supported (catalog-declared) | Undeclared locales and missing mappings fail explicitly; no guessed fallback. |
