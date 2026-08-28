@@ -14,11 +14,11 @@ upstream README, `overpy.d.ts`, `cli.js`, compiler/decompiler sources,
 | `#!mainFile`, `#!include`, `#!excludeVariablesInCompilation` | ✅ Supported | Selection and output filtering have separate effects. |
 | Optimization controls (`#!enableOptimizations`, `#!disableOptimizations`, `#!optimize*`) | 🚧 Coming soon | Recognition is not backend-effect support. |
 | Replacement directives (`#!replace0By*`, team/string replacements) | 🚧 Coming soon | Each replacement target has its own output contract. |
-| `#!rulePrefix` and `#!rulePrefixTemplate` | 🚧 Coming soon | Prefix text and placeholders are separate. |
+| `#!rulePrefix` and `#!rulePrefixTemplate` | ✅ Supported | Source preprocessing applies the resulting rule names before compiler lowering. |
 | `#!extension` and extension-point accounting | 🚧 Coming soon | Output metadata is part of the contract. |
 | `macro name(params)` function/constant macros | ✅ Supported | Defaults, keywords and member macros differ. |
 | `__script__` JavaScript macros | 🚧 Coming soon | QuickJS return ABI and limits are observable. |
-| `#!postCompileHook` | 🚧 Coming soon | Parsing is not execution against final Workshop text. |
+| `#!postCompileHook` | ✅ Bounded compiler slice | Runs only after final Workshop emission; failures keep directive and script provenance. |
 
 ## Compilation, CLI and API
 
@@ -28,7 +28,7 @@ upstream README, `overpy.d.ts`, `cli.js`, compiler/decompiler sources,
 | CLI compile/check invocation and structured diagnostics | ✅ Supported | Exit behavior and source attribution are contractual. |
 | Upstream JS `compile(content, language, rootPath, mainFileName)` API | 🚧 Coming soon | API shape audited; Rust parity is incomplete. |
 | Compile metadata: variables, subroutines, warnings, translations, element count | 🚧 Coming soon | Fields have independent completeness requirements. |
-| Localized Workshop text and custom settings emission | 🚧 Coming soon | Canonical Workshop semantics remain in `workshop-rs`. |
+| Localized Workshop text and custom settings emission | ✅ Bounded compiler slice | The compiler delegates validation and emission to `workshop-rs`; undeclared locales fail explicitly. |
 | Observable optimization/replacement effects | 🚧 Coming soon | Formatting is not a target unless observable. |
 
 ## Decompilation and round trips

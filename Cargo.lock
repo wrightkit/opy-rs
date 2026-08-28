@@ -379,6 +379,7 @@ dependencies = [
 name = "opy-compiler"
 version = "0.1.2"
 dependencies = [
+ "opy-macro-js",
  "opy-rs",
  "serde_json",
  "workshop-rs",

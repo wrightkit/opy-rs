@@ -37,8 +37,8 @@ pub struct CheckOutcome {
   the file registry to `(file id, path, line/col)`.
 * `PostCompileHook`: the declared `#!postCompileHook` script (root-relative
   path plus directive span), present only when the source declared one and
-  the project checked clean. It is a declaration record only — the source implementation
-  never executes the hook (execution is lowering-dependent, issue #8).
+  the project checked clean. It is a declaration record only; the compiler
+  executes it after successful final Workshop emission.
 
 `SemanticModel` wraps the resolved program and answers queries:
 

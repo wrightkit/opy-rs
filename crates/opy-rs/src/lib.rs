@@ -147,6 +147,8 @@ pub struct CompileOutcome {
 pub struct PostCompileHookRecord {
     /// The script path as declared (root-relative).
     pub script: String,
+    /// The resolved script source, retained for the backend hook ABI.
+    pub source: String,
     /// The directive's source span, when known.
     pub span: Option<Span>,
 }
@@ -180,6 +182,7 @@ pub fn compile_with_overlay_outcome(
     // `PostCompileHookRecord`).
     let post_compile_hook = outcome.post_compile_hook.map(|hook| PostCompileHookRecord {
         script: hook.path,
+        source: hook.source,
         span: Some(hook.span),
     });
     CompileOutcome {
