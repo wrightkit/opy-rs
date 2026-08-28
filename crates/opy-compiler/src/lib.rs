@@ -188,7 +188,6 @@ impl Compiler {
     pub fn compile_hir(&self, hir: &hir::Program) -> Result<CompilationArtifact, IntegrationError> {
         let mut lowering = Lowering::new(self, hir)?;
         lowering.copy_files()?;
-        lowering.reject_unsupported_metadata()?;
         lowering.lower_declarations()?;
         lowering.lower_rules()?;
 
@@ -226,6 +225,72 @@ pub struct CompilationArtifact {
     pub wir: Program,
     pub emitted: String,
     pub catalog_identity: CatalogIdentity,
+}
+
+fn convert_settings(settings: opy_rs::hir::Settings) -> workshop_rs::settings::Settings {
+    workshop_rs::settings::Settings {
+        span: settings.span.map(convert_settings_span),
+        children: settings
+            .children
+            .into_iter()
+            .map(convert_settings_node)
+            .collect(),
+    }
+}
+
+fn convert_settings_node(node: opy_rs::hir::SettingsNode) -> workshop_rs::settings::SettingsNode {
+    use opy_rs::hir::SettingsNode as SourceNode;
+    use workshop_rs::settings::{SettingsListElement, SettingsNode as TargetNode};
+
+    match node {
+        SourceNode::Group {
+            name,
+            children,
+            span,
+        } => TargetNode::Group {
+            name,
+            children: children.into_iter().map(convert_settings_node).collect(),
+            span: span.map(convert_settings_span),
+        },
+        SourceNode::Number { name, value, span } => TargetNode::Number {
+            name,
+            value,
+            span: span.map(convert_settings_span),
+        },
+        SourceNode::Bool { name, value, span } => TargetNode::Bool {
+            name,
+            value,
+            span: span.map(convert_settings_span),
+        },
+        SourceNode::String { name, value, span } => TargetNode::String {
+            name,
+            value,
+            span: span.map(convert_settings_span),
+        },
+        SourceNode::List {
+            name,
+            elements,
+            span,
+        } => TargetNode::List {
+            name,
+            elements: elements
+                .into_iter()
+                .map(|element| SettingsListElement {
+                    value: element.value,
+                    span: element.span.map(convert_settings_span),
+                })
+                .collect(),
+            span: span.map(convert_settings_span),
+        },
+    }
+}
+
+fn convert_settings_span(span: HirSpan) -> WorkshopSpan {
+    WorkshopSpan::new(
+        workshop_rs::source::FileId::from_index(span.file as usize),
+        WorkshopPosition::new(span.start.line, span.start.col),
+        WorkshopPosition::new(span.end.line, span.end.col),
+    )
 }
 
 struct Lowering<'a> {
@@ -268,6 +333,11 @@ impl<'a> Lowering<'a> {
     }
 
     fn copy_files(&mut self) -> Result<(), IntegrationError> {
+        self.wir.settings = self
+            .hir
+            .settings
+            .clone()
+            .map(|settings| convert_settings(settings));
         for file in &self.hir.files {
             if self.files.contains_key(&file.id) {
                 return Err(IntegrationError::new(
@@ -279,16 +349,6 @@ impl<'a> Lowering<'a> {
             let id = self.wir.files.push(SourceFile::new(file.path.clone()));
             self.files.insert(file.id, id);
             self.wir_to_hir_files.push(file.id);
-        }
-        Ok(())
-    }
-
-    fn reject_unsupported_metadata(&self) -> Result<(), IntegrationError> {
-        if let Some(settings) = &self.hir.settings {
-            return Err(self.unsupported(
-                "custom-game settings lowering is outside #46",
-                settings.span,
-            ));
         }
         Ok(())
     }
