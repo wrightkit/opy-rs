@@ -1148,6 +1148,14 @@ impl<'a> Lowering<'a> {
                         self.lower_action_call(name, args, *span).map(|action| vec![action])
                     }
                 }
+                Expr::ReceiverCall {
+                    receiver,
+                    name,
+                    args,
+                    span: call_span,
+                } => self
+                    .lower_receiver_action_call(receiver, name, args, *call_span)
+                    .map(|action| vec![action]),
                 _ => Err(self.unsupported(
                     "only action calls are currently representable as expression statements in canonical WIR",
                     *span,
@@ -1721,6 +1729,93 @@ impl<'a> Lowering<'a> {
         }))
     }
 
+    fn lower_receiver_action_call(
+        &mut self,
+        receiver: &Expr,
+        name: &str,
+        args: &[Expr],
+        span: Option<HirSpan>,
+    ) -> Result<wir::ActionId, IntegrationError> {
+        let function = self
+            .compiler
+            .manifest
+            .resolve_member(name)
+            .ok_or_else(|| self.unsupported(format!("unknown member action '{name}'"), span))?;
+        if !matches!(function.kind, FunctionKind::MemberAction) {
+            return Err(self.unsupported(format!("'{name}' is not a member action"), span));
+        }
+
+        // `append` is an OPY mutation, represented by the canonical variable
+        // modify actions rather than a catalog action call.
+        if function.id == "append" {
+            let [value] = args else {
+                return Err(self.unsupported("append requires exactly one argument", span));
+            };
+            let value = self.lower_value(value)?;
+            return match receiver {
+                Expr::GlobalVar {
+                    name,
+                    span: target_span,
+                } => {
+                    let variable = *self.globals.get(name).ok_or_else(|| {
+                        self.unsupported(format!("unknown global variable '{name}'"), *target_span)
+                    })?;
+                    Ok(self.wir.actions.push(Action::ModifyGlobalVariable {
+                        variable,
+                        op: wir::ModifyOp::AppendToArray,
+                        value,
+                        span: self.wir_span(span)?,
+                        target_span: self.wir_span(*target_span)?,
+                    }))
+                }
+                Expr::PlayerVar {
+                    player,
+                    name,
+                    span: target_span,
+                } => {
+                    let variable = *self.players.get(name).ok_or_else(|| {
+                        self.unsupported(format!("unknown player variable '{name}'"), *target_span)
+                    })?;
+                    let player = self.lower_value(player)?;
+                    Ok(self.wir.actions.push(Action::ModifyPlayerVariable {
+                        player,
+                        variable,
+                        op: wir::ModifyOp::AppendToArray,
+                        value,
+                        span: self.wir_span(span)?,
+                        target_span: self.wir_span(*target_span)?,
+                    }))
+                }
+                _ => Err(self.unsupported(
+                    "append requires a global or player variable receiver",
+                    receiver.span().copied().or(span),
+                )),
+            };
+        }
+
+        let catalog_id = function.catalog_id.as_ref().ok_or_else(|| {
+            self.unsupported(
+                format!(
+                    "member action '{}' has no canonical catalog identity",
+                    function.id
+                ),
+                span,
+            )
+        })?;
+        let mut lowered = Vec::with_capacity(args.len() + 1);
+        lowered.push(self.lower_value(receiver)?);
+        lowered.extend(
+            args.iter()
+                .map(|arg| self.lower_value(arg))
+                .collect::<Result<Vec<_>, _>>()?,
+        );
+        Ok(self.wir.actions.push(Action::Call {
+            name: catalog_id.clone(),
+            args: lowered,
+            span: self.wir_span(span)?,
+        }))
+    }
+
     fn lower_value(&mut self, expr: &Expr) -> Result<wir::ValueId, IntegrationError> {
         let span = expr.span().copied();
         let value = match expr {
@@ -1750,10 +1845,23 @@ impl<'a> Lowering<'a> {
             Expr::EventPlayer { .. } => Value::EventPlayer,
             Expr::Enum {
                 value_type, value, ..
-            } => Value::Enum {
-                value_type: value_type.clone(),
-                value: value.clone(),
-            },
+            } => {
+                if self
+                    .compiler
+                    .catalog
+                    .enum_spelling(value_type, &Locale::new("en-US"), value)
+                    .is_none()
+                {
+                    return Err(self.unsupported(
+                        format!("unknown catalog enum member '{value_type}.{value}'"),
+                        span,
+                    ));
+                }
+                Value::Enum {
+                    value_type: value_type.clone(),
+                    value: value.clone(),
+                }
+            }
             Expr::Array { elements, .. } => Value::Array(
                 elements
                     .iter()
@@ -1949,6 +2057,52 @@ impl<'a> Lowering<'a> {
                             .map(|arg| self.lower_value(arg))
                             .collect::<Result<Vec<_>, _>>()?,
                     }
+                }
+            }
+            Expr::ReceiverCall {
+                receiver,
+                name,
+                args,
+                ..
+            } => {
+                let function = self.compiler.manifest.resolve_member(name).ok_or_else(|| {
+                    self.unsupported(format!("unknown member value '{name}'"), span)
+                })?;
+                if !matches!(function.kind, FunctionKind::MemberValue) {
+                    return Err(self.unsupported(format!("'{name}' is not a member value"), span));
+                }
+                let catalog_id = function.catalog_id.as_ref().ok_or_else(|| {
+                    self.unsupported(
+                        format!(
+                            "member value '{}' has no canonical catalog identity",
+                            function.id
+                        ),
+                        span,
+                    )
+                })?;
+                let mut lowered = Vec::with_capacity(args.len() + 1);
+                lowered.push(self.lower_value(receiver)?);
+                lowered.extend(
+                    args.iter()
+                        .map(|arg| self.lower_value(arg))
+                        .collect::<Result<Vec<_>, _>>()?,
+                );
+                Value::Call {
+                    name: catalog_id.clone(),
+                    args: lowered,
+                }
+            }
+            Expr::Member {
+                receiver, member, ..
+            } => {
+                let receiver = self.lower_value(receiver)?;
+                let member = self.wir.values.push(ValueNode::new(
+                    Value::String(member.clone()),
+                    self.wir_span(span)?,
+                ));
+                Value::Call {
+                    name: "memberAccess".to_string(),
+                    args: vec![receiver, member],
                 }
             }
             _ => {
