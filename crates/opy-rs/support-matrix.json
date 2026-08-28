@@ -233,9 +233,11 @@
       "state": "lowering-dependent",
       "evidence": [
         "probes:catalog-only-names",
+        "fixtures:synthetic/receiver-calls",
+        "fixtures:synthetic/chase-condition-agentlab",
         "upstream:src/data/opy/functions.ts"
       ],
-      "notes": "Issue #30/#8. Canonical Workshop action/value catalog breadth, catalog existence, content domains, localized spellings, and emission are owned by workshop-rs. The integration adapter cross-checks manifest catalogId links; opy-rs does not copy the catalog or claim full 225/267 coverage."
+      "notes": "Issue #42 closes a bounded catalog-backed slice: manifest catalogId links lower to canonical action/value ids and representative receiver/chase cases emit through workshop-rs with WIR and canonical-id validation. Full Workshop catalog breadth, content domains, localized spellings, and emission remain lowering-dependent; opy-rs does not copy the catalog or claim full 225/267 coverage."
     },
     {
       "id": "semantics/receiver-members",
@@ -262,9 +264,10 @@
       "state": "lowering-dependent",
       "evidence": [
         "probes:receiver-calls",
+        "fixtures:synthetic/receiver-calls",
         "upstream:src/data/opy/memberFunctions.ts"
       ],
-      "notes": "Issue #30/#8. Canonical receiver member lists, member existence, content-specific receiver/domain validation, localized spellings, and emission are Workshop-owned. The source implementation preserves unknown/member diagnostics that can be decided from OPY metadata and defers catalog checks to integration."
+      "notes": "Issue #42 closes the evidenced receiver slice: member action/value catalogIds are lowered with the receiver as the canonical leading operand, and catalog-gap members remain explicit integration diagnostics. Full receiver member lists and content-specific domain breadth remain Workshop-owned and lowering-dependent."
     },
     {
       "id": "semantics/receiver-playervar",
@@ -299,9 +302,11 @@
       "state": "lowering-dependent",
       "evidence": [
         "probes:unknown-enum",
+        "fixtures:synthetic/chase-enums",
+        "fixtures:synthetic/chase-condition-agentlab",
         "upstream:src/data/opy/constants.ts"
       ],
-      "notes": "Issue #30/#8. Canonical enum domains and members (including Hero, Map, Gamemode, Team, and settings/content domains) are Workshop catalog data. opy-rs carries identity links only; workshop-rs performs member existence and domain compatibility checks at lowering."
+      "notes": "Issue #42 closes catalog validation for the representative declared and contextual enum slice: canonical domains/members are checked through workshop-rs and contextual chase dispatch reaches canonical action ids. Full Hero, Map, Gamemode, Team, and settings/content domain breadth remains Workshop-owned and lowering-dependent."
     },
     {
       "id": "semantics/aliases",
