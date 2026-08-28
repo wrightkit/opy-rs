@@ -267,7 +267,7 @@
         "fixtures:synthetic/receiver-calls",
         "upstream:src/data/opy/memberFunctions.ts"
       ],
-      "notes": "Issue #42 closes the evidenced receiver slice: member action/value catalogIds are lowered with the receiver as the canonical leading operand, and catalog-gap members remain explicit integration diagnostics. Full receiver member lists and content-specific domain breadth remain Workshop-owned and lowering-dependent."
+      "notes": "Issue #42 closes the evidenced receiver slice: member action/value catalogIds are lowered with the receiver as the canonical leading operand, and catalog-gap members remain explicit integration diagnostics. The OPY receiver/member source-language surface (names, aliases, receiver categories, and signatures) belongs to opy-rs; workshop-rs owns canonical Workshop target identities and semantics, content domains, localization, validation, and emission."
     },
     {
       "id": "semantics/receiver-playervar",

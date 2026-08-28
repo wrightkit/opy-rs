@@ -22,6 +22,18 @@ fn compile_fixture(name: &str) -> opy_compiler::CompilationArtifact {
         .expect("fixture must lower to canonical WIR")
 }
 
+fn compile_real_world(name: &str, source_name: &str) -> opy_compiler::CompilationArtifact {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../compatibility/fixtures/real-world")
+        .join(name);
+    let source = std::fs::read_to_string(dir.join(source_name)).expect("source must be readable");
+    let hir = opy_rs::compile(&source, source_name, &dir).expect("real-world source must resolve");
+    Compiler::new()
+        .expect("released workshop contract must load")
+        .compile_hir(&hir)
+        .expect("real-world source must lower to canonical WIR")
+}
+
 fn oracle_workshop(name: &str) -> String {
     let value: serde_json::Value = serde_json::from_str(
         &std::fs::read_to_string(fixture_dir(name).join("oracle.json"))
@@ -70,26 +82,14 @@ fn catalog_backed_contextual_chase_calls_match_the_pinned_oracle() {
 #[test]
 fn catalog_enum_members_lower_and_validate() {
     let artifact = compile_fixture("chase-enums");
-    assert!(
-        artifact
-            .emitted
-            .contains("Set Global Variable(time_reeval, None);")
-    );
-    assert!(
-        artifact
-            .emitted
-            .contains("Set Global Variable(time_reeval, Destination and Duration);")
-    );
-    assert!(
-        artifact
-            .emitted
-            .contains("Set Global Variable(rate_reeval, None);")
-    );
-    assert!(
-        artifact
-            .emitted
-            .contains("Set Global Variable(rate_reeval, Destination and Rate);")
-    );
+    for expected in [
+        "Set Global Variable(time_reeval, None);",
+        "Set Global Variable(time_reeval, Destination and Duration);",
+        "Set Global Variable(rate_reeval, None);",
+        "Set Global Variable(rate_reeval, Destination and Rate);",
+    ] {
+        assert!(artifact.emitted.contains(expected), "missing {expected}");
+    }
 }
 
 #[test]
@@ -135,4 +135,84 @@ fn append_receiver_uses_the_canonical_modify_operation() {
             .emitted
             .contains("Modify Global Variable(values, Append To Array, 1);")
     );
+}
+
+#[test]
+fn real_world_cake_exercises_catalog_lowering_end_to_end() {
+    let first = compile_real_world("overpy-cake", "source.opy");
+    let second = compile_real_world("overpy-cake", "source.opy");
+    assert_eq!(
+        first.emitted, second.emitted,
+        "emission must be deterministic"
+    );
+
+    // compile_hir already runs both structural WIR and canonical catalog-id
+    // validation. The pinned cake Workshop text contains the existing
+    // ambiguous `Visible To` spelling, so reparsing it would test a
+    // workshop-rs parser limitation rather than this lowering contract.
+    let mut calls = std::collections::BTreeSet::new();
+    for index in 0..first.wir.rules.len() {
+        let rule = first
+            .wir
+            .rules
+            .get(workshop_rs::wir::RuleId::from_index(index))
+            .unwrap();
+        collect_action_calls(&first.wir, &rule.actions, &mut calls);
+    }
+    for expected in ["createBeamEffect", "playEffect"] {
+        assert!(
+            calls.contains(expected),
+            "real-world cake must lower {expected}"
+        );
+    }
+    let value_calls: std::collections::BTreeSet<_> = (0..first.wir.values.len())
+        .filter_map(|index| {
+            let node = first
+                .wir
+                .values
+                .get(workshop_rs::wir::ValueId::from_index(index))?;
+            let workshop_rs::wir::Value::Call { name, .. } = &node.value else {
+                return None;
+            };
+            Some(name.as_str())
+        })
+        .collect();
+    for expected in ["randomReal", "randomValueInArray"] {
+        assert!(
+            value_calls.contains(expected),
+            "real-world cake must lower value {expected}"
+        );
+    }
+}
+
+fn collect_action_calls<'a>(
+    program: &'a workshop_rs::wir::Program,
+    actions: &[workshop_rs::wir::ActionId],
+    calls: &mut std::collections::BTreeSet<&'a str>,
+) {
+    for action_id in actions {
+        match program.actions.get(*action_id).unwrap() {
+            workshop_rs::wir::Action::Call { name, .. } => {
+                calls.insert(name.as_str());
+            }
+            workshop_rs::wir::Action::If {
+                branches,
+                else_body,
+                ..
+            } => {
+                for branch in branches {
+                    collect_action_calls(program, &branch.body, calls);
+                }
+                if let Some(body) = else_body {
+                    collect_action_calls(program, body, calls);
+                }
+            }
+            workshop_rs::wir::Action::While { body, .. }
+            | workshop_rs::wir::Action::ForGlobalVariable { body, .. }
+            | workshop_rs::wir::Action::ForPlayerVariable { body, .. } => {
+                collect_action_calls(program, body, calls);
+            }
+            _ => {}
+        }
+    }
 }
