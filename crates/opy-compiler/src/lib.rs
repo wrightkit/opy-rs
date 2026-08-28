@@ -333,11 +333,7 @@ impl<'a> Lowering<'a> {
     }
 
     fn copy_files(&mut self) -> Result<(), IntegrationError> {
-        self.wir.settings = self
-            .hir
-            .settings
-            .clone()
-            .map(|settings| convert_settings(settings));
+        self.wir.settings = self.hir.settings.clone().map(convert_settings);
         for file in &self.hir.files {
             if self.files.contains_key(&file.id) {
                 return Err(IntegrationError::new(
