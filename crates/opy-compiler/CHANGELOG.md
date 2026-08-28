@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4](https://github.com/wrightkit/opy-rs/compare/opy-compiler-v0.1.2...opy-compiler-v0.1.4) - 2026-08-28
+
+### Added
+
+- *(compiler)* integrate Workshop backend slices ([#82](https://github.com/wrightkit/opy-rs/pull/82))
+- *(compiler)* close catalog-backed lowering ([#78](https://github.com/wrightkit/opy-rs/pull/78))
+
+### Other
+
+- release v0.1.3 ([#81](https://github.com/wrightkit/opy-rs/pull/81))
+
 ## [0.1.3](https://github.com/wrightkit/opy-rs/compare/opy-compiler-v0.1.2...opy-compiler-v0.1.3) - 2026-08-28
 
 ### Added
