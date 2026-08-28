@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2](https://github.com/wrightkit/opy-rs/compare/opy-compiler-v0.1.1...opy-compiler-v0.1.2) - 2026-08-28
+
+### Fixed
+
+- move catalog validation and settings lowering to owner ([#79](https://github.com/wrightkit/opy-rs/pull/79))
+
 ## [0.1.1](https://github.com/wrightkit/opy-rs/compare/opy-compiler-v0.1.0...opy-compiler-v0.1.1) - 2026-08-27
 
 ### Added

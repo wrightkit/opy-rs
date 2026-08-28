@@ -366,7 +366,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "opy-cli"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "clap",
  "clap_complete",
@@ -377,7 +377,7 @@ dependencies = [
 
 [[package]]
 name = "opy-compiler"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "opy-rs",
  "serde_json",
@@ -386,7 +386,7 @@ dependencies = [
 
 [[package]]
 name = "opy-macro-js"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "libquickjs-ng-sys",
  "serde_json",
@@ -394,7 +394,7 @@ dependencies = [
 
 [[package]]
 name = "opy-rs"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "opy-macro-js",
  "serde",
