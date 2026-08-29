@@ -209,6 +209,12 @@ class DiffTests(unittest.TestCase):
                     diff.load_compiler_expectations(),
                 )
 
+    def test_compile_result_rejects_public_semantic_wir_evidence(self):
+        result = copy.deepcopy(self.oracle)
+        result["compile"]["semanticWIR"] = {}
+        with self.assertRaises(diff.DiffError):
+            diff.require_result_shape(result, "compile result")
+
     def test_compiler_semantic_wir_consumes_direct_evidence(self):
         fixture = "synthetic/issue-47-control-flow"
         oracle = json.loads(
