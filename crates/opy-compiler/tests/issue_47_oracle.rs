@@ -39,31 +39,15 @@ fn assert_native_wir_equivalent(name: &str) {
     );
 }
 
-fn assert_native_wir_gap(name: &str) {
-    let dir = fixture_dir(name);
-    let source = std::fs::read_to_string(dir.join("source.opy")).unwrap();
-    let hir = opy_rs::compile(&source, "source.opy", &dir).expect("fixture must resolve");
-    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
-    let catalog = Catalog::builtin().unwrap();
-    let locale = Locale::new("en-US");
-    let oracle = workshop_rs::parser::parse(&oracle_workshop(&dir), &catalog, &locale).unwrap();
-
-    assert!(
-        !equivalent(&artifact.wir, &oracle),
-        "native WIR gap disappeared; update the compiler expectation for {name}"
-    );
-}
-
 #[test]
-fn issue_47_residual_native_wir_gaps_are_explicit() {
+fn issue_47_switch_lowering_matches_the_pinned_oracle() {
     for name in [
-        "control-flow",
         "issue-33-switch-break",
         "issue-47-control-flow",
         "issue-47-switch-order",
         "issue-47-switch-structured-target",
     ] {
-        assert_native_wir_gap(name);
+        assert_native_wir_equivalent(name);
     }
 }
 

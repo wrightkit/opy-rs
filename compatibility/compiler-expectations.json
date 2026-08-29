@@ -89,27 +89,26 @@
       "fixture": "synthetic/control-flow",
       "nativeStatus": "success",
       "classification": "known-gap",
-      "comparison": "semantic-wir",
+      "comparison": "compiler-contract",
       "evidence": [
         "oracle:synthetic/control-flow/oracle.json",
         "provenance:synthetic/control-flow/fixture.json"
       ],
-      "owner": "opy-rs#89",
-      "note": "Direct native-WIR comparison records a residual control-flow divergence; follow-up #89 tracks the lowering gap.",
-      "semanticEquivalent": false
+      "owner": "workshop-rs#123",
+      "note": "The native canonical Debug carrier is intentionally emitted as a simplified HUD action, while the pinned oracle expands type-aware debug formatting; direct equivalence remains a Workshop-owned carrier gap."
     },
     {
       "fixture": "synthetic/issue-33-switch-break",
       "nativeStatus": "success",
-      "classification": "known-gap",
+      "classification": "match",
       "comparison": "semantic-wir",
       "evidence": [
         "oracle:synthetic/issue-33-switch-break/oracle.json",
         "provenance:synthetic/issue-33-switch-break/fixture.json"
       ],
       "owner": "opy-rs#89",
-      "note": "Direct native-WIR comparison records a residual nested-switch-break divergence; follow-up #89 tracks the lowering gap.",
-      "semanticEquivalent": false
+      "note": "The native switch-break lowering is directly equivalent to the pinned canonical WIR.",
+      "semanticEquivalent": true
     },
     {
       "fixture": "synthetic/issue-40-structural",
@@ -128,54 +127,54 @@
     {
       "fixture": "synthetic/issue-46-primitives",
       "nativeStatus": "success",
-      "classification": "known-gap",
+      "classification": "match",
       "comparison": "semantic-wir",
       "evidence": [
         "oracle:synthetic/issue-46-primitives/oracle.json",
         "provenance:synthetic/issue-46-primitives/fixture.json"
       ],
       "owner": "opy-rs#89",
-      "note": "Direct native-WIR comparison records a residual #46 primitive-lowering divergence; follow-up #89 tracks the lowering gap.",
-      "semanticEquivalent": false
+      "note": "The native #46 primitive lowering is directly equivalent to the pinned canonical WIR.",
+      "semanticEquivalent": true
     },
     {
       "fixture": "synthetic/issue-47-control-flow",
       "nativeStatus": "success",
-      "classification": "known-gap",
+      "classification": "match",
       "comparison": "semantic-wir",
       "evidence": [
         "oracle:synthetic/issue-47-control-flow/oracle.json",
         "provenance:synthetic/issue-47-control-flow/fixture.json"
       ],
       "owner": "opy-rs#89",
-      "note": "Direct native-WIR comparison records a residual #47 control-flow divergence; follow-up #89 tracks the lowering gap.",
-      "semanticEquivalent": false
+      "note": "The native #47 control-flow lowering is directly equivalent to the pinned canonical WIR.",
+      "semanticEquivalent": true
     },
     {
       "fixture": "synthetic/issue-47-switch-order",
       "nativeStatus": "success",
-      "classification": "known-gap",
+      "classification": "match",
       "comparison": "semantic-wir",
       "evidence": [
         "oracle:synthetic/issue-47-switch-order/oracle.json",
         "provenance:synthetic/issue-47-switch-order/fixture.json"
       ],
       "owner": "opy-rs#89",
-      "note": "Direct native-WIR comparison records a residual authored-switch-order divergence; follow-up #89 tracks the lowering gap.",
-      "semanticEquivalent": false
+      "note": "The native authored switch order is directly equivalent to the pinned canonical WIR.",
+      "semanticEquivalent": true
     },
     {
       "fixture": "synthetic/issue-47-switch-structured-target",
       "nativeStatus": "success",
-      "classification": "known-gap",
+      "classification": "match",
       "comparison": "semantic-wir",
       "evidence": [
         "oracle:synthetic/issue-47-switch-structured-target/oracle.json",
         "provenance:synthetic/issue-47-switch-structured-target/fixture.json"
       ],
       "owner": "opy-rs#89",
-      "note": "Direct native-WIR comparison records a residual structured-switch-target divergence; follow-up #89 tracks the lowering gap.",
-      "semanticEquivalent": false
+      "note": "The native structured switch targets are directly equivalent to the pinned canonical WIR.",
+      "semanticEquivalent": true
     },
     {
       "fixture": "synthetic/issue-47-do-while-shapes",

@@ -216,7 +216,7 @@ class DiffTests(unittest.TestCase):
             diff.require_result_shape(result, "compile result")
 
     def test_compiler_semantic_wir_consumes_direct_evidence(self):
-        fixture = "synthetic/issue-47-control-flow"
+        fixture = "synthetic/expressions-values"
         oracle = json.loads(
             (
                 COMPATIBILITY_DIR

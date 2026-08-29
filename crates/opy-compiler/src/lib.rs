@@ -1427,7 +1427,7 @@ impl<'a> Lowering<'a> {
         let conditions = rule
             .conditions
             .iter()
-            .map(|expr| self.lower_value(expr))
+            .map(|expr| self.lower_condition(expr))
             .collect::<Result<Vec<_>, _>>()?;
         let mut actions = Vec::new();
         actions.extend(self.lower_actions(&rule.actions, None)?);
@@ -2082,10 +2082,7 @@ impl<'a> Lowering<'a> {
             }
         }
 
-        let case_values = self.wir.values.push(ValueNode::new(
-            Value::Array(case_values),
-            self.wir_span(span)?,
-        ));
+        let case_values = self.lower_array(case_values, span)?;
         let value_span = self.wir_span(span)?;
         let offset_values = std::iter::once(default_offset)
             .chain(case_offsets)
@@ -2099,10 +2096,7 @@ impl<'a> Lowering<'a> {
                 ))
             })
             .collect();
-        let offsets = self
-            .wir
-            .values
-            .push(ValueNode::new(Value::Array(offset_values), value_span));
+        let offsets = self.lower_array(offset_values, span)?;
         let one = self.wir.values.push(ValueNode::new(
             Value::Number {
                 value: 1.0,
@@ -2226,6 +2220,46 @@ impl<'a> Lowering<'a> {
                 .or(fallback_span);
             IntegrationError::new("workshop-action-layout", error.to_string(), span)
         })
+    }
+
+    fn lower_array(
+        &mut self,
+        elements: Vec<wir::ValueId>,
+        span: Option<HirSpan>,
+    ) -> Result<wir::ValueId, IntegrationError> {
+        let name = if elements.is_empty() {
+            "emptyArray"
+        } else {
+            "array"
+        };
+        Ok(self.wir.values.push(ValueNode::new(
+            Value::Call {
+                name: name.to_string(),
+                args: elements,
+            },
+            self.wir_span(span)?,
+        )))
+    }
+
+    fn lower_condition(&mut self, expr: &Expr) -> Result<wir::ValueId, IntegrationError> {
+        let value = self.lower_value(expr)?;
+        let is_comparison = |expr: &Expr| matches!(expr, Expr::Binary { op, .. } if matches!(op.as_str(), "==" | "!=" | "<" | "<=" | ">" | ">="));
+        if is_comparison(expr)
+            || matches!(expr, Expr::Unary { op, operand, .. } if op == "not" && is_comparison(operand))
+        {
+            return Ok(value);
+        }
+        let true_value = self.wir.values.push(ValueNode::new(
+            Value::Bool(true),
+            self.wir_span(expr.span().copied())?,
+        ));
+        Ok(self.wir.values.push(ValueNode::new(
+            Value::Call {
+                name: "==".to_string(),
+                args: vec![value, true_value],
+            },
+            self.wir_span(expr.span().copied())?,
+        )))
     }
 
     fn lower_assign(
@@ -2611,16 +2645,20 @@ impl<'a> Lowering<'a> {
                     value: value.clone(),
                 }
             }
-            Expr::Array { elements, .. } => Value::Array(
-                elements
+            Expr::Array { elements, .. } => {
+                let elements = elements
                     .iter()
                     .map(|element| self.lower_value(element))
-                    .collect::<Result<Vec<_>, _>>()?,
-            ),
-            Expr::Vector { x, y, z, .. } => Value::Vector {
-                x: self.lower_value(x)?,
-                y: self.lower_value(y)?,
-                z: self.lower_value(z)?,
+                    .collect::<Result<Vec<_>, _>>()?;
+                return self.lower_array(elements, span);
+            }
+            Expr::Vector { x, y, z, .. } => Value::Call {
+                name: "vector".to_string(),
+                args: vec![
+                    self.lower_value(x)?,
+                    self.lower_value(y)?,
+                    self.lower_value(z)?,
+                ],
             },
             Expr::Constant { name, .. } => {
                 let const_expr = *self
@@ -2647,7 +2685,7 @@ impl<'a> Lowering<'a> {
             }
             Expr::Format { text, args, .. } => {
                 let text_node = self.wir.values.push(ValueNode::new(
-                    Value::String(text.clone()),
+                    Value::String(canonical_format_text(text)),
                     self.wir_span(span)?,
                 ));
                 let mut call_args = vec![text_node];
@@ -3331,6 +3369,24 @@ fn canonical_number_text(value: f64, text: &str) -> String {
     } else {
         text.to_string()
     }
+}
+
+fn canonical_format_text(text: &str) -> String {
+    let mut output = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    let mut index = 0;
+    while let Some(character) = chars.next() {
+        if character == '{' && chars.peek() == Some(&'}') {
+            chars.next();
+            output.push('{');
+            output.push_str(&index.to_string());
+            output.push('}');
+            index += 1;
+        } else {
+            output.push(character);
+        }
+    }
+    output
 }
 
 fn negated_comparison(op: &str) -> Option<&'static str> {
