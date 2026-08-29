@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4](https://github.com/wrightkit/opy-rs/compare/opy-compiler-v0.1.3...opy-compiler-v0.1.4) - 2026-08-29
+
+### Fixed
+
+- *(opy-compiler)* lower declared macros before WIR ([#86](https://github.com/wrightkit/opy-rs/pull/86))
+
 ## [0.1.3](https://github.com/wrightkit/opy-rs/compare/opy-compiler-v0.1.2...opy-compiler-v0.1.3) - 2026-08-28
 
 ### Added
