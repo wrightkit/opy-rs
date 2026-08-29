@@ -10,7 +10,7 @@ description = "Standalone OverPy-compatible .opy implementation: lexer, CST/pars
 workspace = true
 
 [dependencies]
-opy-macro-js = { path = "../opy-macro-js", version = "0.1.3" }
+opy-macro-js = { path = "../opy-macro-js", version = "0.1.4" }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 workshop-rs.workspace = true
