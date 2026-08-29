@@ -663,14 +663,15 @@
     {
       "fixture": "synthetic/preprocessing",
       "nativeStatus": "success",
-      "classification": "match",
-      "comparison": "normalized-output",
+      "classification": "known-gap",
+      "comparison": "semantic-wir",
       "evidence": [
         "oracle:synthetic/preprocessing/oracle.json",
         "provenance:synthetic/preprocessing/fixture.json"
       ],
       "owner": "opy-rs#85",
-      "note": "Included macro expansion is lowered through the canonical compiler path by the #85 implementation."
+      "note": "Included macro expansion now reaches canonical WIR through #85, but the pinned oracle's macro-emission semantics remain a separately tracked compiler gap.",
+      "semanticEquivalent": false
     },
     {
       "fixture": "synthetic/receiver-playervar",
