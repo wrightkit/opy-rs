@@ -28,14 +28,14 @@ frontend class; canonical Workshop, locale, directive, and hook failures use
 the integration class. Normalized output removes line-ending and trailing
 presentation noise, while exact output preserves the emitted artifact.
 
-When a compatibility caller supplies a pinned Workshop reference,
-`compile_source_report_with_semantic_reference` additionally emits optional
-`compile.semanticWIR` evidence. The evidence records schema version 1, the
-`workshop-rs::roundtrip::equivalent` algorithm, and SHA-256 hashes for both
-the source input and reference input. The comparison parses only the pinned
-reference Workshop text and compares it directly with the native lowered WIR;
-native emitted text is not reparsed as a substitute. A normal compile report
-does not include this optional field.
+Compatibility evidence is produced by the isolated compatibility harness, not
+by the public compiler API. For semantic-WIR cases, the feature-gated internal
+`opy-compat` target parses only the pinned reference Workshop text and compares
+it directly with the native lowered WIR through
+`workshop-rs::roundtrip::equivalent`. It writes harness-level
+`compatibility.semanticWIR` evidence, including the project and reference
+input digests; the public compile report and `opy-cli compile` have no oracle
+input or compatibility-evidence field.
 
 The compatibility runner uses the separate
 [`compatibility/compiler-expectations.json`](../../compatibility/compiler-expectations.json)

@@ -10,7 +10,13 @@
   },
   "fixture": "synthetic/issue-28-string-modifiers",
   "input": {
-    "sha256": "a1067d0f682d3baf415c99b980d9b6a253acad47fff340a7b6e06e7af0843c68",
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "a1067d0f682d3baf415c99b980d9b6a253acad47fff340a7b6e06e7af0843c68"
+      }
+    ],
+    "sha256": "2cde6ae6699e81051e9890099279e1d7b26291549d0978a08312a0a752dcb6fa",
     "source": "source.opy"
   },
   "oracle": {

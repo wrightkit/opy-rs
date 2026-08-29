@@ -218,8 +218,10 @@ on **demonstrated behavioral need**, never on release recency:
 4. **Single reference by default.** A second reference is added only when a
    divergence is demonstrated and a single reference cannot represent it.
 5. **Identity in every result.** Every compatibility result records the exact
-   pinned identity (version, content commit, integrity), so historical claims
-   remain interpretable after any future re-baseline.
+   pinned identity (version, content commit, integrity) and complete source
+   project input manifest, including per-file hashes and a canonical project
+   digest, so historical claims remain interpretable after any future
+   re-baseline.
 
 A pin change follows the structured review path: `oracle-metadata.json`,
 lockfile, `run_oracle.py --update` snapshot review, fixture provenance notes,

@@ -10,7 +10,13 @@
   },
   "fixture": "real-world/overpy-client-to-server",
   "input": {
-    "sha256": "3ef442054f57c1a9f9905f11da4d5e27726564c5bab44c74ebfab56825b94781",
+    "files": [
+      {
+        "path": "clientToServer.opy",
+        "sha256": "3ef442054f57c1a9f9905f11da4d5e27726564c5bab44c74ebfab56825b94781"
+      }
+    ],
+    "sha256": "e050e138bcae63eb09c9d13991d0c8ffa7da9ba0e50deeb50a2c88ea7b8934a3",
     "source": "clientToServer.opy"
   },
   "oracle": {

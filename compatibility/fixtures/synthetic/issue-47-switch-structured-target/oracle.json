@@ -10,7 +10,13 @@
   },
   "fixture": "synthetic/issue-47-switch-structured-target",
   "input": {
-    "sha256": "80a1020848684a5a9703f47f9da0085050ceef9a856ad01bfae8018fc88cfb2b",
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "80a1020848684a5a9703f47f9da0085050ceef9a856ad01bfae8018fc88cfb2b"
+      }
+    ],
+    "sha256": "311c80e6637e36455ff625b3242fd92851e923401c38b24014cb8b03bd02be41",
     "source": "source.opy"
   },
   "oracle": {

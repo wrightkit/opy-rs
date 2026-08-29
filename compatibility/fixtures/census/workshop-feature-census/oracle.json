@@ -10,7 +10,13 @@
   },
   "fixture": "census/workshop-feature-census",
   "input": {
-    "sha256": "0d05e6fe81bc4a4759f833b9dd22bfe76892bbb0a1ab24b23107c85528f09619",
+    "files": [
+      {
+        "path": "workshop-feature-census.opy",
+        "sha256": "0d05e6fe81bc4a4759f833b9dd22bfe76892bbb0a1ab24b23107c85528f09619"
+      }
+    ],
+    "sha256": "eceffc7b71269344bd7918bcd396111beb9a61219c14542e2568d7b502e4411e",
     "source": "workshop-feature-census.opy"
   },
   "oracle": {

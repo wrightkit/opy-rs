@@ -15,7 +15,13 @@
   },
   "fixture": "synthetic/chase-condition-agentlab",
   "input": {
-    "sha256": "5aa7ad4f0cb028b57e750557ef6410c0c39dd1fd39572a875ef9cb0c746d7ae6",
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "5aa7ad4f0cb028b57e750557ef6410c0c39dd1fd39572a875ef9cb0c746d7ae6"
+      }
+    ],
+    "sha256": "a76b2a958f8d594ed4bcc3537442eb8282f67878ae3110806a81f85fca3f450a",
     "source": "source.opy"
   },
   "oracle": {

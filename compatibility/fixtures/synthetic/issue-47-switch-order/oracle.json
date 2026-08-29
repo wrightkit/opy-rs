@@ -10,7 +10,13 @@
   },
   "fixture": "synthetic/issue-47-switch-order",
   "input": {
-    "sha256": "b45056da5e473dbfea1ba2de6731359872be6439d146ffbf6360781ead967f12",
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "b45056da5e473dbfea1ba2de6731359872be6439d146ffbf6360781ead967f12"
+      }
+    ],
+    "sha256": "bd2c7a39b913ee250476f556aa171d29f7b71e2aea03a1c54e0c0808cb983838",
     "source": "source.opy"
   },
   "oracle": {

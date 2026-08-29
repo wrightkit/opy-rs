@@ -10,7 +10,13 @@
   },
   "fixture": "synthetic/issue-47-unsupported",
   "input": {
-    "sha256": "e20ad681f3771fc07b49fe577778b595b8f3b847266e4805f0ef7b0cff81c9a6",
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "e20ad681f3771fc07b49fe577778b595b8f3b847266e4805f0ef7b0cff81c9a6"
+      }
+    ],
+    "sha256": "e586c87561514453611f98c11fe91f6aa64d684647505d9e59f6b45724487319",
     "source": "source.opy"
   },
   "oracle": {

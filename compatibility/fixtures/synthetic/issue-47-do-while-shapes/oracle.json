@@ -10,7 +10,13 @@
   },
   "fixture": "synthetic/issue-47-do-while-shapes",
   "input": {
-    "sha256": "6e0baa620c74b51b98ecb2576a353bcae83f335bd50ba904c73347f8b87b9a9c",
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "6e0baa620c74b51b98ecb2576a353bcae83f335bd50ba904c73347f8b87b9a9c"
+      }
+    ],
+    "sha256": "52487c06f49d4649a34064d41c45d81a7bcbf0c5c4f3cd17af1a05d6b94c2f8a",
     "source": "source.opy"
   },
   "oracle": {

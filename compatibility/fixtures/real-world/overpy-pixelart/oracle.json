@@ -10,7 +10,13 @@
   },
   "fixture": "real-world/overpy-pixelart",
   "input": {
-    "sha256": "b9b7c9b0dea9ebd4734a88a10eb8639f32eec8119aefee44333a73cee7ac6502",
+    "files": [
+      {
+        "path": "pixelart.opy",
+        "sha256": "b9b7c9b0dea9ebd4734a88a10eb8639f32eec8119aefee44333a73cee7ac6502"
+      }
+    ],
+    "sha256": "84118801f779dbc0729ee8c6d8d4ebe232f271d9bb6c7fa5069db2a79dd76789",
     "source": "pixelart.opy"
   },
   "oracle": {

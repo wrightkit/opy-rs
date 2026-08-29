@@ -6,12 +6,15 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import shlex
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 from typing import Any
+
+import input_identity
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,6 +31,7 @@ EXPECTED_COMPILER_COMPARISONS = {
     "diagnostic-code",
     "compiler-contract",
 }
+CONCRETE_GAP_OWNER = re.compile(r"(?:opy-rs|workshop-rs)#[1-9][0-9]*")
 
 
 class DiffError(RuntimeError):
@@ -154,8 +158,10 @@ def load_compiler_expectations(
         ):
             raise DiffError(f"{fixture}: evidence must be a non-empty string array")
         owner = case.get("owner")
-        if not isinstance(owner, str) or not owner:
-            raise DiffError(f"{fixture}: owner must be a non-empty string")
+        if not isinstance(owner, str) or not CONCRETE_GAP_OWNER.fullmatch(owner):
+            raise DiffError(
+                f"{fixture}: owner must be a concrete opy-rs or workshop-rs issue"
+            )
         note = case.get("note")
         if not isinstance(note, str) or not note:
             raise DiffError(f"{fixture}: note must be a non-empty string")
@@ -205,16 +211,15 @@ def load_compiler_expectations(
                 raise DiffError(f"{fixture}: oracle evidence fixture does not match")
             if provenance.get("id") != fixture:
                 raise DiffError(f"{fixture}: provenance evidence fixture does not match")
-            source_value = provenance.get("source")
-            if not isinstance(source_value, str) or not source_value:
-                raise DiffError(f"{fixture}: provenance evidence has no source")
-            source_path = fixtures_root / fixture / source_value
             try:
-                source_hash = hashlib.sha256(source_path.read_bytes()).hexdigest()
-            except OSError as error:
-                raise DiffError(f"{fixture}: cannot read provenance source: {error}") from error
-            if oracle.get("input", {}).get("sha256") != source_hash:
-                raise DiffError(f"{fixture}: oracle evidence input hash is stale")
+                expected_input = input_identity.project_input(
+                    fixtures_root / fixture,
+                    provenance,
+                )
+            except input_identity.InputIdentityError as error:
+                raise DiffError(f"{fixture}: invalid provenance source graph: {error}") from error
+            if oracle.get("input") != expected_input:
+                raise DiffError(f"{fixture}: oracle evidence input graph is stale")
         if comparison == "diagnostic-code":
             if not isinstance(case.get("diagnosticCode"), str) or not case["diagnosticCode"]:
                 raise DiffError(f"{fixture}: diagnostic-code requires diagnosticCode")
@@ -241,10 +246,29 @@ def require_result_shape(result: dict[str, Any], label: str) -> None:
         raise DiffError(f"{label}: compile.diagnostics must be an array")
     if not isinstance(compile_result["workshop"], str):
         raise DiffError(f"{label}: compile.workshop must be a string")
+    if "semanticWIR" in compile_result:
+        raise DiffError(f"{label}: compatibility evidence must not be part of compile result")
 
 
 def result_path(results_root: Path, fixture_id: str) -> Path:
     return results_root / fixture_id / "result.json"
+
+
+def validate_project_input(
+    fixtures_root: Path,
+    fixture_id: str,
+    metadata: dict[str, Any],
+    result: dict[str, Any],
+    label: str,
+) -> dict[str, Any]:
+    try:
+        expected = input_identity.project_input(fixtures_root / fixture_id, metadata)
+    except input_identity.InputIdentityError as error:
+        raise DiffError(f"{fixture_id}: invalid source graph: {error}") from error
+    actual = result.get("input")
+    if actual != expected:
+        raise DiffError(f"{label} {fixture_id}: input source graph does not match fixture")
+    return expected
 
 
 def run_producer(
@@ -405,12 +429,10 @@ def compare_fixture(
     require_result_shape(producer, f"producer {fixture_id}")
     if producer["fixture"] != fixture_id:
         raise DiffError(f"producer result for {fixture_id} has fixture {producer['fixture']!r}")
-    oracle_input = oracle.get("input")
-    producer_input = producer.get("input")
-    if not isinstance(oracle_input, dict) or not isinstance(producer_input, dict):
-        raise DiffError(f"{fixture_id}: both results must include input metadata")
-    if oracle_input.get("sha256") != producer_input.get("sha256"):
-        raise DiffError(f"{fixture_id}: producer input hash does not match oracle input")
+    validate_project_input(fixtures_root, fixture_id, metadata, oracle, "oracle")
+    validate_project_input(fixtures_root, fixture_id, metadata, producer, "producer")
+    oracle_input = oracle["input"]
+    producer_input = producer["input"]
 
     stages = compare_stage(oracle, producer)
     regression_stages = [item["name"] for item in stages if item["outcome"] == "regression"]
@@ -489,12 +511,10 @@ def compare_compiler_fixture(
     require_result_shape(producer, f"producer {fixture_id}")
     if producer["fixture"] != fixture_id:
         raise DiffError(f"producer result for {fixture_id} has fixture {producer['fixture']!r}")
-    oracle_input = oracle.get("input")
-    producer_input = producer.get("input")
-    if not isinstance(oracle_input, dict) or not isinstance(producer_input, dict):
-        raise DiffError(f"{fixture_id}: both results must include input metadata")
-    if oracle_input.get("sha256") != producer_input.get("sha256"):
-        raise DiffError(f"{fixture_id}: producer input hash does not match oracle input")
+    validate_project_input(fixtures_root, fixture_id, metadata, oracle, "oracle")
+    validate_project_input(fixtures_root, fixture_id, metadata, producer, "producer")
+    oracle_input = oracle["input"]
+    producer_input = producer["input"]
 
     native_compile = producer["compile"]
     expected_status = expectation["nativeStatus"]
@@ -523,7 +543,8 @@ def compare_compiler_fixture(
         )
         status = "match" if oracle_output == producer_output else "regression"
     elif contract == "semantic-wir":
-        semantic = native_compile.get("semanticWIR")
+        compatibility = producer.get("compatibility")
+        semantic = compatibility.get("semanticWIR") if isinstance(compatibility, dict) else None
         oracle_input_sha256 = oracle["input"].get("sha256")
         producer_input_sha256 = producer["input"].get("sha256")
         if not isinstance(semantic, dict):

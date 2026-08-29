@@ -5,7 +5,7 @@
   "evidencePolicy": {
     "native": "The compiler result is compared with this separately reviewed baseline; it never creates its own expectation.",
     "classification": "match requires normalized output, direct canonical-WIR equivalence, or a stable diagnostic contract. known-gap and unsupported require pinned oracle and fixture provenance evidence plus a concrete follow-up owner.",
-    "semanticWIR": "The runner compares native WIR directly with the pinned oracle WIR through workshop-rs::roundtrip::equivalent and verifies both input hashes. It never reparses native Workshop text as a substitute for native WIR."
+    "semanticWIR": "The runner compares native WIR directly with the pinned oracle WIR through workshop-rs::roundtrip::equivalent and verifies both complete project input digests. It never reparses native Workshop text as a substitute for native WIR."
   },
   "cases": [
     {
@@ -313,8 +313,8 @@
         "oracle:real-world/overpy-cake/oracle.json",
         "provenance:real-world/overpy-cake/fixture.json"
       ],
-      "owner": "workshop-rs#10",
-      "note": "The pinned oracle cannot be parsed by the released workshop-rs catalog because `Visible To` is ambiguous across domains; workshop-rs#10 owns the canonical domain disambiguation before semantic-WIR parity can be evaluated."
+      "owner": "workshop-rs#124",
+      "note": "The pinned oracle cannot be parsed by the released workshop-rs catalog because `Visible To` is ambiguous across domains; workshop-rs#124 owns the canonical domain disambiguation before semantic-WIR parity can be evaluated."
     },
     {
       "fixture": "real-world/overpy-client-to-server",
@@ -464,8 +464,8 @@
         "oracle:synthetic/chase-condition-agentlab/oracle.json",
         "provenance:synthetic/chase-condition-agentlab/fixture.json"
       ],
-      "owner": "workshop-rs#10",
-      "note": "The pinned oracle cannot be parsed by the released workshop-rs catalog because `None` is ambiguous across domains; workshop-rs#10 owns the canonical domain disambiguation before semantic-WIR parity can be evaluated."
+      "owner": "workshop-rs#124",
+      "note": "The pinned oracle cannot be parsed by the released workshop-rs catalog because `None` is ambiguous across domains; workshop-rs#124 owns the canonical domain disambiguation before semantic-WIR parity can be evaluated."
     },
     {
       "fixture": "synthetic/chase-keywords",

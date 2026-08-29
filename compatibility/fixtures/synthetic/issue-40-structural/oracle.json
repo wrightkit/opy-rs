@@ -10,7 +10,13 @@
   },
   "fixture": "synthetic/issue-40-structural",
   "input": {
-    "sha256": "c3a1daee735d48e670cf98fed74872b02480d9a7064a3340eadae3278d4eb7b8",
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "c3a1daee735d48e670cf98fed74872b02480d9a7064a3340eadae3278d4eb7b8"
+      }
+    ],
+    "sha256": "587fe2fb76b196f8eafb7817784710f6f5e03c789d1216f5e253f84d88bd8d40",
     "source": "source.opy"
   },
   "oracle": {

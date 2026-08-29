@@ -10,7 +10,21 @@
   },
   "fixture": "synthetic/issue-31-nested-scope",
   "input": {
-    "sha256": "933baf034eb509b4bb09610645dbe20a24dbae9e903e91bbfb43409877f31991",
+    "files": [
+      {
+        "path": "child.opy",
+        "sha256": "00776d92813be2a6f89b7bc4f4ed559c975aacb1e91f7017852ca3aad4382e01"
+      },
+      {
+        "path": "grandchild.opy",
+        "sha256": "5cb1a52a4313fbe651a3f3075ac907ab884d6d5973a3fdd506c6002a3cdb0afc"
+      },
+      {
+        "path": "source.opy",
+        "sha256": "933baf034eb509b4bb09610645dbe20a24dbae9e903e91bbfb43409877f31991"
+      }
+    ],
+    "sha256": "a20164167acdc69fd991aea76656788157d435d4099407cd1889462f2ed71eef",
     "source": "source.opy"
   },
   "oracle": {

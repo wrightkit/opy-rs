@@ -10,7 +10,21 @@
   },
   "fixture": "synthetic/issue-29-main-file",
   "input": {
-    "sha256": "0656503322a79c4a7eb9d7fd04bf797b5998ebbed82f0757b15e53d61a8eb2ce",
+    "files": [
+      {
+        "path": "child.opy",
+        "sha256": "0640aaad875c72ebdd04d58df369045cd7a70575f37697a308f4850868354dff"
+      },
+      {
+        "path": "entry.opy",
+        "sha256": "339950d8191b54ed0aea8cad0e01d544db92c2113be7af0019b15414325b513c"
+      },
+      {
+        "path": "source.opy",
+        "sha256": "0656503322a79c4a7eb9d7fd04bf797b5998ebbed82f0757b15e53d61a8eb2ce"
+      }
+    ],
+    "sha256": "54c880a0c81287f4c710f2772f2dcb80b4a524f1b55d55f12a62ed06f46553a8",
     "source": "source.opy"
   },
   "oracle": {

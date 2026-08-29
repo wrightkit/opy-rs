@@ -10,7 +10,13 @@
   },
   "fixture": "synthetic/issue-46-primitives",
   "input": {
-    "sha256": "1fc8ac4a977c5b4eba20c8c45340b3ebacf78323e158bd121d723469a31394b4",
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "1fc8ac4a977c5b4eba20c8c45340b3ebacf78323e158bd121d723469a31394b4"
+      }
+    ],
+    "sha256": "7c743a96135e57867eea3e302c73643e3cf5070eea4ed1dd19a79f7a577438aa",
     "source": "source.opy"
   },
   "oracle": {

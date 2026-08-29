@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import subprocess
 import sys
@@ -12,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import diff
+import input_identity
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -48,9 +48,62 @@ def fixtures() -> list[tuple[Path, dict[str, Any]]]:
     return found
 
 
-def run_fixture(binary: Path, directory: Path, metadata: dict[str, Any]) -> dict[str, Any]:
+def run_semantic_evidence(
+    binary: Path,
+    directory: Path,
+    metadata: dict[str, Any],
+    project_sha256: str,
+) -> dict[str, Any]:
     source = directory / metadata["source"]
-    semantic_reference = directory / "oracle.json"
+    completed = subprocess.run(
+        [
+            str(binary),
+            "--source",
+            source.name,
+            "--root",
+            ".",
+            "--oracle",
+            "oracle.json",
+            "--input-sha256",
+            project_sha256,
+        ],
+        cwd=directory,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise NativeError(
+            f"{metadata['id']}: compatibility evidence failed "
+            f"(exit {completed.returncode}): {completed.stderr.strip()}"
+        )
+    try:
+        result = json.loads(completed.stdout)
+    except json.JSONDecodeError as error:
+        raise NativeError(
+            f"{metadata['id']}: compatibility evidence did not produce JSON: "
+            f"{completed.stderr.strip()}"
+        ) from error
+    if not isinstance(result, dict) or result.get("schemaVersion") != 1:
+        raise NativeError(f"{metadata['id']}: invalid compatibility evidence schema")
+    if not isinstance(result.get("semanticWIR"), dict):
+        raise NativeError(f"{metadata['id']}: semantic-WIR evidence is missing")
+    return result
+
+
+def run_fixture(
+    binary: Path,
+    semantic_binary: Path,
+    directory: Path,
+    metadata: dict[str, Any],
+    expectation: dict[str, Any],
+) -> dict[str, Any]:
+    source = directory / metadata["source"]
+    try:
+        project = input_identity.project_input(directory, metadata)
+    except input_identity.InputIdentityError as error:
+        raise NativeError(f"{metadata['id']}: {error}") from error
     completed = subprocess.run(
         [
             str(binary),
@@ -59,8 +112,6 @@ def run_fixture(binary: Path, directory: Path, metadata: dict[str, Any]) -> dict
             "json",
             "--language",
             "en-US",
-            "--semantic-reference",
-            str(semantic_reference.name),
             str(source.name),
         ],
         cwd=directory,
@@ -81,13 +132,20 @@ def run_fixture(binary: Path, directory: Path, metadata: dict[str, Any]) -> dict
     if result.get("compile", {}).get("status") not in {"success", "failure"}:
         raise NativeError(f"{metadata['id']}: invalid compile status")
     result["fixture"] = metadata["id"]
-    result["input"] = {
-        "source": metadata["source"],
-        "sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
-    }
+    result["input"] = project
     result["compile"]["processExitCode"] = completed.returncode
     if completed.stderr:
         result["compile"]["stderr"] = completed.stderr
+    if (
+        expectation["comparison"] == "semantic-wir"
+        and result["compile"]["status"] == "success"
+    ):
+        result["compatibility"] = run_semantic_evidence(
+            semantic_binary,
+            directory,
+            metadata,
+            project["sha256"],
+        )
     return result
 
 
@@ -98,6 +156,11 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         default=ROOT / "target" / "debug" / "opy-cli",
         help="path to a built opy-cli binary",
+    )
+    parser.add_argument(
+        "--semantic-binary",
+        type=Path,
+        help="path to the internal compatibility evidence binary",
     )
     parser.add_argument("--results", type=Path, default=DEFAULT_RESULTS)
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
@@ -110,17 +173,32 @@ def main(argv: list[str] | None = None) -> int:
     binary = args.binary.resolve()
     if not binary.is_file():
         raise NativeError(f"opy-cli binary does not exist: {binary}")
+    semantic_binary = (
+        args.semantic_binary.resolve()
+        if args.semantic_binary
+        else binary.with_name("opy-compat")
+    )
+    if not semantic_binary.is_file():
+        raise NativeError(f"compatibility evidence binary does not exist: {semantic_binary}")
     results_root = args.results.resolve()
     report_path = args.report.resolve()
     results_root.mkdir(parents=True, exist_ok=True)
+    try:
+        expectations = diff.load_compiler_expectations(COMPILER_EXPECTATIONS)
+    except diff.DiffError as error:
+        raise NativeError(str(error)) from error
 
     for directory, metadata in fixtures():
-        native = run_fixture(binary, directory, metadata)
+        try:
+            expectation = expectations[metadata["id"]]
+        except KeyError as error:
+            raise NativeError(f"missing compiler expectation: {metadata['id']}") from error
+        native = run_fixture(binary, semantic_binary, directory, metadata, expectation)
         result_path = results_root / metadata["id"] / "result.json"
         result_path.parent.mkdir(parents=True, exist_ok=True)
         result_path.write_text(json.dumps(native, indent=2, sort_keys=True) + "\n")
 
-    # Keep expectation loading, input-hash validation, stage comparison, and
+    # Keep expectation loading, project-input validation, stage comparison, and
     # blocking status classification in the existing independent comparator.
     try:
         return diff.run_compiler(

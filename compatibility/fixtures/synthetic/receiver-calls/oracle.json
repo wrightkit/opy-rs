@@ -10,7 +10,13 @@
   },
   "fixture": "synthetic/receiver-calls",
   "input": {
-    "sha256": "72ab2b077545fea887e26bd0544441e42bbaab569e5fdd77a9650452e08982e9",
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "72ab2b077545fea887e26bd0544441e42bbaab569e5fdd77a9650452e08982e9"
+      }
+    ],
+    "sha256": "9f1870c3f83735ac716d1c74cc08d87eb1bf61e147084ce6ef06f1a3f1d00382",
     "source": "source.opy"
   },
   "oracle": {

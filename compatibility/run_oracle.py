@@ -14,6 +14,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
+import input_identity
+
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_FIXTURES = ROOT / "compatibility" / "fixtures"
@@ -76,10 +78,6 @@ def normalize_diagnostics(stderr: str) -> list[dict[str, str]]:
 
 def sha256_bytes(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
-
-
-def sha256_file(path: Path) -> str:
-    return sha256_bytes(path.read_bytes())
 
 
 def sha256_text(value: str) -> str:
@@ -220,14 +218,15 @@ def run_fixture(
         workshop = normalize_text(workshop_exact)
 
     status = "success" if completed.returncode == 0 else "failure"
+    try:
+        project = input_identity.project_input(fixture_dir, fixture)
+    except input_identity.InputIdentityError as error:
+        raise RunnerError(f"invalid source project identity: {error}") from error
     return {
         "schemaVersion": 1,
         "fixture": fixture["id"],
         "oracle": oracle,
-        "input": {
-            "source": fixture["source"],
-            "sha256": sha256_file(source),
-        },
+        "input": project,
         "compile": {
             "status": status,
             "exitCode": completed.returncode,

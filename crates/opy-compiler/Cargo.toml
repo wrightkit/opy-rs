@@ -13,7 +13,6 @@ workspace = true
 opy-rs.workspace = true
 opy-macro-js = { path = "../opy-macro-js", version = "0.1.3" }
 serde.workspace = true
-sha2 = "0.10"
 workshop-rs.workspace = true
 
 [dev-dependencies]

@@ -19,7 +19,7 @@ use opy_compiler::{CompileDiagnostic, CompileStatus, Compiler};
 use opy_rs::support::{self, SupportMatrixError};
 use opy_rs::tooling::{CheckOutcome, Diagnostic as OpyDiagnostic, check};
 use opy_rs::{LANGUAGE_NAME, LANGUAGE_VERSION};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use workshop_rs::catalog::Locale;
 
 use crate::cli::{CheckArgs, Cli, Command, CompileArgs, FileArgs, OutputFormatArg, SupportArgs};
@@ -117,34 +117,12 @@ fn cmd_compile(args: &CompileArgs, presentation: Presentation) -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let report = match args.semantic_reference.as_ref() {
-        Some(path) => {
-            let reference = match read_semantic_reference(path) {
-                Ok(reference) => reference,
-                Err(error) => {
-                    eprintln!(
-                        "opy-cli: cannot read semantic reference '{}': {error}",
-                        path.display()
-                    );
-                    return ExitCode::from(2);
-                }
-            };
-            compiler.compile_source_report_with_semantic_reference(
-                &text,
-                &main.to_string_lossy(),
-                &root,
-                &Locale::new(&args.language),
-                &reference.input.sha256,
-                &reference.compile.workshop,
-            )
-        }
-        None => compiler.compile_source_report(
-            &text,
-            &main.to_string_lossy(),
-            &root,
-            &Locale::new(&args.language),
-        ),
-    };
+    let report = compiler.compile_source_report(
+        &text,
+        &main.to_string_lossy(),
+        &root,
+        &Locale::new(&args.language),
+    );
     if args.format == OutputFormatArg::Json {
         return match print_json(&report) {
             Ok(()) => ExitCode::from(report.compile.exit_code),
@@ -165,28 +143,6 @@ fn cmd_compile(args: &CompileArgs, presentation: Presentation) -> ExitCode {
         presentation.render_diagnostics("compile", &diagnostics);
         ExitCode::from(report.compile.exit_code)
     }
-}
-
-#[derive(Debug, Deserialize)]
-struct SemanticReference {
-    input: SemanticReferenceInput,
-    compile: SemanticReferenceCompile,
-}
-
-#[derive(Debug, Deserialize)]
-struct SemanticReferenceInput {
-    sha256: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SemanticReferenceCompile {
-    workshop: String,
-}
-
-fn read_semantic_reference(path: &Path) -> Result<SemanticReference, String> {
-    let text = std::fs::read_to_string(path).map_err(|error| error.to_string())?;
-    serde_json::from_str(&text).map_err(|error| error.to_string())
 }
 
 fn cmd_inspect(args: &FileArgs, presentation: Presentation) -> ExitCode {

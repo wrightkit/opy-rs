@@ -15,7 +15,13 @@
   },
   "fixture": "synthetic/issue-47-do-while-invalid-placement",
   "input": {
-    "sha256": "b7df07df9799afec1c139cd0a23764804feeaccf7aae8dc7d9be575f37c1e5c7",
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "b7df07df9799afec1c139cd0a23764804feeaccf7aae8dc7d9be575f37c1e5c7"
+      }
+    ],
+    "sha256": "0aa0d20de8a47bc4eb1a8f0ce6b3766076e14f5f2bd30b7469b632f371ba9cb9",
     "source": "source.opy"
   },
   "oracle": {

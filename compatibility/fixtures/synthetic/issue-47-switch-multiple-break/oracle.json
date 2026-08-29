@@ -10,7 +10,13 @@
   },
   "fixture": "synthetic/issue-47-switch-multiple-break",
   "input": {
-    "sha256": "e800e97e748ab8ed301e14064e88f115b74fd9953052f5b2108b510d084fedb3",
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "e800e97e748ab8ed301e14064e88f115b74fd9953052f5b2108b510d084fedb3"
+      }
+    ],
+    "sha256": "c51625efd490b713cb2a8d17e188458cf24c4c142a0e62562e7477a27bd33f33",
     "source": "source.opy"
   },
   "oracle": {

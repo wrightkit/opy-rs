@@ -15,7 +15,477 @@
   },
   "fixture": "real-world/6v6-adjustments",
   "input": {
-    "sha256": "45a3c2a3ea23e092035c96c88b5a8b8c2c6545e75aa93dc085723dda5c6e30d1",
+    "files": [
+      {
+        "path": "constants/adj_constants.opy",
+        "sha256": "b204295a573bce36a1dc8f3c88d08fe6d0dacff1c08bd6ebc114ba329a3d2573"
+      },
+      {
+        "path": "constants/ow2_constants.opy",
+        "sha256": "0b7099b2844781bbdb16d2e59a1051e187e6c7e5fcfa2425662b22f721c363e9"
+      },
+      {
+        "path": "heroes/ana/init.opy",
+        "sha256": "f04ef48e8b05d92171e52ad17312a9166c9b479cf22da63b42b2103797e3fa39"
+      },
+      {
+        "path": "heroes/ana/nade.opy",
+        "sha256": "7183c3d4188fa34b092f56a79f0f4b25a443167ab422e8fcd772553ecb9dc820"
+      },
+      {
+        "path": "heroes/ashe/init.opy",
+        "sha256": "06822e04f40ea7a1d87741e891e365f0eabb66ac668ebc23fffcb922e15f0e8d"
+      },
+      {
+        "path": "heroes/baptiste/init.opy",
+        "sha256": "3e22f66b101507730c3c2e4f72ae6a907a22ba52b14dd07e1acf0d36cbb0fdf5"
+      },
+      {
+        "path": "heroes/baptiste/regen_burst.opy",
+        "sha256": "25ada2bae59d896a4aafc38f3e3a3b98ebfe416396c633fec6d433a98e4b5301"
+      },
+      {
+        "path": "heroes/bastion/init.opy",
+        "sha256": "3567e234c7e10a94cd720ce6fe39f52c86dd8ad39161acb1be6dbee0d0d42325"
+      },
+      {
+        "path": "heroes/bastion/reconfigure.opy",
+        "sha256": "c797c657dd3e5e138f0174c6fc773bb53a9b75a71195ef207e6cd254c56debb3"
+      },
+      {
+        "path": "heroes/brigitte/bash.opy",
+        "sha256": "b9e160416acbecaff18c9d55e6694f4ad18ff4a1b7c8d7150dc47014fdcb2e9e"
+      },
+      {
+        "path": "heroes/brigitte/init.opy",
+        "sha256": "99ee256d00a5f38764b1c1e237720e92349d693476e57d42ea8457ba87f21a17"
+      },
+      {
+        "path": "heroes/brigitte/inspire.opy",
+        "sha256": "5df1f1464b4035a6eb7f87584c3aea669e7e29579cc18f280eee893807a8506b"
+      },
+      {
+        "path": "heroes/brigitte/repair_pack.opy",
+        "sha256": "904b181ba1215796b27d1a33056d90b22f2e1d78178622c1a7c7df461110f211"
+      },
+      {
+        "path": "heroes/brigitte/whipshot.opy",
+        "sha256": "4446dc11009cef338b7a29a33bba96cd872f0ce966abcff2acf129010d4f2ea8"
+      },
+      {
+        "path": "heroes/doomfist/init.opy",
+        "sha256": "51970d3b77b0c4400ce8f0c5ac94eb846c512d66337a99e9b2b5466e7cf4dd1d"
+      },
+      {
+        "path": "heroes/doomfist/meteor_strike.opy",
+        "sha256": "7781707eae021507ae36c5247dec72709ec82d403c7f509a1b543eecb8758d92"
+      },
+      {
+        "path": "heroes/doomfist/powerblock.opy",
+        "sha256": "8c27c6f3a247506655121f85a4c9ddb2123eaa0da31f54009724ce68f650e383"
+      },
+      {
+        "path": "heroes/doomfist/punch.opy",
+        "sha256": "62ee636dfb13591711bc4fe21c986fa6388a939d8239ec276ba722cad90e7660"
+      },
+      {
+        "path": "heroes/doomfist/slam.opy",
+        "sha256": "a556023a01b979aab60ccb5d917d5423a3c1e53ca44494a6012ef4896f185668"
+      },
+      {
+        "path": "heroes/dva/boosters.opy",
+        "sha256": "109e7734b394e26d87017c40f08921c785090d70ac0ea740012a95d9f0616e8d"
+      },
+      {
+        "path": "heroes/dva/defense_matrix.opy",
+        "sha256": "4a694a35522a2517371368b21f59740dd8f45d6b8a67404ea52c304aefb52362"
+      },
+      {
+        "path": "heroes/dva/hp.opy",
+        "sha256": "4e0f5bb1490a15215d3298f2b4a8b1e3560bca7976b35158a7c851d918c01af3"
+      },
+      {
+        "path": "heroes/dva/init.opy",
+        "sha256": "811b9efd68549c2aaca82a316ef85a98f24961635cf3610997df95091180758c"
+      },
+      {
+        "path": "heroes/echo/duplicate.opy",
+        "sha256": "11224aa7188a1ad46472bb9f6d73cfd01b4bcad2b4eb210b7193c860e4c5312d"
+      },
+      {
+        "path": "heroes/echo/init.opy",
+        "sha256": "8802cbd58d065261c2409153086cfa4d66eeffb3c6d91c3dc6fd63681acd8b6f"
+      },
+      {
+        "path": "heroes/freja/init.opy",
+        "sha256": "9dd086735af89e39165c97a3764fbcb9846b532e6b10228f664f878f4a7ebbb1"
+      },
+      {
+        "path": "heroes/genji/init.opy",
+        "sha256": "3562ccbd90111dbea676c018cd34a13e408e2a8c0b936617e2ecd0854a49694f"
+      },
+      {
+        "path": "heroes/hanzo/init.opy",
+        "sha256": "e8a7e1ff7629f61167120dcdd88525c724a885d3281e03c29818906459b9929b"
+      },
+      {
+        "path": "heroes/hazard/init.opy",
+        "sha256": "2b195e42eb6d8884424f5c95dce4858453a306ac7db46354bf4ec3a4d7930861"
+      },
+      {
+        "path": "heroes/illari/init.opy",
+        "sha256": "18b6657d79f702b5ad680bcc5af2c9d9de884d3389230b9a7875b118560ffaa1"
+      },
+      {
+        "path": "heroes/illari/solar_rifle.opy",
+        "sha256": "3363e8ee5a3d6fdc68160f013741a2e56ec15ffc3a28ed171b7293e747a73921"
+      },
+      {
+        "path": "heroes/junkerqueen/carnage.opy",
+        "sha256": "cf8e192f9edfc1e7ab8e12180842d21a47c9a336cad474ae3d6c4b5793ecf212"
+      },
+      {
+        "path": "heroes/junkerqueen/commanding_shout.opy",
+        "sha256": "d964de003661c41117b63a6486fd66fc5e459661e5b1c0ae667bc5983e65da74"
+      },
+      {
+        "path": "heroes/junkerqueen/init.opy",
+        "sha256": "4e401d7aa542cf99477c7b4781c7e1596b54e7773b6c6a0559f6ed7069bf2b55"
+      },
+      {
+        "path": "heroes/junkerqueen/jagged_blade.opy",
+        "sha256": "8868ddf544de8715dd4947ba95f965af4ed244d21aa7e46576d9b5a03d61907f"
+      },
+      {
+        "path": "heroes/junkerqueen/rampage.opy",
+        "sha256": "a0a3d775e9ef8fa46899b9e9d8d5fbcfdd65780926c3b680ad1affd8c58df4a8"
+      },
+      {
+        "path": "heroes/junkrat/init.opy",
+        "sha256": "7a0324386ba0d5507bce3664d0bd7c299a09676965d5f04e7a410aa7505696e3"
+      },
+      {
+        "path": "heroes/junkrat/mayhem.opy",
+        "sha256": "8bc47d9493d3a1d707d382cdbe292b42090d636bd85b6bcba526a352abbd3ac6"
+      },
+      {
+        "path": "heroes/juno/init.opy",
+        "sha256": "795ab8951a0f10c6730084405fa33ff889cade9d2cf9d07ba8825f7cf90a6070"
+      },
+      {
+        "path": "heroes/juno/orbital_ray.opy",
+        "sha256": "d55f32378c4faa8a50426a81336ffc5b127064ad0ea25bfae07cfb51ea14e700"
+      },
+      {
+        "path": "heroes/juno/torpedoes.opy",
+        "sha256": "ce16f4d9d731d92dc889af73e285762ed7b3d402f23fb722bde6d4d6a25d2225"
+      },
+      {
+        "path": "heroes/kiriko/init.opy",
+        "sha256": "b017e259e821005a31bebd493201dab5eb3bd0096087b95ff16cce2ee9e487f9"
+      },
+      {
+        "path": "heroes/kiriko/protection_suzu.opy",
+        "sha256": "3f50daf0a1694e0ea851b8a9e84f9cb498868234db426c6880641cff84e511b4"
+      },
+      {
+        "path": "heroes/kiriko/swift_step.opy",
+        "sha256": "27c1c92d137db6ff44ccd99f279e28a60a4ce331689ce657f5a46acfbaa8f81e"
+      },
+      {
+        "path": "heroes/lifeweaver/init.opy",
+        "sha256": "9437032822cc5fdecc46abfb9fb80ddbcd21fb571d0358b6a98d14dd0db84d3c"
+      },
+      {
+        "path": "heroes/lucio/aura.opy",
+        "sha256": "0843fb8f9dc71dc7b730a61b30dedca7ea405f94ad6b86d4421e8c55a44d3dc1"
+      },
+      {
+        "path": "heroes/lucio/init.opy",
+        "sha256": "7557d7caaa9eb7a1896f555f22470dd4d5a490b425539e986b49d997b7ca0886"
+      },
+      {
+        "path": "heroes/mauga/cage_fight.opy",
+        "sha256": "cf1d04b3248c17180ac2b1f545d3beda4c5d70e5dacc207567dd495573c2845f"
+      },
+      {
+        "path": "heroes/mauga/init.opy",
+        "sha256": "76c78838028e23e5790b18bfe249df316cc63bd25b3c468d6cdbb4029ec576f4"
+      },
+      {
+        "path": "heroes/mccree/deadeye.opy",
+        "sha256": "24077e96eff9f4e65ac0b8e67b14585837462b275e7869c15c6471ee9a13c1fd"
+      },
+      {
+        "path": "heroes/mccree/init.opy",
+        "sha256": "96adb0ae7b656f0941716de273d7e9f382f858487f42ee1f248b5140995b627b"
+      },
+      {
+        "path": "heroes/mccree/peacekeeper.opy",
+        "sha256": "aab3df1d08f9960cec8b08194ecefbcef44b1c08140f51f0406bdd7da1950c4f"
+      },
+      {
+        "path": "heroes/mei/cryo_freeze.opy",
+        "sha256": "0d19c28675a5b12f44bda5536e1719924b9241929677bd4e3abee251978c6bd2"
+      },
+      {
+        "path": "heroes/mei/init.opy",
+        "sha256": "9279b206812bda7e09770e5a547383a69ae4bbe45da37e594f8c55af4a21f0a5"
+      },
+      {
+        "path": "heroes/mercy/init.opy",
+        "sha256": "adeb0a0da805a8fb6561ac834deadb5e39d0462b761981b3952bdd75d4ffbad0"
+      },
+      {
+        "path": "heroes/moira/coalescence.opy",
+        "sha256": "a7281154781a465614aa4518715532489ce0614268532df30573a1b9ab1a3763"
+      },
+      {
+        "path": "heroes/moira/init.opy",
+        "sha256": "d22794d8e68238956a28d4ed69badd96b09c4c737259305f7485e7ff3947a030"
+      },
+      {
+        "path": "heroes/orisa/fortify.opy",
+        "sha256": "9f3f92fee1b7df50e455009353aea594b2876ba059d3eabf827c9fcd87653467"
+      },
+      {
+        "path": "heroes/orisa/init.opy",
+        "sha256": "763c89d4d47d8881034fd57289de2d238fc660adf92f66145ea50aa6f0362aa5"
+      },
+      {
+        "path": "heroes/orisa/javelin.opy",
+        "sha256": "85f409c6e7639cb2b276ef99a03ddac2629b56529b87a14a5624b975d3652f02"
+      },
+      {
+        "path": "heroes/orisa/terra_surge.opy",
+        "sha256": "987c74f4f1a7ac8d8d70c84522860a0c06a742bc8c6db7c468b90d6127ea7616"
+      },
+      {
+        "path": "heroes/pharah/init.opy",
+        "sha256": "0068c17233451472968ef56449b9bd66446966d47722037eff0e234fbf387b93"
+      },
+      {
+        "path": "heroes/ramattra/init.opy",
+        "sha256": "f944e6d5f8b0616125ac1857998a1f35b32779824918fc00a1e737613998ba25"
+      },
+      {
+        "path": "heroes/ramattra/nemesis_form.opy",
+        "sha256": "ac199c07cd4a62a551fa60afc1036aca8208c48114578e11103c4f422e487a30"
+      },
+      {
+        "path": "heroes/reaper/init.opy",
+        "sha256": "c5e4ea7c4008083ecedf281fc8da36308875426523a63516cd1ea50c7ea83145"
+      },
+      {
+        "path": "heroes/reinhardt/charge.opy",
+        "sha256": "838e95a92e0adb2be435803c53f478cdeb9cf03b0dcd1af38a1359a22713f202"
+      },
+      {
+        "path": "heroes/reinhardt/firestrike.opy",
+        "sha256": "cfa84ea46d8465d60e7bd0f3e42bd55dfa2e5c77a565cbf036c8469a59f14c27"
+      },
+      {
+        "path": "heroes/reinhardt/init.opy",
+        "sha256": "aa5d6eea90116649ccc038f84e2b4c5c5d1d358c8ab78dbe52e8d5095e0da27e"
+      },
+      {
+        "path": "heroes/reinhardt/shatter.opy",
+        "sha256": "f5af347762ab7d068c354ccf1a1cd8404505ba3936b6113423b41bcb922a5774"
+      },
+      {
+        "path": "heroes/roadhog/breather.opy",
+        "sha256": "4fce21cb92a475462749a5c1df84fd30948c29fa6c80bb86dfce7c084b5f1076"
+      },
+      {
+        "path": "heroes/roadhog/init.opy",
+        "sha256": "c0f759e25f8bf1c979dcb30bd2bed31e8563585d5de8c1b90ef85fa654957b14"
+      },
+      {
+        "path": "heroes/roadhog/wholehog.opy",
+        "sha256": "d90db88f2976835a6acaa25b9c2aabe6c6f0645bd9980a1849f9235f77318e1c"
+      },
+      {
+        "path": "heroes/sigma/accretion.opy",
+        "sha256": "86f0cdb215c902c61ea3e9b145f4e856cd3ccf0a3bd2e251fa2301c1c190c2a9"
+      },
+      {
+        "path": "heroes/sigma/init.opy",
+        "sha256": "4a1bd2f4f6a3c60f80d2bd663215efefb8d41bb23f080ba24bdb5c43b2c6e581"
+      },
+      {
+        "path": "heroes/sigma/kinetic_grasp.opy",
+        "sha256": "31c9ef9e37cfd7b5547d45e825e520183436ecf5160ea145bf86a8680e791e85"
+      },
+      {
+        "path": "heroes/sojourn/init.opy",
+        "sha256": "aec06fc842fb78b96455b1e6f34d1bc2aa39503f6a611a797ce4572daee8119e"
+      },
+      {
+        "path": "heroes/soldier/biotic_field.opy",
+        "sha256": "c6fc2d4e66076033606087a6dd702c24bb35dc16fae8e09a6ac559aa1de7cdf9"
+      },
+      {
+        "path": "heroes/soldier/init.opy",
+        "sha256": "cca99af06dcb4cd48ca6d9f9e2dc6ddec1c307a390d380357abdfd15ed2632fe"
+      },
+      {
+        "path": "heroes/sombra/init.opy",
+        "sha256": "c3f128e7b3730b6dbbb9e3fd7dbaaac4f3c25bb2159149776bbfb75fcfe452a5"
+      },
+      {
+        "path": "heroes/sombra/translocator.opy",
+        "sha256": "3d2057cd1dd565816e723872b774bddef0dcac3e7ea1713c0621885e734a9c36"
+      },
+      {
+        "path": "heroes/symmetra/init.opy",
+        "sha256": "31f37d6ac8b82312dbbeaa6d978abe570c11094a406b5763e7925a361ed35911"
+      },
+      {
+        "path": "heroes/torbjorn/init.opy",
+        "sha256": "5895d6ea36646718105560bcd572247985c7b52d6c7661a44accd8fedd08ab42"
+      },
+      {
+        "path": "heroes/tracer/init.opy",
+        "sha256": "b74fdfb187c2d71e8b9e3eb7f6a06d596e109b8bc287d9c57db2a11fb44afb70"
+      },
+      {
+        "path": "heroes/vendetta/init.opy",
+        "sha256": "31a1cf0988dbf324674781890427e99e5d04bd0c4e669167c9b2a90ea7a6bdfc"
+      },
+      {
+        "path": "heroes/venture/burrow.opy",
+        "sha256": "6a359b37c3fb111f4459f2e1182b99dfc0a133bd95a12d3d01b611a2b1a1c61d"
+      },
+      {
+        "path": "heroes/venture/clobber.opy",
+        "sha256": "38bbd7798ac632a970a0c5db29033bc4b7165963d9ab258aafa12e229dea1154"
+      },
+      {
+        "path": "heroes/venture/drill_dash.opy",
+        "sha256": "caf53f179567dafd7d8ab3dfec8dd9844d3ad2c0b54662d5443526d42cef4411"
+      },
+      {
+        "path": "heroes/venture/excavator.opy",
+        "sha256": "b92a827ea646dd1b7b5771e2cf7b401fd318e0721f82632b19b33b885c48ee73"
+      },
+      {
+        "path": "heroes/venture/init.opy",
+        "sha256": "87b839b7320a9c7fdf520123eecea9baf38c14048c85ed67b7bf5d27420283be"
+      },
+      {
+        "path": "heroes/venture/tectonic_shock.opy",
+        "sha256": "941153326f7ab057fbf5096444cb7570714ce86284f0fe4f4a1e7cb7ef3f5c7a"
+      },
+      {
+        "path": "heroes/widowmaker/init.opy",
+        "sha256": "4c623c225e1c988ecfcddeede5db63e556fcdc320fa56ba62f0103b5144738d4"
+      },
+      {
+        "path": "heroes/winston/barrier.opy",
+        "sha256": "b4d328ba1481f5b52d2e447f60e6e0c34819f156007361c8bdb8ecfcf0707820"
+      },
+      {
+        "path": "heroes/winston/init.opy",
+        "sha256": "3d718c50f8bb0013e7e83137d65e575461e2f1a772393f6aa6ebca8fb56a58d8"
+      },
+      {
+        "path": "heroes/winston/primal.opy",
+        "sha256": "2f08b9592afd7da6dca1482efae832ce6e3326041db4874f4249f4a0735149dd"
+      },
+      {
+        "path": "heroes/wreckingball/grapple.opy",
+        "sha256": "3ad509e40b72c5e4ebd500817f260b259580754695ed1b14b302a7260cbf4667"
+      },
+      {
+        "path": "heroes/wreckingball/init.opy",
+        "sha256": "317229534679bb89dff7f1845ac5a08c72b80515b61174d1508bfa9755e0c321"
+      },
+      {
+        "path": "heroes/wreckingball/piledriver.opy",
+        "sha256": "71928f3cd2fca422183ced10231140c630daf65d7d589d362b67b900901266ea"
+      },
+      {
+        "path": "heroes/wreckingball/shields.opy",
+        "sha256": "f052c50ca26ddee150b0079b50e649491f1ec612c556edb4670fea54149869e8"
+      },
+      {
+        "path": "heroes/wuyang/init.opy",
+        "sha256": "1c9c3d5b679c3391a9b6871b15bf5bb125b0351b8a1e577fc81f92eb3631b0a4"
+      },
+      {
+        "path": "heroes/zarya/ally_bubble.opy",
+        "sha256": "98311612f10e8b2f05ab347cb17045d34733b85cf5cc4f1b59ae17f836cb6673"
+      },
+      {
+        "path": "heroes/zarya/init.opy",
+        "sha256": "817d0193f2f0448f9583c526b81992ad65d010b979cb987df13820b8e697319b"
+      },
+      {
+        "path": "heroes/zarya/self_bubble.opy",
+        "sha256": "d626ee3ed61e981042b56dbb4999c5accfceba395f27f9292703051bbf7864f5"
+      },
+      {
+        "path": "heroes/zenyatta/init.opy",
+        "sha256": "7d233d3f5d990140a1acacbdb85672b7beb626ddef6ff7a0105b0bbca0e38ce8"
+      },
+      {
+        "path": "heroes/zenyatta/transc.opy",
+        "sha256": "b632e797f8854cc2c371289f506195b8a604629292b01a57ed424882bbc02714"
+      },
+      {
+        "path": "lobby/lobby.opy",
+        "sha256": "a321bb32f1e1f08f7c4d64d038591f7bacdd99fdd09f6177ab1e8c42da1ab86d"
+      },
+      {
+        "path": "main.opy",
+        "sha256": "45a3c2a3ea23e092035c96c88b5a8b8c2c6545e75aa93dc085723dda5c6e30d1"
+      },
+      {
+        "path": "passives/damage/damage_passive.opy",
+        "sha256": "a8c1d6f5147a7d66a1208df6531d6aa6964a79d0c7a6526af4fe5459e7ce772a"
+      },
+      {
+        "path": "passives/support/self_heal.opy",
+        "sha256": "f66e19a2945ba3b71cc2029b813f99f402a0d38a91caae3a87eb528a4ed2d5cd"
+      },
+      {
+        "path": "passives/tank/knockback.opy",
+        "sha256": "3d4653e4770c0a80ae97434b4d5f136f2816f97ca13e6acddaa1f8edc2955855"
+      },
+      {
+        "path": "passives/tank/ult_charge.opy",
+        "sha256": "2abd6898561ff6c1c41164e79418dfd856314adf025c6efb3ca7dd3f55949dc1"
+      },
+      {
+        "path": "utilities/anti_crash.opy",
+        "sha256": "1b1198ac7cc49d51b76a41c7781c8b0b288e59e5f63dba94379d729b1b2bb7bd"
+      },
+      {
+        "path": "utilities/custom_hp.opy",
+        "sha256": "c34d4fe926d8488ce0e129da05caebfcfd02dad9c453374d378ad17904238786"
+      },
+      {
+        "path": "utilities/hero_init.opy",
+        "sha256": "ba216e632946715b3af0b2c19546ba1204542636a32121af931b4d73793f7295"
+      },
+      {
+        "path": "utilities/hero_reset.opy",
+        "sha256": "ad62ad2e229d414a2daf6bd5328b726c00154c06ab3888d52f7cbaa771a01241"
+      },
+      {
+        "path": "utilities/hero_switch.opy",
+        "sha256": "d5b9a260539103bb243fe59f900fa999528f25b267264273a90aa73302d4dac2"
+      },
+      {
+        "path": "utilities/macro_functions.opy",
+        "sha256": "dd1986db2f65df66f8d4883c60e3c403ca15f0f1e7d6cecf39cace2d1bc4f8b2"
+      },
+      {
+        "path": "utilities/watermark.opy",
+        "sha256": "7db2d7bcdea9f4bed11f0bd01837acd4127a07cd80cc84a9b465278772fce889"
+      }
+    ],
+    "sha256": "ac6706a4aac869f6f6599215e4dbd8dd8bc78de1503bde93ff79ab62260c81e3",
     "source": "main.opy"
   },
   "oracle": {

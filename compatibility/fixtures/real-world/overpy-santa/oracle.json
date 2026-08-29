@@ -15,7 +15,13 @@
   },
   "fixture": "real-world/overpy-santa",
   "input": {
-    "sha256": "63d9a92ba2c59423857322c4b6d651a2e86863ed040e8af585599a364f11fe0e",
+    "files": [
+      {
+        "path": "santa.opy",
+        "sha256": "63d9a92ba2c59423857322c4b6d651a2e86863ed040e8af585599a364f11fe0e"
+      }
+    ],
+    "sha256": "47ed906272f1be049283a5e8d16b87d64caceccbc945a12d18464b6587f13793",
     "source": "santa.opy"
   },
   "oracle": {

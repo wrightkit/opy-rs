@@ -10,7 +10,13 @@
   },
   "fixture": "real-world/overpy-broken-weapons",
   "input": {
-    "sha256": "4b966f2b755545143c7a9fafdbb7b5d5e85604910f14d2532d92eea0854ae427",
+    "files": [
+      {
+        "path": "broken_weapons.opy",
+        "sha256": "4b966f2b755545143c7a9fafdbb7b5d5e85604910f14d2532d92eea0854ae427"
+      }
+    ],
+    "sha256": "08448dbca223b16df836d84b1a690b11dc5d93df7861739b7112401a2243c5dc",
     "source": "broken_weapons.opy"
   },
   "oracle": {

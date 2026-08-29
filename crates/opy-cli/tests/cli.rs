@@ -23,15 +23,6 @@ const ISSUE_46_UNSUPPORTED: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../compatibility/fixtures/synthetic/issue-46-unsupported/source.opy"
 );
-const ISSUE_47_DO_WHILE: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../../compatibility/fixtures/synthetic/issue-47-do-while-shapes/source.opy"
-);
-const ISSUE_47_DO_WHILE_ORACLE: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../../compatibility/fixtures/synthetic/issue-47-do-while-shapes/oracle.json"
-);
-
 fn run(args: &[&str]) -> std::process::Output {
     run_with_env(args, &[])
 }
@@ -125,29 +116,7 @@ fn compile_json_reports_success_identity_and_normalized_output() {
     );
     assert_eq!(json["compiler"]["name"], "opy-compiler");
     assert_eq!(json["catalog"]["implementation-version"], "0.1.11");
-}
-
-#[test]
-fn compile_json_reports_executable_semantic_wir_evidence() {
-    let output = run(&[
-        "compile",
-        "--format",
-        "json",
-        "--semantic-reference",
-        ISSUE_47_DO_WHILE_ORACLE,
-        ISSUE_47_DO_WHILE,
-    ]);
-    assert_eq!(output.status.code(), Some(0));
-    let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("compile JSON");
-    assert_eq!(
-        json["compile"]["semanticWIR"]["algorithm"],
-        "workshop-rs::roundtrip::equivalent"
-    );
-    assert_eq!(json["compile"]["semanticWIR"]["equivalent"], true);
-    assert_eq!(
-        json["compile"]["semanticWIR"]["inputSha256"],
-        json["compile"]["semanticWIR"]["referenceInputSha256"]
-    );
+    assert!(json.get("compatibility").is_none());
 }
 
 #[test]

@@ -76,10 +76,6 @@ pub(crate) struct CompileArgs {
     /// Workshop locale declared by the canonical catalog.
     #[arg(long, default_value = "en-US", value_name = "LOCALE")]
     pub(crate) language: String,
-
-    /// Pinned Workshop JSON snapshot used for executable canonical-WIR comparison.
-    #[arg(long, value_name = "PATH")]
-    pub(crate) semantic_reference: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]

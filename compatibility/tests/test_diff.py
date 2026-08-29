@@ -220,12 +220,15 @@ class DiffTests(unittest.TestCase):
             ).read_text(encoding="utf-8")
         )
         result = copy.deepcopy(oracle)
-        result["compile"]["semanticWIR"] = {
+        result["compatibility"] = {
             "schemaVersion": 1,
-            "algorithm": "workshop-rs::roundtrip::equivalent",
-            "inputSha256": oracle["input"]["sha256"],
-            "referenceInputSha256": oracle["input"]["sha256"],
-            "equivalent": False,
+            "semanticWIR": {
+                "schemaVersion": 1,
+                "algorithm": "workshop-rs::roundtrip::equivalent",
+                "inputSha256": oracle["input"]["sha256"],
+                "referenceInputSha256": oracle["input"]["sha256"],
+                "equivalent": False,
+            },
         }
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -242,7 +245,7 @@ class DiffTests(unittest.TestCase):
             "accepted-gap",
         )
 
-        result["compile"]["semanticWIR"]["referenceError"] = "invalid pinned Workshop"
+        result["compatibility"]["semanticWIR"]["referenceError"] = "invalid pinned Workshop"
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             self.write_result(root, result)
@@ -258,8 +261,8 @@ class DiffTests(unittest.TestCase):
             "inconclusive",
         )
 
-        del result["compile"]["semanticWIR"]["referenceError"]
-        result["compile"]["semanticWIR"]["equivalent"] = True
+        del result["compatibility"]["semanticWIR"]["referenceError"]
+        result["compatibility"]["semanticWIR"]["equivalent"] = True
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             self.write_result(root, result)

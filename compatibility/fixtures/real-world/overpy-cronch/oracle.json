@@ -15,7 +15,13 @@
   },
   "fixture": "real-world/overpy-cronch",
   "input": {
-    "sha256": "413d3d598ae08f3682acf925b7294316a68aba7c9a959e95d66b461485ba9169",
+    "files": [
+      {
+        "path": "cronch.opy",
+        "sha256": "413d3d598ae08f3682acf925b7294316a68aba7c9a959e95d66b461485ba9169"
+      }
+    ],
+    "sha256": "2c9764fa13d484ae244a1a9907c208e2c5731024e9898f5ab27597faa633cc30",
     "source": "cronch.opy"
   },
   "oracle": {
