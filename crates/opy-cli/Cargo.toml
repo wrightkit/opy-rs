@@ -21,7 +21,7 @@ workspace = true
 clap = { version = "4.5", features = ["derive"] }
 clap_complete = "4.5"
 opy-rs.workspace = true
-opy-compiler = { path = "../opy-compiler", version = "0.1.5" }
+opy-compiler = { path = "../opy-compiler", version = "0.1.6" }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 workshop-rs.workspace = true
