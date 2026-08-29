@@ -4,8 +4,7 @@
 //! fixture is load-bearing for the native compiler: this suite compiles the
 //! fixture source through the full native pipeline (frontend → OPY HIR →
 //! canonical WIR → deterministic en-US emission). The native lowering is
-//! compared directly with the oracle's parsed canonical WIR; the residual
-//! difference is kept explicit until the follow-up owner closes it.
+//! compared directly with the oracle's parsed canonical WIR.
 //!
 //! The adjacent `synthetic/issue-46-unsupported` fixture is the negative
 //! counterpart: the frontend resolves it and the pinned oracle compiles it,
@@ -46,7 +45,7 @@ fn compile_fixture(dir: &Path) -> opy_compiler::CompilationArtifact {
 }
 
 #[test]
-fn issue_46_native_wir_gap_is_explicit() {
+fn issue_46_native_wir_matches_the_pinned_oracle() {
     let dir = fixture_dir("issue-46-primitives");
     let artifact = compile_fixture(&dir);
     let catalog = Catalog::builtin().expect("catalog must load");
@@ -55,10 +54,7 @@ fn issue_46_native_wir_gap_is_explicit() {
     let oracle = workshop_rs::parser::parse(&oracle_workshop(&dir), &catalog, &locale)
         .expect("the pinned oracle Workshop text must reparse");
 
-    assert!(
-        !equivalent(&artifact.wir, &oracle),
-        "native WIR gap disappeared; update the compiler expectation"
-    );
+    assert!(equivalent(&artifact.wir, &oracle));
 }
 
 #[test]
