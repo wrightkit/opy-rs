@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compile the compatibility corpus and write an explicit native report."""
+"""Compile the compatibility corpus and run the shared differential contract."""
 
 from __future__ import annotations
 
@@ -8,9 +8,10 @@ import hashlib
 import json
 import subprocess
 import sys
-from collections import Counter
 from pathlib import Path
 from typing import Any
+
+import diff
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -86,42 +87,6 @@ def run_fixture(binary: Path, directory: Path, metadata: dict[str, Any]) -> dict
     return result
 
 
-def compare(
-    directory: Path, metadata: dict[str, Any], native: dict[str, Any]
-) -> dict[str, Any]:
-    oracle = read_json(directory / "oracle.json")
-    oracle_compile = oracle["compile"]
-    native_compile = native["compile"]
-    oracle_status = oracle_compile["status"]
-    native_status = native_compile["status"]
-    if oracle_status == native_status == "success":
-        output = (
-            "match"
-            if oracle_compile["workshop"] == native_compile["workshop"]
-            else "normalized-output-difference"
-        )
-        status = "match" if output == "match" else "inconclusive"
-    elif oracle_status == native_status == "failure":
-        output = "not-applicable"
-        status = "expected-failure"
-    elif oracle_status == "success" and native_status == "failure":
-        output = "not-applicable"
-        status = "known-gap"
-    else:
-        output = "not-applicable"
-        status = "unexpected-success"
-    return {
-        "fixture": metadata["id"],
-        "expectedStatus": metadata["expectedStatus"],
-        "oracleStatus": oracle_status,
-        "nativeStatus": native_status,
-        "status": status,
-        "output": output,
-        "failureClass": native_compile.get("failureClass"),
-        "diagnostics": native_compile.get("diagnostics", []),
-    }
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -135,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--allow-inconclusive",
         action="store_true",
-        help="return success even when normalized output needs semantic WIR review",
+        help="return success for inconclusive comparisons after shared checks pass",
     )
     args = parser.parse_args(argv)
     binary = args.binary.resolve()
@@ -145,32 +110,25 @@ def main(argv: list[str] | None = None) -> int:
     report_path = args.report.resolve()
     results_root.mkdir(parents=True, exist_ok=True)
 
-    comparisons = []
     for directory, metadata in fixtures():
         native = run_fixture(binary, directory, metadata)
         result_path = results_root / metadata["id"] / "result.json"
         result_path.parent.mkdir(parents=True, exist_ok=True)
         result_path.write_text(json.dumps(native, indent=2, sort_keys=True) + "\n")
-        comparisons.append(compare(directory, metadata, native))
 
-    counts = Counter(item["status"] for item in comparisons)
-    report = {
-        "schemaVersion": 1,
-        "comparison": {
-            "oracle": "compatibility/fixtures/**/oracle.json",
-            "producer": "opy-cli compile --format json",
-            "contract": "normalized Workshop text; semantic differences require canonical WIR evidence",
-        },
-        "summary": {"fixtures": len(comparisons), "counts": dict(sorted(counts.items()))},
-        "results": comparisons,
-    }
-    report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
-    print(json.dumps(report["summary"], indent=2, sort_keys=True))
-    blocking = {"unexpected-success"}
-    if not args.allow_inconclusive:
-        blocking.add("inconclusive")
-    return 1 if any(item["status"] in blocking for item in comparisons) else 0
+    # Keep expectation loading, input-hash validation, stage comparison, and
+    # blocking status classification in the existing independent comparator.
+    try:
+        return diff.run(
+            FIXTURES,
+            report_path,
+            results_root,
+            None,
+            set(),
+            args.allow_inconclusive,
+        )
+    except diff.DiffError as error:
+        raise NativeError(str(error)) from error
 
 
 if __name__ == "__main__":

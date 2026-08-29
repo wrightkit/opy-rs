@@ -64,16 +64,15 @@ The differential runner derives `unexpected-divergence`, `regression`, and
 `inconclusive` results from those records; it never treats a reference-success
 / native-failure case as a match.
 
-run_native.py drives the built opy-cli compile --format json contract for every
-fixture and writes ephemeral producer results plus an explicit comparison
-report under target/. A match means normalized Workshop output agrees with the
-pinned oracle. A known-gap records an oracle-success/native-failure case with
-its structured compiler diagnostic; inconclusive is used when both sides
-compile but normalized text differs and semantic WIR evidence is not available
-in this runner. Neither state is counted as successful parity.
-The command exits non-zero when inconclusive cases remain; use
---allow-inconclusive only for a local report that is explicitly not an
-acceptance gate.
+`run_native.py` drives the built `opy-cli compile --format json` contract for
+every fixture, writes ephemeral producer results under `target/`, and delegates
+all expectation loading, input-hash validation, stage comparison, and blocking
+classification to `diff.py`. Only the durable, evidence-backed entries in
+`differential-expectations.json` can produce `known-gap` or `unsupported`.
+Expectation mismatches are reported as `unexpected-divergence` or `regression`.
+The command exits non-zero for those mismatches and, by default, for
+`inconclusive` cases; use `--allow-inconclusive` only for a local report that is
+explicitly not an acceptance gate.
 
 Real-world fixtures retain the complete project as the integration case. A
 fixture may also declare `regressions` pointing to minimized snippets under
