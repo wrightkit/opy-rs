@@ -11,6 +11,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use opy_rs::hir::{self, Expr, RuleEntry, Span as HirSpan, Stmt, SwitchArm, default_var_index};
 use opy_rs::manifest::{FunctionKind, Manifest};
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 use workshop_rs::catalog::{Catalog, CatalogIdentity, Kind, Locale};
 use workshop_rs::source::{Position as WorkshopPosition, SourceFile, Span as WorkshopSpan};
 use workshop_rs::wir::{self, Action, Event, PlayerEventKind, Program, Value, ValueNode};
@@ -69,6 +70,22 @@ pub struct CompileResult {
     pub stdout: String,
     pub workshop_exact: String,
     pub workshop: String,
+    #[serde(rename = "semanticWIR", skip_serializing_if = "Option::is_none")]
+    pub semantic_wir: Option<SemanticWIRComparison>,
+}
+
+/// Executable canonical-WIR comparison evidence for a pinned Workshop
+/// reference supplied by a compatibility runner.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SemanticWIRComparison {
+    pub schema_version: u32,
+    pub algorithm: &'static str,
+    pub input_sha256: String,
+    pub reference_input_sha256: String,
+    pub equivalent: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reference_error: Option<String>,
 }
 
 /// Complete versioned compile report for CLI, CI, and embedding consumers.
@@ -362,6 +379,38 @@ impl Compiler {
         root: &std::path::Path,
         locale: &Locale,
     ) -> CompileReport {
+        self.compile_source_report_inner(source, main_path, root, locale, None)
+    }
+
+    /// Compile source and compare its canonical WIR with a pinned Workshop
+    /// reference. Both input hashes are recorded in the result so a
+    /// compatibility runner cannot silently compare unrelated inputs.
+    pub fn compile_source_report_with_semantic_reference(
+        &self,
+        source: &str,
+        main_path: &str,
+        root: &std::path::Path,
+        locale: &Locale,
+        reference_input_sha256: &str,
+        reference_workshop: &str,
+    ) -> CompileReport {
+        self.compile_source_report_inner(
+            source,
+            main_path,
+            root,
+            locale,
+            Some((reference_input_sha256, reference_workshop)),
+        )
+    }
+
+    fn compile_source_report_inner(
+        &self,
+        source: &str,
+        main_path: &str,
+        root: &std::path::Path,
+        locale: &Locale,
+        semantic_reference: Option<(&str, &str)>,
+    ) -> CompileReport {
         let outcome = opy_rs::compile_with_overlay_outcome(
             source,
             main_path,
@@ -392,7 +441,19 @@ impl Compiler {
         };
 
         match self.compile_hir_with_locale_and_hook(&hir, outcome.post_compile_hook, locale) {
-            Ok(artifact) => CompileReport::success(compiler, catalog, artifact),
+            Ok(artifact) => {
+                let semantic_wir = semantic_reference.map(|(reference_input_sha256, workshop)| {
+                    semantic_wir_comparison(
+                        source,
+                        reference_input_sha256,
+                        workshop,
+                        &self.catalog,
+                        locale,
+                        &artifact.wir,
+                    )
+                });
+                CompileReport::success(compiler, catalog, artifact, semantic_wir)
+            }
             Err(error) => CompileReport::failure(
                 compiler,
                 catalog,
@@ -454,6 +515,7 @@ impl CompileReport {
         compiler: CompilerIdentity,
         catalog: CatalogIdentity,
         artifact: CompilationArtifact,
+        semantic_wir: Option<SemanticWIRComparison>,
     ) -> Self {
         Self {
             schema_version: COMPILE_SCHEMA_VERSION,
@@ -467,6 +529,7 @@ impl CompileReport {
                 stdout: String::new(),
                 workshop_exact: artifact.final_output.clone(),
                 workshop: normalize_workshop(&artifact.final_output),
+                semantic_wir,
             },
         }
     }
@@ -489,9 +552,41 @@ impl CompileReport {
                 stdout: String::new(),
                 workshop_exact: String::new(),
                 workshop: String::new(),
+                semantic_wir: None,
             },
         }
     }
+}
+
+fn semantic_wir_comparison(
+    source: &str,
+    reference_input_sha256: &str,
+    reference_workshop: &str,
+    catalog: &Catalog,
+    locale: &Locale,
+    native_wir: &Program,
+) -> SemanticWIRComparison {
+    let reference = workshop_rs::parser::parse(reference_workshop, catalog, locale);
+    let (equivalent, reference_error) = match reference {
+        Ok(reference_wir) => (
+            workshop_rs::roundtrip::equivalent(native_wir, &reference_wir),
+            None,
+        ),
+        Err(error) => (false, Some(error.to_string())),
+    };
+    SemanticWIRComparison {
+        schema_version: 1,
+        algorithm: "workshop-rs::roundtrip::equivalent",
+        input_sha256: sha256_text(source),
+        reference_input_sha256: reference_input_sha256.to_string(),
+        equivalent,
+        reference_error,
+    }
+}
+
+fn sha256_text(value: &str) -> String {
+    let digest = Sha256::digest(value.as_bytes());
+    format!("{digest:x}")
 }
 
 fn compile_diagnostic(error: IntegrationError, files: &[hir::SourceFile]) -> CompileDiagnostic {
@@ -3585,6 +3680,16 @@ rule "allocation":
             serde_json::from_str(&std::fs::read_to_string(fixture.join("oracle.json")).unwrap())
                 .unwrap();
         let oracle_workshop = oracle["compile"]["workshop"].as_str().unwrap();
+        let oracle_wir = workshop_rs::parser::parse(
+            oracle_workshop,
+            &Catalog::builtin().unwrap(),
+            &Locale::new("en-US"),
+        )
+        .unwrap();
+        assert!(workshop_rs::roundtrip::equivalent(
+            &artifact.wir,
+            &oracle_wir
+        ));
 
         assert!(oracle_workshop.contains("0: reserved"));
         assert!(oracle_workshop.contains("1: first"));
@@ -3904,6 +4009,16 @@ rule "main":
             .next()
             .unwrap();
         let actual = artifact.emitted.split("\n\nrule").next().unwrap();
+        let oracle_wir = workshop_rs::parser::parse(
+            oracle["compile"]["workshop"].as_str().unwrap(),
+            &Catalog::builtin().unwrap(),
+            &Locale::new("en-US"),
+        )
+        .unwrap();
+        assert!(workshop_rs::roundtrip::equivalent(
+            &artifact.wir,
+            &oracle_wir
+        ));
         assert_eq!(
             normalize_workshop_structural_whitespace(actual),
             normalize_workshop_structural_whitespace(expected)

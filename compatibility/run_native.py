@@ -50,6 +50,7 @@ def fixtures() -> list[tuple[Path, dict[str, Any]]]:
 
 def run_fixture(binary: Path, directory: Path, metadata: dict[str, Any]) -> dict[str, Any]:
     source = directory / metadata["source"]
+    semantic_reference = directory / "oracle.json"
     completed = subprocess.run(
         [
             str(binary),
@@ -58,9 +59,11 @@ def run_fixture(binary: Path, directory: Path, metadata: dict[str, Any]) -> dict
             "json",
             "--language",
             "en-US",
-            str(source),
+            "--semantic-reference",
+            str(semantic_reference.name),
+            str(source.name),
         ],
-        cwd=ROOT,
+        cwd=directory,
         capture_output=True,
         text=True,
         encoding="utf-8",

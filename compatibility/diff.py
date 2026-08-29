@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import shlex
 import subprocess
@@ -25,7 +26,7 @@ EXPECTED_COMPILER_COMPARISONS = {
     "normalized-output",
     "semantic-wir",
     "diagnostic-code",
-    "unverified",
+    "compiler-contract",
 }
 
 
@@ -145,7 +146,7 @@ def load_compiler_expectations(
         if comparison not in EXPECTED_COMPILER_COMPARISONS:
             raise DiffError(
                 f"{fixture}: comparison must be normalized-output, semantic-wir, "
-                "diagnostic-code, or unverified"
+                "diagnostic-code, or compiler-contract"
             )
         evidence = case.get("evidence")
         if not isinstance(evidence, list) or not evidence or not all(
@@ -158,10 +159,62 @@ def load_compiler_expectations(
         note = case.get("note")
         if not isinstance(note, str) or not note:
             raise DiffError(f"{fixture}: note must be a non-empty string")
-        if classification == "match" and comparison == "unverified":
-            raise DiffError(f"{fixture}: match cannot use an unverified comparison")
         if comparison in {"normalized-output", "semantic-wir"} and native_status != "success":
             raise DiffError(f"{fixture}: output comparisons require nativeStatus success")
+        if comparison == "semantic-wir":
+            semantic_equivalent = case.get("semanticEquivalent")
+            if not isinstance(semantic_equivalent, bool):
+                raise DiffError(
+                    f"{fixture}: semantic-wir requires boolean semanticEquivalent"
+                )
+            required_evidence = {
+                f"oracle:{fixture}/oracle.json",
+                f"provenance:{fixture}/fixture.json",
+            }
+            missing_evidence = sorted(required_evidence - set(evidence))
+            if missing_evidence:
+                raise DiffError(
+                    f"{fixture}: semantic-wir expectations require concrete evidence: "
+                    + ", ".join(missing_evidence)
+                )
+            if classification == "match" and not semantic_equivalent:
+                raise DiffError(
+                    f"{fixture}: a semantic-wir match requires semanticEquivalent=true"
+                )
+            if classification == "known-gap" and semantic_equivalent:
+                raise DiffError(
+                    f"{fixture}: a semantic-wir known-gap requires semanticEquivalent=false"
+                )
+        if classification != "match":
+            required_evidence = {
+                f"oracle:{fixture}/oracle.json",
+                f"provenance:{fixture}/fixture.json",
+            }
+            missing_evidence = sorted(required_evidence - set(evidence))
+            if missing_evidence:
+                raise DiffError(
+                    f"{fixture}: non-match expectations require concrete evidence: "
+                    + ", ".join(missing_evidence)
+                )
+            fixtures_root = path.parent / "fixtures"
+            oracle_path = fixtures_root / fixture / "oracle.json"
+            provenance_path = fixtures_root / fixture / "fixture.json"
+            oracle = load_json(oracle_path)
+            provenance = load_json(provenance_path)
+            if oracle.get("fixture") != fixture:
+                raise DiffError(f"{fixture}: oracle evidence fixture does not match")
+            if provenance.get("id") != fixture:
+                raise DiffError(f"{fixture}: provenance evidence fixture does not match")
+            source_value = provenance.get("source")
+            if not isinstance(source_value, str) or not source_value:
+                raise DiffError(f"{fixture}: provenance evidence has no source")
+            source_path = fixtures_root / fixture / source_value
+            try:
+                source_hash = hashlib.sha256(source_path.read_bytes()).hexdigest()
+            except OSError as error:
+                raise DiffError(f"{fixture}: cannot read provenance source: {error}") from error
+            if oracle.get("input", {}).get("sha256") != source_hash:
+                raise DiffError(f"{fixture}: oracle evidence input hash is stale")
         if comparison == "diagnostic-code":
             if not isinstance(case.get("diagnosticCode"), str) or not case["diagnosticCode"]:
                 raise DiffError(f"{fixture}: diagnostic-code requires diagnosticCode")
@@ -470,14 +523,68 @@ def compare_compiler_fixture(
         )
         status = "match" if oracle_output == producer_output else "regression"
     elif contract == "semantic-wir":
-        stages.append(
-            stage(
-                "semantic-wir",
-                "match",
-                evidence=expectation["evidence"],
+        semantic = native_compile.get("semanticWIR")
+        oracle_input_sha256 = oracle["input"].get("sha256")
+        producer_input_sha256 = producer["input"].get("sha256")
+        if not isinstance(semantic, dict):
+            stages.append(
+                stage(
+                    "semantic-wir",
+                    "inconclusive",
+                    reason="producer did not emit executable canonical-WIR evidence",
+                )
             )
-        )
-        status = "match"
+            status = "inconclusive"
+        else:
+            input_matches = semantic.get("inputSha256") == producer_input_sha256
+            reference_matches = (
+                semantic.get("referenceInputSha256") == oracle_input_sha256
+            )
+            algorithm_matches = (
+                semantic.get("schemaVersion") == 1
+                and semantic.get("algorithm")
+                == "workshop-rs::roundtrip::equivalent"
+            )
+            equivalent = semantic.get("equivalent") is True
+            reference_error = semantic.get("referenceError")
+            reference_parsed = reference_error is None
+            evidence_matches = (
+                reference_parsed
+                and input_matches
+                and reference_matches
+                and algorithm_matches
+                and equivalent == expectation["semanticEquivalent"]
+            )
+            expected_equivalent = expectation["semanticEquivalent"]
+            if not reference_parsed:
+                semantic_status = "inconclusive"
+            elif evidence_matches and expected_equivalent:
+                semantic_status = "match"
+            elif evidence_matches:
+                semantic_status = "accepted-gap"
+            else:
+                semantic_status = "regression"
+            stages.append(
+                stage(
+                    "semantic-wir",
+                    semantic_status,
+                    algorithm=semantic.get("algorithm"),
+                    inputSha256=semantic.get("inputSha256"),
+                    referenceInputSha256=semantic.get("referenceInputSha256"),
+                    equivalent=semantic.get("equivalent"),
+                    expectedEquivalent=expected_equivalent,
+                    referenceError=reference_error,
+                )
+            )
+            status = (
+                "inconclusive"
+                if not reference_parsed
+                else "match"
+                if evidence_matches and expectation["classification"] == "match"
+                else expectation["classification"]
+                if evidence_matches
+                else "regression"
+            )
     elif contract == "diagnostic-code":
         expected_class = expectation.get("failureClass")
         expected_code = expectation.get("diagnosticCode")
@@ -510,6 +617,14 @@ def compare_compiler_fixture(
 
     if expectation["classification"] != "match" and status == "match":
         status = expectation["classification"]
+    inconclusive_reason = next(
+        (
+            item.get("reason") or item.get("referenceError")
+            for item in stages
+            if item["outcome"] == "inconclusive"
+        ),
+        None,
+    )
     return {
         "fixture": fixture_id,
         "category": metadata.get("category", "unknown"),
@@ -522,6 +637,7 @@ def compare_compiler_fixture(
         "owner": expectation["owner"],
         "comparison": contract,
         "note": expectation["note"],
+        "reason": inconclusive_reason,
         "regressionStages": [
             item["name"] for item in stages if item["outcome"] == "regression"
         ],
@@ -532,7 +648,10 @@ def compare_compiler_fixture(
     }
 
 
-def build_report(results: list[dict[str, Any]]) -> dict[str, Any]:
+def build_report(
+    results: list[dict[str, Any]],
+    comparison_stages: list[str] | None = None,
+) -> dict[str, Any]:
     by_stage: dict[str, dict[str, int]] = {}
     by_category: dict[str, dict[str, int]] = {}
     for result in results:
@@ -551,7 +670,8 @@ def build_report(results: list[dict[str, Any]]) -> dict[str, Any]:
         "comparison": {
             "oracle": "fixture oracle snapshots",
             "producer": "opy-rs result producer contract",
-            "stages": [
+            "stages": comparison_stages
+            or [
                 "compile-status",
                 "diagnostics",
                 "exact-output",
@@ -567,6 +687,19 @@ def build_report(results: list[dict[str, Any]]) -> dict[str, Any]:
         },
         "results": results,
     }
+
+
+def build_compiler_report(results: list[dict[str, Any]]) -> dict[str, Any]:
+    return build_report(
+        results,
+        [
+            "compile-status",
+            "normalized-output",
+            "semantic-wir",
+            "diagnostic-code",
+            "compiler-contract",
+        ],
+    )
 
 
 def run(
@@ -655,7 +788,7 @@ def run_compiler(
         compare_compiler_fixture(fixtures_root, fixture_id, results_root, expectations)
         for fixture_id in ids
     ]
-    report = build_report(results)
+    report = build_compiler_report(results)
     write_json(report_path, report)
     print(json.dumps(report["summary"], indent=2, sort_keys=True))
     blocking = [

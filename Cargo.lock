@@ -385,6 +385,7 @@ dependencies = [
  "opy-rs",
  "serde",
  "serde_json",
+ "sha2",
  "workshop-rs",
 ]
 

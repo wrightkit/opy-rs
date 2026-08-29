@@ -66,11 +66,17 @@ The differential runner derives `unexpected-divergence`, `regression`, and
 
 `compiler-expectations.json` is a separate contract for the #38 compiler
 surface. It does not replace or weaken the source/frontend expectations above:
-its 51 entries declare the compiler status, normalized-output/semantic-WIR or
-diagnostic contract, evidence, and owner for each fixture. The compiler report
-therefore has an explicit 17-fixture baseline, 31 tracked known gaps, and 3
-unsupported cases rather than treating source-only expectations as compiler
-parity evidence.
+its entries declare the compiler status, normalized-output/direct semantic-WIR
+or diagnostic contract, evidence, and concrete owner for each fixture. A
+non-match must cite both its pinned oracle snapshot and fixture provenance;
+parent issue #8 is not a durable gap owner.
+
+For `semantic-wir`, `run_native.py` passes the same fixture's oracle snapshot to
+the compiler. `opy-cli` parses only the oracle Workshop text into canonical WIR
+and compares it directly with the native WIR produced by lowering through
+`workshop-rs::roundtrip::equivalent`. The result records the source and oracle
+input hashes. A text reparse of the native emission is not accepted as
+semantic-WIR evidence.
 
 `run_native.py` drives the built `opy-cli compile --format json` contract for
 every fixture, writes ephemeral producer results under `target/`, and delegates

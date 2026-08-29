@@ -209,6 +209,81 @@ class DiffTests(unittest.TestCase):
                     diff.load_compiler_expectations(),
                 )
 
+    def test_compiler_semantic_wir_consumes_direct_evidence(self):
+        fixture = "synthetic/issue-47-control-flow"
+        oracle = json.loads(
+            (
+                COMPATIBILITY_DIR
+                / "fixtures"
+                / fixture
+                / "oracle.json"
+            ).read_text(encoding="utf-8")
+        )
+        result = copy.deepcopy(oracle)
+        result["compile"]["semanticWIR"] = {
+            "schemaVersion": 1,
+            "algorithm": "workshop-rs::roundtrip::equivalent",
+            "inputSha256": oracle["input"]["sha256"],
+            "referenceInputSha256": oracle["input"]["sha256"],
+            "equivalent": False,
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write_result(root, result)
+            report_result = diff.compare_compiler_fixture(
+                COMPATIBILITY_DIR / "fixtures",
+                fixture,
+                root,
+                diff.load_compiler_expectations(),
+            )
+        self.assertEqual(report_result["status"], "known-gap")
+        self.assertEqual(
+            report_result["stages"][1]["outcome"],
+            "accepted-gap",
+        )
+
+        result["compile"]["semanticWIR"]["referenceError"] = "invalid pinned Workshop"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write_result(root, result)
+            report_result = diff.compare_compiler_fixture(
+                COMPATIBILITY_DIR / "fixtures",
+                fixture,
+                root,
+                diff.load_compiler_expectations(),
+            )
+        self.assertEqual(report_result["status"], "inconclusive")
+        self.assertEqual(
+            report_result["stages"][1]["outcome"],
+            "inconclusive",
+        )
+
+        del result["compile"]["semanticWIR"]["referenceError"]
+        result["compile"]["semanticWIR"]["equivalent"] = True
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write_result(root, result)
+            report_result = diff.compare_compiler_fixture(
+                COMPATIBILITY_DIR / "fixtures",
+                fixture,
+                root,
+                diff.load_compiler_expectations(),
+            )
+        self.assertEqual(report_result["status"], "regression")
+
+    def test_compiler_report_declares_compiler_stages(self):
+        report = diff.build_compiler_report([])
+        self.assertEqual(
+            report["comparison"]["stages"],
+            [
+                "compile-status",
+                "normalized-output",
+                "semantic-wir",
+                "diagnostic-code",
+                "compiler-contract",
+            ],
+        )
+
     def test_missing_producer_is_inconclusive(self):
         report_result = diff.compare_fixture(
             COMPATIBILITY_DIR / "fixtures",
