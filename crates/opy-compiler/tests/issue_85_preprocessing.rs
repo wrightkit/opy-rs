@@ -24,15 +24,24 @@ fn included_macro_call_reaches_canonical_workshop_output() {
         .rules
         .get(RuleId::from_index(0))
         .expect("fixture has one rule");
-    let Action::Debug { value, .. } = artifact
+    let Action::Call { name, args, .. } = artifact
         .wir
         .actions
         .get(rule.actions[0])
         .expect("fixture has one debug action")
     else {
-        panic!("macro must lower to a debug action");
+        panic!("macro must lower to a native HUD action");
     };
-    let Value::Call { name, args } = &artifact.wir.values.get(*value).unwrap().value else {
+    assert_eq!(name, "createHudText");
+    let Value::Call {
+        name: text_name,
+        args: text_args,
+    } = &artifact.wir.values.get(args[2]).unwrap().value
+    else {
+        panic!("debug text must lower to a canonical value call");
+    };
+    assert_eq!(text_name, "customString");
+    let Value::Call { name, args } = &artifact.wir.values.get(text_args[1]).unwrap().value else {
         panic!("macro result must lower to a canonical value call");
     };
     assert_eq!(name, "add");
@@ -58,7 +67,10 @@ fn statement_macro_expands_into_multiple_canonical_actions() {
     assert_eq!(
         rule.actions
             .iter()
-            .filter(|id| matches!(artifact.wir.actions.get(**id), Some(Action::Debug { .. })))
+            .filter(|id| matches!(
+                artifact.wir.actions.get(**id),
+                Some(Action::Call { name, .. }) if name == "createHudText"
+            ))
             .count(),
         2
     );

@@ -88,14 +88,15 @@
     {
       "fixture": "synthetic/control-flow",
       "nativeStatus": "success",
-      "classification": "known-gap",
-      "comparison": "compiler-contract",
+      "classification": "match",
+      "comparison": "semantic-wir",
       "evidence": [
         "oracle:synthetic/control-flow/oracle.json",
         "provenance:synthetic/control-flow/fixture.json"
       ],
-      "owner": "workshop-rs#123",
-      "note": "The native canonical Debug carrier is intentionally emitted as a simplified HUD action, while the pinned oracle expands type-aware debug formatting; direct equivalence remains a Workshop-owned carrier gap."
+      "owner": "opy-rs#89",
+      "note": "The native debug helper lowers to the pinned canonical HUD action and is directly equivalent to the oracle.",
+      "semanticEquivalent": true
     },
     {
       "fixture": "synthetic/issue-33-switch-break",

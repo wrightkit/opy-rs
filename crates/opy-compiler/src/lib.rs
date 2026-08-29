@@ -1882,11 +1882,7 @@ impl<'a> Lowering<'a> {
                             span: self.wir_span(*span)?,
                         })])
                     } else if name == "debug" && args.len() == 1 {
-                        let val = self.lower_value(&args[0])?;
-                        Ok(vec![self.wir.actions.push(Action::Debug {
-                            value: val,
-                            span: self.wir_span(*span)?,
-                        })])
+                        Ok(vec![self.lower_debug(&args[0], *span)?])
                     } else if name == "print" && args.len() == 1 {
                         let msg = self.lower_value(&args[0])?;
                         Ok(vec![self.wir.actions.push(Action::Print {
@@ -2239,6 +2235,293 @@ impl<'a> Lowering<'a> {
             },
             self.wir_span(span)?,
         )))
+    }
+
+    fn lower_debug(
+        &mut self,
+        expr: &Expr,
+        span: Option<HirSpan>,
+    ) -> Result<wir::ActionId, IntegrationError> {
+        macro_rules! call {
+            ($name:literal $(, $arg:expr)* $(,)?) => {{
+                let args = vec![$($arg),*];
+                self.push_call($name, args)
+            }};
+        }
+
+        let value = self.lower_value(expr)?;
+        let array_text = if self.debug_value_is_array(value) {
+            self.lower_debug_array_text(value)
+        } else {
+            value
+        };
+        let debug_label = canonical_debug_text(&debug_expr_text(expr));
+        let debug_prefix = format!("{debug_label}\u{2028}= {{0}}");
+        let inline_padding = 128 - debug_prefix.chars().count() - "{1}".chars().count();
+        let padding_text = self.push_value(Value::String(" ".repeat(170 - inline_padding)));
+        let padding = self.push_call("customString", vec![padding_text]);
+        let debug_label = self.push_value(Value::String(format!(
+            "{debug_prefix}{}{{1}}",
+            " ".repeat(inline_padding)
+        )));
+        let text = self.push_call("customString", vec![debug_label, array_text, padding]);
+        let all_teams = self.push_value(Value::Enum {
+            value_type: "Team".to_string(),
+            value: "ALL".to_string(),
+        });
+        let all_players = call!("allPlayers", all_teams);
+        let null_value = self.push_value(Value::Null);
+        let null_value_2 = self.push_value(Value::Null);
+        let null_value_3 = self.push_value(Value::Null);
+        let null_value_4 = self.push_value(Value::Null);
+        let hud_position = self.push_value(Value::Enum {
+            value_type: "HudPosition".to_string(),
+            value: "LEFT".to_string(),
+        });
+        let sort_order = self.push_value(Value::Number {
+            value: -9999.0,
+            text: "-9999".to_string(),
+        });
+        let color = self.push_value(Value::Enum {
+            value_type: "Color".to_string(),
+            value: "WHITE".to_string(),
+        });
+        let reevaluation = self.push_value(Value::Enum {
+            value_type: "HudReeval".to_string(),
+            value: "VISIBILITY_SORT_ORDER_STRING_AND_COLOR".to_string(),
+        });
+        let visibility = self.push_value(Value::Enum {
+            value_type: "SpecVisibility".to_string(),
+            value: "DEFAULT".to_string(),
+        });
+        Ok(self.wir.actions.push(Action::Call {
+            name: "createHudText".to_string(),
+            args: vec![
+                all_players,
+                null_value,
+                text,
+                null_value_2,
+                hud_position,
+                sort_order,
+                null_value_3,
+                color,
+                null_value_4,
+                reevaluation,
+                visibility,
+            ],
+            span: self.wir_span(span)?,
+        }))
+    }
+
+    fn lower_debug_array_text(&mut self, value: wir::ValueId) -> wir::ValueId {
+        macro_rules! call {
+            ($name:literal $(, $arg:expr)* $(,)?) => {{
+                let args = vec![$($arg),*];
+                self.push_call($name, args)
+            }};
+        }
+
+        let current_count = call!("countOf", call!("currentArrayElement"));
+        let is_single = call!(
+            "==",
+            call!("countOf", call!("currentArrayElement")),
+            self.push_number(1.0, "1")
+        );
+        let is_empty = call!("==", call!("currentArrayElement"), call!("emptyArray"));
+        let not_null = call!(
+            "!=",
+            call!("currentArrayElement"),
+            self.push_value(Value::Null)
+        );
+        let has_empty_array = call!("and", is_empty, not_null);
+        let brackets = call!("or", is_single, has_empty_array);
+        let first_element = call!(
+            "customString",
+            self.push_value(Value::String("[{0}]".to_string())),
+            call!("currentArrayElement"),
+        );
+        let many_elements = call!(
+            "customString",
+            self.push_value(Value::String("[{0}, …+{1}]".to_string())),
+            call!("currentArrayElement"),
+            call!(
+                "subtract",
+                call!("countOf", call!("currentArrayElement")),
+                self.push_number(1.0, "1"),
+            ),
+        );
+        let element_text = call!(
+            "ifThenElse",
+            brackets,
+            first_element,
+            call!(
+                "ifThenElse",
+                current_count,
+                many_elements,
+                call!("currentArrayElement"),
+            ),
+        );
+        let mapped_elements = call!("mappedArray", value, element_text,);
+        let mapped_input = call!("array", mapped_elements);
+        let current_array = call!("currentArrayElement");
+        let actual_array = call!(
+            "or",
+            call!("countOf", current_array),
+            call!(
+                "and",
+                call!("==", call!("currentArrayElement"), call!("emptyArray")),
+                call!(
+                    "!=",
+                    call!("currentArrayElement"),
+                    self.push_value(Value::Null)
+                ),
+            ),
+        );
+        let empty_length = call!(
+            "ifThenElse",
+            call!(
+                "and",
+                call!("not", call!("countOf", call!("currentArrayElement"))),
+                call!("!=", call!("currentArrayElement"), call!("emptyArray"),),
+            ),
+            self.push_number(3.0, "3"),
+            call!(
+                "multiply",
+                call!("countOf", call!("currentArrayElement")),
+                self.push_number(3.0, "3"),
+            ),
+        );
+        let x = call!(
+            "appendToArray",
+            call!("appendToArray", actual_array, empty_length),
+            current_array,
+        );
+        let x_input = call!("mappedArray", mapped_input, x);
+        let x_length = |this: &mut Self| {
+            let current = this.push_call("currentArrayElement", Vec::new());
+            let index = this.push_number(1.0, "1");
+            this.push_call("valueInArray", vec![current, index])
+        };
+        let x_value = |this: &mut Self, index: f64| {
+            let current = this.push_call("currentArrayElement", Vec::new());
+            let index_value = this.push_number(index, &index.to_string());
+            this.push_call("valueInArray", vec![current, index_value])
+        };
+        let first = call!("firstOf", call!("currentArrayElement"));
+        let array_tail = call!(
+            "customString",
+            self.push_value(Value::String("{0}, {1}, {2}".to_string())),
+            x_value(self, 4.0),
+            x_value(self, 5.0),
+            call!(
+                "customString",
+                self.push_value(Value::String("{0}, {1}, …\u{0001}".to_string())),
+                x_value(self, 6.0),
+                x_value(self, 7.0),
+            ),
+        );
+        let array_head = call!(
+            "customString",
+            self.push_value(Value::String("{0}, {1}, {2}".to_string())),
+            x_value(self, 2.0),
+            x_value(self, 3.0),
+            array_tail,
+        );
+        let placeholder = call!(
+            "customString",
+            self.push_value(Value::String("0, 0, 0, 0, 0, 0, …\u{0001}".to_string())),
+        );
+        let length_for_slice = x_length(self);
+        let end_length_for_slice = x_length(self);
+        let slice = call!(
+            "stringSlice",
+            placeholder,
+            call!("add", self.push_number(-2.0, "-2"), length_for_slice),
+            call!(
+                "subtract",
+                self.push_number(22.0, "22"),
+                end_length_for_slice,
+            ),
+        );
+        let replaced = call!("stringReplace", array_head, slice, call!("emptyArray"),);
+        let length_for_compare = x_length(self);
+        let length_for_divide = x_length(self);
+        let plus = call!(
+            "ifThenElse",
+            call!(">", length_for_compare, self.push_number(18.0, "18")),
+            call!(
+                "customString",
+                self.push_value(Value::String("+{0}".to_string())),
+                call!(
+                    "subtract",
+                    call!("divide", length_for_divide, self.push_number(3.0, "3")),
+                    self.push_number(6.0, "6"),
+                ),
+            ),
+            call!("emptyArray"),
+        );
+        let formatted_array = call!(
+            "customString",
+            self.push_value(Value::String("[{0}{1}]".to_string())),
+            replaced,
+            plus,
+        );
+        let current_for_split = call!("currentArrayElement");
+        let rendered = call!(
+            "ifThenElse",
+            first,
+            formatted_array,
+            call!(
+                "stringSplit",
+                call!(
+                    "valueInArray",
+                    current_for_split,
+                    self.push_number(2.0, "2")
+                ),
+                call!("emptyArray"),
+            ),
+        );
+        call!("mappedArray", x_input, rendered)
+    }
+
+    fn debug_value_is_array(&self, value: wir::ValueId) -> bool {
+        match &self
+            .wir
+            .values
+            .get(value)
+            .expect("lowered value must exist")
+            .value
+        {
+            Value::GlobalVariable(_) | Value::Array(_) => true,
+            Value::Call { name, .. } if matches!(name.as_str(), "array" | "emptyArray") => true,
+            Value::Call { name, .. } => self
+                .compiler
+                .catalog
+                .entry(Kind::Value, name)
+                .and_then(|entry| entry.return_type())
+                .is_some_and(|return_type| {
+                    return_type.split('|').any(|part| part.trim() == "Array")
+                }),
+            _ => false,
+        }
+    }
+
+    fn push_value(&mut self, value: Value) -> wir::ValueId {
+        self.wir.values.push(ValueNode::new(value, None))
+    }
+
+    fn push_call(&mut self, name: &str, args: Vec<wir::ValueId>) -> wir::ValueId {
+        self.push_value(Value::Call {
+            name: name.to_string(),
+            args,
+        })
+    }
+
+    fn push_number(&mut self, value: f64, text: &str) -> wir::ValueId {
+        self.push_value(Value::Number {
+            value,
+            text: text.to_string(),
+        })
     }
 
     fn lower_condition(&mut self, expr: &Expr) -> Result<wir::ValueId, IntegrationError> {
@@ -3387,6 +3670,158 @@ fn canonical_format_text(text: &str) -> String {
         }
     }
     output
+}
+
+fn debug_expr_text(expr: &Expr) -> String {
+    match expr {
+        Expr::Number { text, .. } => text.clone(),
+        Expr::String { value, .. } => {
+            format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
+        }
+        Expr::Bool { value, .. } => value.to_string(),
+        Expr::Null { .. } => "null".to_string(),
+        Expr::Array { elements, .. } => format!(
+            "[{}]",
+            elements
+                .iter()
+                .map(debug_expr_text)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Expr::Dict { entries, .. } => format!(
+            "{{{}}}",
+            entries
+                .iter()
+                .map(|entry| format!(
+                    "{}: {}",
+                    debug_expr_text(&entry.key),
+                    debug_expr_text(&entry.value)
+                ))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Expr::Comprehension {
+            element,
+            variable,
+            iterable,
+            condition,
+            ..
+        } => {
+            let condition = condition
+                .as_deref()
+                .map(|condition| format!(" if {}", debug_expr_text(condition)))
+                .unwrap_or_default();
+            format!(
+                "[{} for {} in {}{}]",
+                debug_expr_text(element),
+                variable,
+                debug_expr_text(iterable),
+                condition
+            )
+        }
+        Expr::Lambda { params, body, .. } => {
+            format!("lambda {}: {}", params.join(", "), debug_expr_text(body))
+        }
+        Expr::StringModifier {
+            modifier, value, ..
+        } => format!("{}\"{}\"", modifier, value),
+        Expr::Local { name, .. }
+        | Expr::GlobalVar { name, .. }
+        | Expr::Constant { name, .. }
+        | Expr::MacroParam { name, .. } => name.clone(),
+        Expr::Vector { x, y, z, .. } => format!(
+            "vect({}, {}, {})",
+            debug_expr_text(x),
+            debug_expr_text(y),
+            debug_expr_text(z)
+        ),
+        Expr::Enum {
+            value_type, value, ..
+        } => format!("{}.{}", value_type, value),
+        Expr::PlayerVar { player, name, .. } => {
+            format!("{}.{}", debug_expr_text(player), name)
+        }
+        Expr::Member {
+            receiver, member, ..
+        } => format!("{}.{}", debug_expr_text(receiver), member),
+        Expr::EventPlayer { .. } => "eventPlayer".to_string(),
+        Expr::Call { name, args, .. } | Expr::MacroCall { name, args, .. } => format!(
+            "{}({})",
+            name,
+            args.iter()
+                .map(debug_expr_text)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Expr::ReceiverCall {
+            receiver,
+            name,
+            args,
+            ..
+        } => format!(
+            "{}.{}({})",
+            debug_expr_text(receiver),
+            name,
+            args.iter()
+                .map(debug_expr_text)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        Expr::Binary {
+            left, op, right, ..
+        } => format!(
+            "{} {} {}",
+            debug_expr_text(left),
+            op,
+            debug_expr_text(right)
+        ),
+        Expr::Unary { op, operand, .. } => format!("{} {}", op, debug_expr_text(operand)),
+        Expr::Index { array, index, .. } => {
+            format!("{}[{}]", debug_expr_text(array), debug_expr_text(index))
+        }
+        Expr::Format { text, args, .. } => format!(
+            "\"{}\".format({})",
+            text,
+            args.iter()
+                .map(debug_expr_text)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+    }
+}
+
+fn canonical_debug_text(text: &str) -> String {
+    text.chars()
+        .map(|character| match character {
+            'a' => 'ạ',
+            'b' => 'ḅ',
+            'c' => 'ƈ',
+            'd' => 'ḍ',
+            'e' => 'ẹ',
+            'f' => 'ƒ',
+            'g' => 'ǥ',
+            'h' => 'һ',
+            'i' => 'і',
+            'j' => 'ј',
+            'k' => 'ḳ',
+            'l' => 'I',
+            'm' => 'ṃ',
+            'n' => 'ṇ',
+            'o' => 'ο',
+            'p' => 'ṗ',
+            'q' => 'ǫ',
+            'r' => 'ṛ',
+            's' => 'ѕ',
+            't' => 'ṭ',
+            'u' => 'υ',
+            'v' => 'ν',
+            'w' => 'ẉ',
+            'x' => 'ҳ',
+            'y' => 'ỵ',
+            'z' => 'ẓ',
+            _ => character,
+        })
+        .collect()
 }
 
 fn negated_comparison(op: &str) -> Option<&'static str> {

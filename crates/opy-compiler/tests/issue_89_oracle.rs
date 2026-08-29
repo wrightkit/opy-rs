@@ -42,6 +42,7 @@ fn compile_fixture(name: &str) -> (opy_compiler::CompilationArtifact, workshop_r
 #[test]
 fn issue_89_residual_lowering_cases_match_the_pinned_oracle() {
     for name in [
+        "control-flow",
         "issue-33-switch-break",
         "issue-46-primitives",
         "issue-47-control-flow",
@@ -58,9 +59,9 @@ fn issue_89_residual_lowering_cases_match_the_pinned_oracle() {
 }
 
 #[test]
-fn issue_89_debug_gap_remains_source_attributed() {
+fn issue_89_debug_lowers_to_a_native_hud_action() {
     let (artifact, oracle) = compile_fixture("control-flow");
-    assert!(!equivalent(&artifact.wir, &oracle));
+    assert!(equivalent(&artifact.wir, &oracle));
 
     let rule = artifact
         .wir
@@ -75,9 +76,10 @@ fn issue_89_debug_gap_remains_source_attributed() {
     let Action::If { branches, .. } = if_action else {
         panic!("control-flow fixture must lower its conditional");
     };
-    let debug_action = artifact.wir.actions.get(branches[0].body[0]).unwrap();
-    let Action::Debug { span, .. } = debug_action else {
-        panic!("control-flow fixture must retain the canonical Debug carrier");
+    let hud_action = artifact.wir.actions.get(branches[0].body[0]).unwrap();
+    let Action::Call { name, span, .. } = hud_action else {
+        panic!("control-flow fixture debug must lower to a native HUD action");
     };
+    assert_eq!(name, "createHudText");
     assert_eq!(span.unwrap().start.line, 7);
 }
