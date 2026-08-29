@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5](https://github.com/wrightkit/opy-rs/compare/opy-compiler-v0.1.4...opy-compiler-v0.1.5) - 2026-08-29
+
+### Fixed
+
+- *(compatibility)* retain compile report serialization
+
+### Other
+
+- Merge remote-tracking branch 'origin/main' into codex/issue-38-compile
+
 ## [0.1.4](https://github.com/wrightkit/opy-rs/compare/opy-compiler-v0.1.3...opy-compiler-v0.1.4) - 2026-08-29
 
 ### Fixed
