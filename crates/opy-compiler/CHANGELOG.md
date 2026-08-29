@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6](https://github.com/wrightkit/opy-rs/compare/opy-compiler-v0.1.5...opy-compiler-v0.1.6) - 2026-08-29
+
+### Fixed
+
+- *(opy-compiler)* restore residual canonical WIR equivalence ([#91](https://github.com/wrightkit/opy-rs/pull/91))
+
 ## [0.1.5](https://github.com/wrightkit/opy-rs/compare/opy-compiler-v0.1.4...opy-compiler-v0.1.5) - 2026-08-29
 
 ### Fixed
