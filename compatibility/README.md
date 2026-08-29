@@ -64,11 +64,20 @@ The differential runner derives `unexpected-divergence`, `regression`, and
 `inconclusive` results from those records; it never treats a reference-success
 / native-failure case as a match.
 
+`compiler-expectations.json` is a separate contract for the #38 compiler
+surface. It does not replace or weaken the source/frontend expectations above:
+its 51 entries declare the compiler status, normalized-output/semantic-WIR or
+diagnostic contract, evidence, and owner for each fixture. The compiler report
+therefore has an explicit 17-fixture baseline, 31 tracked known gaps, and 3
+unsupported cases rather than treating source-only expectations as compiler
+parity evidence.
+
 `run_native.py` drives the built `opy-cli compile --format json` contract for
 every fixture, writes ephemeral producer results under `target/`, and delegates
-all expectation loading, input-hash validation, stage comparison, and blocking
-classification to `diff.py`. Only the durable, evidence-backed entries in
-`differential-expectations.json` can produce `known-gap` or `unsupported`.
+compiler expectation loading, input-hash validation, stage comparison, and
+blocking classification to `diff.py`. Only the durable, evidence-backed
+entries in `compiler-expectations.json` can produce `known-gap` or
+`unsupported` in this report.
 Expectation mismatches are reported as `unexpected-divergence` or `regression`.
 The command exits non-zero for those mismatches and, by default, for
 `inconclusive` cases; use `--allow-inconclusive` only for a local report that is

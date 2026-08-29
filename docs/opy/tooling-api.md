@@ -28,6 +28,13 @@ frontend class; canonical Workshop, locale, directive, and hook failures use
 the integration class. Normalized output removes line-ending and trailing
 presentation noise, while exact output preserves the emitted artifact.
 
+The compatibility runner uses the separate
+[`compatibility/compiler-expectations.json`](../../compatibility/compiler-expectations.json)
+baseline for compiler outcomes. The source/frontend expectation contract is
+kept in `differential-expectations.json`; it is not reused as compiler parity
+evidence. Compiler gaps must carry durable evidence and an owner, while
+expectation mismatches remain blocking.
+
 ## Library API (`opy_rs::tooling`)
 
 ```rust

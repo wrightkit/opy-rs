@@ -710,7 +710,7 @@
         "fixtures:synthetic",
         "fixtures:real-world"
       ],
-      "notes": "Issue #38 exposes the bounded compiler/library/CLI surface over the released workshop-rs v0.1.11 contract. Full OPY statement/expression lowering, catalog/member/enum breadth, optimizer effects, and remaining real-project gaps stay explicit in the native corpus report; no temporary Workshop IR is introduced here."
+      "notes": "Issue #38 exposes the bounded compiler/library/CLI surface over the released workshop-rs v0.1.11 contract. Full OPY statement/expression lowering, catalog/member/enum breadth, optimizer effects, and remaining real-project gaps stay explicit in compiler-expectations.json and the native corpus report; no temporary Workshop IR is introduced here."
     },
     {
       "id": "compilation/end-to-end",
@@ -722,7 +722,7 @@
         "fixtures:real-world",
         "fixtures:census/workshop-feature-census"
       ],
-      "notes": "Full OPY-to-Workshop parity remains broader than the declared #38 baseline. compatibility/run_native.py compiles every fixture through the versioned CLI contract and records matches, known gaps, expected failures, and inconclusive normalized-output differences without counting any unverified case as success."
+      "notes": "Full OPY-to-Workshop parity remains broader than the declared #38 baseline. compatibility/run_native.py compiles every fixture through the versioned CLI contract and compares it with the separate compiler-expectations.json baseline: 17 evidenced matches, 31 tracked known gaps, and 3 explicit unsupported cases. Source/frontend expectations remain independent, and no unverified case is counted as compiler parity."
     },
     {
       "id": "decompilation/workshop-to-opy",

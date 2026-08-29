@@ -33,6 +33,18 @@ class DiffTests(unittest.TestCase):
             self.assertTrue(expectation["evidence"], fixture)
             self.assertTrue(expectation["note"], fixture)
 
+    def test_compiler_expectations_are_separate_and_cover_every_fixture(self):
+        source = diff.load_expectations()
+        compiler = diff.load_compiler_expectations()
+        fixtures = set(diff.fixture_ids(COMPATIBILITY_DIR / "fixtures"))
+        self.assertEqual(set(compiler), fixtures)
+        self.assertNotIn("comparison", source["synthetic/basic-rule"])
+        for fixture, expectation in compiler.items():
+            self.assertIn(expectation["comparison"], diff.EXPECTED_COMPILER_COMPARISONS)
+            self.assertTrue(expectation["evidence"], fixture)
+            self.assertTrue(expectation["owner"], fixture)
+            self.assertTrue(expectation["note"], fixture)
+
     def write_result(self, root: Path, result: dict):
         path = root / result["fixture"] / "result.json"
         path.parent.mkdir(parents=True)
@@ -163,6 +175,38 @@ class DiffTests(unittest.TestCase):
                     "synthetic/basic-rule",
                     root,
                     None,
+                )
+
+    def test_compiler_status_mismatch_is_blocking(self):
+        result = copy.deepcopy(self.oracle)
+        result["compile"]["status"] = "failure"
+        result["compile"]["exitCode"] = 1
+        result["compile"]["workshopExact"] = ""
+        result["compile"]["workshop"] = ""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write_result(root, result)
+            report_result = diff.compare_compiler_fixture(
+                COMPATIBILITY_DIR / "fixtures",
+                "synthetic/basic-rule",
+                root,
+                diff.load_compiler_expectations(),
+            )
+        self.assertEqual(report_result["status"], "unexpected-divergence")
+        self.assertIn("compile-status", report_result["regressionStages"])
+
+    def test_compiler_input_hash_mismatch_is_rejected(self):
+        result = copy.deepcopy(self.oracle)
+        result["input"]["sha256"] = "different"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write_result(root, result)
+            with self.assertRaises(diff.DiffError):
+                diff.compare_compiler_fixture(
+                    COMPATIBILITY_DIR / "fixtures",
+                    "synthetic/basic-rule",
+                    root,
+                    diff.load_compiler_expectations(),
                 )
 
     def test_missing_producer_is_inconclusive(self):

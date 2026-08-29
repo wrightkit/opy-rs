@@ -1,0 +1,626 @@
+{
+  "schemaVersion": 1,
+  "contract": "compiler",
+  "description": "Independent compiler outcome expectations for the #38 OPY-to-Workshop compatibility baseline. Source/frontend expectations remain in differential-expectations.json.",
+  "evidencePolicy": {
+    "native": "The compiler result is compared with this separately reviewed baseline; it never creates its own expectation.",
+    "classification": "match requires a normalized-output, semantic-WIR, or stable-diagnostic contract. known-gap and unsupported require explicit evidence and an owner."
+  },
+  "cases": [
+    {
+      "fixture": "synthetic/basic-rule",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "normalized-output",
+      "evidence": [
+        "test:opy-cli::compile_text_prints_only_final_workshop_to_stdout"
+      ],
+      "owner": "opy-rs#38",
+      "note": "Minimal OPY rule emits the pinned Workshop output through the public compiler and CLI."
+    },
+    {
+      "fixture": "synthetic/chase-enums",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "normalized-output",
+      "evidence": [
+        "test:opy-compiler-issue-42-oracle::catalog_enum_members_lower_and_validate"
+      ],
+      "owner": "opy-rs#38",
+      "note": "Catalog enum members emit through the canonical catalog-backed compiler slice."
+    },
+    {
+      "fixture": "synthetic/declarations-numbers",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "normalized-output",
+      "evidence": [
+        "oracle:synthetic/declarations-numbers/oracle.json"
+      ],
+      "owner": "opy-rs#38",
+      "note": "The declaration fixture has a stable normalized Workshop result under the bounded compiler surface."
+    },
+    {
+      "fixture": "synthetic/for-range-agentlab",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "normalized-output",
+      "evidence": [
+        "oracle:synthetic/for-range-agentlab/oracle.json"
+      ],
+      "owner": "opy-rs#38",
+      "note": "The supported global range binder has a stable normalized Workshop result."
+    },
+    {
+      "fixture": "synthetic/issue-29-main-file",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "normalized-output",
+      "evidence": [
+        "oracle:synthetic/issue-29-main-file/oracle.json"
+      ],
+      "owner": "opy-rs#38",
+      "note": "mainFile scope remains covered by the bounded compiler output contract."
+    },
+    {
+      "fixture": "synthetic/issue-35-integration",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "normalized-output",
+      "evidence": [
+        "test:opy-compiler::vertical_slice_preserves_source_files_spans_and_emits_workshop"
+      ],
+      "owner": "opy-rs#38",
+      "note": "Issue #35 is the public source-to-WIR-to-Workshop vertical slice."
+    },
+    {
+      "fixture": "synthetic/receiver-calls",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "normalized-output",
+      "evidence": [
+        "test:opy-compiler-issue-42-oracle::catalog_backed_receiver_calls_match_the_pinned_oracle"
+      ],
+      "owner": "opy-rs#38",
+      "note": "The exercised catalog-backed receiver call is canonical-WIR equivalent to the pinned oracle."
+    },
+    {
+      "fixture": "synthetic/control-flow",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "semantic-wir",
+      "evidence": [
+        "test:opy-compiler-issue-47-oracle::issue_47_control_flow_matches_the_pinned_oracle"
+      ],
+      "owner": "opy-rs#38",
+      "note": "Control-flow fixture is included in the bounded compiler baseline with canonical WIR evidence."
+    },
+    {
+      "fixture": "synthetic/issue-33-switch-break",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "semantic-wir",
+      "evidence": [
+        "test:opy-compiler-issue-47-oracle::issue_47_nested_switch_break_matches_the_pinned_oracle"
+      ],
+      "owner": "opy-rs#38",
+      "note": "Nested switch break fixture is canonical-WIR equivalent to its pinned oracle."
+    },
+    {
+      "fixture": "synthetic/issue-40-structural",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "semantic-wir",
+      "evidence": [
+        "test:opy-compiler::issue_40_oracle_fixture_and_wir_lowering_agree"
+      ],
+      "owner": "opy-rs#38",
+      "note": "Issue #40 structural lowering is independently checked against the pinned oracle and WIR invariants."
+    },
+    {
+      "fixture": "synthetic/issue-46-primitives",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "semantic-wir",
+      "evidence": [
+        "test:opy-compiler-issue-46-oracle::issue_46_native_lowering_matches_the_pinned_oracle"
+      ],
+      "owner": "opy-rs#38",
+      "note": "Issue #46 primitive lowering is independently checked through canonical WIR equivalence."
+    },
+    {
+      "fixture": "synthetic/issue-47-control-flow",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "semantic-wir",
+      "evidence": [
+        "test:opy-compiler-issue-47-oracle::issue_47_control_flow_matches_the_pinned_oracle"
+      ],
+      "owner": "opy-rs#38",
+      "note": "Issue #47 control-flow lowering is independently checked through canonical WIR equivalence."
+    },
+    {
+      "fixture": "synthetic/issue-47-switch-order",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "semantic-wir",
+      "evidence": [
+        "test:opy-compiler-issue-47-oracle::issue_47_switch_order_matches_the_pinned_oracle"
+      ],
+      "owner": "opy-rs#38",
+      "note": "Authored switch order is independently checked through canonical WIR equivalence."
+    },
+    {
+      "fixture": "synthetic/issue-47-switch-structured-target",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "semantic-wir",
+      "evidence": [
+        "test:opy-compiler-issue-47-oracle::issue_47_structured_switch_target_matches_the_pinned_oracle"
+      ],
+      "owner": "opy-rs#38",
+      "note": "Structured switch targets are independently checked through canonical WIR equivalence."
+    },
+    {
+      "fixture": "synthetic/issue-47-do-while-shapes",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "semantic-wir",
+      "evidence": [
+        "test:opy-compiler-issue-47-oracle::issue_47_do_while_break_shapes_match_the_pinned_oracle"
+      ],
+      "owner": "opy-rs#38",
+      "note": "Supported do-while break shapes are independently checked through canonical WIR equivalence."
+    },
+    {
+      "fixture": "synthetic/settings",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "semantic-wir",
+      "evidence": [
+        "test:opy-compiler::settings_lower_through_workshop_owned_emission"
+      ],
+      "owner": "opy-rs#38",
+      "note": "Settings emission is covered by the compiler's Workshop-owned structural comparison."
+    },
+    {
+      "fixture": "synthetic/issue-47-do-while-invalid-placement",
+      "nativeStatus": "failure",
+      "classification": "match",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "test:opy-compiler-issue-47-oracle::issue_47_invalid_do_while_placement_is_source_attributed"
+      ],
+      "owner": "opy-rs#38",
+      "note": "Invalid do-while placement is a stable source-attributed compiler failure.",
+      "failureClass": "frontend",
+      "diagnosticCode": "do-while-placement"
+    },
+    {
+      "fixture": "synthetic/issue-46-unsupported",
+      "nativeStatus": "failure",
+      "classification": "unsupported",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "test:opy-compiler-issue-46-oracle::issue_46_unsupported_primitive_fails_with_stable_source_attribution"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The compiler deliberately rejects the dict-indexed primitive because canonical WIR has no lossless representation.",
+      "failureClass": "integration",
+      "diagnosticCode": "unsupported-integration-surface"
+    },
+    {
+      "fixture": "synthetic/issue-47-unsupported",
+      "nativeStatus": "failure",
+      "classification": "unsupported",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "test:opy-compiler-issue-47-oracle::issue_47_nested_switch_break_is_source_attributed_when_not_representable"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The compiler deliberately rejects the nested conditional switch break because the released WIR has no equivalent carrier.",
+      "failureClass": "integration",
+      "diagnosticCode": "unsupported-integration-surface"
+    },
+    {
+      "fixture": "synthetic/issue-47-switch-multiple-break",
+      "nativeStatus": "failure",
+      "classification": "unsupported",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "test:opy-compiler-issue-47-oracle::issue_47_multiple_switch_breaks_are_not_silently_dropped"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The compiler deliberately rejects later-reachable multiple switch breaks because the released WIR has one canonical else carrier.",
+      "failureClass": "integration",
+      "diagnosticCode": "unsupported-integration-surface"
+    },
+    {
+      "fixture": "census/workshop-feature-census",
+      "nativeStatus": "success",
+      "classification": "known-gap",
+      "comparison": "unverified",
+      "evidence": [
+        "support-matrix:compilation/end-to-end"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The feature census records an owned Workshop boundary, but this fixture is outside the declared compiler baseline."
+    },
+    {
+      "fixture": "real-world/6v6-adjustments",
+      "nativeStatus": "failure",
+      "classification": "known-gap",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "fixture:real-world/6v6-adjustments/fixture.json"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The full real-world project remains outside the #38 compiler baseline and currently stops at a frontend lexical gap.",
+      "failureClass": "frontend",
+      "diagnosticCode": "lex-error"
+    },
+    {
+      "fixture": "real-world/overpy-broken-weapons",
+      "nativeStatus": "failure",
+      "classification": "known-gap",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "fixture:real-world/overpy-broken-weapons/fixture.json"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The full real-world project remains outside the #38 compiler baseline and currently stops at a frontend parse gap.",
+      "failureClass": "frontend",
+      "diagnosticCode": "parse-error"
+    },
+    {
+      "fixture": "real-world/overpy-cake",
+      "nativeStatus": "success",
+      "classification": "known-gap",
+      "comparison": "unverified",
+      "evidence": [
+        "test:opy-compiler-issue-42-oracle::real_world_cake_exercises_catalog_lowering_end_to_end"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The compiler exercises a bounded catalog slice, but full real-world Workshop parity is not declared."
+    },
+    {
+      "fixture": "real-world/overpy-client-to-server",
+      "nativeStatus": "failure",
+      "classification": "known-gap",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "fixture:real-world/overpy-client-to-server/fixture.json"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The full real-world project remains outside the #38 compiler baseline and currently stops at a frontend parse gap.",
+      "failureClass": "frontend",
+      "diagnosticCode": "parse-error"
+    },
+    {
+      "fixture": "real-world/overpy-cronch",
+      "nativeStatus": "failure",
+      "classification": "known-gap",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "fixture:real-world/overpy-cronch/fixture.json"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The full real-world project remains outside the #38 compiler baseline and currently stops at a frontend parse gap.",
+      "failureClass": "frontend",
+      "diagnosticCode": "parse-error"
+    },
+    {
+      "fixture": "real-world/overpy-crosshair",
+      "nativeStatus": "failure",
+      "classification": "known-gap",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "fixture:real-world/overpy-crosshair/fixture.json"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The full real-world project remains outside the #38 compiler baseline and currently stops at a frontend parse gap.",
+      "failureClass": "frontend",
+      "diagnosticCode": "parse-error"
+    },
+    {
+      "fixture": "real-world/overpy-inputhud",
+      "nativeStatus": "failure",
+      "classification": "known-gap",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "fixture:real-world/overpy-inputhud/fixture.json"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The full real-world project remains outside the #38 compiler baseline and currently stops at a frontend parse gap.",
+      "failureClass": "frontend",
+      "diagnosticCode": "parse-error"
+    },
+    {
+      "fixture": "real-world/overpy-meipocalypse",
+      "nativeStatus": "failure",
+      "classification": "known-gap",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "fixture:real-world/overpy-meipocalypse/fixture.json"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The full real-world project remains outside the #38 compiler baseline and currently stops at a settings-placement gap.",
+      "failureClass": "frontend",
+      "diagnosticCode": "settings-placement"
+    },
+    {
+      "fixture": "real-world/overpy-parabola",
+      "nativeStatus": "failure",
+      "classification": "known-gap",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "fixture:real-world/overpy-parabola/fixture.json"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The full real-world project remains outside the #38 compiler baseline and currently stops at a frontend parse gap.",
+      "failureClass": "frontend",
+      "diagnosticCode": "parse-error"
+    },
+    {
+      "fixture": "real-world/overpy-pixelart",
+      "nativeStatus": "success",
+      "classification": "known-gap",
+      "comparison": "unverified",
+      "evidence": [
+        "fixture:real-world/overpy-pixelart/fixture.json"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The source compiles, but full real-world Workshop parity is outside the declared #38 baseline."
+    },
+    {
+      "fixture": "real-world/overpy-santa",
+      "nativeStatus": "failure",
+      "classification": "known-gap",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "fixture:real-world/overpy-santa/fixture.json"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The full real-world project remains outside the #38 compiler baseline and currently stops at a frontend parse gap.",
+      "failureClass": "frontend",
+      "diagnosticCode": "parse-error"
+    },
+    {
+      "fixture": "real-world/overpy-zencopter",
+      "nativeStatus": "failure",
+      "classification": "known-gap",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "fixture:real-world/overpy-zencopter/fixture.json"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The full real-world project remains outside the #38 compiler baseline and currently stops at a frontend lexical gap.",
+      "failureClass": "frontend",
+      "diagnosticCode": "lex-error"
+    },
+    {
+      "fixture": "real-world/ow1-emulator",
+      "nativeStatus": "failure",
+      "classification": "known-gap",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "fixture:real-world/ow1-emulator/fixture.json"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The full real-world project remains outside the #38 compiler baseline and currently stops at a frontend lexical gap.",
+      "failureClass": "frontend",
+      "diagnosticCode": "lex-error"
+    },
+    {
+      "fixture": "synthetic/chase-condition-agentlab",
+      "nativeStatus": "success",
+      "classification": "known-gap",
+      "comparison": "unverified",
+      "evidence": [
+        "support-matrix:semantics/workshop-builtin-catalog"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The contextual chase slice has bounded evidence, but its complete compiler parity is not declared here."
+    },
+    {
+      "fixture": "synthetic/chase-keywords",
+      "nativeStatus": "failure",
+      "classification": "known-gap",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "support-matrix:semantics/workshop-builtin-catalog"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The source semantic form is known, while the current canonical integration surface lacks a complete compiler contract.",
+      "failureClass": "integration",
+      "diagnosticCode": "unsupported-integration-surface"
+    },
+    {
+      "fixture": "synthetic/declarations-rules",
+      "nativeStatus": "success",
+      "classification": "known-gap",
+      "comparison": "unverified",
+      "evidence": [
+        "support-matrix:compilation/opy-structural-lowering"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The source declaration surface exceeds the independently evidenced compiler baseline."
+    },
+    {
+      "fixture": "synthetic/expressions-values",
+      "nativeStatus": "success",
+      "classification": "known-gap",
+      "comparison": "unverified",
+      "evidence": [
+        "support-matrix:compilation/opy-expression-lowering"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The broad expression fixture exceeds the independently evidenced compiler baseline."
+    },
+    {
+      "fixture": "synthetic/diagnostics",
+      "nativeStatus": "failure",
+      "classification": "known-gap",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "support-matrix:compilation/end-to-end"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The source negative fixture is retained, but its compiler-facing diagnostic contract is outside the #38 baseline.",
+      "failureClass": "frontend",
+      "diagnosticCode": "parse-error"
+    },
+    {
+      "fixture": "synthetic/issue-28-invalid-syntax",
+      "nativeStatus": "failure",
+      "classification": "known-gap",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "support-matrix:compilation/end-to-end"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The source negative fixture is retained, but its compiler-facing diagnostic contract is outside the #38 baseline.",
+      "failureClass": "frontend",
+      "diagnosticCode": "parse-error"
+    },
+    {
+      "fixture": "synthetic/issue-28-string-modifiers",
+      "nativeStatus": "failure",
+      "classification": "known-gap",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "support-matrix:compilation/end-to-end"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The source modifier surface exceeds the independently evidenced compiler baseline.",
+      "failureClass": "integration",
+      "diagnosticCode": "unsupported-integration-surface"
+    },
+    {
+      "fixture": "synthetic/issue-28-syntax",
+      "nativeStatus": "failure",
+      "classification": "known-gap",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "support-matrix:compilation/end-to-end"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The broad syntax fixture exceeds the independently evidenced compiler baseline.",
+      "failureClass": "integration",
+      "diagnosticCode": "unsupported-integration-surface"
+    },
+    {
+      "fixture": "synthetic/issue-29-directives",
+      "nativeStatus": "failure",
+      "classification": "known-gap",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "support-matrix:optimization/controls"
+      ],
+      "owner": "opy-rs#8",
+      "note": "Optimizer/backend directive execution remains outside the declared compiler baseline.",
+      "failureClass": "integration",
+      "diagnosticCode": "backend-directive-unsupported"
+    },
+    {
+      "fixture": "synthetic/issue-29-invalid",
+      "nativeStatus": "failure",
+      "classification": "known-gap",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "support-matrix:compilation/end-to-end"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The source negative directive fixture is retained, but its compiler-facing diagnostic contract is outside the #38 baseline.",
+      "failureClass": "frontend",
+      "diagnosticCode": "parse-error"
+    },
+    {
+      "fixture": "synthetic/issue-31-negative",
+      "nativeStatus": "failure",
+      "classification": "known-gap",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "support-matrix:translations/locale-emission"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The source translation negative fixture is retained, but broader translation parity is outside the #38 baseline.",
+      "failureClass": "frontend",
+      "diagnosticCode": "translations-invalid"
+    },
+    {
+      "fixture": "synthetic/issue-31-nested-scope",
+      "nativeStatus": "success",
+      "classification": "known-gap",
+      "comparison": "unverified",
+      "evidence": [
+        "support-matrix:optimization/controls"
+      ],
+      "owner": "opy-rs#8",
+      "note": "Optimizer scope is represented in source state, but optimizer execution is outside the compiler baseline."
+    },
+    {
+      "fixture": "synthetic/issue-31-positive",
+      "nativeStatus": "failure",
+      "classification": "known-gap",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "support-matrix:optimization/controls"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The positive optimizer/directive fixture exceeds the independently evidenced compiler baseline.",
+      "failureClass": "integration",
+      "diagnosticCode": "unsupported-integration-surface"
+    },
+    {
+      "fixture": "synthetic/issue-33-f-string",
+      "nativeStatus": "failure",
+      "classification": "known-gap",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "support-matrix:compilation/end-to-end"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The broader f-string lowering surface exceeds the independently evidenced compiler baseline.",
+      "failureClass": "integration",
+      "diagnosticCode": "unsupported-integration-surface"
+    },
+    {
+      "fixture": "synthetic/issue-33-lambda-negative",
+      "nativeStatus": "failure",
+      "classification": "known-gap",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "support-matrix:compilation/end-to-end"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The source lambda negative fixture is retained, but its compiler-facing diagnostic contract is outside the #38 baseline.",
+      "failureClass": "frontend",
+      "diagnosticCode": "lambda-context"
+    },
+    {
+      "fixture": "synthetic/preprocessing",
+      "nativeStatus": "failure",
+      "classification": "known-gap",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "support-matrix:compilation/end-to-end"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The preprocessing fixture includes constructs beyond the independently evidenced compiler baseline.",
+      "failureClass": "integration",
+      "diagnosticCode": "unsupported-integration-surface"
+    },
+    {
+      "fixture": "synthetic/receiver-playervar",
+      "nativeStatus": "success",
+      "classification": "known-gap",
+      "comparison": "unverified",
+      "evidence": [
+        "support-matrix:semantics/receiver-playervar"
+      ],
+      "owner": "opy-rs#8",
+      "note": "The source receiver expression is preserved, but complete Workshop member lowering is outside the #38 baseline."
+    }
+  ]
+}

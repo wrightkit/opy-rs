@@ -16,6 +16,7 @@ import diff
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "compatibility" / "fixtures"
+COMPILER_EXPECTATIONS = ROOT / "compatibility" / "compiler-expectations.json"
 DEFAULT_RESULTS = ROOT / "target" / "opy-compiler-results"
 DEFAULT_REPORT = ROOT / "target" / "opy-compiler-report.json"
 
@@ -119,13 +120,12 @@ def main(argv: list[str] | None = None) -> int:
     # Keep expectation loading, input-hash validation, stage comparison, and
     # blocking status classification in the existing independent comparator.
     try:
-        return diff.run(
+        return diff.run_compiler(
             FIXTURES,
             report_path,
             results_root,
-            None,
-            set(),
-            args.allow_inconclusive,
+            COMPILER_EXPECTATIONS,
+            allow_inconclusive=args.allow_inconclusive,
         )
     except diff.DiffError as error:
         raise NativeError(str(error)) from error
