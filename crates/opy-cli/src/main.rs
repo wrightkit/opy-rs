@@ -15,12 +15,14 @@ use std::process::ExitCode;
 
 use clap::{CommandFactory, Parser, error::ErrorKind};
 use clap_complete::{generate, shells};
+use opy_compiler::{CompileDiagnostic, CompileStatus, Compiler};
 use opy_rs::support::{self, SupportMatrixError};
 use opy_rs::tooling::{CheckOutcome, Diagnostic as OpyDiagnostic, check};
 use opy_rs::{LANGUAGE_NAME, LANGUAGE_VERSION};
 use serde::Serialize;
+use workshop_rs::catalog::Locale;
 
-use crate::cli::{CheckArgs, Cli, Command, FileArgs, OutputFormatArg, SupportArgs};
+use crate::cli::{CheckArgs, Cli, Command, CompileArgs, FileArgs, OutputFormatArg, SupportArgs};
 use crate::present::{
     CheckView, DiagnosticSeverity, DiagnosticView, PositionView, Presentation, SpanView,
 };
@@ -53,6 +55,7 @@ fn main() -> ExitCode {
             ExitCode::from(2)
         }
         Some(Command::Check(args)) => cmd_check(&args, presentation),
+        Some(Command::Compile(args)) => cmd_compile(&args, presentation),
         Some(Command::Inspect(args)) => cmd_inspect(&args, presentation),
         Some(Command::Support(args)) => cmd_support(&args),
         Some(Command::Completion(args)) => cmd_completion(args.shell),
@@ -100,6 +103,46 @@ fn cmd_check(args: &CheckArgs, presentation: Presentation) -> ExitCode {
     let code = diagnostic_exit(&outcome);
     presentation.render_check(&check_view(&outcome));
     code
+}
+
+fn cmd_compile(args: &CompileArgs, presentation: Presentation) -> ExitCode {
+    let (text, root, main) = match read_main(&args.file) {
+        Ok(parsed) => parsed,
+        Err(code) => return code,
+    };
+    let compiler = match Compiler::new() {
+        Ok(compiler) => compiler,
+        Err(error) => {
+            eprintln!("opy-cli: cannot initialize compiler: {error}");
+            return ExitCode::from(2);
+        }
+    };
+    let report = compiler.compile_source_report(
+        &text,
+        &main.to_string_lossy(),
+        &root,
+        &Locale::new(&args.language),
+    );
+    if args.format == OutputFormatArg::Json {
+        return match print_json(&report) {
+            Ok(()) => ExitCode::from(report.compile.exit_code),
+            Err(code) => code,
+        };
+    }
+
+    if report.compile.status == CompileStatus::Success {
+        print!("{}", report.compile.workshop_exact);
+        ExitCode::SUCCESS
+    } else {
+        let diagnostics = report
+            .compile
+            .diagnostics
+            .iter()
+            .map(compile_diagnostic_view)
+            .collect::<Vec<_>>();
+        presentation.render_diagnostics("compile", &diagnostics);
+        ExitCode::from(report.compile.exit_code)
+    }
 }
 
 fn cmd_inspect(args: &FileArgs, presentation: Presentation) -> ExitCode {
@@ -216,6 +259,25 @@ fn check_view(outcome: &CheckOutcome) -> CheckView {
 }
 
 fn diagnostic_view(diagnostic: &OpyDiagnostic) -> DiagnosticView {
+    DiagnosticView {
+        severity: DiagnosticSeverity::Error,
+        code: diagnostic.code.clone(),
+        message: diagnostic.message.clone(),
+        span: diagnostic.span.as_ref().map(|span| SpanView {
+            path: span.path.clone(),
+            start: PositionView {
+                line: span.start.line,
+                col: span.start.col,
+            },
+            end: PositionView {
+                line: span.end.line,
+                col: span.end.col,
+            },
+        }),
+    }
+}
+
+fn compile_diagnostic_view(diagnostic: &CompileDiagnostic) -> DiagnosticView {
     DiagnosticView {
         severity: DiagnosticSeverity::Error,
         code: diagnostic.code.clone(),

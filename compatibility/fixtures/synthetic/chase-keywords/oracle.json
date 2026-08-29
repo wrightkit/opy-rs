@@ -10,7 +10,13 @@
   },
   "fixture": "synthetic/chase-keywords",
   "input": {
-    "sha256": "cfe40674f580b176241ebe3270a68dcd1f0e3feb4a3abc8bcba24642691f8bba",
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "cfe40674f580b176241ebe3270a68dcd1f0e3feb4a3abc8bcba24642691f8bba"
+      }
+    ],
+    "sha256": "c3798d40c6c3d81cb1959592dd08234573dd65a7f37e442c5384f3fe2915329c",
     "source": "source.opy"
   },
   "oracle": {

@@ -26,6 +26,15 @@ python3 compatibility/run_oracle.py --update
 # Verify snapshots still match the pinned oracle (fails on any mismatch)
 python3 compatibility/run_oracle.py
 
+# Compiler compatibility gate (public CLI plus internal evidence target)
+cargo build --locked -p opy-cli --bin opy-cli
+cargo build --locked -p opy-cli --features compatibility --bin opy-compat
+python3 -B compatibility/run_native.py \
+  --binary target/debug/opy-cli \
+  --semantic-binary target/debug/opy-compat \
+  --results target/opy-compiler-results \
+  --report target/opy-compiler-report.json
+
 # Differential report against an external producer's results (generic
 # producer contract; the native Rust differential suite is the opy-rs
 # producer side and runs in cargo test; see compatibility/README.md)

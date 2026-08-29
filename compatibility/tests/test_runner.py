@@ -1,5 +1,6 @@
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -8,9 +9,32 @@ COMPATIBILITY_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(COMPATIBILITY_DIR))
 
 import run_oracle  # noqa: E402
+import input_identity  # noqa: E402
 
 
 class RunnerTests(unittest.TestCase):
+    def test_project_identity_covers_all_sources_and_excludes_regressions(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture_dir = Path(temporary)
+            (fixture_dir / "source.opy").write_text("#!mainFile\n", encoding="utf-8")
+            (fixture_dir / "shared.opy").write_text("rule \"shared\":\n", encoding="utf-8")
+            (fixture_dir / "regression.opy").write_text("broken", encoding="utf-8")
+            metadata = {
+                "source": "source.opy",
+                "regressions": [{"source": "regression.opy"}],
+            }
+
+            first = input_identity.project_input(fixture_dir, metadata)
+            self.assertEqual(
+                [item["path"] for item in first["files"]],
+                ["shared.opy", "source.opy"],
+            )
+            (fixture_dir / "shared.opy").write_text(
+                "rule \"changed\":\n", encoding="utf-8"
+            )
+            second = input_identity.project_input(fixture_dir, metadata)
+            self.assertNotEqual(first["sha256"], second["sha256"])
+
     def test_normalize_text_keeps_content_and_removes_presentation_noise(self):
         self.assertEqual(
             run_oracle.normalize_text("one  \r\ntwo\r\n\r\n"),
@@ -41,6 +65,11 @@ class RunnerTests(unittest.TestCase):
             self.assertTrue(snapshot.is_file(), fixture["id"])
             snapshot_data = json.loads(snapshot.read_text(encoding="utf-8"))
             self.assertEqual(snapshot_data["fixture"], fixture["id"])
+            self.assertEqual(
+                snapshot_data["input"],
+                input_identity.project_input(fixture_path.parent, fixture),
+                fixture["id"],
+            )
 
         real_world = [
             fixture for _, fixture in fixtures if fixture["category"] == "real-world"

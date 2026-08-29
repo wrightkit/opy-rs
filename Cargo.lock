@@ -370,9 +370,11 @@ version = "0.1.4"
 dependencies = [
  "clap",
  "clap_complete",
+ "opy-compiler",
  "opy-rs",
  "serde",
  "serde_json",
+ "workshop-rs",
 ]
 
 [[package]]
@@ -381,6 +383,7 @@ version = "0.1.4"
 dependencies = [
  "opy-macro-js",
  "opy-rs",
+ "serde",
  "serde_json",
  "workshop-rs",
 ]

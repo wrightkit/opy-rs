@@ -10,7 +10,13 @@
   },
   "fixture": "real-world/overpy-crosshair",
   "input": {
-    "sha256": "d2c22b59c11fee75ae4febc96c94126059f4e5c5f64cc2e5a28e939968ed8f8f",
+    "files": [
+      {
+        "path": "crosshair.opy",
+        "sha256": "d2c22b59c11fee75ae4febc96c94126059f4e5c5f64cc2e5a28e939968ed8f8f"
+      }
+    ],
+    "sha256": "b9f9e7c69754b5fd59389c7794d29cc0eb6dff90b8b5f6d6103a9293351b10fe",
     "source": "crosshair.opy"
   },
   "oracle": {

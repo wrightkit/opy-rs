@@ -4,7 +4,15 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Standalone OPY CLI: check, inspect, support-matrix, version (Workshop-independent, no Node or Workshop backend required)."
+description = "Standalone OPY CLI: check, compile, inspect, support-matrix, version."
+
+[features]
+compatibility = []
+
+[[bin]]
+name = "opy-compat"
+path = "src/bin/opy-compat.rs"
+required-features = ["compatibility"]
 
 [lints]
 workspace = true
@@ -13,5 +21,7 @@ workspace = true
 clap = { version = "4.5", features = ["derive"] }
 clap_complete = "4.5"
 opy-rs.workspace = true
+opy-compiler = { path = "../opy-compiler", version = "0.1.3" }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
+workshop-rs.workspace = true

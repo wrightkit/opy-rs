@@ -10,7 +10,13 @@
   },
   "fixture": "synthetic/receiver-playervar",
   "input": {
-    "sha256": "c8040ee474759c5b27541b2b9a514d350f605f471bc23246d1baeadc37a5eadc",
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "c8040ee474759c5b27541b2b9a514d350f605f471bc23246d1baeadc37a5eadc"
+      }
+    ],
+    "sha256": "62f7d04611b79a0765ee42514c166996141f36fea9c52970d7a808633116468f",
     "source": "source.opy"
   },
   "oracle": {

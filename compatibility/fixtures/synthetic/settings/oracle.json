@@ -10,7 +10,13 @@
   },
   "fixture": "synthetic/settings",
   "input": {
-    "sha256": "b7989b6c078370649e87407d697da6ca89719b4ec6fcfcee63ce7836d2008fa2",
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "b7989b6c078370649e87407d697da6ca89719b4ec6fcfcee63ce7836d2008fa2"
+      }
+    ],
+    "sha256": "f29d2d73660adbdbdfda2e441a24950ccf369e0334f54667b0498b02f92a33ed",
     "source": "source.opy"
   },
   "oracle": {

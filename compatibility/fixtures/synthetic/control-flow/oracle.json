@@ -10,7 +10,13 @@
   },
   "fixture": "synthetic/control-flow",
   "input": {
-    "sha256": "81abea756fbec67cb1502142e7b8dd0e7abd6b803e49562c01840bed6afc0150",
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "81abea756fbec67cb1502142e7b8dd0e7abd6b803e49562c01840bed6afc0150"
+      }
+    ],
+    "sha256": "220eb532ddb1b608f5255c37caf7c3e75813f4a699f8a33be33b1926ab153e48",
     "source": "source.opy"
   },
   "oracle": {

@@ -10,7 +10,13 @@
   },
   "fixture": "synthetic/issue-47-control-flow",
   "input": {
-    "sha256": "8ff446e90c2d5b1827c42d4d3480951b8059dad1c7f9ecb7f0a6e18a63f1ca77",
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "8ff446e90c2d5b1827c42d4d3480951b8059dad1c7f9ecb7f0a6e18a63f1ca77"
+      }
+    ],
+    "sha256": "09fb929572f39ae87a6cb4e75edf93f3eb84602c686864e85feaf05549680041",
     "source": "source.opy"
   },
   "oracle": {

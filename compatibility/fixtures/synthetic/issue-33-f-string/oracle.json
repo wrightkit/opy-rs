@@ -10,7 +10,13 @@
   },
   "fixture": "synthetic/issue-33-f-string",
   "input": {
-    "sha256": "b314c0b598a5c5286b51b1ebaa5edebc8d192e65a6a091c75ec1dd4ba403a95d",
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "b314c0b598a5c5286b51b1ebaa5edebc8d192e65a6a091c75ec1dd4ba403a95d"
+      }
+    ],
+    "sha256": "70df6980a5ac4d30933bf83337325c2f835e277851300b90b2008f9d366bd614",
     "source": "source.opy"
   },
   "oracle": {

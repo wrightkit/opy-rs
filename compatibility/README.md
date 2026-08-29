@@ -52,10 +52,14 @@ closures. See `compatibility/fixtures/README.md` for the complete provenance
 record; the current inventory is the per-fixture metadata discovered and
 validated by [`run_oracle.py`](run_oracle.py).
 
-`oracle.json` captures the pinned oracle identity, source hash, compile status,
-exit code, normalized diagnostics, normalized Workshop text, and normalized
-output hash. The runner normalizes line endings, trailing whitespace, and final
-newline presentation only; it does not remove Workshop operations or values.
+`oracle.json` captures the pinned oracle identity, the complete resolved OPY
+project input manifest (relative source paths and per-file SHA-256 hashes), its
+canonical project digest, compile status, exit code, normalized diagnostics,
+normalized Workshop text, and normalized output hash. The runner normalizes
+line endings, trailing whitespace, and final newline presentation only; it does
+not remove Workshop operations or values. The project manifest covers every
+`.opy` file in the fixture directory except explicitly listed minimized
+regression snippets, so changes to included sources invalidate the snapshot.
 
 `differential-expectations.json` is the independent native-side expectation
 record. Each fixture has a native outcome, an expected relationship to the
@@ -63,6 +67,34 @@ oracle (`match`, `known-gap`, or `unsupported`), a rationale, and evidence.
 The differential runner derives `unexpected-divergence`, `regression`, and
 `inconclusive` results from those records; it never treats a reference-success
 / native-failure case as a match.
+
+`compiler-expectations.json` is a separate contract for the #38 compiler
+surface. It does not replace or weaken the source/frontend expectations above:
+its entries declare the compiler status, normalized-output/direct semantic-WIR
+or diagnostic contract, evidence, and concrete owner for each fixture. A
+non-match must cite both its pinned oracle snapshot and fixture provenance;
+parent issue #8 is not a durable gap owner.
+
+For `semantic-wir`, `run_native.py` invokes the public `opy-cli compile
+--format json` contract first, then invokes the feature-gated internal
+`opy-compat` target with the same source project and oracle snapshot.
+`opy-compat` parses only the oracle Workshop text into canonical WIR and
+compares it directly with the native WIR produced by lowering through
+`workshop-rs::roundtrip::equivalent`. It emits top-level harness
+`compatibility.semanticWIR` evidence with both project digests. A text reparse
+of the native emission is not accepted as semantic-WIR evidence, and the
+public compiler API remains oracle-free.
+
+`run_native.py` drives the built public compiler contract for every fixture,
+writes ephemeral producer results under `target/`, and delegates compiler
+expectation loading, full project-input validation, stage comparison, and
+blocking classification to `diff.py`. Only the durable, evidence-backed
+entries in `compiler-expectations.json` can produce `known-gap` or
+`unsupported` in this report.
+Expectation mismatches are reported as `unexpected-divergence` or `regression`.
+The command exits non-zero for those mismatches and, by default, for
+`inconclusive` cases; use `--allow-inconclusive` only for a local report that is
+explicitly not an acceptance gate.
 
 Real-world fixtures retain the complete project as the integration case. A
 fixture may also declare `regressions` pointing to minimized snippets under
@@ -81,6 +113,11 @@ definitions, and validation remain owned by `workshop-rs`.
 python3 -m unittest discover -s compatibility/tests
 python3 compatibility/run_oracle.py --update
 python3 compatibility/run_oracle.py
+cargo build --locked -p opy-cli --bin opy-cli
+cargo build --locked -p opy-cli --features compatibility --bin opy-compat
+python3 compatibility/run_native.py \
+  --binary target/debug/opy-cli \
+  --semantic-binary target/debug/opy-compat
 python3 compatibility/diff.py --results /path/to/results --report compatibility/report.json
 ```
 
@@ -150,27 +187,30 @@ python3 compatibility/diff.py \
 (`crates/opy-rs/tests/differential.rs`) against the recorded oracle
 snapshots directly.
 
-The producer must write a result with the same schema as the oracle's
-`compile` record and the fixture id. It may additionally provide a top-level
-`semantic` JSON value when a runtime-sensitive scenario has been executed.
-The command template is tokenized without a shell; `{fixture_id}`, `{source}`,
-and `{result}` are the only substitutions.
+The producer must write a result with the same compile-focused schema as the
+oracle and the fixture id. A compatibility runner may additionally provide a
+top-level `compatibility.semanticWIR` value when a compiler contract requires
+canonical-WIR evidence; this field is not part of `opy-cli`'s public compile
+report. The command template is tokenized without a shell; `{fixture_id}`,
+`{source}`, and `{result}` are the only substitutions.
 
 The report separates these stages:
 
 * `compile-status` and `diagnostics`;
 * `exact-output`, using the unnormalized Workshop text;
 * `normalized-output`, using the versioned snapshot normalization; and
-* `semantic`, when both producers provide semantic evidence.
+* `semantic-wir`, when the isolated compatibility harness provides direct
+  native-WIR evidence.
 
 It also separates relationship outcomes: `match`, `known-gap`, `unsupported`,
 `unexpected-divergence`, `regression`, and `inconclusive`. Known gaps are
 reviewable evidence and are not counted as successful parity.
 
 An exact-output difference with a normalized-output match is reported as a
-presentation difference. A normalized-output or semantic regression exits 1.
-Missing producer results or unavailable semantic evidence are `inconclusive`
-and exit 2 by default, so a CI job cannot silently pass without a producer.
+presentation difference. A normalized-output or semantic-WIR regression exits
+1. Missing producer results or unavailable semantic evidence are
+`inconclusive` and exit 2 by default, so a CI job cannot silently pass without
+a producer.
 Use `--allow-inconclusive` only for local contract checks.
 
 The opy-rs producer side of the differential contract is the native Rust

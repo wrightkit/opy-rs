@@ -15,7 +15,13 @@
   },
   "fixture": "real-world/overpy-parabola",
   "input": {
-    "sha256": "2dce50c374a00e3d3e664f4753f736f788cfb2d0df3a2149b139e6f8cb484940",
+    "files": [
+      {
+        "path": "parabola.opy",
+        "sha256": "2dce50c374a00e3d3e664f4753f736f788cfb2d0df3a2149b139e6f8cb484940"
+      }
+    ],
+    "sha256": "6b7921247aa2e70147223c0b401b232f3820bf7a5d2be369142e5a0840d18b0e",
     "source": "parabola.opy"
   },
   "oracle": {

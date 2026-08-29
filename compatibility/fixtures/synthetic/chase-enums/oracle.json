@@ -10,7 +10,13 @@
   },
   "fixture": "synthetic/chase-enums",
   "input": {
-    "sha256": "45e545039ff2338659c5fbcb78bf9dd86ca0ecd56df19a63219a4971285e0365",
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "45e545039ff2338659c5fbcb78bf9dd86ca0ecd56df19a63219a4971285e0365"
+      }
+    ],
+    "sha256": "2ed5934d1779f94c68ab35874fea15e8b681ef07be4a5cd1494e5ba11d41037d",
     "source": "source.opy"
   },
   "oracle": {

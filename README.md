@@ -54,10 +54,13 @@ maintaining a second raw Workshop implementation.
 
 ## CLI and library
 
-The standalone CLI currently exposes the Workshop-independent tooling surface:
+The standalone CLI exposes both Workshop-independent tooling and the bounded
+Workshop compiler surface:
 
 ```sh
 opy-cli check main.opy
+opy-cli compile main.opy
+opy-cli compile --format json main.opy
 opy-cli inspect main.opy
 opy-cli support --json
 opy-cli completion bash
@@ -90,7 +93,7 @@ compatibility corpus and pinned OverPy reference evidence.
 | Receiver/member functions | 🟡 Partial | Declared members work; full member breadth is not yet complete |
 | Enums & constants | 🟡 Partial | Declared domains resolve; full domain breadth is not yet complete |
 | Advanced directives, translations & optimizer controls | 🟡 Partial | Source state exists; Workshop-dependent effects remain incomplete |
-| OPY → Workshop compilation | 🟡 Partial | The compiler boundary exists and lowering is expanding through `workshop-rs`; full real-project compilation is not yet claimed |
+| OPY → Workshop compilation | 🟡 Partial | The versioned library/CLI compile contract and bounded lowering surface are supported; remaining corpus gaps stay explicit |
 | Workshop → OPY reconstruction | ⏳ Not yet | Will consume canonical `workshop-rs` semantics and remain owned by `opy-rs` |
 
 Exact per-feature evidence remains available in the

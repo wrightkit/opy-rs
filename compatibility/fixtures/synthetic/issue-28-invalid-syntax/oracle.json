@@ -15,7 +15,13 @@
   },
   "fixture": "synthetic/issue-28-invalid-syntax",
   "input": {
-    "sha256": "4c37a67406cb59376baabd986880ff71999f664456c3d1662cab47e47a371765",
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "4c37a67406cb59376baabd986880ff71999f664456c3d1662cab47e47a371765"
+      }
+    ],
+    "sha256": "32cc3774e3fbd6f0ad28d2e727b11614f14dfd82e6bf872b9cb9201425bec975",
     "source": "source.opy"
   },
   "oracle": {

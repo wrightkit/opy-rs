@@ -15,7 +15,14 @@ const MULTI_MAIN: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../opy-rs/tests/fixtures/multi-file/main.opy"
 );
-
+const BASIC_RULE: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../compatibility/fixtures/synthetic/basic-rule/source.opy"
+);
+const ISSUE_46_UNSUPPORTED: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../compatibility/fixtures/synthetic/issue-46-unsupported/source.opy"
+);
 fn run(args: &[&str]) -> std::process::Output {
     run_with_env(args, &[])
 }
@@ -71,6 +78,109 @@ fn check_missing_file_is_an_io_usage_error() {
     let output = run(&["check", "/nonexistent/opy/nope.opy"]);
     assert_eq!(output.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&output.stderr).contains("cannot read"));
+}
+
+#[test]
+fn compile_text_prints_only_final_workshop_to_stdout() {
+    let output = run(&["compile", BASIC_RULE]);
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "compile must succeed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.starts_with("rule (\"setup\")"));
+    assert!(stdout.contains("Disable Inspector Recording;"));
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn compile_json_reports_success_identity_and_normalized_output() {
+    let output = run(&["compile", "--format", "json", BASIC_RULE]);
+    assert_eq!(output.status.code(), Some(0));
+    assert!(output.stderr.is_empty());
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("compile JSON");
+    assert_eq!(json["schemaVersion"], 1);
+    assert_eq!(json["compile"]["status"], "success");
+    assert_eq!(json["compile"]["exitCode"], 0);
+    assert_eq!(json["compile"]["diagnostics"].as_array().unwrap().len(), 0);
+    assert_eq!(
+        json["compile"]["workshop"],
+        json["compile"]["workshopExact"]
+            .as_str()
+            .unwrap()
+            .trim_end_matches('\n')
+            .to_owned()
+            + "\n"
+    );
+    assert_eq!(json["compiler"]["name"], "opy-compiler");
+    assert_eq!(json["catalog"]["implementation-version"], "0.1.11");
+    assert!(json.get("compatibility").is_none());
+}
+
+#[test]
+fn compile_json_reports_frontend_diagnostics_and_exit_one() {
+    let dir = temp_dir("compile-bad");
+    let main = dir.join("bad.opy");
+    std::fs::write(&main, "rule \"r\":\n    @Event global\n    frobnicate()\n").unwrap();
+    let output = run(&["compile", "--format", "json", main.to_str().unwrap()]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(output.stderr.is_empty());
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("compile JSON");
+    assert_eq!(json["compile"]["status"], "failure");
+    assert_eq!(json["compile"]["failureClass"], "frontend");
+    assert_eq!(json["compile"]["diagnostics"][0]["code"], "unknown-action");
+    assert!(
+        json["compile"]["diagnostics"][0]["span"]["path"]
+            .as_str()
+            .unwrap()
+            .ends_with("/bad.opy")
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn compile_missing_file_is_an_io_usage_error() {
+    let output = run(&["compile", "--format", "json", "/nonexistent/opy/nope.opy"]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("cannot read"));
+}
+
+#[test]
+fn compile_json_reports_unsupported_lowering_as_integration_failure() {
+    let output = run(&["compile", "--format", "json", ISSUE_46_UNSUPPORTED]);
+    assert_eq!(output.status.code(), Some(1));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("compile JSON");
+    assert_eq!(json["compile"]["failureClass"], "integration");
+    assert_eq!(
+        json["compile"]["diagnostics"][0]["code"],
+        "unsupported-integration-surface"
+    );
+}
+
+#[test]
+fn compile_rejects_unsupported_locale_with_structured_diagnostic() {
+    let output = run(&[
+        "compile",
+        "--format",
+        "json",
+        "--language",
+        "xx-XX",
+        BASIC_RULE,
+    ]);
+    assert_eq!(output.status.code(), Some(1));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("compile JSON");
+    assert_eq!(json["compile"]["failureClass"], "integration");
+    assert_eq!(
+        json["compile"]["diagnostics"][0]["code"],
+        "locale-unsupported"
+    );
+    assert_eq!(
+        json["compile"]["diagnostics"][0]["span"],
+        serde_json::Value::Null
+    );
 }
 
 #[test]
@@ -192,6 +302,7 @@ fn help_and_parse_are_driven_by_the_structured_command_model() {
     for expected in [
         "opy-cli",
         "check",
+        "compile",
         "inspect",
         "support",
         "completion",

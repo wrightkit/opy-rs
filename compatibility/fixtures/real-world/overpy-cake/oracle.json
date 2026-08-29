@@ -10,7 +10,13 @@
   },
   "fixture": "real-world/overpy-cake",
   "input": {
-    "sha256": "aa1baf73b47136fc5fd01f87458657fb4f4940e939ee6cafaa4eadc6ea742975",
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "aa1baf73b47136fc5fd01f87458657fb4f4940e939ee6cafaa4eadc6ea742975"
+      }
+    ],
+    "sha256": "2e51bf1c73d1b0e1d7654dba99870679c902976ebfe49574129c0a30a29a8bd4",
     "source": "source.opy"
   },
   "oracle": {

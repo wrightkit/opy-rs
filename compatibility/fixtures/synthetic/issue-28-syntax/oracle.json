@@ -10,7 +10,13 @@
   },
   "fixture": "synthetic/issue-28-syntax",
   "input": {
-    "sha256": "edf9128e1aa5b6e2ad8d672e00dad15e58517daec7b1a5ae763d0030a57e5573",
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "edf9128e1aa5b6e2ad8d672e00dad15e58517daec7b1a5ae763d0030a57e5573"
+      }
+    ],
+    "sha256": "17d1328f76d60e0ee02325019468783e052e239b825f8cd504221518d2c278a0",
     "source": "source.opy"
   },
   "oracle": {

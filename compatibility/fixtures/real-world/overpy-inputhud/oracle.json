@@ -10,7 +10,13 @@
   },
   "fixture": "real-world/overpy-inputhud",
   "input": {
-    "sha256": "ae7a0e004cc80e61d256d0ff2509f51bdc96b27d60a93c9215b327436e7eefc1",
+    "files": [
+      {
+        "path": "inputhud.opy",
+        "sha256": "ae7a0e004cc80e61d256d0ff2509f51bdc96b27d60a93c9215b327436e7eefc1"
+      }
+    ],
+    "sha256": "4aaaad4f0395dfa9410eb1b535dc05d542068b6138d080b9bb1813004fc7ae46",
     "source": "inputhud.opy"
   },
   "oracle": {

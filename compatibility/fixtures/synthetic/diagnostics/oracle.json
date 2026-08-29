@@ -15,7 +15,13 @@
   },
   "fixture": "synthetic/diagnostics",
   "input": {
-    "sha256": "3b482dfd7f5b28e89fecb86ffb629f864ea27f280a3638523763e8401a9d3158",
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "3b482dfd7f5b28e89fecb86ffb629f864ea27f280a3638523763e8401a9d3158"
+      }
+    ],
+    "sha256": "86f930b798ff365f4a75d8e818028afc6c7d19e082e8885b566fc678ca70c6bf",
     "source": "source.opy"
   },
   "oracle": {

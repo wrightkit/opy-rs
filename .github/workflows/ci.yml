@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_dispatch:
   push:
     branches: ["main"]
     paths-ignore:
@@ -29,6 +30,56 @@ jobs:
       toolchain: ${{ matrix.toolchain }}
       cache-shared-key: linux-quality
       all-features: true
+
+  compiler-compatibility:
+    name: Compiler compatibility gate
+    needs: rust-quality
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: linux-quality
+          cache-targets: false
+          cache-all-crates: false
+          cache-workspace-crates: false
+          cache-bin: false
+          save-if: false
+          cache-on-failure: false
+
+      - name: Build public compiler CLI
+        run: cargo build --locked -p opy-cli --bin opy-cli
+
+      - name: Build internal compatibility evidence target
+        run: cargo build --locked -p opy-cli --features compatibility --bin opy-compat
+
+      - name: Run compatibility harness tests
+        run: python3 -B -m unittest discover -s compatibility/tests
+
+      - name: Run native compiler compatibility gate
+        run: >-
+          python3 -B compatibility/run_native.py
+          --binary target/debug/opy-cli
+          --semantic-binary target/debug/opy-compat
+          --results target/opy-compiler-results
+          --report target/opy-compiler-report.json
+
+      - name: Upload compiler compatibility report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: opy-compiler-compatibility-report
+          path: target/opy-compiler-report.json
+          if-no-files-found: ignore
 
   macro-runtime-ports:
     name: JS runtime on ${{ matrix.os }}

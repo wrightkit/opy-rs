@@ -10,7 +10,13 @@
   },
   "fixture": "synthetic/expressions-values",
   "input": {
-    "sha256": "d114352687e3c1b52bd284283e27b83b6079fffb23583127664471f0ab5b42d4",
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "d114352687e3c1b52bd284283e27b83b6079fffb23583127664471f0ab5b42d4"
+      }
+    ],
+    "sha256": "bdcbcd7f068858394c91eaee546aa6d775bfc71d8a8110463ad0abb8c5836b88",
     "source": "source.opy"
   },
   "oracle": {

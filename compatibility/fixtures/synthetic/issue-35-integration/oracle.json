@@ -10,7 +10,13 @@
   },
   "fixture": "synthetic/issue-35-integration",
   "input": {
-    "sha256": "81bf609658e1e913773c534ff90271153cad741c131cf06c87785a1e9aef7824",
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "81bf609658e1e913773c534ff90271153cad741c131cf06c87785a1e9aef7824"
+      }
+    ],
+    "sha256": "462314b803f19552ebe5055988e7419321d9345400de93ab79a15307497103c0",
     "source": "source.opy"
   },
   "oracle": {

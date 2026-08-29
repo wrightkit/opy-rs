@@ -10,7 +10,17 @@
   },
   "fixture": "synthetic/issue-31-positive",
   "input": {
-    "sha256": "aa688034210c921381c0d0ddb7c876c05279bac306a6c3cd3103fc47e501a104",
+    "files": [
+      {
+        "path": "child.opy",
+        "sha256": "fff006d57fb4436bfb6450eddc004bc337bf95f3ab8b6cd75c641f79e2d0d080"
+      },
+      {
+        "path": "source.opy",
+        "sha256": "aa688034210c921381c0d0ddb7c876c05279bac306a6c3cd3103fc47e501a104"
+      }
+    ],
+    "sha256": "6bcf82bcfaa534e542e1f6b2057de38c65ae0084dac8cc11cf2f418b80e706bb",
     "source": "source.opy"
   },
   "oracle": {

@@ -10,6 +10,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use opy_rs::hir::{self, Expr, RuleEntry, Span as HirSpan, Stmt, SwitchArm, default_var_index};
 use opy_rs::manifest::{FunctionKind, Manifest};
+use serde::Serialize;
 use workshop_rs::catalog::{Catalog, CatalogIdentity, Kind, Locale};
 use workshop_rs::source::{Position as WorkshopPosition, SourceFile, Span as WorkshopSpan};
 use workshop_rs::wir::{self, Action, Event, PlayerEventKind, Program, Value, ValueNode};
@@ -18,6 +19,76 @@ pub mod reconstruct;
 
 /// The exact released dependency contract consumed by this crate.
 pub const WORKSHOP_RS_VERSION: &str = "0.1.11";
+
+/// Version of the machine-readable compile report contract.
+pub const COMPILE_SCHEMA_VERSION: u32 = 1;
+
+/// Stable identity of the compiler that produced a compile report.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct CompilerIdentity {
+    pub name: &'static str,
+    pub version: &'static str,
+}
+
+/// Whether compilation produced a valid Workshop artifact.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CompileStatus {
+    Success,
+    Failure,
+}
+
+/// Stable classification for a compile failure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CompileFailureClass {
+    Frontend,
+    Integration,
+}
+
+/// A versioned, source-attributed diagnostic exposed by the compile API.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompileDiagnostic {
+    pub severity: opy_rs::tooling::DiagnosticSeverity,
+    pub code: String,
+    pub message: String,
+    pub span: Option<opy_rs::tooling::SourceLocation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub script: Option<ScriptDiagnostic>,
+}
+
+/// The machine-readable result for one compile operation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompileResult {
+    pub status: CompileStatus,
+    pub exit_code: u8,
+    pub failure_class: Option<CompileFailureClass>,
+    pub diagnostics: Vec<CompileDiagnostic>,
+    pub stdout: String,
+    pub workshop_exact: String,
+    pub workshop: String,
+}
+
+/// Complete versioned compile report for CLI, CI, and embedding consumers.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompileReport {
+    pub schema_version: u32,
+    pub compiler: CompilerIdentity,
+    pub catalog: CatalogIdentity,
+    pub compile: CompileResult,
+}
+
+impl CompilerIdentity {
+    fn current() -> Self {
+        Self {
+            name: "opy-compiler",
+            version: env!("CARGO_PKG_VERSION"),
+        }
+    }
+}
 
 /// A source-attributed integration diagnostic.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,7 +100,8 @@ pub struct IntegrationDiagnostic {
 }
 
 /// Script-runtime provenance retained alongside the OPY directive anchor.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ScriptDiagnostic {
     pub source_name: Option<String>,
     pub line: Option<u32>,
@@ -280,6 +352,64 @@ impl Compiler {
         root: &std::path::Path,
         locale: &Locale,
     ) -> Result<CompilationArtifact, IntegrationError> {
+        self.compile_source_internal(source, main_path, root, locale)
+    }
+
+    /// Compile source into the versioned machine-readable result contract.
+    pub fn compile_source_report(
+        &self,
+        source: &str,
+        main_path: &str,
+        root: &std::path::Path,
+        locale: &Locale,
+    ) -> CompileReport {
+        let outcome = opy_rs::compile_with_overlay_outcome(
+            source,
+            main_path,
+            root,
+            &std::collections::BTreeMap::new(),
+        );
+        let catalog = self.catalog.identity();
+        let compiler = CompilerIdentity::current();
+        let Some(hir) = outcome.hir else {
+            let error = outcome
+                .error
+                .expect("failed frontend compile has diagnostic");
+            let diagnostic = CompileDiagnostic {
+                severity: opy_rs::tooling::DiagnosticSeverity::Error,
+                code: error.code,
+                message: error.message,
+                span: error
+                    .span
+                    .and_then(|span| source_location_from_file_records(span, &outcome.files)),
+                script: None,
+            };
+            return CompileReport::failure(
+                compiler,
+                catalog,
+                CompileFailureClass::Frontend,
+                vec![diagnostic],
+            );
+        };
+
+        match self.compile_hir_with_locale_and_hook(&hir, outcome.post_compile_hook, locale) {
+            Ok(artifact) => CompileReport::success(compiler, catalog, artifact),
+            Err(error) => CompileReport::failure(
+                compiler,
+                catalog,
+                CompileFailureClass::Integration,
+                vec![compile_diagnostic(error, &hir.files)],
+            ),
+        }
+    }
+
+    fn compile_source_internal(
+        &self,
+        source: &str,
+        main_path: &str,
+        root: &std::path::Path,
+        locale: &Locale,
+    ) -> Result<CompilationArtifact, IntegrationError> {
         let outcome = opy_rs::compile_with_overlay_outcome(
             source,
             main_path,
@@ -296,8 +426,16 @@ impl Compiler {
                 error.span.map(hir_span_from_diag),
             )
         })?;
-        let hook = outcome.post_compile_hook;
-        let mut artifact = self.compile_hir_with_locale(&hir, locale)?;
+        self.compile_hir_with_locale_and_hook(&hir, outcome.post_compile_hook, locale)
+    }
+
+    fn compile_hir_with_locale_and_hook(
+        &self,
+        hir: &hir::Program,
+        hook: Option<opy_rs::PostCompileHookRecord>,
+        locale: &Locale,
+    ) -> Result<CompilationArtifact, IntegrationError> {
+        let mut artifact = self.compile_hir_with_locale(hir, locale)?;
         if let Some(hook) = hook {
             let runtime = opy_macro_js::MacroRuntime::new(opy_macro_js::Limits::default());
             let result = runtime
@@ -309,6 +447,109 @@ impl Compiler {
             artifact.hook_console_output = result.console_output;
         }
         Ok(artifact)
+    }
+}
+
+impl CompileReport {
+    fn success(
+        compiler: CompilerIdentity,
+        catalog: CatalogIdentity,
+        artifact: CompilationArtifact,
+    ) -> Self {
+        Self {
+            schema_version: COMPILE_SCHEMA_VERSION,
+            compiler,
+            catalog,
+            compile: CompileResult {
+                status: CompileStatus::Success,
+                exit_code: 0,
+                failure_class: None,
+                diagnostics: Vec::new(),
+                stdout: String::new(),
+                workshop_exact: artifact.final_output.clone(),
+                workshop: normalize_workshop(&artifact.final_output),
+            },
+        }
+    }
+
+    fn failure(
+        compiler: CompilerIdentity,
+        catalog: CatalogIdentity,
+        failure_class: CompileFailureClass,
+        diagnostics: Vec<CompileDiagnostic>,
+    ) -> Self {
+        Self {
+            schema_version: COMPILE_SCHEMA_VERSION,
+            compiler,
+            catalog,
+            compile: CompileResult {
+                status: CompileStatus::Failure,
+                exit_code: 1,
+                failure_class: Some(failure_class),
+                diagnostics,
+                stdout: String::new(),
+                workshop_exact: String::new(),
+                workshop: String::new(),
+            },
+        }
+    }
+}
+
+fn compile_diagnostic(error: IntegrationError, files: &[hir::SourceFile]) -> CompileDiagnostic {
+    let diagnostic = error.diagnostic;
+    CompileDiagnostic {
+        severity: opy_rs::tooling::DiagnosticSeverity::Error,
+        code: diagnostic.code,
+        message: diagnostic.message,
+        span: diagnostic
+            .span
+            .and_then(|span| source_location_from_hir(span, files)),
+        script: diagnostic.script.map(|script| *script),
+    }
+}
+
+fn source_location_from_file_records(
+    span: opy_rs::diag::Span,
+    files: &[opy_rs::preprocess::FileRecord],
+) -> Option<opy_rs::tooling::SourceLocation> {
+    let path = files.iter().find(|file| file.id == span.file)?.path.clone();
+    Some(opy_rs::tooling::SourceLocation {
+        file_id: span.file,
+        path,
+        start: span.start,
+        end: span.end,
+    })
+}
+
+fn source_location_from_hir(
+    span: HirSpan,
+    files: &[hir::SourceFile],
+) -> Option<opy_rs::tooling::SourceLocation> {
+    let path = files.iter().find(|file| file.id == span.file)?.path.clone();
+    Some(opy_rs::tooling::SourceLocation {
+        file_id: span.file,
+        path,
+        start: opy_rs::diag::Position::new(span.start.line, span.start.col),
+        end: opy_rs::diag::Position::new(span.end.line, span.end.col),
+    })
+}
+
+fn normalize_workshop(text: &str) -> String {
+    if text.is_empty() {
+        return String::new();
+    }
+    let normalized = text.replace("\r\n", "\n").replace('\r', "\n");
+    let mut lines = normalized
+        .split('\n')
+        .map(|line| line.trim_end_matches([' ', '\t']).to_owned())
+        .collect::<Vec<_>>();
+    while lines.last().is_some_and(|line| line.is_empty()) {
+        lines.pop();
+    }
+    if lines.is_empty() {
+        String::new()
+    } else {
+        lines.join("\n") + "\n"
     }
 }
 
@@ -3154,7 +3395,10 @@ fn workshop_error_span(error: &workshop_rs::WorkshopError) -> Option<WorkshopSpa
 
 #[cfg(test)]
 mod tests {
-    use super::{Compiler, WORKSHOP_RS_VERSION, cross_check_manifest};
+    use super::{
+        COMPILE_SCHEMA_VERSION, CompileFailureClass, CompileStatus, Compiler, WORKSHOP_RS_VERSION,
+        cross_check_manifest,
+    };
     use opy_rs::manifest::Manifest;
     use std::path::Path;
     use workshop_rs::catalog::{Catalog, Locale};
@@ -3166,6 +3410,73 @@ mod tests {
         assert_eq!(identity.implementation_version, WORKSHOP_RS_VERSION);
         assert!(compiler.link_report().catalog_ids_checked > 0);
         assert!(compiler.link_report().domains_checked > 0);
+    }
+
+    #[test]
+    fn compile_report_is_versioned_and_contains_reproducibility_identity() {
+        let compiler = Compiler::new().unwrap();
+        let report = compiler.compile_source_report(
+            "rule \"report\":\n    @Event global\n    disableInspector()\n",
+            "report.opy",
+            Path::new("."),
+            &Locale::new("en-US"),
+        );
+        assert_eq!(report.schema_version, COMPILE_SCHEMA_VERSION);
+        assert_eq!(report.compiler.name, "opy-compiler");
+        assert_eq!(report.catalog.implementation_version, WORKSHOP_RS_VERSION);
+        assert_eq!(report.compile.status, CompileStatus::Success);
+        assert_eq!(report.compile.exit_code, 0);
+        assert!(report.compile.diagnostics.is_empty());
+        assert_eq!(
+            report.compile.workshop,
+            report
+                .compile
+                .workshop_exact
+                .trim_end_matches('\n')
+                .to_owned()
+                + "\n"
+        );
+        assert!(serde_json::to_value(report).unwrap()["catalog"]["catalog-version"].is_string());
+    }
+
+    #[test]
+    fn compile_report_preserves_frontend_failure_class_and_source_path() {
+        let compiler = Compiler::new().unwrap();
+        let report = compiler.compile_source_report(
+            "rule \"broken\":\n    @Event global\n    missing()\n",
+            "broken.opy",
+            Path::new("."),
+            &Locale::new("en-US"),
+        );
+        assert_eq!(report.compile.status, CompileStatus::Failure);
+        assert_eq!(
+            report.compile.failure_class,
+            Some(CompileFailureClass::Frontend)
+        );
+        assert_eq!(report.compile.exit_code, 1);
+        let diagnostic = &report.compile.diagnostics[0];
+        assert_eq!(diagnostic.code, "unknown-action");
+        assert_eq!(diagnostic.span.as_ref().unwrap().path, "broken.opy");
+    }
+
+    #[test]
+    fn compile_report_preserves_integration_failure_class_and_source_path() {
+        let compiler = Compiler::new().unwrap();
+        let report = compiler.compile_source_report(
+            "globalvar A\nrule \"broken\":\n    @Event global\n    A[1][2] = 3\n",
+            "broken.opy",
+            Path::new("."),
+            &Locale::new("en-US"),
+        );
+        assert_eq!(report.compile.status, CompileStatus::Failure);
+        assert_eq!(
+            report.compile.failure_class,
+            Some(CompileFailureClass::Integration)
+        );
+        assert_eq!(
+            report.compile.diagnostics[0].span.as_ref().unwrap().path,
+            "broken.opy"
+        );
     }
 
     #[test]
@@ -3653,6 +3964,16 @@ rule "allocation":
             serde_json::from_str(&std::fs::read_to_string(fixture.join("oracle.json")).unwrap())
                 .unwrap();
         let oracle_workshop = oracle["compile"]["workshop"].as_str().unwrap();
+        let oracle_wir = workshop_rs::parser::parse(
+            oracle_workshop,
+            &Catalog::builtin().unwrap(),
+            &Locale::new("en-US"),
+        )
+        .unwrap();
+        assert!(workshop_rs::roundtrip::equivalent(
+            &artifact.wir,
+            &oracle_wir
+        ));
 
         assert!(oracle_workshop.contains("0: reserved"));
         assert!(oracle_workshop.contains("1: first"));
@@ -3972,6 +4293,16 @@ rule "main":
             .next()
             .unwrap();
         let actual = artifact.emitted.split("\n\nrule").next().unwrap();
+        let oracle_wir = workshop_rs::parser::parse(
+            oracle["compile"]["workshop"].as_str().unwrap(),
+            &Catalog::builtin().unwrap(),
+            &Locale::new("en-US"),
+        )
+        .unwrap();
+        assert!(workshop_rs::roundtrip::equivalent(
+            &artifact.wir,
+            &oracle_wir
+        ));
         assert_eq!(
             normalize_workshop_structural_whitespace(actual),
             normalize_workshop_structural_whitespace(expected)

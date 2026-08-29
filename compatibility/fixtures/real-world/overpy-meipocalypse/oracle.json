@@ -15,7 +15,53 @@
   },
   "fixture": "real-world/overpy-meipocalypse",
   "input": {
-    "sha256": "f982574116462c2796b8800a18f35ed8a55c599f2785c1ef7ca5ee6b21e5b604",
+    "files": [
+      {
+        "path": "barricades.opy",
+        "sha256": "98c6af05fdf0459efc371666e60b736adbe3d845aec6a0f05b9fec4f0c16100f"
+      },
+      {
+        "path": "debug.opy",
+        "sha256": "b5f78f0049bf965fbb1ebf1ae55b4a524523c8770094455e5780a31bf5e152f3"
+      },
+      {
+        "path": "debug_settings.opy",
+        "sha256": "96ec104b525c7a24b64049354334b53afa9cd6ee7eaed0afc2709dc7d1c6e459"
+      },
+      {
+        "path": "fightforyourlife.opy",
+        "sha256": "7b6c69554922c81cea80283c95b0dc3a8641fca5edbb00019fc2456337ad25fd"
+      },
+      {
+        "path": "heroUnlock.opy",
+        "sha256": "ba49692b62356fa821e20b925b097fde8b5ce5ff1d9bb30d4dfe563ceeff8283"
+      },
+      {
+        "path": "mei_types.opy",
+        "sha256": "39b1b890831a674c299930f7ceb9dc77e335147a914fb544767dfdbf2fbb4381"
+      },
+      {
+        "path": "meipocalypse.opy",
+        "sha256": "f982574116462c2796b8800a18f35ed8a55c599f2785c1ef7ca5ee6b21e5b604"
+      },
+      {
+        "path": "settings.opy",
+        "sha256": "429e51da582c24bb52112bd6db9f2ef759e70621e3f5ddb543533aa53ed19634"
+      },
+      {
+        "path": "shop.opy",
+        "sha256": "f84b1cb88cb6c935ecbaf9dced48cbdd9327616a698a4d50b984a844a1c13b1c"
+      },
+      {
+        "path": "waves.opy",
+        "sha256": "0c6fe7d2d5bdd83805413bbdb3d62a26055b6b01e17874759acd2d2a68338c09"
+      },
+      {
+        "path": "zones.opy",
+        "sha256": "a4f3d898c31cdcdb427ab02d986d786fa312acd1a00e2cc8dcc2c2f6aac0aba7"
+      }
+    ],
+    "sha256": "6d248490a57cc1a57b0b52cfafe464eb2b633b2b0226c2850d315e8a7654416c",
     "source": "meipocalypse.opy"
   },
   "oracle": {

@@ -15,7 +15,13 @@
   },
   "fixture": "synthetic/issue-29-invalid",
   "input": {
-    "sha256": "2c3977deb6a40d8a4d38f5b4873ce89e388543e967f2643975d449490704d462",
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "2c3977deb6a40d8a4d38f5b4873ce89e388543e967f2643975d449490704d462"
+      }
+    ],
+    "sha256": "9c8eee6b2ce5f1d8df009b2d58a154aa8947d07d136b40d0d4eeabfefcea177c",
     "source": "source.opy"
   },
   "oracle": {

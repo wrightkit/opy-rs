@@ -10,7 +10,7 @@
   },
   "snapshot": {
     "date": "2026-08-29",
-    "note": "Readiness baseline through the bounded #37 compiler slice. Settings, catalog-declared locale emission, and post-compile hooks have explicit OPY -> HIR -> WIR -> validated Workshop emission evidence. Optimizer controls remain non-blocking presentation differences; semantic replacement directives remain explicit gaps and fail at the compiler boundary until canonical lowering exists. Canonical Workshop catalog data, settings tables, locale spellings, WIR, validation, and emission remain owned by workshop-rs.",
+    "note": "Readiness baseline through the #38 versioned compile API and CLI. Supported settings, catalog-declared locale emission, and post-compile hooks have explicit OPY -> HIR -> WIR -> validated Workshop emission evidence. Compiler and CLI failures remain structured and source-attributed; optimizer controls remain non-blocking presentation differences and semantic replacement directives remain explicit gaps. Canonical Workshop catalog data, settings tables, locale spellings, WIR, validation, and emission remain owned by workshop-rs.",
     "asOfCommit": "9f7c62b1958a3804780a2de7d1bd55e2fb298533"
   },
   "states": {
@@ -642,7 +642,7 @@
       "evidence": [
         "fixtures:synthetic/issue-46-primitives",
         "test:opy-compiler-primitive-lowering",
-        "test:opy-compiler-issue-46-oracle-equivalence",
+        "test:opy-compiler-issue-46-native-wir-gap",
         "contract:workshop-rs-v0.1.11"
       ],
       "notes": "Issue #46. Global/player assignments and augmented assignments (+=, -=, *=, /=, %=, **=), single-level indexed variable assignments and modifications (setGlobalVariableAtIndex, modifyGlobalVariableAtIndex, setPlayerVariableAtIndex, modifyPlayerVariableAtIndex), and pass no-op statements lower into canonical workshop-rs WIR. Declaration initializer evidence covers non-null initializers; OverPy null-default initializer semantics remain tracked by #58. Deeper indexed writes remain tracked by #60. Direct global/player assignments and modifications carry full statement and target-variable span provenance; the single-level indexed forms lower to canonical Call actions, which carry only the statement-level source span (the canonical WIR Call shape has no separate target-span field)."
@@ -651,7 +651,7 @@
       "id": "compilation/opy-implicit-default-variables",
       "name": "OverPy implicit default global and player variables (A-DX) at fixed Workshop slots",
       "category": "compilation",
-      "state": "end-to-end-supported",
+      "state": "lowering-dependent",
       "evidence": [
         "fixtures:synthetic/issue-46-primitives",
         "test:opy-compiler-implicit-default-variables",
@@ -686,7 +686,7 @@
       "id": "compilation/opy-control-flow-lowering",
       "name": "OPY control-flow HIR -> canonical WIR lowering",
       "category": "compilation",
-      "state": "end-to-end-supported",
+      "state": "lowering-dependent",
       "evidence": [
         "fixtures:synthetic/issue-47-control-flow",
         "fixtures:synthetic/issue-47-unsupported",
@@ -696,10 +696,10 @@
         "fixtures:synthetic/issue-47-do-while-shapes",
         "fixtures:synthetic/issue-47-do-while-invalid-placement",
         "fixtures:synthetic/issue-33-switch-break",
-        "test:opy-compiler-issue-47-oracle-equivalence",
+        "test:opy-compiler-issue-47-residual-native-wir-gaps",
         "contract:workshop-rs-v0.1.11"
       ],
-      "notes": "Issue #47. If/elif/else, while, global-binder range-for, do-while expansion, source-ordered switch fallthrough/default, and direct loop/switch/do-while break lower into canonical workshop-rs WIR. Switch offsets and do-while distances use workshop-rs v0.1.11 canonical emitted action widths; direct, conditional, nested, and structured-tail do-while shapes plus structured switch targets are pinned and oracle-equivalent. A nested conditional switch break and a multi-break switch with later reachable actions remain stable source-attributed unsupported-integration-surface diagnostics because workshop-rs v0.1.11 has no lossless multi-target switch carrier."
+      "notes": "Issue #47. If/elif/else, while, global-binder range-for, do-while expansion, source-ordered switch fallthrough/default, and direct loop/switch/do-while break lower into canonical workshop-rs WIR. Switch offsets and do-while distances use workshop-rs v0.1.11 canonical emitted action widths; direct, conditional, and nested do-while shapes are pinned and oracle-equivalent. Residual native-WIR differences in switch-break and switch-target shapes remain explicit compiler gaps, while nested conditional switch break and multi-break switch cases remain stable source-attributed unsupported-integration-surface diagnostics because workshop-rs v0.1.11 has no lossless multi-target switch carrier."
     },
     {
       "id": "compilation/workshop-lowering",
@@ -710,7 +710,7 @@
         "fixtures:synthetic",
         "fixtures:real-world"
       ],
-      "notes": "Issue #8 remains the broader lowering track. The released workshop-rs v0.1.11 public contract now supports the bounded #35 adapter, the #40 structural skeleton, and the separately evidenced #47 control-flow slice; full OPY statement/expression lowering, catalog/member/enum breadth, settings/content, locales, optimizer effects, and hooks remain lowering-dependent follow-up work. Oracle snapshots (fixtures/**/oracle.json) remain preserved reference evidence; no temporary Workshop IR is introduced here."
+      "notes": "Issue #38 exposes the bounded compiler/library/CLI surface over the released workshop-rs v0.1.11 contract. Full OPY statement/expression lowering, catalog/member/enum breadth, optimizer effects, and remaining real-project gaps stay explicit in compiler-expectations.json and the native corpus report; no temporary Workshop IR is introduced here."
     },
     {
       "id": "compilation/end-to-end",
@@ -722,7 +722,7 @@
         "fixtures:real-world",
         "fixtures:census/workshop-feature-census"
       ],
-      "notes": "Full OPY-to-Workshop parity remains lowering-dependent after the bounded #35 first slice; the OPY-side feature census records opaque workshop-rs#10 identities without duplicating catalog definitions. Differential harness contract is ready (compatibility/diff.py, issue #25)."
+      "notes": "Full OPY-to-Workshop parity remains broader than the declared #38 baseline. compatibility/run_native.py compiles every fixture through the versioned CLI contract and compares it with the separate compiler-expectations.json baseline. Source/frontend expectations remain independent; entries are separately classified and no unverified case is counted as compiler parity."
     },
     {
       "id": "decompilation/workshop-to-opy",
@@ -751,8 +751,8 @@
       "planned": 0,
       "source-supported": 23,
       "semantic-supported": 13,
-      "lowering-dependent": 10,
-      "end-to-end-supported": 10
+      "lowering-dependent": 12,
+      "end-to-end-supported": 8
     },
     "byCategory": {
       "syntax": 14,

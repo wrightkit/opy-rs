@@ -10,7 +10,13 @@
   },
   "fixture": "synthetic/declarations-rules",
   "input": {
-    "sha256": "055b7b34908b35f1549c88bdcc8d3a8aea0edf767c722a1f0ad2b04d8d1dea48",
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "055b7b34908b35f1549c88bdcc8d3a8aea0edf767c722a1f0ad2b04d8d1dea48"
+      }
+    ],
+    "sha256": "4d4666efcc550290af42daddbdba3501b4c59f0f4b62b775123f572f61920926",
     "source": "source.opy"
   },
   "oracle": {

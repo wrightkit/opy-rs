@@ -15,7 +15,13 @@
   },
   "fixture": "synthetic/issue-31-negative",
   "input": {
-    "sha256": "613387a057b0ba8958db08b661435b5c53d69f0d4c6b5510214c89589d8fe2ad",
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "613387a057b0ba8958db08b661435b5c53d69f0d4c6b5510214c89589d8fe2ad"
+      }
+    ],
+    "sha256": "e90535d7af9c12f0570fcb36a7093bc78f9426444f7179c2705ddac215c8063b",
     "source": "source.opy"
   },
   "oracle": {

@@ -33,6 +33,18 @@ class DiffTests(unittest.TestCase):
             self.assertTrue(expectation["evidence"], fixture)
             self.assertTrue(expectation["note"], fixture)
 
+    def test_compiler_expectations_are_separate_and_cover_every_fixture(self):
+        source = diff.load_expectations()
+        compiler = diff.load_compiler_expectations()
+        fixtures = set(diff.fixture_ids(COMPATIBILITY_DIR / "fixtures"))
+        self.assertEqual(set(compiler), fixtures)
+        self.assertNotIn("comparison", source["synthetic/basic-rule"])
+        for fixture, expectation in compiler.items():
+            self.assertIn(expectation["comparison"], diff.EXPECTED_COMPILER_COMPARISONS)
+            self.assertTrue(expectation["evidence"], fixture)
+            self.assertTrue(expectation["owner"], fixture)
+            self.assertTrue(expectation["note"], fixture)
+
     def write_result(self, root: Path, result: dict):
         path = root / result["fixture"] / "result.json"
         path.parent.mkdir(parents=True)
@@ -164,6 +176,122 @@ class DiffTests(unittest.TestCase):
                     root,
                     None,
                 )
+
+    def test_compiler_status_mismatch_is_blocking(self):
+        result = copy.deepcopy(self.oracle)
+        result["compile"]["status"] = "failure"
+        result["compile"]["exitCode"] = 1
+        result["compile"]["workshopExact"] = ""
+        result["compile"]["workshop"] = ""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write_result(root, result)
+            report_result = diff.compare_compiler_fixture(
+                COMPATIBILITY_DIR / "fixtures",
+                "synthetic/basic-rule",
+                root,
+                diff.load_compiler_expectations(),
+            )
+        self.assertEqual(report_result["status"], "unexpected-divergence")
+        self.assertIn("compile-status", report_result["regressionStages"])
+
+    def test_compiler_input_hash_mismatch_is_rejected(self):
+        result = copy.deepcopy(self.oracle)
+        result["input"]["sha256"] = "different"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write_result(root, result)
+            with self.assertRaises(diff.DiffError):
+                diff.compare_compiler_fixture(
+                    COMPATIBILITY_DIR / "fixtures",
+                    "synthetic/basic-rule",
+                    root,
+                    diff.load_compiler_expectations(),
+                )
+
+    def test_compile_result_rejects_public_semantic_wir_evidence(self):
+        result = copy.deepcopy(self.oracle)
+        result["compile"]["semanticWIR"] = {}
+        with self.assertRaises(diff.DiffError):
+            diff.require_result_shape(result, "compile result")
+
+    def test_compiler_semantic_wir_consumes_direct_evidence(self):
+        fixture = "synthetic/issue-47-control-flow"
+        oracle = json.loads(
+            (
+                COMPATIBILITY_DIR
+                / "fixtures"
+                / fixture
+                / "oracle.json"
+            ).read_text(encoding="utf-8")
+        )
+        result = copy.deepcopy(oracle)
+        result["compatibility"] = {
+            "schemaVersion": 1,
+            "semanticWIR": {
+                "schemaVersion": 1,
+                "algorithm": "workshop-rs::roundtrip::equivalent",
+                "inputSha256": oracle["input"]["sha256"],
+                "referenceInputSha256": oracle["input"]["sha256"],
+                "equivalent": False,
+            },
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write_result(root, result)
+            report_result = diff.compare_compiler_fixture(
+                COMPATIBILITY_DIR / "fixtures",
+                fixture,
+                root,
+                diff.load_compiler_expectations(),
+            )
+        self.assertEqual(report_result["status"], "known-gap")
+        self.assertEqual(
+            report_result["stages"][1]["outcome"],
+            "accepted-gap",
+        )
+
+        result["compatibility"]["semanticWIR"]["referenceError"] = "invalid pinned Workshop"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write_result(root, result)
+            report_result = diff.compare_compiler_fixture(
+                COMPATIBILITY_DIR / "fixtures",
+                fixture,
+                root,
+                diff.load_compiler_expectations(),
+            )
+        self.assertEqual(report_result["status"], "inconclusive")
+        self.assertEqual(
+            report_result["stages"][1]["outcome"],
+            "inconclusive",
+        )
+
+        del result["compatibility"]["semanticWIR"]["referenceError"]
+        result["compatibility"]["semanticWIR"]["equivalent"] = True
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write_result(root, result)
+            report_result = diff.compare_compiler_fixture(
+                COMPATIBILITY_DIR / "fixtures",
+                fixture,
+                root,
+                diff.load_compiler_expectations(),
+            )
+        self.assertEqual(report_result["status"], "regression")
+
+    def test_compiler_report_declares_compiler_stages(self):
+        report = diff.build_compiler_report([])
+        self.assertEqual(
+            report["comparison"]["stages"],
+            [
+                "compile-status",
+                "normalized-output",
+                "semantic-wir",
+                "diagnostic-code",
+                "compiler-contract",
+            ],
+        )
 
     def test_missing_producer_is_inconclusive(self):
         report_result = diff.compare_fixture(

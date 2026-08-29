@@ -10,7 +10,17 @@
   },
   "fixture": "synthetic/preprocessing",
   "input": {
-    "sha256": "c0307032fc7f0cde66beb3824710480a2dd5a53832cc036b15acc1be2654ed0c",
+    "files": [
+      {
+        "path": "shared.opy",
+        "sha256": "d4e08203bddd10e566d22363b7af590ac4ebb4879d90404e3df2fcb0f710093b"
+      },
+      {
+        "path": "source.opy",
+        "sha256": "c0307032fc7f0cde66beb3824710480a2dd5a53832cc036b15acc1be2654ed0c"
+      }
+    ],
+    "sha256": "344dff011e32094787274531194b62da6e0e7c9e5df40383f00272b98f3c42a3",
     "source": "source.opy"
   },
   "oracle": {

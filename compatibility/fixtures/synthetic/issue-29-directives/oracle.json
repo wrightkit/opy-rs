@@ -10,7 +10,13 @@
   },
   "fixture": "synthetic/issue-29-directives",
   "input": {
-    "sha256": "1d2f7a6fc4f2685dfbd928f1c558a7435d7df2d8e40424fe57041b8bef362c52",
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "1d2f7a6fc4f2685dfbd928f1c558a7435d7df2d8e40424fe57041b8bef362c52"
+      }
+    ],
+    "sha256": "1cc01729133baade27a0ab958b40a985bf4245bc50ee220751159a9165ad2bad",
     "source": "source.opy"
   },
   "oracle": {

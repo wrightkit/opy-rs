@@ -10,7 +10,13 @@
   },
   "fixture": "synthetic/for-range-agentlab",
   "input": {
-    "sha256": "8cfabbc9369bd2af0f39b2f15dcdc44edcc380891740e4b03edb3080c1400561",
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "8cfabbc9369bd2af0f39b2f15dcdc44edcc380891740e4b03edb3080c1400561"
+      }
+    ],
+    "sha256": "45ccb6d87a6cead7c35650c7f25b896eba83861eaede63b35a0045bfe462fc95",
     "source": "source.opy"
   },
   "oracle": {
