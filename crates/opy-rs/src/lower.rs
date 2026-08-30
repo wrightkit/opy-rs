@@ -1159,8 +1159,16 @@ impl Lowerer {
                 || self.players.contains(name)
                 || default_var_index(name).is_some()
             {
+                let receiver = if default_var_index(name).is_some() {
+                    HirExpr::GlobalVar {
+                        name: name.to_string(),
+                        span: Some(receiver.span().into()),
+                    }
+                } else {
+                    self.lower_name(name, receiver.span(), &[])
+                };
                 return HirExpr::Member {
-                    receiver: Box::new(self.lower_name(name, receiver.span(), &[])),
+                    receiver: Box::new(receiver),
                     member: member.to_string(),
                     member_span: Some(member_span.into()),
                     span: Some(span.into()),
@@ -2021,7 +2029,7 @@ mod tests {
             panic!("expected opaque member expression, got {value:?}");
         };
         assert_eq!(member, "C");
-        assert!(matches!(receiver.as_ref(), HirExpr::PlayerVar { name, .. } if name == "B"));
+        assert!(matches!(receiver.as_ref(), HirExpr::GlobalVar { name, .. } if name == "B"));
     }
 
     #[test]

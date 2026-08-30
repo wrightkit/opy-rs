@@ -1884,11 +1884,7 @@ impl<'a> Lowering<'a> {
                     } else if name == "debug" && args.len() == 1 {
                         Ok(vec![self.lower_debug(&args[0], *span)?])
                     } else if name == "print" && args.len() == 1 {
-                        let msg = self.lower_value(&args[0])?;
-                        Ok(vec![self.wir.actions.push(Action::Print {
-                            message: msg,
-                            span: self.wir_span(*span)?,
-                        })])
+                        Ok(vec![self.lower_print(&args[0], *span)?])
                     } else {
                         self.lower_action_call(name, args, *span).map(|action| vec![action])
                     }
@@ -2313,6 +2309,70 @@ impl<'a> Lowering<'a> {
         }))
     }
 
+    fn lower_print(
+        &mut self,
+        expr: &Expr,
+        span: Option<HirSpan>,
+    ) -> Result<wir::ActionId, IntegrationError> {
+        macro_rules! call {
+            ($name:literal $(, $arg:expr)* $(,)?) => {{
+                let args = vec![$($arg),*];
+                self.push_call($name, args)
+            }};
+        }
+
+        let message = self.lower_value(expr)?;
+        let padding_text = self.push_value(Value::String(" ".repeat(45)));
+        let padding = self.push_call("customString", vec![padding_text]);
+        let body_text = self.push_value(Value::String(format!("{}{{0}}", " ".repeat(125))));
+        let body = self.push_call("customString", vec![body_text, padding]);
+        let all_teams = self.push_value(Value::Enum {
+            value_type: "Team".to_string(),
+            value: "ALL".to_string(),
+        });
+        let all_players = call!("allPlayers", all_teams);
+        let null_value = self.push_value(Value::Null);
+        let null_value_2 = self.push_value(Value::Null);
+        let null_value_3 = self.push_value(Value::Null);
+        let hud_position = self.push_value(Value::Enum {
+            value_type: "HudPosition".to_string(),
+            value: "LEFT".to_string(),
+        });
+        let sort_order = self.push_value(Value::Number {
+            value: -9999.0,
+            text: "-9999".to_string(),
+        });
+        let color = self.push_value(Value::Enum {
+            value_type: "Color".to_string(),
+            value: "ORANGE".to_string(),
+        });
+        let reevaluation = self.push_value(Value::Enum {
+            value_type: "HudReeval".to_string(),
+            value: "VISIBILITY_AND_STRING".to_string(),
+        });
+        let visibility = self.push_value(Value::Enum {
+            value_type: "SpecVisibility".to_string(),
+            value: "DEFAULT".to_string(),
+        });
+        Ok(self.wir.actions.push(Action::Call {
+            name: "createHudText".to_string(),
+            args: vec![
+                all_players,
+                message,
+                body,
+                null_value,
+                hud_position,
+                sort_order,
+                color,
+                null_value_2,
+                null_value_3,
+                reevaluation,
+                visibility,
+            ],
+            span: self.wir_span(span)?,
+        }))
+    }
+
     fn lower_debug_array_text(&mut self, value: wir::ValueId) -> wir::ValueId {
         macro_rules! call {
             ($name:literal $(, $arg:expr)* $(,)?) => {{
@@ -2522,6 +2582,30 @@ impl<'a> Lowering<'a> {
             value,
             text: text.to_string(),
         })
+    }
+
+    fn fold_numeric_binary(
+        &self,
+        op: &str,
+        left: wir::ValueId,
+        right: wir::ValueId,
+    ) -> Option<f64> {
+        let number = |id| match self.wir.values.get(id)?.value {
+            Value::Number { value, .. } => Some(value),
+            _ => None,
+        };
+        let left = number(left)?;
+        let right = number(right)?;
+        let value = match op {
+            "+" => left + right,
+            "-" => left - right,
+            "*" => left * right,
+            "/" if right != 0.0 => left / right,
+            "%" if right != 0.0 => left % right,
+            "**" => left.powf(right),
+            _ => return None,
+        };
+        value.is_finite().then_some(value)
     }
 
     fn lower_condition(&mut self, expr: &Expr) -> Result<wir::ValueId, IntegrationError> {
@@ -2982,72 +3066,81 @@ impl<'a> Lowering<'a> {
             }
             Expr::Binary {
                 op, left, right, ..
-            } => match op.as_str() {
-                "==" | "!=" | "<" | "<=" | ">" | ">=" => Value::Call {
-                    name: op.clone(),
-                    args: vec![self.lower_value(left)?, self.lower_value(right)?],
-                },
-                "+" => Value::Call {
-                    name: "add".to_string(),
-                    args: vec![self.lower_value(left)?, self.lower_value(right)?],
-                },
-                "-" => Value::Call {
-                    name: "subtract".to_string(),
-                    args: vec![self.lower_value(left)?, self.lower_value(right)?],
-                },
-                "*" => Value::Call {
-                    name: "multiply".to_string(),
-                    args: vec![self.lower_value(left)?, self.lower_value(right)?],
-                },
-                "/" => Value::Call {
-                    name: "divide".to_string(),
-                    args: vec![self.lower_value(left)?, self.lower_value(right)?],
-                },
-                "%" => Value::Call {
-                    name: "modulo".to_string(),
-                    args: vec![self.lower_value(left)?, self.lower_value(right)?],
-                },
-                "**" => Value::Call {
-                    name: "raiseToPower".to_string(),
-                    args: vec![self.lower_value(left)?, self.lower_value(right)?],
-                },
-                "and" => Value::Call {
-                    name: "and".to_string(),
-                    args: vec![self.lower_value(left)?, self.lower_value(right)?],
-                },
-                "or" => Value::Call {
-                    name: "or".to_string(),
-                    args: vec![self.lower_value(left)?, self.lower_value(right)?],
-                },
-                "in" => Value::Call {
-                    name: "arrayContains".to_string(),
-                    args: vec![self.lower_value(right)?, self.lower_value(left)?],
-                },
-                "not in" => {
-                    let right_val = self.lower_value(right)?;
-                    let left_val = self.lower_value(left)?;
-                    let wir_span = self.wir_span(span)?;
-                    let contains = self.wir.values.push(ValueNode::new(
-                        Value::Call {
-                            name: "arrayContains".to_string(),
-                            args: vec![right_val, left_val],
+            } => {
+                let left = self.lower_value(left)?;
+                let right = self.lower_value(right)?;
+                if let Some(value) = self.fold_numeric_binary(op, left, right) {
+                    Value::Number {
+                        value,
+                        text: computed_number_text(value),
+                    }
+                } else {
+                    match op.as_str() {
+                        "==" | "!=" | "<" | "<=" | ">" | ">=" => Value::Call {
+                            name: op.clone(),
+                            args: vec![left, right],
                         },
-                        wir_span,
-                    ));
-                    Value::Call {
-                        name: "not".to_string(),
-                        args: vec![contains],
+                        "+" => Value::Call {
+                            name: "add".to_string(),
+                            args: vec![left, right],
+                        },
+                        "-" => Value::Call {
+                            name: "subtract".to_string(),
+                            args: vec![left, right],
+                        },
+                        "*" => Value::Call {
+                            name: "multiply".to_string(),
+                            args: vec![left, right],
+                        },
+                        "/" => Value::Call {
+                            name: "divide".to_string(),
+                            args: vec![left, right],
+                        },
+                        "%" => Value::Call {
+                            name: "modulo".to_string(),
+                            args: vec![left, right],
+                        },
+                        "**" => Value::Call {
+                            name: "raiseToPower".to_string(),
+                            args: vec![left, right],
+                        },
+                        "and" => Value::Call {
+                            name: "and".to_string(),
+                            args: vec![left, right],
+                        },
+                        "or" => Value::Call {
+                            name: "or".to_string(),
+                            args: vec![left, right],
+                        },
+                        "in" => Value::Call {
+                            name: "arrayContains".to_string(),
+                            args: vec![right, left],
+                        },
+                        "not in" => {
+                            let wir_span = self.wir_span(span)?;
+                            let contains = self.wir.values.push(ValueNode::new(
+                                Value::Call {
+                                    name: "arrayContains".to_string(),
+                                    args: vec![right, left],
+                                },
+                                wir_span,
+                            ));
+                            Value::Call {
+                                name: "not".to_string(),
+                                args: vec![contains],
+                            }
+                        }
+                        _ => {
+                            return Err(self.unsupported(
+                                format!(
+                                    "binary operator '{op}' is not currently representable in canonical WIR"
+                                ),
+                                span,
+                            ));
+                        }
                     }
                 }
-                _ => {
-                    return Err(self.unsupported(
-                        format!(
-                            "binary operator '{op}' is not currently representable in canonical WIR"
-                        ),
-                        span,
-                    ));
-                }
-            },
+            }
             Expr::Unary { op, operand, .. } => match op.as_str() {
                 "not" => {
                     // The pinned OverPy 9.7.10 oracle lowers `not (a == b)`
@@ -3513,13 +3606,23 @@ fn collect_implicit_expr(
             }
             collect_implicit_expr(player, declared_globals, declared_players, globals, players);
         }
-        Expr::Member { receiver, .. } => collect_implicit_expr(
+        Expr::Member {
             receiver,
-            declared_globals,
-            declared_players,
-            globals,
-            players,
-        ),
+            member,
+            span,
+            ..
+        } => {
+            if !declared_players.contains(member.as_str()) && default_var_index(member).is_some() {
+                players.entry(member.clone()).or_insert(*span);
+            }
+            collect_implicit_expr(
+                receiver,
+                declared_globals,
+                declared_players,
+                globals,
+                players,
+            );
+        }
         Expr::Call { args, .. } | Expr::MacroCall { args, .. } => {
             for arg in args {
                 collect_implicit_expr(arg, declared_globals, declared_players, globals, players);
@@ -3651,6 +3754,14 @@ fn canonical_number_text(value: f64, text: &str) -> String {
         value.to_string()
     } else {
         text.to_string()
+    }
+}
+
+fn computed_number_text(value: f64) -> String {
+    if value.fract() == 0.0 {
+        format!("{value:.0}")
+    } else {
+        value.to_string()
     }
 }
 

@@ -484,40 +484,40 @@
     {
       "fixture": "synthetic/declarations-rules",
       "nativeStatus": "success",
-      "classification": "known-gap",
+      "classification": "match",
       "comparison": "semantic-wir",
       "evidence": [
         "oracle:synthetic/declarations-rules/oracle.json",
         "provenance:synthetic/declarations-rules/fixture.json"
       ],
-      "owner": "opy-rs#88",
-      "note": "The source declaration surface exceeds the independently evidenced compiler baseline.",
-      "semanticEquivalent": false
+      "owner": "opy-rs#94",
+      "note": "Declaration, subroutine, receiver, and print lowering match the pinned canonical WIR.",
+      "semanticEquivalent": true
     },
     {
       "fixture": "synthetic/expressions-values",
       "nativeStatus": "success",
-      "classification": "known-gap",
+      "classification": "match",
       "comparison": "semantic-wir",
       "evidence": [
         "oracle:synthetic/expressions-values/oracle.json",
         "provenance:synthetic/expressions-values/fixture.json"
       ],
-      "owner": "opy-rs#88",
-      "note": "The broad expression fixture exceeds the independently evidenced compiler baseline.",
-      "semanticEquivalent": false
+      "owner": "opy-rs#94",
+      "note": "Expression lowering, literal arithmetic folding, array values, and debug output match the pinned canonical WIR.",
+      "semanticEquivalent": true
     },
     {
       "fixture": "synthetic/diagnostics",
       "nativeStatus": "failure",
-      "classification": "known-gap",
+      "classification": "match",
       "comparison": "diagnostic-code",
       "evidence": [
         "oracle:synthetic/diagnostics/oracle.json",
         "provenance:synthetic/diagnostics/fixture.json"
       ],
-      "owner": "opy-rs#88",
-      "note": "The source negative fixture is retained, but its compiler-facing diagnostic contract is outside the #38 baseline.",
+      "owner": "opy-rs#94",
+      "note": "The compiler preserves the pinned frontend parse-error code and source-attributed diagnostic contract.",
       "failureClass": "frontend",
       "diagnosticCode": "parse-error"
     },
@@ -680,15 +680,15 @@
     {
       "fixture": "synthetic/receiver-playervar",
       "nativeStatus": "success",
-      "classification": "known-gap",
+      "classification": "match",
       "comparison": "semantic-wir",
       "evidence": [
         "oracle:synthetic/receiver-playervar/oracle.json",
         "provenance:synthetic/receiver-playervar/fixture.json"
       ],
-      "owner": "opy-rs#88",
-      "note": "The source receiver expression is preserved, but complete Workshop member lowering is outside the #38 baseline.",
-      "semanticEquivalent": false
+      "owner": "opy-rs#94",
+      "note": "Bare default-variable receivers preserve global identity and player-variable member lowering matches the pinned canonical WIR.",
+      "semanticEquivalent": true
     }
   ]
 }
