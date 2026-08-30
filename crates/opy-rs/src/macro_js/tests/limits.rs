@@ -6,7 +6,9 @@
 
 use std::time::{Duration, Instant};
 
-use opy_macro_js::{Limits, MacroError, MacroRuntime};
+use crate::macro_js::error::MacroError;
+use crate::macro_js::limits::Limits;
+use crate::macro_js::runtime::MacroRuntime;
 
 #[test]
 fn busy_loop_is_interrupted_within_budget() {

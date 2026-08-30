@@ -16,13 +16,5 @@ git_tag_name = "v{{ version }}"
 git_release_enable = true
 
 [[package]]
-name = "opy-compiler"
-version_group = "opy-rs"
-
-[[package]]
 name = "opy-cli"
-version_group = "opy-rs"
-
-[[package]]
-name = "opy-macro-js"
 version_group = "opy-rs"

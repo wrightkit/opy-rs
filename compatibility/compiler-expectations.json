@@ -25,7 +25,7 @@
       "classification": "match",
       "comparison": "normalized-output",
       "evidence": [
-        "test:opy-compiler-issue-42-oracle::catalog_enum_members_lower_and_validate"
+        "test:opy-rs::compiler::integration_tests::issue_42_oracle::catalog_enum_members_lower_and_validate"
       ],
       "owner": "opy-rs#38",
       "note": "Catalog enum members emit through the canonical catalog-backed compiler slice."
@@ -69,7 +69,7 @@
       "classification": "match",
       "comparison": "normalized-output",
       "evidence": [
-        "test:opy-compiler::vertical_slice_preserves_source_files_spans_and_emits_workshop"
+        "test:opy-rs::compiler::tests::vertical_slice_preserves_source_files_spans_and_emits_workshop"
       ],
       "owner": "opy-rs#38",
       "note": "Issue #35 is the public source-to-WIR-to-Workshop vertical slice."
@@ -80,7 +80,7 @@
       "classification": "match",
       "comparison": "normalized-output",
       "evidence": [
-        "test:opy-compiler-issue-42-oracle::catalog_backed_receiver_calls_match_the_pinned_oracle"
+        "test:opy-rs::compiler::integration_tests::issue_42_oracle::catalog_backed_receiver_calls_match_the_pinned_oracle"
       ],
       "owner": "opy-rs#38",
       "note": "The exercised catalog-backed receiver call is canonical-WIR equivalent to the pinned oracle."
@@ -120,7 +120,7 @@
       "evidence": [
         "oracle:synthetic/issue-40-structural/oracle.json",
         "provenance:synthetic/issue-40-structural/fixture.json",
-        "test:opy-compiler::issue_40_oracle_fixture_and_wir_lowering_agree"
+        "test:opy-rs::compiler::tests::issue_40_oracle_fixture_and_wir_lowering_agree"
       ],
       "owner": "opy-rs#38",
       "note": "Issue #40 structural lowering is independently checked against the pinned oracle and WIR invariants."
@@ -186,7 +186,7 @@
       "evidence": [
         "oracle:synthetic/issue-47-do-while-shapes/oracle.json",
         "provenance:synthetic/issue-47-do-while-shapes/fixture.json",
-        "test:opy-compiler-issue-47-oracle::issue_47_do_while_break_shapes_match_the_pinned_oracle"
+        "test:opy-rs::compiler::integration_tests::issue_47_oracle::issue_47_do_while_break_shapes_match_the_pinned_oracle"
       ],
       "owner": "opy-rs#38",
       "note": "Supported do-while break shapes are independently checked through canonical WIR equivalence."
@@ -200,7 +200,7 @@
       "evidence": [
         "oracle:synthetic/settings/oracle.json",
         "provenance:synthetic/settings/fixture.json",
-        "test:opy-compiler::settings_lower_through_workshop_owned_emission"
+        "test:opy-rs::compiler::tests::settings_lower_through_workshop_owned_emission"
       ],
       "owner": "opy-rs#38",
       "note": "Settings emission is covered by the compiler's Workshop-owned structural comparison."
@@ -211,7 +211,7 @@
       "classification": "match",
       "comparison": "diagnostic-code",
       "evidence": [
-        "test:opy-compiler-issue-47-oracle::issue_47_invalid_do_while_placement_is_source_attributed"
+        "test:opy-rs::compiler::integration_tests::issue_47_oracle::issue_47_invalid_do_while_placement_is_source_attributed"
       ],
       "owner": "opy-rs#38",
       "note": "Invalid do-while placement is a stable source-attributed compiler failure.",
@@ -226,7 +226,7 @@
       "evidence": [
         "oracle:synthetic/issue-46-unsupported/oracle.json",
         "provenance:synthetic/issue-46-unsupported/fixture.json",
-        "test:opy-compiler-issue-46-oracle::issue_46_unsupported_primitive_fails_with_stable_source_attribution"
+        "test:opy-rs::compiler::integration_tests::issue_46_oracle::issue_46_unsupported_primitive_fails_with_stable_source_attribution"
       ],
       "owner": "workshop-rs#123",
       "note": "The released workshop-rs v0.1.16 contract keeps AssignMember for canonical memberAccess targets only; this dictionary-indexed OPY primitive still has no lossless OPY-owned lowering and remains explicitly rejected.",
@@ -241,7 +241,7 @@
       "evidence": [
         "oracle:synthetic/issue-47-unsupported/oracle.json",
         "provenance:synthetic/issue-47-unsupported/fixture.json",
-        "test:opy-compiler-issue-47-oracle::issue_47_nested_switch_break_is_source_attributed_when_not_representable"
+        "test:opy-rs::compiler::integration_tests::issue_47_oracle::issue_47_nested_switch_break_is_source_attributed_when_not_representable"
       ],
       "owner": "workshop-rs#123",
       "note": "The released workshop-rs v0.1.16 contract provides native Break, Skip, and Skip If calls, but this nested conditional switch-break shape still has no lossless OPY-owned lowering and remains explicitly rejected.",
@@ -256,7 +256,7 @@
       "evidence": [
         "oracle:synthetic/issue-47-switch-multiple-break/oracle.json",
         "provenance:synthetic/issue-47-switch-multiple-break/fixture.json",
-        "test:opy-compiler-issue-47-oracle::issue_47_multiple_switch_breaks_are_not_silently_dropped"
+        "test:opy-rs::compiler::integration_tests::issue_47_oracle::issue_47_multiple_switch_breaks_are_not_silently_dropped"
       ],
       "owner": "workshop-rs#123",
       "note": "The released workshop-rs v0.1.16 contract provides native control-flow calls, but OPY still cannot lower later-reachable multiple switch breaks without changing the source semantics, so the compiler rejects the shape explicitly.",
@@ -531,7 +531,7 @@
       "evidence": [
         "oracle:synthetic/issue-28-invalid-syntax/oracle.json",
         "provenance:synthetic/issue-28-invalid-syntax/fixture.json",
-        "test:opy-compiler-issue-93::frontend_diagnostics_are_public_and_source_attributed"
+        "test:opy-rs::compiler::integration_tests::issue_93_frontend::frontend_diagnostics_are_public_and_source_attributed"
       ],
       "owner": "opy-rs#93",
       "note": "The public compiler reports the pinned malformed syntax as a source-attributed parse diagnostic.",
@@ -588,7 +588,7 @@
       "evidence": [
         "oracle:synthetic/issue-29-invalid/oracle.json",
         "provenance:synthetic/issue-29-invalid/fixture.json",
-        "test:opy-compiler-issue-93::frontend_diagnostics_are_public_and_source_attributed"
+        "test:opy-rs::compiler::integration_tests::issue_93_frontend::frontend_diagnostics_are_public_and_source_attributed"
       ],
       "owner": "opy-rs#93",
       "note": "The public compiler reports the invalid annotation as a source-attributed parse diagnostic.",
@@ -603,7 +603,7 @@
       "evidence": [
         "oracle:synthetic/issue-31-negative/oracle.json",
         "provenance:synthetic/issue-31-negative/fixture.json",
-        "test:opy-compiler-issue-93::frontend_diagnostics_are_public_and_source_attributed"
+        "test:opy-rs::compiler::integration_tests::issue_93_frontend::frontend_diagnostics_are_public_and_source_attributed"
       ],
       "owner": "opy-rs#93",
       "note": "The public compiler reports the invalid translation code as a source-attributed frontend diagnostic.",
@@ -659,7 +659,7 @@
       "evidence": [
         "oracle:synthetic/issue-33-lambda-negative/oracle.json",
         "provenance:synthetic/issue-33-lambda-negative/fixture.json",
-        "test:opy-compiler-issue-93::frontend_diagnostics_are_public_and_source_attributed"
+        "test:opy-rs::compiler::integration_tests::issue_93_frontend::frontend_diagnostics_are_public_and_source_attributed"
       ],
       "owner": "opy-rs#93",
       "note": "The public compiler reports standalone lambda use as a source-attributed lambda-context diagnostic.",

@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use opy_compiler::{CompileFailureClass, CompileStatus, Compiler};
+use crate::{CompileFailureClass, CompileStatus, Compiler};
 use workshop_rs::catalog::{Catalog, Locale};
 
 fn fixture_dir(name: &str) -> PathBuf {
@@ -34,7 +34,7 @@ fn compiler_semantic_wir_matches_issue_94_fixtures() {
     ] {
         let dir = fixture_dir(name);
         let source = std::fs::read_to_string(dir.join("source.opy")).expect("source is readable");
-        let hir = opy_rs::compile(&source, "source.opy", &dir).expect("fixture resolves");
+        let hir = crate::compile(&source, "source.opy", &dir).expect("fixture resolves");
         let artifact = compiler.compile_hir(&hir).expect("fixture lowers");
         assert!(
             workshop_rs::roundtrip::equivalent(&artifact.wir, &reference_wir(&dir)),
@@ -49,7 +49,7 @@ fn compiler_diagnostic_contract_matches_issue_94_fixture() {
     let source = std::fs::read_to_string(dir.join("source.opy")).expect("source is readable");
     let report = Compiler::new()
         .expect("compiler initializes")
-        .compile_source_report(&source, "source.opy", &dir, &Locale::new("en-US"));
+        .compile_source_report_with_locale(&source, "source.opy", &dir, &Locale::new("en-US"));
 
     assert_eq!(report.compile.status, CompileStatus::Failure);
     assert_eq!(

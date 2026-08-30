@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use opy_compiler::Compiler;
+use crate::Compiler;
 use workshop_rs::catalog::Locale;
 use workshop_rs::wir::{Action, RuleId, Value};
 
@@ -17,7 +17,7 @@ fn included_macro_call_reaches_canonical_workshop_output() {
     let source = std::fs::read_to_string(dir.join("source.opy")).unwrap();
     let artifact = Compiler::new()
         .unwrap()
-        .compile_source(&source, "source.opy", &dir, &Locale::new("en-US"))
+        .compile_source_with_locale(&source, "source.opy", &dir, &Locale::new("en-US"))
         .expect("the included macro must lower through the public compile path");
     let rule = artifact
         .wir
@@ -52,7 +52,7 @@ fn statement_macro_expands_into_multiple_canonical_actions() {
     let source = "macro emit(value):\n    debug(value)\n    debug(value)\n\nrule \"r\":\n    @Event global\n    emit(1)\n";
     let artifact = Compiler::new()
         .unwrap()
-        .compile_source(source, "source.opy", Path::new("."), &Locale::new("en-US"))
+        .compile_source_with_locale(source, "source.opy", Path::new("."), &Locale::new("en-US"))
         .expect("statement macro must expand before WIR lowering");
     let rule = artifact
         .wir
@@ -75,7 +75,7 @@ fn statement_macro_expands_into_multiple_canonical_actions() {
 fn recursive_macro_expansion_is_a_structured_diagnostic() {
     let source =
         "macro recurse():\n    recurse()\n\nrule \"r\":\n    @Event global\n    recurse()\n";
-    let error = match Compiler::new().unwrap().compile_source(
+    let error = match Compiler::new().unwrap().compile_source_with_locale(
         source,
         "source.opy",
         Path::new("."),
@@ -92,7 +92,7 @@ fn recursive_macro_expansion_is_a_structured_diagnostic() {
 fn macro_arity_failure_is_a_structured_diagnostic() {
     let source =
         "macro double(value):\n    debug(value)\n\nrule \"r\":\n    @Event global\n    double()\n";
-    let error = match Compiler::new().unwrap().compile_source(
+    let error = match Compiler::new().unwrap().compile_source_with_locale(
         source,
         "source.opy",
         Path::new("."),
@@ -107,7 +107,7 @@ fn macro_arity_failure_is_a_structured_diagnostic() {
 
 #[test]
 fn failed_preprocessing_keeps_a_structured_source_diagnostic() {
-    let error = match Compiler::new().unwrap().compile_source(
+    let error = match Compiler::new().unwrap().compile_source_with_locale(
         "#!include \"missing.opy\"\nrule \"r\":\n    @Event global\n    pass\n",
         "source.opy",
         Path::new("."),

@@ -191,31 +191,31 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         &mut cases,
         "synthetic/issue-35-integration",
         true,
-        "Issue #35 OPY-to-Workshop integration fixture; the frontend resolves the source and the opy-compiler crate independently validates the canonical WIR slice.",
+        "Issue #35 OPY-to-Workshop integration fixture; the frontend resolves the source and the internal compiler module independently validates the canonical WIR slice.",
     );
     resolve(
         &mut cases,
         "synthetic/issue-40-structural",
         false,
-        "Issue #40 oracle-backed structural probe; the frontend resolves the source while opy-compiler independently checks canonical WIR identity, allocation, and event filters.",
+        "Issue #40 oracle-backed structural probe; the frontend resolves the source while the internal compiler module independently checks canonical WIR identity, allocation, and event filters.",
     );
     resolve(
         &mut cases,
         "synthetic/issue-46-primitives",
         false,
-        "Issue #46 oracle-backed non-control-flow primitives probe; the frontend resolves the source while the opy-compiler test suite constrains the native lowering against the pinned oracle through the canonical workshop-rs parser and structural equivalence.",
+        "Issue #46 oracle-backed non-control-flow primitives probe; the frontend resolves the source while the compiler test suite constrains native lowering against the pinned oracle through the canonical workshop-rs parser and structural equivalence.",
     );
     resolve(
         &mut cases,
         "synthetic/issue-46-unsupported",
         false,
-        "Issue #46 negative primitive-lowering probe; the frontend and the pinned oracle accept the dict-indexed assignment while the opy-compiler rejects it with the stable source-attributed unsupported-integration-surface diagnostic.",
+        "Issue #46 negative primitive-lowering probe; the frontend and the pinned oracle accept the dict-indexed assignment while the compiler rejects it with the stable source-attributed unsupported-integration-surface diagnostic.",
     );
     resolve(
         &mut cases,
         "synthetic/issue-47-control-flow",
         false,
-        "Issue #47 oracle-backed control-flow lowering probe; the frontend resolves the source while opy-compiler independently constrains canonical WIR against the pinned oracle.",
+        "Issue #47 oracle-backed control-flow lowering probe; the frontend resolves the source while the compiler independently constrains canonical WIR against the pinned oracle.",
     );
     resolve(
         &mut cases,

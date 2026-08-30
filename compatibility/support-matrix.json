@@ -458,7 +458,7 @@
         "upstream:src/tests/quickjs-invalid-return.js",
         "upstream:src/tests/quickjs-runaway.js",
         "upstream:src/quickjs.ts",
-        "test:opy-rs-macro-integration",
+        "test:opy-rs::macro_integration",
         "test-fixture:crates/opy-rs/tests/fixtures/macros",
         "test:opy-rs-differential",
         "fixtures:real-world/overpy-meipocalypse"
@@ -473,11 +473,11 @@
       "evidence": [
         "upstream:src/tests/postCompileHook.opy",
         "upstream:src/quickjs.ts",
-        "test:opy-macro-js-hooks",
+        "test:opy-rs::macro_js::tests::hooks",
         "test:opy-rs-macro-integration",
-        "test:opy-compiler"
+        "test:opy-rs::compiler"
       ],
-      "notes": "The compiler runs the bounded opy-macro-js hook only after successful workshop-rs emission, passes the exact emitted Workshop text, and exposes the string completion as final output; hook failures retain both the directive anchor and structured script provenance."
+      "notes": "The compiler runs the bounded internal macro runtime hook only after successful workshop-rs emission, passes the exact emitted Workshop text, and exposes the string completion as final output; hook failures retain both the directive anchor and structured script provenance."
     },
     {
       "id": "directives/rule-annotations",
@@ -542,7 +542,7 @@
       "evidence": [
         "upstream:src/data/localizedStrings.ts",
         "oracle:CLI --language en-US invocation recorded in compatibility/run_oracle.py",
-        "test:opy-compiler"
+        "test:opy-rs::compiler"
       ],
       "notes": "Compiler locale selection delegates to workshop-rs catalog coverage and rejects undeclared locales explicitly; missing per-identity mappings remain fail-explicit."
     },
@@ -589,12 +589,12 @@
         "upstream:runTests.mjs",
         "upstream:src/quickjs.ts",
         "oracle:quickjs-ng.wasm shipped in the pinned npm package",
-        "test:opy-macro-js-abi",
-        "test:opy-macro-js-hooks",
-        "test:opy-macro-js-limits",
-        "test:opy-rs-macro-integration"
+        "test:opy-rs::macro_js::tests::macro_abi",
+        "test:opy-rs::macro_js::tests::hooks",
+        "test:opy-rs::macro_js::tests::limits",
+        "test:opy-rs::macro_integration"
       ],
-      "notes": "Issue #6 + #7 part B. Bounded runtime surface wired into the source implementation: macro execution with argument injection, `vect` helper, empty constant objects, console capture, reference-compatible accept/reject and result semantics, resource limits defaulting to the pinned reference constants (1000 ms macro / 2000 ms hook budgets, 64 MiB memory, 512 KiB stack). The hook ABI runs against synthetic content in opy-macro-js; hook execution against the Workshop output is lowering-dependent (see hooks/post-compile-workshop, issue #8). Browser/WASM execution remains unsupported (native embedding only), matching the declared boundary."
+      "notes": "Issue #6 + #7 part B. Bounded runtime surface wired into the source implementation: macro execution with argument injection, `vect` helper, empty constant objects, console capture, reference-compatible accept/reject and result semantics, resource limits defaulting to the pinned reference constants (1000 ms macro / 2000 ms hook budgets, 64 MiB memory, 512 KiB stack). The hook ABI runs against synthetic content in the internal macro runtime; hook execution against the Workshop output is lowering-dependent (see hooks/post-compile-workshop, issue #8). Browser/WASM execution remains unsupported (native embedding only), matching the declared boundary."
     },
     {
       "id": "compilation/source implementation-pipeline",
@@ -616,10 +616,10 @@
       "state": "end-to-end-supported",
       "evidence": [
         "fixtures:synthetic/issue-35-integration",
-        "test:opy-compiler-vertical-slice",
+        "test:opy-rs::compiler-vertical-slice",
         "contract:workshop-rs-v0.1.16"
       ],
-      "notes": "Issue #35. The dedicated opy-compiler crate consumes resolved OPY HIR, preserves source files/spans in workshop-rs WIR, cross-checks manifest catalogId/domain links against Catalog, validates canonical WIR, and emits deterministic en-US Workshop through the published workshop-rs v0.1.16 contract. This is a bounded first slice; broader OPY lowering remains lowering-dependent and is not reclassified by this fixture."
+      "notes": "Issue #35. The internal compiler module consumes resolved OPY HIR, preserves source files/spans in workshop-rs WIR, cross-checks manifest catalogId/domain links against Catalog, validates canonical WIR, and emits deterministic en-US Workshop through the published workshop-rs v0.1.16 contract. This is a bounded first slice; broader OPY lowering remains lowering-dependent and is not reclassified by this fixture."
     },
     {
       "id": "compilation/opy-structural-lowering",
@@ -629,7 +629,7 @@
       "evidence": [
         "fixtures:synthetic/issue-35-integration",
         "fixtures:synthetic/issue-40-structural",
-        "test:opy-compiler-structural-lowering",
+        "test:opy-rs::compiler-structural-lowering",
         "contract:workshop-rs-v0.1.16"
       ],
       "notes": "Issue #40. Global/player variables and subroutines use deterministic canonical indices with source/name spans; subroutine definitions and calls, rule disabled state, conditions, supported event/filter identities, and source-file provenance lower directly into workshop-rs WIR. Unsupported settings, declarations, annotations, events, filters, and statement forms remain explicit source-attributed integration diagnostics. This does not claim full statement/expression, catalog/member/enum, settings, locale, optimizer, hook, or decompilation coverage."
@@ -641,8 +641,8 @@
       "state": "end-to-end-supported",
       "evidence": [
         "fixtures:synthetic/issue-46-primitives",
-        "test:opy-compiler-primitive-lowering",
-        "test:opy-compiler-issue-46-native-wir-gap",
+        "test:opy-rs::compiler-primitive-lowering",
+        "test:opy-rs::compiler-issue-46-native-wir-gap",
         "contract:workshop-rs-v0.1.16"
       ],
       "notes": "Issue #46. Global/player assignments and augmented assignments (+=, -=, *=, /=, %=, **=), single-level indexed variable assignments and modifications (setGlobalVariableAtIndex, modifyGlobalVariableAtIndex, setPlayerVariableAtIndex, modifyPlayerVariableAtIndex), and pass no-op statements lower into canonical workshop-rs WIR. Declaration initializer evidence covers non-null initializers; OverPy null-default initializer semantics remain tracked by #58. Deeper indexed writes remain tracked by #60. Direct global/player assignments and modifications carry full statement and target-variable span provenance; the single-level indexed forms lower to canonical Call actions, which carry only the statement-level source span (the canonical WIR Call shape has no separate target-span field)."
@@ -654,7 +654,7 @@
       "state": "lowering-dependent",
       "evidence": [
         "fixtures:synthetic/issue-46-primitives",
-        "test:opy-compiler-implicit-default-variables",
+        "test:opy-rs::compiler-implicit-default-variables",
         "contract:workshop-rs-v0.1.16"
       ],
       "notes": "Issue #46. Undeclared A-Z, AA-AZ, ..., DA-DX global references and eventPlayer.<name> player references resolve through the source implementation default_var_index contract and lower to separate Workshop variable namespaces at their fixed reference slots (A=0 ... DX=127); used implicit slots are reserved independently for declared global/player allocation, an explicit declared index colliding with a used implicit slot fails with the stable source-attributed index-collision diagnostic, and a declared name wins in its own namespace. The pinned oracle snapshot for the issue-46 fixture constrains global and player slots through structural equivalence."
@@ -666,7 +666,7 @@
       "state": "end-to-end-supported",
       "evidence": [
         "fixtures:synthetic/issue-46-unsupported",
-        "test:opy-compiler-primitive-lowering-limits"
+        "test:opy-rs::compiler-primitive-lowering-limits"
       ],
       "notes": "Issue #46 negative contract. A non-control-flow primitive the canonical WIR surface cannot represent (the fixture uses a dict-indexed assignment, which the pinned oracle compiles by constant folding) is rejected with the stable unsupported-integration-surface diagnostic attributed to the source statement; no unsupported HIR node is silently discarded or guessed."
     },
@@ -677,8 +677,8 @@
       "state": "end-to-end-supported",
       "evidence": [
         "fixtures:synthetic/issue-46-primitives",
-        "test:opy-compiler-primitive-lowering",
-        "test:opy-compiler-issue-100-conditional",
+        "test:opy-rs::compiler-primitive-lowering",
+        "test:opy-rs::compiler::integration_tests::issue_100_conditional",
         "contract:workshop-rs-v0.1.16"
       ],
       "notes": "Issue #46/#100. Literals (numbers, strings, booleans, null), arrays, vectors (vect), enum constants, global/player/eventPlayer variable references, array indexing (valueInArray; a literal zero index lowers to firstOf, matching the pinned oracle), string formatting (customString), arithmetic/comparison/logical binary operations, unary operations (not, -; not on a comparison lowers to the negated comparison, matching the pinned oracle), right-associative conditional values (ifThenElse), and power operations lower into canonical workshop-rs WIR. Value-position power uses the canonical raiseToPower Value contract; direct and indexed power modifications use the canonical Workshop Operation contract."
@@ -697,7 +697,7 @@
         "fixtures:synthetic/issue-47-do-while-shapes",
         "fixtures:synthetic/issue-47-do-while-invalid-placement",
         "fixtures:synthetic/issue-33-switch-break",
-        "test:opy-compiler-issue-47-residual-native-wir-gaps",
+        "test:opy-rs::compiler-issue-47-residual-native-wir-gaps",
         "contract:workshop-rs-v0.1.16"
       ],
       "notes": "Issue #47. If/elif/else, while, global-binder range-for, do-while expansion, source-ordered switch fallthrough/default, and direct loop/switch/do-while break lower into canonical workshop-rs WIR. Switch offsets and do-while distances use workshop-rs v0.1.16 canonical emitted action widths; direct, conditional, and nested do-while shapes are pinned and oracle-equivalent. Residual native-WIR differences in switch-break and switch-target shapes remain explicit compiler gaps, while nested conditional switch break and multi-break switch cases remain stable source-attributed unsupported-integration-surface diagnostics because OPY has no lossless lowering for those source shapes."

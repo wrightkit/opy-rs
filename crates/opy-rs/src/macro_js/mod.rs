@@ -1,7 +1,7 @@
 //! Bounded JavaScript macro and post-compile hook runtime for OverPy-compatible
 //! OPY tooling.
 //!
-//! This crate reproduces the observable compile-time JavaScript ABI of the
+//! This internal module reproduces the observable compile-time JavaScript ABI of the
 //! pinned OverPy reference (v9.7.10) for `#!define ... __script__("...")`
 //! macros and `#!postCompileHook` scripts, without turning `opy-rs` into a
 //! Node.js host:
@@ -90,7 +90,7 @@
 //! hosts only (the OverPy reference restricts script execution to Node, too).
 //!
 //! [QuickJS-NG]: https://github.com/quickjs-ng/quickjs
-//! [`JsEngine`]: crate::engine::JsEngine
+//! [`JsEngine`]: engine::JsEngine
 
 mod engine;
 mod error;
@@ -98,7 +98,9 @@ mod helpers;
 mod limits;
 mod runtime;
 
-pub use error::{MacroError, ScriptError};
-pub use helpers::Helpers;
-pub use limits::Limits;
-pub use runtime::{MacroArg, MacroResult, MacroRuntime};
+pub(crate) use error::MacroError;
+pub(crate) use limits::Limits;
+pub(crate) use runtime::{MacroArg, MacroRuntime};
+
+#[cfg(test)]
+mod tests;

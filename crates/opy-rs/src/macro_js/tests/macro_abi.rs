@@ -6,7 +6,10 @@
 //! `src/quickjs.ts` (result type check, console install), `src/globalVars.ts`
 //! (`vect`, constant objects), `src/tests/quickjs-*.js` (test fixtures).
 
-use opy_macro_js::{Helpers, Limits, MacroArg, MacroError, MacroRuntime};
+use crate::macro_js::error::MacroError;
+use crate::macro_js::helpers::Helpers;
+use crate::macro_js::limits::Limits;
+use crate::macro_js::runtime::{MacroArg, MacroRuntime};
 
 fn runtime() -> MacroRuntime {
     MacroRuntime::new(Limits::default())

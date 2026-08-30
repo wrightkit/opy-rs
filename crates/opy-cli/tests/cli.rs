@@ -114,7 +114,7 @@ fn compile_json_reports_success_identity_and_normalized_output() {
             .to_owned()
             + "\n"
     );
-    assert_eq!(json["compiler"]["name"], "opy-compiler");
+    assert_eq!(json["compiler"]["name"], "opy-rs");
     assert_eq!(json["catalog"]["implementation-version"], "0.1.16");
     assert!(json.get("compatibility").is_none());
 }

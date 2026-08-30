@@ -10,28 +10,28 @@ use std::time::Duration;
 /// Resource limits enforced on each JavaScript invocation.
 ///
 /// Every field is applied to the engine that executes a single macro or hook
-/// invocation (see [`crate::MacroRuntime`]).
+/// invocation (see [`super::MacroRuntime`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Limits {
+pub(crate) struct Limits {
     /// Wall-clock budget for macro invocations
-    /// ([`crate::MacroRuntime::run_macro`]).
+    /// ([`super::MacroRuntime::run_macro`]).
     ///
     /// Enforced by a deadline-based interrupt handler: once the deadline
     /// passes, the engine aborts the script with the QuickJS `"interrupted"`
     /// error.
-    pub macro_time_budget: Duration,
+    pub(crate) macro_time_budget: Duration,
     /// Wall-clock budget for post-compile hook invocations
-    /// ([`crate::MacroRuntime::run_hook`]).
-    pub hook_time_budget: Duration,
+    /// ([`super::MacroRuntime::run_hook`]).
+    pub(crate) hook_time_budget: Duration,
     /// Maximum engine memory in bytes (`JS_SetMemoryLimit` semantics).
     ///
     /// When the engine's tracked allocations exceed the limit, the script
     /// aborts with the `"out of memory"` error.
-    pub memory_limit_bytes: usize,
+    pub(crate) memory_limit_bytes: usize,
     /// Maximum JavaScript stack size in bytes (`JS_SetMaxStackSize` semantics).
     ///
     /// Deep recursion aborts with `"Maximum call stack size exceeded"`.
-    pub max_stack_bytes: usize,
+    pub(crate) max_stack_bytes: usize,
 }
 
 impl Default for Limits {

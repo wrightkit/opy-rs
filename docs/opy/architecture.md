@@ -23,7 +23,7 @@ semantic resolution
 OPY semantic model / HIR
    ├─→ check / inspect / source tooling
    │
-   └─→ opy-compiler
+   └─→ opy-rs compiler module
           ↓
        OPY-specific lowering
           ↓
@@ -46,9 +46,11 @@ opy-rs reconstruction
 OPY source
 ```
 
-The first path is implemented for the documented bounded compiler surface; the
-reverse path is not yet implemented. The support matrix, tests, and real-project evidence are
-the authority for current support rather than the intended pipeline alone.
+The source path is implemented for the documented bounded compiler surface;
+the reconstruction module remains an owner-facing advanced surface while
+broader decompilation support stays explicit in the support matrix. The tests
+and real-project evidence are the authority for current support rather than
+the intended pipeline alone.
 
 ## Workshop-independent source path
 
@@ -98,14 +100,15 @@ an OverPy-specific interpretation or lowering remains here.
 ```text
 opy-rs
     ↓
-opy-compiler
+opy-rs compiler module
     ↓
 workshop-rs
 ```
 
-`opy-rs` remains independently buildable and usable for the semantic
-workflows that do not require canonical Workshop output. `opy-compiler` is the
-Workshop-dependent integration layer.
+`opy-rs` remains independently buildable and usable for semantic workflows
+that do not require canonical Workshop output. Its compiler module is the
+Workshop-dependent integration layer, while `opy-cli` is only an executable
+consumer of the library API.
 
 There is no dependency from `workshop-rs` back to OPY semantics, and Wright
 integration must not become a dependency of this implementation.
@@ -123,8 +126,9 @@ implemented from evidence or fail explicitly.
 
 ## Compiler boundary
 
-`opy-compiler` consumes resolved Opy HIR and the validated semantic manifest,
-then produces canonical `workshop-rs` WIR with source provenance.
+The internal `opy-rs` compiler module consumes resolved Opy HIR and the
+validated semantic manifest, then produces canonical `workshop-rs` WIR with
+source provenance.
 
 The compiler must:
 
@@ -174,10 +178,10 @@ of `opy-rs`, and standalone library/CLI users do not need Wright.
 
 ## Current capability
 
-The Workshop-independent semantic/tooling foundation and a bounded OPY→Workshop
-compiler surface are implemented and corpus-backed. Broader language coverage
-remains explicit in the compatibility corpus report; Workshop→OPY
-reconstruction is not yet implemented.
+The Workshop-independent semantic/tooling foundation and bounded OPY→Workshop
+compiler surface are implemented and corpus-backed. The reconstruction module
+is owned here, while broader Workshop→OPY coverage remains explicit in the
+compatibility corpus report.
 
 Do not infer a stronger claim from this document; use the support matrix and
 current executable evidence.

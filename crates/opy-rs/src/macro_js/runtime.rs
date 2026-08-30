@@ -3,11 +3,11 @@
 
 use std::time::Instant;
 
-use crate::engine::quickjs_ng::QuickJsEngine;
-use crate::engine::{Completion, EngineError, JsEngine};
-use crate::error::{MacroError, ScriptError};
-use crate::helpers::Helpers;
-use crate::limits::Limits;
+use super::engine::quickjs_ng::QuickJsEngine;
+use super::engine::{Completion, EngineError, JsEngine};
+use super::error::{MacroError, ScriptError};
+use super::helpers::Helpers;
+use super::limits::Limits;
 
 /// One macro argument: the declared parameter name and the **raw** call-site
 /// argument text.
@@ -17,17 +17,17 @@ use crate::limits::Limits;
 /// `src/compiler/tokenizer.ts`). Argument-count validation against the macro
 /// declaration belongs to the frontend, which knows the declared parameters.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MacroArg {
+pub(crate) struct MacroArg {
     /// Parameter name as declared in the macro.
-    pub name: String,
+    pub(crate) name: String,
     /// Raw textual argument from the call site.
-    pub value: String,
+    pub(crate) value: String,
 }
 
 impl MacroArg {
     /// Creates a macro argument from the declared parameter name and the raw
     /// call-site text.
-    pub fn new(name: impl Into<String>, value: impl Into<String>) -> Self {
+    pub(crate) fn new(name: impl Into<String>, value: impl Into<String>) -> Self {
         Self {
             name: name.into(),
             value: value.into(),
@@ -37,13 +37,13 @@ impl MacroArg {
 
 /// The outcome of a successful macro or hook invocation.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MacroResult {
+pub(crate) struct MacroResult {
     /// The script's string completion value: expanded text for macros, the
     /// transformed content for hooks.
-    pub text: String,
+    pub(crate) text: String,
     /// Lines written via `console.log(...)`, in order, one entry per call
     /// (arguments rendered with `String()` semantics and joined on `" "`).
-    pub console_output: Vec<String>,
+    pub(crate) console_output: Vec<String>,
 }
 
 /// Reusable runtime for JavaScript-backed macros and post-compile hooks.
@@ -53,7 +53,7 @@ pub struct MacroResult {
 /// script, and tears the engine down. The runtime itself is reusable, but no
 /// JavaScript state is shared across invocations.
 #[derive(Debug)]
-pub struct MacroRuntime {
+pub(crate) struct MacroRuntime {
     limits: Limits,
     helpers: Helpers,
 }
@@ -61,7 +61,7 @@ pub struct MacroRuntime {
 impl MacroRuntime {
     /// Creates a runtime with the given resource limits and an empty helper
     /// set.
-    pub fn new(limits: Limits) -> Self {
+    pub(crate) fn new(limits: Limits) -> Self {
         Self {
             limits,
             helpers: Helpers::new(),
@@ -70,15 +70,12 @@ impl MacroRuntime {
 
     /// Replaces the helper surface (constant objects) used by subsequent
     /// invocations.
-    pub fn set_helpers(&mut self, helpers: Helpers) {
+    #[cfg(test)]
+    pub(crate) fn set_helpers(&mut self, helpers: Helpers) {
         self.helpers = helpers;
     }
 
     /// The configured resource limits.
-    pub fn limits(&self) -> &Limits {
-        &self.limits
-    }
-
     /// Executes a macro script.
     ///
     /// `source` is the script's text (the file content the frontend resolved
@@ -88,7 +85,7 @@ impl MacroRuntime {
     ///
     /// Returns the string completion value as the expanded text, or a
     /// structured error.
-    pub fn run_macro(
+    pub(crate) fn run_macro(
         &self,
         source: &str,
         args: &[MacroArg],
@@ -118,7 +115,7 @@ impl MacroRuntime {
     /// `var content = "...";` and must return the transformed content as a
     /// string. This works against synthetic/content inputs now; wiring to
     /// actual Workshop emission is lowering-dependent.
-    pub fn run_hook(
+    pub(crate) fn run_hook(
         &self,
         source: &str,
         content: &str,
@@ -176,7 +173,7 @@ const BUILTIN_OBJECTS: [&str; 6] = ["Map", "Hero", "Gamemode", "Color", "Team", 
 
 /// Filename used for the internal helpers script; the helpers are static and
 /// cannot throw, so this never surfaces in errors.
-const BUILTINS_FILENAME: &str = "<opy-macro-js-builtins>";
+const BUILTINS_FILENAME: &str = "<opy-rs-macro-runtime-builtins>";
 
 /// The `vect` helper from the reference's `builtInJsFunctions` block.
 const VECT_HELPER: &str = r#"function vect(x, y, z) {

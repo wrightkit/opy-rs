@@ -370,37 +370,17 @@ version = "0.1.7"
 dependencies = [
  "clap",
  "clap_complete",
- "opy-compiler",
  "opy-rs",
  "serde",
  "serde_json",
  "workshop-rs",
-]
-
-[[package]]
-name = "opy-compiler"
-version = "0.1.7"
-dependencies = [
- "opy-macro-js",
- "opy-rs",
- "serde",
- "serde_json",
- "workshop-rs",
-]
-
-[[package]]
-name = "opy-macro-js"
-version = "0.1.7"
-dependencies = [
- "libquickjs-ng-sys",
- "serde_json",
 ]
 
 [[package]]
 name = "opy-rs"
 version = "0.1.7"
 dependencies = [
- "opy-macro-js",
+ "libquickjs-ng-sys",
  "serde",
  "serde_json",
  "workshop-rs",

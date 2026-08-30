@@ -22,7 +22,7 @@
 //! Fixtures live in `tests/fixtures/macros/`. Workshop-emission wiring (hook
 //! execution against emitted Workshop text, catalog constant population)
 //! stays lowering-dependent; the runtime's hook ABI on synthetic content is
-//! tested in `crates/opy-macro-js/tests/hooks.rs`.
+//! tested in the internal macro-runtime unit tests.
 
 use std::path::{Path, PathBuf};
 

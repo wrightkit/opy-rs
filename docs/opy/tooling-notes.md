@@ -32,8 +32,8 @@ cargo build --locked -p opy-cli --features compatibility --bin opy-compat
 python3 -B compatibility/run_native.py \
   --binary target/debug/opy-cli \
   --semantic-binary target/debug/opy-compat \
-  --results target/opy-compiler-results \
-  --report target/opy-compiler-report.json
+  --results target/opy-rs-compiler-results \
+  --report target/opy-rs-compiler-report.json
 
 # Differential report against an external producer's results (generic
 # producer contract; the native Rust differential suite is the opy-rs

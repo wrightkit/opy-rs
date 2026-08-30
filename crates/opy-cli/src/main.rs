@@ -15,12 +15,11 @@ use std::process::ExitCode;
 
 use clap::{CommandFactory, Parser, error::ErrorKind};
 use clap_complete::{generate, shells};
-use opy_compiler::{CompileDiagnostic, CompileStatus, Compiler};
 use opy_rs::support::{self, SupportMatrixError};
 use opy_rs::tooling::{CheckOutcome, Diagnostic as OpyDiagnostic, check};
+use opy_rs::{CompileDiagnostic, CompileStatus, Compiler};
 use opy_rs::{LANGUAGE_NAME, LANGUAGE_VERSION};
 use serde::Serialize;
-use workshop_rs::catalog::Locale;
 
 use crate::cli::{CheckArgs, Cli, Command, CompileArgs, FileArgs, OutputFormatArg, SupportArgs};
 use crate::present::{
@@ -117,11 +116,11 @@ fn cmd_compile(args: &CompileArgs, presentation: Presentation) -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let report = compiler.compile_source_report(
+    let report = compiler.compile_source_report_with_language(
         &text,
         &main.to_string_lossy(),
         &root,
-        &Locale::new(&args.language),
+        &args.language,
     );
     if args.format == OutputFormatArg::Json {
         return match print_json(&report) {

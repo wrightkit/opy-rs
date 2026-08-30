@@ -20,8 +20,8 @@ use std::time::Instant;
 
 use libquickjs_ng_sys as q;
 
+use super::super::limits::Limits;
 use super::{Completion, EngineError, JsEngine};
-use crate::limits::Limits;
 
 pub(crate) struct QuickJsEngine {
     runtime: *mut q::JSRuntime,
