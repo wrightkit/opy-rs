@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.8](https://github.com/wrightkit/opy-rs/compare/v0.1.7...v0.1.8) - 2026-08-30
+
+### Added
+
+- *(opy)* lower bounded higher-order array operations ([#126](https://github.com/wrightkit/opy-rs/pull/126))
+- *(opy)* support numeric range setting types ([#127](https://github.com/wrightkit/opy-rs/pull/127))
+
 ## [0.1.7](https://github.com/wrightkit/opy-rs/compare/v0.1.6...v0.1.7) - 2026-08-30
 
 ### Fixed
