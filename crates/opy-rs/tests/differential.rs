@@ -416,7 +416,7 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         &mut cases,
         "real-world/overpy-client-to-server",
         Some("parse-error"),
-        "reference accepts; the native frontend rejects chained ternary (`a if c else b if d else e`) — a parse gap beyond the declared surface. Gap: reference accepts, native rejects (documented).",
+        "the chained ternary regression resolves; the full project reaches the next unsupported member (`isDummy`). Gap: reference accepts, native rejects (documented).",
     );
     diagnostic(
         &mut cases,

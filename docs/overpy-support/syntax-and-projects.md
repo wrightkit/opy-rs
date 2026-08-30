@@ -22,7 +22,7 @@ Source: pinned OverPy `9.7.10`, content commit
 | `lambda` with element/index binders | ✅ Supported | Valid positions are contextual. |
 | Member access, calls and postfix expressions | ✅ Supported | Receiver and dispatch checks are contract-sensitive. |
 | `del` array element statement | 🚧 Coming soon | Audited upstream keyword; compilation support is incomplete. |
-| Conditional value `a if condition else b` | 🚧 Coming soon | Distinct from statement `if`. |
+| Conditional value `a if condition else b` | ✅ Supported | Chained forms are right-associative; distinct from statement `if`. |
 | `in` and `not in` membership | ✅ Supported | String containment uses `strContains`. |
 | Arithmetic, comparison, boolean and unary operators | ✅ Supported | Augmented forms are separate rows below. |
 | `++` and `--` postfix modifiers | 🚧 Coming soon | Audited upstream operator surface. |

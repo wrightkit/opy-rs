@@ -902,6 +902,17 @@ impl MacroExpander {
                 right: Box::new(self.expand_expr(right, bindings)?),
                 span: *span,
             }),
+            Expr::Conditional {
+                then_value,
+                condition,
+                else_value,
+                span,
+            } => Ok(Expr::Conditional {
+                then_value: Box::new(self.expand_expr(then_value, bindings)?),
+                condition: Box::new(self.expand_expr(condition, bindings)?),
+                else_value: Box::new(self.expand_expr(else_value, bindings)?),
+                span: *span,
+            }),
             Expr::Unary { op, operand, span } => Ok(Expr::Unary {
                 op: op.clone(),
                 operand: Box::new(self.expand_expr(operand, bindings)?),
@@ -3064,6 +3075,19 @@ impl<'a> Lowering<'a> {
                     args: call_args,
                 }
             }
+            Expr::Conditional {
+                then_value,
+                condition,
+                else_value,
+                ..
+            } => Value::Call {
+                name: "ifThenElse".to_string(),
+                args: vec![
+                    self.lower_value(condition)?,
+                    self.lower_value(then_value)?,
+                    self.lower_value(else_value)?,
+                ],
+            },
             Expr::Binary {
                 op, left, right, ..
             } => {
@@ -3644,6 +3668,34 @@ fn collect_implicit_expr(
             collect_implicit_expr(left, declared_globals, declared_players, globals, players);
             collect_implicit_expr(right, declared_globals, declared_players, globals, players);
         }
+        Expr::Conditional {
+            then_value,
+            condition,
+            else_value,
+            ..
+        } => {
+            collect_implicit_expr(
+                then_value,
+                declared_globals,
+                declared_players,
+                globals,
+                players,
+            );
+            collect_implicit_expr(
+                condition,
+                declared_globals,
+                declared_players,
+                globals,
+                players,
+            );
+            collect_implicit_expr(
+                else_value,
+                declared_globals,
+                declared_players,
+                globals,
+                players,
+            );
+        }
         Expr::Unary { operand, .. } => collect_implicit_expr(
             operand,
             declared_globals,
@@ -3885,6 +3937,17 @@ fn debug_expr_text(expr: &Expr) -> String {
             debug_expr_text(left),
             op,
             debug_expr_text(right)
+        ),
+        Expr::Conditional {
+            then_value,
+            condition,
+            else_value,
+            ..
+        } => format!(
+            "{} if {} else {}",
+            debug_expr_text(then_value),
+            debug_expr_text(condition),
+            debug_expr_text(else_value)
         ),
         Expr::Unary { op, operand, .. } => format!("{} {}", op, debug_expr_text(operand)),
         Expr::Index { array, index, .. } => {

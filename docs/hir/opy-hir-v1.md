@@ -371,6 +371,7 @@ Example `for` with `if`:
 | `macroCall` | `name`, `args`, `span` | A source-level macro invocation kept explicit. |
 | `macroParam` | `name`, `span` | A reference to a macro parameter inside a macro definition body. |
 | `binary` | `op`, `left`, `right`, `span` | Binary operation. `op` is one of `+ - * / % ** == != < <= > >= and or`. |
+| `conditional` | `thenValue`, `condition`, `elseValue`, `span` | Conditional value `thenValue if condition else elseValue`; chained forms are right-associative. |
 | `unary` | `op`, `operand`, `span` | Unary operation. `op` is `-` or `not`. |
 | `index` | `array`, `index`, `span` | Indexing `array[index]`. |
 | `format` | `text`, `args`, `span` | A string with `{0}`, `{1}` style placeholders and their argument expressions. |
@@ -382,6 +383,9 @@ Operators are opy-rs spellings for the semantics the source implementation parse
 * arithmetic: `+ - * / % **`;
 * comparison: `== != < <= > >=` (non-strict, Workshop semantics);
 * logical: `and or`, with `not` as a unary operator.
+* conditional values: `thenValue if condition else elseValue`, with the
+  condition parsed as an `or` expression and the else branch accepting another
+  conditional value.
 
 The source implementation maps parsed OPY operator syntax onto these fixed spellings. The
 consumer treats `op` as an opaque string and validates it only structurally

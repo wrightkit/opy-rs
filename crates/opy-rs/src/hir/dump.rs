@@ -561,6 +561,20 @@ fn render_expr(expr: &Expr, out: &mut String) {
             render_expr(right, out);
             out.push(')');
         }
+        Expr::Conditional {
+            then_value,
+            condition,
+            else_value,
+            ..
+        } => {
+            out.push('(');
+            render_expr(then_value, out);
+            out.push_str(" if ");
+            render_expr(condition, out);
+            out.push_str(" else ");
+            render_expr(else_value, out);
+            out.push(')');
+        }
         Expr::Unary { op, operand, .. } => {
             if op == "-" {
                 out.push('-');

@@ -53,7 +53,7 @@
     },
     {
       "id": "syntax/expressions",
-      "name": "Expression/postfix/member/call grammar, precedence, indexing",
+      "name": "Expression/postfix/member/call grammar, precedence, indexing, conditional values",
       "category": "syntax",
       "state": "source-supported",
       "evidence": [
@@ -64,7 +64,7 @@
         "upstream:src/tests/arrays.opy",
         "upstream:src/tests/strings_args.opy"
       ],
-      "notes": "Corpus-evidenced: expression fixtures + receiver-calls fixture resolve through the semantic model."
+      "notes": "Corpus-evidenced: expression fixtures + receiver-calls fixture resolve through the semantic model; conditional values retain right-associative nesting and source spans."
     },
     {
       "id": "syntax/declarations",
@@ -678,9 +678,10 @@
       "evidence": [
         "fixtures:synthetic/issue-46-primitives",
         "test:opy-compiler-primitive-lowering",
+        "test:opy-compiler-issue-100-conditional",
         "contract:workshop-rs-v0.1.16"
       ],
-      "notes": "Issue #46. Literals (numbers, strings, booleans, null), arrays, vectors (vect), enum constants, global/player/eventPlayer variable references, array indexing (valueInArray; a literal zero index lowers to firstOf, matching the pinned oracle), string formatting (customString), arithmetic/comparison/logical binary operations, unary operations (not, -; not on a comparison lowers to the negated comparison, matching the pinned oracle), and power operations lower into canonical workshop-rs WIR. Value-position power uses the canonical raiseToPower Value contract; direct and indexed power modifications use the canonical Workshop Operation contract."
+      "notes": "Issue #46/#100. Literals (numbers, strings, booleans, null), arrays, vectors (vect), enum constants, global/player/eventPlayer variable references, array indexing (valueInArray; a literal zero index lowers to firstOf, matching the pinned oracle), string formatting (customString), arithmetic/comparison/logical binary operations, unary operations (not, -; not on a comparison lowers to the negated comparison, matching the pinned oracle), right-associative conditional values (ifThenElse), and power operations lower into canonical workshop-rs WIR. Value-position power uses the canonical raiseToPower Value contract; direct and indexed power modifications use the canonical Workshop Operation contract."
     },
     {
       "id": "compilation/opy-control-flow-lowering",
