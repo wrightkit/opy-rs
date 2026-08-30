@@ -662,6 +662,15 @@ pub enum Expr {
         #[serde(skip_serializing_if = "Option::is_none")]
         span: Option<Span>,
     },
+    /// An OPY source type literal, currently used by
+    /// `createWorkshopSetting` numeric ranges.
+    Type {
+        name: String,
+        #[serde(default)]
+        args: Vec<Expr>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        span: Option<Span>,
+    },
     Binary {
         op: String,
         left: Box<Expr>,
@@ -731,6 +740,7 @@ impl Expr {
             | Expr::ReceiverCall { span, .. }
             | Expr::MacroCall { span, .. }
             | Expr::MacroParam { span, .. }
+            | Expr::Type { span, .. }
             | Expr::Binary { span, .. }
             | Expr::Conditional { span, .. }
             | Expr::Unary { span, .. }
@@ -763,6 +773,7 @@ impl Expr {
             Expr::ReceiverCall { .. } => "receiverCall",
             Expr::MacroCall { .. } => "macroCall",
             Expr::MacroParam { .. } => "macroParam",
+            Expr::Type { .. } => "type",
             Expr::Binary { .. } => "binary",
             Expr::Conditional { .. } => "conditional",
             Expr::Unary { .. } => "unary",

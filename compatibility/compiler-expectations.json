@@ -372,9 +372,9 @@
         "provenance:real-world/overpy-broken-weapons/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The full real-world project remains outside the #38 compiler baseline and currently stops at a frontend parse gap.",
+      "note": "The full real-world project now passes the #99 numeric-range setting parser boundary and remains outside the #38 compiler baseline at the next unknown-value diagnostic.",
       "failureClass": "frontend",
-      "diagnosticCode": "parse-error"
+      "diagnosticCode": "unknown-value"
     },
     {
       "fixture": "real-world/overpy-cake",

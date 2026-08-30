@@ -317,6 +317,13 @@ pub enum Expr {
         member_span: Span,
         span: Span,
     },
+    /// A source type literal used by `createWorkshopSetting`, such as
+    /// `float[0.5:10]`.
+    Type {
+        name: String,
+        args: Vec<Expr>,
+        span: Span,
+    },
     Index {
         array: Box<Expr>,
         index: Box<Expr>,
@@ -366,6 +373,7 @@ impl Expr {
             | Expr::ReceiverCall { span, .. }
             | Expr::Name { span, .. }
             | Expr::Member { span, .. }
+            | Expr::Type { span, .. }
             | Expr::Index { span, .. }
             | Expr::Binary { span, .. }
             | Expr::Conditional { span, .. }
