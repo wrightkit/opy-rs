@@ -56,6 +56,8 @@ repository:
 | `issue-35-integration` | minimal OPY HIR to canonical Workshop WIR validation and deterministic emission slice |
 | `issue-46-primitives` | #46 oracle-backed primitive lowering probe: assignments and modifications (including `**=`), expressions, indexing, format, initializers, implicit default variables at fixed slots; the snapshot constrains the native compiler through structural equivalence |
 | `issue-46-unsupported` | #46 negative probe: a dict-indexed assignment the compiler rejects with the stable source-attributed diagnostic while the oracle compiles it |
+| `issue-59-postfix-assignment` | #59 oracle-backed postfix `++`/`--` assignment probe for global, player, and single-level indexed variables; the snapshot constrains native lowering through canonical WIR equivalence |
+| `issue-59-postfix-negative` | #59 pinned negative probe for rejected prefix and embedded postfix forms with a stable source-attributed parse diagnostic |
 | `issue-47-control-flow` | #47 pinned oracle-backed control-flow lowering probe: if/elif/else, while, range-for, do-while expansion, switch fallthrough/default, and direct break |
 | `issue-47-unsupported` | #47 negative probe: a break hidden inside a conditional switch arm is accepted by the source implementation/oracle but rejected by the compiler with a stable source-attributed diagnostic |
 | `issue-47-switch-order` | #47 pinned oracle probe for a default arm before later case arms and source-order fallthrough |

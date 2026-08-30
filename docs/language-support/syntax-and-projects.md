@@ -25,7 +25,7 @@ Source: pinned OverPy `9.7.10`, content commit
 | Conditional value `a if condition else b` | ✅ Supported | Chained forms are right-associative; distinct from statement `if`. |
 | `in` and `not in` membership | ✅ Supported | String containment uses `strContains`. |
 | Arithmetic, comparison, boolean and unary operators | ✅ Supported | Augmented forms are separate rows below. |
-| `++` and `--` postfix modifiers | 🚧 Coming soon | Audited upstream operator surface. |
+| `++` and `--` postfix assignment modifiers | ✅ Supported | Statement-level global, player and single-level indexed forms are covered by Issue #59; prefix and embedded forms remain rejected. |
 | `0x`/`0X` hexadecimal literals | ✅ Supported | Case variants are one semantic capability. |
 
 ## Assignments and declarations
@@ -33,7 +33,7 @@ Source: pinned OverPy `9.7.10`, content commit
 | Feature | Status | Notes |
 | --- | --- | --- |
 | Simple assignment `=` | ✅ Supported | Global, player and indexed forms differ at lowering. |
-| `+=`, `-=`, `*=`, `/=`, `%=` | ✅ Supported | Each spelling is independently audited. |
+| `+=`, `-=`, `*=`, `/=`, `%=` | ✅ Supported | Each spelling is independently audited; postfix `++`/`--` forms lower to canonical Add/Subtract modifications. |
 | `**=` augmented assignment | ✅ Supported | Separate from `**`; uses Raise To Power. |
 | `min=` and `max=` modification forms | 🚧 Coming soon | Recognized by the audit; Workshop support is not claimed. |
 | `globalvar name [index]` | ✅ Supported | Explicit and implicit index forms are distinct. |
