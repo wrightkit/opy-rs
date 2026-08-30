@@ -221,7 +221,7 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         &mut cases,
         "synthetic/issue-59-postfix-negative",
         Some("parse-error"),
-        "Issue #59 prefix and embedded postfix forms remain stable source-attributed parse errors.",
+        "Issue #59 prefix ++ remains a stable source-attributed parse error; prefix --x remains valid consecutive unary-minus syntax.",
     );
     diagnostic(
         &mut cases,

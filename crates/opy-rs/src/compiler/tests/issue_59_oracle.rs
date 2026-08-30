@@ -49,7 +49,7 @@ fn assert_rejected_postfix_fixture(name: &str, line: u32, col: u32) {
 }
 
 #[test]
-fn issue_59_rejected_prefix_form_has_stable_source_diagnostic() {
+fn issue_59_rejected_prefix_increment_form_has_stable_source_diagnostic() {
     assert_rejected_postfix_fixture("issue-59-postfix-negative", 6, 5);
 }
 

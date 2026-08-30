@@ -25,7 +25,7 @@ Source: pinned OverPy `9.7.10`, content commit
 | Conditional value `a if condition else b` | ✅ Supported | Chained forms are right-associative; distinct from statement `if`. |
 | `in` and `not in` membership | ✅ Supported | String containment uses `strContains`. |
 | Arithmetic, comparison, boolean and unary operators | ✅ Supported | Augmented forms are separate rows below. |
-| `++` and `--` postfix assignment modifiers | ✅ Supported | Statement-level global, player and single-level indexed forms are covered by Issue #59; prefix and embedded forms remain rejected. |
+| `++` and `--` postfix assignment modifiers | ✅ Supported | Statement-level global, player and single-level indexed forms are covered by Issue #59; prefix `++` and embedded postfix `++`/`--` remain rejected, while prefix `--x` remains valid consecutive unary-minus syntax. |
 | `0x`/`0X` hexadecimal literals | ✅ Supported | Case variants are one semantic capability. |
 
 ## Assignments and declarations

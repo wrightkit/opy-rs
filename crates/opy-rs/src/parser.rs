@@ -2087,7 +2087,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_prefix_and_embedded_postfix_forms() {
+    fn rejects_prefix_increment_and_embedded_postfix_forms() {
         for source in [
             "globalvar value\nrule \"r\":\n    @Event global\n    ++value\n",
             "globalvar value\nrule \"r\":\n    @Event global\n    value++++\n",

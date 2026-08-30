@@ -67,7 +67,7 @@
         "upstream:src/tests/arrays.opy",
         "upstream:src/tests/strings_args.opy"
       ],
-      "notes": "Corpus-evidenced: expression fixtures + receiver-calls fixture resolve through the semantic model; conditional values retain right-associative nesting and source spans. Postfix ++/-- are accepted only as statement-level assignments; prefix and embedded forms remain stable parse diagnostics."
+      "notes": "Corpus-evidenced: expression fixtures + receiver-calls fixture resolve through the semantic model; conditional values retain right-associative nesting and source spans. Postfix ++/-- are accepted only as statement-level assignments; prefix ++ and embedded postfix ++/-- remain stable parse diagnostics, while prefix --x remains valid consecutive unary-minus syntax."
     },
     {
       "id": "syntax/declarations",

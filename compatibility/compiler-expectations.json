@@ -255,10 +255,10 @@
       "evidence": [
         "oracle:synthetic/issue-59-postfix-negative/oracle.json",
         "provenance:synthetic/issue-59-postfix-negative/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_59_oracle::issue_59_rejected_prefix_form_has_stable_source_diagnostic"
+        "test:opy-rs::compiler::integration_tests::issue_59_oracle::issue_59_rejected_prefix_increment_form_has_stable_source_diagnostic"
       ],
       "owner": "opy-rs#59",
-      "note": "The pinned oracle rejects the prefix form and native reports the stable source-attributed frontend diagnostic.",
+      "note": "The pinned oracle rejects prefix ++ and native reports the stable source-attributed frontend diagnostic; prefix --x remains valid consecutive unary-minus syntax.",
       "failureClass": "frontend",
       "diagnosticCode": "parse-error"
     },
