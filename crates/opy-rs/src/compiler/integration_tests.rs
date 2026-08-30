@@ -2,6 +2,8 @@
 mod issue_100_conditional;
 #[path = "tests/issue_101_implicit_string.rs"]
 mod issue_101_implicit_string;
+#[path = "tests/issue_115_string_continuation.rs"]
+mod issue_115_string_continuation;
 #[path = "tests/issue_42_oracle.rs"]
 mod issue_42_oracle;
 #[path = "tests/issue_46_oracle.rs"]
