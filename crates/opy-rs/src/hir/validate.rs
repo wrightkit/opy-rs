@@ -903,6 +903,7 @@ fn check_expr(value: &Value) -> Result<(), HirError> {
         "array",
         "index",
         "thenValue",
+        "condition",
         "elseValue",
     ] {
         if let Some(child) = object.get(field) {

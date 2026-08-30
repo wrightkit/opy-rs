@@ -117,7 +117,7 @@
       "name": "do … while",
       "category": "syntax",
       "state": "source-supported",
-      "evidence": ["fixtures:synthetic/issue-28-syntax", "fixtures:real-world/overpy-santa/regressions/do-while.opy", "upstream:src/tests/loops.opy"],
+      "evidence": ["fixtures:synthetic/issue-28-syntax", "upstream:src/tests/loops.opy"],
       "notes": "Issue #28: the body executes before the condition and the condition is retained as an OPY HIR expression; malformed/truncated conditions remain structured parse errors."
     },
     {
