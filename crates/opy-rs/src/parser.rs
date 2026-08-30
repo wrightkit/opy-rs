@@ -949,6 +949,36 @@ impl Parser<'_> {
                     span: Span::new(start.file, start.start, end),
                 })
             }
+            TokenKind::Increment | TokenKind::Decrement => {
+                let operator = self.advance();
+                if !matches!(self.peek_kind(), TokenKind::Newline | TokenKind::Eof) {
+                    self.error_at_current(
+                        "postfix increment/decrement must be a standalone assignment".to_string(),
+                    );
+                    return Err(());
+                }
+                let operation = if operator.kind == TokenKind::Increment {
+                    "+"
+                } else {
+                    "-"
+                };
+                let span = Span::new(start.file, start.start, operator.span.end);
+                let value = Expr::Binary {
+                    op: operation.to_string(),
+                    left: Box::new(expr.clone()),
+                    right: Box::new(Expr::Number {
+                        value: 1.0,
+                        text: "1".to_string(),
+                        span: operator.span,
+                    }),
+                    span,
+                };
+                Ok(Stmt::Assign {
+                    target: expr,
+                    value,
+                    span,
+                })
+            }
             _ => {
                 let end = self.peek().span.start;
                 Ok(Stmt::Expr {
@@ -1269,6 +1299,26 @@ impl Parser<'_> {
     fn parse_additive(&mut self) -> Result<Expr, ()> {
         let mut left = self.parse_multiplicative()?;
         loop {
+            if self.peek_kind() == TokenKind::Decrement
+                && !matches!(self.peek_at(1).kind, TokenKind::Newline | TokenKind::Eof)
+            {
+                let operator = self.advance();
+                let operand = self.parse_unary()?;
+                let unary = Expr::Unary {
+                    op: "-".to_string(),
+                    span: Span::new(operator.span.file, operator.span.start, operand.span().end),
+                    operand: Box::new(operand),
+                };
+                let right = self.parse_multiplicative_tail(unary)?;
+                let span = Span::new(left.span().file, left.span().start, right.span().end);
+                left = Expr::Binary {
+                    op: "-".to_string(),
+                    left: Box::new(left),
+                    right: Box::new(right),
+                    span,
+                };
+                continue;
+            }
             let op = match self.peek_kind() {
                 TokenKind::Plus => "+",
                 TokenKind::Minus => "-",
@@ -1288,7 +1338,11 @@ impl Parser<'_> {
     }
 
     fn parse_multiplicative(&mut self) -> Result<Expr, ()> {
-        let mut left = self.parse_unary()?;
+        let left = self.parse_unary()?;
+        self.parse_multiplicative_tail(left)
+    }
+
+    fn parse_multiplicative_tail(&mut self, mut left: Expr) -> Result<Expr, ()> {
         loop {
             let op = match self.peek_kind() {
                 TokenKind::Star => "*",
@@ -1310,15 +1364,23 @@ impl Parser<'_> {
     }
 
     fn parse_unary(&mut self) -> Result<Expr, ()> {
-        if self.peek_kind() == TokenKind::Minus {
+        if matches!(self.peek_kind(), TokenKind::Minus | TokenKind::Decrement) {
             let start = self.advance();
             let operand = self.parse_unary()?;
             let end = operand.span().end;
-            return Ok(Expr::Unary {
+            let unary = Expr::Unary {
                 op: "-".to_string(),
                 operand: Box::new(operand),
                 span: Span::new(start.span.file, start.span.start, end),
-            });
+            };
+            if start.kind == TokenKind::Decrement {
+                return Ok(Expr::Unary {
+                    op: "-".to_string(),
+                    operand: Box::new(unary),
+                    span: Span::new(start.span.file, start.span.start, end),
+                });
+            }
+            return Ok(unary);
         }
         self.parse_power()
     }
@@ -1985,6 +2047,70 @@ mod tests {
             Expr::Name { name, .. } if name == "a"
         ));
         assert!(matches!(right.as_ref(), Expr::Number { .. }));
+    }
+
+    #[test]
+    fn parses_postfix_increment_and_decrement_as_modifications() {
+        let program =
+            parse_ok("globalvar value\nrule \"r\":\n    @Event global\n    value++\n    value--\n");
+        let RuleEntry::Rule(rule) = &program.rules[0] else {
+            panic!("expected a rule");
+        };
+        for (statement, expected_op) in [(&rule.actions[0], "+"), (&rule.actions[1], "-")] {
+            let Stmt::Assign { target, value, .. } = statement else {
+                panic!("expected a postfix assignment");
+            };
+            let Expr::Binary {
+                op, left, right, ..
+            } = value
+            else {
+                panic!("expected a synthetic modification value");
+            };
+            assert_eq!(op, expected_op);
+            let Expr::Name {
+                name: left_name, ..
+            } = left.as_ref()
+            else {
+                panic!("expected the target to be the modification's left operand");
+            };
+            let Expr::Name {
+                name: target_name, ..
+            } = target
+            else {
+                panic!("expected a name target");
+            };
+            assert_eq!(left_name, target_name);
+            assert!(
+                matches!(right.as_ref(), Expr::Number { value, text, .. } if *value == 1.0 && text == "1")
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_prefix_increment_and_embedded_postfix_forms() {
+        for source in [
+            "globalvar value\nrule \"r\":\n    @Event global\n    ++value\n",
+            "globalvar value\nrule \"r\":\n    @Event global\n    value++++\n",
+        ] {
+            let errors = parse_err(source);
+            assert!(!errors.is_empty());
+            assert!(errors.iter().all(|error| error.code == "parse-error"));
+            assert!(errors.iter().all(|error| error.span.is_some()));
+        }
+    }
+
+    #[test]
+    fn preserves_consecutive_unary_minus_expressions() {
+        let source = concat!(
+            "globalvar value = 0\n",
+            "globalvar B = 1\n",
+            "rule \"r\":\n",
+            "    @Event global\n",
+            "    value = --1\n",
+            "    value = --B\n",
+            "    value = B--1\n",
+        );
+        parse_ok(source);
     }
 
     #[test]
