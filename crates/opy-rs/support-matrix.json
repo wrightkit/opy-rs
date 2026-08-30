@@ -59,12 +59,15 @@
       "evidence": [
         "fixtures:synthetic/expressions-values",
         "fixtures:synthetic/receiver-calls",
+        "fixtures:synthetic/issue-59-postfix-assignment",
+        "fixtures:synthetic/issue-59-postfix-negative",
+        "fixtures:synthetic/issue-59-embedded-postfix-negative",
         "fixtures:real-world/overpy-cake",
         "upstream:src/tests/operators.opy",
         "upstream:src/tests/arrays.opy",
         "upstream:src/tests/strings_args.opy"
       ],
-      "notes": "Corpus-evidenced: expression fixtures + receiver-calls fixture resolve through the semantic model; conditional values retain right-associative nesting and source spans."
+      "notes": "Corpus-evidenced: expression fixtures + receiver-calls fixture resolve through the semantic model; conditional values retain right-associative nesting and source spans. Postfix ++/-- are accepted only as statement-level assignments; prefix ++ and embedded postfix ++/-- remain stable parse diagnostics, while prefix --x remains valid consecutive unary-minus syntax."
     },
     {
       "id": "syntax/declarations",
@@ -91,10 +94,11 @@
         "fixtures:synthetic/control-flow",
         "fixtures:synthetic/for-range-agentlab",
         "fixtures:synthetic/chase-condition-agentlab",
+        "fixtures:synthetic/issue-59-postfix-assignment",
         "upstream:src/tests/loops.opy",
         "upstream:src/tests/conditions.opy"
       ],
-      "notes": "Corpus-evidenced: the supported augmented assignment subset is +=, -=, *=, /=, %=, and **=; control-flow fixtures resolve; parser rejects out-of-surface forms structurally. min=/max= and ++/-- remain explicit follow-ups (#59, wrightkit/workshop-rs#95)."
+      "notes": "Corpus-evidenced: the supported augmented assignment subset is +=, -=, *=, /=, %=, and **=, plus statement-level postfix ++/--; control-flow fixtures resolve; parser rejects out-of-surface forms structurally. min=/max= remains an explicit follow-up (wrightkit/workshop-rs#95)."
     },
     {
       "id": "syntax/switch",
@@ -641,11 +645,13 @@
       "state": "end-to-end-supported",
       "evidence": [
         "fixtures:synthetic/issue-46-primitives",
+        "fixtures:synthetic/issue-59-postfix-assignment",
         "test:opy-rs::compiler-primitive-lowering",
+        "test:opy-rs::compiler::integration_tests::issue_59_oracle::issue_59_postfix_assignments_match_the_pinned_oracle",
         "test:opy-rs::compiler-issue-46-native-wir-gap",
         "contract:workshop-rs-v0.1.16"
       ],
-      "notes": "Issue #46. Global/player assignments and augmented assignments (+=, -=, *=, /=, %=, **=), single-level indexed variable assignments and modifications (setGlobalVariableAtIndex, modifyGlobalVariableAtIndex, setPlayerVariableAtIndex, modifyPlayerVariableAtIndex), and pass no-op statements lower into canonical workshop-rs WIR. Declaration initializer evidence covers non-null initializers; OverPy null-default initializer semantics remain tracked by #58. Deeper indexed writes remain tracked by #60. Direct global/player assignments and modifications carry full statement and target-variable span provenance; the single-level indexed forms lower to canonical Call actions, which carry only the statement-level source span (the canonical WIR Call shape has no separate target-span field)."
+      "notes": "Issue #46/#59. Global/player assignments and augmented assignments (+=, -=, *=, /=, %=, **=, ++, --), single-level indexed variable assignments and modifications (setGlobalVariableAtIndex, modifyGlobalVariableAtIndex, setPlayerVariableAtIndex, modifyPlayerVariableAtIndex), and pass no-op statements lower into canonical workshop-rs WIR. Declaration initializer evidence covers non-null initializers; OverPy null-default initializer semantics remain tracked by #58. Deeper indexed writes remain tracked by #60. Direct global/player modifications carry full statement and target-variable span provenance; the single-level indexed forms lower to canonical Call actions, which carry only the statement-level source span (the canonical WIR Call shape has no separate target-span field)."
     },
     {
       "id": "compilation/opy-implicit-default-variables",

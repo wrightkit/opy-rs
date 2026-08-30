@@ -12,6 +12,8 @@ mod issue_42_oracle;
 mod issue_46_oracle;
 #[path = "tests/issue_47_oracle.rs"]
 mod issue_47_oracle;
+#[path = "tests/issue_59_oracle.rs"]
+mod issue_59_oracle;
 #[path = "tests/issue_85_preprocessing.rs"]
 mod issue_85_preprocessing;
 #[path = "tests/issue_89_oracle.rs"]

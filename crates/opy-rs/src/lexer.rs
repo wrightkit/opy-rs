@@ -47,6 +47,8 @@ pub enum TokenKind {
     DoubleStar,
     PlusAssign,
     MinusAssign,
+    Increment,
+    Decrement,
     StarAssign,
     SlashAssign,
     PercentAssign,
@@ -149,8 +151,20 @@ impl Lexer {
                 '.' => self.single(TokenKind::Dot),
                 '@' => self.single(TokenKind::At),
                 '=' => self.two(TokenKind::Assign, TokenKind::Eq, '='),
-                '+' => self.lex_two(TokenKind::Plus, TokenKind::PlusAssign, '='),
-                '-' => self.lex_two(TokenKind::Minus, TokenKind::MinusAssign, '='),
+                '+' => {
+                    if self.peek(1) == Some('+') {
+                        self.lex_duplicate(TokenKind::Increment, "++");
+                    } else {
+                        self.lex_two(TokenKind::Plus, TokenKind::PlusAssign, '=');
+                    }
+                }
+                '-' => {
+                    if self.peek(1) == Some('-') {
+                        self.lex_duplicate(TokenKind::Decrement, "--");
+                    } else {
+                        self.lex_two(TokenKind::Minus, TokenKind::MinusAssign, '=');
+                    }
+                }
                 '*' => {
                     if self.peek(1) == Some('*') {
                         if self.peek(2) == Some('=') {
@@ -428,6 +442,18 @@ impl Lexer {
         }
     }
 
+    fn lex_duplicate(&mut self, kind: TokenKind, text: &str) {
+        let start = self.here(1);
+        self.advance();
+        self.advance();
+        let end = self.here(0);
+        self.tokens.push(Token::new(
+            kind,
+            text,
+            Span::new(self.file_id, start.start, end.start),
+        ));
+    }
+
     /// Two-char operator with a fixed second char (e.g. `==`, `<=`).
     fn two(&mut self, plain: TokenKind, combined: TokenKind, second: char) {
         let start = self.here(1);
@@ -563,6 +589,23 @@ mod tests {
             .find(|t| t.kind == TokenKind::DoubleStarAssign)
             .unwrap();
         assert_eq!(assign.text, "**=");
+    }
+
+    #[test]
+    fn postfix_operators_are_single_tokens() {
+        let tokens = lex_ok("counter++ points--");
+        assert_eq!(
+            tokens.iter().map(|token| token.kind).collect::<Vec<_>>(),
+            vec![
+                TokenKind::Ident,
+                TokenKind::Increment,
+                TokenKind::Ident,
+                TokenKind::Decrement,
+                TokenKind::Eof,
+            ]
+        );
+        assert_eq!(tokens[1].span.start.col, 8);
+        assert_eq!(tokens[1].span.end.col, 10);
     }
 
     #[test]
