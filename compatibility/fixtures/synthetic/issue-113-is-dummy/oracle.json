@@ -4,19 +4,19 @@
     "exitCode": 0,
     "status": "success",
     "stdout": "",
-    "workshop": "rule (\"isDummy residual\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    conditions {\n        Is Dummy Bot(Event Player) == True;\n    }\n}\n",
-    "workshopExact": "rule (\"isDummy residual\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    conditions {\n        Is Dummy Bot(Event Player) == True;\n    }\n}\n",
-    "workshopSha256": "17d965f38e60a2bd4cfd576d6570ac4de206ecdd7f891e29474975631be4e323"
+    "workshop": "rule (\"isDummy residual\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    conditions {\n        Is Dummy Bot(Event Player) == True;\n    }\n    actions {\n        Disable Inspector Recording;\n    }\n}\n",
+    "workshopExact": "rule (\"isDummy residual\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    conditions {\n        Is Dummy Bot(Event Player) == True;\n    }\n    actions {\n        Disable Inspector Recording;\n    }\n}\n\n",
+    "workshopSha256": "d286f8078620f44fcda8fb8b10d72a6bc62c80640354d7355fbd28630e695a97"
   },
   "fixture": "synthetic/issue-113-is-dummy",
   "input": {
     "files": [
       {
         "path": "source.opy",
-        "sha256": "e891870a4ecbd85a751380d8395eac7ab1b7949f01cebcd0bd0a376b43c77e1a"
+        "sha256": "2473ef20d561be5af94700886db1cdcb83c6ee513db9845897fa11ed54772da6"
       }
     ],
-    "sha256": "8d35f31898d4b3da9e3623163930e7fe2b433689982fde91f770fedff6a9b9a3",
+    "sha256": "697ca5a90f65ed59c1b284cec180f374757441ae973e3074df5d4b568d707d65",
     "source": "source.opy"
   },
   "oracle": {

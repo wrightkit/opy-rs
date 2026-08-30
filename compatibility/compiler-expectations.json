@@ -244,7 +244,22 @@
         "test:opy-rs::compiler::integration_tests::issue_113_is_dummy::is_dummy_member_lowers_to_the_catalog_value_in_canonical_wir"
       ],
       "owner": "opy-rs#113",
-      "note": "The catalog-backed eventPlayer.isDummy() predicate lowers to a canonical WIR value call equivalent to the pinned oracle."
+      "note": "The catalog-backed eventPlayer.isDummy() predicate lowers to a canonical WIR value call equivalent to the pinned oracle.",
+      "semanticEquivalent": true
+    },
+    {
+      "fixture": "synthetic/issue-114-hud-subheader",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "semantic-wir",
+      "evidence": [
+        "oracle:synthetic/issue-114-hud-subheader/oracle.json",
+        "provenance:synthetic/issue-114-hud-subheader/fixture.json",
+        "test:opy-rs::compiler::integration_tests::issue_114_hud_subheader::hud_subheader_matches_the_pinned_canonical_wir"
+      ],
+      "owner": "opy-rs#114",
+      "note": "The shared hudSubheader action lowers to canonical Create HUD Text WIR with the pinned argument order and visibility semantics.",
+      "semanticEquivalent": true
     },
     {
       "fixture": "synthetic/issue-47-unsupported",
@@ -368,9 +383,9 @@
         "provenance:real-world/overpy-crosshair/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The full real-world project now passes the implicit-concatenation boundary from #101; it remains outside the #38 compiler baseline at the unsupported hudSubheader action, with the byte-string modifier tracked separately.",
+      "note": "The full real-world project now passes the implicit-concatenation and hudSubheader boundaries; the first remaining native gap is the unsupported SpecVisibility.NEVER enum member, while the byte-string modifier remains a separate documented gap.",
       "failureClass": "frontend",
-      "diagnosticCode": "unknown-action"
+      "diagnosticCode": "unknown-enum-member"
     },
     {
       "fixture": "real-world/overpy-inputhud",
