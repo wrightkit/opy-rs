@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "id": "synthetic/issue-59-postfix-negative",
+  "id": "synthetic/issue-59-embedded-postfix-negative",
   "category": "synthetic",
   "features": [
     "syntax/postfix-assignment"
@@ -9,7 +9,7 @@
   "expectedStatus": "failure",
   "provenance": {
     "kind": "original",
-    "origin": "opy-rs Issue #59 prefix postfix assignment rejection probe",
+    "origin": "opy-rs Issue #59 embedded postfix assignment rejection probe",
     "license": "AGPL-3.0-or-later",
     "redistributable": true
   }

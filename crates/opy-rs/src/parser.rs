@@ -1299,6 +1299,26 @@ impl Parser<'_> {
     fn parse_additive(&mut self) -> Result<Expr, ()> {
         let mut left = self.parse_multiplicative()?;
         loop {
+            if self.peek_kind() == TokenKind::Decrement
+                && !matches!(self.peek_at(1).kind, TokenKind::Newline | TokenKind::Eof)
+            {
+                let operator = self.advance();
+                let operand = self.parse_unary()?;
+                let unary = Expr::Unary {
+                    op: "-".to_string(),
+                    span: Span::new(operator.span.file, operator.span.start, operand.span().end),
+                    operand: Box::new(operand),
+                };
+                let right = self.parse_multiplicative_tail(unary)?;
+                let span = Span::new(left.span().file, left.span().start, right.span().end);
+                left = Expr::Binary {
+                    op: "-".to_string(),
+                    left: Box::new(left),
+                    right: Box::new(right),
+                    span,
+                };
+                continue;
+            }
             let op = match self.peek_kind() {
                 TokenKind::Plus => "+",
                 TokenKind::Minus => "-",
@@ -1318,7 +1338,11 @@ impl Parser<'_> {
     }
 
     fn parse_multiplicative(&mut self) -> Result<Expr, ()> {
-        let mut left = self.parse_unary()?;
+        let left = self.parse_unary()?;
+        self.parse_multiplicative_tail(left)
+    }
+
+    fn parse_multiplicative_tail(&mut self, mut left: Expr) -> Result<Expr, ()> {
         loop {
             let op = match self.peek_kind() {
                 TokenKind::Star => "*",
@@ -1340,15 +1364,23 @@ impl Parser<'_> {
     }
 
     fn parse_unary(&mut self) -> Result<Expr, ()> {
-        if self.peek_kind() == TokenKind::Minus {
+        if matches!(self.peek_kind(), TokenKind::Minus | TokenKind::Decrement) {
             let start = self.advance();
             let operand = self.parse_unary()?;
             let end = operand.span().end;
-            return Ok(Expr::Unary {
+            let unary = Expr::Unary {
                 op: "-".to_string(),
                 operand: Box::new(operand),
                 span: Span::new(start.span.file, start.span.start, end),
-            });
+            };
+            if start.kind == TokenKind::Decrement {
+                return Ok(Expr::Unary {
+                    op: "-".to_string(),
+                    operand: Box::new(unary),
+                    span: Span::new(start.span.file, start.span.start, end),
+                });
+            }
+            return Ok(unary);
         }
         self.parse_power()
     }
@@ -2058,7 +2090,6 @@ mod tests {
     fn rejects_prefix_and_embedded_postfix_forms() {
         for source in [
             "globalvar value\nrule \"r\":\n    @Event global\n    ++value\n",
-            "globalvar value\nrule \"r\":\n    @Event global\n    value = value++\n",
             "globalvar value\nrule \"r\":\n    @Event global\n    value++++\n",
         ] {
             let errors = parse_err(source);
@@ -2066,6 +2097,20 @@ mod tests {
             assert!(errors.iter().all(|error| error.code == "parse-error"));
             assert!(errors.iter().all(|error| error.span.is_some()));
         }
+    }
+
+    #[test]
+    fn preserves_consecutive_unary_minus_expressions() {
+        let source = concat!(
+            "globalvar value = 0\n",
+            "globalvar B = 1\n",
+            "rule \"r\":\n",
+            "    @Event global\n",
+            "    value = --1\n",
+            "    value = --B\n",
+            "    value = B--1\n",
+        );
+        parse_ok(source);
     }
 
     #[test]

@@ -61,6 +61,7 @@
         "fixtures:synthetic/receiver-calls",
         "fixtures:synthetic/issue-59-postfix-assignment",
         "fixtures:synthetic/issue-59-postfix-negative",
+        "fixtures:synthetic/issue-59-embedded-postfix-negative",
         "fixtures:real-world/overpy-cake",
         "upstream:src/tests/operators.opy",
         "upstream:src/tests/arrays.opy",

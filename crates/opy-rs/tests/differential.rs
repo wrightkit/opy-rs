@@ -223,6 +223,12 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         Some("parse-error"),
         "Issue #59 prefix and embedded postfix forms remain stable source-attributed parse errors.",
     );
+    diagnostic(
+        &mut cases,
+        "synthetic/issue-59-embedded-postfix-negative",
+        Some("parse-error"),
+        "Issue #59 embedded postfix form remains a stable source-attributed parse error with independent pinned oracle evidence.",
+    );
     resolve(
         &mut cases,
         "synthetic/issue-47-control-flow",

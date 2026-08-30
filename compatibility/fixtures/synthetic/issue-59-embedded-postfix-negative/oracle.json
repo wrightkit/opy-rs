@@ -3,7 +3,7 @@
     "diagnostics": [
       {
         "severity": "error",
-        "text": "Error: Expected an action, but got global variable 'counter' which is a value\n    | line 6, col 7, at source.opy"
+        "text": "Error: Cannot modify or assign to operator '='\n    | line 6, col 5, at source.opy"
       }
     ],
     "exitCode": 1,
@@ -13,15 +13,15 @@
     "workshopExact": "",
     "workshopSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
-  "fixture": "synthetic/issue-59-postfix-negative",
+  "fixture": "synthetic/issue-59-embedded-postfix-negative",
   "input": {
     "files": [
       {
         "path": "source.opy",
-        "sha256": "a97a5e3d00cbad47670bdd453e595dc5117e59cb5e46f0a5c4068f4019ade717"
+        "sha256": "4f85e7ee341a9f097ebd738a5345eb2f48ce8ccd9ab1e4c7e0c86df6ad1cf0d8"
       }
     ],
-    "sha256": "6339eaf4661dc48ae0f67fe3eb108f5ff84f9611ef86d8c763521ff73f604378",
+    "sha256": "d3e46082b556c732e7adff8e1b8865d56c5a820c908cfb02189fb95ab60aa02c",
     "source": "source.opy"
   },
   "oracle": {
