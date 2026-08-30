@@ -711,17 +711,16 @@
     },
     {
       "fixture": "synthetic/issue-33-f-string",
-      "nativeStatus": "failure",
-      "classification": "known-gap",
-      "comparison": "diagnostic-code",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "semantic-wir",
       "evidence": [
         "oracle:synthetic/issue-33-f-string/oracle.json",
         "provenance:synthetic/issue-33-f-string/fixture.json"
       ],
-      "owner": "opy-rs#88",
-      "note": "The broader f-string lowering surface exceeds the independently evidenced compiler baseline.",
-      "failureClass": "integration",
-      "diagnosticCode": "unsupported-integration-surface"
+      "owner": "opy-rs#103",
+      "note": "The demonstrated sorted-array key lambda lowers to canonical Sorted Array WIR and matches the pinned oracle.",
+      "semanticEquivalent": true
     },
     {
       "fixture": "synthetic/issue-33-lambda-negative",
