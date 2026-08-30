@@ -5,7 +5,6 @@ git_release_enable = false
 git_tag_enable = false
 pr_labels = ["release"]
 publish_timeout = "10m"
-release_always = false
 semver_check = false
 
 [[package]]
