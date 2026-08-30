@@ -121,7 +121,8 @@ Reference: `889d9749d1def17f146548cbddb94ea1ab015847`.
 | `.getRealPlayerClosestToReticle`, `.getRealPlayersClosestToReticle` | 🚧 Coming soon |
 | `getRealPlayersInRadius`, `.getRealPlayersInViewAngle` | 🚧 Coming soon |
 | `getSign`, `getAllPlayers` | 🚧 Coming soon |
-| `hudHeader`, `hudSubheader`, `hudSubtext` | 🚧 Coming soon |
+| `hudHeader`, `hudSubtext` | 🚧 Coming soon |
+| `hudSubheader` | ✅ Bounded compiler slice |
 | `lerp`, `lineIntersectsSphere` | 🚧 Coming soon |
 | `print`, `.reverse`, `timeToString`, `.unique` | 🚧 Coming soon |
 

@@ -2,6 +2,10 @@
 mod issue_100_conditional;
 #[path = "tests/issue_101_implicit_string.rs"]
 mod issue_101_implicit_string;
+#[path = "tests/issue_113_is_dummy.rs"]
+mod issue_113_is_dummy;
+#[path = "tests/issue_114_hud_subheader.rs"]
+mod issue_114_hud_subheader;
 #[path = "tests/issue_115_string_continuation.rs"]
 mod issue_115_string_continuation;
 #[path = "tests/issue_42_oracle.rs"]
@@ -10,6 +14,8 @@ mod issue_42_oracle;
 mod issue_46_oracle;
 #[path = "tests/issue_47_oracle.rs"]
 mod issue_47_oracle;
+#[path = "tests/issue_59_oracle.rs"]
+mod issue_59_oracle;
 #[path = "tests/issue_85_preprocessing.rs"]
 mod issue_85_preprocessing;
 #[path = "tests/issue_89_oracle.rs"]

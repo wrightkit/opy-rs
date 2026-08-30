@@ -1,0 +1,33 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "rule (\"hudSubheader residual\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Create HUD Text(All Players(All Teams), Null, Custom String(\"text\"), Null, Top, 0, Null, Color(White), Null, Visible To, Default Visibility);\n    }\n}\n",
+    "workshopExact": "rule (\"hudSubheader residual\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Create HUD Text(All Players(All Teams), Null, Custom String(\"text\"), Null, Top, 0, Null, Color(White), Null, Visible To, Default Visibility);\n    }\n}\n\n",
+    "workshopSha256": "6cfd12424fec4993266f49a7f19e27c0ae48fe1cfcdccc53bfc26a8e2d23bd4f"
+  },
+  "fixture": "synthetic/issue-114-hud-subheader",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "3dc0cd70e945fa88ba0f1453eafa37c6397ea8182b31ae57561b1e2c216e587b"
+      }
+    ],
+    "sha256": "0ae3def5c9b58202e0f78adaa3638affc31b5d0710246ba7ed3a7b82b59da609",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

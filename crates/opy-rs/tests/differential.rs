@@ -213,6 +213,36 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
     );
     resolve(
         &mut cases,
+        "synthetic/issue-59-postfix-assignment",
+        false,
+        "Issue #59 postfix ++/-- assignment probe; global, player, and single-level indexed targets resolve and are constrained by compiler oracle tests.",
+    );
+    diagnostic(
+        &mut cases,
+        "synthetic/issue-59-postfix-negative",
+        Some("parse-error"),
+        "Issue #59 prefix ++ remains a stable source-attributed parse error; prefix --x remains valid consecutive unary-minus syntax.",
+    );
+    diagnostic(
+        &mut cases,
+        "synthetic/issue-59-embedded-postfix-negative",
+        Some("parse-error"),
+        "Issue #59 embedded postfix form remains a stable source-attributed parse error with independent pinned oracle evidence.",
+    );
+    resolve(
+        &mut cases,
+        "synthetic/issue-113-is-dummy",
+        true,
+        "Issue #113 catalog-backed eventPlayer.isDummy() member predicate; canonical WIR lowering is constrained by the dedicated compiler test.",
+    );
+    resolve(
+        &mut cases,
+        "synthetic/issue-114-hud-subheader",
+        true,
+        "Issue #114 shared hudSubheader action; canonical WIR lowering is constrained by the dedicated compiler test.",
+    );
+    resolve(
+        &mut cases,
         "synthetic/issue-47-control-flow",
         false,
         "Issue #47 oracle-backed control-flow lowering probe; the frontend resolves the source while the compiler independently constrains canonical WIR against the pinned oracle.",
@@ -398,13 +428,13 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         &mut cases,
         "real-world/overpy-santa",
         Some("parse-error"),
-        "the chained conditional path resolves; the full project reaches the next unsupported postfix increment (`++`) at santa.opy:304. Gap: reference accepts, native rejects (documented).",
+        "the postfix increment regression now resolves; the full project reaches the next unsupported for-range expression at santa.opy:356. Gap: reference accepts, native rejects (documented).",
     );
     diagnostic(
         &mut cases,
         "real-world/overpy-cronch",
         Some("parse-error"),
-        "reference accepts; the native frontend rejects postfix `++` (declared rejection, syntax/lexing notes). Gap: reference accepts, native rejects (documented).",
+        "the postfix increment regression now resolves; the full project reaches the next unsupported createDummy action at cronch.opy:103. Gap: reference accepts, native rejects (documented).",
     );
     diagnostic(
         &mut cases,
@@ -416,7 +446,7 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         &mut cases,
         "real-world/overpy-client-to-server",
         Some("parse-error"),
-        "the chained ternary regression resolves; the full project reaches the next unsupported member (`isDummy`). Gap: reference accepts, native rejects (documented).",
+        "the chained ternary and isDummy regressions resolve; the full project reaches the next unsupported member (`getHorizontalFacingAngle`). Gap: reference accepts, native rejects (documented).",
     );
     diagnostic(
         &mut cases,

@@ -2961,6 +2961,9 @@ impl<'a> Lowering<'a> {
         if !matches!(function.kind, FunctionKind::Action) {
             return Err(self.unsupported(format!("'{name}' is not a generic OPY action"), span));
         }
+        if function.id == "hudSubheader" {
+            return self.lower_hud_subheader(args, span);
+        }
         let catalog_id = function.catalog_id.as_ref().ok_or_else(|| {
             self.unsupported(
                 format!(
@@ -2979,6 +2982,63 @@ impl<'a> Lowering<'a> {
             args,
             span: self.wir_span(span)?,
         }))
+    }
+
+    fn lower_hud_subheader(
+        &mut self,
+        args: &[Expr],
+        span: Option<HirSpan>,
+    ) -> Result<wir::ActionId, IntegrationError> {
+        let [
+            visible_to,
+            text,
+            position,
+            sort_order,
+            color,
+            reevaluation,
+            spectators,
+        ] = args
+        else {
+            return Err(
+                self.unsupported("hudSubheader requires exactly seven bound arguments", span)
+            );
+        };
+        let visible_to = self.lower_hud_visible_to(visible_to)?;
+        let null_header = self.push_value(Value::Null);
+        let null_text = self.push_value(Value::Null);
+        let text_value = self.lower_value(text)?;
+        let text = self.push_call("customString", vec![text_value]);
+        let args = vec![
+            visible_to,
+            null_header,
+            text,
+            null_text,
+            self.lower_value(position)?,
+            self.lower_value(sort_order)?,
+            self.push_value(Value::Null),
+            self.lower_value(color)?,
+            self.push_value(Value::Null),
+            self.lower_value(reevaluation)?,
+            self.lower_value(spectators)?,
+        ];
+        Ok(self.wir.actions.push(Action::Call {
+            name: "createHudText".to_string(),
+            args,
+            span: self.wir_span(span)?,
+        }))
+    }
+
+    fn lower_hud_visible_to(&mut self, expr: &Expr) -> Result<wir::ValueId, IntegrationError> {
+        if let Expr::Call { name, args, .. } = expr {
+            if name == "getAllPlayers" && args.is_empty() {
+                let all_teams = self.push_value(Value::Enum {
+                    value_type: "Team".to_string(),
+                    value: "ALL".to_string(),
+                });
+                return Ok(self.push_call("allPlayers", vec![all_teams]));
+            }
+        }
+        self.lower_value(expr)
     }
 
     fn lower_receiver_action_call(

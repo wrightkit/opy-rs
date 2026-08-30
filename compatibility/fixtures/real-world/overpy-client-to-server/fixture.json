@@ -34,6 +34,14 @@
       "expectedReferenceStatus": "success",
       "kind": "minimized-regression",
       "provenance": "oracle:real-world/overpy-client-to-server/oracle.json; source path 55"
+    },
+    {
+      "id": "real-world/overpy-client-to-server/is-dummy",
+      "source": "regressions/is-dummy.opy",
+      "derivedFrom": "clientToServer.opy",
+      "expectedReferenceStatus": "success",
+      "kind": "minimized-regression",
+      "provenance": "oracle:real-world/overpy-client-to-server/oracle.json; source path 42"
     }
   ]
 }
