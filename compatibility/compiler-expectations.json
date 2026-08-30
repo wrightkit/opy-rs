@@ -327,9 +327,9 @@
         "provenance:real-world/overpy-client-to-server/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The full real-world project remains outside the #38 compiler baseline and currently stops at a frontend parse gap.",
+      "note": "The chained ternary regression now lowers; the full real-world project remains outside the #38 compiler baseline and currently stops at the next unsupported member (`isDummy`).",
       "failureClass": "frontend",
-      "diagnosticCode": "parse-error"
+      "diagnosticCode": "unknown-member"
     },
     {
       "fixture": "real-world/overpy-cronch",
@@ -371,7 +371,7 @@
       "owner": "opy-rs#88",
       "note": "The full real-world project now passes the implicit-concatenation boundary from #101; it remains outside the #38 compiler baseline at the separate unsupported conditional-value expression.",
       "failureClass": "frontend",
-      "diagnosticCode": "parse-error"
+      "diagnosticCode": "unknown-value"
     },
     {
       "fixture": "real-world/overpy-meipocalypse",

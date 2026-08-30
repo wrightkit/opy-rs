@@ -29,6 +29,18 @@ the v2 consumer rejects protocol major 1 for the same reason.
 The producer emits `2.0.0`, and the opy-rs HIR parser validates major `2`.
 The v1 and v2 grammars are not silently accepted under one version.
 
+## Additive expression node
+
+HIR v2 adds the `conditional` expression node without changing the retained
+v1 baseline:
+
+| Kind | Fields | Meaning |
+| --- | --- | --- |
+| `conditional` | `thenValue`, `condition`, `elseValue`, `span` | Conditional value `thenValue if condition else elseValue`; chained forms are right-associative. |
+
+The condition is parsed as an `or` expression, and the else branch accepts
+another conditional value.
+
 ## Consumer migration
 
 Every external `wright/opy-hir` consumer must migrate its protocol gate and

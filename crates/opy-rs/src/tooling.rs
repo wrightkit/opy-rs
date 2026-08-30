@@ -592,6 +592,16 @@ impl SemanticModel {
                 Self::collect_expr(left, sites);
                 Self::collect_expr(right, sites);
             }
+            HirExpr::Conditional {
+                then_value,
+                condition,
+                else_value,
+                ..
+            } => {
+                Self::collect_expr(then_value, sites);
+                Self::collect_expr(condition, sites);
+                Self::collect_expr(else_value, sites);
+            }
             HirExpr::Unary { operand, .. } => Self::collect_expr(operand, sites),
             HirExpr::Index { array, index, .. } => {
                 Self::collect_expr(array, sites);

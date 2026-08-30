@@ -1019,6 +1019,25 @@ impl Lowerer {
                 right: Box::new(self.lower_expr(right, macro_params, CallPosition::Value)),
                 span: Some(span.into()),
             },
+            Expr::Conditional {
+                then_value,
+                condition,
+                else_value,
+                span,
+            } => HirExpr::Conditional {
+                then_value: Box::new(self.lower_expr(
+                    then_value,
+                    macro_params,
+                    CallPosition::Value,
+                )),
+                condition: Box::new(self.lower_expr(condition, macro_params, CallPosition::Value)),
+                else_value: Box::new(self.lower_expr(
+                    else_value,
+                    macro_params,
+                    CallPosition::Value,
+                )),
+                span: Some((*span).into()),
+            },
             Expr::Unary { op, operand, span } => HirExpr::Unary {
                 op: op.clone(),
                 operand: Box::new(self.lower_expr(operand, macro_params, CallPosition::Value)),

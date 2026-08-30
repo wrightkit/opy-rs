@@ -69,6 +69,7 @@ const EXPR_KINDS: &[&str] = &[
     "macroCall",
     "macroParam",
     "binary",
+    "conditional",
     "unary",
     "index",
     "format",
@@ -730,6 +731,16 @@ fn for_each_expr<'a>(expr: &'a Expr, f: &mut impl FnMut(&'a Expr)) {
             for_each_expr(left, f);
             for_each_expr(right, f);
         }
+        Expr::Conditional {
+            then_value,
+            condition,
+            else_value,
+            ..
+        } => {
+            for_each_expr(then_value, f);
+            for_each_expr(condition, f);
+            for_each_expr(else_value, f);
+        }
         Expr::Unary { operand, .. } => for_each_expr(operand, f),
         Expr::Index { array, index, .. } => {
             for_each_expr(array, f);
@@ -881,7 +892,19 @@ fn check_expr(value: &Value) -> Result<(), HirError> {
         return Err(unsupported_node(kind, object));
     }
     for field in [
-        "x", "y", "z", "player", "receiver", "left", "right", "operand", "array", "index",
+        "x",
+        "y",
+        "z",
+        "player",
+        "receiver",
+        "left",
+        "right",
+        "operand",
+        "array",
+        "index",
+        "thenValue",
+        "condition",
+        "elseValue",
     ] {
         if let Some(child) = object.get(field) {
             check_expr(child)?;

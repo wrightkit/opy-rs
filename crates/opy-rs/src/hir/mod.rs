@@ -62,6 +62,7 @@ impl Program {
 mod tests {
     use serde_json::json;
 
+    use super::parse_value;
     use super::validate::check_envelope;
 
     #[test]
@@ -77,5 +78,38 @@ mod tests {
         });
         let error = check_envelope(&v1).expect_err("v1 payload must not enter the v2 parser");
         assert_eq!(error.code(), "incompatible-protocol");
+    }
+
+    #[test]
+    fn unknown_conditional_condition_kind_preserves_unsupported_node_span() {
+        let error = parse_value(json!({
+            "protocol": { "name": "wright/opy-hir", "version": "2.0.0" },
+            "rules": [{
+                "event": { "args": [] },
+                "conditions": [],
+                "actions": [{
+                    "kind": "expr",
+                    "expr": {
+                        "kind": "conditional",
+                        "thenValue": { "kind": "number", "value": 1 },
+                        "condition": {
+                            "kind": "future-expression",
+                            "span": {
+                                "file": 0,
+                                "start": { "line": 4, "col": 12 },
+                                "end": { "line": 4, "col": 20 }
+                            }
+                        },
+                        "elseValue": { "kind": "number", "value": 0 }
+                    }
+                }]
+            }]
+        }))
+        .expect_err("unknown kinds nested in conditional conditions must be rejected");
+
+        assert_eq!(error.code(), "unsupported-node");
+        assert_eq!(error.message(), "unsupported node kind 'future-expression'");
+        assert_eq!(error.span().unwrap().start.line, 4);
+        assert_eq!(error.span().unwrap().start.col, 12);
     }
 }

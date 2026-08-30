@@ -328,6 +328,12 @@ pub enum Expr {
         right: Box<Expr>,
         span: Span,
     },
+    Conditional {
+        then_value: Box<Expr>,
+        condition: Box<Expr>,
+        else_value: Box<Expr>,
+        span: Span,
+    },
     Unary {
         op: String,
         operand: Box<Expr>,
@@ -362,6 +368,7 @@ impl Expr {
             | Expr::Member { span, .. }
             | Expr::Index { span, .. }
             | Expr::Binary { span, .. }
+            | Expr::Conditional { span, .. }
             | Expr::Unary { span, .. } => *span,
         }
     }

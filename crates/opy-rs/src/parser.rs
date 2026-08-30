@@ -1162,7 +1162,32 @@ impl Parser<'_> {
     // ---- expressions ----
 
     fn parse_expr(&mut self) -> Result<Expr, ()> {
-        self.parse_or()
+        let then_value = self.parse_or()?;
+        if !self.is_ident("if") {
+            return Ok(then_value);
+        }
+
+        self.advance();
+        let condition = self.parse_or()?;
+        if !self.is_ident("else") {
+            self.error_at_current("expected `else` in conditional expression".to_string());
+            return Err(());
+        }
+        self.advance();
+        // Conditional expressions are right-associative, so a chained form
+        // such as `a if c else b if d else e` groups at the else branch.
+        let else_value = self.parse_expr()?;
+        let span = Span::new(
+            then_value.span().file,
+            then_value.span().start,
+            else_value.span().end,
+        );
+        Ok(Expr::Conditional {
+            then_value: Box::new(then_value),
+            condition: Box::new(condition),
+            else_value: Box::new(else_value),
+            span,
+        })
     }
 
     fn parse_or(&mut self) -> Result<Expr, ()> {
@@ -1566,10 +1591,10 @@ impl Parser<'_> {
                         return Err(());
                     }
                     self.advance();
-                    let iterable = self.parse_expr()?;
+                    let iterable = self.parse_or()?;
                     let condition = if self.is_ident("if") {
                         self.advance();
-                        Some(Box::new(self.parse_expr()?))
+                        Some(Box::new(self.parse_or()?))
                     } else {
                         None
                     };
@@ -2098,6 +2123,73 @@ mod tests {
         };
         assert_eq!(inner, "*");
         assert!(matches!(left.as_ref(), Expr::Number { .. }));
+    }
+
+    #[test]
+    fn parses_right_associative_conditional_expressions() {
+        let program = parse_ok(
+            "rule \"r\":\n    @Event global\n    debug(1 if true else 2 if false else 3)\n",
+        );
+        let RuleEntry::Rule(rule) = &program.rules[0] else {
+            panic!("expected a rule");
+        };
+        let Stmt::Expr { expr, .. } = &rule.actions[0] else {
+            panic!("expected an expression statement");
+        };
+        let Expr::Call { args, .. } = expr else {
+            panic!("expected a call");
+        };
+        let Expr::Conditional {
+            then_value,
+            condition,
+            else_value,
+            span,
+        } = &args[0].value
+        else {
+            panic!("expected a conditional expression");
+        };
+        assert!(matches!(then_value.as_ref(), Expr::Number { value, .. } if *value == 1.0));
+        assert!(matches!(condition.as_ref(), Expr::Bool { value: true, .. }));
+        assert!(matches!(
+            else_value.as_ref(),
+            Expr::Conditional { then_value, condition, else_value, .. }
+                if matches!(then_value.as_ref(), Expr::Number { value, .. } if *value == 2.0)
+                    && matches!(condition.as_ref(), Expr::Bool { value: false, .. })
+                    && matches!(else_value.as_ref(), Expr::Number { value, .. } if *value == 3.0)
+        ));
+        assert_eq!(span.start.line, 3);
+        assert_eq!(span.start.col, 11);
+    }
+
+    #[test]
+    fn parses_parenthesized_nested_conditional_and_rejects_missing_else() {
+        let program = parse_ok(
+            "rule \"r\":\n    @Event global\n    debug((1 if true else 2) if false else 3)\n",
+        );
+        let RuleEntry::Rule(rule) = &program.rules[0] else {
+            panic!("expected a rule");
+        };
+        let Stmt::Expr { expr, .. } = &rule.actions[0] else {
+            panic!("expected an expression statement");
+        };
+        let Expr::Call { args, .. } = expr else {
+            panic!("expected a call");
+        };
+        assert!(matches!(
+            &args[0].value,
+            Expr::Conditional {
+                then_value,
+                condition,
+                else_value,
+                ..
+            } if matches!(then_value.as_ref(), Expr::Conditional { .. })
+                && matches!(condition.as_ref(), Expr::Bool { value: false, .. })
+                && matches!(else_value.as_ref(), Expr::Number { value, .. } if *value == 3.0)
+        ));
+
+        let errors = parse_err("rule \"r\":\n    @Event global\n    debug(1 if true)\n");
+        assert_eq!(errors[0].code, "parse-error");
+        assert!(errors[0].message.contains("expected `else`"));
     }
 
     #[test]

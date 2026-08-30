@@ -669,6 +669,13 @@ pub enum Expr {
         #[serde(skip_serializing_if = "Option::is_none")]
         span: Option<Span>,
     },
+    Conditional {
+        then_value: Box<Expr>,
+        condition: Box<Expr>,
+        else_value: Box<Expr>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        span: Option<Span>,
+    },
     Unary {
         op: String,
         operand: Box<Expr>,
@@ -725,6 +732,7 @@ impl Expr {
             | Expr::MacroCall { span, .. }
             | Expr::MacroParam { span, .. }
             | Expr::Binary { span, .. }
+            | Expr::Conditional { span, .. }
             | Expr::Unary { span, .. }
             | Expr::Index { span, .. }
             | Expr::Format { span, .. } => span.as_ref(),
@@ -756,6 +764,7 @@ impl Expr {
             Expr::MacroCall { .. } => "macroCall",
             Expr::MacroParam { .. } => "macroParam",
             Expr::Binary { .. } => "binary",
+            Expr::Conditional { .. } => "conditional",
             Expr::Unary { .. } => "unary",
             Expr::Index { .. } => "index",
             Expr::Format { .. } => "format",

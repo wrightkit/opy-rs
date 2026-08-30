@@ -398,7 +398,7 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         &mut cases,
         "real-world/overpy-santa",
         Some("parse-error"),
-        "reference accepts; the native frontend rejects the `do:` loop (baseline category 1a, evidence-prioritized, explicit rejection). Gap: reference accepts, native rejects (documented).",
+        "the chained conditional path resolves; the full project reaches the next unsupported postfix increment (`++`) at santa.opy:304. Gap: reference accepts, native rejects (documented).",
     );
     diagnostic(
         &mut cases,
@@ -416,7 +416,7 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         &mut cases,
         "real-world/overpy-client-to-server",
         Some("parse-error"),
-        "reference accepts; the native frontend rejects chained ternary (`a if c else b if d else e`) — a parse gap beyond the declared surface. Gap: reference accepts, native rejects (documented).",
+        "the chained ternary regression resolves; the full project reaches the next unsupported member (`isDummy`). Gap: reference accepts, native rejects (documented).",
     );
     diagnostic(
         &mut cases,

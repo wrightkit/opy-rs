@@ -382,7 +382,6 @@ Operators are opy-rs spellings for the semantics the source implementation parse
 * arithmetic: `+ - * / % **`;
 * comparison: `== != < <= > >=` (non-strict, Workshop semantics);
 * logical: `and or`, with `not` as a unary operator.
-
 The source implementation maps parsed OPY operator syntax onto these fixed spellings. The
 consumer treats `op` as an opaque string and validates it only structurally
 (§8).
