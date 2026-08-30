@@ -81,6 +81,42 @@
       ]
     },
     {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "hud-subheader"
+      ],
+      "id": "hudSubheader",
+      "kind": "action",
+      "params": [
+        {
+          "name": "visibleTo"
+        },
+        {
+          "name": "text"
+        },
+        {
+          "domain": "HudPosition",
+          "name": "position"
+        },
+        {
+          "name": "sortOrder"
+        },
+        {
+          "domain": "Color",
+          "name": "color"
+        },
+        {
+          "domain": "HudReeval",
+          "name": "reevaluation"
+        },
+        {
+          "default": "DEFAULT",
+          "domain": "SpecVisibility",
+          "name": "spectators"
+        }
+      ]
+    },
+    {
       "catalogId": "createBeamEffect",
       "evidence": [
         "generic-builtins"
@@ -601,6 +637,16 @@
         "receiver-calls"
       ],
       "id": "isAlive",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "isDummy",
+      "evidence": [
+        "is-dummy"
+      ],
+      "id": "isDummy",
       "kind": "memberValue",
       "params": [],
       "receiver": "Player"

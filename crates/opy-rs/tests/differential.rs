@@ -231,6 +231,18 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
     );
     resolve(
         &mut cases,
+        "synthetic/issue-113-is-dummy",
+        true,
+        "Issue #113 catalog-backed eventPlayer.isDummy() member predicate; canonical WIR lowering is constrained by the dedicated compiler test.",
+    );
+    resolve(
+        &mut cases,
+        "synthetic/issue-114-hud-subheader",
+        true,
+        "Issue #114 shared hudSubheader action; canonical WIR lowering is constrained by the dedicated compiler test.",
+    );
+    resolve(
+        &mut cases,
         "synthetic/issue-47-control-flow",
         false,
         "Issue #47 oracle-backed control-flow lowering probe; the frontend resolves the source while the compiler independently constrains canonical WIR against the pinned oracle.",
@@ -434,7 +446,7 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         &mut cases,
         "real-world/overpy-client-to-server",
         Some("parse-error"),
-        "the chained ternary regression resolves; the full project reaches the next unsupported member (`isDummy`). Gap: reference accepts, native rejects (documented).",
+        "the chained ternary and isDummy regressions resolve; the full project reaches the next unsupported member (`getHorizontalFacingAngle`). Gap: reference accepts, native rejects (documented).",
     );
     diagnostic(
         &mut cases,
