@@ -16,6 +16,13 @@
       "source": "aliases.opy"
     },
     {
+      "expect": "success",
+      "id": "hud-subheader",
+      "outputSha256": "6cfd12424fec4993266f49a7f19e27c0ae48fe1cfcdccc53bfc26a8e2d23bd4f",
+      "sha256": "3dc0cd70e945fa88ba0f1453eafa37c6397ea8182b31ae57561b1e2c216e587b",
+      "source": "hud-subheader.opy"
+    },
+    {
       "diagnosticContains": "Unknown function 'createHudText'",
       "expect": "failure",
       "id": "catalog-only-names",

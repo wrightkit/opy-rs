@@ -1,0 +1,18 @@
+{
+  "category": "synthetic",
+  "expectedStatus": "success",
+  "features": [
+    "hudSubheader special lowering",
+    "canonical HUD reevaluation and spectator visibility"
+  ],
+  "id": "synthetic/issue-114-hud-subheader",
+  "provenance": {
+    "kind": "minimized-regression",
+    "license": "AGPL-3.0-or-later",
+    "modifications": "WrightKit-authored minimized reproduction from wrightkit/opy-rs#114",
+    "origin": "wrightkit/opy-rs#114 acceptance reproduction",
+    "redistributable": true
+  },
+  "schemaVersion": 1,
+  "source": "source.opy"
+}

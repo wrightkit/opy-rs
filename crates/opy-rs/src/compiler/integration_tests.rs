@@ -4,6 +4,8 @@ mod issue_100_conditional;
 mod issue_101_implicit_string;
 #[path = "tests/issue_113_is_dummy.rs"]
 mod issue_113_is_dummy;
+#[path = "tests/issue_114_hud_subheader.rs"]
+mod issue_114_hud_subheader;
 #[path = "tests/issue_42_oracle.rs"]
 mod issue_42_oracle;
 #[path = "tests/issue_46_oracle.rs"]
