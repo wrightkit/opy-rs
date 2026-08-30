@@ -122,7 +122,7 @@ Reference: `889d9749d1def17f146548cbddb94ea1ab015847`.
 | `getRealPlayersInRadius`, `.getRealPlayersInViewAngle` | 🚧 Coming soon |
 | `getSign`, `getAllPlayers` | 🚧 Coming soon |
 | `hudHeader`, `hudSubtext` | 🚧 Coming soon |
-| `hudSubheader` | ✅ Supported |
+| `hudSubheader` | ✅ Bounded compiler slice |
 | `lerp`, `lineIntersectsSphere` | 🚧 Coming soon |
 | `print`, `.reverse`, `timeToString`, `.unique` | 🚧 Coming soon |
 
