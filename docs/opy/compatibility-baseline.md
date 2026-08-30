@@ -44,7 +44,7 @@ For each category the following dimensions are distinguished:
   (names, members, enums, call semantics);
 * **Compilation**: standalone compile/emission through the `workshop-rs`
 backend succeeds with reference-equivalent semantics. The bounded #35
-vertical slice is now evidenced through workshop-rs v0.1.1; the remaining
+vertical slice is now evidenced through workshop-rs v0.1.16; the remaining
 surface is **lowering-dependent** and stays inventory-only until later #8
 work;
 * **Tooling/analysis**: `check`/`analyze`/`lint`/`inspect` and language

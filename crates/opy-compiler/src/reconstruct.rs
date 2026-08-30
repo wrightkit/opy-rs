@@ -25,15 +25,14 @@
 //!   token), Workshop-spelled call names with no manifest source form
 //!   (`add`, `countOf`, `createBeamEffect`, …), enums outside the manifest's
 //!   declared domains, `Remove From Array` modifies, calls the frontend
-//!   lowers to dedicated nodes (`debug`, `print`, `append`, `vect`), and any
+//!   lowers to dedicated nodes (`append`, `vect`), and any
 //!   rule layout the frontend's deterministic re-lowering cannot reproduce
 //!   (non-leading initializer rules, out-of-table-order subroutine rules,
 //!   unsorted global slots, non-canonical subroutine indices).
-//! * `debug`/`print` actions, arrays, vectors, and `format` are emitted in
-//!   their OPY source forms (`debug(x)`, `print(x)`, `[...]`, `vect(x, y, z)`,
-//!   `"text".format(...)`) from the dedicated WIR nodes; they are reachable
-//!   from OPY-derived WIR and are covered by direct unit tests (no Workshop
-//!   text spells them).
+//! * Arrays, vectors, and `format` are emitted in their OPY source forms
+//!   (`[...]`, `vect(x, y, z)`, `"text".format(...)`) from the dedicated WIR
+//!   nodes. Debug and print lower to canonical Workshop calls and are therefore
+//!   outside this reconstruction surface.
 //!
 //! Pipeline: [`reconstruct`] validates the table layout, then emits the
 //! declarations (variables, subroutines), the `def` bodies, and the rules in
@@ -186,7 +185,7 @@ const BINARY_OPS: &[&str] = &[
 ];
 
 /// Call names the frontend lowers to dedicated WIR nodes (never `Call`s).
-const DEDICATED_ACTION_NAMES: &[&str] = &["debug", "print", "append"];
+const DEDICATED_ACTION_NAMES: &[&str] = &["append"];
 const DEDICATED_VALUE_NAMES: &[&str] = &["vect", "range", "chase"];
 
 struct Emitter<'a> {
@@ -1031,20 +1030,6 @@ impl<'a> Emitter<'a> {
                      (the OPY `for` form binds a global variable)",
                     *span,
                 );
-            }
-            Action::Debug { value, span } => {
-                self.out.push_str(&indent);
-                self.out.push_str("debug(");
-                self.emit_value(*value);
-                self.out.push_str(")\n");
-                let _ = span;
-            }
-            Action::Print { message, span } => {
-                self.out.push_str(&indent);
-                self.out.push_str("print(");
-                self.emit_value(*message);
-                self.out.push_str(")\n");
-                let _ = span;
             }
             Action::Call { name, args, span } => {
                 self.emit_call_action(name, args, &indent, *span);

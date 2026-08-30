@@ -1,7 +1,7 @@
 //! The first OPY-to-Workshop integration boundary.
 //!
 //! `opy-rs` remains a standalone OPY/HIR producer. This crate is the
-//! consumer-owned compiler layer: it pins the released `workshop-rs` v0.1.11
+//! consumer-owned compiler layer: it pins the released `workshop-rs` v0.1.16
 //! contract, checks the OPY manifest links against the canonical catalog, and
 //! lowers the supported OPY program structure into canonical WIR before
 //! validation and deterministic Workshop emission.
@@ -18,7 +18,7 @@ use workshop_rs::wir::{self, Action, Event, PlayerEventKind, Program, Value, Val
 pub mod reconstruct;
 
 /// The exact released dependency contract consumed by this crate.
-pub const WORKSHOP_RS_VERSION: &str = "0.1.11";
+pub const WORKSHOP_RS_VERSION: &str = "0.1.16";
 
 /// Version of the machine-readable compile report contract.
 pub const COMPILE_SCHEMA_VERSION: u32 = 1;
@@ -4108,7 +4108,7 @@ mod tests {
         assert_eq!(rule.span.unwrap().file.index(), 0);
         assert_eq!(rule.name_span.unwrap().start.line, 2);
         assert!(artifact.emitted.contains("Disable Inspector Recording;"));
-        assert_eq!(artifact.catalog_identity.implementation_version, "0.1.11");
+        assert_eq!(artifact.catalog_identity.implementation_version, "0.1.16");
     }
 
     #[test]
