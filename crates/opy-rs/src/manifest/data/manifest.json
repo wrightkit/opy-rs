@@ -606,6 +606,16 @@
       "receiver": "Player"
     },
     {
+      "catalogId": "isDummy",
+      "evidence": [
+        "is-dummy"
+      ],
+      "id": "isDummy",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
       "catalogId": "hasSpawned",
       "evidence": [
         "receiver-calls"

@@ -184,6 +184,13 @@
       "source": "is-game-in-progress.opy"
     },
     {
+      "expect": "success",
+      "id": "is-dummy",
+      "outputSha256": "17d965f38e60a2bd4cfd576d6570ac4de206ecdd7f891e29474975631be4e323",
+      "sha256": "e891870a4ecbd85a751380d8395eac7ab1b7949f01cebcd0bd0a376b43c77e1a",
+      "source": "is-dummy.opy"
+    },
+    {
       "expect": "failure",
       "id": "keyword-arguments-unsupported",
       "sha256": "2a4b1b11447c4c7be4e02eb39af2e35e9203e2c19cb1e52da6ecc652ee9af88e",

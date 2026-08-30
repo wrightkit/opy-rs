@@ -1,0 +1,33 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "rule (\"isDummy residual\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    conditions {\n        Is Dummy Bot(Event Player) == True;\n    }\n}\n",
+    "workshopExact": "rule (\"isDummy residual\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    conditions {\n        Is Dummy Bot(Event Player) == True;\n    }\n}\n",
+    "workshopSha256": "17d965f38e60a2bd4cfd576d6570ac4de206ecdd7f891e29474975631be4e323"
+  },
+  "fixture": "synthetic/issue-113-is-dummy",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "e891870a4ecbd85a751380d8395eac7ab1b7949f01cebcd0bd0a376b43c77e1a"
+      }
+    ],
+    "sha256": "8d35f31898d4b3da9e3623163930e7fe2b433689982fde91f770fedff6a9b9a3",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}
