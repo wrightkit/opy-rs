@@ -913,6 +913,14 @@ impl MacroExpander {
                 body: Box::new(self.expand_expr(body, bindings)?),
                 span: *span,
             }),
+            Expr::Type { name, args, span } => Ok(Expr::Type {
+                name: name.clone(),
+                args: args
+                    .iter()
+                    .map(|arg| self.expand_expr(arg, bindings))
+                    .collect::<Result<Vec<_>, _>>()?,
+                span: *span,
+            }),
             Expr::Vector { x, y, z, span } => Ok(Expr::Vector {
                 x: Box::new(self.expand_expr(x, bindings)?),
                 y: Box::new(self.expand_expr(y, bindings)?),
@@ -3138,6 +3146,12 @@ impl<'a> Lowering<'a> {
             Expr::String { value, .. } => Value::String(value.clone()),
             Expr::Bool { value, .. } => Value::Bool(*value),
             Expr::Null { .. } => Value::Null,
+            Expr::Type { .. } => {
+                return Err(self.unsupported(
+                    "type expressions are only valid as createWorkshopSetting type arguments",
+                    span,
+                ));
+            }
             Expr::GlobalVar { name, .. } => {
                 let id = *self.globals.get(name).ok_or_else(|| {
                     self.unsupported(format!("unknown global variable '{name}'"), span)
@@ -3362,6 +3376,9 @@ impl<'a> Lowering<'a> {
                 }
             },
             Expr::Call { name, args, .. } => {
+                if name == "createWorkshopSetting" {
+                    return self.lower_workshop_setting(args, span);
+                }
                 if name == "vect" && args.len() == 3 {
                     Value::Vector {
                         x: self.lower_value(&args[0])?,
@@ -3457,6 +3474,68 @@ impl<'a> Lowering<'a> {
             .wir
             .values
             .push(ValueNode::new(value, self.wir_span(span)?)))
+    }
+
+    fn lower_workshop_setting(
+        &mut self,
+        args: &[Expr],
+        span: Option<HirSpan>,
+    ) -> Result<wir::ValueId, IntegrationError> {
+        let [
+            Expr::Type {
+                name: setting_type,
+                args: type_args,
+                span: type_span,
+            },
+            category,
+            setting_name,
+            default,
+            sort_order,
+        ] = args
+        else {
+            return Err(self.unsupported(
+                "createWorkshopSetting requires a type and four value arguments",
+                span,
+            ));
+        };
+
+        let catalog_name = match (setting_type.as_str(), type_args.as_slice()) {
+            ("bool", []) => "createWorkshopSettingBool",
+            ("int", [_, _]) => "createWorkshopSettingInt",
+            ("float", [_, _]) => "createWorkshopSettingFloat",
+            ("int", []) | ("float", []) => {
+                return Err(self.unsupported(
+                    format!("createWorkshopSetting type '{setting_type}' requires a numeric range"),
+                    type_span.or(span),
+                ));
+            }
+            _ => {
+                return Err(self.unsupported(
+                    format!("unsupported createWorkshopSetting type '{setting_type}'"),
+                    type_span.or(span),
+                ));
+            }
+        };
+
+        // OverPy uses an ideographic space for an empty setting category so
+        // the generated Workshop setting has a non-empty category value.
+        let category = match category {
+            Expr::String { value, .. } if value.is_empty() => {
+                self.push_value(Value::String("\u{3000}".to_string()))
+            }
+            _ => self.lower_value(category)?,
+        };
+        let mut lowered = vec![
+            category,
+            self.lower_value(setting_name)?,
+            self.lower_value(default)?,
+        ];
+        if let [minimum, maximum] = type_args.as_slice() {
+            lowered.push(self.lower_value(minimum)?);
+            lowered.push(self.lower_value(maximum)?);
+        }
+        lowered.push(self.lower_value(sort_order)?);
+        Ok(self.push_call(catalog_name, lowered))
     }
 
     fn wir_span(&self, span: Option<HirSpan>) -> Result<Option<WorkshopSpan>, IntegrationError> {
@@ -3767,6 +3846,11 @@ fn collect_implicit_expr(
         Expr::Lambda { body, .. } => {
             collect_implicit_expr(body, declared_globals, declared_players, globals, players)
         }
+        Expr::Type { args, .. } => {
+            for arg in args {
+                collect_implicit_expr(arg, declared_globals, declared_players, globals, players);
+            }
+        }
         Expr::Vector { x, y, z, .. } => {
             collect_implicit_expr(x, declared_globals, declared_players, globals, players);
             collect_implicit_expr(y, declared_globals, declared_players, globals, players);
@@ -4043,6 +4127,20 @@ fn debug_expr_text(expr: &Expr) -> String {
         | Expr::GlobalVar { name, .. }
         | Expr::Constant { name, .. }
         | Expr::MacroParam { name, .. } => name.clone(),
+        Expr::Type { name, args, .. } => {
+            if args.is_empty() {
+                name.clone()
+            } else {
+                format!(
+                    "{}[{}]",
+                    name,
+                    args.iter()
+                        .map(debug_expr_text)
+                        .collect::<Vec<_>>()
+                        .join(": ")
+                )
+            }
+        }
         Expr::Vector { x, y, z, .. } => format!(
             "vect({}, {}, {})",
             debug_expr_text(x),
