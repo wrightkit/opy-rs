@@ -1315,6 +1315,36 @@ mod tests {
     }
 
     #[test]
+    fn macro_expanded_string_can_concatenate_with_following_literal() {
+        let (pre, _) = preprocess(
+            "#!define PREFIX \"one\"\nrule \"r\":\n    debug(PREFIX\n        \"two\")\n",
+            "main.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let output = crate::parser::parse(&pre.tokens);
+        assert!(
+            output.errors.is_empty(),
+            "unexpected errors: {:?}",
+            output.errors
+        );
+        let program = output.program.expect("expanded source must parse");
+        let crate::cst::RuleEntry::Rule(rule) = &program.rules[0] else {
+            panic!("expected rule");
+        };
+        let crate::cst::Stmt::Expr { expr, .. } = &rule.actions[0] else {
+            panic!("expected expression statement");
+        };
+        let crate::cst::Expr::Call { args, .. } = expr else {
+            panic!("expected call");
+        };
+        assert!(matches!(
+            &args[0].value,
+            crate::cst::Expr::String { value, .. } if value == "onetwo"
+        ));
+    }
+
+    #[test]
     fn recursive_defines_expand_transitively() {
         let (pre, _) = preprocess(
             "#!define A 2\n#!define B A + 1\nrule \"r\":\n    x = B\n",

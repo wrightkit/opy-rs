@@ -355,9 +355,9 @@
         "provenance:real-world/overpy-crosshair/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The full real-world project remains outside the #38 compiler baseline and currently stops at a frontend parse gap.",
+      "note": "The full real-world project now passes the implicit-concatenation boundary from #101; it remains outside the #38 compiler baseline at the unsupported hudSubheader action, with the byte-string modifier tracked separately.",
       "failureClass": "frontend",
-      "diagnosticCode": "parse-error"
+      "diagnosticCode": "unknown-action"
     },
     {
       "fixture": "real-world/overpy-inputhud",
@@ -369,7 +369,7 @@
         "provenance:real-world/overpy-inputhud/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The full real-world project remains outside the #38 compiler baseline and currently stops at a frontend parse gap.",
+      "note": "The full real-world project now passes the implicit-concatenation boundary from #101; it remains outside the #38 compiler baseline at the separate unsupported conditional-value expression.",
       "failureClass": "frontend",
       "diagnosticCode": "parse-error"
     },
