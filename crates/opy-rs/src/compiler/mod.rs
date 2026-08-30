@@ -1162,6 +1162,13 @@ struct Lowering<'a> {
     subroutines: HashMap<String, wir::SubroutineId>,
     constants: HashMap<String, &'a Expr>,
     defined_subroutines: HashSet<wir::SubroutineId>,
+    array_bindings: Vec<ArrayBinding>,
+}
+
+#[derive(Debug, Clone)]
+struct ArrayBinding {
+    element: String,
+    index: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1187,6 +1194,7 @@ impl<'a> Lowering<'a> {
             subroutines: HashMap::new(),
             constants: HashMap::new(),
             defined_subroutines: HashSet::new(),
+            array_bindings: Vec::new(),
         })
     }
 
@@ -3146,6 +3154,23 @@ impl<'a> Lowering<'a> {
             Expr::String { value, .. } => Value::String(value.clone()),
             Expr::Bool { value, .. } => Value::Bool(*value),
             Expr::Null { .. } => Value::Null,
+            Expr::Local { name, .. } => {
+                let binding = self.array_bindings.iter().rev().find(|binding| {
+                    binding.element == *name || binding.index.as_deref() == Some(name)
+                });
+                match binding {
+                    Some(binding) if binding.element == *name => {
+                        return Ok(self.push_call("currentArrayElement", Vec::new()));
+                    }
+                    Some(_) => return Ok(self.push_call("currentArrayIndex", Vec::new())),
+                    None => {
+                        return Err(self.unsupported(
+                            format!("local '{name}' is not inside a supported array callback"),
+                            span,
+                        ));
+                    }
+                }
+            }
             Expr::Type { .. } => {
                 return Err(self.unsupported(
                     "type expressions are only valid as createWorkshopSetting type arguments",
@@ -3385,6 +3410,33 @@ impl<'a> Lowering<'a> {
                         y: self.lower_value(&args[1])?,
                         z: self.lower_value(&args[2])?,
                     }
+                } else if name == "sorted" {
+                    let (array, key) = match args.as_slice() {
+                        [array] => (
+                            self.lower_value(array)?,
+                            self.push_call("currentArrayElement", Vec::new()),
+                        ),
+                        [
+                            array,
+                            Expr::Lambda {
+                                params, body, span, ..
+                            },
+                        ] => {
+                            let array = self.lower_value(array)?;
+                            let key = self.lower_array_callback(params, body, *span)?;
+                            (array, key)
+                        }
+                        _ => {
+                            return Err(self.unsupported(
+                                "sorted requires an array and an optional lambda key",
+                                span,
+                            ));
+                        }
+                    };
+                    Value::Call {
+                        name: "sortedArray".to_string(),
+                        args: vec![array, key],
+                    }
                 } else {
                     let function = self
                         .compiler
@@ -3460,6 +3512,50 @@ impl<'a> Lowering<'a> {
                     args: vec![receiver, member],
                 }
             }
+            Expr::Comprehension {
+                element,
+                variable,
+                index,
+                iterable,
+                condition,
+                span: comprehension_span,
+                ..
+            } => {
+                if condition.is_some() && index.is_some() {
+                    return Err(self.unsupported(
+                        "comprehensions with both a filter and an index binder are not currently representable in canonical WIR",
+                        *comprehension_span,
+                    ));
+                }
+                let iterable = self.lower_value(iterable)?;
+                let binding = ArrayBinding {
+                    element: variable.clone(),
+                    index: index.clone(),
+                };
+                self.array_bindings.push(binding);
+                let predicate = condition
+                    .as_deref()
+                    .map(|condition| self.lower_value(condition));
+                let element = self.lower_value(element);
+                self.array_bindings.pop();
+                let element = element?;
+                let iterable = if let Some(predicate) = predicate {
+                    let predicate = predicate?;
+                    self.push_call("filteredArray", vec![iterable, predicate])
+                } else {
+                    iterable
+                };
+                Value::Call {
+                    name: "mappedArray".to_string(),
+                    args: vec![iterable, element],
+                }
+            }
+            Expr::Lambda { span, .. } => {
+                return Err(self.unsupported(
+                    "lambda expressions are only representable as supported array operation arguments",
+                    *span,
+                ));
+            }
             _ => {
                 return Err(self.unsupported(
                     format!(
@@ -3474,6 +3570,32 @@ impl<'a> Lowering<'a> {
             .wir
             .values
             .push(ValueNode::new(value, self.wir_span(span)?)))
+    }
+
+    fn lower_array_callback(
+        &mut self,
+        params: &[String],
+        body: &Expr,
+        span: Option<HirSpan>,
+    ) -> Result<wir::ValueId, IntegrationError> {
+        if !(1..=2).contains(&params.len()) {
+            return Err(self.unsupported(
+                "array callbacks require one element parameter and at most one index parameter",
+                span,
+            ));
+        }
+        if params.windows(2).any(|pair| pair[0] == pair[1]) {
+            return Err(
+                self.unsupported("array callback parameters must have distinct names", span)
+            );
+        }
+        self.array_bindings.push(ArrayBinding {
+            element: params[0].clone(),
+            index: params.get(1).cloned(),
+        });
+        let result = self.lower_value(body);
+        self.array_bindings.pop();
+        result
     }
 
     fn lower_workshop_setting(
@@ -4157,6 +4279,13 @@ fn debug_expr_text(expr: &Expr) -> String {
             receiver, member, ..
         } => format!("{}.{}", debug_expr_text(receiver), member),
         Expr::EventPlayer { .. } => "eventPlayer".to_string(),
+        Expr::Call { name, args, .. } if name == "sorted" && args.len() == 2 => {
+            format!(
+                "sorted({}, key = {})",
+                debug_expr_text(&args[0]),
+                debug_expr_text(&args[1])
+            )
+        }
         Expr::Call { name, args, .. } | Expr::MacroCall { name, args, .. } => format!(
             "{}({})",
             name,
