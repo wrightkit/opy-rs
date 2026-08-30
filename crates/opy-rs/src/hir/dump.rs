@@ -550,6 +550,19 @@ fn render_expr(expr: &Expr, out: &mut String) {
             out.push('$');
             out.push_str(name);
         }
+        Expr::Type { name, args, .. } => {
+            out.push_str(name);
+            if !args.is_empty() {
+                out.push('[');
+                for (index, arg) in args.iter().enumerate() {
+                    if index > 0 {
+                        out.push_str(": ");
+                    }
+                    render_expr(arg, out);
+                }
+                out.push(']');
+            }
+        }
         Expr::Binary {
             op, left, right, ..
         } => {

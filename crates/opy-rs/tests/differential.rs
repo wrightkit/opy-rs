@@ -439,8 +439,8 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
     diagnostic(
         &mut cases,
         "real-world/overpy-broken-weapons",
-        Some("parse-error"),
-        "reference accepts; the native frontend rejects the `createWorkshopSetting(float[0.5:10], …)` numeric-range type at parse (the settings surface itself is parsed structurally; key/type validation is lowering-dependent, #8). Gap: reference accepts, native rejects (documented).",
+        Some("unknown-value"),
+        "the numeric-range setting regression now resolves; the full project reaches the next unknown-value gap at `isAssemblingHeroes`. Gap: reference accepts, native rejects (documented).",
     );
     diagnostic(
         &mut cases,

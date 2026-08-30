@@ -1440,6 +1440,23 @@ impl Parser<'_> {
                 TokenKind::LBracket => {
                     self.advance();
                     let index = self.parse_expr()?;
+                    if self.peek_kind() == TokenKind::Colon {
+                        self.advance();
+                        let maximum = self.parse_expr()?;
+                        let end = self.expect(TokenKind::RBracket, "']'")?.span.end;
+                        let Expr::Name { name, span } = &base else {
+                            self.error_at_current(
+                                "a range type must start with a type name".to_string(),
+                            );
+                            return Err(());
+                        };
+                        base = Expr::Type {
+                            name: name.clone(),
+                            args: vec![index, maximum],
+                            span: Span::new(span.file, span.start, end),
+                        };
+                        continue;
+                    }
                     let end = match self.expect(TokenKind::RBracket, "']'") {
                         Ok(token) => token.span.end,
                         Err(()) => return Err(()),

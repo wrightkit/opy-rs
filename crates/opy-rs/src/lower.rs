@@ -982,6 +982,14 @@ impl Lowerer {
                 }
             }
             Expr::Name { name, span } => self.lower_name(name, *span, macro_params),
+            Expr::Type { name, args, span } => HirExpr::Type {
+                name: name.clone(),
+                args: args
+                    .iter()
+                    .map(|arg| self.lower_expr(arg, macro_params, CallPosition::Value))
+                    .collect(),
+                span: Some(span.into()),
+            },
             Expr::Member {
                 receiver,
                 member,
@@ -1210,6 +1218,9 @@ impl Lowerer {
         macro_params: &[String],
         position: CallPosition,
     ) -> HirExpr {
+        if name == "createWorkshopSetting" {
+            return self.lower_workshop_setting(args, span, macro_params);
+        }
         // Builtin identity and position checks run before the special forms
         // so that a misplaced `wait`/`vect` still diagnoses its position.
         if !self.macros.contains(name) && !self.subroutines.contains(name) && name != "sorted" {
@@ -1319,6 +1330,86 @@ impl Lowerer {
                     },
                 }
             }
+        }
+    }
+
+    fn lower_workshop_setting(
+        &mut self,
+        args: &[cst::CallArg],
+        span: Span,
+        macro_params: &[String],
+    ) -> HirExpr {
+        if !(4..=5).contains(&args.len()) {
+            self.error_at(
+                "invalid-arity",
+                format!(
+                    "function 'createWorkshopSetting' takes 4 or 5 arguments, received {}",
+                    args.len()
+                ),
+                span,
+            );
+            return HirExpr::Null { span: None };
+        }
+        for arg in args {
+            if let Some((keyword, keyword_span)) = &arg.keyword {
+                self.error_at(
+                    "keyword-unsupported",
+                    format!(
+                        "function 'createWorkshopSetting' does not accept keyword arguments ('{keyword}')"
+                    ),
+                    *keyword_span,
+                );
+            }
+        }
+
+        let setting_type = match &args[0].value {
+            Expr::Type {
+                name,
+                args: type_args,
+                span: type_span,
+            } => HirExpr::Type {
+                name: name.clone(),
+                args: type_args
+                    .iter()
+                    .map(|arg| self.lower_expr(arg, macro_params, CallPosition::Value))
+                    .collect(),
+                span: Some((*type_span).into()),
+            },
+            Expr::Name {
+                name,
+                span: type_span,
+            } if matches!(name.as_str(), "bool" | "int" | "float") => HirExpr::Type {
+                name: name.clone(),
+                args: Vec::new(),
+                span: Some((*type_span).into()),
+            },
+            other => {
+                self.error_at(
+                    "invalid-argument",
+                    "argument 1 of 'createWorkshopSetting' must be a setting type".to_string(),
+                    other.span(),
+                );
+                HirExpr::Null { span: None }
+            }
+        };
+        let mut lowered = Vec::with_capacity(5);
+        lowered.push(setting_type);
+        lowered.extend(
+            args[1..]
+                .iter()
+                .map(|arg| self.lower_expr(&arg.value, macro_params, CallPosition::Value)),
+        );
+        if args.len() == 4 {
+            lowered.push(HirExpr::Number {
+                value: 0.0,
+                text: "0".to_string(),
+                span: None,
+            });
+        }
+        HirExpr::Call {
+            name: "createWorkshopSetting".to_string(),
+            args: lowered,
+            span: Some(span.into()),
         }
     }
 

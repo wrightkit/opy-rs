@@ -510,6 +510,11 @@ impl SemanticModel {
             | HirExpr::MacroParam { .. }
             | HirExpr::StringModifier { .. }
             | HirExpr::Local { .. } => {}
+            HirExpr::Type { args, .. } => {
+                for arg in args {
+                    Self::collect_expr(arg, sites);
+                }
+            }
             HirExpr::GlobalVar { name, span } | HirExpr::Constant { name, span } => {
                 let kind = if matches!(expr, HirExpr::GlobalVar { .. }) {
                     SymbolKind::Global

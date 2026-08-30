@@ -26,3 +26,5 @@ mod issue_89_oracle;
 mod issue_93_frontend;
 #[path = "tests/issue_94_semantics.rs"]
 mod issue_94_semantics;
+#[path = "tests/issue_99_numeric_range.rs"]
+mod issue_99_numeric_range;

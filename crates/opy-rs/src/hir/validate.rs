@@ -68,6 +68,7 @@ const EXPR_KINDS: &[&str] = &[
     "receiverCall",
     "macroCall",
     "macroParam",
+    "type",
     "binary",
     "conditional",
     "unary",
@@ -745,6 +746,11 @@ fn for_each_expr<'a>(expr: &'a Expr, f: &mut impl FnMut(&'a Expr)) {
         Expr::Index { array, index, .. } => {
             for_each_expr(array, f);
             for_each_expr(index, f);
+        }
+        Expr::Type { args, .. } => {
+            for arg in args {
+                for_each_expr(arg, f);
+            }
         }
         Expr::Number { .. }
         | Expr::String { .. }
