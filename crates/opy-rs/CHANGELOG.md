@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7](https://github.com/wrightkit/opy-rs/compare/v0.1.6...v0.1.7) - 2026-08-30
+
+### Fixed
+
+- *(opy-compiler)* close semantic HIR gaps ([#98](https://github.com/wrightkit/opy-rs/pull/98))
+
+### Other
+
+- *(deps)* consume workshop-rs 0.1.16 contracts ([#108](https://github.com/wrightkit/opy-rs/pull/108))
+
 ## [0.1.5](https://github.com/wrightkit/opy-rs/compare/v0.1.4...v0.1.5) - 2026-08-29
 
 ### Other
