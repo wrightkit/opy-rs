@@ -135,6 +135,15 @@ impl Lexer {
                 ' ' | '\t' | '\r' => {
                     self.advance();
                 }
+                '\\' => {
+                    if !self.skip_line_continuation() {
+                        return Err(OpyError::at(
+                            "lex-error",
+                            "unexpected character '\\'",
+                            self.here(1),
+                        ));
+                    }
+                }
                 '#' => self.lex_hash()?,
                 '/' if self.peek(1) == Some('*') => self.skip_block_comment()?,
                 '"' | '\'' => self.lex_string(ch)?,
@@ -310,6 +319,22 @@ impl Lexer {
             "unterminated string literal",
             start,
         ))
+    }
+
+    fn skip_line_continuation(&mut self) -> bool {
+        let mut offset = 1;
+        while matches!(self.peek(offset), Some(' ' | '\r')) {
+            offset += 1;
+        }
+        if self.peek(offset) != Some('\n') {
+            return false;
+        }
+        for _ in 0..=offset {
+            self.advance();
+        }
+        self.line += 1;
+        self.col = 1;
+        true
     }
 
     fn lex_number(&mut self) -> OpyResult<()> {
@@ -617,5 +642,38 @@ mod tests {
         .unwrap_err();
         assert_eq!(error.code, "lex-error");
         assert!(error.span.is_some());
+    }
+
+    #[test]
+    fn backslash_line_continuation_is_not_a_token() {
+        let tokens = lex_ok("one \\\ntwo");
+        assert_eq!(
+            tokens.iter().map(|token| token.kind).collect::<Vec<_>>(),
+            vec![TokenKind::Ident, TokenKind::Ident, TokenKind::Eof]
+        );
+        assert_eq!(tokens[1].span.start.line, 2);
+        assert_eq!(tokens[1].span.start.col, 1);
+    }
+
+    #[test]
+    fn crlf_line_continuation_tracks_the_next_line() {
+        let tokens = lex_ok("one \\\r\ntwo");
+        assert_eq!(tokens[1].span.start, Position::new(2, 1));
+    }
+
+    #[test]
+    fn whitespace_before_line_ending_is_part_of_the_continuation() {
+        let tokens = lex_ok("one \\  \ntwo");
+        assert_eq!(tokens[1].span.start, Position::new(2, 1));
+    }
+
+    #[test]
+    fn non_newline_backslash_remains_a_lex_error() {
+        for text in ["one \\ two", "one \\", "one \\ \t\ntwo"] {
+            let error = lex(LexInput { file_id: 0, text }).unwrap_err();
+            assert_eq!(error.code, "lex-error");
+            assert_eq!(error.message, "unexpected character '\\'");
+            assert_eq!(error.span.unwrap().start, Position::new(1, 5));
+        }
     }
 }

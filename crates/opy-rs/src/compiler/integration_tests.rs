@@ -6,6 +6,8 @@ mod issue_101_implicit_string;
 mod issue_113_is_dummy;
 #[path = "tests/issue_114_hud_subheader.rs"]
 mod issue_114_hud_subheader;
+#[path = "tests/issue_115_string_continuation.rs"]
+mod issue_115_string_continuation;
 #[path = "tests/issue_42_oracle.rs"]
 mod issue_42_oracle;
 #[path = "tests/issue_46_oracle.rs"]

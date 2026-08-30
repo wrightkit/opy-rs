@@ -483,14 +483,14 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
     diagnostic(
         &mut cases,
         "real-world/ow1-emulator",
-        Some("lex-error"),
-        "reference fails on semantic member checks; the native frontend rejects earlier on backslash line continuation and implicit string concatenation (declared rejection, syntax/lexing notes) and on #!mainFile/#!defineMember (legacy-quirk/demand-driven). Gap: rejection reason differs (documented).",
+        Some("main-file-placement"),
+        "reference fails on semantic member checks; the native frontend now passes backslash line continuation and implicit string concatenation, then rejects the legacy #!mainFile placement (legacy-quirk/demand-driven). Gap: rejection reason differs (documented).",
     );
     diagnostic(
         &mut cases,
         "real-world/6v6-adjustments",
-        Some("lex-error"),
-        "reference fails on 'Unknown member '_hp_reset''; the native frontend rejects earlier on backslash line continuation (declared rejection, syntax/lexing notes) and #!mainFile/#!defineMember (legacy-quirk/demand-driven). Gap: rejection reason differs (documented).",
+        Some("main-file-placement"),
+        "reference fails on 'Unknown member '_hp_reset''; the native frontend now passes backslash line continuation, then rejects the legacy #!mainFile placement (legacy-quirk/demand-driven). Gap: rejection reason differs (documented).",
     );
 
     cases
