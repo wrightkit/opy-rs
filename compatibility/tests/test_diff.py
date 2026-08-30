@@ -215,7 +215,7 @@ class DiffTests(unittest.TestCase):
         with self.assertRaises(diff.DiffError):
             diff.require_result_shape(result, "compile result")
 
-    def test_compiler_semantic_wir_consumes_direct_evidence(self):
+    def test_compiler_semantic_wir_rejects_stale_direct_evidence(self):
         fixture = "synthetic/expressions-values"
         oracle = json.loads(
             (
@@ -245,10 +245,10 @@ class DiffTests(unittest.TestCase):
                 root,
                 diff.load_compiler_expectations(),
             )
-        self.assertEqual(report_result["status"], "known-gap")
+        self.assertEqual(report_result["status"], "regression")
         self.assertEqual(
             report_result["stages"][1]["outcome"],
-            "accepted-gap",
+            "regression",
         )
 
         result["compatibility"]["semanticWIR"]["referenceError"] = "invalid pinned Workshop"
@@ -278,7 +278,7 @@ class DiffTests(unittest.TestCase):
                 root,
                 diff.load_compiler_expectations(),
             )
-        self.assertEqual(report_result["status"], "regression")
+        self.assertEqual(report_result["status"], "match")
 
     def test_compiler_report_declares_compiler_stages(self):
         report = diff.build_compiler_report([])

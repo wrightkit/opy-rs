@@ -41,15 +41,10 @@ fn included_macro_call_reaches_canonical_workshop_output() {
         panic!("debug text must lower to a canonical value call");
     };
     assert_eq!(text_name, "customString");
-    let Value::Call { name, args } = &artifact.wir.values.get(text_args[1]).unwrap().value else {
-        panic!("macro result must lower to a canonical value call");
-    };
-    assert_eq!(name, "add");
-    assert_eq!(args.len(), 2);
-    assert!(args.iter().all(|id| matches!(
-        &artifact.wir.values.get(*id).unwrap().value,
-        Value::Number { value, .. } if *value == 1.0
-    )));
+    assert!(matches!(
+        &artifact.wir.values.get(text_args[1]).unwrap().value,
+        Value::Number { value, .. } if *value == 2.0
+    ));
 }
 
 #[test]
