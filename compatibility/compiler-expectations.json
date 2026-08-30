@@ -229,7 +229,7 @@
         "test:opy-compiler-issue-46-oracle::issue_46_unsupported_primitive_fails_with_stable_source_attribution"
       ],
       "owner": "workshop-rs#123",
-      "note": "The compiler deliberately rejects the dict-indexed primitive because canonical WIR has no lossless representation.",
+      "note": "The released workshop-rs v0.1.16 contract keeps AssignMember for canonical memberAccess targets only; this dictionary-indexed OPY primitive still has no lossless OPY-owned lowering and remains explicitly rejected.",
       "failureClass": "integration",
       "diagnosticCode": "unsupported-integration-surface"
     },
@@ -244,7 +244,7 @@
         "test:opy-compiler-issue-47-oracle::issue_47_nested_switch_break_is_source_attributed_when_not_representable"
       ],
       "owner": "workshop-rs#123",
-      "note": "The compiler deliberately rejects the nested conditional switch break because the released WIR has no equivalent carrier.",
+      "note": "The released workshop-rs v0.1.16 contract provides native Break, Skip, and Skip If calls, but this nested conditional switch-break shape still has no lossless OPY-owned lowering and remains explicitly rejected.",
       "failureClass": "integration",
       "diagnosticCode": "unsupported-integration-surface"
     },
@@ -259,7 +259,7 @@
         "test:opy-compiler-issue-47-oracle::issue_47_multiple_switch_breaks_are_not_silently_dropped"
       ],
       "owner": "workshop-rs#123",
-      "note": "The compiler deliberately rejects later-reachable multiple switch breaks because the released WIR has one canonical else carrier.",
+      "note": "The released workshop-rs v0.1.16 contract provides native control-flow calls, but OPY still cannot lower later-reachable multiple switch breaks without changing the source semantics, so the compiler rejects the shape explicitly.",
       "failureClass": "integration",
       "diagnosticCode": "unsupported-integration-surface"
     },
@@ -308,13 +308,14 @@
       "fixture": "real-world/overpy-cake",
       "nativeStatus": "success",
       "classification": "known-gap",
-      "comparison": "compiler-contract",
+      "comparison": "semantic-wir",
       "evidence": [
         "oracle:real-world/overpy-cake/oracle.json",
         "provenance:real-world/overpy-cake/fixture.json"
       ],
       "owner": "workshop-rs#124",
-      "note": "The pinned oracle cannot be parsed by the released workshop-rs catalog because `Visible To` is ambiguous across domains; workshop-rs#124 owns the canonical domain disambiguation before semantic-WIR parity can be evaluated."
+      "note": "The released workshop-rs v0.1.16 catalog resolves `Visible To` through the canonical call-signature domain, so the native WIR can be compared directly with the pinned oracle; remaining arithmetic and implicit-value lowering differences keep this real-world case an explicit compiler gap.",
+      "semanticEquivalent": false
     },
     {
       "fixture": "real-world/overpy-client-to-server",
@@ -458,14 +459,15 @@
     {
       "fixture": "synthetic/chase-condition-agentlab",
       "nativeStatus": "success",
-      "classification": "known-gap",
-      "comparison": "compiler-contract",
+      "classification": "match",
+      "comparison": "semantic-wir",
       "evidence": [
         "oracle:synthetic/chase-condition-agentlab/oracle.json",
         "provenance:synthetic/chase-condition-agentlab/fixture.json"
       ],
       "owner": "workshop-rs#124",
-      "note": "The pinned oracle cannot be parsed by the released workshop-rs catalog because `None` is ambiguous across domains; workshop-rs#124 owns the canonical domain disambiguation before semantic-WIR parity can be evaluated."
+      "note": "The released workshop-rs v0.1.16 catalog resolves `None` through the canonical call-signature domain, so the native WIR can be compared directly with the pinned oracle.",
+      "semanticEquivalent": true
     },
     {
       "fixture": "synthetic/chase-keywords",
