@@ -1517,13 +1517,7 @@ impl Parser<'_> {
                     span: token.span,
                 })
             }
-            TokenKind::String => {
-                let token = self.advance();
-                Ok(Expr::String {
-                    value: token.text.clone(),
-                    span: token.span,
-                })
-            }
+            TokenKind::String => self.parse_string_literal(),
             TokenKind::Ident => {
                 let token = self.advance();
                 if token.text == "lambda" {
@@ -1644,6 +1638,53 @@ impl Parser<'_> {
                 Err(())
             }
         }
+    }
+
+    /// Parse adjacent string literals as one source-language string value.
+    ///
+    /// Newlines are only ignored while looking for another literal inside a
+    /// delimiter group. Outside a group, a newline remains a statement
+    /// boundary, matching the bounded implicit-concatenation surface used by
+    /// the OverPy examples.
+    fn parse_string_literal(&mut self) -> Result<Expr, ()> {
+        let first = self.advance();
+        let mut value = first.text.clone();
+        let mut end = first.span.end;
+        loop {
+            let saved = self.pos;
+            if self.inside_delimiter_group() {
+                self.skip_newlines();
+            }
+            if self.peek_kind() != TokenKind::String || self.peek().span.file != first.span.file {
+                self.pos = saved;
+                break;
+            }
+            let next = self.advance();
+            value.push_str(&next.text);
+            end = next.span.end;
+        }
+        Ok(Expr::String {
+            value,
+            span: Span::new(first.span.file, first.span.start, end),
+        })
+    }
+
+    /// Return whether the current parser position is inside `()`, `[]`, or
+    /// `{}`. The token stream retains newlines, so this keeps multiline
+    /// implicit concatenation scoped to syntactic grouping without adding
+    /// parser state to every delimiter path.
+    fn inside_delimiter_group(&self) -> bool {
+        let mut depth = 0usize;
+        for token in &self.tokens[..self.pos] {
+            match token.kind {
+                TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace => depth += 1,
+                TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace => {
+                    depth = depth.saturating_sub(1)
+                }
+                _ => {}
+            }
+        }
+        depth != 0
     }
 
     fn parse_dict(&mut self) -> Result<Expr, ()> {
@@ -2210,6 +2251,55 @@ mod tests {
         };
         assert!(args[0].keyword.is_none(), "comparisons are not keywords");
         assert!(matches!(&args[0].value, Expr::Binary { .. }));
+    }
+
+    #[test]
+    fn adjacent_string_literals_concatenate_and_preserve_span() {
+        let program = parse_ok("rule \"r\":\n    @Event global\n    debug(\"one\" \"two\")\n");
+        let RuleEntry::Rule(rule) = &program.rules[0] else {
+            panic!("expected rule");
+        };
+        let Stmt::Expr { expr, .. } = &rule.actions[0] else {
+            panic!("expected expression statement");
+        };
+        let Expr::Call { args, .. } = expr else {
+            panic!("expected call");
+        };
+        let Expr::String { value, span } = &args[0].value else {
+            panic!("expected concatenated string");
+        };
+        assert_eq!(value, "onetwo");
+        assert_eq!(span.start.line, 3);
+        assert_eq!(span.start.col, 11);
+        assert_eq!(span.end.col, 22);
+    }
+
+    #[test]
+    fn multiline_adjacent_string_literals_concatenate_inside_group() {
+        let program =
+            parse_ok("rule \"r\":\n    @Event global\n    debug(\"one\"\n        \"two\")\n");
+        let RuleEntry::Rule(rule) = &program.rules[0] else {
+            panic!("expected rule");
+        };
+        let Stmt::Expr { expr, .. } = &rule.actions[0] else {
+            panic!("expected expression statement");
+        };
+        let Expr::Call { args, .. } = expr else {
+            panic!("expected call");
+        };
+        assert!(matches!(
+            &args[0].value,
+            Expr::String { value, .. } if value == "onetwo"
+        ));
+    }
+
+    #[test]
+    fn newline_outside_group_keeps_adjacent_literals_as_statements() {
+        let program = parse_ok("rule \"r\":\n    @Event global\n    \"one\"\n    \"two\"\n");
+        let RuleEntry::Rule(rule) = &program.rules[0] else {
+            panic!("expected rule");
+        };
+        assert_eq!(rule.actions.len(), 2);
     }
 
     #[test]
