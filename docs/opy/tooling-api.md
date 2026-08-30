@@ -1,9 +1,9 @@
 # opy-rs Tooling API
 
 The OPY source implementation exposes Workshop-independent checking and
-inspection through `crates/opy-rs` (`opy_rs::tooling`). The
-Workshop-dependent compiler is exposed by `crates/opy-compiler`, and
-`crates/opy-cli` provides both surfaces without requiring Node or OverPy.
+inspection and bounded Workshop compilation through `crates/opy-rs`.
+`crates/opy-cli` is a thin executable surface over those APIs and does not
+assemble frontend or compiler implementation crates.
 
 ## Pipeline contract
 
@@ -15,11 +15,18 @@ diagnostic when either the frontend or integration stage fails.
 
 ## Compile API
 
-The Workshop-dependent compiler is exposed by opy-compiler. Its
-Compiler::compile_source_report method runs the explicit source → HIR →
-canonical WIR → validation → localized Workshop pipeline and returns a
-versioned CompileReport. Compiler::compile_source remains available when a
-caller needs the typed CompilationArtifact.
+`opy_rs::Compiler::compile_source` is the ordinary embedding API. It runs the
+explicit source → HIR → canonical WIR → validation → Workshop pipeline and
+returns `opy_rs::CompileOutput`, which contains only emitted text and captured
+hook output. `compile_source_with_language` selects a catalog locale by name;
+callers do not need to construct a `workshop-rs` `Locale`.
+
+`Compiler::compile_source_report` and
+`Compiler::compile_source_report_with_language` return the versioned
+`CompileReport` contract with structured diagnostics. The explicit
+`*_with_locale` and `compile_hir*` methods, `CompilationArtifact`, and
+`opy_rs::reconstruct` are advanced integration APIs for consumers that
+intentionally interoperate with canonical Workshop WIR/catalog types.
 
 The report schema version is 1. It contains compiler and catalog identities,
 compile status, exit code, failure class, source-attributed diagnostics, exact
@@ -29,7 +36,7 @@ the integration class. Normalized output removes line-ending and trailing
 presentation noise, while exact output preserves the emitted artifact.
 
 Compatibility evidence is produced by the isolated compatibility harness, not
-by the public compiler API. For semantic-WIR cases, the feature-gated internal
+by the ordinary compile API. For semantic-WIR cases, the feature-gated internal
 `opy-compat` target parses only the pinned reference Workshop text and compares
 it directly with the native lowered WIR through
 `workshop-rs::roundtrip::equivalent`. It writes harness-level

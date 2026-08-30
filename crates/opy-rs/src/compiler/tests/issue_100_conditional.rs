@@ -2,14 +2,12 @@
 
 use std::path::Path;
 
-use opy_compiler::Compiler;
-use opy_rs::hir::Expr;
+use crate::hir::Expr;
+use crate::{CompilationArtifact, Compiler};
 use workshop_rs::catalog::Locale;
 use workshop_rs::wir::Value;
 
-fn conditional_calls(
-    artifact: &opy_compiler::CompilationArtifact,
-) -> Vec<Vec<workshop_rs::wir::ValueId>> {
+fn conditional_calls(artifact: &CompilationArtifact) -> Vec<Vec<workshop_rs::wir::ValueId>> {
     (0..artifact.wir.values.len())
         .filter_map(|index| {
             let node = artifact
@@ -32,7 +30,7 @@ fn chained_conditional_lowers_to_right_associative_canonical_values() {
     .expect("the minimized regression must be readable");
     let artifact = Compiler::new()
         .expect("released Workshop contract must load")
-        .compile_source(&source, "source.opy", Path::new("."), &Locale::new("en-US"))
+        .compile_source_with_locale(&source, "source.opy", Path::new("."), &Locale::new("en-US"))
         .expect("chained conditional must lower");
 
     let calls = conditional_calls(&artifact);
@@ -71,10 +69,10 @@ fn chained_conditional_lowers_to_right_associative_canonical_values() {
 #[test]
 fn preprocessor_conditional_preserves_macro_argument_provenance() {
     let source = "#!define choose(value) value if value else 0\n\nglobalvar result\n\nrule \"r\":\n    @Event global\n    result = choose(1)\n";
-    let hir = opy_rs::compile(source, "source.opy", Path::new("."))
+    let hir = crate::compile(source, "source.opy", Path::new("."))
         .expect("macro-expanded conditional must parse");
     hir.validate().expect("conditional HIR must validate");
-    let round_trip = opy_rs::hir::parse_value(
+    let round_trip = crate::hir::parse_value(
         serde_json::to_value(&hir).expect("conditional HIR must serialize"),
     )
     .expect("conditional HIR must round-trip");
@@ -104,21 +102,21 @@ fn preprocessor_conditional_preserves_macro_argument_provenance() {
     assert_eq!(conditional_calls(&artifact).len(), 1);
 
     let invalid = "#!define broken(value) value if value\n\nglobalvar result\n\nrule \"r\":\n    @Event global\n    result = broken(1)\n";
-    let error = opy_rs::compile(invalid, "source.opy", Path::new("."))
+    let error = crate::compile(invalid, "source.opy", Path::new("."))
         .expect_err("missing else in a macro expansion must remain a parse error");
     assert_eq!(error.code, "parse-error");
     assert_eq!(error.span.unwrap().start.line, 7);
 }
 
-fn find_first_conditional(program: &opy_rs::hir::Program) -> &Expr {
+fn find_first_conditional(program: &crate::hir::Program) -> &Expr {
     for entry in &program.rules {
-        let opy_rs::hir::RuleEntry::Rule(rule) = entry else {
+        let crate::hir::RuleEntry::Rule(rule) = entry else {
             continue;
         };
         for statement in &rule.actions {
             let expression = match statement {
-                opy_rs::hir::Stmt::Expr { expr, .. }
-                | opy_rs::hir::Stmt::Assign { value: expr, .. } => expr,
+                crate::hir::Stmt::Expr { expr, .. }
+                | crate::hir::Stmt::Assign { value: expr, .. } => expr,
                 _ => continue,
             };
             if let Some(conditional) = find_conditional(expression) {

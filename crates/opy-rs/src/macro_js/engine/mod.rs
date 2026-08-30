@@ -8,7 +8,7 @@ pub(crate) mod quickjs_ng;
 use std::fmt;
 use std::time::Instant;
 
-use crate::limits::Limits;
+use super::limits::Limits;
 
 /// Result of a script evaluation: either the string completion value or a
 /// non-string value described by its ECMAScript `typeof` name.

@@ -67,8 +67,8 @@ opy-cli completion bash
 opy-cli version
 ```
 
-The Rust library surface lives in `crates/opy-rs`, while Workshop-dependent
-compilation lives in `crates/opy-compiler`. See the
+The Rust library surface, including the bounded Workshop compiler, lives in
+`crates/opy-rs`; `opy-cli` is the standalone executable surface. See the
 [tooling API reference](docs/opy/tooling-api.md) and
 [implementation role](docs/opy/implementation-role.md) for the durable boundary.
 

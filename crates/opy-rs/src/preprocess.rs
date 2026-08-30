@@ -17,7 +17,7 @@
 //! (OverPy 9.7.10 ABI, `src/compiler/tokenizer.ts`) is a script macro: the
 //! script path resolves root-relative at the define site (missing files are a
 //! `script-not-found` diagnostic, mirroring the reference's ENOENT failure),
-//! and each expansion runs the script through [`opy_macro_js::MacroRuntime`]
+//! and each expansion runs the script through [`crate::macro_js::MacroRuntime`]
 //! with the call-site arguments injected as `var <name>=<raw>;` declarations
 //! (the reference's `resolveMacro`). The string completion value is lexed
 //! back into the token stream at the call site, with the reference's
@@ -36,13 +36,13 @@
 //! Boundary: `__script__` macros expand at compile time through the runtime
 //! (source-supported); `#!postCompileHook` is recorded and executed only
 //! against the real Workshop output (lowering-dependent). The runtime's hook
-//! ABI is tested separately on synthetic content in `opy-macro-js` (see its
-//! `hooks` test suite).
+//! ABI is tested separately on synthetic content in the internal macro runtime
+//! module (see its `hooks` test suite).
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use opy_macro_js::{Limits, MacroArg, MacroError, MacroRuntime};
+use crate::macro_js::{Limits, MacroArg, MacroError, MacroRuntime};
 
 use crate::diag::{OpyError, OpyResult, Span};
 use crate::hir::types::{
@@ -967,7 +967,7 @@ impl Preprocessor {
             .map(|(param, tokens)| MacroArg::new(param.clone(), raw_arg_text(tokens)))
             .collect();
         // Resource limits mirror the pinned reference constants (1000 ms macro
-        // budget, 64 MiB memory, 512 KiB stack; see `opy_macro_js::Limits`).
+        // budget, 64 MiB memory, 512 KiB stack; see `crate::macro_js::Limits`).
         let runtime = MacroRuntime::new(Limits::default());
         let result = runtime
             .run_macro(&script.source, &macro_args, &script.path)

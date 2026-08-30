@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use opy_compiler::Compiler;
+use crate::Compiler;
 use workshop_rs::catalog::{Catalog, Locale};
 use workshop_rs::roundtrip::equivalent;
 
@@ -26,7 +26,7 @@ fn oracle_workshop(dir: &Path) -> String {
 fn assert_native_wir_equivalent(name: &str) {
     let dir = fixture_dir(name);
     let source = std::fs::read_to_string(dir.join("source.opy")).unwrap();
-    let hir = opy_rs::compile(&source, "source.opy", &dir).expect("fixture must resolve");
+    let hir = crate::compile(&source, "source.opy", &dir).expect("fixture must resolve");
     let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
     let catalog = Catalog::builtin().unwrap();
     let locale = Locale::new("en-US");
@@ -61,7 +61,7 @@ fn issue_47_multiple_switch_breaks_are_not_silently_dropped() {
     let compiler = Compiler::new().unwrap();
     let dir = fixture_dir("issue-47-switch-multiple-break");
     let source = std::fs::read_to_string(dir.join("source.opy")).unwrap();
-    let hir = opy_rs::compile(&source, "source.opy", &dir).unwrap();
+    let hir = crate::compile(&source, "source.opy", &dir).unwrap();
     let error = match compiler.compile_hir(&hir) {
         Ok(_) => panic!("multi-break switch must not be silently truncated"),
         Err(error) => error,
@@ -74,7 +74,7 @@ fn issue_47_multiple_switch_breaks_are_not_silently_dropped() {
 fn issue_47_invalid_do_while_placement_is_source_attributed() {
     let dir = fixture_dir("issue-47-do-while-invalid-placement");
     let source = std::fs::read_to_string(dir.join("source.opy")).unwrap();
-    let error = opy_rs::compile(&source, "source.opy", &dir)
+    let error = crate::compile(&source, "source.opy", &dir)
         .expect_err("invalid do-while placement must be rejected");
     assert_eq!(error.code, "do-while-placement");
     assert_eq!(error.span.unwrap().start.line, 6);
@@ -85,7 +85,7 @@ fn issue_47_nested_switch_break_is_source_attributed_when_not_representable() {
     let compiler = Compiler::new().unwrap();
     let dir = fixture_dir("issue-47-unsupported");
     let source = std::fs::read_to_string(dir.join("source.opy")).unwrap();
-    let hir = opy_rs::compile(&source, "source.opy", &dir).unwrap();
+    let hir = crate::compile(&source, "source.opy", &dir).unwrap();
     let error = match compiler.compile_hir(&hir) {
         Ok(_) => panic!("nested switch break unexpectedly lowered"),
         Err(error) => error,

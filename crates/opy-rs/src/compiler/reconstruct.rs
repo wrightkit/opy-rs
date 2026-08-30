@@ -45,7 +45,7 @@ use workshop_rs::catalog::{Catalog, Locale};
 use workshop_rs::source::Span;
 use workshop_rs::wir::{self, Action, Event, ModifyOp, Value};
 
-use opy_rs::manifest::{Function, FunctionKind, Manifest};
+use crate::manifest::{Function, FunctionKind, Manifest};
 
 /// A structured reconstruction diagnostic naming one non-representable WIR
 /// construct. Stable `code`, a human-readable `message`, and the offending

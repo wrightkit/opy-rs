@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use opy_compiler::{CompileFailureClass, CompileStatus, Compiler};
+use crate::{CompileFailureClass, CompileStatus, Compiler};
 use workshop_rs::catalog::Locale;
 
 #[test]
@@ -30,7 +30,7 @@ fn frontend_diagnostics_are_public_and_source_attributed() {
     let compiler = Compiler::new().expect("released Workshop contract must load");
 
     for (source_name, source, code) in cases {
-        let report = compiler.compile_source_report(
+        let report = compiler.compile_source_report_with_locale(
             source,
             source_name,
             Path::new("."),

@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use opy_compiler::Compiler;
+use crate::Compiler;
 use workshop_rs::catalog::{Catalog, Locale};
 use workshop_rs::roundtrip::equivalent;
 use workshop_rs::wir::Action;
@@ -24,10 +24,10 @@ fn oracle_workshop(dir: &Path) -> String {
         .to_string()
 }
 
-fn compile_fixture(name: &str) -> (opy_compiler::CompilationArtifact, workshop_rs::wir::Program) {
+fn compile_fixture(name: &str) -> (crate::CompilationArtifact, workshop_rs::wir::Program) {
     let dir = fixture_dir(name);
     let source = std::fs::read_to_string(dir.join("source.opy")).expect("source must be readable");
-    let hir = opy_rs::compile(&source, "source.opy", &dir).expect("fixture must resolve");
+    let hir = crate::compile(&source, "source.opy", &dir).expect("fixture must resolve");
     let artifact = Compiler::new()
         .expect("released workshop contract must load")
         .compile_hir(&hir)

@@ -7,7 +7,7 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use opy_compiler::Compiler;
+use opy_rs::Compiler;
 use serde::Serialize;
 use serde_json::Value;
 use workshop_rs::catalog::{Catalog, Locale};
@@ -74,7 +74,7 @@ fn run() -> Result<CompatibilityResult, String> {
     let compiler =
         Compiler::new().map_err(|error| format!("cannot initialize compiler: {error}"))?;
     let artifact = compiler
-        .compile_source(
+        .compile_source_with_locale(
             &source_text,
             &args.source.to_string_lossy(),
             &args.root,

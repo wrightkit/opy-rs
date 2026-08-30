@@ -17,8 +17,8 @@ import input_identity
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "compatibility" / "fixtures"
 COMPILER_EXPECTATIONS = ROOT / "compatibility" / "compiler-expectations.json"
-DEFAULT_RESULTS = ROOT / "target" / "opy-compiler-results"
-DEFAULT_REPORT = ROOT / "target" / "opy-compiler-report.json"
+DEFAULT_RESULTS = ROOT / "target" / "opy-rs-compiler-results"
+DEFAULT_REPORT = ROOT / "target" / "opy-rs-compiler-report.json"
 
 
 class NativeError(RuntimeError):

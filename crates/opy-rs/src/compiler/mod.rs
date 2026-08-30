@@ -1,21 +1,23 @@
-//! The first OPY-to-Workshop integration boundary.
+//! OPY-to-Workshop integration, kept behind the `opy-rs` library boundary.
 //!
-//! `opy-rs` remains a standalone OPY/HIR producer. This crate is the
-//! consumer-owned compiler layer: it pins the released `workshop-rs` v0.1.16
-//! contract, checks the OPY manifest links against the canonical catalog, and
-//! lowers the supported OPY program structure into canonical WIR before
-//! validation and deterministic Workshop emission.
+//! This module pins the released `workshop-rs` v0.1.16 contract, checks the OPY
+//! manifest links against the canonical catalog, and lowers the supported OPY
+//! program structure into canonical WIR before validation and deterministic
+//! Workshop emission.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use opy_rs::hir::{self, Expr, RuleEntry, Span as HirSpan, Stmt, SwitchArm, default_var_index};
-use opy_rs::manifest::{FunctionKind, Manifest};
+use crate::hir::{self, Expr, RuleEntry, Span as HirSpan, Stmt, SwitchArm, default_var_index};
+use crate::manifest::{FunctionKind, Manifest};
 use serde::Serialize;
 use workshop_rs::catalog::{Catalog, CatalogIdentity, Kind, Locale};
 use workshop_rs::source::{Position as WorkshopPosition, SourceFile, Span as WorkshopSpan};
 use workshop_rs::wir::{self, Action, Event, PlayerEventKind, Program, Value, ValueNode};
 
 pub mod reconstruct;
+
+#[cfg(test)]
+mod integration_tests;
 
 /// The exact released dependency contract consumed by this crate.
 pub const WORKSHOP_RS_VERSION: &str = "0.1.16";
@@ -50,10 +52,10 @@ pub enum CompileFailureClass {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CompileDiagnostic {
-    pub severity: opy_rs::tooling::DiagnosticSeverity,
+    pub severity: crate::tooling::DiagnosticSeverity,
     pub code: String,
     pub message: String,
-    pub span: Option<opy_rs::tooling::SourceLocation>,
+    pub span: Option<crate::tooling::SourceLocation>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub script: Option<ScriptDiagnostic>,
 }
@@ -84,7 +86,7 @@ pub struct CompileReport {
 impl CompilerIdentity {
     fn current() -> Self {
         Self {
-            name: "opy-compiler",
+            name: "opy-rs",
             version: env!("CARGO_PKG_VERSION"),
         }
     }
@@ -133,17 +135,17 @@ impl IntegrationError {
         }
     }
 
-    fn post_compile_hook(error: opy_macro_js::MacroError, span: Option<HirSpan>) -> Self {
+    fn post_compile_hook(error: crate::macro_js::MacroError, span: Option<HirSpan>) -> Self {
         let message = error.to_string();
         let script = match error {
-            opy_macro_js::MacroError::Script(error) => Some(Box::new(ScriptDiagnostic {
+            crate::macro_js::MacroError::Script(error) => Some(Box::new(ScriptDiagnostic {
                 source_name: error.source_name,
                 line: error.line,
                 column: error.column,
                 stack: error.stack,
             })),
-            opy_macro_js::MacroError::InvalidResult { .. }
-            | opy_macro_js::MacroError::Internal(_) => None,
+            crate::macro_js::MacroError::InvalidResult { .. }
+            | crate::macro_js::MacroError::Internal(_) => None,
         };
         Self {
             diagnostic: IntegrationDiagnostic {
@@ -174,7 +176,7 @@ pub struct LinkReport {
 /// Cross-check every OPY manifest `catalogId` and domain identity against the
 /// canonical Workshop catalog. No local catalog copy or spelling allowlist is
 /// involved.
-pub fn cross_check_manifest(
+pub(crate) fn cross_check_manifest(
     manifest: &Manifest,
     catalog: &Catalog,
 ) -> Result<LinkReport, IntegrationError> {
@@ -343,9 +345,38 @@ impl Compiler {
         })
     }
 
-    /// Compile source and run a declared post-compile hook only after the
-    /// final Workshop emission has succeeded.
+    /// Compile source using the default `en-US` catalog locale.
+    ///
+    /// This is the ordinary embedding API. It returns Workshop text and does
+    /// not require callers to construct a `workshop-rs` locale or understand
+    /// canonical WIR types.
     pub fn compile_source(
+        &self,
+        source: &str,
+        main_path: &str,
+        root: &std::path::Path,
+    ) -> Result<CompileOutput, IntegrationError> {
+        self.compile_source_with_language(source, main_path, root, "en-US")
+    }
+
+    /// Compile source using a catalog locale name without exposing the
+    /// `workshop-rs` locale type to ordinary embedding callers.
+    pub fn compile_source_with_language(
+        &self,
+        source: &str,
+        main_path: &str,
+        root: &std::path::Path,
+        language: &str,
+    ) -> Result<CompileOutput, IntegrationError> {
+        self.compile_source_with_locale(source, main_path, root, &Locale::new(language))
+            .map(CompilationArtifact::into_output)
+    }
+
+    /// Compile source with an explicit canonical Workshop locale.
+    ///
+    /// This is an advanced integration API. Use [`Self::compile_source`] or
+    /// [`Self::compile_source_with_language`] for ordinary embedding.
+    pub fn compile_source_with_locale(
         &self,
         source: &str,
         main_path: &str,
@@ -355,15 +386,50 @@ impl Compiler {
         self.compile_source_internal(source, main_path, root, locale)
     }
 
-    /// Compile source into the versioned machine-readable result contract.
+    /// Compile source and return the canonical WIR artifact for advanced
+    /// integrations.
+    pub fn compile_source_artifact(
+        &self,
+        source: &str,
+        main_path: &str,
+        root: &std::path::Path,
+    ) -> Result<CompilationArtifact, IntegrationError> {
+        self.compile_source_with_locale(source, main_path, root, &Locale::new("en-US"))
+    }
+
+    /// Compile source into the versioned machine-readable result contract
+    /// using the default `en-US` catalog locale.
     pub fn compile_source_report(
+        &self,
+        source: &str,
+        main_path: &str,
+        root: &std::path::Path,
+    ) -> CompileReport {
+        self.compile_source_report_with_language(source, main_path, root, "en-US")
+    }
+
+    /// Compile source into the versioned machine-readable result contract
+    /// using a catalog locale name.
+    pub fn compile_source_report_with_language(
+        &self,
+        source: &str,
+        main_path: &str,
+        root: &std::path::Path,
+        language: &str,
+    ) -> CompileReport {
+        self.compile_source_report_with_locale(source, main_path, root, &Locale::new(language))
+    }
+
+    /// Compile source into the report contract with an explicit canonical
+    /// Workshop locale. This is an advanced integration API.
+    pub fn compile_source_report_with_locale(
         &self,
         source: &str,
         main_path: &str,
         root: &std::path::Path,
         locale: &Locale,
     ) -> CompileReport {
-        let outcome = opy_rs::compile_with_overlay_outcome(
+        let outcome = crate::compile_with_overlay_outcome(
             source,
             main_path,
             root,
@@ -376,7 +442,7 @@ impl Compiler {
                 .error
                 .expect("failed frontend compile has diagnostic");
             let diagnostic = CompileDiagnostic {
-                severity: opy_rs::tooling::DiagnosticSeverity::Error,
+                severity: crate::tooling::DiagnosticSeverity::Error,
                 code: error.code,
                 message: error.message,
                 span: error
@@ -410,7 +476,7 @@ impl Compiler {
         root: &std::path::Path,
         locale: &Locale,
     ) -> Result<CompilationArtifact, IntegrationError> {
-        let outcome = opy_rs::compile_with_overlay_outcome(
+        let outcome = crate::compile_with_overlay_outcome(
             source,
             main_path,
             root,
@@ -432,12 +498,12 @@ impl Compiler {
     fn compile_hir_with_locale_and_hook(
         &self,
         hir: &hir::Program,
-        hook: Option<opy_rs::PostCompileHookRecord>,
+        hook: Option<crate::PostCompileHookRecord>,
         locale: &Locale,
     ) -> Result<CompilationArtifact, IntegrationError> {
         let mut artifact = self.compile_hir_with_locale(hir, locale)?;
         if let Some(hook) = hook {
-            let runtime = opy_macro_js::MacroRuntime::new(opy_macro_js::Limits::default());
+            let runtime = crate::macro_js::MacroRuntime::new(crate::macro_js::Limits::default());
             let result = runtime
                 .run_hook(&hook.source, &artifact.emitted, &hook.script)
                 .map_err(|error| {
@@ -498,7 +564,7 @@ impl CompileReport {
 fn compile_diagnostic(error: IntegrationError, files: &[hir::SourceFile]) -> CompileDiagnostic {
     let diagnostic = error.diagnostic;
     CompileDiagnostic {
-        severity: opy_rs::tooling::DiagnosticSeverity::Error,
+        severity: crate::tooling::DiagnosticSeverity::Error,
         code: diagnostic.code,
         message: diagnostic.message,
         span: diagnostic
@@ -509,11 +575,11 @@ fn compile_diagnostic(error: IntegrationError, files: &[hir::SourceFile]) -> Com
 }
 
 fn source_location_from_file_records(
-    span: opy_rs::diag::Span,
-    files: &[opy_rs::preprocess::FileRecord],
-) -> Option<opy_rs::tooling::SourceLocation> {
+    span: crate::diag::Span,
+    files: &[crate::preprocess::FileRecord],
+) -> Option<crate::tooling::SourceLocation> {
     let path = files.iter().find(|file| file.id == span.file)?.path.clone();
-    Some(opy_rs::tooling::SourceLocation {
+    Some(crate::tooling::SourceLocation {
         file_id: span.file,
         path,
         start: span.start,
@@ -524,13 +590,13 @@ fn source_location_from_file_records(
 fn source_location_from_hir(
     span: HirSpan,
     files: &[hir::SourceFile],
-) -> Option<opy_rs::tooling::SourceLocation> {
+) -> Option<crate::tooling::SourceLocation> {
     let path = files.iter().find(|file| file.id == span.file)?.path.clone();
-    Some(opy_rs::tooling::SourceLocation {
+    Some(crate::tooling::SourceLocation {
         file_id: span.file,
         path,
-        start: opy_rs::diag::Position::new(span.start.line, span.start.col),
-        end: opy_rs::diag::Position::new(span.end.line, span.end.col),
+        start: crate::diag::Position::new(span.start.line, span.start.col),
+        end: crate::diag::Position::new(span.end.line, span.end.col),
     })
 }
 
@@ -977,7 +1043,22 @@ impl MacroExpander {
     }
 }
 
-/// A validated WIR program and its emitted Workshop artifact.
+/// A source compile result for ordinary embedding callers.
+///
+/// The result contains only emitted text and hook output. Callers that need
+/// canonical WIR should use the explicit advanced artifact APIs instead.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompileOutput {
+    /// Workshop text after a declared post-compile hook, if any.
+    pub workshop: String,
+    /// Workshop text emitted before a declared post-compile hook.
+    pub emitted_workshop: String,
+    /// Console lines captured while running a declared post-compile hook.
+    pub hook_console_output: Vec<String>,
+}
+
+/// A validated WIR program and its emitted Workshop artifact for advanced
+/// integrations.
 pub struct CompilationArtifact {
     pub wir: Program,
     pub emitted: String,
@@ -986,7 +1067,17 @@ pub struct CompilationArtifact {
     pub hook_console_output: Vec<String>,
 }
 
-fn convert_settings(settings: opy_rs::hir::Settings) -> workshop_rs::settings::Settings {
+impl CompilationArtifact {
+    fn into_output(self) -> CompileOutput {
+        CompileOutput {
+            workshop: self.final_output,
+            emitted_workshop: self.emitted,
+            hook_console_output: self.hook_console_output,
+        }
+    }
+}
+
+fn convert_settings(settings: crate::hir::Settings) -> workshop_rs::settings::Settings {
     workshop_rs::settings::Settings {
         span: settings.span.map(convert_settings_span),
         children: settings
@@ -997,8 +1088,8 @@ fn convert_settings(settings: opy_rs::hir::Settings) -> workshop_rs::settings::S
     }
 }
 
-fn convert_settings_node(node: opy_rs::hir::SettingsNode) -> workshop_rs::settings::SettingsNode {
-    use opy_rs::hir::SettingsNode as SourceNode;
+fn convert_settings_node(node: crate::hir::SettingsNode) -> workshop_rs::settings::SettingsNode {
+    use crate::hir::SettingsNode as SourceNode;
     use workshop_rs::settings::{SettingsListElement, SettingsNode as TargetNode};
 
     match node {
@@ -4034,7 +4125,7 @@ fn modify_catalog_name_from_str(op: &str) -> Option<&'static str> {
     }
 }
 
-fn hir_span_from_diag(span: opy_rs::diag::Span) -> HirSpan {
+fn hir_span_from_diag(span: crate::diag::Span) -> HirSpan {
     HirSpan {
         file: span.file,
         start: hir::Position {
@@ -4064,7 +4155,7 @@ mod tests {
         COMPILE_SCHEMA_VERSION, CompileFailureClass, CompileStatus, Compiler, WORKSHOP_RS_VERSION,
         cross_check_manifest,
     };
-    use opy_rs::manifest::Manifest;
+    use crate::manifest::Manifest;
     use std::path::Path;
     use workshop_rs::catalog::{Catalog, Locale};
 
@@ -4080,14 +4171,14 @@ mod tests {
     #[test]
     fn compile_report_is_versioned_and_contains_reproducibility_identity() {
         let compiler = Compiler::new().unwrap();
-        let report = compiler.compile_source_report(
+        let report = compiler.compile_source_report_with_locale(
             "rule \"report\":\n    @Event global\n    disableInspector()\n",
             "report.opy",
             Path::new("."),
             &Locale::new("en-US"),
         );
         assert_eq!(report.schema_version, COMPILE_SCHEMA_VERSION);
-        assert_eq!(report.compiler.name, "opy-compiler");
+        assert_eq!(report.compiler.name, "opy-rs");
         assert_eq!(report.catalog.implementation_version, WORKSHOP_RS_VERSION);
         assert_eq!(report.compile.status, CompileStatus::Success);
         assert_eq!(report.compile.exit_code, 0);
@@ -4107,7 +4198,7 @@ mod tests {
     #[test]
     fn compile_report_preserves_frontend_failure_class_and_source_path() {
         let compiler = Compiler::new().unwrap();
-        let report = compiler.compile_source_report(
+        let report = compiler.compile_source_report_with_locale(
             "rule \"broken\":\n    @Event global\n    missing()\n",
             "broken.opy",
             Path::new("."),
@@ -4127,7 +4218,7 @@ mod tests {
     #[test]
     fn compile_report_preserves_integration_failure_class_and_source_path() {
         let compiler = Compiler::new().unwrap();
-        let report = compiler.compile_source_report(
+        let report = compiler.compile_source_report_with_locale(
             "globalvar A\nrule \"broken\":\n    @Event global\n    A[1][2] = 3\n",
             "broken.opy",
             Path::new("."),
@@ -4147,7 +4238,7 @@ mod tests {
     #[test]
     fn vertical_slice_preserves_source_files_spans_and_emits_workshop() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_rs::compile(
+        let hir = crate::compile(
             "globalvar A\nrule \"issue 35 integration\":\n    @Event global\n    A = 1\n    disableInspector()\n",
             "issue-35-integration.opy",
             Path::new("."),
@@ -4186,7 +4277,7 @@ mod tests {
     #[test]
     fn while_lowering_is_source_attributed() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_rs::compile(
+        let hir = crate::compile(
             "rule \"while\":\n    @Event global\n    while true:\n        disableInspector()\n",
             "while.opy",
             Path::new("."),
@@ -4208,7 +4299,7 @@ mod tests {
     #[test]
     fn structural_subroutines_lower_to_canonical_wir() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_rs::compile(
+        let hir = crate::compile(
             "globalvar score\nsubroutine showStatus\ndef showStatus():\n    @Name \"Friendly\"\n    @SuppressWarnings unusedVariable\n    disableInspector()\nrule \"caller\":\n    @Event global\n    showStatus()\n",
             "structure.opy",
             Path::new("."),
@@ -4250,7 +4341,7 @@ mod tests {
     #[test]
     fn player_event_filters_resolve_through_canonical_catalog() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_rs::compile(
+        let hir = crate::compile(
             "rule \"joined\":\n    @Event playerJoined\n    @Team 1\n    @Slot 2\n    disableInspector()\n",
             "filters.opy",
             Path::new("."),
@@ -4276,7 +4367,7 @@ mod tests {
     #[test]
     fn explicit_indices_are_reserved_before_deterministic_allocation() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_rs::compile(
+        let hir = crate::compile(
             "globalvar first\nglobalvar reserved 0\nglobalvar next\nrule \"indices\":\n    @Event global\n    disableInspector()\n",
             "indices.opy",
             Path::new("."),
@@ -4306,7 +4397,7 @@ mod tests {
     #[test]
     fn implicit_default_variables_use_reference_fixed_slots() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_rs::compile(
+        let hir = crate::compile(
             r#"
 globalvar timer
 globalvar extra 5
@@ -4374,7 +4465,7 @@ rule "implicit":
     #[test]
     fn implicit_default_variable_slot_collision_is_source_attributed() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_rs::compile(
+        let hir = crate::compile(
             "globalvar x 0\nrule \"collision\":\n    @Event global\n    x = 1\n    A = 2\n",
             "collision.opy",
             Path::new("."),
@@ -4392,7 +4483,7 @@ rule "implicit":
     #[test]
     fn implicit_default_player_variables_use_independent_reference_slots() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_rs::compile(
+        let hir = crate::compile(
             r#"
 playervar declaredPlayer
 
@@ -4447,7 +4538,7 @@ rule "implicit player variables":
     #[test]
     fn implicit_default_player_slot_collision_is_source_attributed() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_rs::compile(
+        let hir = crate::compile(
             "playervar declared 0\nrule \"collision\":\n    @Event eachPlayer\n    eventPlayer.A = 1\n",
             "player-collision.opy",
             Path::new("."),
@@ -4470,7 +4561,7 @@ rule "implicit player variables":
     #[test]
     fn power_augmented_assignment_lowers_from_source() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_rs::compile(
+        let hir = crate::compile(
             "globalvar g\nrule \"power\":\n    @Event global\n    g = 2\n    g **= 3\n",
             "power.opy",
             Path::new("."),
@@ -4488,7 +4579,7 @@ rule "implicit player variables":
     #[test]
     fn opy_hex_numbers_are_normalized_at_the_wir_boundary() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_rs::compile(
+        let hir = crate::compile(
             "globalvar large = 0x124BC\nglobalvar small = 0x124\nglobalvar scientific = 1e10\n",
             "numbers.opy",
             Path::new("."),
@@ -4517,7 +4608,7 @@ rule "implicit player variables":
     #[test]
     fn unsupported_primitive_lowering_is_stable_and_source_attributed() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_rs::compile(
+        let hir = crate::compile(
             "globalvar total\nrule \"negative\":\n    @Event global\n    total = {\"a\": 1, \"b\": 2}[\"a\"]\n",
             "negative.opy",
             Path::new("."),
@@ -4535,7 +4626,7 @@ rule "implicit player variables":
     #[test]
     fn auto_allocation_fills_free_slots_below_early_explicit_indices() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_rs::compile(
+        let hir = crate::compile(
             r#"
 globalvar reserved 5
 globalvar auto1
@@ -4576,7 +4667,7 @@ rule "allocation":
     #[test]
     fn power_expressions_lower_through_the_canonical_contract() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_rs::compile(
+        let hir = crate::compile(
             "globalvar a = [2, 4]\nglobalvar out\nrule \"power\":\n    @Event global\n    out = a ** 2\n    a **= 2\n    a[0] **= 2\n",
             "power.opy",
             Path::new("."),
@@ -4603,7 +4694,7 @@ rule "allocation":
     #[test]
     fn unsupported_rule_metadata_is_explicit_and_source_attributed() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_rs::compile(
+        let hir = crate::compile(
             "rule \"metadata\":\n    @Event global\n    @NewPage \"section\"\n    disableInspector()\n",
             "metadata.opy",
             Path::new("."),
@@ -4623,7 +4714,7 @@ rule "allocation":
         let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../compatibility/fixtures/synthetic/issue-40-structural");
         let source = std::fs::read_to_string(fixture.join("source.opy")).unwrap();
-        let hir = opy_rs::compile(&source, "source.opy", &fixture).unwrap();
+        let hir = crate::compile(&source, "source.opy", &fixture).unwrap();
         let artifact = compiler.compile_hir(&hir).unwrap();
         let oracle: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(fixture.join("oracle.json")).unwrap())
@@ -4678,7 +4769,7 @@ rule "allocation":
     #[test]
     fn assignments_and_modifications_lower_to_canonical_wir() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_rs::compile(
+        let hir = crate::compile(
             r#"
 globalvar g1
 globalvar g2
@@ -4806,7 +4897,7 @@ rule "assignments":
     #[test]
     fn expressions_and_values_lower_to_canonical_wir() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_rs::compile(
+        let hir = crate::compile(
             r#"
 enum Consts:
     BASE
@@ -4848,7 +4939,7 @@ rule "expressions":
     #[test]
     fn pass_is_supported_as_source_level_noop() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_rs::compile(
+        let hir = crate::compile(
             r#"
 subroutine emptySub
 
@@ -4881,7 +4972,7 @@ rule "empty rule":
     #[test]
     fn variable_initializers_synthesize_initialize_rules() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_rs::compile(
+        let hir = crate::compile(
             r#"
 globalvar j = 5
 globalvar h = 0
@@ -4946,7 +5037,7 @@ rule "main":
         let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../compatibility/fixtures/synthetic/settings");
         let source = std::fs::read_to_string(fixture.join("source.opy")).unwrap();
-        let hir = opy_rs::compile(&source, "source.opy", &fixture).unwrap();
+        let hir = crate::compile(&source, "source.opy", &fixture).unwrap();
         let artifact = compiler.compile_hir(&hir).unwrap();
         let oracle: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(fixture.join("oracle.json")).unwrap())
@@ -4977,7 +5068,7 @@ rule "main":
     #[test]
     fn unsupported_locale_has_no_fabricated_source_span() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_rs::compile(
+        let hir = crate::compile(
             "#!translations en\nrule \"r\":\n    @Event global\n    pass\n",
             "locale.opy",
             Path::new("."),
@@ -4994,7 +5085,7 @@ rule "main":
     #[test]
     fn locale_selection_emits_catalog_localized_workshop() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_rs::compile(
+        let hir = crate::compile(
             "rule \"locale\":\n    @Event global\n    disableInspector()\n",
             "locale.opy",
             Path::new("."),
@@ -5010,7 +5101,7 @@ rule "main":
     #[test]
     fn unsupported_backend_directives_fail_at_their_source_anchor() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_rs::compile(
+        let hir = crate::compile(
             "#!replace0ByCapturePercentage\nrule \"r\":\n    @Event global\n    pass\n",
             "directives.opy",
             Path::new("."),
@@ -5027,7 +5118,7 @@ rule "main":
     #[test]
     fn optimizer_directives_remain_non_blocking_presentation_controls() {
         let compiler = Compiler::new().unwrap();
-        let hir = opy_rs::compile(
+        let hir = crate::compile(
             "#!disableOptimizations\nrule \"r\":\n    @Event global\n    pass\n",
             "optimization.opy",
             Path::new("."),
@@ -5039,7 +5130,7 @@ rule "main":
     #[test]
     fn replacement_directive_records_are_checked_even_if_final_state_is_restored() {
         let compiler = Compiler::new().unwrap();
-        let mut hir = opy_rs::compile(
+        let mut hir = crate::compile(
             "#!replace0ByCapturePercentage\nrule \"r\":\n    @Event global\n    pass\n",
             "directives.opy",
             Path::new("."),
@@ -5057,7 +5148,7 @@ rule "main":
     #[test]
     fn active_replacement_state_is_checked_without_directive_history() {
         let compiler = Compiler::new().unwrap();
-        let mut hir = opy_rs::compile(
+        let mut hir = crate::compile(
             "#!replace0ByCapturePercentage\nrule \"r\":\n    @Event global\n    pass\n",
             "directives.opy",
             Path::new("."),
@@ -5076,10 +5167,10 @@ rule "main":
     #[test]
     fn post_compile_hook_receives_exact_emitted_workshop() {
         let compiler = Compiler::new().unwrap();
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../opy-rs/tests/fixtures/macros");
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/macros");
         let source = "#!postCompileHook \"hook.js\"\n\nrule \"setup\":\n    pass\n";
         let artifact = compiler
-            .compile_source(source, "hook.opy", &root, &Locale::new("en-US"))
+            .compile_source_with_locale(source, "hook.opy", &root, &Locale::new("en-US"))
             .unwrap();
         assert!(artifact.emitted.contains("rule (\"setup\")"));
         assert!(artifact.final_output.contains("rule (\"transformed\")"));
@@ -5089,10 +5180,14 @@ rule "main":
     #[test]
     fn post_compile_hook_failure_keeps_script_provenance_and_directive_anchor() {
         let compiler = Compiler::new().unwrap();
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../opy-rs/tests/fixtures/macros");
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/macros");
         let source = "#!postCompileHook \"hook-boom.js\"\n\nrule \"setup\":\n    pass\n";
-        let error = match compiler.compile_source(source, "hook.opy", &root, &Locale::new("en-US"))
-        {
+        let error = match compiler.compile_source_with_locale(
+            source,
+            "hook.opy",
+            &root,
+            &Locale::new("en-US"),
+        ) {
             Ok(_) => panic!("failing post-compile hook unexpectedly compiled"),
             Err(error) => error,
         };

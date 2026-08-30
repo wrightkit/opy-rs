@@ -6,17 +6,17 @@
 //! resolution, and lowering into the opy-rs-owned Opy HIR contract
 //! ([`hir::Program`]). Everything from source through the Opy HIR semantic
 //! model is Workshop-independent: source analysis never depends on `workshop-rs`,
-//! OverPy, or Node, and the integration boundary toward `workshop-rs` is
-//! documented rather than implemented here.
+//! OverPy, or Node. The bounded source-to-Workshop compiler is exposed from
+//! this same crate behind the explicit [`Compiler`] API.
 //!
 //! Pipeline: [`lexer::lex`] → [`preprocess::preprocess`] →
 //! [`parser::parse`] → [`lower::lower`] → Opy HIR ([`hir`]).
 //!
 //! OverPy-compatible `__script__("…")` macros execute at compile time through
-//! the bounded embedded runtime ([`opy_macro_js`]): script macros expand
+//! the bounded embedded macro runtime: script macros expand
 //! during preprocessing with the reference's argument-injection ABI, and
 //! resource limits mirror the pinned reference constants
-//! (`opy_macro_js::Limits::default()`). Script-macro expansion is
+//! (`macro_js::Limits::default()`). Script-macro expansion is
 //! compile-time behavior and is source-supported.
 //!
 //! `#!postCompileHook` is recognized, parsed, validated, and recorded only
@@ -26,15 +26,17 @@
 //! lowering-dependent (workshop-rs emission, issue #8); source analysis never
 //! fabricates a Workshop payload.
 //!
-//! This crate owns the OverPy source-language implementation. Workshop→OPY
-//! reconstruction and the differential harness are not part of this crate
-//! (see the opy-rs roadmap).
+//! This crate owns the OverPy source-language implementation, its bounded
+//! compiler, Workshop→OPY reconstruction, and the isolated differential
+//! harness entry points.
 
+mod compiler;
 pub mod cst;
 pub mod diag;
 pub mod hir;
 pub mod lexer;
 pub mod lower;
+mod macro_js;
 pub mod manifest;
 pub mod parser;
 pub mod preprocess;
@@ -44,6 +46,12 @@ pub mod tooling;
 
 use std::path::Path;
 
+pub use compiler::reconstruct;
+pub use compiler::{
+    COMPILE_SCHEMA_VERSION, CompilationArtifact, CompileDiagnostic, CompileFailureClass,
+    CompileOutput, CompileReport, CompileResult, CompileStatus, Compiler, CompilerIdentity,
+    IntegrationDiagnostic, IntegrationError, LinkReport, ScriptDiagnostic, WORKSHOP_RS_VERSION,
+};
 use diag::Span;
 pub use diag::{OpyError, OpyResult};
 pub use lower::lower;

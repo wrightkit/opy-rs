@@ -4,13 +4,13 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Standalone OverPy-compatible .opy implementation: lexer, CST/parser, preprocessing, semantic resolution, and Opy HIR lowering (Workshop-independent)."
+description = "Standalone OverPy-compatible .opy implementation with parsing, tooling, and bounded Workshop compilation."
 
 [lints]
 workspace = true
 
 [dependencies]
-opy-macro-js = { path = "../opy-macro-js", version = "0.1.7" }
+libquickjs-ng-sys.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 workshop-rs.workspace = true

@@ -70,15 +70,15 @@ jobs:
           python3 -B compatibility/run_native.py
           --binary target/debug/opy-cli
           --semantic-binary target/debug/opy-compat
-          --results target/opy-compiler-results
-          --report target/opy-compiler-report.json
+          --results target/opy-rs-compiler-results
+          --report target/opy-rs-compiler-report.json
 
       - name: Upload compiler compatibility report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: opy-compiler-compatibility-report
-          path: target/opy-compiler-report.json
+          name: opy-rs-compiler-compatibility-report
+          path: target/opy-rs-compiler-report.json
           if-no-files-found: ignore
 
   macro-runtime-ports:
@@ -112,5 +112,5 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-on-failure: false
 
-      - name: Run opy-macro-js tests
-        run: cargo test --locked -p opy-macro-js --all-targets
+      - name: Run internal macro runtime tests
+        run: cargo test --locked -p opy-rs --lib macro_js::tests

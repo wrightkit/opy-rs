@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use opy_compiler::Compiler;
+use crate::Compiler;
 use workshop_rs::catalog::{Catalog, Locale};
 use workshop_rs::roundtrip::equivalent;
 
@@ -12,22 +12,22 @@ fn fixture_dir(name: &str) -> PathBuf {
         .join(name)
 }
 
-fn compile_fixture(name: &str) -> opy_compiler::CompilationArtifact {
+fn compile_fixture(name: &str) -> crate::CompilationArtifact {
     let dir = fixture_dir(name);
     let source = std::fs::read_to_string(dir.join("source.opy")).expect("source must be readable");
-    let hir = opy_rs::compile(&source, "source.opy", &dir).expect("fixture must resolve");
+    let hir = crate::compile(&source, "source.opy", &dir).expect("fixture must resolve");
     Compiler::new()
         .expect("released workshop contract must load")
         .compile_hir(&hir)
         .expect("fixture must lower to canonical WIR")
 }
 
-fn compile_real_world(name: &str, source_name: &str) -> opy_compiler::CompilationArtifact {
+fn compile_real_world(name: &str, source_name: &str) -> crate::CompilationArtifact {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../compatibility/fixtures/real-world")
         .join(name);
     let source = std::fs::read_to_string(dir.join(source_name)).expect("source must be readable");
-    let hir = opy_rs::compile(&source, source_name, &dir).expect("real-world source must resolve");
+    let hir = crate::compile(&source, source_name, &dir).expect("real-world source must resolve");
     Compiler::new()
         .expect("released workshop contract must load")
         .compile_hir(&hir)
@@ -96,7 +96,7 @@ fn catalog_enum_members_lower_and_validate() {
 fn catalog_gap_member_is_explicitly_rejected() {
     let source =
         "rule \"r\":\n    @Event eachPlayer\n    @Condition eventPlayer.getHero() == None\n";
-    let hir = opy_rs::compile(source, "source.opy", Path::new(".")).expect("frontend resolves");
+    let hir = crate::compile(source, "source.opy", Path::new(".")).expect("frontend resolves");
     let error = match Compiler::new().expect("compiler loads").compile_hir(&hir) {
         Ok(_) => panic!("catalog-gap member must remain explicit"),
         Err(error) => error,
@@ -113,7 +113,7 @@ fn catalog_gap_member_is_explicitly_rejected() {
 #[test]
 fn append_receiver_uses_the_canonical_modify_operation() {
     let source = "globalvar values\nrule \"r\":\n    @Event global\n    values.append(1)\n";
-    let hir = opy_rs::compile(source, "source.opy", Path::new(".")).expect("frontend resolves");
+    let hir = crate::compile(source, "source.opy", Path::new(".")).expect("frontend resolves");
     let artifact = Compiler::new()
         .expect("compiler loads")
         .compile_hir(&hir)

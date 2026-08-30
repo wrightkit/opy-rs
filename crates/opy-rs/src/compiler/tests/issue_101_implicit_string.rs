@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use opy_compiler::Compiler;
+use crate::Compiler;
 use workshop_rs::catalog::Locale;
 use workshop_rs::wir::{Action, RuleId, Value};
 
@@ -18,7 +18,7 @@ fn minimized_regression_reaches_canonical_debug_string() {
         .expect("minimized regression must be readable");
     let artifact = Compiler::new()
         .expect("released workshop contract must load")
-        .compile_source(&source, "regression.opy", &dir, &Locale::new("en-US"))
+        .compile_source_with_locale(&source, "regression.opy", &dir, &Locale::new("en-US"))
         .expect("adjacent string literals must compile");
 
     let rule = artifact

@@ -6,7 +6,9 @@
 //! (string-only result contract), and the directive documentation in
 //! `src/data/opy/preprocessing.ts`.
 
-use opy_macro_js::{Limits, MacroError, MacroRuntime};
+use crate::macro_js::error::MacroError;
+use crate::macro_js::limits::Limits;
+use crate::macro_js::runtime::MacroRuntime;
 
 fn runtime() -> MacroRuntime {
     MacroRuntime::new(Limits::default())

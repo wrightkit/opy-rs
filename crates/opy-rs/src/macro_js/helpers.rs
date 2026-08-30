@@ -10,14 +10,14 @@ use std::collections::BTreeMap;
 /// constant entries are Workshop catalog data that `workshop-rs` owns, so this
 /// crate ships them empty; populate them with [`Helpers::set_constant`].
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Helpers {
+pub(crate) struct Helpers {
     entries: BTreeMap<String, Vec<(String, String)>>,
 }
 
 impl Helpers {
     /// Creates an empty helper set: only the builtin `vect` function and the
     /// six empty constant objects exist.
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 
@@ -27,7 +27,8 @@ impl Helpers {
     /// to a string carrying the object prefix, e.g.
     /// `set_constant("Map", "KANEZAKA", "Map.KANEZAKA")` makes
     /// `Map.KANEZAKA === "Map.KANEZAKA"` inside scripts.
-    pub fn set_constant(&mut self, object: &str, key: &str, value: &str) {
+    #[cfg(test)]
+    pub(crate) fn set_constant(&mut self, object: &str, key: &str, value: &str) {
         self.entries
             .entry(object.to_string())
             .or_default()
@@ -35,7 +36,7 @@ impl Helpers {
     }
 
     /// Entries configured for `object`, in insertion order.
-    pub fn entries(&self, object: &str) -> &[(String, String)] {
+    pub(crate) fn entries(&self, object: &str) -> &[(String, String)] {
         self.entries.get(object).map_or(&[], Vec::as_slice)
     }
 }

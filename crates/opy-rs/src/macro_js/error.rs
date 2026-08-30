@@ -10,21 +10,21 @@ use std::fmt;
 /// prologue is subtracted), mirroring the OverPy reference behavior
 /// (`normalizeScriptError` in `src/quickjs.ts`).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ScriptError {
+pub(crate) struct ScriptError {
     /// The exception message (e.g. `"kaboom"`). Resource-limit abort messages
     /// are `"interrupted"`, `"out of memory"`, and
     /// `"Maximum call stack size exceeded"`.
-    pub message: String,
+    pub(crate) message: String,
     /// The script name the invocation was attributed to.
-    pub source_name: Option<String>,
+    pub(crate) source_name: Option<String>,
     /// 1-based line in the user's script of the first stack frame matching
     /// `source_name`, when the engine provided a stack.
-    pub line: Option<u32>,
+    pub(crate) line: Option<u32>,
     /// 1-based column of that frame, when available.
-    pub column: Option<u32>,
+    pub(crate) column: Option<u32>,
     /// The engine stack trace with line numbers adjusted to the user's script,
     /// when the engine provided one.
-    pub stack: Option<String>,
+    pub(crate) stack: Option<String>,
 }
 
 impl fmt::Display for ScriptError {
@@ -35,7 +35,7 @@ impl fmt::Display for ScriptError {
 
 /// Errors produced by macro or hook execution.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum MacroError {
+pub(crate) enum MacroError {
     /// The script threw an exception.
     Script(ScriptError),
     /// The script completed without throwing, but its completion value is not
