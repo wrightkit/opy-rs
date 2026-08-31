@@ -148,7 +148,7 @@ beginning with `.` are receiver dispatch entries. The separate
 | `floor` | 🚧 Coming soon |
 | `round` | 🚧 Coming soon |
 | `hsl` | 🚧 Coming soon |
-| `chaseAtRate` | 🚧 Coming soon |
+| `chaseAtRate` | ✅ Supported |
 | `chaseOverTime` | 🚧 Coming soon |
 | `compress` | 🚧 Coming soon |
 | `compressed` | 🚧 Coming soon |

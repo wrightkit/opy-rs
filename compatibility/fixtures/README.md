@@ -55,7 +55,7 @@ repository:
 | `issue-28-*` | pure OPY syntax probes for switch, do-while, hex, membership, modifiers, dicts, comprehensions, lambda, and negative diagnostics |
 | `issue-35-integration` | minimal OPY HIR to canonical Workshop WIR validation and deterministic emission slice |
 | `issue-46-primitives` | #46 oracle-backed primitive lowering probe: assignments and modifications (including `**=`), expressions, indexing, format, initializers, implicit default variables at fixed slots; the snapshot constrains the native compiler through structural equivalence |
-| `issue-46-unsupported` | #46 negative probe: a dict-indexed assignment the compiler rejects with the stable source-attributed diagnostic while the oracle compiles it |
+| `issue-46-unsupported` | #145 literal dictionary lookup probe retained from #46: the compiler folds the literal key selection and matches the oracle; dictionary-indexed assignment targets remain a separate boundary |
 | `issue-59-postfix-assignment` | #59 oracle-backed postfix `++`/`--` assignment probe for global, player, and single-level indexed variables; the snapshot constrains native lowering through canonical WIR equivalence |
 | `issue-59-postfix-negative` | #59 pinned negative probe for rejected prefix `++` with a stable source-attributed parse diagnostic; prefix `--x` remains valid consecutive unary-minus syntax |
 | `issue-59-embedded-postfix-negative` | #59 pinned negative probe for the rejected embedded postfix form with a stable source-attributed parse diagnostic |

@@ -6,11 +6,8 @@
 //! canonical WIR → deterministic en-US emission). The native lowering is
 //! compared directly with the oracle's parsed canonical WIR.
 //!
-//! The adjacent `synthetic/issue-46-unsupported` fixture is the negative
-//! counterpart: the frontend resolves it and the pinned oracle compiles it,
-//! while the native compiler must reject the dict primitive with the stable
-//! `unsupported-integration-surface` diagnostic attributed to the source
-//! statement.
+//! The adjacent `synthetic/issue-46-unsupported` fixture exercises the
+//! literal-dictionary lookup form that is now folded during OPY lowering.
 
 use std::path::Path;
 
@@ -58,25 +55,18 @@ fn issue_46_native_wir_matches_the_pinned_oracle() {
 }
 
 #[test]
-fn issue_46_unsupported_primitive_fails_with_stable_source_attribution() {
+fn issue_46_literal_dict_lookup_matches_the_pinned_oracle() {
     let dir = fixture_dir("issue-46-unsupported");
     let source = std::fs::read_to_string(dir.join("source.opy")).unwrap();
     let hir = crate::compile(&source, "source.opy", &dir)
         .expect("the frontend resolves the negative fixture");
-    let error = match Compiler::new().unwrap().compile_hir(&hir) {
-        Ok(_) => panic!("dict primitive lowering unexpectedly succeeded"),
-        Err(error) => error,
-    };
-    assert_eq!(error.diagnostic.code, "unsupported-integration-surface");
-    assert!(error.diagnostic.message.contains("dict"));
-    // `total = {"a": 1, "b": 2}["a"]` sits on line 5 of the fixture source.
-    assert_eq!(
-        error
-            .diagnostic
-            .span
-            .expect("diagnostic is source-attributed")
-            .start
-            .line,
-        5
-    );
+    let artifact = Compiler::new()
+        .unwrap()
+        .compile_hir(&hir)
+        .expect("literal dict lookup should lower to canonical WIR");
+    let catalog = Catalog::builtin().expect("catalog must load");
+    let oracle =
+        workshop_rs::parser::parse(&oracle_workshop(&dir), &catalog, &Locale::new("en-US"))
+            .expect("the pinned oracle Workshop text must reparse");
+    assert!(equivalent(&artifact.wir, &oracle));
 }

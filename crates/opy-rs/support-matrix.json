@@ -669,10 +669,10 @@
         "fixtures:synthetic/issue-59-postfix-assignment",
         "test:opy-rs::compiler-primitive-lowering",
         "test:opy-rs::compiler::integration_tests::issue_59_oracle::issue_59_postfix_assignments_match_the_pinned_oracle",
-        "test:opy-rs::compiler-issue-46-native-wir-gap",
+        "test:opy-rs::compiler::integration_tests::issue_145_lowering::null_initializers_are_dropped_but_float_zero_is_preserved",
         "contract:workshop-rs-v0.1.16"
       ],
-      "notes": "Issue #46/#59. Global/player assignments and augmented assignments (+=, -=, *=, /=, %=, **=, ++, --), single-level indexed variable assignments and modifications (setGlobalVariableAtIndex, modifyGlobalVariableAtIndex, setPlayerVariableAtIndex, modifyPlayerVariableAtIndex), and pass no-op statements lower into canonical workshop-rs WIR. Declaration initializer evidence covers non-null initializers; OverPy null-default initializer semantics remain tracked by #58. Deeper indexed writes remain tracked by #60. Direct global/player modifications carry full statement and target-variable span provenance; the single-level indexed forms lower to canonical Call actions, which carry only the statement-level source span (the canonical WIR Call shape has no separate target-span field)."
+      "notes": "Issue #46/#59/#145. Global/player assignments and augmented assignments (+=, -=, *=, /=, %=, **=, ++, --), literal dictionary lookup folding, single-level indexed variable assignments and modifications (setGlobalVariableAtIndex, modifyGlobalVariableAtIndex, setPlayerVariableAtIndex, modifyPlayerVariableAtIndex), and pass no-op statements lower into canonical workshop-rs WIR. Null and integer-zero declaration initializers are omitted while float zero remains observable; deeper indexed writes remain tracked by #60. Direct global/player modifications carry full statement and target-variable span provenance; the single-level indexed forms lower to canonical Call actions, which carry only the statement-level source span (the canonical WIR Call shape has no separate target-span field)."
     },
     {
       "id": "compilation/opy-implicit-default-variables",
@@ -687,15 +687,15 @@
       "notes": "Issue #46. Undeclared A-Z, AA-AZ, ..., DA-DX global references and eventPlayer.<name> player references resolve through the source implementation default_var_index contract and lower to separate Workshop variable namespaces at their fixed reference slots (A=0 ... DX=127); used implicit slots are reserved independently for declared global/player allocation, an explicit declared index colliding with a used implicit slot fails with the stable source-attributed index-collision diagnostic, and a declared name wins in its own namespace. The pinned oracle snapshot for the issue-46 fixture constrains global and player slots through structural equivalence."
     },
     {
-      "id": "compilation/opy-primitive-lowering-limits",
-      "name": "Negative primitive-lowering diagnostics for forms outside canonical WIR",
+      "id": "compilation/opy-literal-dict-lookup",
+      "name": "Literal dictionary lookup lowering to canonical WIR",
       "category": "compilation",
       "state": "end-to-end-supported",
       "evidence": [
         "fixtures:synthetic/issue-46-unsupported",
-        "test:opy-rs::compiler-primitive-lowering-limits"
+        "test:opy-rs::compiler::integration_tests::issue_145_lowering::literal_dict_lookup_lowering_matches_the_pinned_oracle"
       ],
-      "notes": "Issue #46 negative contract. A non-control-flow primitive the canonical WIR surface cannot represent (the fixture uses a dict-indexed assignment, which the pinned oracle compiles by constant folding) is rejected with the stable unsupported-integration-surface diagnostic attributed to the source statement; no unsupported HIR node is silently discarded or guessed."
+      "notes": "Issue #145. Literal dictionary lookups with literal keys are folded to the selected value and compared directly with the pinned oracle WIR. Dictionary-indexed assignment targets remain outside this bounded path and are not silently guessed."
     },
     {
       "id": "compilation/opy-expression-lowering",
@@ -708,7 +708,7 @@
         "test:opy-rs::compiler::integration_tests::issue_100_conditional",
         "contract:workshop-rs-v0.1.16"
       ],
-      "notes": "Issue #46/#100. Literals (numbers, strings, booleans, null), arrays, vectors (vect), enum constants, global/player/eventPlayer variable references, array indexing (valueInArray; a literal zero index lowers to firstOf, matching the pinned oracle), string formatting (customString), arithmetic/comparison/logical binary operations, unary operations (not, -; not on a comparison lowers to the negated comparison, matching the pinned oracle), right-associative conditional values (ifThenElse), and power operations lower into canonical workshop-rs WIR. Value-position power uses the canonical raiseToPower Value contract; direct and indexed power modifications use the canonical Workshop Operation contract."
+      "notes": "Issue #46/#100/#145. Literals (numbers, strings, booleans, null), arrays, vectors (vect), enum constants, global/player/eventPlayer variable references, literal dictionary lookup, array indexing (valueInArray; a literal zero index lowers to firstOf, matching the pinned oracle), string formatting (customString), f/w/b/c literal string modifiers, arithmetic/comparison/logical binary operations, unary operations (not, -; not on a comparison lowers to the negated comparison, matching the pinned oracle), right-associative conditional values (ifThenElse), and power operations lower into canonical workshop-rs WIR. Value-position power uses the canonical raiseToPower Value contract; direct and indexed power modifications use the canonical Workshop Operation contract."
     },
     {
       "id": "compilation/opy-control-flow-lowering",

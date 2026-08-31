@@ -232,18 +232,17 @@
     },
     {
       "fixture": "synthetic/issue-46-unsupported",
-      "nativeStatus": "failure",
-      "classification": "unsupported",
-      "comparison": "diagnostic-code",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "semantic-wir",
       "evidence": [
         "oracle:synthetic/issue-46-unsupported/oracle.json",
         "provenance:synthetic/issue-46-unsupported/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_46_oracle::issue_46_unsupported_primitive_fails_with_stable_source_attribution"
+        "test:opy-rs::compiler::integration_tests::issue_46_oracle::issue_46_literal_dict_lookup_matches_the_pinned_oracle"
       ],
-      "owner": "workshop-rs#123",
-      "note": "The released workshop-rs v0.1.16 contract keeps AssignMember for canonical memberAccess targets only; this dictionary-indexed OPY primitive still has no lossless OPY-owned lowering and remains explicitly rejected.",
-      "failureClass": "integration",
-      "diagnosticCode": "unsupported-integration-surface"
+      "owner": "opy-rs#145",
+      "note": "Literal dictionary lookups with literal keys are folded to their selected value, matching the pinned oracle; dictionary-indexed assignment targets remain outside this bounded lowering path.",
+      "semanticEquivalent": true
     },
     {
       "fixture": "synthetic/issue-59-postfix-assignment",
@@ -612,17 +611,17 @@
     },
     {
       "fixture": "synthetic/chase-keywords",
-      "nativeStatus": "failure",
+      "nativeStatus": "success",
       "classification": "known-gap",
-      "comparison": "diagnostic-code",
+      "comparison": "semantic-wir",
       "evidence": [
         "oracle:synthetic/chase-keywords/oracle.json",
-        "provenance:synthetic/chase-keywords/fixture.json"
+        "provenance:synthetic/chase-keywords/fixture.json",
+        "test:opy-rs::compiler::integration_tests::issue_145_lowering::contextual_chase_lowering_matches_the_pinned_oracle"
       ],
-      "owner": "opy-rs#88",
-      "note": "The source semantic form is known, while the current canonical integration surface lacks a complete compiler contract.",
-      "failureClass": "integration",
-      "diagnosticCode": "unsupported-integration-surface"
+      "owner": "opy-rs#144",
+      "note": "The contextual chase forms lower to canonical chaseAtRate/chaseOverTime actions; the full corpus fixture still contains separate len/builtin and text-shape differences tracked by the builtin/member lowering stream.",
+      "semanticEquivalent": false
     },
     {
       "fixture": "synthetic/declarations-rules",
@@ -681,31 +680,30 @@
     },
     {
       "fixture": "synthetic/issue-28-string-modifiers",
-      "nativeStatus": "failure",
-      "classification": "known-gap",
-      "comparison": "diagnostic-code",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "semantic-wir",
       "evidence": [
         "oracle:synthetic/issue-28-string-modifiers/oracle.json",
-        "provenance:synthetic/issue-28-string-modifiers/fixture.json"
+        "provenance:synthetic/issue-28-string-modifiers/fixture.json",
+        "test:opy-rs::compiler::integration_tests::issue_145_lowering::string_modifier_lowering_matches_the_pinned_oracle"
       ],
-      "owner": "opy-rs#88",
-      "note": "The source modifier surface exceeds the independently evidenced compiler baseline.",
-      "failureClass": "integration",
-      "diagnosticCode": "unsupported-integration-surface"
+      "owner": "opy-rs#145",
+      "note": "The compiler lowers the evidenced f/w/b/c literal string modifiers to canonical Custom String values; l/t remain translation-carried source constructs.",
+      "semanticEquivalent": true
     },
     {
       "fixture": "synthetic/issue-28-syntax",
-      "nativeStatus": "failure",
+      "nativeStatus": "success",
       "classification": "known-gap",
-      "comparison": "diagnostic-code",
+      "comparison": "compiler-contract",
       "evidence": [
         "oracle:synthetic/issue-28-syntax/oracle.json",
-        "provenance:synthetic/issue-28-syntax/fixture.json"
+        "provenance:synthetic/issue-28-syntax/fixture.json",
+        "test:opy-rs::compiler::integration_tests::issue_145_lowering::broad_supported_syntax_lowering_reaches_canonical_wir"
       ],
-      "owner": "opy-rs#88",
-      "note": "The broad syntax fixture exceeds the independently evidenced compiler baseline.",
-      "failureClass": "integration",
-      "diagnosticCode": "unsupported-integration-surface"
+      "owner": "workshop-rs#123",
+      "note": "The supported issue-28 syntax slice lowers through the native canonical-WIR contract; the pinned oracle snapshot currently cannot be reparsed by the released Workshop parser because of its uppercase hexadecimal spelling, so full semantic comparison remains an external owner blocker."
     },
     {
       "fixture": "synthetic/issue-29-directives",

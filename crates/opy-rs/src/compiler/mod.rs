@@ -2431,7 +2431,7 @@ impl<'a> Lowering<'a> {
             }};
         }
 
-        let value = self.lower_value(expr)?;
+        let value = self.lower_text_value(expr)?;
         let array_text = if self.debug_value_is_array(value) {
             self.lower_debug_array_text(value)
         } else {
@@ -2507,7 +2507,7 @@ impl<'a> Lowering<'a> {
             }};
         }
 
-        let message = self.lower_value(expr)?;
+        let message = self.lower_text_value(expr)?;
         let padding_text = self.push_value(Value::String(" ".repeat(45)));
         let padding = self.push_call("customString", vec![padding_text]);
         let body_text = self.push_value(Value::String(format!("{}{{0}}", " ".repeat(125))));
@@ -2730,6 +2730,24 @@ impl<'a> Lowering<'a> {
         call!("mappedArray", x_input, rendered)
     }
 
+    fn lower_text_value(&mut self, expr: &Expr) -> Result<wir::ValueId, IntegrationError> {
+        let value = self.lower_value(expr)?;
+        let Value::Call { name, args } = &self
+            .wir
+            .values
+            .get(value)
+            .expect("lowered text value must exist")
+            .value
+        else {
+            return Ok(value);
+        };
+        if name == "customString" && args.len() == 1 {
+            Ok(args[0])
+        } else {
+            Ok(value)
+        }
+    }
+
     fn debug_value_is_array(&self, value: wir::ValueId) -> bool {
         match &self
             .wir
@@ -2761,6 +2779,25 @@ impl<'a> Lowering<'a> {
             name: name.to_string(),
             args,
         })
+    }
+
+    fn lower_custom_string(
+        &mut self,
+        value: String,
+        span: Option<HirSpan>,
+    ) -> Result<wir::ValueId, IntegrationError> {
+        let span = self.wir_span(span)?;
+        let text = self
+            .wir
+            .values
+            .push(ValueNode::new(Value::String(value), span));
+        Ok(self.wir.values.push(ValueNode::new(
+            Value::Call {
+                name: "customString".to_string(),
+                args: vec![text],
+            },
+            span,
+        )))
     }
 
     fn push_number(&mut self, value: f64, text: &str) -> wir::ValueId {
@@ -3039,6 +3076,17 @@ impl<'a> Lowering<'a> {
         args: &[Expr],
         span: Option<HirSpan>,
     ) -> Result<wir::ActionId, IntegrationError> {
+        if name == "chaseAtRate" {
+            let args = args
+                .iter()
+                .map(|expr| self.lower_value(expr))
+                .collect::<Result<Vec<_>, _>>()?;
+            return Ok(self.wir.actions.push(Action::Call {
+                name: name.to_string(),
+                args,
+                span: self.wir_span(span)?,
+            }));
+        }
         let function = self
             .compiler
             .manifest
@@ -3092,7 +3140,7 @@ impl<'a> Lowering<'a> {
         let visible_to = self.lower_hud_visible_to(visible_to)?;
         let null_header = self.push_value(Value::Null);
         let null_text = self.push_value(Value::Null);
-        let text_value = self.lower_value(text)?;
+        let text_value = self.lower_text_value(text)?;
         let text = self.push_call("customString", vec![text_value]);
         let args = vec![
             visible_to,
@@ -3222,7 +3270,9 @@ impl<'a> Lowering<'a> {
                 value: *value,
                 text: canonical_number_text(*value, text),
             },
-            Expr::String { value, .. } => Value::String(value.clone()),
+            Expr::String { value, .. } => {
+                return self.lower_custom_string(value.clone(), span);
+            }
             Expr::Bool { value, .. } => Value::Bool(*value),
             Expr::Null { .. } => Value::Null,
             Expr::Local { name, .. } => {
@@ -3311,6 +3361,14 @@ impl<'a> Lowering<'a> {
                 return self.lower_value(const_expr);
             }
             Expr::Index { array, index, .. } => {
+                if let Expr::Dict { entries, .. } = array.as_ref()
+                    && let Some(value) = entries
+                        .iter()
+                        .find(|entry| literal_key_matches(&entry.key, index))
+                        .map(|entry| &entry.value)
+                {
+                    return self.lower_value(value);
+                }
                 // The pinned OverPy oracle lowers a literal zero-index read
                 // (`arr[0]`, `arr[0.0]`) to `firstOf(arr)`; non-zero indexes
                 // and indexed writes keep the indexed forms.
@@ -3327,6 +3385,9 @@ impl<'a> Lowering<'a> {
                 }
             }
             Expr::Format { text, args, .. } => {
+                if let Some(value) = fold_literal_format(text, args) {
+                    return self.lower_custom_string(value, span);
+                }
                 let text_node = self.wir.values.push(ValueNode::new(
                     Value::String(canonical_format_text(text)),
                     self.wir_span(span)?,
@@ -3630,6 +3691,26 @@ impl<'a> Lowering<'a> {
                     "lambda expressions are only representable as supported array operation arguments",
                     *span,
                 ));
+            }
+            Expr::StringModifier {
+                modifier,
+                value,
+                span,
+            } => {
+                let value = match modifier.as_str() {
+                    "b" => big_letters(value),
+                    "c" => case_sensitive(value),
+                    "w" => fullwidth(value),
+                    _ => {
+                        return Err(self.unsupported(
+                            format!(
+                                "string modifier '{modifier}' is not currently representable in canonical WIR"
+                            ),
+                            *span,
+                        ));
+                    }
+                };
+                return self.lower_custom_string(value, *span);
             }
             _ => {
                 return Err(self.unsupported(
@@ -4250,8 +4331,120 @@ fn player_event_kind(name: &str) -> Option<PlayerEventKind> {
 fn is_zero_initializer(expr: &hir::Expr) -> bool {
     match expr {
         hir::Expr::Number { text, value, .. } => text == "0" && *value == 0.0,
+        hir::Expr::Null { .. } => true,
         _ => false,
     }
+}
+
+fn literal_key_matches(left: &hir::Expr, right: &hir::Expr) -> bool {
+    match (left, right) {
+        (hir::Expr::Number { value: left, .. }, hir::Expr::Number { value: right, .. }) => {
+            left == right
+        }
+        (hir::Expr::String { value: left, .. }, hir::Expr::String { value: right, .. }) => {
+            left == right
+        }
+        (hir::Expr::Bool { value: left, .. }, hir::Expr::Bool { value: right, .. }) => {
+            left == right
+        }
+        (hir::Expr::Null { .. }, hir::Expr::Null { .. }) => true,
+        _ => false,
+    }
+}
+
+fn big_letters(value: &str) -> String {
+    let mut output = String::with_capacity(value.len());
+    let mut converted = false;
+    for character in value.chars() {
+        if !converted {
+            if let Some(mapped) = big_letter(character) {
+                output.push(mapped);
+                converted = true;
+                continue;
+            }
+        }
+        output.push(character);
+    }
+    output
+}
+
+fn big_letter(character: char) -> Option<char> {
+    Some(match character {
+        'a' | 'A' => 'Α',
+        'b' | 'B' => 'Β',
+        'e' | 'E' => 'Ε',
+        'h' | 'H' => 'Η',
+        'i' | 'I' => 'Ι',
+        'k' | 'K' => 'Κ',
+        'm' | 'M' => 'Μ',
+        'n' | 'N' => 'Ν',
+        'o' | 'O' => 'Ο',
+        'p' | 'P' => 'Ρ',
+        't' | 'T' => 'Τ',
+        'x' | 'X' => 'Χ',
+        'y' | 'Y' => 'Υ',
+        'z' | 'Z' => 'Ζ',
+        '.' => '\u{2024}',
+        ' ' => '\u{2028}',
+        _ => return None,
+    })
+}
+
+fn fullwidth(value: &str) -> String {
+    value
+        .chars()
+        .map(|character| match character {
+            ' ' => '\u{2001}',
+            '\u{00a5}' => '\u{ffe5}',
+            '\u{20a9}' => '\u{ffe6}',
+            '\u{00a2}' => '\u{ffe0}',
+            '\u{00a3}' => '\u{ffe1}',
+            '\u{00af}' => '\u{ffe3}',
+            '\u{00ac}' => '\u{ffe2}',
+            '\u{00a6}' => '\u{ffe4}',
+            character if ('!'..='~').contains(&character) => {
+                char::from_u32(character as u32 + 65248).unwrap_or(character)
+            }
+            _ => character,
+        })
+        .collect()
+}
+
+fn case_sensitive(value: &str) -> String {
+    let mut output = value.replace('æ', "\u{04d5}").replace("nj", "\u{01cc}");
+    output = output.replace(" a ", " ａ ");
+    output
+        .chars()
+        .map(|character| match character {
+            'a' => 'ạ',
+            'b' => 'ḅ',
+            'c' => 'ƈ',
+            'd' => 'ḍ',
+            'e' => 'ẹ',
+            'f' => 'ƒ',
+            'g' => 'ǥ',
+            'h' => '\u{04bb}',
+            'i' => 'і',
+            'j' => 'ј',
+            'k' => 'ḳ',
+            'l' => 'I',
+            'm' => 'ṃ',
+            'n' => 'ṇ',
+            'o' => 'ο',
+            'p' => 'ṗ',
+            'q' => 'ǫ',
+            'r' => 'ṛ',
+            's' => 'ѕ',
+            't' => 'ṭ',
+            'u' => 'υ',
+            'v' => 'ν',
+            'w' => 'ẉ',
+            'x' => '\u{04b3}',
+            'y' => 'ỵ',
+            'z' => 'ẓ',
+            _ => character,
+        })
+        .collect()
 }
 
 fn canonical_number_text(value: f64, text: &str) -> String {
@@ -4286,6 +4479,24 @@ fn canonical_format_text(text: &str) -> String {
         }
     }
     output
+}
+
+fn fold_literal_format(text: &str, args: &[hir::Expr]) -> Option<String> {
+    let values = args
+        .iter()
+        .map(|arg| match arg {
+            hir::Expr::Number { text, value, .. } => Some(canonical_number_text(*value, text)),
+            hir::Expr::String { value, .. } => Some(value.clone()),
+            hir::Expr::Bool { value, .. } => Some(value.to_string()),
+            hir::Expr::Null { .. } => Some("null".to_string()),
+            _ => None,
+        })
+        .collect::<Option<Vec<_>>>()?;
+    let mut output = canonical_format_text(text);
+    for (index, value) in values.iter().enumerate() {
+        output = output.replace(&format!("{{{index}}}"), value);
+    }
+    Some(output)
 }
 
 fn debug_expr_text(expr: &Expr) -> String {
@@ -4990,7 +5201,7 @@ rule "implicit player variables":
     }
 
     #[test]
-    fn unsupported_primitive_lowering_is_stable_and_source_attributed() {
+    fn literal_dict_lookup_lowers_to_the_selected_value() {
         let compiler = Compiler::new().unwrap();
         let hir = crate::compile(
             "globalvar total\nrule \"negative\":\n    @Event global\n    total = {\"a\": 1, \"b\": 2}[\"a\"]\n",
@@ -4998,13 +5209,10 @@ rule "implicit player variables":
             Path::new("."),
         )
         .unwrap();
-        let error = match compiler.compile_hir(&hir) {
-            Ok(_) => panic!("dict primitive lowering unexpectedly succeeded"),
-            Err(error) => error,
-        };
-        assert_eq!(error.diagnostic.code, "unsupported-integration-surface");
-        assert!(error.diagnostic.message.contains("dict"));
-        assert_eq!(error.diagnostic.span.unwrap().start.line, 4);
+        let artifact = compiler
+            .compile_hir(&hir)
+            .expect("literal dict lookup should lower");
+        assert!(artifact.emitted.contains("Set Global Variable(total, 1);"));
     }
 
     #[test]
