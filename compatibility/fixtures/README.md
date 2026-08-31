@@ -61,6 +61,7 @@ repository:
 | `issue-59-embedded-postfix-negative` | #59 pinned negative probe for the rejected embedded postfix form with a stable source-attributed parse diagnostic |
 | `issue-65-player-range` | #65 pinned oracle-backed player-variable range binder probe for canonical `For Player Variable` lowering |
 | `issue-65-invalid-binder` | #65 pinned negative probe for a non-variable range binder with a stable source-attributed diagnostic |
+| `issue-130-horizontal-facing-angle` | #130 catalog-backed `eventPlayer.getHorizontalFacingAngle()` member-value lowering |
 | `issue-131-spec-visibility` | #131 `SpecVisibility.NEVER` to canonical `VISIBLE_NEVER` enum mapping |
 | `issue-47-control-flow` | #47 pinned oracle-backed control-flow lowering probe: if/elif/else, while, range-for, do-while expansion, switch fallthrough/default, and direct break |
 | `issue-47-unsupported` | #47 negative probe: a break hidden inside a conditional switch arm is accepted by the source implementation/oracle but rejected by the compiler with a stable source-attributed diagnostic |

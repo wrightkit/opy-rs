@@ -42,6 +42,14 @@
       "expectedReferenceStatus": "success",
       "kind": "minimized-regression",
       "provenance": "oracle:real-world/overpy-client-to-server/oracle.json; source path 42"
+    },
+    {
+      "id": "real-world/overpy-client-to-server/get-horizontal-facing-angle",
+      "source": "regressions/get-horizontal-facing-angle.opy",
+      "derivedFrom": "clientToServer.opy",
+      "expectedReferenceStatus": "success",
+      "kind": "minimized-regression",
+      "provenance": "oracle:real-world/overpy-client-to-server/oracle.json; source paths 46, 58, 60, 62, 64"
     }
   ]
 }

@@ -255,6 +255,12 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
     );
     resolve(
         &mut cases,
+        "synthetic/issue-130-horizontal-facing-angle",
+        true,
+        "Issue #130 catalog-backed eventPlayer.getHorizontalFacingAngle() member value; canonical WIR lowering is constrained by the dedicated compiler test.",
+    );
+    resolve(
+        &mut cases,
         "synthetic/issue-131-spec-visibility",
         true,
         "Issue #131 maps SpecVisibility.NEVER to the canonical VISIBLE_NEVER member; canonical WIR lowering is constrained by the dedicated compiler test.",
@@ -470,7 +476,7 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         &mut cases,
         "real-world/overpy-client-to-server",
         Some("parse-error"),
-        "the chained ternary and isDummy regressions resolve; the full project reaches the next unsupported member (`getHorizontalFacingAngle`). Gap: reference accepts, native rejects (documented).",
+        "the chained ternary, isDummy, and getHorizontalFacingAngle regressions resolve; the full project reaches the next unknown value (`horizontalAngleOfDirection`). Gap: reference accepts, native rejects (documented).",
     );
     diagnostic(
         &mut cases,

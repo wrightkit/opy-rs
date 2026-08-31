@@ -141,5 +141,15 @@
   },
   "runtimeSeconds": 9.7,
   "schemaVersion": 1,
-  "source": "main.opy"
+  "source": "main.opy",
+  "regressions": [
+    {
+      "id": "real-world/6v6-adjustments/get-horizontal-facing-angle",
+      "source": "regressions/get-horizontal-facing-angle.opy",
+      "derivedFrom": "heroes/juno/orbital_ray.opy",
+      "expectedReferenceStatus": "success",
+      "kind": "minimized-regression",
+      "provenance": "oracle:real-world/6v6-adjustments/oracle.json; source paths 20-24 in heroes/juno/orbital_ray.opy"
+    }
+  ]
 }
