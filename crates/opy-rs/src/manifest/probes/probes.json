@@ -2,6 +2,13 @@
   "schemaVersion": 1,
   "probes": [
     {
+      "expect": "success",
+      "id": "builtin-surface",
+      "outputSha256": "a39f1063b02efe65e96584872ab48c147cc5b2a0cb88acdd67e015c59a347124",
+      "sha256": "4912631d54d26e9fb5c242de1c30ba2fa75cb6e6a47cb6b9333e2af1c19c694b",
+      "source": "builtin-surface.opy"
+    },
+    {
       "diagnosticContains": "Expected a value, but got function 'wait' which is an action",
       "expect": "failure",
       "id": "action-in-value-position",

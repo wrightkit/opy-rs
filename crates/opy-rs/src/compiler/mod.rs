@@ -3047,8 +3047,36 @@ impl<'a> Lowering<'a> {
         if !matches!(function.kind, FunctionKind::Action) {
             return Err(self.unsupported(format!("'{name}' is not a generic OPY action"), span));
         }
-        if function.id == "hudSubheader" {
-            return self.lower_hud_subheader(args, span);
+        if matches!(
+            function.id.as_str(),
+            "hudHeader" | "hudSubheader" | "hudSubtext"
+        ) {
+            let text_slot = match function.id.as_str() {
+                "hudHeader" => 1,
+                "hudSubheader" => 2,
+                "hudSubtext" => 3,
+                _ => unreachable!(),
+            };
+            return self.lower_hud_text(args, span, text_slot, &function.id);
+        }
+        if function.id == "createDummy" && args.len() == 4 {
+            let mut lowered = args
+                .iter()
+                .map(|expr| self.lower_value(expr))
+                .collect::<Result<Vec<_>, _>>()?;
+            let mut zero_vector = Vec::with_capacity(3);
+            for value in [0.0, 0.0, 0.0] {
+                zero_vector.push(self.push_value(Value::Number {
+                    value,
+                    text: "0".to_string(),
+                }));
+            }
+            lowered.push(self.push_call("vector", zero_vector));
+            return Ok(self.wir.actions.push(Action::Call {
+                name: "createDummyBot".to_string(),
+                args: lowered,
+                span: self.wir_span(span)?,
+            }));
         }
         let catalog_id = function.catalog_id.as_ref().ok_or_else(|| {
             self.unsupported(
@@ -3070,10 +3098,12 @@ impl<'a> Lowering<'a> {
         }))
     }
 
-    fn lower_hud_subheader(
+    fn lower_hud_text(
         &mut self,
         args: &[Expr],
         span: Option<HirSpan>,
+        text_slot: usize,
+        function_name: &str,
     ) -> Result<wir::ActionId, IntegrationError> {
         let [
             visible_to,
@@ -3085,25 +3115,35 @@ impl<'a> Lowering<'a> {
             spectators,
         ] = args
         else {
-            return Err(
-                self.unsupported("hudSubheader requires exactly seven bound arguments", span)
-            );
+            return Err(self.unsupported(
+                format!("{function_name} requires exactly seven bound arguments"),
+                span,
+            ));
         };
         let visible_to = self.lower_hud_visible_to(visible_to)?;
-        let null_header = self.push_value(Value::Null);
-        let null_text = self.push_value(Value::Null);
+        let mut text_slots = [
+            self.push_value(Value::Null),
+            self.push_value(Value::Null),
+            self.push_value(Value::Null),
+        ];
         let text_value = self.lower_value(text)?;
-        let text = self.push_call("customString", vec![text_value]);
+        text_slots[text_slot - 1] = self.push_call("customString", vec![text_value]);
+        let mut colors = [
+            self.push_value(Value::Null),
+            self.push_value(Value::Null),
+            self.push_value(Value::Null),
+        ];
+        colors[text_slot - 1] = self.lower_value(color)?;
         let args = vec![
             visible_to,
-            null_header,
-            text,
-            null_text,
+            text_slots[0],
+            text_slots[1],
+            text_slots[2],
             self.lower_value(position)?,
             self.lower_value(sort_order)?,
-            self.push_value(Value::Null),
-            self.lower_value(color)?,
-            self.push_value(Value::Null),
+            colors[0],
+            colors[1],
+            colors[2],
             self.lower_value(reevaluation)?,
             self.lower_value(spectators)?,
         ];
@@ -3484,6 +3524,71 @@ impl<'a> Lowering<'a> {
                         x: self.lower_value(&args[0])?,
                         y: self.lower_value(&args[1])?,
                         z: self.lower_value(&args[2])?,
+                    }
+                } else if matches!(name.as_str(), "all" | "any") {
+                    let call_name = if name == "all" {
+                        "isTrueForAll"
+                    } else {
+                        "isTrueForAny"
+                    };
+                    let [array] = args.as_slice() else {
+                        return Err(self.unsupported(
+                            format!("{name} requires exactly one array argument"),
+                            span,
+                        ));
+                    };
+                    let (array, condition) = match array {
+                        Expr::Comprehension {
+                            element,
+                            variable,
+                            index,
+                            iterable,
+                            ..
+                        } => {
+                            if index.is_some() {
+                                return Err(self.unsupported(
+                                    format!("{name} does not support an index binder"),
+                                    span,
+                                ));
+                            }
+                            let iterable = self.lower_value(iterable)?;
+                            self.array_bindings.push(ArrayBinding {
+                                element: variable.clone(),
+                                index: None,
+                            });
+                            let condition = self.lower_value(element);
+                            self.array_bindings.pop();
+                            (iterable, condition?)
+                        }
+                        array => (
+                            self.lower_value(array)?,
+                            self.push_call("currentArrayElement", Vec::new()),
+                        ),
+                    };
+                    Value::Call {
+                        name: call_name.to_string(),
+                        args: vec![array, condition],
+                    }
+                } else if matches!(name.as_str(), "ceil" | "floor" | "round") {
+                    let [value] = args.as_slice() else {
+                        return Err(self.unsupported(
+                            format!("{name} requires exactly one numeric argument"),
+                            span,
+                        ));
+                    };
+                    let rounding = match name.as_str() {
+                        "ceil" => "UP",
+                        "floor" => "DOWN",
+                        "round" => "NEAREST",
+                        _ => unreachable!(),
+                    };
+                    let rounding = self.push_value(Value::Enum {
+                        value_type: "Rounding".to_string(),
+                        value: rounding.to_string(),
+                    });
+                    Value::Call {
+                        name: "roundToInteger".to_string(),
+                        args: vec![self.lower_value(value)?, rounding],
                     }
                 } else if name == "sorted" {
                     let (array, key) = match args.as_slice() {

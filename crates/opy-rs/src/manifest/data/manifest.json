@@ -23,6 +23,46 @@
       "kind": "memberAlias",
       "source": "hasStatusEffect",
       "target": "hasStatus"
+    },
+    {
+      "evidence": [
+        "builtin-surface"
+      ],
+      "kind": "functionAlias",
+      "source": "horizontalAngleFromDirection",
+      "target": "horizontalAngleOfDirection"
+    },
+    {
+      "evidence": [
+        "builtin-surface"
+      ],
+      "kind": "memberAlias",
+      "source": "isHoldingButton",
+      "target": "isButtonHeld"
+    },
+    {
+      "evidence": [
+        "builtin-surface"
+      ],
+      "kind": "functionAlias",
+      "source": "angleToDirection",
+      "target": "directionFromAngles"
+    },
+    {
+      "evidence": [
+        "builtin-surface"
+      ],
+      "kind": "functionAlias",
+      "source": "buttonString",
+      "target": "inputBindingString"
+    },
+    {
+      "evidence": [
+        "builtin-surface"
+      ],
+      "kind": "memberAlias",
+      "source": "disableHeroHUD",
+      "target": "disableHeroHud"
     }
   ],
   "functions": [
@@ -42,6 +82,22 @@
           "default": "IGNORE_CONDITION",
           "domain": "Wait",
           "name": "waitBehavior"
+        }
+      ]
+    },
+    {
+      "catalogId": "waitUntil",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "waitUntil",
+      "kind": "action",
+      "params": [
+        {
+          "name": "condition"
+        },
+        {
+          "name": "timeout"
         }
       ]
     },
@@ -113,6 +169,90 @@
           "default": "DEFAULT",
           "domain": "SpecVisibility",
           "name": "spectators"
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "hudHeader",
+      "kind": "action",
+      "params": [
+        {
+          "name": "visibleTo"
+        },
+        {
+          "name": "text"
+        },
+        {
+          "alternateNames": [
+            "position"
+          ],
+          "domain": "HudPosition",
+          "name": "location"
+        },
+        {
+          "name": "sortOrder"
+        },
+        {
+          "domain": "Color",
+          "name": "color"
+        },
+        {
+          "domain": "HudReeval",
+          "name": "reevaluation"
+        },
+        {
+          "alternateNames": [
+            "spectators"
+          ],
+          "default": "DEFAULT",
+          "domain": "SpecVisibility",
+          "name": "specVisibility"
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "hudSubtext",
+      "kind": "action",
+      "params": [
+        {
+          "name": "visibleTo"
+        },
+        {
+          "name": "text"
+        },
+        {
+          "alternateNames": [
+            "position"
+          ],
+          "domain": "HudPosition",
+          "name": "location"
+        },
+        {
+          "name": "sortOrder"
+        },
+        {
+          "domain": "Color",
+          "name": "color"
+        },
+        {
+          "domain": "HudReeval",
+          "name": "reevaluation"
+        },
+        {
+          "alternateNames": [
+            "spectators"
+          ],
+          "default": "DEFAULT",
+          "domain": "SpecVisibility",
+          "name": "specVisibility"
         }
       ]
     },
@@ -221,6 +361,31 @@
       ]
     },
     {
+      "catalogId": "chaseAtRate",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "chaseAtRate",
+      "kind": "action",
+      "params": [
+        {
+          "name": "variable",
+          "variable": true
+        },
+        {
+          "name": "destination"
+        },
+        {
+          "name": "rate"
+        },
+        {
+          "default": "DESTINATION_AND_RATE",
+          "domain": "ChaseRateReeval",
+          "name": "reevaluation"
+        }
+      ]
+    },
+    {
       "catalogId": "chaseOverTime",
       "evidence": [
         "chase-over-time",
@@ -308,6 +473,36 @@
       "params": []
     },
     {
+      "catalogId": "directionFromAngles",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "directionFromAngles",
+      "kind": "value",
+      "params": [
+        {
+          "name": "horizontalAngle"
+        },
+        {
+          "name": "verticalAngle"
+        }
+      ]
+    },
+    {
+      "catalogId": "inputBindingString",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "inputBindingString",
+      "kind": "value",
+      "params": [
+        {
+          "domain": "Button",
+          "name": "button"
+        }
+      ]
+    },
+    {
       "catalogId": "randomReal",
       "evidence": [
         "generic-builtins"
@@ -335,6 +530,117 @@
       "params": [
         {
           "name": "array"
+        }
+      ]
+    },
+    {
+      "catalogId": "randomInteger",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "random.randint",
+      "keywordArgs": false,
+      "kind": "value",
+      "params": [
+        {
+          "name": "min"
+        },
+        {
+          "name": "max"
+        }
+      ]
+    },
+    {
+      "catalogId": "randomizedArray",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "random.shuffle",
+      "keywordArgs": false,
+      "kind": "value",
+      "params": [
+        {
+          "name": "array"
+        }
+      ]
+    },
+    {
+      "catalogId": "allPlayers",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getPlayers",
+      "kind": "value",
+      "params": [
+        {
+          "default": "ALL",
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "all",
+      "kind": "value",
+      "params": [
+        {
+          "name": "array"
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "any",
+      "kind": "value",
+      "params": [
+        {
+          "name": "array"
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "ceil",
+      "kind": "value",
+      "params": [
+        {
+          "name": "value"
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "floor",
+      "kind": "value",
+      "params": [
+        {
+          "name": "value"
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "round",
+      "kind": "value",
+      "params": [
+        {
+          "name": "value"
         }
       ]
     },
@@ -388,6 +694,69 @@
       "id": "isGameInProgress",
       "kind": "value",
       "params": []
+    },
+    {
+      "catalogId": "isAssemblingHeroes",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "isAssemblingHeroes",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "setMatchTime",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "setMatchTime",
+      "kind": "action",
+      "params": [
+        {
+          "name": "time"
+        }
+      ]
+    },
+    {
+      "catalogId": "horizontalAngleFromDirection",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "horizontalAngleOfDirection",
+      "kind": "value",
+      "params": [
+        {
+          "name": "direction"
+        }
+      ]
+    },
+    {
+      "catalogId": "createDummyBot",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "createDummy",
+      "kind": "action",
+      "params": [
+        {
+          "domain": "Hero",
+          "name": "hero"
+        },
+        {
+          "domain": "Team",
+          "name": "team"
+        },
+        {
+          "name": "slot"
+        },
+        {
+          "name": "position"
+        },
+        {
+          "name": "facing",
+          "optional": true
+        }
+      ]
     },
     {
       "catalogId": "getPlayersInRadius",
@@ -678,6 +1047,76 @@
       ],
       "id": "getThrottle",
       "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getFacingDirection",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getFacingDirection",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "isButtonHeld",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "isButtonHeld",
+      "kind": "memberValue",
+      "params": [
+        {
+          "domain": "Button",
+          "name": "button"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "startFacing",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "startFacing",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "direction"
+        },
+        {
+          "name": "turnRate"
+        },
+        {
+          "domain": "Relativity",
+          "name": "relativity"
+        },
+        {
+          "domain": "FacingReeval",
+          "name": "reevaluation"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "disableHeroHud",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "disableHeroHud",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "enableHeroHud",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "enableHeroHud",
+      "kind": "memberAction",
       "params": [],
       "receiver": "Player"
     },

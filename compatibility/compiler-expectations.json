@@ -441,9 +441,9 @@
         "provenance:real-world/overpy-broken-weapons/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The full real-world project now passes the #99 numeric-range setting parser boundary and remains outside the #38 compiler baseline at the next unknown-value diagnostic.",
+      "note": "The full real-world project now passes the #99 numeric-range setting parser boundary and the audited builtin surface; it remains outside the #38 compiler baseline at the OverPy internal RULE_CONDITION identifier boundary.",
       "failureClass": "frontend",
-      "diagnosticCode": "unknown-value"
+      "diagnosticCode": "unknown-identifier"
     },
     {
       "fixture": "real-world/overpy-cake",
@@ -468,9 +468,9 @@
         "provenance:real-world/overpy-client-to-server/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The chained ternary, isDummy, and getHorizontalFacingAngle regressions now lower; the full real-world project remains outside the #38 compiler baseline and currently stops at the next unknown value (`horizontalAngleOfDirection`).",
+      "note": "The chained ternary, isDummy, getHorizontalFacingAngle, horizontalAngleOfDirection, and getFacingDirection boundaries now lower; the full real-world project remains outside the #38 compiler baseline at the next unknown member (`startFacing`).",
       "failureClass": "frontend",
-      "diagnosticCode": "unknown-value"
+      "diagnosticCode": "unknown-member"
     },
     {
       "fixture": "real-world/overpy-cronch",
@@ -482,9 +482,9 @@
         "provenance:real-world/overpy-cronch/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The postfix increment regression now lowers; the full real-world project remains outside the #38 compiler baseline and currently stops at the unsupported createDummy action at cronch.opy:103.",
+      "note": "The postfix increment regression and createDummy action now lower; the full real-world project remains outside the #38 compiler baseline at the existing SpecVisibility enum boundary.",
       "failureClass": "frontend",
-      "diagnosticCode": "unknown-action"
+      "diagnosticCode": "unknown-enum-member"
     },
     {
       "fixture": "real-world/overpy-crosshair",
@@ -496,9 +496,9 @@
         "provenance:real-world/overpy-crosshair/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The full real-world project now passes the implicit-concatenation, hudSubheader, and SpecVisibility.NEVER boundaries; the remaining native gap is the separate unsupported hudSubtext action.",
-      "failureClass": "frontend",
-      "diagnosticCode": "unknown-action"
+      "note": "The full real-world project now passes the implicit-concatenation, hudSubheader, SpecVisibility.NEVER, hudSubtext, and disableHeroHUD member boundaries; the remaining native gap is the separate stringModifier integration surface.",
+      "failureClass": "integration",
+      "diagnosticCode": "unsupported-integration-surface"
     },
     {
       "fixture": "real-world/overpy-inputhud",
@@ -612,17 +612,16 @@
     },
     {
       "fixture": "synthetic/chase-keywords",
-      "nativeStatus": "failure",
-      "classification": "known-gap",
-      "comparison": "diagnostic-code",
+      "nativeStatus": "success",
+      "classification": "unsupported",
+      "comparison": "semantic-wir",
       "evidence": [
         "oracle:synthetic/chase-keywords/oracle.json",
         "provenance:synthetic/chase-keywords/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The source semantic form is known, while the current canonical integration surface lacks a complete compiler contract.",
-      "failureClass": "integration",
-      "diagnosticCode": "unsupported-integration-surface"
+      "note": "The complete chase keyword source now compiles through the audited builtin surface, while canonical WIR equivalence remains an explicit follow-up for the native compiler's variable presentation and constant-folding differences.",
+      "semanticEquivalent": false
     },
     {
       "fixture": "synthetic/declarations-rules",
