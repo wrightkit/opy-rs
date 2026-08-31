@@ -457,7 +457,31 @@ pub enum Stmt {
         #[serde(skip_serializing_if = "Option::is_none")]
         span: Option<Span>,
     },
+    Delete {
+        target: Box<Expr>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        span: Option<Span>,
+    },
     Break {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        span: Option<Span>,
+    },
+    Continue {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        span: Option<Span>,
+    },
+    Goto {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        label: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        offset: Option<Box<Expr>>,
+        #[serde(default)]
+        rule_start: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        span: Option<Span>,
+    },
+    Label {
+        name: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         span: Option<Span>,
     },
@@ -491,7 +515,11 @@ impl Stmt {
             | Stmt::While { span, .. }
             | Stmt::DoWhile { span, .. }
             | Stmt::Switch { span, .. }
+            | Stmt::Delete { span, .. }
             | Stmt::Break { span }
+            | Stmt::Continue { span }
+            | Stmt::Goto { span, .. }
+            | Stmt::Label { span, .. }
             | Stmt::CallSubroutine { span, .. }
             | Stmt::Pass { span } => span.as_ref(),
         }

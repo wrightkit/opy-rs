@@ -21,7 +21,7 @@ Source: pinned OverPy `9.7.10`, content commit
 | List comprehensions | ✅ Supported | Mapping and filtering are separate behaviors. |
 | `lambda` with element/index binders | ✅ Supported | Valid positions are contextual. |
 | Member access, calls and postfix expressions | ✅ Supported | Receiver and dispatch checks are contract-sensitive. |
-| `del` array element statement | 🚧 Coming soon | Audited upstream keyword; compilation support is incomplete. |
+| `del` array element statement | 🚧 Coming soon | Source syntax and HIR are supported; canonical compilation remains incomplete. |
 | Conditional value `a if condition else b` | ✅ Supported | Chained forms are right-associative; distinct from statement `if`. |
 | `in` and `not in` membership | ✅ Supported | String containment uses `strContains`. |
 | Arithmetic, comparison, boolean and unary operators | ✅ Supported | Augmented forms are separate rows below. |
@@ -35,7 +35,7 @@ Source: pinned OverPy `9.7.10`, content commit
 | Simple assignment `=` | ✅ Supported | Global, player and indexed forms differ at lowering. |
 | `+=`, `-=`, `*=`, `/=`, `%=` | ✅ Supported | Each spelling is independently audited; postfix `++`/`--` forms lower to canonical Add/Subtract modifications. |
 | `**=` augmented assignment | ✅ Supported | Separate from `**`; uses Raise To Power. |
-| `min=` and `max=` modification forms | 🚧 Coming soon | Recognized by the audit; Workshop support is not claimed. |
+| `min=` and `max=` modification forms | 🚧 Coming soon | Source syntax and HIR are supported; Workshop support is not claimed. |
 | `globalvar name [index]` | ✅ Supported | Explicit and implicit index forms are distinct. |
 | `playervar name [index]` | ✅ Supported | Explicit and implicit index forms are distinct. |
 | Variable initializer `globalvar/playervar name = value` | ✅ Supported | Constant-zero behavior is observable. |
@@ -55,8 +55,8 @@ Source: pinned OverPy `9.7.10`, content commit
 | `while` and `do ... while` loops | ✅ Supported | Distinct entry-condition behavior. |
 | `switch` / `case` / `default` | ✅ Supported | Fall-through and `break` are separate. |
 | `break` in loops and switch arms | ✅ Supported | |
-| `continue` in loops | 🚧 Coming soon | Upstream keyword exists; end-to-end support is incomplete. |
-| `goto`, labels and dynamic `loc+` targets | 🚧 Coming soon | Audited from keyword registry and `src/tests/gotos.opy`. |
+| `continue` in loops | 🚧 Coming soon | Source syntax and HIR are supported with loop-context diagnostics; canonical lowering is incomplete. |
+| `goto`, labels and dynamic `loc+` targets | 🚧 Coming soon | Source syntax and HIR are supported; canonical lowering is incomplete. |
 | `pass` and `return` statements | ✅ Supported | Context restrictions remain conformance work. |
 | `#!include` root-relative composition | ✅ Supported | Missing files and cycles have distinct failures. |
 | Nested include closure and main-file selection | ✅ Supported | Project behavior is not inferred from one-file tests. |

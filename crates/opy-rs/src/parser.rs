@@ -189,6 +189,15 @@ impl Parser<'_> {
         }
     }
 
+    fn expect_statement_end(&mut self, what: &str) -> Result<(), ()> {
+        if matches!(self.peek_kind(), TokenKind::Newline | TokenKind::Eof) {
+            Ok(())
+        } else {
+            self.error_at_current(format!("expected the end of {what}"));
+            Err(())
+        }
+    }
+
     // ---- declarations ----
 
     fn parse_variable(&mut self, declarations: &mut Vec<Decl>, global: bool) -> bool {
@@ -890,6 +899,13 @@ impl Parser<'_> {
                 "while" => return self.parse_while(),
                 "do" => return self.parse_do_while(),
                 "switch" => return self.parse_switch(),
+                "del" => return self.parse_delete(),
+                "continue" => {
+                    let token = self.advance();
+                    self.expect_statement_end("the continue statement")?;
+                    return Ok(Stmt::Continue { span: token.span });
+                }
+                "goto" => return self.parse_goto(),
                 "break" => {
                     let token = self.advance();
                     return Ok(Stmt::Break { span: token.span });
@@ -900,8 +916,69 @@ impl Parser<'_> {
                 }
                 _ => {}
             }
+            if self.peek_at(1).kind == TokenKind::Colon {
+                return self.parse_label();
+            }
         }
         self.parse_expr_statement()
+    }
+
+    fn parse_delete(&mut self) -> Result<Stmt, ()> {
+        let start = self.advance();
+        let target = self.parse_postfix()?;
+        if !matches!(target, Expr::Index { .. }) {
+            self.errors.push(OpyError::at(
+                "parse-error",
+                "the del statement requires an array index target".to_string(),
+                target.span(),
+            ));
+            return Err(());
+        }
+        self.expect_statement_end("the del statement")?;
+        Ok(Stmt::Delete {
+            span: Span::new(start.span.file, start.span.start, target.span().end),
+            target,
+        })
+    }
+
+    fn parse_goto(&mut self) -> Result<Stmt, ()> {
+        let start = self.advance();
+        if self.is_ident("loc") {
+            self.advance();
+            self.expect(TokenKind::Plus, "'+' after 'goto loc'")?;
+            let offset = self.parse_expr()?;
+            self.expect_statement_end("the goto target")?;
+            return Ok(Stmt::Goto {
+                label: None,
+                span: Span::new(start.span.file, start.span.start, offset.span().end),
+                offset: Some(offset),
+                rule_start: false,
+            });
+        }
+
+        let label = self.expect_ident("a label or 'loc+...' after 'goto'")?;
+        self.expect_statement_end("the goto target")?;
+        let rule_start = label == "RULE_START";
+        Ok(Stmt::Goto {
+            label: (!rule_start).then_some(label),
+            offset: None,
+            rule_start,
+            span: Span::new(
+                start.span.file,
+                start.span.start,
+                self.tokens[self.pos - 1].span.end,
+            ),
+        })
+    }
+
+    fn parse_label(&mut self) -> Result<Stmt, ()> {
+        let name = self.advance();
+        let colon = self.expect(TokenKind::Colon, "':' after a label")?;
+        self.expect_statement_end("the label")?;
+        Ok(Stmt::Label {
+            name: name.text,
+            span: Span::new(name.span.file, name.span.start, colon.span.end),
+        })
     }
 
     fn parse_expr_statement(&mut self) -> Result<Stmt, ()> {
@@ -934,6 +1011,26 @@ impl Parser<'_> {
                     _ => unreachable!(),
                 }
                 .to_string();
+                self.advance();
+                let rhs = self.parse_expr()?;
+                let end = self.peek().span.start;
+                let value = Expr::Binary {
+                    op,
+                    left: Box::new(expr.clone()),
+                    right: Box::new(rhs),
+                    span: Span::new(start.file, start.start, end),
+                };
+                Ok(Stmt::Assign {
+                    target: expr,
+                    value,
+                    span: Span::new(start.file, start.start, end),
+                })
+            }
+            TokenKind::Ident
+                if matches!(self.peek().text.as_str(), "min" | "max")
+                    && self.peek_at(1).kind == TokenKind::Assign =>
+            {
+                let op = self.advance().text;
                 self.advance();
                 let rhs = self.parse_expr()?;
                 let end = self.peek().span.start;
@@ -2157,6 +2254,83 @@ mod tests {
             panic!();
         };
         assert_eq!(body.len(), 2);
+    }
+
+    #[test]
+    fn parses_issue_141_statement_surface() {
+        let program = parse_ok(concat!(
+            "globalvar value\n",
+            "rule \"r\":\n",
+            "    @Event global\n",
+            "    del value[1]\n",
+            "    value min= 2\n",
+            "    value max= 3\n",
+            "    while value < 4:\n",
+            "        continue\n",
+            "    goto RULE_START\n",
+            "    goto target\n",
+            "    goto loc + value\n",
+            "    target:\n",
+        ));
+        let RuleEntry::Rule(rule) = &program.rules[0] else {
+            panic!("expected rule");
+        };
+        assert!(matches!(rule.actions[0], Stmt::Delete { .. }));
+        for (statement, expected) in [(&rule.actions[1], "min"), (&rule.actions[2], "max")] {
+            let Stmt::Assign { value, .. } = statement else {
+                panic!("expected augmented assignment");
+            };
+            assert!(matches!(value, Expr::Binary { op, .. } if op == expected));
+        }
+        let Stmt::While { body, .. } = &rule.actions[3] else {
+            panic!("expected while");
+        };
+        assert!(matches!(body.as_slice(), [Stmt::Continue { .. }]));
+        assert!(matches!(
+            &rule.actions[4],
+            Stmt::Goto {
+                label: None,
+                offset: None,
+                rule_start: true,
+                ..
+            }
+        ));
+        assert!(matches!(
+            &rule.actions[5],
+            Stmt::Goto {
+                label: Some(label),
+                offset: None,
+                rule_start: false,
+                ..
+            } if label == "target"
+        ));
+        assert!(matches!(
+            &rule.actions[6],
+            Stmt::Goto {
+                label: None,
+                offset: Some(_),
+                rule_start: false,
+                ..
+            }
+        ));
+        assert!(matches!(&rule.actions[7], Stmt::Label { name, .. } if name == "target"));
+    }
+
+    #[test]
+    fn rejects_invalid_issue_141_statement_forms() {
+        for source in [
+            "rule \"r\":\n    @Event global\n    del value\n",
+            "rule \"r\":\n    @Event global\n    goto\n",
+            "rule \"r\":\n    @Event global\n    goto loc\n",
+            "rule \"r\":\n    @Event global\n    goto target extra\n",
+            "rule \"r\":\n    @Event global\n    continue now\n",
+            "rule \"r\":\n    @Event global\n    A = 1; A = 2\n",
+        ] {
+            let errors = parse_err(source);
+            assert!(!errors.is_empty(), "invalid form parsed: {source}");
+            assert!(errors.iter().all(|error| error.code == "parse-error"));
+            assert!(errors.iter().all(|error| error.span.is_some()));
+        }
     }
 
     #[test]

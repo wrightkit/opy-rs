@@ -311,10 +311,47 @@ fn dump_stmt(statement: &Stmt, out: &mut String, level: usize) {
                 }
             }
         }
+        Stmt::Delete { target, span } => {
+            out.push_str(&format!("{}delete ", indent(level)));
+            render_expr(target, out);
+            out.push_str(&format!("{}\n", span_suffix(span.as_ref())));
+        }
         Stmt::Break { span } => {
             out.push_str(&format!(
                 "{}break{}\n",
                 indent(level),
+                span_suffix(span.as_ref())
+            ));
+        }
+        Stmt::Continue { span } => {
+            out.push_str(&format!(
+                "{}continue{}\n",
+                indent(level),
+                span_suffix(span.as_ref())
+            ));
+        }
+        Stmt::Goto {
+            label,
+            offset,
+            rule_start,
+            span,
+        } => {
+            out.push_str(&format!("{}goto ", indent(level)));
+            if *rule_start {
+                out.push_str("RULE_START");
+            } else if let Some(label) = label {
+                out.push_str(&format!("label {label}"));
+            } else if let Some(offset) = offset {
+                out.push_str("loc+");
+                render_expr(offset, out);
+            }
+            out.push_str(&format!("{}\n", span_suffix(span.as_ref())));
+        }
+        Stmt::Label { name, span } => {
+            out.push_str(&format!(
+                "{}label {}{}\n",
+                indent(level),
+                name,
                 span_suffix(span.as_ref())
             ));
         }

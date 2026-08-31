@@ -223,7 +223,7 @@ pub fn lower_with_preprocessing(
                     source_name: name.clone(),
                     span: Some(span.into()),
                     name_span: Some(name_span.into()),
-                    body: lowerer.lower_block(body, &[], false, true),
+                    body: lowerer.lower_block(body, &[], false, true, false),
                     annotations: lower_annotations(annotations),
                 });
             }
@@ -631,7 +631,7 @@ impl Lowerer {
             .iter()
             .map(|condition| self.lower_expr(condition, &[], CallPosition::Value))
             .collect();
-        let actions = self.lower_block(&rule.actions, &[], false, true);
+        let actions = self.lower_block(&rule.actions, &[], false, true, false);
         Ok(Rule {
             name: render_rule_name(
                 &rule.name,
@@ -669,6 +669,7 @@ impl Lowerer {
         macro_params: &[String],
         breakable: bool,
         allow_do_while: bool,
+        loopable: bool,
     ) -> Vec<HirStmt> {
         stmts
             .iter()
@@ -686,12 +687,18 @@ impl Lowerer {
                         stmt.span(),
                     );
                 }
-                self.lower_stmt(stmt, macro_params, breakable)
+                self.lower_stmt(stmt, macro_params, breakable, loopable)
             })
             .collect()
     }
 
-    fn lower_stmt(&mut self, stmt: &Stmt, macro_params: &[String], breakable: bool) -> HirStmt {
+    fn lower_stmt(
+        &mut self,
+        stmt: &Stmt,
+        macro_params: &[String],
+        breakable: bool,
+        loopable: bool,
+    ) -> HirStmt {
         match stmt {
             Stmt::Expr { expr, span } => {
                 // A bare call of a declared subroutine becomes
@@ -733,12 +740,18 @@ impl Lowerer {
                             macro_params,
                             CallPosition::Value,
                         )),
-                        body: self.lower_block(&branch.body, macro_params, breakable, false),
+                        body: self.lower_block(
+                            &branch.body,
+                            macro_params,
+                            breakable,
+                            false,
+                            loopable,
+                        ),
                     })
                     .collect(),
                 r#else: r#else
                     .as_ref()
-                    .map(|body| self.lower_block(body, macro_params, breakable, false)),
+                    .map(|body| self.lower_block(body, macro_params, breakable, false, loopable)),
                 span: Some(span.into()),
             },
             Stmt::For {
@@ -764,7 +777,7 @@ impl Lowerer {
                 HirStmt::For {
                     variable: Box::new(self.lower_for_binder(variable, macro_params)),
                     iterable: Box::new(self.lower_expr(iterable, macro_params, iterable_position)),
-                    body: self.lower_block(body, macro_params, true, false),
+                    body: self.lower_block(body, macro_params, true, false, true),
                     span: Some(span.into()),
                 }
             }
@@ -774,7 +787,7 @@ impl Lowerer {
                 span,
             } => HirStmt::While {
                 condition: Box::new(self.lower_expr(condition, macro_params, CallPosition::Value)),
-                body: self.lower_block(body, macro_params, true, false),
+                body: self.lower_block(body, macro_params, true, false, true),
                 span: Some(span.into()),
             },
             Stmt::DoWhile {
@@ -783,7 +796,7 @@ impl Lowerer {
                 span,
             } => HirStmt::DoWhile {
                 condition: Box::new(self.lower_expr(condition, macro_params, CallPosition::Value)),
-                body: self.lower_block(body, macro_params, true, true),
+                body: self.lower_block(body, macro_params, true, true, true),
                 span: Some(span.into()),
             },
             Stmt::Switch { value, arms, span } => HirStmt::Switch {
@@ -797,15 +810,19 @@ impl Lowerer {
                                 macro_params,
                                 CallPosition::Value,
                             )),
-                            body: self.lower_block(body, macro_params, true, false),
+                            body: self.lower_block(body, macro_params, true, false, loopable),
                             span: Some((*span).into()),
                         },
                         cst::SwitchArm::Default { body, span } => HirSwitchArm::Default {
-                            body: self.lower_block(body, macro_params, true, false),
+                            body: self.lower_block(body, macro_params, true, false, loopable),
                             span: Some((*span).into()),
                         },
                     })
                     .collect(),
+                span: Some(span.into()),
+            },
+            Stmt::Delete { target, span } => HirStmt::Delete {
+                target: Box::new(self.lower_expr(target, macro_params, CallPosition::Value)),
                 span: Some(span.into()),
             },
             Stmt::Break { span } => {
@@ -820,6 +837,35 @@ impl Lowerer {
                     span: Some(span.into()),
                 }
             }
+            Stmt::Continue { span } => {
+                if !loopable {
+                    self.error_at(
+                        "continue-context",
+                        "continue is only valid inside a loop".to_string(),
+                        *span,
+                    );
+                }
+                HirStmt::Continue {
+                    span: Some(span.into()),
+                }
+            }
+            Stmt::Goto {
+                label,
+                offset,
+                rule_start,
+                span,
+            } => HirStmt::Goto {
+                label: label.clone(),
+                offset: offset.as_ref().map(|offset| {
+                    Box::new(self.lower_expr(offset, macro_params, CallPosition::Value))
+                }),
+                rule_start: *rule_start,
+                span: Some(span.into()),
+            },
+            Stmt::Label { name, span } => HirStmt::Label {
+                name: name.clone(),
+                span: Some(span.into()),
+            },
             Stmt::Pass { span } => HirStmt::Pass {
                 span: Some(span.into()),
             },
@@ -845,7 +891,7 @@ impl Lowerer {
     }
 
     fn lower_macro_body(&mut self, body: &[Stmt], params: &[String]) -> Vec<HirStmt> {
-        self.lower_block(body, params, false, false)
+        self.lower_block(body, params, false, false, false)
     }
 
     fn lower_expr(

@@ -267,7 +267,14 @@ fn support_filters_by_feature_id_and_category() {
     let slice: serde_json::Value =
         serde_json::from_slice(&by_category.stdout).expect("category JSON");
     assert_eq!(slice["category"], "syntax");
-    assert_eq!(slice["count"], 14);
+    let features = slice["features"].as_array().expect("filtered features");
+    assert_eq!(slice["count"], features.len());
+    assert!(!features.is_empty());
+    assert!(
+        features
+            .iter()
+            .all(|feature| feature["category"] == "syntax")
+    );
 
     let unknown = run(&["support", "nope/nothing"]);
     assert_eq!(unknown.status.code(), Some(2));
