@@ -4,19 +4,19 @@
     "exitCode": 0,
     "status": "success",
     "stdout": "",
-    "workshop": "rule (\"horizontal facing angle\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    conditions {\n        Horizontal Facing Angle Of(Event Player) == 0;\n    }\n    actions {\n        Disable Inspector Recording;\n    }\n}\n",
-    "workshopExact": "rule (\"horizontal facing angle\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    conditions {\n        Horizontal Facing Angle Of(Event Player) == 0;\n    }\n    actions {\n        Disable Inspector Recording;\n    }\n}\n\n",
-    "workshopSha256": "200dc5e5881b71f32fcc351cf4adb082984fdb4594fdc124aea65bc29491b8d5"
+    "workshop": "variables {\n    global:\n        0: horizontalAngle\n}\n\nrule (\"horizontal facing angle\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Set Global Variable(horizontalAngle, Horizontal Facing Angle Of(Event Player));\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: horizontalAngle\n}\n\nrule (\"horizontal facing angle\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Set Global Variable(horizontalAngle, Horizontal Facing Angle Of(Event Player));\n    }\n}\n\n",
+    "workshopSha256": "cfa82e04854ba3836ac997c475a095afa044b8f5c1ca803fa32f3c1b909c35c9"
   },
   "fixture": "synthetic/issue-130-horizontal-facing-angle",
   "input": {
     "files": [
       {
         "path": "source.opy",
-        "sha256": "7ba6cecf6d62550deef81b09117b935cc226e538814daad6bbd67faada1b1178"
+        "sha256": "114a0e69c9c49618e3233a5b76eb32948edd0a1478a1d24303db5f910343c949"
       }
     ],
-    "sha256": "aeacd3ab03cdb0cd1ccc3561492f2911135e94c5597c845936a700476dad60ff",
+    "sha256": "b70bd3106b5293de1ec9408833a8e1a8744579238ddd0f5400246826c3d5f2dd",
     "source": "source.opy"
   },
   "oracle": {

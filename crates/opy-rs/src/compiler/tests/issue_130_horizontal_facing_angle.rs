@@ -41,23 +41,29 @@ fn horizontal_facing_angle_member_matches_the_pinned_canonical_wir() {
         .rules
         .get(workshop_rs::wir::RuleId::from_index(0))
         .expect("fixture has one rule");
-    let condition = artifact
+    let Action::SetGlobalVariable {
+        variable, value, ..
+    } = artifact
         .wir
-        .values
-        .get(rule.conditions[0])
-        .expect("rule has one condition");
-    let Value::Call {
-        name: comparison,
-        args: comparison_args,
-    } = &condition.value
+        .actions
+        .get(rule.actions[0])
+        .expect("rule captures the member value")
     else {
-        panic!("expected condition comparison, got {:?}", condition.value);
+        panic!("expected direct global assignment");
     };
-    assert_eq!(comparison, "==");
+    assert_eq!(
+        artifact
+            .wir
+            .global_variables
+            .get(*variable)
+            .expect("global variable")
+            .name,
+        "horizontalAngle"
+    );
     let Value::Call { name, args } = &artifact
         .wir
         .values
-        .get(comparison_args[0])
+        .get(*value)
         .expect("horizontal facing angle value")
         .value
     else {
@@ -73,10 +79,6 @@ fn horizontal_facing_angle_member_matches_the_pinned_canonical_wir() {
             .expect("receiver value")
             .value,
         Value::EventPlayer
-    ));
-    assert!(matches!(
-        artifact.wir.actions.get(rule.actions[0]),
-        Some(Action::Call { name, .. }) if name == "disableInspector"
     ));
 }
 

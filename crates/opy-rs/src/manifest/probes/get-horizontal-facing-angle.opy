@@ -1,4 +1,5 @@
+globalvar horizontalAngle
+
 rule "r":
     @Event eachPlayer
-    @Condition eventPlayer.getHorizontalFacingAngle() == 0
-    disableInspector()
+    horizontalAngle = eventPlayer.getHorizontalFacingAngle()

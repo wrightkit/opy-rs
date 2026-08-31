@@ -470,7 +470,7 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         &mut cases,
         "real-world/overpy-client-to-server",
         Some("parse-error"),
-        "the chained ternary and isDummy regressions resolve; the full project reaches the next unsupported member (`getHorizontalFacingAngle`). Gap: reference accepts, native rejects (documented).",
+        "the chained ternary, isDummy, and getHorizontalFacingAngle regressions resolve; the full project reaches the next unknown value (`horizontalAngleOfDirection`). Gap: reference accepts, native rejects (documented).",
     );
     diagnostic(
         &mut cases,
