@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/issue-129-included-main-file",
+  "category": "preprocessing",
+  "features": ["preprocessing/main-file", "preprocessing/include-scope"],
+  "source": "source.opy",
+  "expectedStatus": "success",
+  "provenance": {
+    "kind": "original",
+    "origin": "opy-rs Issue #129 included-file mainFile scope probe",
+    "license": "AGPL-3.0-or-later",
+    "redistributable": true
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: value\n}\n\nrule (\"included\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(value, 2);\n    }\n}\n\nrule (\"root\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(value, 1);\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: value\n}\n\nrule (\"included\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(value, 2);\n    }\n}\n\nrule (\"root\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(value, 1);\n    }\n}\n\n",
+    "workshopSha256": "5ad16b26c7f468d24ea3d77d2bb9bfc113a15549b41394d6e84425c16f5b209a"
+  },
+  "fixture": "synthetic/issue-129-included-main-file",
+  "input": {
+    "files": [
+      {
+        "path": "child.opy",
+        "sha256": "10b95dc06e9c59f36cce2349c7f1608c619840ffda25bfa807474be5670cbf9f"
+      },
+      {
+        "path": "source.opy",
+        "sha256": "dd8a1e1a97f7e6288f2293811cca8d3a5eb01c2fd6dbb53481de90b6b190980e"
+      }
+    ],
+    "sha256": "f22de4f9f40985281aeb2946784ff52c5e06d53eb76cff727436741a4e6b7f9d",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

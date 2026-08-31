@@ -279,7 +279,7 @@ pub fn preprocess_with_overlay_outcome(
             };
         }
     };
-    if let Err(error) = pre.process_directives(&mut tokens) {
+    if let Err(error) = pre.process_directives(&mut tokens, false) {
         return PreprocessOutcome {
             result: Err(error),
             files: pre.files,
@@ -351,11 +351,16 @@ fn first_main_file_directive(text: &str) -> Option<(String, Span)> {
 impl Preprocessor {
     /// Process `#!` directive tokens, splicing includes and registering
     /// defines. Non-directive tokens are kept in place.
-    fn process_directives(&mut self, tokens: &mut Vec<Token>) -> OpyResult<()> {
+    fn process_directives(
+        &mut self,
+        tokens: &mut Vec<Token>,
+        allow_leading_main_file: bool,
+    ) -> OpyResult<()> {
         let mut out: Vec<Token> = Vec::with_capacity(tokens.len());
         for token in tokens.drain(..) {
             if token.kind == TokenKind::Directive {
-                self.handle_directive(token, &mut out)?;
+                let is_leading_main_file = allow_leading_main_file && token.span.start.line == 1;
+                self.handle_directive(token, &mut out, is_leading_main_file)?;
             } else if token.kind == TokenKind::Ident
                 && matches!(token.text.as_str(), "rule" | "def")
                 && self.preprocessing.rule_prefix.is_some()
@@ -381,7 +386,12 @@ impl Preprocessor {
         Ok(())
     }
 
-    fn handle_directive(&mut self, token: Token, out: &mut Vec<Token>) -> OpyResult<()> {
+    fn handle_directive(
+        &mut self,
+        token: Token,
+        out: &mut Vec<Token>,
+        allow_leading_main_file: bool,
+    ) -> OpyResult<()> {
         let text = token.text.trim();
         let span = token.span;
         let (name, rest) = split_directive(text);
@@ -449,7 +459,7 @@ impl Preprocessor {
             return Ok(());
         }
         if name == "mainFile" {
-            if !self.include_stack.is_empty() {
+            if allow_leading_main_file {
                 let main_file = strip_quoted(rest.trim())
                     .filter(|main_file| !main_file.is_empty())
                     .ok_or_else(|| {
@@ -704,7 +714,11 @@ impl Preprocessor {
             file_id,
             text: &text,
         })?;
-        let processed = self.process_directives(&mut included);
+        let allow_leading_main_file = text
+            .lines()
+            .next()
+            .is_some_and(|line| line.trim_end_matches('\r').starts_with("#!mainFile"));
+        let processed = self.process_directives(&mut included, allow_leading_main_file);
         self.preprocessing.rule_prefix = saved_prefix;
         self.preprocessing.optimization = saved_optimization;
         if let Err(error) = processed {

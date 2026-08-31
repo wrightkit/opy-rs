@@ -339,6 +339,12 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
     );
     resolve(
         &mut cases,
+        "synthetic/issue-129-included-main-file",
+        true,
+        "included-file mainFile scope and root entry-point preservation; oracle status success.",
+    );
+    resolve(
+        &mut cases,
         "synthetic/issue-31-positive",
         false,
         "pinned positive probe for global rulePrefixTemplate, include prefix restoration, AST macro/enum redeclaration, and translation normalization.",

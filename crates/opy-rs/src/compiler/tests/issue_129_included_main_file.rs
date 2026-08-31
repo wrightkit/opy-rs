@@ -54,3 +54,19 @@ fn malformed_included_main_file_is_source_attributed() {
     assert_eq!(span.start.line, 1);
     assert_eq!(outcome.files[1].path, "child.opy");
 }
+
+#[test]
+fn included_main_file_must_be_on_the_first_line() {
+    let outcome = compile_with_overlay_outcome(
+        "#!include \"child.opy\"\n",
+        "main.opy",
+        Path::new("."),
+        &child_overlay("#!define VALUE 1\n#!mainFile \"../main.opy\"\n"),
+    );
+    let error = outcome.error.expect("a non-leading mainFile must fail");
+    assert_eq!(error.code, "main-file-placement");
+    let span = error.span.expect("diagnostic provenance");
+    assert_eq!(span.file, 1);
+    assert_eq!(span.start.line, 2);
+    assert_eq!(outcome.files[1].path, "child.opy");
+}
