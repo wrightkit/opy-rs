@@ -347,6 +347,20 @@
       "semanticEquivalent": true
     },
     {
+      "fixture": "synthetic/issue-130-horizontal-facing-angle",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "semantic-wir",
+      "evidence": [
+        "oracle:synthetic/issue-130-horizontal-facing-angle/oracle.json",
+        "provenance:synthetic/issue-130-horizontal-facing-angle/fixture.json",
+        "test:opy-rs::compiler::integration_tests::issue_130_horizontal_facing_angle::horizontal_facing_angle_member_matches_the_pinned_canonical_wir"
+      ],
+      "owner": "opy-rs#130",
+      "note": "The catalog-backed eventPlayer.getHorizontalFacingAngle() member value lowers to canonical WIR equivalent to the pinned oracle.",
+      "semanticEquivalent": true
+    },
+    {
       "fixture": "synthetic/issue-47-unsupported",
       "nativeStatus": "failure",
       "classification": "unsupported",
@@ -440,9 +454,9 @@
         "provenance:real-world/overpy-client-to-server/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The chained ternary and isDummy regressions now lower; the full real-world project remains outside the #38 compiler baseline and currently stops at the next unsupported member (`getHorizontalFacingAngle`).",
+      "note": "The chained ternary, isDummy, and getHorizontalFacingAngle regressions now lower; the full real-world project remains outside the #38 compiler baseline and currently stops at the next unknown value (`horizontalAngleOfDirection`).",
       "failureClass": "frontend",
-      "diagnosticCode": "unknown-member"
+      "diagnosticCode": "unknown-value"
     },
     {
       "fixture": "real-world/overpy-cronch",

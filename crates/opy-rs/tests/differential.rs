@@ -255,6 +255,12 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
     );
     resolve(
         &mut cases,
+        "synthetic/issue-130-horizontal-facing-angle",
+        true,
+        "Issue #130 catalog-backed eventPlayer.getHorizontalFacingAngle() member value; canonical WIR lowering is constrained by the dedicated compiler test.",
+    );
+    resolve(
+        &mut cases,
         "synthetic/issue-47-control-flow",
         false,
         "Issue #47 oracle-backed control-flow lowering probe; the frontend resolves the source while the compiler independently constrains canonical WIR against the pinned oracle.",

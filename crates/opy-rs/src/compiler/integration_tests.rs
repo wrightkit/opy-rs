@@ -14,6 +14,8 @@ mod issue_114_hud_subheader;
 mod issue_115_string_continuation;
 #[path = "tests/issue_129_included_main_file.rs"]
 mod issue_129_included_main_file;
+#[path = "tests/issue_130_horizontal_facing_angle.rs"]
+mod issue_130_horizontal_facing_angle;
 #[path = "tests/issue_42_oracle.rs"]
 mod issue_42_oracle;
 #[path = "tests/issue_46_oracle.rs"]

@@ -1,0 +1,33 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "rule (\"horizontal facing angle\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    conditions {\n        Horizontal Facing Angle Of(Event Player) == 0;\n    }\n    actions {\n        Disable Inspector Recording;\n    }\n}\n",
+    "workshopExact": "rule (\"horizontal facing angle\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    conditions {\n        Horizontal Facing Angle Of(Event Player) == 0;\n    }\n    actions {\n        Disable Inspector Recording;\n    }\n}\n\n",
+    "workshopSha256": "200dc5e5881b71f32fcc351cf4adb082984fdb4594fdc124aea65bc29491b8d5"
+  },
+  "fixture": "synthetic/issue-130-horizontal-facing-angle",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "7ba6cecf6d62550deef81b09117b935cc226e538814daad6bbd67faada1b1178"
+      }
+    ],
+    "sha256": "aeacd3ab03cdb0cd1ccc3561492f2911135e94c5597c845936a700476dad60ff",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

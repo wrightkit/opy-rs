@@ -642,6 +642,16 @@
       "receiver": "Player"
     },
     {
+      "catalogId": "getHorizontalFacingAngle",
+      "evidence": [
+        "get-horizontal-facing-angle"
+      ],
+      "id": "getHorizontalFacingAngle",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
       "catalogId": "isDummy",
       "evidence": [
         "is-dummy"

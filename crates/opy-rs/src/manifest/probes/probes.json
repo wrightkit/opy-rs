@@ -135,6 +135,13 @@
       "source": "generic-builtins.opy"
     },
     {
+      "expect": "success",
+      "id": "get-horizontal-facing-angle",
+      "outputSha256": "207bc55acfe5eea59d6c9212752ff339a12271e0d96328380fd63a74918cb948",
+      "sha256": "e4a092940cc6081a56e7eb0cc16be33338235f2b9cb86a0110bb2bfb8d5ccb08",
+      "source": "get-horizontal-facing-angle.opy"
+    },
+    {
       "diagnosticContains": "Unknown function 'setMoveSpeed'",
       "expect": "failure",
       "id": "generic-member-only-action",
