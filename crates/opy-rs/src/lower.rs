@@ -1161,6 +1161,10 @@ impl Lowerer {
             // against the canonical Workshop catalog.
             if self.manifest.domain_identity(name) {
                 let locale = Locale::new("en-US");
+                let catalog_member = match (name.as_str(), member) {
+                    ("SpecVisibility", "NEVER") => "VISIBLE_NEVER",
+                    _ => member,
+                };
                 let canonical_member = self
                     .catalog
                     .enum_domain(name)
@@ -1168,7 +1172,7 @@ impl Lowerer {
                         domain
                             .members
                             .iter()
-                            .find(|candidate| candidate.member == member)
+                            .find(|candidate| candidate.member == catalog_member)
                             .map(|candidate| candidate.member.clone())
                     })
                     .or_else(|| {
