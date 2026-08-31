@@ -137,13 +137,12 @@ impl ReceiverCategory {
     }
 }
 
-/// A parameter default that the frontend expands: an enum member
-/// (`"MEMBER"`) or a scalar (`0.016`). Only enum-member defaults are
-/// expanded at lowering (matching the reference emission); scalar defaults
-/// are declared data (the `wait` special form fills its own).
+/// A parameter default that the frontend expands: a function call, enum
+/// member (`"MEMBER"`), or scalar (`0.016`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ParamDefault {
+    Call { call: String },
     EnumMember(String),
     Number(f64),
 }

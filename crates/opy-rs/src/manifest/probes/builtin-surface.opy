@@ -20,6 +20,8 @@ rule "builtin surface":
     createDummy(Hero.ANA, Team.ALL, -1, vect(0, 0, 0), vect(0, 0, 0))
     hudHeader(getAllPlayers(), "header", HudPosition.TOP, 0, Color.WHITE, HudReeval.VISIBILITY, SpecVisibility.DEFAULT)
     hudSubtext(getAllPlayers(), "text", HudPosition.TOP, 1, Color.WHITE, HudReeval.VISIBILITY, SpecVisibility.DEFAULT)
+    hudHeader(text="default header")
+    hudSubtext(text="default text")
     setMatchTime(0)
     eventPlayer.startFacing(vect(0, 0, 1), 1, Relativity.TO_WORLD, FacingReeval.DIRECTION_AND_TURN_RATE)
     eventPlayer.disableHeroHUD()

@@ -39,6 +39,8 @@ rule "builtin surface":
     createDummy(Hero.ANA, Team.ALL, -1, vect(0, 0, 0), vect(0, 0, 0))
     hudHeader(getAllPlayers(), "header", HudPosition.TOP, 0, Color.WHITE, HudReeval.VISIBILITY, SpecVisibility.DEFAULT)
     hudSubtext(getAllPlayers(), "text", HudPosition.TOP, 1, Color.WHITE, HudReeval.VISIBILITY, SpecVisibility.DEFAULT)
+    hudHeader(text="default header")
+    hudSubtext(text="default text")
     waitUntil(true, 1)
 "#;
     let hir = crate::compile(source, "builtin-surface.opy", Path::new("."))
@@ -66,7 +68,7 @@ rule "builtin surface":
     assert!(artifact.emitted.contains("Chase Global Variable At Rate"));
     assert!(artifact.emitted.contains("Create Dummy Bot"));
     assert!(artifact.emitted.contains("Wait Until"));
-    assert_eq!(artifact.emitted.matches("Create HUD Text").count(), 2);
+    assert_eq!(artifact.emitted.matches("Create HUD Text").count(), 4);
 }
 
 #[test]

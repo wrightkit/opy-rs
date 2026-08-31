@@ -181,6 +181,9 @@
       "kind": "action",
       "params": [
         {
+          "default": {
+            "call": "getAllPlayers"
+          },
           "name": "visibleTo"
         },
         {
@@ -190,17 +193,21 @@
           "alternateNames": [
             "position"
           ],
+          "default": "LEFT",
           "domain": "HudPosition",
           "name": "location"
         },
         {
+          "default": 0,
           "name": "sortOrder"
         },
         {
+          "default": "WHITE",
           "domain": "Color",
           "name": "color"
         },
         {
+          "default": "VISIBILITY_SORT_ORDER_STRING_AND_COLOR",
           "domain": "HudReeval",
           "name": "reevaluation"
         },
@@ -223,6 +230,9 @@
       "kind": "action",
       "params": [
         {
+          "default": {
+            "call": "getAllPlayers"
+          },
           "name": "visibleTo"
         },
         {
@@ -232,17 +242,21 @@
           "alternateNames": [
             "position"
           ],
+          "default": "LEFT",
           "domain": "HudPosition",
           "name": "location"
         },
         {
+          "default": 0,
           "name": "sortOrder"
         },
         {
+          "default": "WHITE",
           "domain": "Color",
           "name": "color"
         },
         {
+          "default": "VISIBILITY_SORT_ORDER_STRING_AND_COLOR",
           "domain": "HudReeval",
           "name": "reevaluation"
         },
