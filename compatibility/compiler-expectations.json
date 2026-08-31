@@ -593,9 +593,9 @@
         "provenance:real-world/ow1-emulator/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The full real-world project now resolves included-file #!mainFile and #!defineMember directives; it remains outside the compiler baseline at the next lexer line-continuation boundary.",
+      "note": "The full real-world project now resolves included-file #!mainFile, #!defineMember directives, and continued directive lines; it remains outside the compiler baseline at the duplicate-include macro-redeclaration boundary.",
       "failureClass": "frontend",
-      "diagnosticCode": "lex-error"
+      "diagnosticCode": "macro-redeclaration"
     },
     {
       "fixture": "synthetic/chase-condition-agentlab",
