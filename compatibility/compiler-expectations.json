@@ -702,8 +702,8 @@
         "provenance:synthetic/issue-28-syntax/fixture.json",
         "test:opy-rs::compiler::integration_tests::issue_145_lowering::broad_supported_syntax_lowering_reaches_canonical_wir"
       ],
-      "owner": "workshop-rs#123",
-      "note": "The supported issue-28 syntax slice lowers through the native canonical-WIR contract; the pinned oracle snapshot currently cannot be reparsed by the released Workshop parser because of its uppercase hexadecimal spelling, so full semantic comparison remains an external owner blocker."
+      "owner": "opy-rs#88",
+      "note": "The supported issue-28 syntax slice lowers through the native canonical-WIR contract; the pinned oracle snapshot currently cannot be reparsed by the released Workshop parser because of its uppercase hexadecimal spelling, so full semantic comparison remains a declared #88 corpus boundary rather than an unowned OPY lowering gap."
     },
     {
       "fixture": "synthetic/issue-29-directives",
