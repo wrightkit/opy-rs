@@ -60,30 +60,15 @@ fn never_maps_to_visible_never_in_canonical_wir() {
 }
 
 #[test]
-fn default_and_always_keep_their_canonical_visibility_members() {
-    for (member, expected) in [("DEFAULT", "DEFAULT"), ("ALWAYS", "VISIBLE_ALWAYS")] {
-        let source = format!(
-            "rule \"r\":\n    @Event global\n    hudSubheader(getAllPlayers(), \"text\", HudPosition.TOP, 0, Color.WHITE, HudReeval.VISIBILITY, SpecVisibility.{member})\n"
-        );
-        let hir = crate::compile(&source, "source.opy", Path::new(".")).expect("source resolves");
-        let artifact = Compiler::new()
-            .expect("compiler loads")
-            .compile_hir(&hir)
-            .expect("SpecVisibility member must lower");
-        let rule = artifact
-            .wir
-            .rules
-            .get(workshop_rs::wir::RuleId::from_index(0))
-            .expect("rule exists");
-        let Action::Call { args, .. } = artifact.wir.actions.get(rule.actions[0]).unwrap() else {
-            panic!("hudSubheader must lower to a canonical action call");
-        };
-        assert!(matches!(
-            &artifact.wir.values.get(args[10]).unwrap().value,
-            Value::Enum { value_type, value }
-                if value_type == "SpecVisibility" && value == expected
-        ));
-    }
+fn unrelated_always_member_keeps_its_existing_diagnostic() {
+    let source = "rule \"r\":\n    @Event global\n    hudSubheader(getAllPlayers(), \"text\", HudPosition.TOP, 0, Color.WHITE, HudReeval.VISIBILITY, SpecVisibility.ALWAYS)\n";
+    let error = crate::compile(source, "source.opy", Path::new("."))
+        .expect_err("SpecVisibility.ALWAYS is outside issue #131 scope");
+    assert_eq!(error.code, "unknown-enum-member");
+    assert_eq!(
+        error.message,
+        "enum 'SpecVisibility' has no member 'ALWAYS'"
+    );
 }
 
 #[test]

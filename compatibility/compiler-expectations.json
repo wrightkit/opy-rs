@@ -357,7 +357,7 @@
         "test:opy-rs::compiler::integration_tests::issue_131_spec_visibility::never_maps_to_visible_never_in_canonical_wir"
       ],
       "owner": "opy-rs#131",
-      "note": "The OPY SpecVisibility.NEVER spelling lowers to the canonical VISIBLE_NEVER enum member and is equivalent to the pinned oracle WIR.",
+      "note": "The OPY SpecVisibility.NEVER spelling lowers to the canonical VISIBLE_NEVER enum member and is equivalent to the pinned oracle WIR; unrelated SpecVisibility members remain unchanged.",
       "semanticEquivalent": true
     },
     {

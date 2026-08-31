@@ -1162,7 +1162,6 @@ impl Lowerer {
             if self.manifest.domain_identity(name) {
                 let locale = Locale::new("en-US");
                 let catalog_member = match (name.as_str(), member) {
-                    ("SpecVisibility", "ALWAYS") => "VISIBLE_ALWAYS",
                     ("SpecVisibility", "NEVER") => "VISIBLE_NEVER",
                     _ => member,
                 };
