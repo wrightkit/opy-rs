@@ -13,6 +13,7 @@ fn issue_141_surface_reaches_validated_hir_with_spans() {
         "    value max= 3\n",
         "    while value < 4:\n",
         "        continue\n",
+        "    goto RULE_START\n",
         "    goto target\n",
         "    goto loc + value\n",
         "    target:\n",
@@ -60,20 +61,31 @@ fn issue_141_surface_reaches_validated_hir_with_spans() {
     assert!(matches!(
         &rule.actions[4],
         Stmt::Goto {
-            label: Some(_),
+            label: None,
             offset: None,
-            span: Some(_)
+            rule_start: true,
+            span: Some(_),
         }
     ));
     assert!(matches!(
         &rule.actions[5],
         Stmt::Goto {
-            label: None,
-            offset: Some(_),
-            span: Some(_)
+            label: Some(_),
+            offset: None,
+            rule_start: false,
+            span: Some(_),
         }
     ));
-    assert!(matches!(&rule.actions[6], Stmt::Label { name, span: Some(_) } if name == "target"));
+    assert!(matches!(
+        &rule.actions[6],
+        Stmt::Goto {
+            label: None,
+            offset: Some(_),
+            rule_start: false,
+            span: Some(_),
+        }
+    ));
+    assert!(matches!(&rule.actions[7], Stmt::Label { name, span: Some(_) } if name == "target"));
 }
 
 #[test]
@@ -116,6 +128,10 @@ fn issue_141_backend_boundary_is_explicit_for_source_only_statements() {
         ),
         (
             "rule \"goto\":\n    @Event global\n    goto target\n",
+            "goto statements",
+        ),
+        (
+            "rule \"goto rule start\":\n    @Event global\n    goto RULE_START\n",
             "goto statements",
         ),
         (

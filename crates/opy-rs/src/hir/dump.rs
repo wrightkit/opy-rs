@@ -333,10 +333,13 @@ fn dump_stmt(statement: &Stmt, out: &mut String, level: usize) {
         Stmt::Goto {
             label,
             offset,
+            rule_start,
             span,
         } => {
             out.push_str(&format!("{}goto ", indent(level)));
-            if let Some(label) = label {
+            if *rule_start {
+                out.push_str("RULE_START");
+            } else if let Some(label) = label {
                 out.push_str(&format!("label {label}"));
             } else if let Some(offset) = offset {
                 out.push_str("loc+");

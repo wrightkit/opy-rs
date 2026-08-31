@@ -952,14 +952,17 @@ impl Parser<'_> {
                 label: None,
                 span: Span::new(start.span.file, start.span.start, offset.span().end),
                 offset: Some(offset),
+                rule_start: false,
             });
         }
 
         let label = self.expect_ident("a label or 'loc+...' after 'goto'")?;
         self.expect_statement_end("the goto target")?;
+        let rule_start = label == "RULE_START";
         Ok(Stmt::Goto {
-            label: Some(label),
+            label: (!rule_start).then_some(label),
             offset: None,
+            rule_start,
             span: Span::new(
                 start.span.file,
                 start.span.start,
@@ -2264,6 +2267,7 @@ mod tests {
             "    value max= 3\n",
             "    while value < 4:\n",
             "        continue\n",
+            "    goto RULE_START\n",
             "    goto target\n",
             "    goto loc + value\n",
             "    target:\n",
@@ -2282,18 +2286,34 @@ mod tests {
             panic!("expected while");
         };
         assert!(matches!(body.as_slice(), [Stmt::Continue { .. }]));
-        assert!(
-            matches!(&rule.actions[4], Stmt::Goto { label: Some(label), offset: None, .. } if label == "target")
-        );
         assert!(matches!(
-            &rule.actions[5],
+            &rule.actions[4],
             Stmt::Goto {
                 label: None,
-                offset: Some(_),
+                offset: None,
+                rule_start: true,
                 ..
             }
         ));
-        assert!(matches!(&rule.actions[6], Stmt::Label { name, .. } if name == "target"));
+        assert!(matches!(
+            &rule.actions[5],
+            Stmt::Goto {
+                label: Some(label),
+                offset: None,
+                rule_start: false,
+                ..
+            } if label == "target"
+        ));
+        assert!(matches!(
+            &rule.actions[6],
+            Stmt::Goto {
+                label: None,
+                offset: Some(_),
+                rule_start: false,
+                ..
+            }
+        ));
+        assert!(matches!(&rule.actions[7], Stmt::Label { name, .. } if name == "target"));
     }
 
     #[test]

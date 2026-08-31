@@ -852,12 +852,14 @@ impl Lowerer {
             Stmt::Goto {
                 label,
                 offset,
+                rule_start,
                 span,
             } => HirStmt::Goto {
                 label: label.clone(),
                 offset: offset.as_ref().map(|offset| {
                     Box::new(self.lower_expr(offset, macro_params, CallPosition::Value))
                 }),
+                rule_start: *rule_start,
                 span: Some(span.into()),
             },
             Stmt::Label { name, span } => HirStmt::Label {

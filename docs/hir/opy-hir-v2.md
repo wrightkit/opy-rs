@@ -60,7 +60,7 @@ not yet representable in canonical Workshop WIR:
 | --- | --- | --- |
 | `delete` | `target`, `span` | Delete an element addressed by an array index. |
 | `continue` | `span` | Continue the innermost loop; source lowering rejects it outside a loop. |
-| `goto` | `label`, `offset`, `span` | Jump to a named label or to a relative `loc+` offset; exactly one target field is present. |
+| `goto` | `label`, `offset`, `ruleStart`, `span` | Jump to a named label, to a relative `loc+` offset, or to the enclosing rule loop with `RULE_START`; exactly one target field is present. |
 | `label` | `name`, `span` | A named jump target. |
 
 These nodes are source-semantic and preserve provenance. The bounded compiler

@@ -826,6 +826,7 @@ impl MacroExpander {
             Stmt::Goto {
                 label,
                 offset,
+                rule_start,
                 span,
             } => Stmt::Goto {
                 label: label.clone(),
@@ -833,6 +834,7 @@ impl MacroExpander {
                     .as_ref()
                     .map(|offset| self.expand_expr(offset, bindings).map(Box::new))
                     .transpose()?,
+                rule_start: *rule_start,
                 span: *span,
             },
             Stmt::Break { .. } | Stmt::CallSubroutine { .. } | Stmt::Pass { .. } => {

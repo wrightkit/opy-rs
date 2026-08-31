@@ -483,13 +483,16 @@ fn validate_stmts(
             Stmt::Goto {
                 label,
                 offset,
+                rule_start,
                 span,
                 ..
             } => {
-                if label.is_some() == offset.is_some() {
+                let target_count =
+                    u8::from(label.is_some()) + u8::from(offset.is_some()) + u8::from(*rule_start);
+                if target_count != 1 {
                     errors.push(invalid(
                         "invalid-structure",
-                        "a goto must contain exactly one label or offset",
+                        "a goto must contain exactly one label, offset, or RULE_START target",
                         *span,
                     ));
                 }

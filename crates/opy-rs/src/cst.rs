@@ -210,6 +210,7 @@ pub enum Stmt {
     Goto {
         label: Option<String>,
         offset: Option<Expr>,
+        rule_start: bool,
         span: Span,
     },
     Label {

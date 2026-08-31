@@ -475,6 +475,8 @@ pub enum Stmt {
         label: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         offset: Option<Box<Expr>>,
+        #[serde(default)]
+        rule_start: bool,
         #[serde(skip_serializing_if = "Option::is_none")]
         span: Option<Span>,
     },
