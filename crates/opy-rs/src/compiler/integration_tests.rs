@@ -16,6 +16,8 @@ mod issue_115_string_continuation;
 mod issue_129_included_main_file;
 #[path = "tests/issue_130_horizontal_facing_angle.rs"]
 mod issue_130_horizontal_facing_angle;
+#[path = "tests/issue_131_spec_visibility.rs"]
+mod issue_131_spec_visibility;
 #[path = "tests/issue_42_oracle.rs"]
 mod issue_42_oracle;
 #[path = "tests/issue_46_oracle.rs"]
