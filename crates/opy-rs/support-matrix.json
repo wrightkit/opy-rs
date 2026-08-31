@@ -400,7 +400,7 @@
     },
     {
       "id": "preprocessing/include",
-      "name": "#!include: root-relative resolution, cycle detection, missing-file diagnostics, file registry",
+      "name": "#!include: including-file-relative resolution, cycle detection, missing-file diagnostics, file registry",
       "category": "preprocessing",
       "state": "source-supported",
       "evidence": [
@@ -411,24 +411,26 @@
         "upstream:src/tests/include3.opy",
         "upstream:src/tests/include5.opy"
       ],
-      "notes": "Root-relative include resolution, cycle detection, missing-file diagnostics, file registry; deterministic multi-file tests."
+      "notes": "Includes resolve from the declaring source file, including nested closures; cycle detection, missing-file diagnostics, file registry, and deterministic multi-file provenance are covered."
     },
     {
       "id": "preprocessing/define-undef",
-      "name": "#!define (object- and function-like), #!undef, recursive expansion, recursion guard",
+      "name": "#!define/#!defineMember (object- and function-like), #!undef, recursive expansion, recursion guard",
       "category": "preprocessing",
       "state": "source-supported",
       "evidence": [
         "fixtures:synthetic/preprocessing",
         "fixtures:real-world/overpy-cake",
+        "test:opy-rs::compiler::integration_tests::issue_142_preprocessing::included_define_member_expands_with_definition_provenance",
+        "test:opy-rs::compiler::integration_tests::issue_142_preprocessing::nested_includes_resolve_relative_to_the_including_file",
         "upstream:src/tests/macros.opy",
         "upstream:src/tests/builtinmacros.opy"
       ],
-      "notes": "Object- and function-like #!define, #!undef, recursive expansion with recursion guard; preprocessing fixtures."
+      "notes": "Object- and function-like #!define/#!defineMember, #!undef, recursive expansion with recursion guard; member defines share the pinned textual macro contract and retain definition-site provenance."
     },
     {
       "id": "preprocessing/advanced-directives",
-      "name": "#!mainFile, #!allowMacroRedeclaration, #!optimize*/#!replace0By* family, #!rulePrefix*",
+      "name": "#!mainFile, #!allowMacroRedeclaration, backend-only directive state, #!optimize*/#!replace0By* family, #!rulePrefix*",
       "category": "preprocessing",
       "state": "semantic-supported",
       "evidence": [
@@ -436,9 +438,10 @@
         "fixtures:synthetic/issue-29-main-file",
         "upstream:src/tests/rulePrefix.opy",
         "upstream:src/tests/compression.opy",
-        "upstream:src/data/opy/preprocessing.ts"
+        "upstream:src/data/opy/preprocessing.ts",
+        "test:opy-rs::preprocess::tests::backend_only_directives_are_validated_and_recorded"
       ],
-      "notes": "Issue #29: source implementation records directive state, macro-redeclaration policy, main-file provenance, and rule-prefix application. Optimizer and generated Workshop effects remain separate."
+      "notes": "Issue #29 plus #142: source implementation validates and records main-file provenance, macro-redeclaration policy, backend-only directive state, and rule-prefix application. Optimizer, localization, extension catalog, output-file, compression, and generated Workshop effects remain separate."
     },
     {
       "id": "preprocessing/directive-effects",

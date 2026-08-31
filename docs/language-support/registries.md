@@ -51,38 +51,39 @@ Reference: `889d9749d1def17f146548cbddb94ea1ab015847`.
 
 | Upstream key | Status |
 | --- | --- |
-| `allowMacroRedeclaration` | 🚧 Coming soon |
-| `define` | ✅ Supported |
-| `debugElementCount` | 🚧 Coming soon |
-| `disableInspector` | 🚧 Coming soon |
-| `suppressWarnings` | 🚧 Coming soon |
+| `allowMacroRedeclaration` | ✅ Source-supported |
+| `define`, `defineMember` | ✅ Source-supported |
+| `debugElementCount` | ✅ Source-supported |
+| `disableInspector` | ✅ Source-supported |
+| `suppressWarnings` | ✅ Source-supported |
 | `mainFile` | ✅ Supported |
 | `include` | ✅ Supported |
-| `excludeVariablesInCompilation` | 🚧 Coming soon |
-| `setupTags` | 🚧 Coming soon |
-| `disableOptimizations` | 🚧 Coming soon |
-| `enableOptimizations` | 🚧 Coming soon |
-| `optimizeForSize` | 🚧 Coming soon |
-| `optimizeForSizeAggressive` | 🚧 Coming soon |
-| `disableOptimizeForSize` | 🚧 Coming soon |
-| `optimizeStrict` | 🚧 Coming soon |
-| `disableOptimizeStrict` | 🚧 Coming soon |
-| `replace0ByCapturePercentage` | 🚧 Coming soon |
-| `replace0ByPayloadProgressPercentage` | 🚧 Coming soon |
-| `replace0ByIsMatchComplete` | 🚧 Coming soon |
-| `replace1ByMatchRound` | 🚧 Coming soon |
-| `replaceTeam1ByControlScoringTeam` | 🚧 Coming soon |
-| `replaceEmptyStringByEmptyArray` | 🚧 Coming soon |
-| `replaceEmptyStringByVariable` | 🚧 Coming soon |
-| `translations` | 🚧 Coming soon |
-| `translateWithPlayerVar` | 🚧 Coming soon |
-| `useVariableForCompressionAlphabet` | 🚧 Coming soon |
-| `extension` | 🚧 Coming soon |
-| `globalvarInitRuleName` | 🚧 Coming soon |
-| `playervarInitRuleName` | 🚧 Coming soon |
-| `keepUnusedTranslations` | 🚧 Coming soon |
-| `disableTranslationSourceLines` | 🚧 Coming soon |
-| `writeToOutputFile` | 🚧 Coming soon |
+| `excludeVariablesInCompilation` | ✅ Source-supported |
+| `setupTags` | ✅ Source-supported |
+| `setupTx` | ✅ Source-supported |
+| `disableOptimizations` | ✅ Source-supported |
+| `enableOptimizations` | ✅ Source-supported |
+| `optimizeForSize` | ✅ Source-supported |
+| `optimizeForSizeAggressive` | ✅ Source-supported |
+| `disableOptimizeForSize` | ✅ Source-supported |
+| `optimizeStrict` | ✅ Source-supported |
+| `disableOptimizeStrict` | ✅ Source-supported |
+| `replace0ByCapturePercentage` | ✅ Source-supported |
+| `replace0ByPayloadProgressPercentage` | ✅ Source-supported |
+| `replace0ByIsMatchComplete` | ✅ Source-supported |
+| `replace1ByMatchRound` | ✅ Source-supported |
+| `replaceTeam1ByControlScoringTeam` | ✅ Source-supported |
+| `replaceEmptyStringByEmptyArray` | ✅ Source-supported |
+| `replaceEmptyStringByVariable` | ✅ Source-supported |
+| `translations` | ✅ Source-supported |
+| `translateWithPlayerVar` | ✅ Source-supported |
+| `useVariableForCompressionAlphabet` | ✅ Source-supported |
+| `extension` | ✅ Source-supported |
+| `globalvarInitRuleName` | ✅ Source-supported |
+| `playervarInitRuleName` | ✅ Source-supported |
+| `keepUnusedTranslations` | ✅ Source-supported |
+| `disableTranslationSourceLines` | ✅ Source-supported |
+| `writeToOutputFile` | ✅ Source-supported |
 | `postCompileHook` | ✅ Bounded compiler slice |
 | `rulePrefix`, `rulePrefixTemplate` | ✅ Supported |
 

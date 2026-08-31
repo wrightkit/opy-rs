@@ -427,9 +427,9 @@
         "provenance:real-world/6v6-adjustments/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The full real-world project accepts included-file #!mainFile directives and reaches the next unsupported #!defineMember frontend boundary.",
+      "note": "The full real-world project now resolves included-file #!mainFile and #!defineMember directives; it remains outside the compiler baseline at the existing included settings-placement boundary.",
       "failureClass": "frontend",
-      "diagnosticCode": "unsupported-directive"
+      "diagnosticCode": "settings-placement"
     },
     {
       "fixture": "real-world/overpy-broken-weapons",
@@ -593,9 +593,9 @@
         "provenance:real-world/ow1-emulator/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The full real-world project accepts included-file #!mainFile directives and reaches the next unsupported #!defineMember frontend boundary.",
+      "note": "The full real-world project now resolves included-file #!mainFile and #!defineMember directives; it remains outside the compiler baseline at the next lexer line-continuation boundary.",
       "failureClass": "frontend",
-      "diagnosticCode": "unsupported-directive"
+      "diagnosticCode": "lex-error"
     },
     {
       "fixture": "synthetic/chase-condition-agentlab",
