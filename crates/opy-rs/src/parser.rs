@@ -1471,9 +1471,12 @@ impl Parser<'_> {
                 TokenKind::Dot => {
                     self.advance();
                     let member_token = self.peek().clone();
-                    let member = match self.expect_ident("a member name after '.'") {
-                        Ok(member) => member,
-                        Err(()) => return Err(()),
+                    let member = match self.peek_kind() {
+                        TokenKind::Ident | TokenKind::Number => self.advance().text,
+                        _ => {
+                            self.error_at_current("expected a member name after '.'".to_string());
+                            return Err(());
+                        }
                     };
                     let member_span = member_token.span;
                     let end = member_span.end;

@@ -413,9 +413,9 @@
         "provenance:real-world/overpy-cronch/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The postfix increment regression now lowers; the full real-world project remains outside the #38 compiler baseline and currently stops at the unsupported createDummy action.",
+      "note": "The postfix increment regression now lowers; the full real-world project remains outside the #38 compiler baseline and currently stops at the unsupported createDummy action at cronch.opy:103.",
       "failureClass": "frontend",
-      "diagnosticCode": "parse-error"
+      "diagnosticCode": "unknown-action"
     },
     {
       "fixture": "real-world/overpy-crosshair",
@@ -469,7 +469,7 @@
         "provenance:real-world/overpy-parabola/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The postfix increment regression now lowers; the full real-world project remains outside the #38 compiler baseline and currently stops at the next unsupported for-range expression.",
+      "note": "The numeric enum member regression now lowers; the full real-world project remains outside the #38 compiler baseline and currently stops at the next multiline parenthesized expression gap at parabola.opy:50.",
       "failureClass": "frontend",
       "diagnosticCode": "parse-error"
     },

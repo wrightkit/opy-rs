@@ -2,6 +2,8 @@
 mod issue_100_conditional;
 #[path = "tests/issue_101_implicit_string.rs"]
 mod issue_101_implicit_string;
+#[path = "tests/issue_102_numeric_enum.rs"]
+mod issue_102_numeric_enum;
 #[path = "tests/issue_103_higher_order.rs"]
 mod issue_103_higher_order;
 #[path = "tests/issue_113_is_dummy.rs"]
