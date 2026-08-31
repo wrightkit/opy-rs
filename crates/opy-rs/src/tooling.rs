@@ -136,6 +136,7 @@ pub fn check_with_overlay(
         .map(|define| Define {
             name: define.name.clone(),
             is_function: define.is_function,
+            is_member: define.is_member,
             span: define.span.map(Into::into),
         })
         .collect();

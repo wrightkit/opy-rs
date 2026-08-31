@@ -23,6 +23,7 @@ fn included_define_member_expands_with_definition_provenance() {
     assert!(hir.dump().contains("assign A = 2"), "{}", hir.dump());
     assert_eq!(hir.defines.len(), 1);
     assert_eq!(hir.defines[0].name, "VALUE");
+    assert!(hir.defines[0].is_member);
     assert_eq!(hir.defines[0].span.expect("define span").file, 1);
     assert_eq!(hir.files[1].path, "shared.opy");
 }
@@ -35,6 +36,7 @@ fn function_define_member_uses_the_same_textual_macro_contract() {
         std::path::Path::new("."),
     )
     .expect("function-like member defines must expand");
+    assert!(hir.defines[0].is_member);
 
     let RuleEntry::Rule(rule) = &hir.rules[0] else {
         panic!("expected a rule");
@@ -71,4 +73,6 @@ fn nested_includes_resolve_relative_to_the_including_file() {
 
     assert!(hir.dump().contains("assign A = 2"), "{}", hir.dump());
     assert_eq!(hir.defines[0].span.expect("define span").file, 2);
+    assert_eq!(hir.files[1].path, "dir/child.opy");
+    assert_eq!(hir.files[2].path, "dir/grandchild.opy");
 }

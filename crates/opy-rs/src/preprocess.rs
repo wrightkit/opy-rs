@@ -57,6 +57,7 @@ use crate::settings::SettingsBlock;
 pub struct DefineRecord {
     pub name: String,
     pub is_function: bool,
+    pub is_member: bool,
     pub span: Option<Span>,
 }
 
@@ -414,7 +415,7 @@ impl Preprocessor {
             return Ok(());
         }
         if matches!(name, "define" | "defineMember") {
-            self.define(rest.trim(), span)?;
+            self.define(rest.trim(), span, name == "defineMember")?;
             return Ok(());
         }
         if name == "undef" {
@@ -495,6 +496,7 @@ impl Preprocessor {
         }
         if name == "extension" {
             let extension = parse_single_word(rest, name, span)?;
+            validate_extension_name(extension, span)?;
             self.record(name, Some(extension), span);
             return Ok(());
         }
@@ -750,9 +752,10 @@ impl Preprocessor {
         // Each include registers a file in the registry (reference behavior).
         let file_id = self.next_file_id;
         self.next_file_id += 1;
+        let display_path = self.include_display_path(&candidate, include);
         self.files.push(FileRecord {
             id: file_id,
-            path: include.to_string(),
+            path: display_path,
         });
         self.include_stack.push(identity);
         let saved_prefix = self.preprocessing.rule_prefix.clone();
@@ -807,12 +810,25 @@ impl Preprocessor {
             .unwrap_or_else(|| self.root.clone())
     }
 
+    fn include_display_path(&self, candidate: &Path, fallback: &str) -> String {
+        candidate
+            .strip_prefix(&self.root)
+            .ok()
+            .and_then(|path| (!path.as_os_str().is_empty()).then_some(path))
+            .map(|path| path.to_string_lossy().into_owned())
+            .or_else(|| {
+                let path = candidate.to_string_lossy();
+                Some(path.strip_prefix("./").unwrap_or(&path).to_string())
+            })
+            .unwrap_or_else(|| fallback.to_string())
+    }
+
     /// Register one `#!define` (object- or function-like).
     ///
     /// A define is function-like when `(` immediately follows the name
     /// (`cakeBeam(start, end)`); a parenthesized object-like value
     /// (`#!define X (a + b)`) keeps its parentheses as value tokens.
-    fn define(&mut self, rest: &str, span: Span) -> OpyResult<()> {
+    fn define(&mut self, rest: &str, span: Span, is_member: bool) -> OpyResult<()> {
         let rest = rest.trim();
         let first_open = rest.find('(').unwrap_or(usize::MAX);
         let first_space = rest.find(char::is_whitespace).unwrap_or(usize::MAX);
@@ -903,6 +919,7 @@ impl Preprocessor {
         self.defines.push(DefineRecord {
             name: name.clone(),
             is_function,
+            is_member,
             span: Some(span),
         });
         self.macros.push(MacroDef {
@@ -1171,6 +1188,22 @@ fn parse_single_word<'a>(rest: &'a str, name: &str, span: Span) -> OpyResult<&'a
     Ok(value)
 }
 
+fn validate_extension_name(extension: &str, span: Span) -> OpyResult<()> {
+    let path = [
+        workshop_rs::settings::table::PathPart::Part("extensions"),
+        workshop_rs::settings::table::PathPart::Part(extension),
+    ];
+    if workshop_rs::settings::definition(&path).is_some() {
+        Ok(())
+    } else {
+        Err(OpyError::at(
+            "directive-invalid",
+            format!("unknown Workshop extension `{extension}`"),
+            span,
+        ))
+    }
+}
+
 fn is_identifier_char(ch: char) -> bool {
     ch.is_ascii_alphanumeric() || ch == '_'
 }
@@ -1408,6 +1441,7 @@ mod tests {
         assert_eq!(pre.defines.len(), 1);
         assert_eq!(pre.defines[0].name, "SIDE");
         assert!(!pre.defines[0].is_function);
+        assert!(!pre.defines[0].is_member);
         let numbers: Vec<&str> = pre
             .tokens
             .iter()
@@ -1653,6 +1687,17 @@ mod tests {
             pre.preprocessing.directives[4].value.as_deref(),
             Some("noDetectionRule noTlErr")
         );
+    }
+
+    #[test]
+    fn extension_directive_rejects_unknown_schema_values() {
+        let error = preprocess(
+            "#!extension notAnExtension\nrule \"r\":\n    pass\n",
+            "main.opy",
+            Path::new("."),
+        )
+        .unwrap_err();
+        assert_eq!(error.code, "directive-invalid");
     }
 
     #[test]

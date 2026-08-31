@@ -2,7 +2,7 @@
 //!
 //! Owns the OPY source-language surface of the `opy-rs` repository: a lexer,
 //! an indentation-aware CST/parser with structured diagnostics and recovery,
-//! token-level preprocessing (includes and `#!define` macros), semantic
+//! token-level preprocessing (includes and `#!define`/`#!defineMember` macros), semantic
 //! resolution, and lowering into the opy-rs-owned Opy HIR contract
 //! ([`hir::Program`]). Everything from source through the Opy HIR semantic
 //! model is Workshop-independent: source analysis never depends on `workshop-rs`,

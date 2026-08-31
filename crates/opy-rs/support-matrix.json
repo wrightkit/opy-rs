@@ -439,9 +439,10 @@
         "upstream:src/tests/rulePrefix.opy",
         "upstream:src/tests/compression.opy",
         "upstream:src/data/opy/preprocessing.ts",
-        "test:opy-rs::preprocess::tests::backend_only_directives_are_validated_and_recorded"
+        "test:opy-rs::preprocess::tests::backend_only_directives_are_validated_and_recorded",
+        "test:opy-rs::preprocess::tests::extension_directive_rejects_unknown_schema_values"
       ],
-      "notes": "Issue #29 plus #142: source implementation validates and records main-file provenance, macro-redeclaration policy, backend-only directive state, and rule-prefix application. Optimizer, localization, extension catalog, output-file, compression, and generated Workshop effects remain separate."
+      "notes": "Issue #29 plus #142: source implementation validates and records main-file provenance, macro-redeclaration policy, backend-only directive state, canonical extension names, and rule-prefix application. Optimizer, localization, extension point accounting, output-file, compression, and generated Workshop effects remain separate."
     },
     {
       "id": "preprocessing/directive-effects",

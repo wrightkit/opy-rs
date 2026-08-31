@@ -102,13 +102,14 @@ Every payload is a JSON object with the following top-level fields.
 
 ### 2.4 `defines`
 
-Preprocessing definitions (`#!define` constants and function macros) that the
-source implementation expanded before parsing. They are recorded for provenance so a
-diagnostic can explain where a value came from; they carry no semantic
-payload because expansion already happened.
+Preprocessing definitions (`#!define` constants and function macros, including
+`#!defineMember`) that the source implementation expanded before parsing. They
+are recorded for provenance and retain whether the definition came from the
+member-macro surface; they carry no semantic payload because expansion already
+happened.
 
 ```jsonc
-{ "name": "CAKE_SIDE_LENGTH", "isFunction": false, "span": { "file": 0, "start": { "line": 10, "col": 1 }, "end": { "line": 10, "col": 24 } } }
+{ "name": "CAKE_SIDE_LENGTH", "is_function": false, "is_member": false, "span": { "file": 0, "start": { "line": 10, "col": 1 }, "end": { "line": 10, "col": 24 } } }
 ```
 
 ### 2.5 `settings` (v1.1.0, additive)

@@ -80,7 +80,7 @@ pub struct CheckOutcome {
 | --- | --- |
 | `declarations()` | HIR declarations (globals, players, subroutines, constants, macros) |
 | `rules()` | Rule listing (rules and `def` subroutine definitions) |
-| `defines()` | Recorded `#!define` macros with their definition-site spans |
+| `defines()` | Recorded `#!define`/`#!defineMember` macros with their definition-site spans and member identity |
 | `enums()` | Custom `enum` declarations (CST-retained; they fold to constants in the HIR) |
 | `symbols()` / `symbol(name)` | Program-scope bindings with declaration site and reference sites |
 | `symbol_at(span)` | The binding or reference owner at a span |
@@ -97,8 +97,9 @@ declarations (custom enums fold instead).
 Source provenance: the file registry maps every span's file id to its path.
 id 0 is the main file, then one entry per include, in include order. Macro
 expansion stamps expanded tokens with the use-site span; the recorded
-`defines` carry their definition-site spans, so both define attribution and
-include attribution are queryable through `provenance`.
+`defines` carry their definition-site spans and whether they came from
+`#!defineMember`, so both define attribution and include attribution are
+queryable through `provenance`.
 
 ## Diagnostics contract
 

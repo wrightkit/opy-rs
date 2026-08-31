@@ -15,7 +15,7 @@ upstream README, `overpy.d.ts`, `cli.js`, compiler/decompiler sources,
 | Optimization controls (`#!enableOptimizations`, `#!disableOptimizations`, `#!optimize*`) | ✅ Source-supported | Directive state is recorded; optimizer output remains a backend concern. |
 | Replacement directives (`#!replace0By*`, team/string replacements) | ✅ Source-supported | Directive state is recorded; semantic replacement effects remain a backend concern. |
 | `#!rulePrefix` and `#!rulePrefixTemplate` | ✅ Supported | Source preprocessing applies the resulting rule names before compiler lowering. |
-| `#!extension` and extension-point accounting | ✅ Source-supported | The extension directive is validated and recorded; extension catalogs and point accounting remain outside opy-rs. |
+| `#!extension` and extension-point accounting | ✅ Source-supported | The extension name is checked against the canonical Workshop schema and recorded; extension point accounting remains outside opy-rs. |
 | Remaining pinned backend-only directives | ✅ Source-supported | `setupTags`, `setupTx`, translation/inspection/output/compression controls, and init-rule names are validated and recorded without approximating backend effects. |
 | `macro name(params)` function/constant macros | ✅ Supported | Defaults, keywords and member macros differ. |
 | `__script__` JavaScript macros | 🚧 Coming soon | QuickJS return ABI and limits are observable. |
