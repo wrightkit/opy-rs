@@ -223,7 +223,13 @@ impl Lexer {
             self.advance();
             self.advance();
             let mut text = String::new();
-            while self.pos < self.chars.len() && self.chars[self.pos] != '\n' {
+            while self.pos < self.chars.len() {
+                if self.chars[self.pos] == '\\' && self.skip_line_continuation() {
+                    continue;
+                }
+                if self.chars[self.pos] == '\n' {
+                    break;
+                }
                 text.push(self.chars[self.pos]);
                 self.advance();
             }
@@ -572,6 +578,18 @@ mod tests {
             .unwrap();
         assert_eq!(directive.text, "define X 1");
         assert!(!tokens.iter().any(|t| t.text == "comment"));
+    }
+
+    #[test]
+    fn directive_line_continuation_is_part_of_one_directive() {
+        let tokens = lex_ok("#!define X first + \\\n  second\n");
+        let directive = tokens
+            .iter()
+            .find(|token| token.kind == TokenKind::Directive)
+            .unwrap();
+        assert_eq!(directive.text, "define X first +   second");
+        assert_eq!(directive.span.start, Position::new(1, 1));
+        assert_eq!(directive.span.end, Position::new(2, 9));
     }
 
     #[test]
