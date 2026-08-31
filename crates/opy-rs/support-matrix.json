@@ -672,7 +672,7 @@
         "test:opy-rs::compiler::integration_tests::issue_145_lowering::null_initializers_are_dropped_but_float_zero_is_preserved",
         "contract:workshop-rs-v0.1.16"
       ],
-      "notes": "Issue #46/#59/#145. Global/player assignments and augmented assignments (+=, -=, *=, /=, %=, **=, ++, --), literal dictionary lookup folding, single-level indexed variable assignments and modifications (setGlobalVariableAtIndex, modifyGlobalVariableAtIndex, setPlayerVariableAtIndex, modifyPlayerVariableAtIndex), and pass no-op statements lower into canonical workshop-rs WIR. Null and integer-zero declaration initializers are omitted while float zero remains observable; deeper indexed writes remain tracked by #60. Direct global/player modifications carry full statement and target-variable span provenance; the single-level indexed forms lower to canonical Call actions, which carry only the statement-level source span (the canonical WIR Call shape has no separate target-span field)."
+      "notes": "Issue #46/#59/#145. Global/player assignments and augmented assignments (+=, -=, *=, /=, %=, **=, ++, --), literal dictionary lookup folding, single-level indexed variable assignments and modifications (setGlobalVariableAtIndex, modifyGlobalVariableAtIndex, setPlayerVariableAtIndex, modifyPlayerVariableAtIndex), and pass no-op statements lower into canonical workshop-rs WIR. Null and integer-zero declaration initializers are omitted while float zero remains observable; deeper indexed writes remain tracked by #88. Direct global/player modifications carry full statement and target-variable span provenance; the single-level indexed forms lower to canonical Call actions, which carry only the statement-level source span (the canonical WIR Call shape has no separate target-span field)."
     },
     {
       "id": "compilation/opy-implicit-default-variables",
@@ -693,9 +693,9 @@
       "state": "end-to-end-supported",
       "evidence": [
         "fixtures:synthetic/issue-46-unsupported",
-        "test:opy-rs::compiler::integration_tests::issue_145_lowering::literal_dict_lookup_lowering_matches_the_pinned_oracle"
+        "test:opy-rs::compiler::integration_tests::issue_145_lowering::literal_dict_lookup_hit_and_miss_match_the_pinned_oracle"
       ],
-      "notes": "Issue #145. Literal dictionary lookups with literal keys are folded to the selected value and compared directly with the pinned oracle WIR. Dictionary-indexed assignment targets remain outside this bounded path and are not silently guessed."
+      "notes": "Issue #145. Literal dictionary lookups with literal keys are folded to the selected value, or to Null on a literal miss, and compared directly with the pinned oracle WIR. Dictionary-indexed assignment targets remain outside this bounded path and are not silently guessed."
     },
     {
       "id": "compilation/opy-expression-lowering",

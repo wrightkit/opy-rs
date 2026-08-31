@@ -771,8 +771,8 @@
         "oracle:synthetic/issue-31-positive/oracle.json",
         "provenance:synthetic/issue-31-positive/fixture.json"
       ],
-      "owner": "opy-rs#145",
-      "note": "The semantic HIR now materializes the implicit def subroutine declaration; optimizer/directive compiler parity remains a separate lowering gap.",
+      "owner": "opy-rs#88",
+      "note": "The semantic HIR now materializes the implicit def subroutine declaration; optimizer/directive compiler parity remains a separate lowering gap tracked by the parent compatibility program.",
       "semanticEquivalent": false
     },
     {

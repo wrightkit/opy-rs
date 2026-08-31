@@ -86,7 +86,7 @@ fn broad_supported_syntax_lowering_reaches_canonical_wir() {
 }
 
 #[test]
-fn literal_dict_lookup_lowering_matches_the_pinned_oracle() {
+fn literal_dict_lookup_hit_and_miss_match_the_pinned_oracle() {
     assert_fixture_matches_oracle("issue-46-unsupported");
 }
 

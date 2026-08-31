@@ -3362,12 +3362,20 @@ impl<'a> Lowering<'a> {
             }
             Expr::Index { array, index, .. } => {
                 if let Expr::Dict { entries, .. } = array.as_ref()
-                    && let Some(value) = entries
+                    && is_literal_key(index)
+                    && entries.iter().all(|entry| is_literal_key(&entry.key))
+                {
+                    if let Some(value) = entries
                         .iter()
                         .find(|entry| literal_key_matches(&entry.key, index))
                         .map(|entry| &entry.value)
-                {
-                    return self.lower_value(value);
+                    {
+                        return self.lower_value(value);
+                    }
+                    return Ok(self
+                        .wir
+                        .values
+                        .push(ValueNode::new(Value::Null, self.wir_span(span)?)));
                 }
                 // The pinned OverPy oracle lowers a literal zero-index read
                 // (`arr[0]`, `arr[0.0]`) to `firstOf(arr)`; non-zero indexes
@@ -4350,6 +4358,16 @@ fn literal_key_matches(left: &hir::Expr, right: &hir::Expr) -> bool {
         (hir::Expr::Null { .. }, hir::Expr::Null { .. }) => true,
         _ => false,
     }
+}
+
+fn is_literal_key(expr: &hir::Expr) -> bool {
+    matches!(
+        expr,
+        hir::Expr::Number { .. }
+            | hir::Expr::String { .. }
+            | hir::Expr::Bool { .. }
+            | hir::Expr::Null { .. }
+    )
 }
 
 fn big_letters(value: &str) -> String {
