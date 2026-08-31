@@ -61,12 +61,15 @@ enum CallPosition {
 
 /// The lowerer's symbol context, built from the CST declarations.
 struct Lowerer {
-    globals: HashSet<String>,
-    players: HashSet<String>,
-    subroutines: HashSet<String>,
-    macros: HashSet<String>,
+    global_declarations: HashMap<String, usize>,
+    player_declarations: HashMap<String, usize>,
+    subroutine_declarations: HashMap<String, usize>,
+    subroutine_definitions: Vec<(String, usize)>,
+    macro_declarations: HashMap<String, usize>,
     enums: HashMap<String, Vec<String>>,
+    enum_declarations: HashMap<String, usize>,
     locals: Vec<String>,
+    current_order: usize,
     allow_dict_literal: bool,
     /// The authoritative builtin semantic table (issue #109).
     manifest: &'static Manifest,
@@ -109,12 +112,15 @@ pub fn lower_with_preprocessing(
         }
     };
     let mut lowerer = Lowerer {
-        globals: HashSet::new(),
-        players: HashSet::new(),
-        subroutines: HashSet::new(),
-        macros: HashSet::new(),
+        global_declarations: HashMap::new(),
+        player_declarations: HashMap::new(),
+        subroutine_declarations: HashMap::new(),
+        subroutine_definitions: Vec::new(),
+        macro_declarations: HashMap::new(),
         enums: HashMap::new(),
+        enum_declarations: HashMap::new(),
         locals: Vec::new(),
+        current_order: 0,
         allow_dict_literal: false,
         manifest,
         catalog,
@@ -123,7 +129,8 @@ pub fn lower_with_preprocessing(
     lowerer.collect_symbols(program);
 
     let mut declarations = Vec::new();
-    for decl in &program.declarations {
+    for (order, decl) in program.declarations.iter().enumerate() {
+        lowerer.current_order = order;
         match decl {
             Decl::GlobalVariable {
                 name,
@@ -188,8 +195,31 @@ pub fn lower_with_preprocessing(
         }
     }
 
-    let mut rules = Vec::new();
+    let mut implicit_subroutines = HashSet::new();
     for entry in &program.rules {
+        let CstRuleEntry::SubroutineDef {
+            name,
+            span,
+            name_span,
+            ..
+        } = entry
+        else {
+            continue;
+        };
+        if !lowerer.subroutine_declarations.contains_key(name)
+            && implicit_subroutines.insert(name.clone())
+        {
+            declarations.push(Declaration::Subroutine {
+                name: name.clone(),
+                index: None,
+                span: Some(span.into()),
+                name_span: Some(name_span.into()),
+            });
+        }
+    }
+    let mut rules = Vec::new();
+    for (rule_order, entry) in program.rules.iter().enumerate() {
+        lowerer.current_order = program.declarations.len() + rule_order;
         match entry {
             CstRuleEntry::Rule(rule) => rules.push(RuleEntry::Rule(lowerer.lower_rule(
                 rule,
@@ -584,28 +614,110 @@ fn lower_settings_node(node: &cst::SettingsNode) -> HirSettingsNode {
 
 impl Lowerer {
     fn collect_symbols(&mut self, program: &cst::Program) {
-        for decl in &program.declarations {
+        for (order, decl) in program.declarations.iter().enumerate() {
             match decl {
-                Decl::GlobalVariable { name, .. } => {
-                    self.globals.insert(name.clone());
+                Decl::GlobalVariable { name, span, .. } => {
+                    if self
+                        .global_declarations
+                        .insert(name.clone(), order)
+                        .is_some()
+                    {
+                        self.error_at(
+                            "duplicate-declaration",
+                            format!("duplicate global variable '{name}'"),
+                            *span,
+                        );
+                    }
                 }
-                Decl::PlayerVariable { name, .. } => {
-                    self.players.insert(name.clone());
+                Decl::PlayerVariable { name, span, .. } => {
+                    if self
+                        .player_declarations
+                        .insert(name.clone(), order)
+                        .is_some()
+                    {
+                        self.error_at(
+                            "duplicate-declaration",
+                            format!("duplicate player variable '{name}'"),
+                            *span,
+                        );
+                    }
                 }
-                Decl::Subroutine { name, .. } => {
-                    self.subroutines.insert(name.clone());
+                Decl::Subroutine { name, span, .. } => {
+                    if self
+                        .subroutine_declarations
+                        .insert(name.clone(), order)
+                        .is_some()
+                    {
+                        self.error_at(
+                            "duplicate-declaration",
+                            format!("duplicate subroutine '{name}'"),
+                            *span,
+                        );
+                    }
                 }
                 Decl::Enum { name, members, .. } => {
-                    self.enums.insert(
-                        name.clone(),
-                        members.iter().map(|(member, _)| member.clone()).collect(),
-                    );
+                    self.enum_declarations.entry(name.clone()).or_insert(order);
+                    self.enums.entry(name.clone()).or_insert_with(|| {
+                        members.iter().map(|(member, _)| member.clone()).collect()
+                    });
                 }
                 Decl::Macro { name, .. } => {
-                    self.macros.insert(name.clone());
+                    self.macro_declarations.entry(name.clone()).or_insert(order);
                 }
             }
         }
+        for (rule_order, entry) in program.rules.iter().enumerate() {
+            let CstRuleEntry::SubroutineDef { name, span, .. } = entry else {
+                continue;
+            };
+            if self
+                .subroutine_definitions
+                .iter()
+                .any(|(defined, _)| defined == name)
+            {
+                self.error_at(
+                    "duplicate-definition",
+                    format!("duplicate subroutine definition '{name}'"),
+                    *span,
+                );
+            }
+            self.subroutine_definitions
+                .push((name.clone(), program.declarations.len() + rule_order));
+        }
+    }
+
+    fn subroutine_visible(&self, name: &str) -> bool {
+        self.subroutine_declarations
+            .get(name)
+            .is_some_and(|order| *order <= self.current_order)
+            || self
+                .subroutine_definitions
+                .iter()
+                .any(|(definition, order)| definition == name && *order <= self.current_order)
+    }
+
+    fn global_visible(&self, name: &str) -> bool {
+        self.global_declarations
+            .get(name)
+            .is_some_and(|order| *order <= self.current_order)
+    }
+
+    fn player_visible(&self, name: &str) -> bool {
+        self.player_declarations
+            .get(name)
+            .is_some_and(|order| *order <= self.current_order)
+    }
+
+    fn macro_visible(&self, name: &str) -> bool {
+        self.macro_declarations
+            .get(name)
+            .is_some_and(|order| *order <= self.current_order)
+    }
+
+    fn enum_visible(&self, name: &str) -> bool {
+        self.enum_declarations
+            .get(name)
+            .is_some_and(|order| *order <= self.current_order)
     }
 
     /// A declaration initializer: integer-`0` literal initializers are
@@ -704,7 +816,7 @@ impl Lowerer {
                 // A bare call of a declared subroutine becomes
                 // `CallSubroutine` (reference behavior).
                 if let Expr::Call { name, args, .. } = expr {
-                    if self.subroutines.contains(name) && args.is_empty() {
+                    if self.subroutine_visible(name) && args.is_empty() {
                         return HirStmt::CallSubroutine {
                             name: name.clone(),
                             span: Some(span.into()),
@@ -880,6 +992,14 @@ impl Lowerer {
             span,
         } = variable
         {
+            if !default_var_index(member).is_some() && !self.player_visible(member) {
+                self.error_at(
+                    "unknown-identifier",
+                    format!("unknown player variable '{member}'"),
+                    *member_span,
+                );
+                return HirExpr::Null { span: None };
+            }
             return HirExpr::PlayerVar {
                 player: Box::new(self.lower_expr(receiver, macro_params, CallPosition::Value)),
                 name: member.clone(),
@@ -1134,17 +1254,17 @@ impl Lowerer {
             "hostPlayer" => HirExpr::HostPlayer {
                 span: Some(span.into()),
             },
-            _ if self.globals.contains(name) => HirExpr::GlobalVar {
+            _ if self.global_visible(name) => HirExpr::GlobalVar {
                 name: name.to_string(),
                 span: Some(span.into()),
             },
-            _ if self.players.contains(name) => HirExpr::PlayerVar {
+            _ if self.player_visible(name) => HirExpr::PlayerVar {
                 player: Box::new(HirExpr::EventPlayer { span: None }),
                 name: name.to_string(),
                 member_span: None,
                 span: Some(span.into()),
             },
-            _ if self.enums.contains_key(name) => {
+            _ if self.enum_visible(name) => {
                 self.error_at(
                     "enum-type-without-member",
                     format!("enum type '{name}' must be used with a member (e.g. {name}.MEMBER)"),
@@ -1183,7 +1303,8 @@ impl Lowerer {
     ) -> HirExpr {
         if let Expr::Name { name, .. } = receiver {
             // Custom enum member: folds to its numeric constant.
-            if let Some(members) = self.enums.get(name) {
+            if self.enum_visible(name) {
+                let members = self.enums.get(name).expect("enum span and members agree");
                 return match members.iter().position(|candidate| candidate == member) {
                     Some(index) => HirExpr::Number {
                         value: index as f64,
@@ -1246,6 +1367,14 @@ impl Lowerer {
             }
             // Event-player member: a player-variable reference.
             if name == "eventPlayer" {
+                if !default_var_index(member).is_some() && !self.player_visible(member) {
+                    self.error_at(
+                        "unknown-identifier",
+                        format!("unknown player variable '{member}'"),
+                        member_span,
+                    );
+                    return HirExpr::Null { span: None };
+                }
                 return HirExpr::PlayerVar {
                     player: Box::new(HirExpr::EventPlayer { span: None }),
                     name: member.to_string(),
@@ -1254,6 +1383,14 @@ impl Lowerer {
                 };
             }
             if name == "hostPlayer" {
+                if !default_var_index(member).is_some() && !self.player_visible(member) {
+                    self.error_at(
+                        "unknown-identifier",
+                        format!("unknown player variable '{member}'"),
+                        member_span,
+                    );
+                    return HirExpr::Null { span: None };
+                }
                 return HirExpr::PlayerVar {
                     player: Box::new(HirExpr::HostPlayer { span: None }),
                     name: member.to_string(),
@@ -1274,8 +1411,8 @@ impl Lowerer {
             // when canonical member existence is deferred to Workshop. Keep
             // both the resolved variable receiver and the source member
             // identity in HIR instead of treating it as an unknown member.
-            if self.globals.contains(name)
-                || self.players.contains(name)
+            if self.global_visible(name)
+                || self.player_visible(name)
                 || default_var_index(name).is_some()
             {
                 let receiver = if default_var_index(name).is_some() {
@@ -1315,7 +1452,7 @@ impl Lowerer {
         }
         // Builtin identity and position checks run before the special forms
         // so that a misplaced `wait`/`vect` still diagnoses its position.
-        if !self.macros.contains(name) && !self.subroutines.contains(name) && name != "sorted" {
+        if !self.macro_visible(name) && !self.subroutine_visible(name) && name != "sorted" {
             match self.manifest.resolve_function(name) {
                 Some(entry) => self.check_call_position(name, entry, position, span),
                 None => {
@@ -1372,7 +1509,7 @@ impl Lowerer {
                 }
             }
             _ => {
-                if self.macros.contains(name) {
+                if self.macro_visible(name) {
                     // A declared `macro` invocation is recorded as a macroCall
                     // (positional-only; keyword arguments are an explicit
                     // diagnostic).
@@ -1399,7 +1536,7 @@ impl Lowerer {
                         // Declared subroutines with arguments stay generic
                         // calls; builtins get keyword binding, arity, and
                         // domain/default handling.
-                        if self.subroutines.contains(name) {
+                        if self.subroutine_visible(name) {
                             return HirExpr::Call {
                                 name: name.to_string(),
                                 args: self.lower_arg_values(args, macro_params),
