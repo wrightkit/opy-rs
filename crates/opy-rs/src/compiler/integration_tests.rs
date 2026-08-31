@@ -12,6 +12,8 @@ mod issue_113_is_dummy;
 mod issue_114_hud_subheader;
 #[path = "tests/issue_115_string_continuation.rs"]
 mod issue_115_string_continuation;
+#[path = "tests/issue_129_included_main_file.rs"]
+mod issue_129_included_main_file;
 #[path = "tests/issue_42_oracle.rs"]
 mod issue_42_oracle;
 #[path = "tests/issue_46_oracle.rs"]
