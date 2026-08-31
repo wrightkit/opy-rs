@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.10](https://github.com/wrightkit/opy-rs/compare/v0.1.9...v0.1.10) - 2026-08-31
+
+### Added
+
+- *(opy)* support getHorizontalFacingAngle receiver member ([#138](https://github.com/wrightkit/opy-rs/pull/138))
+- *(opy)* support SpecVisibility.NEVER ([#139](https://github.com/wrightkit/opy-rs/pull/139))
+
 ## [0.1.9](https://github.com/wrightkit/opy-rs/compare/v0.1.8...v0.1.9) - 2026-08-31
 
 ### Added
