@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.9](https://github.com/wrightkit/opy-rs/compare/v0.1.8...v0.1.9) - 2026-08-31
+
+### Added
+
+- *(opy-compiler)* support player-variable range binders ([#136](https://github.com/wrightkit/opy-rs/pull/136))
+
+### Fixed
+
+- *(opy)* accept mainFile in included sources ([#134](https://github.com/wrightkit/opy-rs/pull/134))
+- *(opy)* support numeric Team enum members ([#135](https://github.com/wrightkit/opy-rs/pull/135))
+
 ## [0.1.8](https://github.com/wrightkit/opy-rs/compare/v0.1.7...v0.1.8) - 2026-08-30
 
 ### Added
