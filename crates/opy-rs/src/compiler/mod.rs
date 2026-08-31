@@ -819,9 +819,26 @@ impl MacroExpander {
                     .collect::<Result<Vec<_>, IntegrationError>>()?,
                 span: *span,
             },
+            Stmt::Delete { target, span } => Stmt::Delete {
+                target: Box::new(self.expand_expr(target, bindings)?),
+                span: *span,
+            },
+            Stmt::Goto {
+                label,
+                offset,
+                span,
+            } => Stmt::Goto {
+                label: label.clone(),
+                offset: offset
+                    .as_ref()
+                    .map(|offset| self.expand_expr(offset, bindings).map(Box::new))
+                    .transpose()?,
+                span: *span,
+            },
             Stmt::Break { .. } | Stmt::CallSubroutine { .. } | Stmt::Pass { .. } => {
                 statement.clone()
             }
+            Stmt::Continue { .. } | Stmt::Label { .. } => statement.clone(),
         })
     }
 
@@ -2005,6 +2022,22 @@ impl<'a> Lowering<'a> {
                 arms,
                 span,
             } => self.lower_switch(value, arms, *span).map(|action| vec![action]),
+            Stmt::Delete { span, .. } => Err(self.unsupported(
+                "delete statements are not representable in canonical WIR",
+                *span,
+            )),
+            Stmt::Continue { span } => Err(self.unsupported(
+                "continue statements are not representable in canonical WIR",
+                *span,
+            )),
+            Stmt::Goto { span, .. } => Err(self.unsupported(
+                "goto statements are not representable in canonical WIR",
+                *span,
+            )),
+            Stmt::Label { span, .. } => Err(self.unsupported(
+                "labels are not representable in canonical WIR",
+                *span,
+            )),
             Stmt::Break { span } => match break_target {
                 Some(BreakTarget::Loop) => Ok(vec![self.wir.actions.push(Action::Call {
                     name: "break".to_string(),
@@ -3830,6 +3863,9 @@ fn collect_implicit_stmts(
                 collect_implicit_expr(target, declared_globals, declared_players, globals, players);
                 collect_implicit_expr(value, declared_globals, declared_players, globals, players);
             }
+            Stmt::Delete { target, .. } => {
+                collect_implicit_expr(target, declared_globals, declared_players, globals, players);
+            }
             Stmt::If {
                 branches, r#else, ..
             } => {
@@ -3928,7 +3964,22 @@ fn collect_implicit_stmts(
                     }
                 }
             }
-            Stmt::Break { .. } | Stmt::CallSubroutine { .. } | Stmt::Pass { .. } => {}
+            Stmt::Goto { offset, .. } => {
+                if let Some(offset) = offset {
+                    collect_implicit_expr(
+                        offset,
+                        declared_globals,
+                        declared_players,
+                        globals,
+                        players,
+                    );
+                }
+            }
+            Stmt::Break { .. }
+            | Stmt::Continue { .. }
+            | Stmt::Label { .. }
+            | Stmt::CallSubroutine { .. }
+            | Stmt::Pass { .. } => {}
         }
     }
 }

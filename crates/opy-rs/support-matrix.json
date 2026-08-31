@@ -117,6 +117,22 @@
       "notes": "Issue #33: break is a real HIR statement, validates its enclosing switch/loop context, and is retained without implicit arm exits."
     },
     {
+      "id": "syntax/statement-surface",
+      "name": "del, continue, goto, labels, and dynamic loc+ targets",
+      "category": "syntax",
+      "state": "source-supported",
+      "evidence": ["tests:crates/opy-rs/tests/issue_141_syntax.rs", "upstream:src/tests/loops.opy", "upstream:src/tests/gotos.opy"],
+      "notes": "Issue #141: audited statements lower to source HIR nodes with spans; continue context and malformed targets produce structured diagnostics. Canonical WIR lowering remains an explicit integration boundary."
+    },
+    {
+      "id": "syntax/augmented-min-max",
+      "name": "min= and max= modification forms",
+      "category": "syntax",
+      "state": "source-supported",
+      "evidence": ["tests:crates/opy-rs/tests/issue_141_syntax.rs", "upstream:src/tests/operators.opy"],
+      "notes": "Issue #141: min=/max= are retained as source-semantic binary modifications with provenance; Workshop support is not claimed."
+    },
+    {
       "id": "syntax/do-while",
       "name": "do … while",
       "category": "syntax",
@@ -759,13 +775,13 @@
   "summary": {
     "byState": {
       "planned": 0,
-      "source-supported": 23,
+      "source-supported": 25,
       "semantic-supported": 13,
       "lowering-dependent": 12,
       "end-to-end-supported": 8
     },
     "byCategory": {
-      "syntax": 14,
+      "syntax": 16,
       "semantics": 14,
       "preprocessing": 4,
       "macros": 3,

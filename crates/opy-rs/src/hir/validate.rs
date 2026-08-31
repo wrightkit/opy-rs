@@ -41,7 +41,11 @@ const STMT_KINDS: &[&str] = &[
     "while",
     "doWhile",
     "switch",
+    "delete",
     "break",
+    "continue",
+    "goto",
+    "label",
     "callSubroutine",
     "pass",
 ];
@@ -467,6 +471,39 @@ fn validate_stmts(
                     }
                 }
             }
+            Stmt::Delete { target, span } => {
+                if !matches!(target.as_ref(), Expr::Index { .. }) {
+                    errors.push(invalid(
+                        "invalid-structure",
+                        "a delete statement must target an array index",
+                        *span,
+                    ));
+                }
+            }
+            Stmt::Goto {
+                label,
+                offset,
+                span,
+                ..
+            } => {
+                if label.is_some() == offset.is_some() {
+                    errors.push(invalid(
+                        "invalid-structure",
+                        "a goto must contain exactly one label or offset",
+                        *span,
+                    ));
+                }
+                if let Some(label) = label {
+                    if let Err(error) = check_name(label, "label", *span) {
+                        errors.push(error);
+                    }
+                }
+            }
+            Stmt::Label { name, span } => {
+                if let Err(error) = check_name(name, "label", *span) {
+                    errors.push(error);
+                }
+            }
             _ => {}
         }
     });
@@ -542,6 +579,7 @@ fn statement_exprs(statements: &[Stmt]) -> Vec<&Expr> {
                 exprs.push(target.as_ref());
                 exprs.push(value.as_ref());
             }
+            Stmt::Delete { target, .. } => exprs.push(target.as_ref()),
             Stmt::If {
                 branches, r#else, ..
             } => {
@@ -589,7 +627,16 @@ fn statement_exprs(statements: &[Stmt]) -> Vec<&Expr> {
                     }
                 }
             }
-            Stmt::Break { .. } | Stmt::CallSubroutine { .. } | Stmt::Pass { .. } => {}
+            Stmt::Goto { offset, .. } => {
+                if let Some(offset) = offset {
+                    exprs.push(offset.as_ref());
+                }
+            }
+            Stmt::Break { .. }
+            | Stmt::Continue { .. }
+            | Stmt::Label { .. }
+            | Stmt::CallSubroutine { .. }
+            | Stmt::Pass { .. } => {}
         }
     }
     exprs
@@ -685,7 +732,11 @@ fn for_each_stmt<'a>(statements: &'a [Stmt], f: &mut impl FnMut(&'a Stmt)) {
             }
             Stmt::Expr { .. }
             | Stmt::Assign { .. }
+            | Stmt::Delete { .. }
             | Stmt::Break { .. }
+            | Stmt::Continue { .. }
+            | Stmt::Goto { .. }
+            | Stmt::Label { .. }
             | Stmt::CallSubroutine { .. }
             | Stmt::Pass { .. } => {}
         }
@@ -851,6 +902,7 @@ fn check_stmt(value: &Value) -> Result<(), HirError> {
         "condition",
         "variable",
         "iterable",
+        "offset",
     ] {
         if let Some(child) = object.get(field) {
             check_expr(child)?;

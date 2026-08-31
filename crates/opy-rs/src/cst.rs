@@ -197,7 +197,23 @@ pub enum Stmt {
         arms: Vec<SwitchArm>,
         span: Span,
     },
+    Delete {
+        target: Expr,
+        span: Span,
+    },
     Break {
+        span: Span,
+    },
+    Continue {
+        span: Span,
+    },
+    Goto {
+        label: Option<String>,
+        offset: Option<Expr>,
+        span: Span,
+    },
+    Label {
+        name: String,
         span: Span,
     },
     Pass {
@@ -393,7 +409,11 @@ impl Stmt {
             | Stmt::While { span, .. }
             | Stmt::DoWhile { span, .. }
             | Stmt::Switch { span, .. }
+            | Stmt::Delete { span, .. }
             | Stmt::Break { span }
+            | Stmt::Continue { span }
+            | Stmt::Goto { span, .. }
+            | Stmt::Label { span, .. }
             | Stmt::Pass { span } => *span,
         }
     }

@@ -51,6 +51,22 @@ The optional `member_span` field preserves the exact source span of the player
 variable member identifier (for example, `I` in `hostPlayer.I`); `span`
 continues to cover the complete member expression.
 
+## Additive statement nodes
+
+The source frontend also retains the audited control-flow statements that are
+not yet representable in canonical Workshop WIR:
+
+| Kind | Fields | Meaning |
+| --- | --- | --- |
+| `delete` | `target`, `span` | Delete an element addressed by an array index. |
+| `continue` | `span` | Continue the innermost loop; source lowering rejects it outside a loop. |
+| `goto` | `label`, `offset`, `span` | Jump to a named label or to a relative `loc+` offset; exactly one target field is present. |
+| `label` | `name`, `span` | A named jump target. |
+
+These nodes are source-semantic and preserve provenance. The bounded compiler
+reports an explicit integration diagnostic for them until canonical WIR owns
+the corresponding Workshop control-flow semantics.
+
 ## Consumer migration
 
 Every external `wright/opy-hir` consumer must migrate its protocol gate and

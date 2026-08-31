@@ -633,6 +633,7 @@ impl SemanticModel {
                 Self::collect_expr(target, sites);
                 Self::collect_expr(value, sites);
             }
+            HirStmt::Delete { target, .. } => Self::collect_expr(target, sites),
             HirStmt::If {
                 branches, r#else, ..
             } => {
@@ -695,6 +696,12 @@ impl SemanticModel {
                 }
             }
             HirStmt::Break { .. } => {}
+            HirStmt::Continue { .. } | HirStmt::Label { .. } => {}
+            HirStmt::Goto { offset, .. } => {
+                if let Some(offset) = offset {
+                    Self::collect_expr(offset, sites);
+                }
+            }
             HirStmt::CallSubroutine { name, span } => {
                 if let Some(span) = span {
                     sites.push((
