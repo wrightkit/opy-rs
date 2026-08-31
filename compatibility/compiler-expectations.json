@@ -347,6 +347,20 @@
       "semanticEquivalent": true
     },
     {
+      "fixture": "synthetic/issue-131-spec-visibility",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "semantic-wir",
+      "evidence": [
+        "oracle:synthetic/issue-131-spec-visibility/oracle.json",
+        "provenance:synthetic/issue-131-spec-visibility/fixture.json",
+        "test:opy-rs::compiler::integration_tests::issue_131_spec_visibility::never_maps_to_visible_never_in_canonical_wir"
+      ],
+      "owner": "opy-rs#131",
+      "note": "The OPY SpecVisibility.NEVER spelling lowers to the canonical VISIBLE_NEVER enum member and is equivalent to the pinned oracle WIR.",
+      "semanticEquivalent": true
+    },
+    {
       "fixture": "synthetic/issue-47-unsupported",
       "nativeStatus": "failure",
       "classification": "unsupported",
@@ -468,9 +482,9 @@
         "provenance:real-world/overpy-crosshair/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The full real-world project now passes the implicit-concatenation and hudSubheader boundaries; the first remaining native gap is the unsupported SpecVisibility.NEVER enum member, while the byte-string modifier remains a separate documented gap.",
+      "note": "The full real-world project now passes the implicit-concatenation, hudSubheader, and SpecVisibility.NEVER boundaries; the remaining native gap is the separate unsupported hudSubtext action.",
       "failureClass": "frontend",
-      "diagnosticCode": "unknown-enum-member"
+      "diagnosticCode": "unknown-action"
     },
     {
       "fixture": "real-world/overpy-inputhud",

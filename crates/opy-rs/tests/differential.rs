@@ -255,6 +255,12 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
     );
     resolve(
         &mut cases,
+        "synthetic/issue-131-spec-visibility",
+        true,
+        "Issue #131 maps SpecVisibility.NEVER to the canonical VISIBLE_NEVER member; canonical WIR lowering is constrained by the dedicated compiler test.",
+    );
+    resolve(
+        &mut cases,
         "synthetic/issue-47-control-flow",
         false,
         "Issue #47 oracle-backed control-flow lowering probe; the frontend resolves the source while the compiler independently constrains canonical WIR against the pinned oracle.",
@@ -469,8 +475,8 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
     diagnostic(
         &mut cases,
         "real-world/overpy-crosshair",
-        Some("parse-error"),
-        "reference accepts; the native frontend rejects the `b\"…\"` byte-string modifier (baseline category 1b, legacy-quirk/demand-driven, explicit rejection). Gap: reference accepts, native rejects (documented).",
+        Some("unknown-action"),
+        "the SpecVisibility.NEVER and hudSubheader boundaries now resolve; the full project reaches the separate unsupported hudSubtext action. Gap: reference accepts, native rejects (documented).",
     );
     diagnostic(
         &mut cases,
