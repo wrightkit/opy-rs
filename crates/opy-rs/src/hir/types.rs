@@ -611,6 +611,10 @@ pub enum Expr {
     PlayerVar {
         player: Box<Expr>,
         name: String,
+        /// The exact span of the member identifier in a source reference
+        /// such as `hostPlayer.I`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        member_span: Option<Span>,
         #[serde(skip_serializing_if = "Option::is_none")]
         span: Option<Span>,
     },

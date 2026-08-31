@@ -502,9 +502,10 @@ fn validate_exprs(
                         *span,
                     ));
                 }
-                Expr::PlayerVar { player, name, span }
-                    if !tables.players.contains(&name.as_str())
-                        && !is_implicit_player_variable(player, name) =>
+                Expr::PlayerVar {
+                    player, name, span, ..
+                } if !tables.players.contains(&name.as_str())
+                    && !is_implicit_player_variable(player, name) =>
                 {
                     errors.push(invalid(
                         "unresolved-reference",

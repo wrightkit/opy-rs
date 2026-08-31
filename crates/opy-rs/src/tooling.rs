@@ -526,8 +526,13 @@ impl SemanticModel {
                     sites.push((kind, name.clone(), to_frontend_span(*span)));
                 }
             }
-            HirExpr::PlayerVar { name, span, .. } => {
-                if let Some(span) = span {
+            HirExpr::PlayerVar {
+                name,
+                member_span,
+                span,
+                ..
+            } => {
+                if let Some(span) = member_span.as_ref().or(span.as_ref()) {
                     sites.push((SymbolKind::Player, name.clone(), to_frontend_span(*span)));
                 }
             }

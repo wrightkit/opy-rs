@@ -47,6 +47,9 @@ HIR v2 also supports the `hostPlayer` pseudo-symbol as a source reference.
 Player-variable `for` binders are represented by the existing `playerVar`
 expression with the receiver preserved in `player`; this includes receivers
 such as `eventPlayer`, `hostPlayer`, and a player-valued variable expression.
+The optional `member_span` field preserves the exact source span of the player
+variable member identifier (for example, `I` in `hostPlayer.I`); `span`
+continues to cover the complete member expression.
 
 ## Consumer migration
 

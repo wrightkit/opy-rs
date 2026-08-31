@@ -830,13 +830,14 @@ impl Lowerer {
         if let Expr::Member {
             receiver,
             member,
+            member_span,
             span,
-            ..
         } = variable
         {
             return HirExpr::PlayerVar {
                 player: Box::new(self.lower_expr(receiver, macro_params, CallPosition::Value)),
                 name: member.clone(),
+                member_span: Some((*member_span).into()),
                 span: Some((*span).into()),
             };
         }
@@ -1094,6 +1095,7 @@ impl Lowerer {
             _ if self.players.contains(name) => HirExpr::PlayerVar {
                 player: Box::new(HirExpr::EventPlayer { span: None }),
                 name: name.to_string(),
+                member_span: None,
                 span: Some(span.into()),
             },
             _ if self.enums.contains_key(name) => {
@@ -1182,6 +1184,7 @@ impl Lowerer {
                 return HirExpr::PlayerVar {
                     player: Box::new(HirExpr::EventPlayer { span: None }),
                     name: member.to_string(),
+                    member_span: Some(member_span.into()),
                     span: Some(span.into()),
                 };
             }
@@ -1189,6 +1192,7 @@ impl Lowerer {
                 return HirExpr::PlayerVar {
                     player: Box::new(HirExpr::HostPlayer { span: None }),
                     name: member.to_string(),
+                    member_span: Some(member_span.into()),
                     span: Some(span.into()),
                 };
             }
@@ -2995,12 +2999,26 @@ mod tests {
         let HirStmt::For { variable, .. } = &actions[0] else {
             panic!("expected a for statement");
         };
-        let HirExpr::PlayerVar { player, name, span } = variable.as_ref() else {
+        let HirExpr::PlayerVar {
+            player,
+            name,
+            member_span,
+            span,
+        } = variable.as_ref()
+        else {
             panic!("expected a player-variable binder, got {variable:?}");
         };
         assert_eq!(name, "I");
         assert!(matches!(player.as_ref(), HirExpr::HostPlayer { .. }));
         assert_eq!(span.unwrap().start.line, 4);
+        assert_eq!(span.unwrap().start.col, 9);
+        assert_eq!(span.unwrap().end.line, 4);
+        assert_eq!(span.unwrap().end.col, 21);
+        let member_span = member_span.expect("player binder member span");
+        assert_eq!(member_span.start.line, 4);
+        assert_eq!(member_span.start.col, 20);
+        assert_eq!(member_span.end.line, 4);
+        assert_eq!(member_span.end.col, 21);
     }
 
     #[test]

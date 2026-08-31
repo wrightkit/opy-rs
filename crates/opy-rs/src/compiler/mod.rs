@@ -927,9 +927,15 @@ impl MacroExpander {
                 z: Box::new(self.expand_expr(z, bindings)?),
                 span: *span,
             }),
-            Expr::PlayerVar { player, name, span } => Ok(Expr::PlayerVar {
+            Expr::PlayerVar {
+                player,
+                name,
+                member_span,
+                span,
+            } => Ok(Expr::PlayerVar {
                 player: Box::new(self.expand_expr(player, bindings)?),
                 name: name.clone(),
+                member_span: *member_span,
                 span: *span,
             }),
             Expr::Member {
@@ -1938,6 +1944,7 @@ impl<'a> Lowering<'a> {
                         player,
                         name,
                         span: target_span,
+                        ..
                     } => {
                         let variable_id = *self.players.get(name).ok_or_else(|| {
                             self.unsupported(
@@ -2821,6 +2828,7 @@ impl<'a> Lowering<'a> {
                 player,
                 name,
                 span: target_span,
+                ..
             } => {
                 let variable = *self.players.get(name).ok_or_else(|| {
                     self.unsupported(format!("unknown player variable '{name}'"), *target_span)
@@ -2919,6 +2927,7 @@ impl<'a> Lowering<'a> {
                     player,
                     name,
                     span: arr_span,
+                    ..
                 } => {
                     let player_val = self.lower_value(player)?;
                     let variable = *self.players.get(name).ok_or_else(|| {
@@ -3126,6 +3135,7 @@ impl<'a> Lowering<'a> {
                     player,
                     name,
                     span: target_span,
+                    ..
                 } => {
                     let variable = *self.players.get(name).ok_or_else(|| {
                         self.unsupported(format!("unknown player variable '{name}'"), *target_span)
@@ -4008,9 +4018,14 @@ fn collect_implicit_expr(
             collect_implicit_expr(y, declared_globals, declared_players, globals, players);
             collect_implicit_expr(z, declared_globals, declared_players, globals, players);
         }
-        Expr::PlayerVar { player, name, span } => {
+        Expr::PlayerVar {
+            player,
+            name,
+            member_span,
+            span,
+        } => {
             if !declared_players.contains(name.as_str()) && default_var_index(name).is_some() {
-                players.entry(name.clone()).or_insert(*span);
+                players.entry(name.clone()).or_insert(member_span.or(*span));
             }
             collect_implicit_expr(player, declared_globals, declared_players, globals, players);
         }
