@@ -40,7 +40,7 @@ use crate::diag::{OpyError, OpyResult, Span};
 use crate::manifest::{
     Function, FunctionContext, FunctionKind, Manifest, Param, ParamDefault, ReceiverCategory,
 };
-use workshop_rs::catalog::Catalog;
+use workshop_rs::catalog::{Catalog, Locale};
 
 /// The protocol envelope this frontend produces.
 const PROTOCOL_NAME: &str = "wright/opy-hir";
@@ -1160,22 +1160,37 @@ impl Lowerer {
             // resolves as an opaque identity after validating the member
             // against the canonical Workshop catalog.
             if self.manifest.domain_identity(name) {
-                if let Some(domain) = self.catalog.enum_domain(name)
-                    && !domain
-                        .members
-                        .iter()
-                        .any(|candidate| candidate.member == *member)
-                {
+                let locale = Locale::new("en-US");
+                let canonical_member = self
+                    .catalog
+                    .enum_domain(name)
+                    .and_then(|domain| {
+                        domain
+                            .members
+                            .iter()
+                            .find(|candidate| candidate.member == member)
+                            .map(|candidate| candidate.member.clone())
+                    })
+                    .or_else(|| {
+                        if name == "Team" && member.parse::<u32>().is_ok() {
+                            self.catalog
+                                .resolve_enum_member(name, &locale, &format!("{name} {member}"))
+                                .map(|(_, member)| member)
+                        } else {
+                            None
+                        }
+                    });
+                let Some(canonical_member) = canonical_member else {
                     self.error_at(
                         "unknown-enum-member",
                         format!("enum '{name}' has no member '{member}'"),
                         span,
                     );
                     return HirExpr::Null { span: None };
-                }
+                };
                 return HirExpr::Enum {
                     value_type: name.clone(),
-                    value: member.to_string(),
+                    value: canonical_member,
                     span: Some(span.into()),
                 };
             }

@@ -2,6 +2,8 @@
 mod issue_100_conditional;
 #[path = "tests/issue_101_implicit_string.rs"]
 mod issue_101_implicit_string;
+#[path = "tests/issue_102_numeric_enum.rs"]
+mod issue_102_numeric_enum;
 #[path = "tests/issue_103_higher_order.rs"]
 mod issue_103_higher_order;
 #[path = "tests/issue_113_is_dummy.rs"]
@@ -10,6 +12,8 @@ mod issue_113_is_dummy;
 mod issue_114_hud_subheader;
 #[path = "tests/issue_115_string_continuation.rs"]
 mod issue_115_string_continuation;
+#[path = "tests/issue_129_included_main_file.rs"]
+mod issue_129_included_main_file;
 #[path = "tests/issue_42_oracle.rs"]
 mod issue_42_oracle;
 #[path = "tests/issue_46_oracle.rs"]

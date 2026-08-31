@@ -351,6 +351,12 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
     );
     resolve(
         &mut cases,
+        "synthetic/issue-129-included-main-file",
+        true,
+        "included-file mainFile scope and root entry-point preservation; oracle status success.",
+    );
+    resolve(
+        &mut cases,
         "synthetic/issue-31-positive",
         false,
         "pinned positive probe for global rulePrefixTemplate, include prefix restoration, AST macro/enum redeclaration, and translation normalization.",
@@ -445,7 +451,7 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
     diagnostic(
         &mut cases,
         "real-world/overpy-cronch",
-        Some("parse-error"),
+        Some("unknown-action"),
         "the postfix increment regression now resolves; the full project reaches the next unsupported createDummy action at cronch.opy:103. Gap: reference accepts, native rejects (documented).",
     );
     diagnostic(
@@ -476,7 +482,7 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         &mut cases,
         "real-world/overpy-parabola",
         Some("parse-error"),
-        "reference accepts; the native frontend rejects the numeric enum member `Team.2` — a parse gap beyond the declared surface. Gap: reference accepts, native rejects (documented).",
+        "the numeric enum member regression now resolves; the full project reaches the next multiline parenthesized expression gap at parabola.opy:50. Gap: reference accepts, native rejects (documented).",
     );
 
     // Real-world failure fixtures (reference rejects; recorded diagnostics).
@@ -495,14 +501,14 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
     diagnostic(
         &mut cases,
         "real-world/ow1-emulator",
-        Some("main-file-placement"),
-        "reference fails on semantic member checks; the native frontend now passes backslash line continuation and implicit string concatenation, then rejects the legacy #!mainFile placement (legacy-quirk/demand-driven). Gap: rejection reason differs (documented).",
+        Some("unsupported-directive"),
+        "reference fails on semantic member checks; the native frontend accepts the included-file #!mainFile directives and reaches the next unsupported #!defineMember directive with source attribution. Gap: rejection reason differs (documented).",
     );
     diagnostic(
         &mut cases,
         "real-world/6v6-adjustments",
-        Some("main-file-placement"),
-        "reference fails on 'Unknown member '_hp_reset''; the native frontend now passes backslash line continuation, then rejects the legacy #!mainFile placement (legacy-quirk/demand-driven). Gap: rejection reason differs (documented).",
+        Some("unsupported-directive"),
+        "reference fails on 'Unknown member '_hp_reset''; the native frontend accepts the included-file #!mainFile directives and reaches the next unsupported #!defineMember directive with source attribution. Gap: rejection reason differs (documented).",
     );
 
     cases
