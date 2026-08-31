@@ -38,7 +38,7 @@ fn multi_file_project_checks_and_resolves_end_to_end() {
     // Declarations across both files: globalvar/subroutine/macro from the
     // include, playervar from the main file (enums are not retained in the
     // Opy HIR; they are queried separately).
-    assert_eq!(model.declarations().len(), 4);
+    assert_eq!(model.declarations().len(), 5);
     assert!(model
         .declarations()
         .iter()
@@ -90,9 +90,21 @@ fn multi_file_project_checks_and_resolves_end_to_end() {
             .kind,
         SymbolKind::Macro
     );
-    assert_eq!(
-        model.symbol("finish").expect("def binding").kind,
-        SymbolKind::Def
+    let finish_symbols: Vec<_> = model
+        .symbols()
+        .iter()
+        .filter(|symbol| symbol.name == "finish")
+        .collect();
+    assert_eq!(finish_symbols.len(), 2);
+    assert!(
+        finish_symbols
+            .iter()
+            .any(|symbol| symbol.kind == SymbolKind::Subroutine)
+    );
+    assert!(
+        finish_symbols
+            .iter()
+            .any(|symbol| symbol.kind == SymbolKind::Def)
     );
 
     // References: uses in the main file and in the def body resolve to the

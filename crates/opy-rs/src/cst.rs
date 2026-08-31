@@ -13,8 +13,19 @@ use crate::diag::Span;
 pub struct Program {
     pub declarations: Vec<Decl>,
     pub rules: Vec<RuleEntry>,
+    /// All top-level forms in source order. The category-specific vectors are
+    /// retained for the HIR-shaped parser API, while lowering uses this list
+    /// for scope and visibility decisions.
+    pub top_level: Vec<TopLevel>,
     /// The parsed top-of-file `settings { ... }` block, when present (#86).
     pub settings: Option<Settings>,
+}
+
+/// A top-level declaration or rule entry in source order.
+#[derive(Debug, Clone)]
+pub enum TopLevel {
+    Declaration(Decl),
+    Rule(RuleEntry),
 }
 
 /// A parsed `settings { ... }` block (JSONC, #86).

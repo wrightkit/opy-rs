@@ -128,6 +128,7 @@ Span layout: `file_id` indexes the registry, positions are 1-based
 | `manifest-error` | resolve | Semantic manifest load failure |
 | `unknown-identifier` / `enum-type-without-member` | resolve | Unresolved names |
 | `unknown-action` / `unknown-value` / `unknown-member` | resolve | Unknown builtins |
+| `duplicate-declaration` / `duplicate-definition` | resolve | Duplicate OPY declarations or `def` definitions |
 | `unsupported-member` | resolve | Member access outside the declared surface |
 | `unknown-enum-member` | resolve | Custom (user-declared) enum member validation |
 | `invalid-arity` / `missing-argument` / `invalid-argument` | resolve | Signature validation |
@@ -210,10 +211,10 @@ stdout.
 
 ## Known limitations
 
-* `def NAME():` bodies resolve, but calls resolve only against `subroutine
-  NAME` declarations; a def-only subroutine call is an `unknown-action`
-  diagnostic (existing source implementation resolution contract; tracked as source implementation
-  follow-up).
+* `def NAME():` materializes an implicit `subroutine NAME` declaration in the
+  HIR. The declaration and definition are separate tooling symbols, and calls
+  resolve according to source order; a call before the declaration or
+  definition receives an `unknown-action` diagnostic.
 * Custom enums fold to constants in the HIR (reference behavior); enum
   declarations are queryable through `SemanticModel::enums`, not the HIR
   declaration list.
