@@ -357,10 +357,10 @@
         "oracle:real-world/6v6-adjustments/oracle.json",
         "provenance:real-world/6v6-adjustments/fixture.json"
       ],
-      "owner": "opy-rs#88",
-      "note": "The full real-world project now passes the #115 backslash line-continuation boundary; it remains outside the #38 compiler baseline at the existing main-file placement diagnostic.",
+      "owner": "opy-rs#129",
+      "note": "The full real-world project accepts included-file #!mainFile directives and reaches the next unsupported #!defineMember frontend boundary.",
       "failureClass": "frontend",
-      "diagnosticCode": "main-file-placement"
+      "diagnosticCode": "unsupported-directive"
     },
     {
       "fixture": "real-world/overpy-broken-weapons",
@@ -523,10 +523,10 @@
         "oracle:real-world/ow1-emulator/oracle.json",
         "provenance:real-world/ow1-emulator/fixture.json"
       ],
-      "owner": "opy-rs#88",
-      "note": "The full real-world project now passes the #115 backslash line-continuation boundary; it remains outside the #38 compiler baseline at the existing main-file placement diagnostic.",
+      "owner": "opy-rs#129",
+      "note": "The full real-world project accepts included-file #!mainFile directives and reaches the next unsupported #!defineMember frontend boundary.",
       "failureClass": "frontend",
-      "diagnosticCode": "main-file-placement"
+      "diagnosticCode": "unsupported-directive"
     },
     {
       "fixture": "synthetic/chase-condition-agentlab",

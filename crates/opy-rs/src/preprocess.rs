@@ -449,6 +449,19 @@ impl Preprocessor {
             return Ok(());
         }
         if name == "mainFile" {
+            if !self.include_stack.is_empty() {
+                let main_file = strip_quoted(rest.trim())
+                    .filter(|main_file| !main_file.is_empty())
+                    .ok_or_else(|| {
+                        OpyError::at(
+                            "main-file-invalid",
+                            "`#!mainFile` expects one quoted path",
+                            span,
+                        )
+                    })?;
+                self.record(name, Some(main_file), span);
+                return Ok(());
+            }
             return Err(OpyError::at(
                 "main-file-placement",
                 "`#!mainFile` must be the first directive in the main source",
