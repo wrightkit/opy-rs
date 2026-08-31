@@ -41,6 +41,13 @@ v1 baseline:
 The condition is parsed as an `or` expression, and the else branch accepts
 another conditional value.
 
+## Additive player reference
+
+HIR v2 also supports the `hostPlayer` pseudo-symbol as a source reference.
+Player-variable `for` binders are represented by the existing `playerVar`
+expression with the receiver preserved in `player`; this includes receivers
+such as `eventPlayer`, `hostPlayer`, and a player-valued variable expression.
+
 ## Consumer migration
 
 Every external `wright/opy-hir` consumer must migrate its protocol gate and

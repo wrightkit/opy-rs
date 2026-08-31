@@ -231,6 +231,18 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
     );
     resolve(
         &mut cases,
+        "synthetic/issue-65-player-range",
+        false,
+        "Issue #65 player-variable range binder resolves in HIR; canonical For Player Variable lowering is constrained by the dedicated compiler test.",
+    );
+    diagnostic(
+        &mut cases,
+        "synthetic/issue-65-invalid-binder",
+        Some("invalid-structure"),
+        "Issue #65 non-variable range binder is rejected by HIR validation with a stable source-attributed diagnostic.",
+    );
+    resolve(
+        &mut cases,
         "synthetic/issue-113-is-dummy",
         true,
         "Issue #113 catalog-backed eventPlayer.isDummy() member predicate; canonical WIR lowering is constrained by the dedicated compiler test.",
@@ -428,7 +440,7 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         &mut cases,
         "real-world/overpy-santa",
         Some("parse-error"),
-        "the postfix increment regression now resolves; the full project reaches the next unsupported for-range expression at santa.opy:356. Gap: reference accepts, native rejects (documented).",
+        "the player-variable range binder now resolves; the full project advances to the next unsupported multiline conditional expression at santa.opy:359. Gap: reference accepts, native rejects (documented).",
     );
     diagnostic(
         &mut cases,
@@ -607,9 +619,18 @@ fn run_native(
     id: &str,
 ) -> Result<opy_rs::hir::Program, opy_rs::OpyError> {
     let program = compile(source, source_name, fixture_dir)?;
-    program
-        .validate()
-        .expect("native HIR must satisfy the v1 invariants");
+    program.validate().map_err(|error| match error.span() {
+        Some(span) => opy_rs::OpyError::at(
+            error.code(),
+            error.message(),
+            opy_rs::diag::Span::new(
+                span.file,
+                opy_rs::diag::Position::new(span.start.line, span.start.col),
+                opy_rs::diag::Position::new(span.end.line, span.end.col),
+            ),
+        ),
+        None => opy_rs::OpyError::new(error.code(), error.message()),
+    })?;
     let wire = serde_json::to_value(&program).expect("HIR serialization is infallible");
     let round_trip = opy_rs::hir::parse_value(wire)
         .expect("the native wire payload must be consumable by parse_value");

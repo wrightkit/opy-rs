@@ -504,6 +504,7 @@ fn render_expr(expr: &Expr, out: &mut String) {
             out.push_str(member);
         }
         Expr::EventPlayer { .. } => out.push_str("eventPlayer"),
+        Expr::HostPlayer { .. } => out.push_str("hostPlayer"),
         Expr::Constant { name, .. } => out.push_str(name),
         Expr::Call { name, args, .. } => {
             out.push_str(name);

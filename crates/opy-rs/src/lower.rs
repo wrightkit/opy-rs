@@ -762,11 +762,7 @@ impl Lowerer {
                     CallPosition::Value
                 };
                 HirStmt::For {
-                    variable: Box::new(self.lower_expr(
-                        variable,
-                        macro_params,
-                        CallPosition::Value,
-                    )),
+                    variable: Box::new(self.lower_for_binder(variable, macro_params)),
                     iterable: Box::new(self.lower_expr(iterable, macro_params, iterable_position)),
                     body: self.lower_block(body, macro_params, true, false),
                     span: Some(span.into()),
@@ -828,6 +824,23 @@ impl Lowerer {
                 span: Some(span.into()),
             },
         }
+    }
+
+    fn lower_for_binder(&mut self, variable: &Expr, macro_params: &[String]) -> HirExpr {
+        if let Expr::Member {
+            receiver,
+            member,
+            span,
+            ..
+        } = variable
+        {
+            return HirExpr::PlayerVar {
+                player: Box::new(self.lower_expr(receiver, macro_params, CallPosition::Value)),
+                name: member.clone(),
+                span: Some((*span).into()),
+            };
+        }
+        self.lower_expr(variable, macro_params, CallPosition::Value)
     }
 
     fn lower_macro_body(&mut self, body: &[Stmt], params: &[String]) -> Vec<HirStmt> {
@@ -1071,6 +1084,9 @@ impl Lowerer {
             "eventPlayer" => HirExpr::EventPlayer {
                 span: Some(span.into()),
             },
+            "hostPlayer" => HirExpr::HostPlayer {
+                span: Some(span.into()),
+            },
             _ if self.globals.contains(name) => HirExpr::GlobalVar {
                 name: name.to_string(),
                 span: Some(span.into()),
@@ -1165,6 +1181,13 @@ impl Lowerer {
             if name == "eventPlayer" {
                 return HirExpr::PlayerVar {
                     player: Box::new(HirExpr::EventPlayer { span: None }),
+                    name: member.to_string(),
+                    span: Some(span.into()),
+                };
+            }
+            if name == "hostPlayer" {
+                return HirExpr::PlayerVar {
+                    player: Box::new(HirExpr::HostPlayer { span: None }),
                     name: member.to_string(),
                     span: Some(span.into()),
                 };
@@ -2961,6 +2984,23 @@ mod tests {
                 "the binder use inside the body resolves to the implicit global"
             );
         }
+    }
+
+    #[test]
+    fn player_variable_range_binder_preserves_host_player_receiver() {
+        let hir = lower_ok(
+            "playervar I\nrule \"r\":\n    @Event global\n    for hostPlayer.I in range(3):\n        hostPlayer.I = 1\n",
+        );
+        let (_, actions) = rule_conditions_and_actions(&hir);
+        let HirStmt::For { variable, .. } = &actions[0] else {
+            panic!("expected a for statement");
+        };
+        let HirExpr::PlayerVar { player, name, span } = variable.as_ref() else {
+            panic!("expected a player-variable binder, got {variable:?}");
+        };
+        assert_eq!(name, "I");
+        assert!(matches!(player.as_ref(), HirExpr::HostPlayer { .. }));
+        assert_eq!(span.unwrap().start.line, 4);
     }
 
     #[test]

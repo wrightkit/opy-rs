@@ -18,6 +18,8 @@ mod issue_46_oracle;
 mod issue_47_oracle;
 #[path = "tests/issue_59_oracle.rs"]
 mod issue_59_oracle;
+#[path = "tests/issue_65_player_variable.rs"]
+mod issue_65_player_variable;
 #[path = "tests/issue_85_preprocessing.rs"]
 mod issue_85_preprocessing;
 #[path = "tests/issue_89_oracle.rs"]

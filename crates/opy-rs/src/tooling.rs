@@ -507,6 +507,7 @@ impl SemanticModel {
             | HirExpr::Null { .. }
             | HirExpr::Enum { .. }
             | HirExpr::EventPlayer { .. }
+            | HirExpr::HostPlayer { .. }
             | HirExpr::MacroParam { .. }
             | HirExpr::StringModifier { .. }
             | HirExpr::Local { .. } => {}

@@ -1048,7 +1048,7 @@ impl Parser<'_> {
 
     fn parse_for(&mut self) -> Result<Stmt, ()> {
         let start = self.advance();
-        let variable = self.parse_primary()?;
+        let variable = self.parse_postfix()?;
         if !self.is_ident("in") {
             self.error_at_current("expected `in` in the for statement".to_string());
             return Err(());

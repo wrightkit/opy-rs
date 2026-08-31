@@ -51,7 +51,7 @@ Source: pinned OverPy `9.7.10`, content commit
 | `@Condition` and multiple conditions | ✅ Supported | |
 | `@Name`, `@Disabled`, `@Delimiter`, `@NewPage`, `@SuppressWarnings` | ✅ Supported | Each annotation has independent effects. |
 | `if` / `elif` / `else` statements | ✅ Supported | Inline conditional values are separate. |
-| `for ... in range(start, stop, step)` | ✅ Supported | Global/player binders are separate. |
+| `for ... in range(start, stop, step)` | ✅ Supported | Declared or implicit global binders and player-variable binders such as `hostPlayer.I` are supported; other iterable forms remain unsupported. |
 | `while` and `do ... while` loops | ✅ Supported | Distinct entry-condition behavior. |
 | `switch` / `case` / `default` | ✅ Supported | Fall-through and `break` are separate. |
 | `break` in loops and switch arms | ✅ Supported | |

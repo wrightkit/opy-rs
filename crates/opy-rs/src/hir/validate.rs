@@ -63,6 +63,7 @@ const EXPR_KINDS: &[&str] = &[
     "playerVar",
     "member",
     "eventPlayer",
+    "hostPlayer",
     "constant",
     "call",
     "receiverCall",
@@ -418,6 +419,14 @@ fn validate_stmts(
                     format!("for-loop variable '{name}' is not a declared global variable"),
                     *span,
                 )),
+                Expr::PlayerVar { name, player, .. }
+                    if tables.players.contains(&name.as_str())
+                        || is_implicit_player_variable(player, name) => {}
+                Expr::PlayerVar { name, .. } => errors.push(invalid(
+                    "unresolved-reference",
+                    format!("for-loop variable '{name}' is not a declared player variable"),
+                    *span,
+                )),
                 other => errors.push(invalid(
                     "invalid-structure",
                     format!(
@@ -517,8 +526,8 @@ fn validate_exprs(
     errors.into_iter().next().map_or(Ok(()), Err)
 }
 
-fn is_implicit_player_variable(player: &Expr, name: &str) -> bool {
-    matches!(player, Expr::EventPlayer { .. }) && default_var_index(name).is_some()
+fn is_implicit_player_variable(_player: &Expr, name: &str) -> bool {
+    default_var_index(name).is_some()
 }
 
 /// The expressions directly contained in a statement list (used to feed
@@ -759,6 +768,7 @@ fn for_each_expr<'a>(expr: &'a Expr, f: &mut impl FnMut(&'a Expr)) {
         | Expr::Enum { .. }
         | Expr::GlobalVar { .. }
         | Expr::EventPlayer { .. }
+        | Expr::HostPlayer { .. }
         | Expr::Constant { .. }
         | Expr::MacroParam { .. }
         | Expr::StringModifier { .. }

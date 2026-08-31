@@ -21,9 +21,8 @@ pub const PROTOCOL_VERSION: &str = "2.0.0";
 /// uppercase letter spellings `A`–`Z`, `AA`–`AZ`, …, `DA`–`DX` (bijective
 /// base-26, Excel-style, zero-based). The pinned OverPy 9.7.10 reference
 /// accepts these names as *implicit* global variables anywhere a variable may
-/// appear — including as a `for ... in range(...)` loop binder — and as
-/// `eventPlayer.<name>` player variables, without declarations, assigning each
-/// namespace its fixed slot.
+/// appear — including as a `for ... in range(...)` loop binder — and as player
+/// variables, without declarations, assigning each namespace its fixed slot.
 /// Names outside the table (lowercase, mixed case, longer spellings) stay
 /// ordinary unresolved identifiers (see `docs/opy/support-matrix.md`).
 const DEFAULT_VAR_SLOTS: u32 = 128;
@@ -615,6 +614,10 @@ pub enum Expr {
         #[serde(skip_serializing_if = "Option::is_none")]
         span: Option<Span>,
     },
+    HostPlayer {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        span: Option<Span>,
+    },
     /// An OPY member expression whose canonical Workshop meaning is deferred
     /// to the integration catalog. The receiver and source member identity
     /// remain available to tooling and lowering.
@@ -733,6 +736,7 @@ impl Expr {
             | Expr::Enum { span, .. }
             | Expr::GlobalVar { span, .. }
             | Expr::PlayerVar { span, .. }
+            | Expr::HostPlayer { span }
             | Expr::Member { span, .. }
             | Expr::EventPlayer { span }
             | Expr::Constant { span, .. }
@@ -766,6 +770,7 @@ impl Expr {
             Expr::Enum { .. } => "enum",
             Expr::GlobalVar { .. } => "globalVar",
             Expr::PlayerVar { .. } => "playerVar",
+            Expr::HostPlayer { .. } => "hostPlayer",
             Expr::Member { .. } => "member",
             Expr::EventPlayer { .. } => "eventPlayer",
             Expr::Constant { .. } => "constant",

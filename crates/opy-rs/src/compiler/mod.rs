@@ -1911,30 +1911,56 @@ impl<'a> Lowering<'a> {
                 body,
                 span,
             } => {
-                let Expr::GlobalVar {
-                    name,
-                    span: target_span,
-                } = variable.as_ref()
-                else {
-                    return Err(self.unsupported(
-                        "range loops require a global-variable binder in canonical WIR",
-                        variable.span().copied(),
-                    ));
-                };
-                let variable_id = *self.globals.get(name).ok_or_else(|| {
-                    self.unsupported(format!("unknown global variable '{name}'"), *target_span)
-                })?;
                 let (start, stop, step) = self.lower_range(iterable)?;
                 let body = self.lower_actions(body, Some(BreakTarget::Loop))?;
-                Ok(vec![self.wir.actions.push(Action::ForGlobalVariable {
-                    variable: variable_id,
-                    start,
-                    stop,
-                    step,
-                    body,
-                    span: self.wir_span(*span)?,
-                    target_span: self.wir_span(*target_span)?,
-                })])
+                match variable.as_ref() {
+                    Expr::GlobalVar {
+                        name,
+                        span: target_span,
+                    } => {
+                        let variable_id = *self.globals.get(name).ok_or_else(|| {
+                            self.unsupported(
+                                format!("unknown global variable '{name}'"),
+                                *target_span,
+                            )
+                        })?;
+                        Ok(vec![self.wir.actions.push(Action::ForGlobalVariable {
+                            variable: variable_id,
+                            start,
+                            stop,
+                            step,
+                            body,
+                            span: self.wir_span(*span)?,
+                            target_span: self.wir_span(*target_span)?,
+                        })])
+                    }
+                    Expr::PlayerVar {
+                        player,
+                        name,
+                        span: target_span,
+                    } => {
+                        let variable_id = *self.players.get(name).ok_or_else(|| {
+                            self.unsupported(
+                                format!("unknown player variable '{name}'"),
+                                *target_span,
+                            )
+                        })?;
+                        let player = self.lower_value(player)?;
+                        Ok(vec![self.wir.actions.push(Action::ForPlayerVariable {
+                            player,
+                            variable: variable_id,
+                            start,
+                            stop,
+                            step,
+                            body,
+                            span: self.wir_span(*span)?,
+                        })])
+                    }
+                    _ => Err(self.unsupported(
+                        "range loops require a global- or player-variable binder in canonical WIR",
+                        variable.span().copied(),
+                    )),
+                }
             }
             Stmt::While {
                 condition,
@@ -3194,6 +3220,10 @@ impl<'a> Lowering<'a> {
                 }
             }
             Expr::EventPlayer { .. } => Value::EventPlayer,
+            Expr::HostPlayer { .. } => Value::Call {
+                name: "hostPlayer".to_string(),
+                args: Vec::new(),
+            },
             Expr::Enum {
                 value_type, value, ..
             } => {
@@ -3979,10 +4009,7 @@ fn collect_implicit_expr(
             collect_implicit_expr(z, declared_globals, declared_players, globals, players);
         }
         Expr::PlayerVar { player, name, span } => {
-            if matches!(player.as_ref(), Expr::EventPlayer { .. })
-                && !declared_players.contains(name.as_str())
-                && default_var_index(name).is_some()
-            {
+            if !declared_players.contains(name.as_str()) && default_var_index(name).is_some() {
                 players.entry(name.clone()).or_insert(*span);
             }
             collect_implicit_expr(player, declared_globals, declared_players, globals, players);
@@ -4077,6 +4104,7 @@ fn collect_implicit_expr(
         | Expr::Local { .. }
         | Expr::Enum { .. }
         | Expr::EventPlayer { .. }
+        | Expr::HostPlayer { .. }
         | Expr::Constant { .. }
         | Expr::MacroParam { .. } => {}
     }
@@ -4279,6 +4307,7 @@ fn debug_expr_text(expr: &Expr) -> String {
             receiver, member, ..
         } => format!("{}.{}", debug_expr_text(receiver), member),
         Expr::EventPlayer { .. } => "eventPlayer".to_string(),
+        Expr::HostPlayer { .. } => "hostPlayer".to_string(),
         Expr::Call { name, args, .. } if name == "sorted" && args.len() == 2 => {
             format!(
                 "sorted({}, key = {})",
