@@ -149,6 +149,21 @@ fn multi_file_project_checks_and_resolves_end_to_end() {
     assert!(json["enums"].as_array().expect("enums array").len() == 1);
 }
 
+#[test]
+fn tooling_exposes_define_member_identity() {
+    let outcome = check(
+        "#!defineMember VALUE 2\nglobalvar result\nrule \"member define\":\n    @Event global\n    result = VALUE\n",
+        "main.opy",
+        Path::new("."),
+    );
+    let model = outcome
+        .model
+        .expect("member define project must check clean");
+
+    assert_eq!(model.defines().len(), 1);
+    assert!(model.defines()[0].is_member);
+}
+
 /// Representative malformed inputs with their stable diagnostic codes (the
 /// machine contract: codes and source locations, not wording).
 #[rustfmt::skip]

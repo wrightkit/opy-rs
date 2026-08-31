@@ -1,4 +1,4 @@
-//! `.opy` preprocessing: includes, `#!define` macros (textual and
+//! `.opy` preprocessing: includes, `#!define`/`#!defineMember` macros (textual and
 //! `__script__` JavaScript-backed), `#!postCompileHook`, and expansion.
 //!
 //! Operates at the token level, matching the reference frontend's observable
@@ -7,9 +7,9 @@
 //! register macros that expand at their use sites, recursively (a macro may
 //! reference earlier macros). The output is a single-file token stream whose
 //! spans point at use sites, mirroring the reference adapter's provenance
-//! convention (the HIR file registry keeps the main file). Invalid include
-//! graphs (cycles, missing files) and recursive defines fail deterministically
-//! with structured diagnostics that name the offending file/line.
+//! convention (the HIR file registry records the included sources). Invalid
+//! include graphs (cycles, missing files) and recursive defines fail
+//! deterministically with structured diagnostics that name the offending file/line.
 //!
 //! # JavaScript macros and hooks
 //!
@@ -57,6 +57,7 @@ use crate::settings::SettingsBlock;
 pub struct DefineRecord {
     pub name: String,
     pub is_function: bool,
+    pub is_member: bool,
     pub span: Option<Span>,
 }
 
@@ -413,8 +414,8 @@ impl Preprocessor {
             self.include(include, span, out)?;
             return Ok(());
         }
-        if name == "define" {
-            self.define(rest.trim(), span)?;
+        if matches!(name, "define" | "defineMember") {
+            self.define(rest.trim(), span, name == "defineMember")?;
             return Ok(());
         }
         if name == "undef" {
@@ -458,6 +459,11 @@ impl Preprocessor {
             self.record("postCompileHook", Some(path), span);
             return Ok(());
         }
+        if matches!(name, "setupTags" | "setupTx") {
+            require_no_arguments(name, rest, span)?;
+            self.record(name, None, span);
+            return Ok(());
+        }
         if name == "mainFile" {
             if allow_leading_main_file {
                 let main_file = strip_quoted(rest.trim())
@@ -481,6 +487,57 @@ impl Preprocessor {
         if name == "allowMacroRedeclaration" {
             self.preprocessing.allow_macro_redeclaration = true;
             self.record(name, None, span);
+            return Ok(());
+        }
+        if name == "excludeVariablesInCompilation" {
+            require_no_arguments(name, rest, span)?;
+            self.record(name, None, span);
+            return Ok(());
+        }
+        if name == "extension" {
+            let extension = parse_single_word(rest, name, span)?;
+            validate_extension_name(extension, span)?;
+            self.record(name, Some(extension), span);
+            return Ok(());
+        }
+        if name == "translateWithPlayerVar" {
+            let options = rest.split_whitespace().collect::<Vec<_>>();
+            if options
+                .iter()
+                .any(|option| !matches!(*option, "noDetectionRule" | "noTlErr"))
+            {
+                return Err(OpyError::at(
+                    "directive-invalid",
+                    "`#!translateWithPlayerVar` accepts only `noDetectionRule` and `noTlErr`",
+                    span,
+                ));
+            }
+            let value = (!options.is_empty()).then(|| options.join(" "));
+            self.record(name, value.as_deref(), span);
+            return Ok(());
+        }
+        if matches!(
+            name,
+            "disableInspector"
+                | "writeToOutputFile"
+                | "disableTranslationSourceLines"
+                | "keepUnusedTranslations"
+                | "useVariableForCompressionAlphabet"
+                | "debugElementCount"
+        ) {
+            require_no_arguments(name, rest, span)?;
+            self.record(name, None, span);
+            return Ok(());
+        }
+        if matches!(name, "globalvarInitRuleName" | "playervarInitRuleName") {
+            let value = strip_quoted(rest.trim()).ok_or_else(|| {
+                OpyError::at(
+                    "directive-invalid",
+                    format!("`#!{name}` expects one quoted string"),
+                    span,
+                )
+            })?;
+            self.record(name, Some(value), span);
             return Ok(());
         }
         if name == "translations" {
@@ -605,8 +662,7 @@ impl Preprocessor {
         });
     }
 
-    /// Resolve a script path root-relative (the reference's
-    /// `getFilePaths(path, rootPath)` convention) and read its text.
+    /// Resolve a script path relative to the project root and read its text.
     fn resolve_script(&self, path: &str, span: Span) -> OpyResult<ScriptMacro> {
         let canonical = self.root.join(path).canonicalize().map_err(|_| {
             OpyError::at(
@@ -633,16 +689,23 @@ impl Preprocessor {
 
     /// Resolve, lex, and splice one included file.
     fn include(&mut self, include: &str, span: Span, out: &mut Vec<Token>) -> OpyResult<()> {
-        // The include base is the root; the main file is the only file in the
-        // registry (reference convention), so path resolution is root-based.
-        let candidate = self.root.join(include);
+        // Includes resolve relative to the source file containing the
+        // directive. The main source uses the project root as its base.
+        let candidate = self.include_base().join(include);
         let canonical = std::fs::canonicalize(&candidate).ok();
+        let candidate_path = candidate.to_string_lossy().into_owned();
+        let candidate_without_dot = candidate_path
+            .strip_prefix("./")
+            .unwrap_or(&candidate_path)
+            .to_string();
         // An open-document overlay (an unsaved editor buffer) takes
         // precedence over the filesystem. Overlays are keyed by the include
         // string and by the resolved canonical path, so both spellings work.
         let overlay_text = self
             .overlay
             .get(include)
+            .or_else(|| self.overlay.get(&candidate_path))
+            .or_else(|| self.overlay.get(&candidate_without_dot))
             .or_else(|| {
                 canonical
                     .as_ref()
@@ -689,9 +752,10 @@ impl Preprocessor {
         // Each include registers a file in the registry (reference behavior).
         let file_id = self.next_file_id;
         self.next_file_id += 1;
+        let display_path = self.include_display_path(&candidate, include);
         self.files.push(FileRecord {
             id: file_id,
-            path: include.to_string(),
+            path: display_path,
         });
         self.include_stack.push(identity);
         let saved_prefix = self.preprocessing.rule_prefix.clone();
@@ -738,12 +802,33 @@ impl Preprocessor {
         Ok(())
     }
 
+    fn include_base(&self) -> PathBuf {
+        self.include_stack
+            .last()
+            .and_then(|path| path.parent())
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| self.root.clone())
+    }
+
+    fn include_display_path(&self, candidate: &Path, fallback: &str) -> String {
+        candidate
+            .strip_prefix(&self.root)
+            .ok()
+            .and_then(|path| (!path.as_os_str().is_empty()).then_some(path))
+            .map(|path| path.to_string_lossy().into_owned())
+            .or_else(|| {
+                let path = candidate.to_string_lossy();
+                Some(path.strip_prefix("./").unwrap_or(&path).to_string())
+            })
+            .unwrap_or_else(|| fallback.to_string())
+    }
+
     /// Register one `#!define` (object- or function-like).
     ///
     /// A define is function-like when `(` immediately follows the name
     /// (`cakeBeam(start, end)`); a parenthesized object-like value
     /// (`#!define X (a + b)`) keeps its parentheses as value tokens.
-    fn define(&mut self, rest: &str, span: Span) -> OpyResult<()> {
+    fn define(&mut self, rest: &str, span: Span, is_member: bool) -> OpyResult<()> {
         let rest = rest.trim();
         let first_open = rest.find('(').unwrap_or(usize::MAX);
         let first_space = rest.find(char::is_whitespace).unwrap_or(usize::MAX);
@@ -834,6 +919,7 @@ impl Preprocessor {
         self.defines.push(DefineRecord {
             name: name.clone(),
             is_function,
+            is_member,
             span: Some(span),
         });
         self.macros.push(MacroDef {
@@ -1078,6 +1164,46 @@ fn split_directive(text: &str) -> (&str, &str) {
         .map_or((text, ""), |(name, rest)| (name, rest))
 }
 
+fn require_no_arguments(name: &str, rest: &str, span: Span) -> OpyResult<()> {
+    if rest.trim().is_empty() {
+        Ok(())
+    } else {
+        Err(OpyError::at(
+            "directive-invalid",
+            format!("`#!{name}` does not accept arguments"),
+            span,
+        ))
+    }
+}
+
+fn parse_single_word<'a>(rest: &'a str, name: &str, span: Span) -> OpyResult<&'a str> {
+    let value = rest.trim();
+    if value.is_empty() || value.chars().any(char::is_whitespace) {
+        return Err(OpyError::at(
+            "directive-invalid",
+            format!("`#!{name}` expects one argument"),
+            span,
+        ));
+    }
+    Ok(value)
+}
+
+fn validate_extension_name(extension: &str, span: Span) -> OpyResult<()> {
+    let path = [
+        workshop_rs::settings::table::PathPart::Part("extensions"),
+        workshop_rs::settings::table::PathPart::Part(extension),
+    ];
+    if workshop_rs::settings::definition(&path).is_some() {
+        Ok(())
+    } else {
+        Err(OpyError::at(
+            "directive-invalid",
+            format!("unknown Workshop extension `{extension}`"),
+            span,
+        ))
+    }
+}
+
 fn is_identifier_char(ch: char) -> bool {
     ch.is_ascii_alphanumeric() || ch == '_'
 }
@@ -1315,6 +1441,7 @@ mod tests {
         assert_eq!(pre.defines.len(), 1);
         assert_eq!(pre.defines[0].name, "SIDE");
         assert!(!pre.defines[0].is_function);
+        assert!(!pre.defines[0].is_member);
         let numbers: Vec<&str> = pre
             .tokens
             .iter()
@@ -1518,6 +1645,59 @@ mod tests {
             "getCapturePercentage"
         );
         assert_eq!(pre.defines.len(), 1);
+    }
+
+    #[test]
+    fn backend_only_directives_are_validated_and_recorded() {
+        let (pre, _) = preprocess(
+            "#!excludeVariablesInCompilation\n#!extension projectiles\n#!setupTags\n#!setupTx\n#!translateWithPlayerVar noDetectionRule noTlErr\n#!disableInspector\n#!writeToOutputFile\n#!disableTranslationSourceLines\n#!keepUnusedTranslations\n#!useVariableForCompressionAlphabet\n#!debugElementCount\n#!globalvarInitRuleName \"Init globals\"\n#!playervarInitRuleName \"Init players\"\nrule \"r\":\n    pass\n",
+            "main.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let names: Vec<&str> = pre
+            .preprocessing
+            .directives
+            .iter()
+            .map(|directive| directive.name.as_str())
+            .collect();
+        assert_eq!(
+            names,
+            vec![
+                "excludeVariablesInCompilation",
+                "extension",
+                "setupTags",
+                "setupTx",
+                "translateWithPlayerVar",
+                "disableInspector",
+                "writeToOutputFile",
+                "disableTranslationSourceLines",
+                "keepUnusedTranslations",
+                "useVariableForCompressionAlphabet",
+                "debugElementCount",
+                "globalvarInitRuleName",
+                "playervarInitRuleName",
+            ]
+        );
+        assert_eq!(
+            pre.preprocessing.directives[1].value.as_deref(),
+            Some("projectiles")
+        );
+        assert_eq!(
+            pre.preprocessing.directives[4].value.as_deref(),
+            Some("noDetectionRule noTlErr")
+        );
+    }
+
+    #[test]
+    fn extension_directive_rejects_unknown_schema_values() {
+        let error = preprocess(
+            "#!extension notAnExtension\nrule \"r\":\n    pass\n",
+            "main.opy",
+            Path::new("."),
+        )
+        .unwrap_err();
+        assert_eq!(error.code, "directive-invalid");
     }
 
     #[test]

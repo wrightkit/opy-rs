@@ -29,13 +29,14 @@ pub fn dump(program: &Program) -> String {
         out.push_str("defines:\n");
         for define in &program.defines {
             out.push_str(&format!(
-                "  {} ({}){}\n",
+                "  {} ({}{}){}\n",
                 define.name,
                 if define.is_function {
                     "function"
                 } else {
                     "constant"
                 },
+                if define.is_member { ", member" } else { "" },
                 span_suffix(define.span.as_ref()),
             ));
         }

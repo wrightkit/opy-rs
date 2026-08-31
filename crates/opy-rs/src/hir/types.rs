@@ -77,6 +77,9 @@ pub struct Define {
     pub name: String,
     #[serde(default)]
     pub is_function: bool,
+    /// Whether the definition used OverPy's `#!defineMember` surface.
+    #[serde(default)]
+    pub is_member: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub span: Option<Span>,
 }
