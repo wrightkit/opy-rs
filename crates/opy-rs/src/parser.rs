@@ -9,7 +9,7 @@
 
 use crate::cst::{
     Annotation, AnnotationArg, CallArg, Decl, DictEntry, Event, Expr, IfBranch, Program, Rule,
-    RuleEntry, Stmt, SwitchArm,
+    RuleEntry, Stmt, SwitchArm, TopLevel,
 };
 use crate::diag::{OpyError, Position, Span};
 use crate::lexer::{Token, TokenKind};
@@ -134,6 +134,7 @@ impl Parser<'_> {
     fn parse_program(&mut self) -> Program {
         let mut declarations = Vec::new();
         let mut rules = Vec::new();
+        let mut top_level = Vec::new();
         loop {
             self.skip_newlines();
             if self.peek_kind() == TokenKind::Eof {
@@ -144,7 +145,23 @@ impl Parser<'_> {
             } else {
                 None
             };
+            let declaration_count = declarations.len();
+            let rule_count = rules.len();
             let ok = self.parse_top_level(&mut declarations, &mut rules, rule_prefix);
+            if ok {
+                if declarations.len() > declaration_count {
+                    top_level.push(TopLevel::Declaration(
+                        declarations
+                            .last()
+                            .expect("declaration was appended")
+                            .clone(),
+                    ));
+                } else if rules.len() > rule_count {
+                    top_level.push(TopLevel::Rule(
+                        rules.last().expect("rule was appended").clone(),
+                    ));
+                }
+            }
             if !ok {
                 self.recover_line();
             }
@@ -152,6 +169,7 @@ impl Parser<'_> {
         Program {
             declarations,
             rules,
+            top_level,
             settings: None,
         }
     }

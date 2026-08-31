@@ -78,3 +78,42 @@ fn subroutine_visibility_follows_source_order_and_rejects_duplicate_defs() {
     assert_eq!(diagnostic.code, "duplicate-definition");
     assert_eq!(diagnostic.span.as_ref().expect("source span").start.line, 4);
 }
+
+#[test]
+fn visibility_uses_interleaved_top_level_source_order() {
+    let source = "def worker():\n    pass\n\nmacro call_worker():\n    worker()\n\nrule \"call macro\":\n    @Event global\n    call_worker()\n";
+    let outcome = check(source, "main.opy", Path::new(""));
+    assert!(
+        outcome.is_clean(),
+        "a macro must see an earlier def: {:?}",
+        outcome.diagnostics
+    );
+
+    let later_macro = check(
+        "rule \"call macro\":\n    @Event global\n    later_macro()\n\nmacro later_macro():\n    pass\n",
+        "main.opy",
+        Path::new(""),
+    );
+    assert_eq!(
+        later_macro
+            .diagnostics
+            .first()
+            .expect("forward macro diagnostic")
+            .code,
+        "unknown-action"
+    );
+
+    let later_global = check(
+        "rule \"use global\":\n    @Event global\n    later = 1\n\nglobalvar later\n",
+        "main.opy",
+        Path::new(""),
+    );
+    assert_eq!(
+        later_global
+            .diagnostics
+            .first()
+            .expect("forward global diagnostic")
+            .code,
+        "unknown-identifier"
+    );
+}

@@ -35,7 +35,7 @@ use crate::hir::types::{
     Stmt as HirStmt, SwitchArm as HirSwitchArm, default_var_index,
 };
 
-use crate::cst::{self, CallArg, Decl, Expr, RuleEntry as CstRuleEntry, Stmt};
+use crate::cst::{self, CallArg, Decl, Expr, RuleEntry as CstRuleEntry, Stmt, TopLevel};
 use crate::diag::{OpyError, OpyResult, Span};
 use crate::manifest::{
     Function, FunctionContext, FunctionKind, Manifest, Param, ParamDefault, ReceiverCategory,
@@ -129,104 +129,71 @@ pub fn lower_with_preprocessing(
     lowerer.collect_symbols(program);
 
     let mut declarations = Vec::new();
-    for (order, decl) in program.declarations.iter().enumerate() {
+    let mut rules = Vec::new();
+    let mut implicit_subroutines = HashSet::new();
+    for (order, item) in program.top_level.iter().enumerate() {
         lowerer.current_order = order;
-        match decl {
-            Decl::GlobalVariable {
-                name,
-                index,
-                span,
-                name_span,
-                initializer,
-            } => {
-                declarations.push(Declaration::GlobalVariable {
+        match item {
+            TopLevel::Declaration(decl) => match decl {
+                Decl::GlobalVariable {
+                    name,
+                    index,
+                    span,
+                    name_span,
+                    initializer,
+                } => declarations.push(Declaration::GlobalVariable {
                     name: name.clone(),
                     index: *index,
                     span: Some(span.into()),
                     name_span: Some(name_span.into()),
                     initializer: lowerer.initializer(initializer.as_ref()),
-                });
-            }
-            Decl::PlayerVariable {
-                name,
-                index,
-                span,
-                name_span,
-                initializer,
-            } => {
-                declarations.push(Declaration::PlayerVariable {
+                }),
+                Decl::PlayerVariable {
+                    name,
+                    index,
+                    span,
+                    name_span,
+                    initializer,
+                } => declarations.push(Declaration::PlayerVariable {
                     name: name.clone(),
                     index: *index,
                     span: Some(span.into()),
                     name_span: Some(name_span.into()),
                     initializer: lowerer.initializer(initializer.as_ref()),
-                });
-            }
-            Decl::Subroutine {
-                name,
-                span,
-                name_span,
-            } => {
-                declarations.push(Declaration::Subroutine {
+                }),
+                Decl::Subroutine {
+                    name,
+                    span,
+                    name_span,
+                } => declarations.push(Declaration::Subroutine {
                     name: name.clone(),
                     index: None,
                     span: Some(span.into()),
                     name_span: Some(name_span.into()),
-                });
-            }
-            Decl::Enum { .. } => {
-                // Custom enums fold to numeric constants at use sites and
-                // produce no HIR declaration (reference behavior).
-            }
-            Decl::Macro {
-                name,
-                args,
-                body,
-                span,
-            } => {
-                let lowered_body = lowerer.lower_macro_body(body, args);
-                declarations.push(Declaration::Macro {
-                    name: name.clone(),
-                    args: args.clone(),
-                    span: Some(span.into()),
-                    body: lowered_body,
-                });
-            }
-        }
-    }
-
-    let mut implicit_subroutines = HashSet::new();
-    for entry in &program.rules {
-        let CstRuleEntry::SubroutineDef {
-            name,
-            span,
-            name_span,
-            ..
-        } = entry
-        else {
-            continue;
-        };
-        if !lowerer.subroutine_declarations.contains_key(name)
-            && implicit_subroutines.insert(name.clone())
-        {
-            declarations.push(Declaration::Subroutine {
-                name: name.clone(),
-                index: None,
-                span: Some(span.into()),
-                name_span: Some(name_span.into()),
-            });
-        }
-    }
-    let mut rules = Vec::new();
-    for (rule_order, entry) in program.rules.iter().enumerate() {
-        lowerer.current_order = program.declarations.len() + rule_order;
-        match entry {
-            CstRuleEntry::Rule(rule) => rules.push(RuleEntry::Rule(lowerer.lower_rule(
-                rule,
-                files.as_slice(),
-                preprocessing,
-            )?)),
-            CstRuleEntry::SubroutineDef {
+                }),
+                Decl::Enum { .. } => {
+                    // Custom enums fold to numeric constants at use sites and
+                    // produce no HIR declaration (reference behavior).
+                }
+                Decl::Macro {
+                    name,
+                    args,
+                    body,
+                    span,
+                } => {
+                    let lowered_body = lowerer.lower_macro_body(body, args);
+                    declarations.push(Declaration::Macro {
+                        name: name.clone(),
+                        args: args.clone(),
+                        span: Some(span.into()),
+                        body: lowered_body,
+                    });
+                }
+            },
+            TopLevel::Rule(CstRuleEntry::Rule(rule)) => rules.push(RuleEntry::Rule(
+                lowerer.lower_rule(rule, files.as_slice(), preprocessing)?,
+            )),
+            TopLevel::Rule(CstRuleEntry::SubroutineDef {
                 name,
                 presentation_name,
                 span,
@@ -234,7 +201,17 @@ pub fn lower_with_preprocessing(
                 body,
                 annotations,
                 rule_prefix,
-            } => {
+            }) => {
+                if !lowerer.subroutine_declarations.contains_key(name)
+                    && implicit_subroutines.insert(name.clone())
+                {
+                    declarations.push(Declaration::Subroutine {
+                        name: name.clone(),
+                        index: None,
+                        span: Some(span.into()),
+                        name_span: Some(name_span.into()),
+                    });
+                }
                 let base_name = presentation_name
                     .as_deref()
                     .map(str::to_string)
@@ -614,14 +591,17 @@ fn lower_settings_node(node: &cst::SettingsNode) -> HirSettingsNode {
 
 impl Lowerer {
     fn collect_symbols(&mut self, program: &cst::Program) {
-        for (order, decl) in program.declarations.iter().enumerate() {
+        for (order, item) in program.top_level.iter().enumerate() {
+            let TopLevel::Declaration(decl) = item else {
+                continue;
+            };
             match decl {
                 Decl::GlobalVariable { name, span, .. } => {
-                    if self
-                        .global_declarations
-                        .insert(name.clone(), order)
-                        .is_some()
-                    {
+                    let duplicate = self.global_declarations.contains_key(name);
+                    self.global_declarations
+                        .entry(name.clone())
+                        .or_insert(order);
+                    if duplicate {
                         self.error_at(
                             "duplicate-declaration",
                             format!("duplicate global variable '{name}'"),
@@ -630,11 +610,11 @@ impl Lowerer {
                     }
                 }
                 Decl::PlayerVariable { name, span, .. } => {
-                    if self
-                        .player_declarations
-                        .insert(name.clone(), order)
-                        .is_some()
-                    {
+                    let duplicate = self.player_declarations.contains_key(name);
+                    self.player_declarations
+                        .entry(name.clone())
+                        .or_insert(order);
+                    if duplicate {
                         self.error_at(
                             "duplicate-declaration",
                             format!("duplicate player variable '{name}'"),
@@ -643,11 +623,11 @@ impl Lowerer {
                     }
                 }
                 Decl::Subroutine { name, span, .. } => {
-                    if self
-                        .subroutine_declarations
-                        .insert(name.clone(), order)
-                        .is_some()
-                    {
+                    let duplicate = self.subroutine_declarations.contains_key(name);
+                    self.subroutine_declarations
+                        .entry(name.clone())
+                        .or_insert(order);
+                    if duplicate {
                         self.error_at(
                             "duplicate-declaration",
                             format!("duplicate subroutine '{name}'"),
@@ -666,8 +646,8 @@ impl Lowerer {
                 }
             }
         }
-        for (rule_order, entry) in program.rules.iter().enumerate() {
-            let CstRuleEntry::SubroutineDef { name, span, .. } = entry else {
+        for (order, item) in program.top_level.iter().enumerate() {
+            let TopLevel::Rule(CstRuleEntry::SubroutineDef { name, span, .. }) = item else {
                 continue;
             };
             if self
@@ -681,8 +661,7 @@ impl Lowerer {
                     *span,
                 );
             }
-            self.subroutine_definitions
-                .push((name.clone(), program.declarations.len() + rule_order));
+            self.subroutine_definitions.push((name.clone(), order));
         }
     }
 
