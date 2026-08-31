@@ -59,6 +59,8 @@ repository:
 | `issue-59-postfix-assignment` | #59 oracle-backed postfix `++`/`--` assignment probe for global, player, and single-level indexed variables; the snapshot constrains native lowering through canonical WIR equivalence |
 | `issue-59-postfix-negative` | #59 pinned negative probe for rejected prefix `++` with a stable source-attributed parse diagnostic; prefix `--x` remains valid consecutive unary-minus syntax |
 | `issue-59-embedded-postfix-negative` | #59 pinned negative probe for the rejected embedded postfix form with a stable source-attributed parse diagnostic |
+| `issue-65-player-range` | #65 pinned oracle-backed player-variable range binder probe for canonical `For Player Variable` lowering |
+| `issue-65-invalid-binder` | #65 pinned negative probe for a non-variable range binder with a stable source-attributed diagnostic |
 | `issue-47-control-flow` | #47 pinned oracle-backed control-flow lowering probe: if/elif/else, while, range-for, do-while expansion, switch fallthrough/default, and direct break |
 | `issue-47-unsupported` | #47 negative probe: a break hidden inside a conditional switch arm is accepted by the source implementation/oracle but rejected by the compiler with a stable source-attributed diagnostic |
 | `issue-47-switch-order` | #47 pinned oracle probe for a default arm before later case arms and source-order fallthrough |

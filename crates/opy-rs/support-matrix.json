@@ -201,14 +201,15 @@
     },
     {
       "id": "semantics/for-binder",
-      "name": "for-loop binder: declared globalvar or implicit default variables A-Z … DA-DX",
+      "name": "for-loop binder: declared globalvar/playervar or implicit default variables A-Z … DA-DX",
       "category": "semantics",
       "state": "semantic-supported",
       "evidence": [
         "fixtures:synthetic/for-range-agentlab",
+        "fixtures:synthetic/issue-65-player-range",
         "upstream:src/tests/loops.opy"
       ],
-      "notes": "for-loop binders resolve to declared globals or implicit default variables (A-Z .. DA-DX); fixture for-range-agentlab."
+      "notes": "for-loop binders resolve to declared globals or player variables, including implicit default variables (A-Z .. DA-DX); player receivers such as eventPlayer, hostPlayer, and variable expressions are preserved in HIR."
     },
     {
       "id": "semantics/builtin-actions-values",
@@ -702,11 +703,13 @@
         "fixtures:synthetic/issue-47-switch-multiple-break",
         "fixtures:synthetic/issue-47-do-while-shapes",
         "fixtures:synthetic/issue-47-do-while-invalid-placement",
+        "fixtures:synthetic/issue-65-player-range",
+        "fixtures:synthetic/issue-65-invalid-binder",
         "fixtures:synthetic/issue-33-switch-break",
         "test:opy-rs::compiler-issue-47-residual-native-wir-gaps",
         "contract:workshop-rs-v0.1.16"
       ],
-      "notes": "Issue #47. If/elif/else, while, global-binder range-for, do-while expansion, source-ordered switch fallthrough/default, and direct loop/switch/do-while break lower into canonical workshop-rs WIR. Switch offsets and do-while distances use workshop-rs v0.1.16 canonical emitted action widths; direct, conditional, and nested do-while shapes are pinned and oracle-equivalent. Residual native-WIR differences in switch-break and switch-target shapes remain explicit compiler gaps, while nested conditional switch break and multi-break switch cases remain stable source-attributed unsupported-integration-surface diagnostics because OPY has no lossless lowering for those source shapes."
+      "notes": "Issue #47/#65. If/elif/else, while, global- and player-variable range-for, do-while expansion, source-ordered switch fallthrough/default, and direct loop/switch/do-while break lower into canonical workshop-rs WIR. Player-variable binders preserve their receiver and source span through HIR and use the existing For Player Variable contract. Switch offsets and do-while distances use workshop-rs v0.1.16 canonical emitted action widths; direct, conditional, and nested do-while shapes are pinned and oracle-equivalent. Residual native-WIR differences in switch-break and switch-target shapes remain explicit compiler gaps, while nested conditional switch break and multi-break switch cases remain stable source-attributed unsupported-integration-surface diagnostics because OPY has no lossless lowering for those source shapes."
     },
     {
       "id": "compilation/workshop-lowering",

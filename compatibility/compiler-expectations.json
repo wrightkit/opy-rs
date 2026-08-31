@@ -290,6 +290,35 @@
       "diagnosticCode": "parse-error"
     },
     {
+      "fixture": "synthetic/issue-65-player-range",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "semantic-wir",
+      "evidence": [
+        "oracle:synthetic/issue-65-player-range/oracle.json",
+        "provenance:synthetic/issue-65-player-range/fixture.json",
+        "test:opy-rs::compiler::integration_tests::issue_65_player_variable::player_variable_range_binder_matches_the_pinned_oracle"
+      ],
+      "owner": "opy-rs#65",
+      "note": "The pinned hostPlayer.I range binder lowers to the existing canonical For Player Variable WIR contract and is directly equivalent to the oracle.",
+      "semanticEquivalent": true
+    },
+    {
+      "fixture": "synthetic/issue-65-invalid-binder",
+      "nativeStatus": "failure",
+      "classification": "match",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "oracle:synthetic/issue-65-invalid-binder/oracle.json",
+        "provenance:synthetic/issue-65-invalid-binder/fixture.json",
+        "test:opy-rs::compiler::integration_tests::issue_65_player_variable::invalid_range_binder_has_a_stable_source_diagnostic"
+      ],
+      "owner": "opy-rs#65",
+      "note": "The pinned oracle and native source boundary reject a non-variable range binder with source-attributed diagnostics.",
+      "failureClass": "integration",
+      "diagnosticCode": "unsupported-integration-surface"
+    },
+    {
       "fixture": "synthetic/issue-113-is-dummy",
       "nativeStatus": "success",
       "classification": "match",
@@ -508,7 +537,7 @@
         "provenance:real-world/overpy-santa/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The postfix increment regression now lowers; the full real-world project remains outside the #38 compiler baseline and currently stops at the next unsupported for-range expression.",
+      "note": "The player-variable range binder now lowers; the full real-world project remains outside the #38 compiler baseline and currently stops at the next unsupported multiline conditional expression at santa.opy:359.",
       "failureClass": "frontend",
       "diagnosticCode": "parse-error"
     },

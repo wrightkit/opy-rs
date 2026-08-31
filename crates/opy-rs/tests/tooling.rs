@@ -303,3 +303,30 @@ fn unknown_span_lookup_returns_none() {
     assert!(model.provenance(nowhere).is_none());
     assert_eq!(model.file(42), None);
 }
+
+#[test]
+fn player_member_references_use_exact_member_span() {
+    let source = "playervar I\nrule \"r\":\n    @Event global\n    for hostPlayer.I in range(3):\n        hostPlayer.I = 1\n";
+    let outcome = check(source, "main.opy", Path::new(""));
+    assert!(
+        outcome.is_clean(),
+        "player member source must check clean: {:?}",
+        outcome.diagnostics
+    );
+    let model = outcome.model.expect("clean project");
+    let symbol = model.symbol("I").expect("player variable symbol");
+
+    assert_eq!(symbol.references.len(), 2);
+    assert!(
+        symbol
+            .references
+            .iter()
+            .any(|reference| reference.start.line == 4 && reference.start.col == 20)
+    );
+    assert!(
+        symbol
+            .references
+            .iter()
+            .any(|reference| reference.start.line == 5 && reference.start.col == 20)
+    );
+}
