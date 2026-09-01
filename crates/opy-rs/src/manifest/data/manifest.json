@@ -710,6 +710,15 @@
       "params": []
     },
     {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "rule-condition"
+      ],
+      "id": "ruleCondition",
+      "kind": "value",
+      "params": []
+    },
+    {
       "catalogId": "isAssemblingHeroes",
       "evidence": [
         "builtin-surface"
@@ -842,6 +851,20 @@
       "params": [
         {
           "name": "moveSpeedPercent"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setWeapon",
+      "evidence": [
+        "receiver-calls"
+      ],
+      "id": "setWeapon",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "weapon"
         }
       ],
       "receiver": "Player"
@@ -1015,6 +1038,35 @@
       "receiver": "Player"
     },
     {
+      "catalogId": "getAmmo",
+      "evidence": [
+        "receiver-calls"
+      ],
+      "id": "getAmmo",
+      "kind": "memberValue",
+      "params": [
+        {
+          "default": 0,
+          "name": "clip"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getMaxAmmo",
+      "evidence": [
+        "receiver-calls"
+      ],
+      "id": "getMaxAmmo",
+      "kind": "memberValue",
+      "params": [
+        {
+          "name": "clip"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
       "catalogId": "isAlive",
       "evidence": [
         "receiver-calls"
@@ -1070,6 +1122,36 @@
         "builtin-surface"
       ],
       "id": "getFacingDirection",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getCurrentWeapon",
+      "evidence": [
+        "receiver-calls"
+      ],
+      "id": "getCurrentWeapon",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "isFiringPrimaryFire",
+      "evidence": [
+        "receiver-calls"
+      ],
+      "id": "isFiringPrimaryFire",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "isFiringSecondaryFire",
+      "evidence": [
+        "receiver-calls"
+      ],
+      "id": "isFiringSecondaryFire",
       "kind": "memberValue",
       "params": [],
       "receiver": "Player"

@@ -1190,6 +1190,7 @@ struct Lowering<'a> {
     constants: HashMap<String, &'a Expr>,
     defined_subroutines: HashSet<wir::SubroutineId>,
     array_bindings: Vec<ArrayBinding>,
+    current_rule_conditions: Option<Vec<wir::ValueId>>,
 }
 
 #[derive(Debug, Clone)]
@@ -1222,6 +1223,7 @@ impl<'a> Lowering<'a> {
             constants: HashMap::new(),
             defined_subroutines: HashSet::new(),
             array_bindings: Vec::new(),
+            current_rule_conditions: None,
         })
     }
 
@@ -1643,8 +1645,11 @@ impl<'a> Lowering<'a> {
             .iter()
             .map(|expr| self.lower_condition(expr))
             .collect::<Result<Vec<_>, _>>()?;
+        let previous_conditions = self.current_rule_conditions.replace(conditions.clone());
+        let lowered_actions = self.lower_actions(&rule.actions, None);
+        self.current_rule_conditions = previous_conditions;
         let mut actions = Vec::new();
-        actions.extend(self.lower_actions(&rule.actions, None)?);
+        actions.extend(lowered_actions?);
         self.wir.rules.push(wir::Rule {
             name: rule.name.clone(),
             span: self.wir_span(rule.span)?,
@@ -3836,6 +3841,24 @@ impl<'a> Lowering<'a> {
             Expr::Call { name, args, .. } => {
                 if name == "createWorkshopSetting" {
                     return self.lower_workshop_setting(args, span);
+                }
+                if name == "ruleCondition" {
+                    if !args.is_empty() {
+                        return Err(
+                            self.unsupported("ruleCondition does not accept arguments", span)
+                        );
+                    }
+                    let conditions = self.current_rule_conditions.clone().ok_or_else(|| {
+                        self.unsupported("ruleCondition is only valid inside a rule", span)
+                    })?;
+                    let Some((first, rest)) = conditions.split_first() else {
+                        return Ok(self.push_value(Value::Bool(true)));
+                    };
+                    let mut combined = *first;
+                    for condition in rest {
+                        combined = self.push_call("and", vec![combined, *condition]);
+                    }
+                    return Ok(combined);
                 }
                 if name == "vect" && args.len() == 3 {
                     Value::Vector {
