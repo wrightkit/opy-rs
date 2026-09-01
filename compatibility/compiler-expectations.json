@@ -426,9 +426,9 @@
         "provenance:real-world/6v6-adjustments/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The full real-world project now resolves included-file #!mainFile and #!defineMember directives; it remains outside the compiler baseline at the existing included settings-placement boundary.",
+      "note": "The full real-world project now resolves included-file #!mainFile, #!defineMember directives, and included settings; it remains outside the compiler baseline at the next parser boundary in the included constants.",
       "failureClass": "frontend",
-      "diagnosticCode": "settings-placement"
+      "diagnosticCode": "parse-error"
     },
     {
       "fixture": "real-world/overpy-broken-weapons",
@@ -522,9 +522,9 @@
         "provenance:real-world/overpy-meipocalypse/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The full real-world project remains outside the #38 compiler baseline and currently stops at a settings-placement gap.",
+      "note": "The full real-world project now resolves its included settings block and reaches the pinned missing generator-script boundary.",
       "failureClass": "frontend",
-      "diagnosticCode": "settings-placement"
+      "diagnosticCode": "script-not-found"
     },
     {
       "fixture": "real-world/overpy-parabola",
@@ -591,9 +591,9 @@
         "provenance:real-world/ow1-emulator/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The full real-world project now resolves included-file #!mainFile, #!defineMember directives, and continued directive lines; it remains outside the compiler baseline at the duplicate-include macro-redeclaration boundary.",
+      "note": "The full real-world project now resolves included-file #!mainFile, #!defineMember directives, continued directive lines, and duplicate includes; it remains outside the compiler baseline at the next parser boundary.",
       "failureClass": "frontend",
-      "diagnosticCode": "macro-redeclaration"
+      "diagnosticCode": "parse-error"
     },
     {
       "fixture": "synthetic/chase-condition-agentlab",

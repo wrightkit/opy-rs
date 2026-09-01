@@ -76,3 +76,22 @@ fn nested_includes_resolve_relative_to_the_including_file() {
     assert_eq!(hir.files[1].path, "dir/child.opy");
     assert_eq!(hir.files[2].path, "dir/grandchild.opy");
 }
+
+#[test]
+fn included_settings_are_extracted_with_file_provenance() {
+    let overlay = BTreeMap::from([(
+        "shared.opy".to_string(),
+        "settings {\n    \"gamemodes\": {}\n}\n".to_string(),
+    )]);
+    let hir = compile_with_overlay(
+        "#!include \"shared.opy\"\nrule \"included settings\":\n    @Event global\n    pass\n",
+        "main.opy",
+        std::path::Path::new("."),
+        &overlay,
+    )
+    .expect("included settings must compile through the public path");
+
+    let settings = hir.settings.expect("included settings");
+    assert_eq!(settings.span.expect("settings span").file, 1);
+    assert_eq!(hir.files[1].path, "shared.opy");
+}

@@ -2,7 +2,7 @@
 //!
 //! The settings block is recognized and consumed *before* lexing, so the
 //! lexer never gains global `{`/`}` tokens (meipocalypse's dict literal keeps
-//! failing as a `lex-error`). [`find_blocks`] locates a top-of-file block
+//! failing as a `lex-error`). [`find_blocks`] locates a project settings block
 //! with a logical-line keyword scan, [`sanitize_for_lex`] blanks the block
 //! region out of the text handed to the lexer (newlines preserved, so
 //! positions after the block are unchanged), and [`parse_block`] turns the
@@ -17,7 +17,7 @@
 use crate::cst;
 use crate::diag::{OpyError, OpyResult, Position, Span};
 
-/// A top-of-file `settings { ... }` block.
+/// A project `settings { ... }` block.
 #[derive(Debug, Clone)]
 pub struct SettingsBlock {
     /// The raw JSONC text between the braces (braces excluded).
@@ -52,6 +52,8 @@ pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
     };
     let mut blocks = Vec::new();
     let mut in_block_comment = false;
+    let mut string_quote = None;
+    let mut escaped = false;
     let mut seen_first_construct = false;
     while scanner.pos < scanner.chars.len() {
         let ch = scanner.chars[scanner.pos];
@@ -62,6 +64,22 @@ pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
             } else {
                 scanner.advance(1);
             }
+            continue;
+        }
+        if let Some(quote) = string_quote {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == quote {
+                string_quote = None;
+            }
+            scanner.advance(1);
+            continue;
+        }
+        if ch == '"' || ch == '\'' {
+            string_quote = Some(ch);
+            scanner.advance(1);
             continue;
         }
         if ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n' {
@@ -82,7 +100,7 @@ pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
             let keyword_start = scanner.here();
             let keyword_offset = scanner.pos;
             let word = scanner.read_word();
-            if word == "settings" {
+            if word == "settings" && keyword_start.col == 1 {
                 let keyword_span = Span::new(file_id, keyword_start, scanner.here());
                 if seen_first_construct || !blocks.is_empty() {
                     return Err(OpyError::at(
@@ -707,6 +725,12 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn ignores_settings_words_in_strings_and_indented_code() {
+        let text = "rule \"settings\":\n    x = \"settings\"\n";
+        assert!(find_blocks(text, 0).unwrap().is_empty());
     }
 
     #[test]
