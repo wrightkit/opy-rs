@@ -440,9 +440,9 @@
         "provenance:real-world/overpy-broken-weapons/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The full real-world project now passes the #99 numeric-range setting parser boundary and the audited builtin surface; it remains outside the #38 compiler baseline at the OverPy internal RULE_CONDITION identifier boundary.",
+      "note": "The full real-world project now resolves RULE_CONDITION and the audited weapon/ammo receiver builtins; it remains outside the #38 compiler baseline at the non-eventPlayer custom player-variable member boundary (attacker.isWeaponBroken).",
       "failureClass": "frontend",
-      "diagnosticCode": "unknown-identifier"
+      "diagnosticCode": "unsupported-member"
     },
     {
       "fixture": "real-world/overpy-cake",

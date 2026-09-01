@@ -249,8 +249,8 @@
     {
       "expect": "success",
       "id": "receiver-calls",
-      "outputSha256": "827a36368c290664087189244f197822790e8874dec3e0c89ca7647c1af0c1a7",
-      "sha256": "abc9c1f92eb179879da0bc17906bb489b8f764bd89ef7e8af36f3bd4bf3ca968",
+      "outputSha256": "e056f1acf6bfe4230726729609a59e217fec0b3a1be179fb7c23b9bf921be68a",
+      "sha256": "1604fd5b04c9216e07679fe943f717354808f80065c1877cb4c418cc3907fd92",
       "source": "receiver-calls.opy"
     },
     {
@@ -294,6 +294,13 @@
       "sha256": "275864fc4db1e06955e674ed4656dc8350faf96d3f0877d06d2c9906cfde6ec9",
       "source": "wait-keyword-names.opy",
       "diagnosticContains": "Unknown keyword argument 'duration'"
+    },
+    {
+      "expect": "success",
+      "id": "rule-condition",
+      "outputSha256": "7b2ecd50c29af45d2747cd3bb15afbfbcd896887e145a25f6d66232112c0aecb",
+      "sha256": "74fbae25f9bac410a94815eb40f76b70d8082db3d37a881f236568a6e3be008d",
+      "source": "rule-condition.opy"
     }
   ]
 }

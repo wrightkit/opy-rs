@@ -1233,6 +1233,11 @@ impl Lowerer {
             "hostPlayer" => HirExpr::HostPlayer {
                 span: Some(span.into()),
             },
+            "RULE_CONDITION" | "ruleCondition" => HirExpr::Call {
+                name: "ruleCondition".to_string(),
+                args: Vec::new(),
+                span: Some(span.into()),
+            },
             _ if self.global_visible(name) => HirExpr::GlobalVar {
                 name: name.to_string(),
                 span: Some(span.into()),
