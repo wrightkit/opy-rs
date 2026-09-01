@@ -791,6 +791,21 @@
       "semanticEquivalent": true
     },
     {
+      "fixture": "synthetic/issue-60-4d-negative",
+      "nativeStatus": "failure",
+      "classification": "match",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "oracle:synthetic/issue-60-4d-negative/oracle.json",
+        "provenance:synthetic/issue-60-4d-negative/fixture.json",
+        "test:opy-rs::compiler::integration_tests::issue_145_lowering::four_dimensional_indexed_assignment_is_rejected_at_the_pinned_boundary"
+      ],
+      "owner": "opy-rs#145",
+      "note": "The pinned OverPy implementation rejects four-dimensional indexed assignments; native lowering preserves this boundary with a source-attributed integration diagnostic.",
+      "failureClass": "integration",
+      "diagnosticCode": "unsupported-integration-surface"
+    },
+    {
       "fixture": "synthetic/issue-33-f-string",
       "nativeStatus": "success",
       "classification": "match",

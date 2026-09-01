@@ -96,6 +96,27 @@ fn nested_indexed_assignments_match_the_pinned_oracle() {
 }
 
 #[test]
+fn four_dimensional_indexed_assignment_is_rejected_at_the_pinned_boundary() {
+    let dir = fixture_dir("issue-60-4d-negative");
+    let source = std::fs::read_to_string(dir.join("source.opy")).expect("source must be readable");
+    let hir = crate::compile(&source, "source.opy", &dir).expect("fixture must resolve");
+    let error = match Compiler::new()
+        .expect("released workshop contract must load")
+        .compile_hir(&hir)
+    {
+        Ok(_) => panic!("four-dimensional assignment must remain rejected"),
+        Err(error) => error,
+    };
+    let oracle: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.join("oracle.json")).expect("oracle must be readable"),
+    )
+    .expect("oracle must parse");
+    assert_eq!(oracle["compile"]["status"], "failure");
+    assert_eq!(error.diagnostic.code, "unsupported-integration-surface");
+    assert_eq!(error.diagnostic.span.as_ref().unwrap().start.line, 5);
+}
+
+#[test]
 fn translated_implicit_subroutine_fixture_matches_the_pinned_oracle() {
     assert_fixture_matches_oracle("issue-31-positive");
 }

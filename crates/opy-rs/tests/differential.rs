@@ -223,6 +223,12 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         false,
         "Issue #60 nested indexed assignment probe; global targets resolve and are constrained by the pinned canonical-WIR oracle.",
     );
+    resolve(
+        &mut cases,
+        "synthetic/issue-60-4d-negative",
+        false,
+        "Issue #60 four-dimensional negative probe; the frontend resolves the source while the compiler preserves the pinned rejection boundary.",
+    );
     diagnostic(
         &mut cases,
         "synthetic/issue-59-postfix-negative",

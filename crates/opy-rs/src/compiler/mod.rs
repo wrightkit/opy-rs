@@ -2974,11 +2974,14 @@ impl<'a> Lowering<'a> {
         span: Option<HirSpan>,
     ) -> Result<wir::ActionId, IntegrationError> {
         let mut indices = Vec::new();
-        if let Some(root) = indexed_target_parts(target, &mut indices)
-            && indices.len() > 1
-        {
-            indices.reverse();
-            return self.lower_nested_indexed_assign(root, &indices, target, value, span);
+        if let Some(root) = indexed_target_parts(target, &mut indices) {
+            if indices.len() > 3 {
+                return Err(self.unsupported("Cannot assign to 4d array", target.span().copied()));
+            }
+            if indices.len() > 1 {
+                indices.reverse();
+                return self.lower_nested_indexed_assign(root, &indices, target, value, span);
+            }
         }
         match target {
             Expr::GlobalVar {
