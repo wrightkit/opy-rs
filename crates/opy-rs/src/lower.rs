@@ -928,6 +928,9 @@ impl Lowerer {
                     span: Some(span.into()),
                 }
             }
+            Stmt::Return { span } => HirStmt::Return {
+                span: Some(span.into()),
+            },
             Stmt::Continue { span } => {
                 if !loopable {
                     self.error_at(
@@ -1235,6 +1238,11 @@ impl Lowerer {
                 args: Vec::new(),
                 span: Some(span.into()),
             },
+            "eventAbility" | "eventDamage" => HirExpr::Call {
+                name: name.to_string(),
+                args: Vec::new(),
+                span: Some(span.into()),
+            },
             _ if self.global_visible(name) => HirExpr::GlobalVar {
                 name: name.to_string(),
                 span: Some(span.into()),
@@ -1307,15 +1315,28 @@ impl Lowerer {
             // is Workshop-owned catalog content, so the member access
             // resolves as an opaque identity after validating the member
             // against the canonical Workshop catalog.
-            if self.manifest.domain_identity(name) {
+            let catalog_domain = match name.as_str() {
+                "Clip" => "Clipping",
+                _ => name.as_str(),
+            };
+            if self.manifest.domain_identity(name)
+                || (name == "Clip" && self.manifest.domain_identity(catalog_domain))
+            {
                 let locale = Locale::new("en-US");
                 let catalog_member = match (name.as_str(), member) {
+                    ("Clip", "NONE") => "DO_NOT_CLIP",
+                    ("SpecVisibility", "ALWAYS") => "VISIBLE_ALWAYS",
                     ("SpecVisibility", "NEVER") => "VISIBLE_NEVER",
+                    ("EffectReeval", "VISIBILITY_POSITION_AND_RADIUS") => {
+                        "VISIBLE_TO_POSITION_AND_RADIUS"
+                    }
+                    ("Hero", "MCCREE") => "CASSIDY",
+                    ("Hero", "HAMMOND") => "WRECKING_BALL",
                     _ => member,
                 };
                 let canonical_member = self
                     .catalog
-                    .enum_domain(name)
+                    .enum_domain(catalog_domain)
                     .and_then(|domain| {
                         domain
                             .members
@@ -1341,7 +1362,7 @@ impl Lowerer {
                     return HirExpr::Null { span: None };
                 };
                 return HirExpr::Enum {
-                    value_type: name.clone(),
+                    value_type: catalog_domain.to_string(),
                     value: canonical_member,
                     span: Some(span.into()),
                 };
@@ -1349,7 +1370,7 @@ impl Lowerer {
             // Context-player member: a player-variable reference.
             if matches!(
                 name.as_str(),
-                "eventPlayer" | "hostPlayer" | "attacker" | "victim"
+                "eventPlayer" | "hostPlayer" | "localPlayer" | "attacker" | "victim"
             ) {
                 if !default_var_index(member).is_some() && !self.player_visible(member) {
                     self.error_at(
@@ -1417,6 +1438,14 @@ impl Lowerer {
             return HirExpr::PlayerVar {
                 player: Box::new(self.lower_expr(receiver, macro_params, CallPosition::Value)),
                 name: member.to_string(),
+                member_span: Some(member_span.into()),
+                span: Some(span.into()),
+            };
+        }
+        if matches!(member, "x" | "y" | "z") {
+            return HirExpr::Member {
+                receiver: Box::new(self.lower_expr(receiver, macro_params, CallPosition::Value)),
+                member: member.to_string(),
                 member_span: Some(member_span.into()),
                 span: Some(span.into()),
             };
@@ -2061,7 +2090,7 @@ impl Lowerer {
         if let Expr::Name { name: root, .. } = receiver {
             if matches!(
                 root.as_str(),
-                "eventPlayer" | "hostPlayer" | "attacker" | "victim"
+                "eventPlayer" | "hostPlayer" | "localPlayer" | "attacker" | "victim"
             ) {
                 return HirExpr::ReceiverCall {
                     receiver: Box::new(
@@ -2167,9 +2196,11 @@ impl Lowerer {
         span: Span,
     ) {
         let mismatch = match category {
-            ReceiverCategory::String => !matches!(receiver, Expr::String { .. }),
+            ReceiverCategory::String => {
+                !matches!(receiver, Expr::String { .. } | Expr::StringModifier { .. })
+            }
             ReceiverCategory::Variable => !assignable_receiver(receiver),
-            ReceiverCategory::Player | ReceiverCategory::Any => false,
+            ReceiverCategory::Player | ReceiverCategory::Vector | ReceiverCategory::Any => false,
         };
         if mismatch {
             self.error_at(
@@ -2242,6 +2273,11 @@ fn arg_span(args: &[CallArg]) -> Span {
 fn context_player_expr(name: &str, span: Option<Span>) -> Option<HirExpr> {
     match name {
         "eventPlayer" => Some(HirExpr::EventPlayer {
+            span: span.map(Into::into),
+        }),
+        "localPlayer" => Some(HirExpr::Call {
+            name: name.to_string(),
+            args: Vec::new(),
             span: span.map(Into::into),
         }),
         "hostPlayer" => Some(HirExpr::HostPlayer {
@@ -3154,7 +3190,7 @@ mod tests {
         let HirExpr::Call { name, .. } = expr.as_ref() else {
             panic!("expected a call");
         };
-        assert_eq!(name, "stopChasing");
+        assert_eq!(name, "stopChasingVariable");
 
         let hir = crate::compile(
             "globalvar g\nrule \"r\":\n    @Event eachPlayer\n    \

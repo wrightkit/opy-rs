@@ -836,9 +836,10 @@ impl MacroExpander {
                 rule_start: *rule_start,
                 span: *span,
             },
-            Stmt::Break { .. } | Stmt::CallSubroutine { .. } | Stmt::Pass { .. } => {
-                statement.clone()
-            }
+            Stmt::Break { .. }
+            | Stmt::Return { .. }
+            | Stmt::CallSubroutine { .. }
+            | Stmt::Pass { .. } => statement.clone(),
             Stmt::Continue { .. } | Stmt::Label { .. } => statement.clone(),
         })
     }
@@ -1205,6 +1206,45 @@ enum BreakTarget {
 
 type SwitchBreak = (usize, HirSpan);
 type LoweredSwitchBody = (Vec<wir::ActionId>, Option<SwitchBreak>);
+
+/// Return the condition path when a statement consists only of a continue.
+/// An empty path represents an unconditional continue; a non-empty path is
+/// folded into the canonical `skipIf` condition by the loop lowering.
+fn pure_continue_conditions(statement: &Stmt) -> Option<Vec<&Expr>> {
+    match statement {
+        Stmt::Continue { .. } => Some(Vec::new()),
+        Stmt::If {
+            branches,
+            r#else: None,
+            ..
+        } if branches.len() == 1 && branches[0].body.len() == 1 => {
+            let mut conditions = pure_continue_conditions(&branches[0].body[0])?;
+            conditions.insert(0, &branches[0].condition);
+            Some(conditions)
+        }
+        _ => None,
+    }
+}
+
+/// Detect continues belonging to the current loop. Nested loops own their
+/// continues and are lowered independently by `lower_action`.
+fn contains_loop_continue(statement: &Stmt) -> bool {
+    match statement {
+        Stmt::Continue { .. } => true,
+        Stmt::If {
+            branches, r#else, ..
+        } => {
+            branches
+                .iter()
+                .any(|branch| branch.body.iter().any(contains_loop_continue))
+                || r#else
+                    .as_ref()
+                    .is_some_and(|body| body.iter().any(contains_loop_continue))
+        }
+        Stmt::For { .. } | Stmt::While { .. } | Stmt::DoWhile { .. } => false,
+        _ => false,
+    }
+}
 
 impl<'a> Lowering<'a> {
     fn new(compiler: &'a Compiler, hir: &'a hir::Program) -> Result<Self, IntegrationError> {
@@ -1929,10 +1969,32 @@ impl<'a> Lowering<'a> {
         } else {
             "Hero"
         };
-        let (_, member) = self
+        let locale = Locale::new("en-US");
+        let member = self
             .compiler
             .catalog
-            .resolve_enum_member(domain, &Locale::new("en-US"), &spelling)
+            .resolve_enum_member(domain, &locale, &spelling)
+            .map(|(_, member)| member)
+            .or_else(|| {
+                (domain == "Hero")
+                    .then(|| {
+                        self.compiler
+                            .catalog
+                            .enum_domain(domain)
+                            .and_then(|domain| {
+                                domain
+                                    .members
+                                    .iter()
+                                    .find(|member| {
+                                        member.spellings(&locale).iter().any(|candidate| {
+                                            candidate.eq_ignore_ascii_case(&spelling)
+                                        })
+                                    })
+                                    .map(|member| member.member.clone())
+                            })
+                    })
+                    .flatten()
+            })
             .ok_or_else(|| {
                 self.unsupported(
                     format!("unknown {domain} filter '{spelling}'"),
@@ -2018,7 +2080,7 @@ impl<'a> Lowering<'a> {
                 span,
             } => {
                 let (start, stop, step) = self.lower_range(iterable)?;
-                let body = self.lower_actions(body, Some(BreakTarget::Loop))?;
+                let body = self.lower_loop_body(body)?;
                 match variable.as_ref() {
                     Expr::GlobalVar {
                         name,
@@ -2075,7 +2137,7 @@ impl<'a> Lowering<'a> {
                 span,
             } => {
                 let condition = self.lower_value(condition)?;
-                let body = self.lower_actions(body, Some(BreakTarget::Loop))?;
+                let body = self.lower_loop_body(body)?;
                 Ok(vec![self.wir.actions.push(Action::While {
                     condition,
                     body,
@@ -2110,7 +2172,7 @@ impl<'a> Lowering<'a> {
                 *span,
             )),
             Stmt::Continue { span } => Err(self.unsupported(
-                "continue statements are not representable in canonical WIR",
+                "continue statements are only lowered while constructing a loop body",
                 *span,
             )),
             Stmt::Goto { span, .. } => Err(self.unsupported(
@@ -2140,6 +2202,17 @@ impl<'a> Lowering<'a> {
                     *span,
                 )),
             },
+            Stmt::Return { span } => {
+                let true_value = self.wir.values.push(ValueNode::new(
+                    Value::Bool(true),
+                    self.wir_span(*span)?,
+                ));
+                Ok(vec![self.wir.actions.push(Action::Call {
+                    name: "abortIf".to_string(),
+                    args: vec![true_value],
+                    span: self.wir_span(*span)?,
+                })])
+            }
             Stmt::Expr { expr, span } => match expr.as_ref() {
                 Expr::Call { name, args, .. } => {
                     if name == "disableInspector" && args.is_empty() {
@@ -2181,6 +2254,138 @@ impl<'a> Lowering<'a> {
                 })])
             }
         }
+    }
+
+    /// Lower a loop body while preserving OverPy's continue jump layout.
+    /// Continue skips the remaining canonical actions in the current body;
+    /// when it is the sole action of a conditional branch, the conditional
+    /// jump is lifted to the loop body's action list so its distance reaches
+    /// the loop continuation label.
+    fn lower_loop_body(
+        &mut self,
+        statements: &[Stmt],
+    ) -> Result<Vec<wir::ActionId>, IntegrationError> {
+        self.lower_loop_sequence(statements, &[], 0)
+    }
+
+    /// Lower one sequence nested inside a loop. `after` contains already
+    /// lowered actions that follow this sequence before the loop continues;
+    /// `structural_after` counts non-action lines that follow this sequence
+    /// before those actions. This lets a continue remain inside its authored
+    /// conditional while still reaching the nearest loop continuation label.
+    fn lower_loop_sequence(
+        &mut self,
+        statements: &[Stmt],
+        after: &[wir::ActionId],
+        structural_after: usize,
+    ) -> Result<Vec<wir::ActionId>, IntegrationError> {
+        let mut actions = Vec::new();
+        let mut index = 0;
+        while index < statements.len() {
+            let statement = &statements[index];
+            let tail = &statements[index + 1..];
+            if let Some(conditions) = pure_continue_conditions(statement) {
+                let tail = self.lower_loop_sequence(tail, after, structural_after)?;
+                let distance = self.canonical_action_width(&tail, statement.span().copied())?
+                    + structural_after
+                    + self.canonical_action_width(after, statement.span().copied())?;
+                if distance > 0 {
+                    let mut args = Vec::with_capacity(conditions.len() + 1);
+                    if let Some((first, rest)) = conditions.split_first() {
+                        let mut condition = self.lower_value(first)?;
+                        for expression in rest {
+                            let right = self.lower_value(expression)?;
+                            condition = self.push_call("and", vec![condition, right]);
+                        }
+                        args.push(condition);
+                    }
+                    let distance = self.wir.values.push(ValueNode::new(
+                        Value::Number {
+                            value: distance as f64,
+                            text: distance.to_string(),
+                        },
+                        self.wir_span(statement.span().copied())?,
+                    ));
+                    args.push(distance);
+                    actions.push(
+                        self.wir.actions.push(Action::Call {
+                            name: if conditions.is_empty() {
+                                "skip"
+                            } else {
+                                "skipIf"
+                            }
+                            .to_string(),
+                            args,
+                            span: self.wir_span(statement.span().copied())?,
+                        }),
+                    );
+                }
+                actions.extend(tail);
+                return Ok(actions);
+            }
+            if contains_loop_continue(statement) {
+                let tail = self.lower_loop_sequence(tail, after, structural_after)?;
+                let mut continuation_after = tail.clone();
+                continuation_after.extend_from_slice(after);
+                let lowered = self.lower_if_with_loop_continue(
+                    statement,
+                    &continuation_after,
+                    structural_after,
+                )?;
+                actions.push(lowered);
+                actions.extend(tail);
+                return Ok(actions);
+            }
+            actions.extend(self.lower_action(statement, Some(BreakTarget::Loop))?);
+            index += 1;
+        }
+        Ok(actions)
+    }
+
+    fn lower_if_with_loop_continue(
+        &mut self,
+        statement: &Stmt,
+        after: &[wir::ActionId],
+        structural_after: usize,
+    ) -> Result<wir::ActionId, IntegrationError> {
+        let Stmt::If {
+            branches,
+            r#else,
+            span,
+        } = statement
+        else {
+            unreachable!("continue-containing loop statement must be an if")
+        };
+        let mut lowered_branches = Vec::with_capacity(branches.len());
+        let mut suffix = after.to_vec();
+        let mut suffix_structural = structural_after + 1;
+        let mut lowered_else = None;
+        if let Some(body) = r#else {
+            let body = self.lower_loop_sequence(body, after, suffix_structural)?;
+            suffix.splice(0..0, body.iter().copied());
+            suffix_structural += 1;
+            lowered_else = Some(body);
+        }
+        for index in (0..branches.len()).rev() {
+            let body =
+                self.lower_loop_sequence(&branches[index].body, &suffix, suffix_structural)?;
+            suffix_structural += 1;
+            suffix.splice(0..0, body.iter().copied());
+            lowered_branches.push(body);
+        }
+        lowered_branches.reverse();
+        let mut branch_actions = Vec::with_capacity(branches.len());
+        for (branch, body) in branches.iter().zip(lowered_branches) {
+            branch_actions.push(wir::IfBranch {
+                condition: self.lower_value(&branch.condition)?,
+                body,
+            });
+        }
+        Ok(self.wir.actions.push(Action::If {
+            branches: branch_actions,
+            else_body: lowered_else,
+            span: self.wir_span(*span)?,
+        }))
     }
 
     fn lower_do_while_body(
@@ -3842,6 +4047,9 @@ impl<'a> Lowering<'a> {
                 if matches!(name.as_str(), "attacker" | "victim") && args.is_empty() {
                     return Ok(self.push_call(name, Vec::new()));
                 }
+                if name == "localPlayer" && args.is_empty() {
+                    return Ok(self.push_call(name, Vec::new()));
+                }
                 if name == "ruleCondition" {
                     if !args.is_empty() {
                         return Err(
@@ -3999,38 +4207,68 @@ impl<'a> Lowering<'a> {
                 if !matches!(function.kind, FunctionKind::MemberValue) {
                     return Err(self.unsupported(format!("'{name}' is not a member value"), span));
                 }
-                let catalog_id = function.catalog_id.as_ref().ok_or_else(|| {
-                    self.unsupported(
-                        format!(
-                            "member value '{}' has no canonical catalog identity",
-                            function.id
-                        ),
-                        span,
-                    )
-                })?;
-                let mut lowered = Vec::with_capacity(args.len() + 1);
-                lowered.push(self.lower_value(receiver)?);
-                lowered.extend(
-                    args.iter()
-                        .map(|arg| self.lower_value(arg))
-                        .collect::<Result<Vec<_>, _>>()?,
-                );
-                Value::Call {
-                    name: catalog_id.clone(),
-                    args: lowered,
+                if matches!(function.id.as_str(), "concat" | "exclude") {
+                    let [value] = args.as_slice() else {
+                        return Err(self.unsupported(
+                            format!("{} requires exactly one argument", function.id),
+                            span,
+                        ));
+                    };
+                    Value::Call {
+                        name: if function.id == "concat" {
+                            "appendToArray"
+                        } else {
+                            "removeFromArray"
+                        }
+                        .to_string(),
+                        args: vec![self.lower_value(receiver)?, self.lower_value(value)?],
+                    }
+                } else {
+                    let catalog_id = function.catalog_id.as_ref().ok_or_else(|| {
+                        self.unsupported(
+                            format!(
+                                "member value '{}' has no canonical catalog identity",
+                                function.id
+                            ),
+                            span,
+                        )
+                    })?;
+                    let mut lowered = Vec::with_capacity(args.len() + 1);
+                    lowered.push(self.lower_value(receiver)?);
+                    lowered.extend(
+                        args.iter()
+                            .map(|arg| self.lower_value(arg))
+                            .collect::<Result<Vec<_>, _>>()?,
+                    );
+                    Value::Call {
+                        name: catalog_id.clone(),
+                        args: lowered,
+                    }
                 }
             }
             Expr::Member {
                 receiver, member, ..
             } => {
                 let receiver = self.lower_value(receiver)?;
-                let member = self.wir.values.push(ValueNode::new(
-                    Value::String(member.clone()),
-                    self.wir_span(span)?,
-                ));
-                Value::Call {
-                    name: "memberAccess".to_string(),
-                    args: vec![receiver, member],
+                if let Some(name) = match member.as_str() {
+                    "x" => Some("__xComponentOf__"),
+                    "y" => Some("__yComponentOf__"),
+                    "z" => Some("__zComponentOf__"),
+                    _ => None,
+                } {
+                    Value::Call {
+                        name: name.to_string(),
+                        args: vec![receiver],
+                    }
+                } else {
+                    let member = self.wir.values.push(ValueNode::new(
+                        Value::String(member.clone()),
+                        self.wir_span(span)?,
+                    ));
+                    Value::Call {
+                        name: "memberAccess".to_string(),
+                        args: vec![receiver, member],
+                    }
                 }
             }
             Expr::Comprehension {
@@ -4444,6 +4682,7 @@ fn collect_implicit_stmts(
                 }
             }
             Stmt::Break { .. }
+            | Stmt::Return { .. }
             | Stmt::Continue { .. }
             | Stmt::Label { .. }
             | Stmt::CallSubroutine { .. }

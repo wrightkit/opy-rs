@@ -215,6 +215,9 @@ pub enum Stmt {
     Break {
         span: Span,
     },
+    Return {
+        span: Span,
+    },
     Continue {
         span: Span,
     },
@@ -423,6 +426,7 @@ impl Stmt {
             | Stmt::Switch { span, .. }
             | Stmt::Delete { span, .. }
             | Stmt::Break { span }
+            | Stmt::Return { span }
             | Stmt::Continue { span }
             | Stmt::Goto { span, .. }
             | Stmt::Label { span, .. }

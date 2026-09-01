@@ -60,18 +60,6 @@ fn never_maps_to_visible_never_in_canonical_wir() {
 }
 
 #[test]
-fn unrelated_always_member_keeps_its_existing_diagnostic() {
-    let source = "rule \"r\":\n    @Event global\n    hudSubheader(getAllPlayers(), \"text\", HudPosition.TOP, 0, Color.WHITE, HudReeval.VISIBILITY, SpecVisibility.ALWAYS)\n";
-    let error = crate::compile(source, "source.opy", Path::new("."))
-        .expect_err("SpecVisibility.ALWAYS is outside issue #131 scope");
-    assert_eq!(error.code, "unknown-enum-member");
-    assert_eq!(
-        error.message,
-        "enum 'SpecVisibility' has no member 'ALWAYS'"
-    );
-}
-
-#[test]
 fn invalid_spec_visibility_members_keep_source_attributed_diagnostics() {
     let source = "rule \"r\":\n    @Event global\n    hudSubheader(getAllPlayers(), \"text\", HudPosition.TOP, 0, Color.WHITE, HudReeval.VISIBILITY, SpecVisibility.INVALID)\n";
     let error =

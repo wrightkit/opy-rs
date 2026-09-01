@@ -107,7 +107,7 @@ fn malformed_numeric_range_keeps_frontend_diagnostic_boundary() {
 }
 
 #[test]
-fn motivating_project_advances_past_numeric_range_frontend_gap() {
+fn motivating_project_compiles_after_numeric_range_and_return_support() {
     let dir = fixture_dir();
     let source = std::fs::read_to_string(dir.join("broken_weapons.opy"))
         .expect("motivating project must be readable");
@@ -120,15 +120,8 @@ fn motivating_project_advances_past_numeric_range_frontend_gap() {
             &Locale::new("en-US"),
         );
 
-    assert_eq!(report.compile.status, CompileStatus::Failure);
-    // The player-variable receiver gap is now covered by the source HIR;
-    // this project reaches its next independent unsupported action.
-    assert_eq!(report.compile.diagnostics[0].code, "unknown-action");
-    assert!(
-        report.compile.diagnostics[0]
-            .message
-            .contains("unknown action 'bigMessage'")
-    );
+    assert_eq!(report.compile.status, CompileStatus::Success);
+    assert!(report.compile.diagnostics.is_empty());
 }
 
 fn find_initializer(program: &crate::hir::Program) -> &Expr {

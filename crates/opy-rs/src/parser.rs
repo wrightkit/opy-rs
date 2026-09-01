@@ -102,6 +102,12 @@ impl Parser<'_> {
         }
     }
 
+    fn skip_expression_newlines(&mut self) {
+        if self.inside_delimiter_group() {
+            self.skip_newlines();
+        }
+    }
+
     fn is_ident(&self, text: &str) -> bool {
         self.peek_kind() == TokenKind::Ident && self.peek().text == text
     }
@@ -928,6 +934,11 @@ impl Parser<'_> {
                     let token = self.advance();
                     return Ok(Stmt::Break { span: token.span });
                 }
+                "return" => {
+                    let token = self.advance();
+                    self.expect_statement_end("the return statement")?;
+                    return Ok(Stmt::Return { span: token.span });
+                }
                 "pass" => {
                     let start = self.advance();
                     return Ok(Stmt::Pass { span: start.span });
@@ -1307,13 +1318,17 @@ impl Parser<'_> {
     // ---- expressions ----
 
     fn parse_expr(&mut self) -> Result<Expr, ()> {
+        self.skip_expression_newlines();
         let then_value = self.parse_or()?;
+        self.skip_expression_newlines();
         if !self.is_ident("if") {
             return Ok(then_value);
         }
 
         self.advance();
+        self.skip_expression_newlines();
         let condition = self.parse_or()?;
+        self.skip_expression_newlines();
         if !self.is_ident("else") {
             self.error_at_current("expected `else` in conditional expression".to_string());
             return Err(());
@@ -1336,9 +1351,15 @@ impl Parser<'_> {
     }
 
     fn parse_or(&mut self) -> Result<Expr, ()> {
+        self.skip_expression_newlines();
         let mut left = self.parse_and()?;
-        while self.is_ident("or") {
+        loop {
+            self.skip_expression_newlines();
+            if !self.is_ident("or") {
+                break;
+            }
             self.advance();
+            self.skip_expression_newlines();
             let right = self.parse_and()?;
             let span = Span::new(left.span().file, left.span().start, right.span().end);
             left = Expr::Binary {
@@ -1352,9 +1373,15 @@ impl Parser<'_> {
     }
 
     fn parse_and(&mut self) -> Result<Expr, ()> {
+        self.skip_expression_newlines();
         let mut left = self.parse_not()?;
-        while self.is_ident("and") {
+        loop {
+            self.skip_expression_newlines();
+            if !self.is_ident("and") {
+                break;
+            }
             self.advance();
+            self.skip_expression_newlines();
             let right = self.parse_not()?;
             let span = Span::new(left.span().file, left.span().start, right.span().end);
             left = Expr::Binary {
@@ -1368,8 +1395,10 @@ impl Parser<'_> {
     }
 
     fn parse_not(&mut self) -> Result<Expr, ()> {
+        self.skip_expression_newlines();
         if self.is_ident("not") {
             let start = self.advance();
+            self.skip_expression_newlines();
             let operand = self.parse_not()?;
             let end = operand.span().end;
             return Ok(Expr::Unary {
@@ -1382,8 +1411,10 @@ impl Parser<'_> {
     }
 
     fn parse_comparison(&mut self) -> Result<Expr, ()> {
+        self.skip_expression_newlines();
         let mut left = self.parse_additive()?;
         loop {
+            self.skip_expression_newlines();
             let op = match self.peek_kind() {
                 TokenKind::Eq => "==",
                 TokenKind::Ne => "!=",
@@ -1399,6 +1430,7 @@ impl Parser<'_> {
             if op == "not in" {
                 self.advance();
             }
+            self.skip_expression_newlines();
             let right = self.parse_additive()?;
             let span = Span::new(left.span().file, left.span().start, right.span().end);
             left = Expr::Binary {
@@ -1412,8 +1444,10 @@ impl Parser<'_> {
     }
 
     fn parse_additive(&mut self) -> Result<Expr, ()> {
+        self.skip_expression_newlines();
         let mut left = self.parse_multiplicative()?;
         loop {
+            self.skip_expression_newlines();
             if self.peek_kind() == TokenKind::Decrement
                 && !matches!(self.peek_at(1).kind, TokenKind::Newline | TokenKind::Eof)
             {
@@ -1440,6 +1474,7 @@ impl Parser<'_> {
                 _ => break,
             };
             self.advance();
+            self.skip_expression_newlines();
             let right = self.parse_multiplicative()?;
             let span = Span::new(left.span().file, left.span().start, right.span().end);
             left = Expr::Binary {
@@ -1453,12 +1488,14 @@ impl Parser<'_> {
     }
 
     fn parse_multiplicative(&mut self) -> Result<Expr, ()> {
+        self.skip_expression_newlines();
         let left = self.parse_unary()?;
         self.parse_multiplicative_tail(left)
     }
 
     fn parse_multiplicative_tail(&mut self, mut left: Expr) -> Result<Expr, ()> {
         loop {
+            self.skip_expression_newlines();
             let op = match self.peek_kind() {
                 TokenKind::Star => "*",
                 TokenKind::Slash => "/",
@@ -1466,6 +1503,7 @@ impl Parser<'_> {
                 _ => break,
             };
             self.advance();
+            self.skip_expression_newlines();
             let right = self.parse_unary()?;
             let span = Span::new(left.span().file, left.span().start, right.span().end);
             left = Expr::Binary {
@@ -1479,8 +1517,10 @@ impl Parser<'_> {
     }
 
     fn parse_unary(&mut self) -> Result<Expr, ()> {
+        self.skip_expression_newlines();
         if matches!(self.peek_kind(), TokenKind::Minus | TokenKind::Decrement) {
             let start = self.advance();
+            self.skip_expression_newlines();
             let operand = self.parse_unary()?;
             let end = operand.span().end;
             let unary = Expr::Unary {
@@ -1502,9 +1542,11 @@ impl Parser<'_> {
 
     fn parse_power(&mut self) -> Result<Expr, ()> {
         let base = self.parse_postfix()?;
+        self.skip_expression_newlines();
         if self.peek_kind() == TokenKind::DoubleStar {
             self.advance();
             // Right-associative.
+            self.skip_expression_newlines();
             let exponent = self.parse_unary()?;
             let span = Span::new(base.span().file, base.span().start, exponent.span().end);
             return Ok(Expr::Binary {
@@ -1520,6 +1562,7 @@ impl Parser<'_> {
     fn parse_postfix(&mut self) -> Result<Expr, ()> {
         let mut base = self.parse_primary()?;
         loop {
+            self.skip_expression_newlines();
             match self.peek_kind() {
                 TokenKind::LParen => {
                     let mut args = Vec::new();
@@ -1756,7 +1799,9 @@ impl Parser<'_> {
             }
             TokenKind::LParen => {
                 self.advance();
+                self.skip_expression_newlines();
                 let expr = self.parse_expr()?;
+                self.skip_expression_newlines();
                 self.expect(TokenKind::RParen, "')'")?;
                 Ok(expr)
             }

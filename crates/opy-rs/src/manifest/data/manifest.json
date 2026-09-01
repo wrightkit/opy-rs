@@ -2,14 +2,6 @@
   "aliases": [
     {
       "evidence": [
-        "aliases"
-      ],
-      "kind": "functionAlias",
-      "source": "stopChasingVariable",
-      "target": "stopChasing"
-    },
-    {
-      "evidence": [
         "member-aliases"
       ],
       "kind": "memberAlias",
@@ -55,6 +47,38 @@
       "kind": "functionAlias",
       "source": "buttonString",
       "target": "inputBindingString"
+    },
+    {
+      "evidence": [
+        "builtin-surface"
+      ],
+      "kind": "functionAlias",
+      "source": "evalOnce",
+      "target": "evaluateOnce"
+    },
+    {
+      "evidence": [
+        "builtin-surface"
+      ],
+      "kind": "functionAlias",
+      "source": "updateEveryTick",
+      "target": "updateEveryFrame"
+    },
+    {
+      "evidence": [
+        "builtin-surface"
+      ],
+      "kind": "functionAlias",
+      "source": "destroyAllHudTexts",
+      "target": "destroyAllHudText"
+    },
+    {
+      "evidence": [
+        "builtin-surface"
+      ],
+      "kind": "functionAlias",
+      "source": "getLastCreatedEntity",
+      "target": "lastCreatedEntity"
     },
     {
       "evidence": [
@@ -271,6 +295,505 @@
       ]
     },
     {
+      "catalogId": "bigMessage",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "bigMessage",
+      "kind": "action",
+      "params": [
+        {
+          "default": {
+            "call": "getAllPlayers"
+          },
+          "name": "visibleTo"
+        },
+        {
+          "name": "text"
+        }
+      ]
+    },
+    {
+      "catalogId": "smallMessage",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "smallMessage",
+      "kind": "action",
+      "params": [
+        {
+          "default": {
+            "call": "getAllPlayers"
+          },
+          "name": "visibleTo"
+        },
+        {
+          "name": "text"
+        }
+      ]
+    },
+    {
+      "catalogId": "destroyAllEffects",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "destroyAllEffects",
+      "kind": "action",
+      "params": []
+    },
+    {
+      "catalogId": "destroyAllDummies",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "destroyAllDummies",
+      "kind": "action",
+      "params": []
+    },
+    {
+      "catalogId": "setObjectiveDescription",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "setObjectiveDescription",
+      "kind": "action",
+      "params": [
+        {
+          "name": "visibleTo"
+        },
+        {
+          "name": "description"
+        },
+        {
+          "domain": "HudReeval",
+          "name": "reevaluation"
+        }
+      ]
+    },
+    {
+      "catalogId": "createEffect",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "createEffect",
+      "kind": "action",
+      "params": [
+        {
+          "name": "visibleTo"
+        },
+        {
+          "domain": "Effect",
+          "name": "type"
+        },
+        {
+          "domain": "Color",
+          "name": "color"
+        },
+        {
+          "name": "position"
+        },
+        {
+          "name": "radius"
+        },
+        {
+          "domain": "EffectReeval",
+          "name": "reevaluation"
+        }
+      ]
+    },
+    {
+      "catalogId": "declareTeamVictory",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "declareTeamVictory",
+      "kind": "action",
+      "params": [
+        {
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
+      "catalogId": "declarePlayerVictory",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "declarePlayerVictory",
+      "kind": "action",
+      "params": [
+        {
+          "name": "player"
+        }
+      ]
+    },
+    {
+      "catalogId": "setSlowMotion",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "setSlowMotion",
+      "kind": "action",
+      "params": [
+        {
+          "name": "percent"
+        }
+      ]
+    },
+    {
+      "catalogId": "createInWorldText",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "createInWorldText",
+      "kind": "action",
+      "params": [
+        {
+          "name": "visibleTo"
+        },
+        {
+          "name": "header"
+        },
+        {
+          "name": "position"
+        },
+        {
+          "name": "scale"
+        },
+        {
+          "domain": "Clipping",
+          "name": "clipping"
+        },
+        {
+          "domain": "WorldTextReeval",
+          "name": "reevaluation"
+        },
+        {
+          "domain": "Color",
+          "name": "textColor"
+        },
+        {
+          "default": "DEFAULT",
+          "domain": "SpecVisibility",
+          "name": "spectators"
+        }
+      ]
+    },
+    {
+      "catalogId": "destroyAllHudText",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "destroyAllHudText",
+      "kind": "action",
+      "params": []
+    },
+    {
+      "catalogId": "disableBuiltinGameModeCompletion",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "disableGamemodeCompletion",
+      "kind": "action",
+      "params": []
+    },
+    {
+      "catalogId": "disableBuiltinGameModeScoring",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "disableScoring",
+      "kind": "action",
+      "params": []
+    },
+    {
+      "catalogId": "createHudText",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "hudText",
+      "kind": "action",
+      "params": [
+        {
+          "name": "visibleTo"
+        },
+        {
+          "name": "header"
+        },
+        {
+          "name": "subheader"
+        },
+        {
+          "name": "text"
+        },
+        {
+          "domain": "HudPosition",
+          "name": "position"
+        },
+        {
+          "name": "sortOrder"
+        },
+        {
+          "domain": "Color",
+          "name": "headerColor"
+        },
+        {
+          "domain": "Color",
+          "name": "subheaderColor"
+        },
+        {
+          "domain": "Color",
+          "name": "textColor"
+        },
+        {
+          "domain": "HudReeval",
+          "name": "reevaluation"
+        },
+        {
+          "default": "DEFAULT",
+          "domain": "SpecVisibility",
+          "name": "spectators"
+        }
+      ]
+    },
+    {
+      "catalogId": "eventAbility",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "eventAbility",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "lastCreatedEntity",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "lastCreatedEntity",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "max",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "max",
+      "kind": "value",
+      "params": [
+        {
+          "name": "left"
+        },
+        {
+          "name": "right"
+        }
+      ]
+    },
+    {
+      "catalogId": "eventDamage",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "eventDamage",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "isInSetup",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "isInSetup",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "evaluateOnce",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "evaluateOnce",
+      "kind": "value",
+      "params": [
+        {
+          "name": "value"
+        }
+      ]
+    },
+    {
+      "catalogId": "abilityIconString",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "abilityIconString",
+      "kind": "value",
+      "params": [
+        {
+          "domain": "Hero",
+          "name": "hero"
+        },
+        {
+          "domain": "Button",
+          "name": "button"
+        }
+      ]
+    },
+    {
+      "catalogId": "sinDeg",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "sinDeg",
+      "kind": "value",
+      "params": [
+        {
+          "name": "value"
+        }
+      ]
+    },
+    {
+      "catalogId": "cosDeg",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "cosDeg",
+      "kind": "value",
+      "params": [
+        {
+          "name": "value"
+        }
+      ]
+    },
+    {
+      "catalogId": "customColor",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "rgb",
+      "kind": "value",
+      "params": [
+        {
+          "name": "red"
+        },
+        {
+          "name": "green"
+        },
+        {
+          "name": "blue"
+        },
+        {
+          "default": 255,
+          "name": "alpha"
+        }
+      ]
+    },
+    {
+      "catalogId": "updateEveryFrame",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "updateEveryFrame",
+      "kind": "value",
+      "params": [
+        {
+          "name": "value"
+        }
+      ]
+    },
+    {
+      "catalogId": "distance",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "distance",
+      "kind": "value",
+      "params": [
+        {
+          "name": "left"
+        },
+        {
+          "name": "right"
+        }
+      ]
+    },
+    {
+      "catalogId": "vectorTowards",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "vectorTowards",
+      "kind": "value",
+      "params": [
+        {
+          "name": "start"
+        },
+        {
+          "name": "end"
+        }
+      ]
+    },
+    {
+      "catalogId": "dotProduct",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "dotProduct",
+      "kind": "value",
+      "params": [
+        {
+          "name": "left"
+        },
+        {
+          "name": "right"
+        }
+      ]
+    },
+    {
+      "catalogId": "strContains",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "strContains",
+      "kind": "value",
+      "params": [
+        {
+          "name": "text"
+        },
+        {
+          "name": "substring"
+        }
+      ]
+    },
+    {
+      "catalogId": "getServerLoad",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getServerLoad",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "getAverageServerLoad",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getAverageServerLoad",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "getPeakServerLoad",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getPeakServerLoad",
+      "kind": "value",
+      "params": []
+    },
+    {
       "catalogId": "createBeamEffect",
       "evidence": [
         "generic-builtins"
@@ -426,11 +949,11 @@
       ]
     },
     {
-      "catalogLink": "legacy-alias",
+      "catalogId": "stopChasingGlobalVariable",
       "evidence": [
-        "aliases"
+        "builtin-surface"
       ],
-      "id": "stopChasing",
+      "id": "stopChasingVariable",
       "kind": "action",
       "params": [
         {
@@ -592,6 +1115,37 @@
           "name": "team"
         }
       ]
+    },
+    {
+      "catalogId": "allHeroes",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getAllHeroes",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "heroIconString",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "heroIcon",
+      "kind": "value",
+      "params": [
+        {
+          "name": "hero"
+        }
+      ]
+    },
+    {
+      "catalogId": "getMatchTime",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getMatchTime",
+      "kind": "value",
+      "params": []
     },
     {
       "catalogLink": "special-lowering",
@@ -816,6 +1370,7 @@
       "kind": "value",
       "params": [
         {
+          "domain": "Vector",
           "name": "localVector"
         },
         {
@@ -840,6 +1395,48 @@
         }
       ],
       "receiver": "Variable"
+    },
+    {
+      "catalogId": "charAt",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "charAt",
+      "kind": "memberValue",
+      "params": [
+        {
+          "name": "index"
+        }
+      ],
+      "receiver": "Any"
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "concat",
+      "kind": "memberValue",
+      "params": [
+        {
+          "name": "value"
+        }
+      ],
+      "receiver": "Any"
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "exclude",
+      "kind": "memberValue",
+      "params": [
+        {
+          "name": "value"
+        }
+      ],
+      "receiver": "Any"
     },
     {
       "catalogId": "setMoveSpeed",
@@ -1028,6 +1625,46 @@
       "receiver": "Player"
     },
     {
+      "catalogId": "__xComponentOf__",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "x",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Vector"
+    },
+    {
+      "catalogId": "__yComponentOf__",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "y",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Vector"
+    },
+    {
+      "catalogId": "__zComponentOf__",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "z",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Vector"
+    },
+    {
+      "catalogId": "lastOf",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "last",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Any"
+    },
+    {
       "catalogId": "getHealth",
       "evidence": [
         "receiver-calls"
@@ -1084,6 +1721,168 @@
       "id": "getHorizontalFacingAngle",
       "kind": "memberValue",
       "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getEyePosition",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getEyePosition",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getSlot",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getSlot",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getMaxHealth",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getMaxHealth",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getUltCharge",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getUltCharge",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "addToScore",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "addToScore",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "score"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "disallowButton",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "disallowButton",
+      "kind": "memberAction",
+      "params": [
+        {
+          "domain": "Button",
+          "name": "button"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "allowButton",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "allowButton",
+      "kind": "memberAction",
+      "params": [
+        {
+          "domain": "Button",
+          "name": "button"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "disableKillFeed",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "disableKillFeed",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "startForcingPosition",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "startForcingPosition",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "position"
+        },
+        {
+          "name": "includeY"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "startHealingOverTime",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "startHoT",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "healer"
+        },
+        {
+          "name": "rate"
+        },
+        {
+          "name": "duration"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "attachTo",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "attachTo",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "parent"
+        },
+        {
+          "name": "position"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "disableMovementCollisionWithEnvironment",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "disableEnvironmentCollision",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "includeFloors"
+        }
+      ],
       "receiver": "Player"
     },
     {
@@ -1197,6 +1996,189 @@
       "receiver": "Player"
     },
     {
+      "catalogId": "startForcingHero",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "startForcingHero",
+      "kind": "memberAction",
+      "params": [
+        {
+          "domain": "Hero",
+          "name": "hero"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setAbility1Enabled",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "setAbility1Enabled",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "enabled"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setAbility2Enabled",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "setAbility2Enabled",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "enabled"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setUltEnabled",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "setUltEnabled",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "enabled"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setPrimaryFireEnabled",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "setPrimaryFireEnabled",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "enabled"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setSecondaryFireEnabled",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "setSecondaryFireEnabled",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "enabled"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "clearStatusEffect",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "clearStatusEffect",
+      "kind": "memberAction",
+      "params": [
+        {
+          "domain": "Status",
+          "name": "status"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setFacing",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "setFacing",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "direction"
+        },
+        {
+          "domain": "Relativity",
+          "name": "relativity"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "startForcingButton",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "startForcingButton",
+      "kind": "memberAction",
+      "params": [
+        {
+          "domain": "Button",
+          "name": "button"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "stopFacing",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "stopFacing",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "stopForcingCurrentHero",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "stopForcingCurrentHero",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "stopForcingButton",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "stopForcingButton",
+      "kind": "memberAction",
+      "params": [
+        {
+          "domain": "Button",
+          "name": "button"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "forceButtonPress",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "forceButtonPress",
+      "kind": "memberAction",
+      "params": [
+        {
+          "domain": "Button",
+          "name": "button"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
       "catalogId": "disableHeroHud",
       "evidence": [
         "builtin-surface"
@@ -1217,7 +2199,7 @@
       "receiver": "Player"
     },
     {
-      "catalogLink": "catalog-gap",
+      "catalogId": "getHero",
       "evidence": [
         "member-aliases"
       ],
@@ -1227,7 +2209,7 @@
       "receiver": "Player"
     },
     {
-      "catalogLink": "catalog-gap",
+      "catalogId": "hasStatus",
       "evidence": [
         "member-aliases"
       ],

@@ -466,29 +466,29 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         false,
         "pixelart example; oracle status success.",
     );
-    diagnostic(
+    resolve(
         &mut cases,
         "real-world/overpy-santa",
-        Some("parse-error"),
-        "the player-variable range binder now resolves; the full project advances to the next unsupported multiline conditional expression at santa.opy:359. Gap: reference accepts, native rejects (documented).",
+        false,
+        "the final #141 grammar and #144 builtin/member/enum residuals now resolve the full project; canonical WIR equivalence remains a separate explicit compiler gap.",
     );
-    diagnostic(
+    resolve(
         &mut cases,
         "real-world/overpy-cronch",
-        Some("unknown-action"),
-        "the postfix increment regression now resolves; the full project reaches the next unsupported createDummy action at cronch.opy:103. Gap: reference accepts, native rejects (documented).",
+        false,
+        "the final #141 grammar and #144 builtin/member/enum residuals now resolve the full project; canonical WIR equivalence remains a separate explicit compiler gap.",
     );
-    diagnostic(
+    resolve(
         &mut cases,
         "real-world/overpy-broken-weapons",
-        Some("unknown-value"),
-        "the numeric-range setting regression now resolves; the full project reaches the next unknown-value gap at `isAssemblingHeroes`. Gap: reference accepts, native rejects (documented).",
+        false,
+        "the final #141 return grammar and #144 builtin/member/enum residuals now resolve the full project; canonical WIR equivalence remains a separate explicit compiler gap.",
     );
-    diagnostic(
+    resolve(
         &mut cases,
         "real-world/overpy-client-to-server",
-        Some("parse-error"),
-        "the chained ternary, isDummy, and getHorizontalFacingAngle regressions resolve; the full project reaches the next unknown value (`horizontalAngleOfDirection`). Gap: reference accepts, native rejects (documented).",
+        false,
+        "the final #141 grammar and #144 builtin/member/enum residuals now resolve the full project; canonical WIR equivalence remains a separate explicit compiler gap.",
     );
     resolve(
         &mut cases,
@@ -496,17 +496,17 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         false,
         "the frontend resolves the full project through the audited HUD builtin surface; compiler-only lowering retains the separate stringModifier integration boundary.",
     );
-    diagnostic(
+    resolve(
         &mut cases,
         "real-world/overpy-inputhud",
-        Some("parse-error"),
-        "reference accepts; the native frontend rejects multi-line parenthesized expressions with implicit string concatenation — a parse gap beyond the declared surface. Gap: reference accepts, native rejects (documented).",
+        false,
+        "the final #141 grammar and #144 builtin/member/enum residuals now resolve the full project; canonical WIR equivalence remains a separate explicit compiler gap.",
     );
-    diagnostic(
+    resolve(
         &mut cases,
         "real-world/overpy-parabola",
-        Some("parse-error"),
-        "the numeric enum member regression now resolves; the full project reaches the next multiline parenthesized expression gap at parabola.opy:50. Gap: reference accepts, native rejects (documented).",
+        false,
+        "the final #141 grammar and #144 builtin/member/enum residuals now resolve the full project; canonical WIR equivalence remains a separate explicit compiler gap.",
     );
 
     // Real-world failure fixtures (reference rejects; recorded diagnostics).
