@@ -822,9 +822,9 @@
         "test:opy-rs::compiler::integration_tests::issue_93_frontend::frontend_diagnostics_are_public_and_source_attributed"
       ],
       "owner": "opy-rs#93",
-      "note": "The public compiler reports standalone lambda use as a source-attributed lambda-context diagnostic.",
+      "note": "The public compiler reports standalone lambda use at the source-attributed parse frontier.",
       "failureClass": "frontend",
-      "diagnosticCode": "lambda-context"
+      "diagnosticCode": "parse-error"
     },
     {
       "fixture": "synthetic/preprocessing",

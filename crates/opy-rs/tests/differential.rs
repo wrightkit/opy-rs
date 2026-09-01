@@ -322,7 +322,7 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
     diagnostic(
         &mut cases,
         "synthetic/issue-33-lambda-negative",
-        Some("lambda-context"),
+        Some("parse-error"),
         "Issue #33 standalone lambda use remains rejected outside a signature-approved argument position.",
     );
     diagnostic(

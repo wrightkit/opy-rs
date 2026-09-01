@@ -61,3 +61,11 @@ Its summary groups results by the manifest's root capability and owner, and
 its fixture entries retain both reference and native diagnostics. It is the
 current divergence inventory used to group follow-up work. No current native
 failure is entered into the manifest as an expected pass.
+
+The broad `synthetic/issue-28-syntax` probe is inventoried under the
+canonical-WIR boundary rather than lexical conformance. Its source compiles
+successfully, but the pinned Workshop output contains `0X20`, which the
+released `workshop-rs` parser does not currently reparse; this is a
+`workshop-rs` evidence limitation, not an OPY lexer divergence. Likewise,
+switch multi-break and nested switch-break probes remain lowering-only gaps
+and are not parser failures.

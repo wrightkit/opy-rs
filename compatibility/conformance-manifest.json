@@ -34,7 +34,7 @@
           "id": "compound-expression-tokens",
           "claim": "Compound expression punctuation and token adjacency are preserved for the parser.",
           "probeKinds": ["positive", "contextual"],
-          "probes": ["synthetic/issue-28-syntax"]
+          "probes": ["synthetic/expressions-values"]
         },
         {
           "id": "malformed-lexical-input",
@@ -45,7 +45,7 @@
       ],
       "probeFixtures": [
         "synthetic/issue-28-string-modifiers",
-        "synthetic/issue-28-syntax",
+        "synthetic/expressions-values",
         "synthetic/issue-28-invalid-syntax",
         "synthetic/issue-33-f-string",
         "real-world/overpy-zencopter"
@@ -76,7 +76,7 @@
           "id": "branches-loops-and-switches",
           "claim": "Branches, loops, switch ordering, and break shapes are parsed distinctly.",
           "probeKinds": ["positive", "contextual", "negative"],
-          "probes": ["synthetic/control-flow", "synthetic/issue-47-control-flow", "synthetic/issue-47-do-while-invalid-placement", "synthetic/issue-47-do-while-shapes", "synthetic/issue-47-switch-multiple-break", "synthetic/issue-47-switch-order", "synthetic/issue-47-switch-structured-target", "synthetic/issue-47-unsupported", "synthetic/issue-33-switch-break", "synthetic/for-range-agentlab"]
+          "probes": ["synthetic/control-flow", "synthetic/issue-47-control-flow", "synthetic/issue-47-do-while-invalid-placement", "synthetic/issue-47-do-while-shapes", "synthetic/issue-47-switch-order", "synthetic/issue-47-switch-structured-target", "synthetic/issue-33-switch-break", "synthetic/for-range-agentlab"]
         },
         {
           "id": "lambda-and-postfix-context",
@@ -86,30 +86,26 @@
         },
         {
           "id": "indexed-assignment-depth",
-          "claim": "Indexed assignment depth has explicit supported and unsupported parser shapes.",
-          "probeKinds": ["contextual", "negative"],
-          "probes": ["synthetic/issue-46-primitives", "synthetic/issue-60-4d-negative"]
+          "claim": "Indexed assignment and access forms retain their structural boundaries before lowering.",
+          "probeKinds": ["contextual"],
+          "probes": ["synthetic/issue-46-primitives"]
         }
       ],
       "probeFixtures": [
         "synthetic/basic-rule",
         "synthetic/expressions-values",
         "synthetic/control-flow",
-        "synthetic/issue-28-syntax",
         "synthetic/issue-33-lambda-negative",
         "synthetic/issue-33-switch-break",
         "synthetic/issue-47-control-flow",
         "synthetic/issue-47-do-while-invalid-placement",
         "synthetic/issue-47-do-while-shapes",
-        "synthetic/issue-47-switch-multiple-break",
         "synthetic/issue-47-switch-order",
         "synthetic/issue-47-switch-structured-target",
-        "synthetic/issue-47-unsupported",
         "synthetic/issue-33-switch-break",
         "synthetic/issue-59-embedded-postfix-negative",
         "synthetic/issue-59-postfix-assignment",
         "synthetic/issue-59-postfix-negative",
-        "synthetic/issue-60-4d-negative",
         "synthetic/issue-60-nested-index",
         "synthetic/for-range-agentlab",
         "synthetic/issue-46-primitives",
@@ -276,7 +272,7 @@
           "id": "vertical-slice",
           "claim": "A successful source-to-WIR vertical slice is comparable through the canonical Workshop contract.",
           "probeKinds": ["positive"],
-          "probes": ["synthetic/issue-35-integration", "synthetic/issue-40-structural"]
+          "probes": ["synthetic/issue-35-integration", "synthetic/issue-40-structural", "synthetic/issue-28-syntax"]
         },
         {
           "id": "assignments-and-indexing",
@@ -318,6 +314,7 @@
       "probeFixtures": [
         "synthetic/issue-35-integration",
         "synthetic/issue-40-structural",
+        "synthetic/issue-28-syntax",
         "synthetic/issue-46-primitives",
         "synthetic/issue-46-unsupported",
         "synthetic/issue-47-control-flow",
