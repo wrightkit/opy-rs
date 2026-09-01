@@ -457,12 +457,16 @@ impl Compiler {
             Ok(artifact) => {
                 CompileReport::success(compiler, catalog, artifact, frontend_diagnostics)
             }
-            Err(error) => CompileReport::failure(
-                compiler,
-                catalog,
-                CompileFailureClass::Integration,
-                vec![compile_diagnostic(error, &hir.files)],
-            ),
+            Err(error) => {
+                let mut diagnostics = frontend_diagnostics;
+                diagnostics.push(compile_diagnostic(error, &hir.files));
+                CompileReport::failure(
+                    compiler,
+                    catalog,
+                    CompileFailureClass::Integration,
+                    diagnostics,
+                )
+            }
         }
     }
 
@@ -5249,6 +5253,44 @@ mod tests {
         );
         assert_eq!(
             report.compile.diagnostics[0].span.as_ref().unwrap().path,
+            "broken.opy"
+        );
+    }
+
+    #[test]
+    fn compile_report_preserves_frontend_warnings_on_integration_failure() {
+        let compiler = Compiler::new().unwrap();
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../compatibility/fixtures/synthetic/preprocessing");
+        let report = compiler.compile_source_report_with_locale(
+            concat!(
+                "#!include \"shared.opy\"\n",
+                "#!include \"shared.opy\"\n",
+                "rule \"broken\":\n",
+                "    @Event global\n",
+                "    {\"a\": 1}[\"b\"] = 3\n",
+            ),
+            "broken.opy",
+            &root,
+            &Locale::new("en-US"),
+        );
+        assert_eq!(report.compile.status, CompileStatus::Failure);
+        assert_eq!(
+            report.compile.failure_class,
+            Some(CompileFailureClass::Integration)
+        );
+        assert_eq!(report.compile.diagnostics.len(), 2);
+        assert_eq!(
+            report.compile.diagnostics[0].severity,
+            crate::tooling::DiagnosticSeverity::Warning
+        );
+        assert_eq!(report.compile.diagnostics[0].code, "w_already_imported");
+        assert_eq!(
+            report.compile.diagnostics[1].severity,
+            crate::tooling::DiagnosticSeverity::Error
+        );
+        assert_eq!(
+            report.compile.diagnostics[1].span.as_ref().unwrap().path,
             "broken.opy"
         );
     }
