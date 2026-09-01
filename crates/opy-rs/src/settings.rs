@@ -2,11 +2,11 @@
 //!
 //! The settings block is recognized and consumed *before* lexing, so the
 //! lexer never gains global `{`/`}` tokens (meipocalypse's dict literal keeps
-//! failing as a `lex-error`). [`find_blocks`] locates a top-of-file block
-//! with a logical-line keyword scan, [`sanitize_for_lex`] blanks the block
-//! region out of the text handed to the lexer (newlines preserved, so
-//! positions after the block are unchanged), and [`parse_block`] turns the
-//! JSONC text into a typed [`cst::Settings`] tree with source spans.
+//! failing as a `lex-error`). [`find_blocks`] locates a top-of-file block in
+//! each source file with a logical-line keyword scan, [`sanitize_for_lex`]
+//! blanks the block region out of the text handed to the lexer (newlines
+//! preserved, so positions after the block are unchanged), and [`parse_block`]
+//! turns the JSONC text into a typed [`cst::Settings`] tree with source spans.
 //!
 //! The parse is value-driven: any JSONC object/leaf shape becomes a
 //! structurally generic [`cst::SettingsNode`]. Which keys exist and which
@@ -52,9 +52,22 @@ pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
     };
     let mut blocks = Vec::new();
     let mut in_block_comment = false;
+    let mut string_quote = None;
+    let mut escaped = false;
     let mut seen_first_construct = false;
     while scanner.pos < scanner.chars.len() {
         let ch = scanner.chars[scanner.pos];
+        if let Some(quote) = string_quote {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == quote {
+                string_quote = None;
+            }
+            scanner.advance(1);
+            continue;
+        }
         if in_block_comment {
             if ch == '*' && scanner.peek(1) == Some('/') {
                 in_block_comment = false;
@@ -62,6 +75,11 @@ pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
             } else {
                 scanner.advance(1);
             }
+            continue;
+        }
+        if matches!(ch, '"' | '\'') {
+            string_quote = Some(ch);
+            scanner.advance(1);
             continue;
         }
         if ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n' {
@@ -707,6 +725,12 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn settings_word_inside_a_string_is_not_a_block() {
+        let text = "rule \"Workshop Settings\":\n    value = \"special settings\"\n";
+        assert!(find_blocks(text, 0).unwrap().is_empty());
     }
 
     #[test]

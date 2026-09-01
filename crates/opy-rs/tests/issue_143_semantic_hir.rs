@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use opy_rs::hir::types::{Declaration, RuleEntry, Stmt};
+use opy_rs::hir::types::{Declaration, Expr, RuleEntry, Stmt};
 use opy_rs::tooling::{SymbolKind, check};
 
 #[test]
@@ -116,4 +116,95 @@ fn visibility_uses_interleaved_top_level_source_order() {
             .code,
         "unknown-identifier"
     );
+}
+
+#[test]
+fn player_variable_receivers_cover_all_source_player_contexts() {
+    let source = "\
+playervar isWeaponBroken
+globalvar target
+rule \"player contexts\":
+    @Event global
+    @Condition eventPlayer.isWeaponBroken == true
+    @Condition hostPlayer.isWeaponBroken == false
+    @Condition attacker.isWeaponBroken == true
+    @Condition victim.isWeaponBroken == false
+    @Condition attacker.isAlive()
+    target = attacker
+";
+    let outcome = check(source, "main.opy", Path::new(""));
+    assert!(
+        outcome.is_clean(),
+        "player context expressions must resolve: {:?}",
+        outcome.diagnostics
+    );
+    let model = outcome.model.expect("clean semantic model");
+    let RuleEntry::Rule(rule) = &model.hir.rules[0] else {
+        panic!("expected a rule");
+    };
+
+    let expected_contexts = ["eventPlayer", "hostPlayer", "attacker", "victim"];
+    for (condition, expected_context) in rule
+        .conditions
+        .iter()
+        .take(expected_contexts.len())
+        .zip(expected_contexts)
+    {
+        let Expr::Binary { left, .. } = condition else {
+            panic!("expected comparison condition");
+        };
+        let Expr::PlayerVar {
+            player,
+            name,
+            member_span,
+            ..
+        } = left.as_ref()
+        else {
+            panic!("expected player-variable condition");
+        };
+        assert_eq!(name, "isWeaponBroken");
+        assert!(member_span.is_some(), "member source identity must survive");
+        match expected_context {
+            "eventPlayer" => assert!(matches!(&**player, Expr::EventPlayer { .. })),
+            "hostPlayer" => assert!(matches!(&**player, Expr::HostPlayer { .. })),
+            "attacker" | "victim" => assert!(matches!(
+                &**player,
+                Expr::Call { name, args, .. }
+                    if name == expected_context && args.is_empty()
+            )),
+            _ => unreachable!(),
+        }
+    }
+
+    assert!(matches!(
+        &rule.conditions[4],
+        Expr::ReceiverCall { receiver, name, .. }
+            if name == "isAlive"
+                && matches!(receiver.as_ref(), Expr::Call { name, args, .. } if name == "attacker" && args.is_empty())
+    ));
+    assert!(matches!(
+        rule.actions.first(),
+        Some(Stmt::Assign { value, .. })
+            if matches!(value.as_ref(), Expr::Call { name, args, .. } if name == "attacker" && args.is_empty())
+    ));
+}
+
+#[test]
+fn unknown_context_player_variable_keeps_a_structured_member_diagnostic() {
+    let outcome = check(
+        "playervar isWeaponBroken\n\
+rule \"invalid player member\":
+    @Event playerDied
+    @Condition attacker.notDeclared
+",
+        "main.opy",
+        Path::new(""),
+    );
+    let diagnostic = outcome
+        .diagnostics
+        .first()
+        .expect("unknown player member diagnostic");
+    assert_eq!(diagnostic.code, "unknown-identifier");
+    assert_eq!(diagnostic.span.as_ref().expect("member span").start.line, 4);
+    assert_eq!(diagnostic.span.as_ref().expect("member span").start.col, 25);
 }

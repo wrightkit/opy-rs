@@ -426,9 +426,9 @@
         "provenance:real-world/6v6-adjustments/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The full real-world project now resolves included-file #!mainFile and #!defineMember directives; it remains outside the compiler baseline at the existing included settings-placement boundary.",
+      "note": "The full real-world project now resolves included-file settings, #!mainFile, and #!defineMember directives; it remains outside the compiler baseline at the next macro declaration syntax boundary.",
       "failureClass": "frontend",
-      "diagnosticCode": "settings-placement"
+      "diagnosticCode": "parse-error"
     },
     {
       "fixture": "real-world/overpy-broken-weapons",
@@ -439,10 +439,10 @@
         "oracle:real-world/overpy-broken-weapons/oracle.json",
         "provenance:real-world/overpy-broken-weapons/fixture.json"
       ],
-      "owner": "opy-rs#88",
-      "note": "The full real-world project now resolves RULE_CONDITION and the audited weapon/ammo receiver builtins; it remains outside the #38 compiler baseline at the non-eventPlayer custom player-variable member boundary (attacker.isWeaponBroken).",
+      "owner": "opy-rs#144",
+      "note": "The full real-world project now resolves all audited player-variable receiver contexts, including attacker and victim; it remains outside the compiler baseline at the next unimplemented builtin action (bigMessage).",
       "failureClass": "frontend",
-      "diagnosticCode": "unsupported-member"
+      "diagnosticCode": "unknown-action"
     },
     {
       "fixture": "real-world/overpy-cake",
@@ -522,9 +522,9 @@
         "provenance:real-world/overpy-meipocalypse/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The full real-world project remains outside the #38 compiler baseline and currently stops at a settings-placement gap.",
+      "note": "The full real-world project now resolves included settings; it remains outside the compiler baseline at the fixture's missing generateWalls.js script resource.",
       "failureClass": "frontend",
-      "diagnosticCode": "settings-placement"
+      "diagnosticCode": "script-not-found"
     },
     {
       "fixture": "real-world/overpy-parabola",
@@ -591,9 +591,9 @@
         "provenance:real-world/ow1-emulator/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The full real-world project now resolves included-file #!mainFile, #!defineMember directives, and continued directive lines; it remains outside the compiler baseline at the duplicate-include macro-redeclaration boundary.",
+      "note": "The full real-world project now resolves duplicate includes without macro redeclaration; it remains outside the compiler baseline at the next macro invocation arity boundary.",
       "failureClass": "frontend",
-      "diagnosticCode": "macro-redeclaration"
+      "diagnosticCode": "macro-arity"
     },
     {
       "fixture": "synthetic/chase-condition-agentlab",
