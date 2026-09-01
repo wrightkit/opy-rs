@@ -81,6 +81,21 @@ jobs:
           path: target/opy-rs-compiler-report.json
           if-no-files-found: ignore
 
+      - name: Run independent conformance baseline
+        run: >-
+          python3 -B compatibility/conformance.py
+          --binary target/debug/opy-cli
+          --semantic-binary target/debug/opy-compat
+          --report target/opy-rs-conformance-report.json
+
+      - name: Upload conformance baseline report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: opy-rs-conformance-report
+          path: target/opy-rs-conformance-report.json
+          if-no-files-found: ignore
+
   macro-runtime-ports:
     name: JS runtime on ${{ matrix.os }}
     needs: rust-quality

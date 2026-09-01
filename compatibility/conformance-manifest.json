@@ -1,0 +1,283 @@
+{
+  "schemaVersion": 1,
+  "contract": "offline-overpy-conformance",
+  "reference": {
+    "name": "overpy",
+    "version": "9.7.10",
+    "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw=="
+  },
+  "stages": [
+    {"id": "lex", "name": "lexing"},
+    {"id": "parse", "name": "parsing"},
+    {"id": "preprocess", "name": "preprocessing and project composition"},
+    {"id": "semantic", "name": "source semantics"},
+    {"id": "lowering", "name": "canonical-WIR lowering"}
+  ],
+  "categories": [
+    {
+      "id": "syntax.lexing",
+      "stage": "lex",
+      "owner": "opy-rs",
+      "authority": [
+        "OverPy@9.7.10:src/compiler/tokenizer.ts",
+        "docs/language-support/registries.md"
+      ],
+      "probeFixtures": [
+        "synthetic/issue-28-string-modifiers",
+        "synthetic/issue-28-syntax",
+        "synthetic/issue-28-invalid-syntax",
+        "synthetic/issue-33-f-string",
+        "real-world/overpy-zencopter"
+      ]
+    },
+    {
+      "id": "syntax.parser-and-control-flow",
+      "stage": "parse",
+      "owner": "opy-rs",
+      "authority": [
+        "OverPy@9.7.10:src/compiler/parser.ts",
+        "OverPy@9.7.10:src/compiler/astParser.ts"
+      ],
+      "probeFixtures": [
+        "synthetic/basic-rule",
+        "synthetic/expressions-values",
+        "synthetic/control-flow",
+        "synthetic/issue-28-syntax",
+        "synthetic/issue-33-lambda-negative",
+        "synthetic/issue-33-switch-break",
+        "synthetic/issue-47-control-flow",
+        "synthetic/issue-47-do-while-invalid-placement",
+        "synthetic/issue-47-do-while-shapes",
+        "synthetic/issue-47-switch-multiple-break",
+        "synthetic/issue-47-switch-order",
+        "synthetic/issue-47-switch-structured-target",
+        "synthetic/issue-47-unsupported",
+        "synthetic/issue-59-embedded-postfix-negative",
+        "synthetic/issue-59-postfix-assignment",
+        "synthetic/issue-59-postfix-negative",
+        "synthetic/issue-60-4d-negative",
+        "synthetic/issue-60-nested-index",
+        "synthetic/for-range-agentlab"
+      ]
+    },
+    {
+      "id": "preprocessing.project-composition",
+      "stage": "preprocess",
+      "owner": "opy-rs",
+      "authority": [
+        "OverPy@9.7.10:src/compiler/compiler.ts",
+        "OverPy@9.7.10:src/data/opy/preprocessing.ts"
+      ],
+      "probeFixtures": [
+        "synthetic/preprocessing",
+        "synthetic/issue-29-directives",
+        "synthetic/issue-29-invalid",
+        "synthetic/issue-29-main-file",
+        "synthetic/issue-31-nested-scope",
+        "synthetic/issue-31-positive",
+        "synthetic/issue-31-negative",
+        "synthetic/issue-129-included-main-file",
+        "real-world/6v6-adjustments",
+        "real-world/overpy-meipocalypse",
+        "real-world/ow1-emulator"
+      ]
+    },
+    {
+      "id": "semantics.declarations-and-settings",
+      "stage": "semantic",
+      "owner": "opy-rs",
+      "authority": [
+        "OverPy@9.7.10:src/compiler/astParser.ts",
+        "OverPy@9.7.10:src/data/opy/annotations.ts",
+        "OverPy@9.7.10:src/data/customGameSettings.ts"
+      ],
+      "probeFixtures": [
+        "synthetic/declarations-numbers",
+        "synthetic/declarations-rules",
+        "synthetic/settings",
+        "synthetic/diagnostics"
+      ]
+    },
+    {
+      "id": "semantics.builtins-members-and-enums",
+      "stage": "semantic",
+      "owner": "opy-rs",
+      "authority": [
+        "OverPy@9.7.10:src/data/opy/functions.ts",
+        "OverPy@9.7.10:src/data/opy/memberFunctions.ts",
+        "OverPy@9.7.10:src/data/opy/constants.ts",
+        "docs/language-support/registries.md"
+      ],
+      "probeFixtures": [
+        "synthetic/chase-condition-agentlab",
+        "synthetic/chase-enums",
+        "synthetic/chase-keywords",
+        "synthetic/issue-113-is-dummy",
+        "synthetic/issue-114-hud-subheader",
+        "synthetic/issue-130-horizontal-facing-angle",
+        "synthetic/issue-131-spec-visibility",
+        "synthetic/issue-65-invalid-binder",
+        "synthetic/issue-65-player-range",
+        "synthetic/receiver-calls",
+        "synthetic/receiver-playervar",
+        "synthetic/issue-29-invalid"
+      ]
+    },
+    {
+      "id": "lowering.canonical-wir",
+      "stage": "lowering",
+      "owner": "opy-rs + workshop-rs",
+      "authority": [
+        "workshop-rs canonical WIR contract",
+        "docs/opy/tooling-api.md"
+      ],
+      "probeFixtures": [
+        "synthetic/issue-35-integration",
+        "synthetic/issue-40-structural",
+        "synthetic/issue-46-primitives",
+        "synthetic/issue-46-unsupported",
+        "synthetic/issue-47-control-flow",
+        "synthetic/issue-47-do-while-shapes",
+        "synthetic/issue-47-switch-order",
+        "synthetic/issue-47-switch-structured-target",
+        "synthetic/issue-59-postfix-assignment",
+        "synthetic/issue-60-nested-index",
+        "synthetic/issue-65-player-range",
+        "synthetic/settings",
+        "census/workshop-feature-census"
+      ]
+    },
+    {
+      "id": "diagnostics.failure-frontiers",
+      "stages": ["lex", "parse", "preprocess", "semantic", "lowering"],
+      "owner": "opy-rs",
+      "authority": [
+        "OverPy@9.7.10 pinned oracle snapshots",
+        "docs/compatibility/upstream-references.md"
+      ],
+      "probeFixtures": [
+        "real-world/6v6-adjustments",
+        "real-world/overpy-meipocalypse",
+        "real-world/overpy-zencopter",
+        "real-world/ow1-emulator",
+        "synthetic/diagnostics",
+        "synthetic/issue-28-invalid-syntax",
+        "synthetic/issue-29-invalid",
+        "synthetic/issue-31-negative",
+        "synthetic/issue-33-lambda-negative",
+        "synthetic/issue-47-do-while-invalid-placement",
+        "synthetic/issue-59-embedded-postfix-negative",
+        "synthetic/issue-59-postfix-negative",
+        "synthetic/issue-60-4d-negative",
+        "synthetic/issue-65-invalid-binder"
+      ]
+    },
+    {
+      "id": "projects.real-world",
+      "stage": "preprocess",
+      "owner": "opy-rs",
+      "authority": [
+        "OverPy@9.7.10:examples/",
+        "compatibility/fixtures/README.md"
+      ],
+      "probeFixtures": [
+        "real-world/6v6-adjustments",
+        "real-world/overpy-broken-weapons",
+        "real-world/overpy-cake",
+        "real-world/overpy-client-to-server",
+        "real-world/overpy-cronch",
+        "real-world/overpy-crosshair",
+        "real-world/overpy-inputhud",
+        "real-world/overpy-meipocalypse",
+        "real-world/overpy-parabola",
+        "real-world/overpy-pixelart",
+        "real-world/overpy-santa",
+        "real-world/overpy-zencopter",
+        "real-world/ow1-emulator"
+      ]
+    },
+    {
+      "id": "ownership.workshop-feature-census",
+      "stage": "lowering",
+      "owner": "workshop-rs",
+      "authority": [
+        "workshop-rs#10 feature census contract",
+        "compatibility/fixtures/census/workshop-feature-census/fixture.json"
+      ],
+      "probeFixtures": ["census/workshop-feature-census"]
+    }
+  ],
+  "referenceFrontiers": {
+    "real-world/6v6-adjustments": {
+      "stage": "semantic",
+      "construct": "unknown-member",
+      "diagnosticContains": "Unknown member"
+    },
+    "real-world/overpy-meipocalypse": {
+      "stage": "preprocess",
+      "construct": "script-not-found",
+      "diagnosticContains": "ENOENT"
+    },
+    "real-world/overpy-zencopter": {
+      "stage": "lex",
+      "construct": "lex-error",
+      "diagnosticContains": "Invalid content before string"
+    },
+    "real-world/ow1-emulator": {
+      "stage": "parse",
+      "construct": "parse-error",
+      "diagnosticContains": "Found 'if', but no 'else'"
+    },
+    "synthetic/diagnostics": {
+      "stage": "parse",
+      "construct": "parse-error",
+      "diagnosticContains": "Expected a ':'"
+    },
+    "synthetic/issue-28-invalid-syntax": {
+      "stage": "parse",
+      "construct": "parse-error",
+      "diagnosticContains": "Content is empty"
+    },
+    "synthetic/issue-29-invalid": {
+      "stage": "semantic",
+      "construct": "duplicate-rule-name",
+      "diagnosticContains": "Rule name was already declared"
+    },
+    "synthetic/issue-31-negative": {
+      "stage": "preprocess",
+      "construct": "translations-invalid",
+      "diagnosticContains": "Invalid language"
+    },
+    "synthetic/issue-33-lambda-negative": {
+      "stage": "parse",
+      "construct": "parse-error",
+      "diagnosticContains": "Expected '(' after 'lambda'"
+    },
+    "synthetic/issue-47-do-while-invalid-placement": {
+      "stage": "semantic",
+      "construct": "do-while-placement",
+      "diagnosticContains": "Do/While loops can only be at the beginning"
+    },
+    "synthetic/issue-59-embedded-postfix-negative": {
+      "stage": "parse",
+      "construct": "parse-error",
+      "diagnosticContains": "Cannot modify or assign to operator '='"
+    },
+    "synthetic/issue-59-postfix-negative": {
+      "stage": "parse",
+      "construct": "parse-error",
+      "diagnosticContains": "Expected an action"
+    },
+    "synthetic/issue-60-4d-negative": {
+      "stage": "semantic",
+      "construct": "four-dimensional-assignment",
+      "diagnosticContains": "Cannot assign to 4d array"
+    },
+    "synthetic/issue-65-invalid-binder": {
+      "stage": "semantic",
+      "construct": "invalid-range-binder",
+      "diagnosticContains": "Expected variable for 1st argument"
+    }
+  }
+}
