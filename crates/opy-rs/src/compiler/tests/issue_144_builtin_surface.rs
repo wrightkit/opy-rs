@@ -58,6 +58,7 @@ rule "builtin surface":
     g = cosDeg(g)
     g = rgb(1, 2, 3)
     g = eventPlayer.getSlot()
+    g = localPlayer
     g = eventPlayer.getMaxHealth()
     g = eventPlayer.getUltCharge()
     eventPlayer.addToScore(1)
@@ -186,6 +187,8 @@ rule "builtin surface":
     assert!(artifact.emitted.contains("Set Secondary Fire Enabled"));
     assert!(artifact.emitted.contains("Clear Status"));
     assert!(artifact.emitted.contains("Hero Of"));
+    assert!(names.iter().any(|name| name == "localPlayer"));
+    assert!(artifact.emitted.contains("Local Player"));
     assert!(artifact.emitted.contains("Has Status"));
     assert!(artifact.emitted.contains("Destroy All Effects"));
     assert!(artifact.emitted.contains("Destroy All Dummy Bots"));

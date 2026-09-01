@@ -1577,6 +1577,10 @@ impl<'a> Emitter<'a> {
     }
 
     fn emit_value_call(&mut self, name: &str, args: &[wir::ValueId], span: Option<Span>) {
+        if name == "localPlayer" && args.is_empty() {
+            self.out.push_str(name);
+            return;
+        }
         // Binary and unary operator calls keep their source spelling.
         if BINARY_OPS.contains(&name) && args.len() == 2 {
             self.out.push('(');

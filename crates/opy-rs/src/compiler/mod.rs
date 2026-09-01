@@ -1207,6 +1207,45 @@ enum BreakTarget {
 type SwitchBreak = (usize, HirSpan);
 type LoweredSwitchBody = (Vec<wir::ActionId>, Option<SwitchBreak>);
 
+/// Return the condition path when a statement consists only of a continue.
+/// An empty path represents an unconditional continue; a non-empty path is
+/// folded into the canonical `skipIf` condition by the loop lowering.
+fn pure_continue_conditions(statement: &Stmt) -> Option<Vec<&Expr>> {
+    match statement {
+        Stmt::Continue { .. } => Some(Vec::new()),
+        Stmt::If {
+            branches,
+            r#else: None,
+            ..
+        } if branches.len() == 1 && branches[0].body.len() == 1 => {
+            let mut conditions = pure_continue_conditions(&branches[0].body[0])?;
+            conditions.insert(0, &branches[0].condition);
+            Some(conditions)
+        }
+        _ => None,
+    }
+}
+
+/// Detect continues belonging to the current loop. Nested loops own their
+/// continues and are lowered independently by `lower_action`.
+fn contains_loop_continue(statement: &Stmt) -> bool {
+    match statement {
+        Stmt::Continue { .. } => true,
+        Stmt::If {
+            branches, r#else, ..
+        } => {
+            branches
+                .iter()
+                .any(|branch| branch.body.iter().any(contains_loop_continue))
+                || r#else
+                    .as_ref()
+                    .is_some_and(|body| body.iter().any(contains_loop_continue))
+        }
+        Stmt::For { .. } | Stmt::While { .. } | Stmt::DoWhile { .. } => false,
+        _ => false,
+    }
+}
+
 impl<'a> Lowering<'a> {
     fn new(compiler: &'a Compiler, hir: &'a hir::Program) -> Result<Self, IntegrationError> {
         Ok(Self {
@@ -2226,56 +2265,71 @@ impl<'a> Lowering<'a> {
         &mut self,
         statements: &[Stmt],
     ) -> Result<Vec<wir::ActionId>, IntegrationError> {
+        self.lower_loop_sequence(statements, &[], 0)
+    }
+
+    /// Lower one sequence nested inside a loop. `after` contains already
+    /// lowered actions that follow this sequence before the loop continues;
+    /// `end_depth` counts enclosing conditional `End` markers crossed on that
+    /// path. This lets a continue remain inside its authored conditional while
+    /// still reaching the nearest loop continuation label.
+    fn lower_loop_sequence(
+        &mut self,
+        statements: &[Stmt],
+        after: &[wir::ActionId],
+        end_depth: usize,
+    ) -> Result<Vec<wir::ActionId>, IntegrationError> {
         let mut actions = Vec::new();
         let mut index = 0;
         while index < statements.len() {
             let statement = &statements[index];
             let tail = &statements[index + 1..];
-            if let Stmt::Continue { span } = statement {
-                let tail = self.lower_loop_body(tail)?;
-                let distance = self.canonical_action_width(&tail, *span)?;
+            if let Some(conditions) = pure_continue_conditions(statement) {
+                let tail = self.lower_loop_sequence(tail, after, end_depth)?;
+                let distance = self.canonical_action_width(&tail, statement.span().copied())?
+                    + end_depth
+                    + self.canonical_action_width(after, statement.span().copied())?;
                 if distance > 0 {
+                    let mut args = Vec::with_capacity(conditions.len() + 1);
+                    if let Some((first, rest)) = conditions.split_first() {
+                        let mut condition = self.lower_value(first)?;
+                        for expression in rest {
+                            let right = self.lower_value(expression)?;
+                            condition = self.push_call("and", vec![condition, right]);
+                        }
+                        args.push(condition);
+                    }
                     let distance = self.wir.values.push(ValueNode::new(
                         Value::Number {
                             value: distance as f64,
                             text: distance.to_string(),
                         },
-                        self.wir_span(*span)?,
+                        self.wir_span(statement.span().copied())?,
                     ));
-                    actions.push(self.wir.actions.push(Action::Call {
-                        name: "skip".to_string(),
-                        args: vec![distance],
-                        span: self.wir_span(*span)?,
-                    }));
+                    args.push(distance);
+                    actions.push(
+                        self.wir.actions.push(Action::Call {
+                            name: if conditions.is_empty() {
+                                "skip"
+                            } else {
+                                "skipIf"
+                            }
+                            .to_string(),
+                            args,
+                            span: self.wir_span(statement.span().copied())?,
+                        }),
+                    );
                 }
                 actions.extend(tail);
                 return Ok(actions);
             }
-            if let Stmt::If {
-                branches,
-                r#else: None,
-                span,
-            } = statement
-                && branches.len() == 1
-                && matches!(branches[0].body.as_slice(), [Stmt::Continue { .. }])
-            {
-                let tail = self.lower_loop_body(tail)?;
-                let distance = self.canonical_action_width(&tail, *span)?;
-                if distance > 0 {
-                    let condition = self.lower_value(&branches[0].condition)?;
-                    let distance = self.wir.values.push(ValueNode::new(
-                        Value::Number {
-                            value: distance as f64,
-                            text: distance.to_string(),
-                        },
-                        self.wir_span(*span)?,
-                    ));
-                    actions.push(self.wir.actions.push(Action::Call {
-                        name: "skipIf".to_string(),
-                        args: vec![condition, distance],
-                        span: self.wir_span(*span)?,
-                    }));
-                }
+            if contains_loop_continue(statement) {
+                let tail = self.lower_loop_sequence(tail, after, end_depth)?;
+                let mut continuation_after = tail.clone();
+                continuation_after.extend_from_slice(after);
+                let lowered =
+                    self.lower_if_with_loop_continue(statement, &continuation_after, end_depth)?;
+                actions.push(lowered);
                 actions.extend(tail);
                 return Ok(actions);
             }
@@ -2283,6 +2337,38 @@ impl<'a> Lowering<'a> {
             index += 1;
         }
         Ok(actions)
+    }
+
+    fn lower_if_with_loop_continue(
+        &mut self,
+        statement: &Stmt,
+        after: &[wir::ActionId],
+        end_depth: usize,
+    ) -> Result<wir::ActionId, IntegrationError> {
+        let Stmt::If {
+            branches,
+            r#else,
+            span,
+        } = statement
+        else {
+            unreachable!("continue-containing loop statement must be an if")
+        };
+        let mut branch_actions = Vec::with_capacity(branches.len());
+        for branch in branches {
+            branch_actions.push(wir::IfBranch {
+                condition: self.lower_value(&branch.condition)?,
+                body: self.lower_loop_sequence(&branch.body, after, end_depth + 1)?,
+            });
+        }
+        let else_body = r#else
+            .as_ref()
+            .map(|body| self.lower_loop_sequence(body, after, end_depth + 1))
+            .transpose()?;
+        Ok(self.wir.actions.push(Action::If {
+            branches: branch_actions,
+            else_body,
+            span: self.wir_span(*span)?,
+        }))
     }
 
     fn lower_do_while_body(
@@ -3942,6 +4028,9 @@ impl<'a> Lowering<'a> {
                     return self.lower_workshop_setting(args, span);
                 }
                 if matches!(name.as_str(), "attacker" | "victim") && args.is_empty() {
+                    return Ok(self.push_call(name, Vec::new()));
+                }
+                if name == "localPlayer" && args.is_empty() {
                     return Ok(self.push_call(name, Vec::new()));
                 }
                 if name == "ruleCondition" {

@@ -2272,7 +2272,12 @@ fn arg_span(args: &[CallArg]) -> Span {
 /// leaving canonical value ownership with Workshop.
 fn context_player_expr(name: &str, span: Option<Span>) -> Option<HirExpr> {
     match name {
-        "eventPlayer" | "localPlayer" => Some(HirExpr::EventPlayer {
+        "eventPlayer" => Some(HirExpr::EventPlayer {
+            span: span.map(Into::into),
+        }),
+        "localPlayer" => Some(HirExpr::Call {
+            name: name.to_string(),
+            args: Vec::new(),
             span: span.map(Into::into),
         }),
         "hostPlayer" => Some(HirExpr::HostPlayer {

@@ -132,6 +132,7 @@ rule \"player contexts\":
     @Condition attacker.isAlive()
     @Condition target.isWeaponBroken == true
     @Condition getAllPlayers().isWeaponBroken == true
+    @Condition localPlayer.isWeaponBroken == false
     target = attacker
 ";
     let outcome = check(source, "main.opy", Path::new(""));
@@ -177,6 +178,14 @@ rule \"player contexts\":
             _ => unreachable!(),
         }
     }
+
+    assert!(matches!(
+        &rule.conditions[7],
+        Expr::Binary { left, .. }
+            if matches!(left.as_ref(), Expr::PlayerVar { player, .. }
+                if matches!(player.as_ref(), Expr::Call { name, args, .. }
+                    if name == "localPlayer" && args.is_empty()))
+    ));
 
     assert!(matches!(
         &rule.conditions[4],

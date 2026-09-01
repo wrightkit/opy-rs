@@ -425,7 +425,7 @@
         "oracle:real-world/6v6-adjustments/oracle.json",
         "provenance:real-world/6v6-adjustments/fixture.json"
       ],
-      "owner": "opy-rs#88",
+      "owner": "opy-rs#1",
       "note": "The full real-world project now resolves included-file settings, #!mainFile, and #!defineMember directives; it remains outside the compiler baseline at the next macro declaration syntax boundary.",
       "failureClass": "frontend",
       "diagnosticCode": "parse-error"
@@ -439,7 +439,7 @@
         "oracle:real-world/overpy-broken-weapons/oracle.json",
         "provenance:real-world/overpy-broken-weapons/fixture.json"
       ],
-      "owner": "opy-rs#88",
+      "owner": "opy-rs#1",
       "note": "The full real-world project now compiles through the final #141 grammar and #144 builtin/member/enum residuals; canonical WIR equivalence remains an explicit compiler boundary for the existing real-world lowering differences.",
       "semanticEquivalent": false
     },
@@ -465,7 +465,7 @@
         "oracle:real-world/overpy-client-to-server/oracle.json",
         "provenance:real-world/overpy-client-to-server/fixture.json"
       ],
-      "owner": "opy-rs#88",
+      "owner": "opy-rs#1",
       "note": "The full real-world project now compiles through the final #141 grammar and #144 builtin/member/enum residuals; canonical WIR equivalence remains an explicit compiler boundary for the existing real-world lowering differences.",
       "semanticEquivalent": false
     },
@@ -478,7 +478,7 @@
         "oracle:real-world/overpy-cronch/oracle.json",
         "provenance:real-world/overpy-cronch/fixture.json"
       ],
-      "owner": "opy-rs#88",
+      "owner": "opy-rs#1",
       "note": "The full real-world project now compiles through the final #141 grammar and #144 builtin/member/enum residuals; canonical WIR equivalence remains an explicit compiler boundary for the existing real-world lowering differences.",
       "semanticEquivalent": false
     },
@@ -491,7 +491,7 @@
         "oracle:real-world/overpy-crosshair/oracle.json",
         "provenance:real-world/overpy-crosshair/fixture.json"
       ],
-      "owner": "opy-rs#88",
+      "owner": "opy-rs#1",
       "note": "The full real-world project now compiles through the audited HUD builtin surface; canonical WIR equivalence remains an explicit compiler boundary because of variable presentation and string-shape differences.",
       "semanticEquivalent": false
     },
@@ -504,7 +504,7 @@
         "oracle:real-world/overpy-inputhud/oracle.json",
         "provenance:real-world/overpy-inputhud/fixture.json"
       ],
-      "owner": "opy-rs#88",
+      "owner": "opy-rs#1",
       "note": "The full real-world project now compiles through the final #141 grammar and #144 builtin/member/enum residuals; canonical WIR equivalence remains an explicit compiler boundary for the existing real-world lowering differences.",
       "semanticEquivalent": false
     },
@@ -517,7 +517,7 @@
         "oracle:real-world/overpy-meipocalypse/oracle.json",
         "provenance:real-world/overpy-meipocalypse/fixture.json"
       ],
-      "owner": "opy-rs#88",
+      "owner": "opy-rs#1",
       "note": "The full real-world project now resolves included settings; it remains outside the compiler baseline at the fixture's missing generateWalls.js script resource.",
       "failureClass": "frontend",
       "diagnosticCode": "script-not-found"
@@ -531,7 +531,7 @@
         "oracle:real-world/overpy-parabola/oracle.json",
         "provenance:real-world/overpy-parabola/fixture.json"
       ],
-      "owner": "opy-rs#88",
+      "owner": "opy-rs#1",
       "note": "The full real-world project now compiles through the final #141 grammar and #144 builtin/member/enum residuals; canonical WIR equivalence remains an explicit compiler boundary for the existing real-world lowering differences.",
       "semanticEquivalent": false
     },
@@ -544,7 +544,7 @@
         "oracle:real-world/overpy-pixelart/oracle.json",
         "provenance:real-world/overpy-pixelart/fixture.json"
       ],
-      "owner": "opy-rs#88",
+      "owner": "opy-rs#1",
       "note": "The source compiles, but full real-world Workshop parity is outside the declared #38 baseline.",
       "semanticEquivalent": false
     },
@@ -557,7 +557,7 @@
         "oracle:real-world/overpy-santa/oracle.json",
         "provenance:real-world/overpy-santa/fixture.json"
       ],
-      "owner": "opy-rs#88",
+      "owner": "opy-rs#1",
       "note": "The full real-world project now compiles through the final #141 grammar and #144 builtin/member/enum residuals; canonical WIR equivalence remains an explicit compiler boundary for the existing real-world lowering differences.",
       "semanticEquivalent": false
     },
@@ -570,7 +570,7 @@
         "oracle:real-world/overpy-zencopter/oracle.json",
         "provenance:real-world/overpy-zencopter/fixture.json"
       ],
-      "owner": "opy-rs#88",
+      "owner": "opy-rs#1",
       "note": "The full real-world project remains outside the #38 compiler baseline and currently stops at a frontend lexical gap.",
       "failureClass": "frontend",
       "diagnosticCode": "lex-error"
@@ -584,7 +584,7 @@
         "oracle:real-world/ow1-emulator/oracle.json",
         "provenance:real-world/ow1-emulator/fixture.json"
       ],
-      "owner": "opy-rs#88",
+      "owner": "opy-rs#1",
       "note": "The full real-world project now resolves included-file #!mainFile, #!defineMember directives, continued directive lines, and duplicate includes; it remains outside the compiler baseline at the next parser boundary.",
       "failureClass": "frontend",
       "diagnosticCode": "parse-error"
@@ -612,7 +612,7 @@
         "provenance:synthetic/chase-keywords/fixture.json",
         "test:opy-rs::compiler::integration_tests::issue_145_lowering::contextual_chase_lowering_matches_the_pinned_oracle"
       ],
-      "owner": "opy-rs#88",
+      "owner": "opy-rs#1",
       "note": "The complete chase keyword source now compiles through the audited builtin surface, while canonical WIR equivalence remains an explicit follow-up for the native compiler's variable presentation and constant-folding differences.",
       "semanticEquivalent": false
     },
@@ -695,8 +695,8 @@
         "provenance:synthetic/issue-28-syntax/fixture.json",
         "test:opy-rs::compiler::integration_tests::issue_145_lowering::broad_supported_syntax_lowering_reaches_canonical_wir"
       ],
-      "owner": "opy-rs#88",
-      "note": "The supported issue-28 syntax slice lowers through the native canonical-WIR contract; the pinned oracle snapshot currently cannot be reparsed by the released Workshop parser because of its uppercase hexadecimal spelling, so full semantic comparison remains a declared #88 corpus boundary rather than an unowned OPY lowering gap."
+      "owner": "opy-rs#1",
+      "note": "The supported issue-28 syntax slice lowers through the native canonical-WIR contract; the pinned oracle snapshot currently cannot be reparsed by the released Workshop parser because of its uppercase hexadecimal spelling, so full semantic comparison remains a declared compiler boundary with follow-up under open opy-rs#1 rather than an unowned OPY lowering gap."
     },
     {
       "fixture": "synthetic/issue-29-directives",
@@ -707,7 +707,7 @@
         "oracle:synthetic/issue-29-directives/oracle.json",
         "provenance:synthetic/issue-29-directives/fixture.json"
       ],
-      "owner": "opy-rs#88",
+      "owner": "opy-rs#1",
       "note": "Optimizer/backend directive execution remains outside the declared compiler baseline.",
       "failureClass": "integration",
       "diagnosticCode": "backend-directive-unsupported"
@@ -751,7 +751,7 @@
         "oracle:synthetic/issue-31-nested-scope/oracle.json",
         "provenance:synthetic/issue-31-nested-scope/fixture.json"
       ],
-      "owner": "opy-rs#88",
+      "owner": "opy-rs#1",
       "note": "Optimizer scope is represented in source state, but optimizer execution is outside the compiler baseline.",
       "semanticEquivalent": false
     },
