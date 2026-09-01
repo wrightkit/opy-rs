@@ -1046,6 +1046,7 @@
       "kind": "memberValue",
       "params": [
         {
+          "default": 0,
           "name": "clip"
         }
       ],

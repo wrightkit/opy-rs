@@ -203,3 +203,19 @@ fn rule_condition_rejects_values_outside_rule_context() {
             .contains("only valid inside a rule")
     );
 }
+
+#[test]
+fn get_ammo_uses_the_reference_zero_clip_default() {
+    let source = r#"globalvar g
+rule "r":
+    @Event eachPlayer
+    g = eventPlayer.getAmmo()
+"#;
+    let hir = crate::compile(source, "get-ammo-default.opy", Path::new("."))
+        .expect("source must resolve");
+    let artifact = Compiler::new()
+        .expect("released Workshop contract must load")
+        .compile_hir(&hir)
+        .expect("getAmmo's omitted clip must lower");
+    assert!(artifact.emitted.contains("Ammo(Event Player, 0)"));
+}

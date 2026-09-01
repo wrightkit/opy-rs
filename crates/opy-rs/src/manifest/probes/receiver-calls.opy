@@ -17,7 +17,7 @@ rule "r":
     eventPlayer.setDamageDealt(50)
     eventPlayer.setDamageReceived(50)
     eventPlayer.setUltCharge(100)
-    g = eventPlayer.getAmmo(0)
+    g = eventPlayer.getAmmo()
     g = eventPlayer.getMaxAmmo(0)
     g = eventPlayer
     g.setMoveSpeed(50)

@@ -250,7 +250,7 @@
       "expect": "success",
       "id": "receiver-calls",
       "outputSha256": "e056f1acf6bfe4230726729609a59e217fec0b3a1be179fb7c23b9bf921be68a",
-      "sha256": "1604fd5b04c9216e07679fe943f717354808f80065c1877cb4c418cc3907fd92",
+      "sha256": "d6c9e12eb83a000c7af643d1f5b3912663274268c2befd3ae37c4ba36292ed20",
       "source": "receiver-calls.opy"
     },
     {
