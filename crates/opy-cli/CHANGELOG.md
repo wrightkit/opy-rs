@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.11](https://github.com/wrightkit/opy-rs/compare/opy-cli-v0.1.10...opy-cli-v0.1.11) - 2026-09-01
+
+### Added
+
+- *(opy)* complete final #88 source convergence ([#156](https://github.com/wrightkit/opy-rs/pull/156))
+- *(opy)* complete bounded canonical lowering ([#150](https://github.com/wrightkit/opy-rs/pull/150))
+- *(opy)* complete audited statement grammar surface ([#146](https://github.com/wrightkit/opy-rs/pull/146))
+
+### Fixed
+
+- *(opy)* complete project preprocessing state ([#154](https://github.com/wrightkit/opy-rs/pull/154))
+
 ## [0.1.7](https://github.com/wrightkit/opy-rs/compare/opy-cli-v0.1.6...opy-cli-v0.1.7) - 2026-08-30
 
 ### Other
