@@ -121,11 +121,13 @@ fn motivating_project_advances_past_numeric_range_frontend_gap() {
         );
 
     assert_eq!(report.compile.status, CompileStatus::Failure);
-    assert_eq!(report.compile.diagnostics[0].code, "unsupported-member");
+    // The player-variable receiver gap is now covered by the source HIR;
+    // this project reaches its next independent unsupported action.
+    assert_eq!(report.compile.diagnostics[0].code, "unknown-action");
     assert!(
         report.compile.diagnostics[0]
             .message
-            .contains("unsupported member access")
+            .contains("unknown action 'bigMessage'")
     );
 }
 
