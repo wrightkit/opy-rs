@@ -22,6 +22,8 @@ mod issue_131_spec_visibility;
 mod issue_142_preprocessing;
 #[path = "tests/issue_144_builtin_surface.rs"]
 mod issue_144_builtin_surface;
+#[path = "tests/issue_145_lowering.rs"]
+mod issue_145_lowering;
 #[path = "tests/issue_42_oracle.rs"]
 mod issue_42_oracle;
 #[path = "tests/issue_46_oracle.rs"]

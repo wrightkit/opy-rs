@@ -15,9 +15,9 @@ Source: pinned OverPy `9.7.10`, content commit
 | Boolean, integer, float and `null` literals | ✅ Supported | Numeric edge cases remain conformance work. |
 | Strings, escaped strings and implicit concatenation | ✅ Supported | String modifiers are separate rows. |
 | f-string/interpolated strings | ✅ Supported | Supported formatting subset is fixture-covered. |
-| String modifiers `f`, `w`, `l`, `b`, `c`, `t` | ✅ Supported | Each modifier is a distinct lexical form. |
+| String modifiers `f`, `w`, `l`, `b`, `c`, `t` | ✅ Supported | f/w/b/c have canonical lowering evidence; l/t retain source syntax without duplicating translation content. |
 | Array literals and indexing | ✅ Supported | Includes nested arrays. |
-| Dictionary literals and keyed access | 🚧 Coming soon | Source analysis exists; full compilation is incomplete. |
+| Dictionary literals and keyed access | partial | Literal-key lookup folds during canonical lowering; dictionary assignment targets remain outside the bounded compiler surface. |
 | List comprehensions | ✅ Supported | Mapping and filtering are separate behaviors. |
 | `lambda` with element/index binders | ✅ Supported | Valid positions are contextual. |
 | Member access, calls and postfix expressions | ✅ Supported | Receiver and dispatch checks are contract-sensitive. |

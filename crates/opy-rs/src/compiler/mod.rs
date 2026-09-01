@@ -22,6 +22,8 @@ mod integration_tests;
 /// The exact released dependency contract consumed by this crate.
 pub const WORKSHOP_RS_VERSION: &str = "0.1.16";
 
+const TRANSLATION_HELPER_NAME: &str = "__overpyTranslationHelper__";
+
 /// Version of the machine-readable compile report contract.
 pub const COMPILE_SCHEMA_VERSION: u32 = 1;
 
@@ -1240,6 +1242,42 @@ impl<'a> Lowering<'a> {
         Ok(())
     }
 
+    fn translation_helper_index(
+        &self,
+        implicit_reserved: &HashSet<u32>,
+    ) -> Result<Option<u32>, IntegrationError> {
+        if self.hir.preprocessing.translations.is_none() {
+            return Ok(None);
+        }
+        let mut reserved = implicit_reserved.clone();
+        reserved.extend(
+            self.hir
+                .declarations
+                .iter()
+                .filter_map(|declaration| match declaration {
+                    hir::Declaration::GlobalVariable {
+                        index: Some(index), ..
+                    } => Some(*index),
+                    _ => None,
+                }),
+        );
+        (0..=127)
+            .rev()
+            .find(|index| !reserved.contains(index))
+            .map(Some)
+            .ok_or_else(|| {
+                IntegrationError::new(
+                    "index-exhausted",
+                    "no available global variable index remains for translations",
+                    self.hir
+                        .preprocessing
+                        .translations
+                        .as_ref()
+                        .and_then(|value| value.span),
+                )
+            })
+    }
+
     fn lower_declarations(&mut self) -> Result<(), IntegrationError> {
         let (implicit_globals, implicit_players) = implicit_default_variables(self.hir);
         for declaration in &self.hir.declarations {
@@ -1318,8 +1356,13 @@ impl<'a> Lowering<'a> {
             .keys()
             .map(|name| default_var_index(name).expect("implicit default player names resolve"))
             .collect::<HashSet<_>>();
+        let translation_helper_index = self.translation_helper_index(&implicit_reserved)?;
+        let mut global_reserved = implicit_reserved.clone();
+        if let Some(index) = translation_helper_index {
+            global_reserved.insert(index);
+        }
         let empty = HashSet::new();
-        let global_indices = allocate_indices(&globals, &implicit_reserved, "global variable")?;
+        let global_indices = allocate_indices(&globals, &global_reserved, "global variable")?;
         let player_indices =
             allocate_indices(&players, &implicit_player_reserved, "player variable")?;
         let subroutine_indices = allocate_indices(&subroutines, &empty, "subroutine")?;
@@ -1441,6 +1484,9 @@ impl<'a> Lowering<'a> {
                 None,
             )
         }));
+        if let Some(index) = translation_helper_index {
+            planned_globals.push((TRANSLATION_HELPER_NAME.to_string(), index, None, None));
+        }
         planned_globals.sort_by_key(|(_, index, ..)| *index);
         for (name, assigned, span, name_span) in planned_globals {
             let id = self.wir.global_variables.push(wir::WorkshopVariable {
@@ -1487,8 +1533,33 @@ impl<'a> Lowering<'a> {
             self.subroutines.insert(name.to_string(), id);
         }
 
-        if !global_initializers.is_empty() {
-            let mut actions = Vec::with_capacity(global_initializers.len());
+        let translation_initializer = self
+            .hir
+            .preprocessing
+            .translations
+            .as_ref()
+            .map(|translations| {
+                let variable = *self
+                    .globals
+                    .get(TRANSLATION_HELPER_NAME)
+                    .expect("translation helper variable is created");
+                let value = self.lower_translation_helper(translations)?;
+                Ok(self.wir.actions.push(Action::SetGlobalVariable {
+                    variable,
+                    value,
+                    span: self.wir_span(translations.span)?,
+                    target_span: None,
+                }))
+            })
+            .transpose()?;
+
+        if translation_initializer.is_some() || !global_initializers.is_empty() {
+            let mut actions = Vec::with_capacity(
+                global_initializers.len() + usize::from(translation_initializer.is_some()),
+            );
+            if let Some(action) = translation_initializer {
+                actions.push(action);
+            }
             for (name, init_expr, span, target_span) in global_initializers {
                 let variable = *self.globals.get(name).expect("declared global is created");
                 let value = self.lower_value(init_expr)?;
@@ -1500,7 +1571,7 @@ impl<'a> Lowering<'a> {
                 }));
             }
             self.wir.rules.push(wir::Rule {
-                name: "Initialize global variables".to_string(),
+                name: self.global_initializer_rule_name(),
                 span: None,
                 name_span: None,
                 disabled: false,
@@ -1696,6 +1767,14 @@ impl<'a> Lowering<'a> {
             generated_name.to_string()
         } else {
             format!("Subroutine {generated_name}")
+        }
+    }
+
+    fn global_initializer_rule_name(&self) -> String {
+        if self.hir.preprocessing.rule_prefix_template.is_some() {
+            "[] Initialize global variables".to_string()
+        } else {
+            "Initialize global variables".to_string()
         }
     }
 
@@ -2419,6 +2498,42 @@ impl<'a> Lowering<'a> {
         )))
     }
 
+    fn lower_translation_helper(
+        &mut self,
+        translations: &hir::TranslationState,
+    ) -> Result<wir::ValueId, IntegrationError> {
+        let translated_white = translations
+            .languages
+            .iter()
+            .map(|language| {
+                let locale = translation_locale(language).ok_or_else(|| {
+                    IntegrationError::new(
+                        "translations-invalid",
+                        format!("unsupported translation language '{language}'"),
+                        translations.span,
+                    )
+                })?;
+                self.compiler
+                    .catalog
+                    .enum_spelling("Color", &Locale::new(locale), "WHITE")
+                    .map(str::to_string)
+                    .ok_or_else(|| {
+                        IntegrationError::new(
+                            "translations-invalid",
+                            format!("catalog has no Color.WHITE spelling for locale '{locale}'"),
+                            translations.span,
+                        )
+                    })
+            })
+            .collect::<Result<Vec<_>, _>>()?
+            .join("0");
+        let text = self.push_value(Value::String(format!("\u{ec48}0{translated_white}")));
+        let custom_string = self.push_call("customString", vec![text]);
+        let null = self.push_value(Value::Null);
+        let separator = self.push_call("firstOf", vec![null]);
+        Ok(self.push_call("stringSplit", vec![custom_string, separator]))
+    }
+
     fn lower_debug(
         &mut self,
         expr: &Expr,
@@ -2431,7 +2546,7 @@ impl<'a> Lowering<'a> {
             }};
         }
 
-        let value = self.lower_value(expr)?;
+        let value = self.lower_text_value(expr)?;
         let array_text = if self.debug_value_is_array(value) {
             self.lower_debug_array_text(value)
         } else {
@@ -2507,7 +2622,7 @@ impl<'a> Lowering<'a> {
             }};
         }
 
-        let message = self.lower_value(expr)?;
+        let message = self.lower_text_value(expr)?;
         let padding_text = self.push_value(Value::String(" ".repeat(45)));
         let padding = self.push_call("customString", vec![padding_text]);
         let body_text = self.push_value(Value::String(format!("{}{{0}}", " ".repeat(125))));
@@ -2730,6 +2845,24 @@ impl<'a> Lowering<'a> {
         call!("mappedArray", x_input, rendered)
     }
 
+    fn lower_text_value(&mut self, expr: &Expr) -> Result<wir::ValueId, IntegrationError> {
+        let value = self.lower_value(expr)?;
+        let Value::Call { name, args } = &self
+            .wir
+            .values
+            .get(value)
+            .expect("lowered text value must exist")
+            .value
+        else {
+            return Ok(value);
+        };
+        if name == "customString" && args.len() == 1 {
+            Ok(args[0])
+        } else {
+            Ok(value)
+        }
+    }
+
     fn debug_value_is_array(&self, value: wir::ValueId) -> bool {
         match &self
             .wir
@@ -2761,6 +2894,25 @@ impl<'a> Lowering<'a> {
             name: name.to_string(),
             args,
         })
+    }
+
+    fn lower_custom_string(
+        &mut self,
+        value: String,
+        span: Option<HirSpan>,
+    ) -> Result<wir::ValueId, IntegrationError> {
+        let span = self.wir_span(span)?;
+        let text = self
+            .wir
+            .values
+            .push(ValueNode::new(Value::String(value), span));
+        Ok(self.wir.values.push(ValueNode::new(
+            Value::Call {
+                name: "customString".to_string(),
+                args: vec![text],
+            },
+            span,
+        )))
     }
 
     fn push_number(&mut self, value: f64, text: &str) -> wir::ValueId {
@@ -2821,6 +2973,16 @@ impl<'a> Lowering<'a> {
         value: &Expr,
         span: Option<HirSpan>,
     ) -> Result<wir::ActionId, IntegrationError> {
+        let mut indices = Vec::new();
+        if let Some(root) = indexed_target_parts(target, &mut indices) {
+            if indices.len() > 3 {
+                return Err(self.unsupported("Cannot assign to 4d array", target.span().copied()));
+            }
+            if indices.len() > 1 {
+                indices.reverse();
+                return self.lower_nested_indexed_assign(root, &indices, target, value, span);
+            }
+        }
         match target {
             Expr::GlobalVar {
                 name,
@@ -3033,12 +3195,147 @@ impl<'a> Lowering<'a> {
         }
     }
 
+    fn lower_nested_indexed_assign(
+        &mut self,
+        root: &Expr,
+        indices: &[&Expr],
+        target: &Expr,
+        value: &Expr,
+        span: Option<HirSpan>,
+    ) -> Result<wir::ActionId, IntegrationError> {
+        let (action_name, root_value) = match root {
+            Expr::GlobalVar {
+                name,
+                span: target_span,
+            } => {
+                let variable = *self.globals.get(name).ok_or_else(|| {
+                    self.unsupported(format!("unknown global variable '{name}'"), *target_span)
+                })?;
+                let root_value = self.wir.values.push(ValueNode::new(
+                    Value::GlobalVariable(variable),
+                    self.wir_span(*target_span)?,
+                ));
+                ("setGlobalVariableAtIndex", root_value)
+            }
+            Expr::PlayerVar {
+                player,
+                name,
+                span: target_span,
+                ..
+            } => {
+                let player_value = self.lower_value(player)?;
+                let variable = *self.players.get(name).ok_or_else(|| {
+                    self.unsupported(format!("unknown player variable '{name}'"), *target_span)
+                })?;
+                let root_value = self.wir.values.push(ValueNode::new(
+                    Value::PlayerVariable {
+                        player: player_value,
+                        variable,
+                    },
+                    self.wir_span(*target_span)?,
+                ));
+                ("setPlayerVariableAtIndex", root_value)
+            }
+            _ => {
+                return Err(self.unsupported(
+                    "indexing assignment is only representable for global or player variables",
+                    target.span().copied(),
+                ));
+            }
+        };
+
+        let outer_index = self.lower_value(indices[0])?;
+        let outer_array = self.lower_indexed_read(root_value, indices[0], outer_index)?;
+        let replacement =
+            self.rebuild_indexed_value(outer_array, &indices[1..], target, value, span)?;
+        Ok(self.wir.actions.push(Action::Call {
+            name: action_name.to_string(),
+            args: vec![root_value, outer_index, replacement],
+            span: self.wir_span(span)?,
+        }))
+    }
+
+    fn rebuild_indexed_value(
+        &mut self,
+        array: wir::ValueId,
+        indices: &[&Expr],
+        target: &Expr,
+        value: &Expr,
+        span: Option<HirSpan>,
+    ) -> Result<wir::ValueId, IntegrationError> {
+        let index = indices
+            .first()
+            .copied()
+            .expect("nested indexed assignment has an inner index");
+        let index_value = self.lower_value(index)?;
+        let replacement = if indices.len() == 1 {
+            if let Expr::Binary {
+                op, left, right, ..
+            } = value
+                && left.as_ref() == target
+                && let Some(call_name) = modify_catalog_name_from_str(op)
+            {
+                let current = self.lower_indexed_read(array, index, index_value)?;
+                let right = self.lower_value(right)?;
+                self.push_call(call_name, vec![current, right])
+            } else {
+                self.lower_value(value)?
+            }
+        } else {
+            let child = self.lower_indexed_read(array, index, index_value)?;
+            self.rebuild_indexed_value(child, &indices[1..], target, value, span)?
+        };
+        self.replace_array_element(array, index_value, replacement, span)
+    }
+
+    fn lower_indexed_read(
+        &mut self,
+        array: wir::ValueId,
+        index: &Expr,
+        index_value: wir::ValueId,
+    ) -> Result<wir::ValueId, IntegrationError> {
+        if matches!(index, Expr::Number { value, .. } if *value == 0.0) {
+            Ok(self.push_call("firstOf", vec![array]))
+        } else {
+            Ok(self.push_call("valueInArray", vec![array, index_value]))
+        }
+    }
+
+    fn replace_array_element(
+        &mut self,
+        array: wir::ValueId,
+        index: wir::ValueId,
+        replacement: wir::ValueId,
+        span: Option<HirSpan>,
+    ) -> Result<wir::ValueId, IntegrationError> {
+        let zero = self.push_number(0.0, "0");
+        let one = self.push_number(1.0, "1");
+        let end = self.push_call("add", vec![index, one]);
+        let maximum = self.push_number(999_999_999_999.0, "999999999999");
+        let prefix = self.push_call("slice", vec![array, zero, index]);
+        let middle = self.lower_array(vec![replacement], span)?;
+        let suffix = self.push_call("slice", vec![array, end, maximum]);
+        let with_replacement = self.push_call("appendToArray", vec![prefix, middle]);
+        Ok(self.push_call("appendToArray", vec![with_replacement, suffix]))
+    }
+
     fn lower_action_call(
         &mut self,
         name: &str,
         args: &[Expr],
         span: Option<HirSpan>,
     ) -> Result<wir::ActionId, IntegrationError> {
+        if name == "chaseAtRate" {
+            let args = args
+                .iter()
+                .map(|expr| self.lower_value(expr))
+                .collect::<Result<Vec<_>, _>>()?;
+            return Ok(self.wir.actions.push(Action::Call {
+                name: name.to_string(),
+                args,
+                span: self.wir_span(span)?,
+            }));
+        }
         let function = self
             .compiler
             .manifest
@@ -3126,7 +3423,7 @@ impl<'a> Lowering<'a> {
             self.push_value(Value::Null),
             self.push_value(Value::Null),
         ];
-        let text_value = self.lower_value(text)?;
+        let text_value = self.lower_text_value(text)?;
         text_slots[text_slot - 1] = self.push_call("customString", vec![text_value]);
         let mut colors = [
             self.push_value(Value::Null),
@@ -3262,7 +3559,9 @@ impl<'a> Lowering<'a> {
                 value: *value,
                 text: canonical_number_text(*value, text),
             },
-            Expr::String { value, .. } => Value::String(value.clone()),
+            Expr::String { value, .. } => {
+                return self.lower_custom_string(value.clone(), span);
+            }
             Expr::Bool { value, .. } => Value::Bool(*value),
             Expr::Null { .. } => Value::Null,
             Expr::Local { name, .. } => {
@@ -3351,6 +3650,22 @@ impl<'a> Lowering<'a> {
                 return self.lower_value(const_expr);
             }
             Expr::Index { array, index, .. } => {
+                if let Expr::Dict { entries, .. } = array.as_ref()
+                    && is_literal_key(index)
+                    && entries.iter().all(|entry| is_literal_key(&entry.key))
+                {
+                    if let Some(value) = entries
+                        .iter()
+                        .find(|entry| literal_key_matches(&entry.key, index))
+                        .map(|entry| &entry.value)
+                    {
+                        return self.lower_value(value);
+                    }
+                    return Ok(self
+                        .wir
+                        .values
+                        .push(ValueNode::new(Value::Null, self.wir_span(span)?)));
+                }
                 // The pinned OverPy oracle lowers a literal zero-index read
                 // (`arr[0]`, `arr[0.0]`) to `firstOf(arr)`; non-zero indexes
                 // and indexed writes keep the indexed forms.
@@ -3367,6 +3682,9 @@ impl<'a> Lowering<'a> {
                 }
             }
             Expr::Format { text, args, .. } => {
+                if let Some(value) = fold_literal_format(text, args) {
+                    return self.lower_custom_string(value, span);
+                }
                 let text_node = self.wir.values.push(ValueNode::new(
                     Value::String(canonical_format_text(text)),
                     self.wir_span(span)?,
@@ -3735,6 +4053,26 @@ impl<'a> Lowering<'a> {
                     "lambda expressions are only representable as supported array operation arguments",
                     *span,
                 ));
+            }
+            Expr::StringModifier {
+                modifier,
+                value,
+                span,
+            } => {
+                let value = match modifier.as_str() {
+                    "b" => big_letters(value),
+                    "c" => case_sensitive(value),
+                    "w" => fullwidth(value),
+                    _ => {
+                        return Err(self.unsupported(
+                            format!(
+                                "string modifier '{modifier}' is not currently representable in canonical WIR"
+                            ),
+                            *span,
+                        ));
+                    }
+                };
+                return self.lower_custom_string(value, *span);
             }
             _ => {
                 return Err(self.unsupported(
@@ -4355,8 +4693,165 @@ fn player_event_kind(name: &str) -> Option<PlayerEventKind> {
 fn is_zero_initializer(expr: &hir::Expr) -> bool {
     match expr {
         hir::Expr::Number { text, value, .. } => text == "0" && *value == 0.0,
+        hir::Expr::Null { .. } => true,
         _ => false,
     }
+}
+
+fn literal_key_matches(left: &hir::Expr, right: &hir::Expr) -> bool {
+    match (left, right) {
+        (hir::Expr::Number { value: left, .. }, hir::Expr::Number { value: right, .. }) => {
+            left == right
+        }
+        (hir::Expr::String { value: left, .. }, hir::Expr::String { value: right, .. }) => {
+            left == right
+        }
+        (hir::Expr::Bool { value: left, .. }, hir::Expr::Bool { value: right, .. }) => {
+            left == right
+        }
+        (hir::Expr::Null { .. }, hir::Expr::Null { .. }) => true,
+        _ => false,
+    }
+}
+
+fn indexed_target_parts<'a>(
+    target: &'a hir::Expr,
+    indices: &mut Vec<&'a hir::Expr>,
+) -> Option<&'a hir::Expr> {
+    match target {
+        hir::Expr::Index { array, index, .. } => {
+            indices.push(index);
+            indexed_target_parts(array, indices)
+        }
+        hir::Expr::GlobalVar { .. } | hir::Expr::PlayerVar { .. } => Some(target),
+        _ => None,
+    }
+}
+
+fn is_literal_key(expr: &hir::Expr) -> bool {
+    matches!(
+        expr,
+        hir::Expr::Number { .. }
+            | hir::Expr::String { .. }
+            | hir::Expr::Bool { .. }
+            | hir::Expr::Null { .. }
+    )
+}
+
+fn translation_locale(language: &str) -> Option<&'static str> {
+    Some(match language {
+        "de" => "de-DE",
+        "en" => "en-US",
+        "es" | "es_mx" => "es-MX",
+        "es_es" => "es-ES",
+        "fr" => "fr-FR",
+        "it" => "it-IT",
+        "ja" => "ja-JP",
+        "ko" => "ko-KR",
+        "pl" => "pl-PL",
+        "pt" => "pt-BR",
+        "ru" => "ru-RU",
+        "th" => "th-TH",
+        "tr" => "tr-TR",
+        "zh" | "zh_cn" => "zh-CN",
+        "zh_tw" => "zh-TW",
+        _ => return None,
+    })
+}
+
+fn big_letters(value: &str) -> String {
+    let mut output = String::with_capacity(value.len());
+    let mut converted = false;
+    for character in value.chars() {
+        if !converted {
+            if let Some(mapped) = big_letter(character) {
+                output.push(mapped);
+                converted = true;
+                continue;
+            }
+        }
+        output.push(character);
+    }
+    output
+}
+
+fn big_letter(character: char) -> Option<char> {
+    Some(match character {
+        'a' | 'A' => 'Α',
+        'b' | 'B' => 'Β',
+        'e' | 'E' => 'Ε',
+        'h' | 'H' => 'Η',
+        'i' | 'I' => 'Ι',
+        'k' | 'K' => 'Κ',
+        'm' | 'M' => 'Μ',
+        'n' | 'N' => 'Ν',
+        'o' | 'O' => 'Ο',
+        'p' | 'P' => 'Ρ',
+        't' | 'T' => 'Τ',
+        'x' | 'X' => 'Χ',
+        'y' | 'Y' => 'Υ',
+        'z' | 'Z' => 'Ζ',
+        '.' => '\u{2024}',
+        ' ' => '\u{2028}',
+        _ => return None,
+    })
+}
+
+fn fullwidth(value: &str) -> String {
+    value
+        .chars()
+        .map(|character| match character {
+            ' ' => '\u{2001}',
+            '\u{00a5}' => '\u{ffe5}',
+            '\u{20a9}' => '\u{ffe6}',
+            '\u{00a2}' => '\u{ffe0}',
+            '\u{00a3}' => '\u{ffe1}',
+            '\u{00af}' => '\u{ffe3}',
+            '\u{00ac}' => '\u{ffe2}',
+            '\u{00a6}' => '\u{ffe4}',
+            character if ('!'..='~').contains(&character) => {
+                char::from_u32(character as u32 + 65248).unwrap_or(character)
+            }
+            _ => character,
+        })
+        .collect()
+}
+
+fn case_sensitive(value: &str) -> String {
+    let mut output = value.replace('æ', "\u{04d5}").replace("nj", "\u{01cc}");
+    output = output.replace(" a ", " ａ ");
+    output
+        .chars()
+        .map(|character| match character {
+            'a' => 'ạ',
+            'b' => 'ḅ',
+            'c' => 'ƈ',
+            'd' => 'ḍ',
+            'e' => 'ẹ',
+            'f' => 'ƒ',
+            'g' => 'ǥ',
+            'h' => '\u{04bb}',
+            'i' => 'і',
+            'j' => 'ј',
+            'k' => 'ḳ',
+            'l' => 'I',
+            'm' => 'ṃ',
+            'n' => 'ṇ',
+            'o' => 'ο',
+            'p' => 'ṗ',
+            'q' => 'ǫ',
+            'r' => 'ṛ',
+            's' => 'ѕ',
+            't' => 'ṭ',
+            'u' => 'υ',
+            'v' => 'ν',
+            'w' => 'ẉ',
+            'x' => '\u{04b3}',
+            'y' => 'ỵ',
+            'z' => 'ẓ',
+            _ => character,
+        })
+        .collect()
 }
 
 fn canonical_number_text(value: f64, text: &str) -> String {
@@ -4391,6 +4886,24 @@ fn canonical_format_text(text: &str) -> String {
         }
     }
     output
+}
+
+fn fold_literal_format(text: &str, args: &[hir::Expr]) -> Option<String> {
+    let values = args
+        .iter()
+        .map(|arg| match arg {
+            hir::Expr::Number { text, value, .. } => Some(canonical_number_text(*value, text)),
+            hir::Expr::String { value, .. } => Some(value.clone()),
+            hir::Expr::Bool { value, .. } => Some(value.to_string()),
+            hir::Expr::Null { .. } => Some("null".to_string()),
+            _ => None,
+        })
+        .collect::<Option<Vec<_>>>()?;
+    let mut output = canonical_format_text(text);
+    for (index, value) in values.iter().enumerate() {
+        output = output.replace(&format!("{{{index}}}"), value);
+    }
+    Some(output)
 }
 
 fn debug_expr_text(expr: &Expr) -> String {
@@ -4708,7 +5221,7 @@ mod tests {
     fn compile_report_preserves_integration_failure_class_and_source_path() {
         let compiler = Compiler::new().unwrap();
         let report = compiler.compile_source_report_with_locale(
-            "globalvar A\nrule \"broken\":\n    @Event global\n    A[1][2] = 3\n",
+            "rule \"broken\":\n    @Event global\n    {\"a\": 1}[\"b\"] = 3\n",
             "broken.opy",
             Path::new("."),
             &Locale::new("en-US"),
@@ -5095,7 +5608,7 @@ rule "implicit player variables":
     }
 
     #[test]
-    fn unsupported_primitive_lowering_is_stable_and_source_attributed() {
+    fn literal_dict_lookup_lowers_to_the_selected_value() {
         let compiler = Compiler::new().unwrap();
         let hir = crate::compile(
             "globalvar total\nrule \"negative\":\n    @Event global\n    total = {\"a\": 1, \"b\": 2}[\"a\"]\n",
@@ -5103,13 +5616,10 @@ rule "implicit player variables":
             Path::new("."),
         )
         .unwrap();
-        let error = match compiler.compile_hir(&hir) {
-            Ok(_) => panic!("dict primitive lowering unexpectedly succeeded"),
-            Err(error) => error,
-        };
-        assert_eq!(error.diagnostic.code, "unsupported-integration-surface");
-        assert!(error.diagnostic.message.contains("dict"));
-        assert_eq!(error.diagnostic.span.unwrap().start.line, 4);
+        let artifact = compiler
+            .compile_hir(&hir)
+            .expect("literal dict lookup should lower");
+        assert!(artifact.emitted.contains("Set Global Variable(total, 1);"));
     }
 
     #[test]

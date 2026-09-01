@@ -232,18 +232,17 @@
     },
     {
       "fixture": "synthetic/issue-46-unsupported",
-      "nativeStatus": "failure",
-      "classification": "unsupported",
-      "comparison": "diagnostic-code",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "semantic-wir",
       "evidence": [
         "oracle:synthetic/issue-46-unsupported/oracle.json",
         "provenance:synthetic/issue-46-unsupported/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_46_oracle::issue_46_unsupported_primitive_fails_with_stable_source_attribution"
+        "test:opy-rs::compiler::integration_tests::issue_46_oracle::issue_46_literal_dict_lookup_matches_the_pinned_oracle"
       ],
-      "owner": "workshop-rs#123",
-      "note": "The released workshop-rs v0.1.16 contract keeps AssignMember for canonical memberAccess targets only; this dictionary-indexed OPY primitive still has no lossless OPY-owned lowering and remains explicitly rejected.",
-      "failureClass": "integration",
-      "diagnosticCode": "unsupported-integration-surface"
+      "owner": "opy-rs#145",
+      "note": "Literal dictionary lookups with literal keys are folded to their selected value, or to Null on a literal miss, matching the pinned oracle; dictionary-indexed assignment targets remain outside this bounded lowering path.",
+      "semanticEquivalent": true
     },
     {
       "fixture": "synthetic/issue-59-postfix-assignment",
@@ -488,17 +487,16 @@
     },
     {
       "fixture": "real-world/overpy-crosshair",
-      "nativeStatus": "failure",
+      "nativeStatus": "success",
       "classification": "known-gap",
-      "comparison": "diagnostic-code",
+      "comparison": "semantic-wir",
       "evidence": [
         "oracle:real-world/overpy-crosshair/oracle.json",
         "provenance:real-world/overpy-crosshair/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The full real-world project now passes the implicit-concatenation, hudSubheader, SpecVisibility.NEVER, hudSubtext, and disableHeroHUD member boundaries; the remaining native gap is the separate stringModifier integration surface.",
-      "failureClass": "integration",
-      "diagnosticCode": "unsupported-integration-surface"
+      "note": "The full real-world project now compiles through the audited HUD builtin surface; canonical WIR equivalence remains an explicit compiler boundary because of variable presentation and string-shape differences.",
+      "semanticEquivalent": false
     },
     {
       "fixture": "real-world/overpy-inputhud",
@@ -617,7 +615,8 @@
       "comparison": "semantic-wir",
       "evidence": [
         "oracle:synthetic/chase-keywords/oracle.json",
-        "provenance:synthetic/chase-keywords/fixture.json"
+        "provenance:synthetic/chase-keywords/fixture.json",
+        "test:opy-rs::compiler::integration_tests::issue_145_lowering::contextual_chase_lowering_matches_the_pinned_oracle"
       ],
       "owner": "opy-rs#88",
       "note": "The complete chase keyword source now compiles through the audited builtin surface, while canonical WIR equivalence remains an explicit follow-up for the native compiler's variable presentation and constant-folding differences.",
@@ -680,31 +679,30 @@
     },
     {
       "fixture": "synthetic/issue-28-string-modifiers",
-      "nativeStatus": "failure",
-      "classification": "known-gap",
-      "comparison": "diagnostic-code",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "semantic-wir",
       "evidence": [
         "oracle:synthetic/issue-28-string-modifiers/oracle.json",
-        "provenance:synthetic/issue-28-string-modifiers/fixture.json"
+        "provenance:synthetic/issue-28-string-modifiers/fixture.json",
+        "test:opy-rs::compiler::integration_tests::issue_145_lowering::string_modifier_lowering_matches_the_pinned_oracle"
       ],
-      "owner": "opy-rs#88",
-      "note": "The source modifier surface exceeds the independently evidenced compiler baseline.",
-      "failureClass": "integration",
-      "diagnosticCode": "unsupported-integration-surface"
+      "owner": "opy-rs#145",
+      "note": "The compiler lowers the evidenced f/w/b/c literal string modifiers to canonical Custom String values; l/t remain translation-carried source constructs.",
+      "semanticEquivalent": true
     },
     {
       "fixture": "synthetic/issue-28-syntax",
-      "nativeStatus": "failure",
+      "nativeStatus": "success",
       "classification": "known-gap",
-      "comparison": "diagnostic-code",
+      "comparison": "compiler-contract",
       "evidence": [
         "oracle:synthetic/issue-28-syntax/oracle.json",
-        "provenance:synthetic/issue-28-syntax/fixture.json"
+        "provenance:synthetic/issue-28-syntax/fixture.json",
+        "test:opy-rs::compiler::integration_tests::issue_145_lowering::broad_supported_syntax_lowering_reaches_canonical_wir"
       ],
       "owner": "opy-rs#88",
-      "note": "The broad syntax fixture exceeds the independently evidenced compiler baseline.",
-      "failureClass": "integration",
-      "diagnosticCode": "unsupported-integration-surface"
+      "note": "The supported issue-28 syntax slice lowers through the native canonical-WIR contract; the pinned oracle snapshot currently cannot be reparsed by the released Workshop parser because of its uppercase hexadecimal spelling, so full semantic comparison remains a declared #88 corpus boundary rather than an unowned OPY lowering gap."
     },
     {
       "fixture": "synthetic/issue-29-directives",
@@ -766,15 +764,45 @@
     {
       "fixture": "synthetic/issue-31-positive",
       "nativeStatus": "success",
-      "classification": "known-gap",
+      "classification": "match",
       "comparison": "semantic-wir",
       "evidence": [
         "oracle:synthetic/issue-31-positive/oracle.json",
-        "provenance:synthetic/issue-31-positive/fixture.json"
+        "provenance:synthetic/issue-31-positive/fixture.json",
+        "test:opy-rs::compiler::integration_tests::issue_145_lowering::translated_implicit_subroutine_fixture_matches_the_pinned_oracle"
       ],
       "owner": "opy-rs#145",
-      "note": "The semantic HIR now materializes the implicit def subroutine declaration; optimizer/directive compiler parity remains a separate lowering gap.",
-      "semanticEquivalent": false
+      "note": "The compiler materializes the implicit def subroutine declaration and the translation helper initialization required by the pinned canonical WIR.",
+      "semanticEquivalent": true
+    },
+    {
+      "fixture": "synthetic/issue-60-nested-index",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "semantic-wir",
+      "evidence": [
+        "oracle:synthetic/issue-60-nested-index/oracle.json",
+        "provenance:synthetic/issue-60-nested-index/fixture.json",
+        "test:opy-rs::compiler::integration_tests::issue_145_lowering::nested_indexed_assignments_match_the_pinned_oracle"
+      ],
+      "owner": "opy-rs#145",
+      "note": "Nested indexed assignments, including compound modification and three-level replacement, lower through canonical array slices and match the pinned canonical WIR.",
+      "semanticEquivalent": true
+    },
+    {
+      "fixture": "synthetic/issue-60-4d-negative",
+      "nativeStatus": "failure",
+      "classification": "match",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "oracle:synthetic/issue-60-4d-negative/oracle.json",
+        "provenance:synthetic/issue-60-4d-negative/fixture.json",
+        "test:opy-rs::compiler::integration_tests::issue_145_lowering::four_dimensional_indexed_assignment_is_rejected_at_the_pinned_boundary"
+      ],
+      "owner": "opy-rs#145",
+      "note": "The pinned OverPy implementation rejects four-dimensional indexed assignments; native lowering preserves this boundary with a source-attributed integration diagnostic.",
+      "failureClass": "integration",
+      "diagnosticCode": "unsupported-integration-surface"
     },
     {
       "fixture": "synthetic/issue-33-f-string",

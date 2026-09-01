@@ -19,7 +19,7 @@ const BASIC_RULE: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../compatibility/fixtures/synthetic/basic-rule/source.opy"
 );
-const ISSUE_46_UNSUPPORTED: &str = concat!(
+const ISSUE_46_LITERAL_DICT_LOOKUP: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../compatibility/fixtures/synthetic/issue-46-unsupported/source.opy"
 );
@@ -149,14 +149,16 @@ fn compile_missing_file_is_an_io_usage_error() {
 }
 
 #[test]
-fn compile_json_reports_unsupported_lowering_as_integration_failure() {
-    let output = run(&["compile", "--format", "json", ISSUE_46_UNSUPPORTED]);
-    assert_eq!(output.status.code(), Some(1));
+fn compile_json_reports_literal_dict_lookup_success() {
+    let output = run(&["compile", "--format", "json", ISSUE_46_LITERAL_DICT_LOOKUP]);
+    assert_eq!(output.status.code(), Some(0));
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("compile JSON");
-    assert_eq!(json["compile"]["failureClass"], "integration");
-    assert_eq!(
-        json["compile"]["diagnostics"][0]["code"],
-        "unsupported-integration-surface"
+    assert_eq!(json["compile"]["status"], "success");
+    assert!(
+        json["compile"]["workshop"]
+            .as_str()
+            .unwrap()
+            .contains("Set Global Variable(total, 1);")
     );
 }
 
