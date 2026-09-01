@@ -469,8 +469,8 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
     diagnostic(
         &mut cases,
         "real-world/overpy-santa",
-        Some("parse-error"),
-        "the player-variable range binder now resolves; the full project advances to the next unsupported multiline conditional expression at santa.opy:359. Gap: reference accepts, native rejects (documented).",
+        Some("unknown-member"),
+        "the multiline conditional expression now parses; the full project advances to the next unsupported `concat` member. Gap: reference accepts, native rejects (documented).",
     );
     diagnostic(
         &mut cases,
@@ -499,14 +499,14 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
     diagnostic(
         &mut cases,
         "real-world/overpy-inputhud",
-        Some("parse-error"),
-        "reference accepts; the native frontend rejects multi-line parenthesized expressions with implicit string concatenation — a parse gap beyond the declared surface. Gap: reference accepts, native rejects (documented).",
+        Some("unknown-value"),
+        "the multiline conditional-value expression now parses; the full project advances to the separate unsupported `strContains` value. Gap: reference accepts, native rejects (documented).",
     );
     diagnostic(
         &mut cases,
         "real-world/overpy-parabola",
-        Some("parse-error"),
-        "the numeric enum member regression now resolves; the full project reaches the next multiline parenthesized expression gap at parabola.opy:50. Gap: reference accepts, native rejects (documented).",
+        Some("unknown-value"),
+        "the multiline parenthesized expression now parses; the full project reaches the next unsupported `getServerLoad` value. Gap: reference accepts, native rejects (documented).",
     );
 
     // Real-world failure fixtures (reference rejects; recorded diagnostics).

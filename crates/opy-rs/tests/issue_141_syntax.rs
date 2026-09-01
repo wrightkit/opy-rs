@@ -149,3 +149,77 @@ fn issue_141_backend_boundary_is_explicit_for_source_only_statements() {
         assert!(error.diagnostic.span.is_some());
     }
 }
+
+#[test]
+fn issue_141_multiline_grouped_expressions_reach_hir_with_spans() {
+    let source = concat!(
+        "rule \"multiline expressions\":\n",
+        "    @Event global\n",
+        "    debug(\n",
+        "        (\n",
+        "            1\n",
+        "            + 2\n",
+        "        ) if (\n",
+        "            true\n",
+        "        ) else (\n",
+        "            3\n",
+        "            * 4\n",
+        "        )\n",
+        "    )\n",
+    );
+    let program = opy_rs::compile(source, "issue-141-expressions.opy", Path::new(""))
+        .expect("multiline grouped expressions must reach HIR");
+    program.validate().expect("the generated HIR must validate");
+
+    let rule = match &program.rules[0] {
+        opy_rs::hir::types::RuleEntry::Rule(rule) => rule,
+        other => panic!("expected rule, got {other:?}"),
+    };
+    let Stmt::Expr { expr, .. } = &rule.actions[0] else {
+        panic!("expected an expression statement");
+    };
+    let Expr::Call { args, span, .. } = &**expr else {
+        panic!("expected a call expression, got {expr:?}");
+    };
+    assert_eq!(span.unwrap().start.line, 3);
+    assert_eq!(span.unwrap().end.line, 13);
+    let Expr::Conditional {
+        then_value,
+        condition,
+        else_value,
+        span,
+    } = &args[0]
+    else {
+        panic!("expected a conditional value, got {:?}", args[0]);
+    };
+    assert_eq!(span.unwrap().start.line, 5);
+    assert_eq!(span.unwrap().end.line, 11);
+    assert!(matches!(
+        then_value.as_ref(),
+        Expr::Binary { op, .. } if op == "+"
+    ));
+    assert!(matches!(
+        else_value.as_ref(),
+        Expr::Binary { op, .. } if op == "*"
+    ));
+    assert_eq!(then_value.span().unwrap().start.line, 5);
+    assert_eq!(condition.span().unwrap().start.line, 8);
+    assert_eq!(else_value.span().unwrap().start.line, 10);
+}
+
+#[test]
+fn issue_141_multiline_conditional_missing_else_is_a_source_diagnostic() {
+    let source = concat!(
+        "rule \"invalid multiline expression\":\n",
+        "    @Event global\n",
+        "    debug(\n",
+        "        1 if\n",
+        "        true\n",
+        "    )\n",
+    );
+    let error = opy_rs::compile(source, "issue-141-invalid-expression.opy", Path::new(""))
+        .expect_err("a conditional without else must remain rejected");
+    assert_eq!(error.code, "parse-error");
+    assert!(error.message.contains("expected `else`"));
+    assert!(error.span.is_some());
+}

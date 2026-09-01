@@ -508,7 +508,7 @@
         "provenance:real-world/overpy-inputhud/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The full real-world project now passes the implicit-concatenation boundary from #101; it remains outside the #38 compiler baseline at the separate unsupported conditional-value expression.",
+      "note": "The full real-world project now parses the multiline conditional-value expression; it remains outside the #38 compiler baseline at the unsupported `strContains` value.",
       "failureClass": "frontend",
       "diagnosticCode": "unknown-value"
     },
@@ -536,9 +536,9 @@
         "provenance:real-world/overpy-parabola/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The numeric enum member regression now lowers; the full real-world project remains outside the #38 compiler baseline and currently stops at the next multiline parenthesized expression gap at parabola.opy:50.",
+      "note": "The multiline parenthesized expression now parses; the full real-world project remains outside the #38 compiler baseline and currently stops at the unsupported `getServerLoad` value.",
       "failureClass": "frontend",
-      "diagnosticCode": "parse-error"
+      "diagnosticCode": "unknown-value"
     },
     {
       "fixture": "real-world/overpy-pixelart",
@@ -563,9 +563,9 @@
         "provenance:real-world/overpy-santa/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The player-variable range binder now lowers; the full real-world project remains outside the #38 compiler baseline and currently stops at the next unsupported multiline conditional expression at santa.opy:359.",
+      "note": "The multiline conditional expression now parses; the full real-world project remains outside the #38 compiler baseline and currently stops at the unsupported `concat` member.",
       "failureClass": "frontend",
-      "diagnosticCode": "parse-error"
+      "diagnosticCode": "unknown-member"
     },
     {
       "fixture": "real-world/overpy-zencopter",
