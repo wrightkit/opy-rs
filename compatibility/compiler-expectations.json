@@ -591,9 +591,9 @@
         "provenance:real-world/ow1-emulator/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The full real-world project now resolves duplicate includes without macro redeclaration; it remains outside the compiler baseline at the next macro invocation arity boundary.",
+      "note": "The full real-world project now resolves included-file #!mainFile, #!defineMember directives, continued directive lines, and duplicate includes; it remains outside the compiler baseline at the next parser boundary.",
       "failureClass": "frontend",
-      "diagnosticCode": "macro-arity"
+      "diagnosticCode": "parse-error"
     },
     {
       "fixture": "synthetic/chase-condition-agentlab",

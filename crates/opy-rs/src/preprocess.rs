@@ -39,7 +39,7 @@
 //! ABI is tested separately on synthetic content in the internal macro runtime
 //! module (see its `hooks` test suite).
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use crate::macro_js::{Limits, MacroArg, MacroError, MacroRuntime};
@@ -95,17 +95,27 @@ pub struct Preprocessed {
     pub defines: Vec<DefineRecord>,
     /// The project `settings { ... }` block, when present (#86).
     pub settings: Option<SettingsBlock>,
+    /// Warnings emitted while composing the project.
+    pub warnings: Vec<PreprocessWarning>,
     /// The registered `#!postCompileHook` script, when declared.
     pub post_compile_hook: Option<PostCompileHook>,
     /// Frontend-visible preprocessing state; backend effects are not run.
     pub preprocessing: PreprocessingState,
 }
 
-/// The output file registry: the main file only (reference convention).
+/// The output file registry, in include order, preserving source provenance.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FileRecord {
     pub id: u32,
     pub path: String,
+}
+
+/// A source-attributed preprocessing warning.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreprocessWarning {
+    pub code: String,
+    pub message: String,
+    pub span: Span,
 }
 
 /// Preprocess the main source text with its include root.
@@ -136,6 +146,7 @@ pub fn preprocess_with_overlay(
 pub struct PreprocessOutcome {
     pub result: OpyResult<(Preprocessed, Vec<FileRecord>)>,
     pub files: Vec<FileRecord>,
+    pub warnings: Vec<PreprocessWarning>,
 }
 
 /// Preprocess with open-document overlays while retaining the file registry
@@ -155,11 +166,12 @@ pub fn preprocess_with_overlay_outcome(
         root: root.to_path_buf(),
         overlay: overlay.clone(),
         include_stack: Vec::new(),
-        included_files: HashSet::new(),
+        imported_files: BTreeSet::new(),
         macros: Vec::new(),
-        settings: None,
         defines: Vec::new(),
         post_compile_hook: None,
+        settings: None,
+        warnings: Vec::new(),
         preprocessing: PreprocessingState::default(),
     };
     let mut owned_main_text = None;
@@ -180,6 +192,7 @@ pub fn preprocess_with_overlay_outcome(
                 span,
             )),
             files: pre.files,
+            warnings: pre.warnings,
         };
     }
     if let Some((main_file, span)) = first_main_file_directive(main_text) {
@@ -211,6 +224,7 @@ pub fn preprocess_with_overlay_outcome(
                             span,
                         )),
                         files: pre.files,
+                        warnings: pre.warnings,
                     };
                 };
                 let text = match std::fs::read_to_string(&canonical) {
@@ -223,6 +237,7 @@ pub fn preprocess_with_overlay_outcome(
                                 span,
                             )),
                             files: pre.files,
+                            warnings: pre.warnings,
                         };
                     }
                 };
@@ -248,20 +263,20 @@ pub fn preprocess_with_overlay_outcome(
         pre.record("mainFile", Some(&main_file), span);
     }
     let source_text = owned_main_text.as_deref().unwrap_or(main_text);
-    // The top-of-file settings block is extracted before lexing and blanked
-    // out of the lexed text, so the lexer never sees the block's braces
-    // (scoped settings lexing, #86).
+    // The project settings block is extracted before lexing and blanked out of
+    // the owning file's lexed text, so the lexer never sees its braces (#86).
     let settings = match crate::settings::find_blocks(source_text, source_file_id) {
         Ok(mut blocks) => blocks.pop(),
         Err(error) => {
             return PreprocessOutcome {
                 result: Err(error),
                 files: pre.files,
+                warnings: pre.warnings,
             };
         }
     };
-    pre.settings = settings;
-    let tokens = match &pre.settings {
+    pre.settings = settings.clone();
+    let tokens = match &settings {
         Some(block) => {
             let sanitized = crate::settings::sanitize_for_lex(source_text, block);
             lex(LexInput {
@@ -280,6 +295,7 @@ pub fn preprocess_with_overlay_outcome(
             return PreprocessOutcome {
                 result: Err(error),
                 files: pre.files,
+                warnings: pre.warnings,
             };
         }
     };
@@ -287,6 +303,7 @@ pub fn preprocess_with_overlay_outcome(
         return PreprocessOutcome {
             result: Err(error),
             files: pre.files,
+            warnings: pre.warnings,
         };
     }
     match pre.expand(tokens) {
@@ -296,6 +313,7 @@ pub fn preprocess_with_overlay_outcome(
                     tokens,
                     defines: pre.defines,
                     settings: pre.settings,
+                    warnings: pre.warnings.clone(),
                     post_compile_hook: pre.post_compile_hook,
                     preprocessing: pre.preprocessing,
                 },
@@ -304,11 +322,13 @@ pub fn preprocess_with_overlay_outcome(
             PreprocessOutcome {
                 result,
                 files: pre.files,
+                warnings: pre.warnings,
             }
         }
         Err(error) => PreprocessOutcome {
             result: Err(error),
             files: pre.files,
+            warnings: pre.warnings,
         },
     }
 }
@@ -319,11 +339,12 @@ struct Preprocessor {
     root: PathBuf,
     overlay: BTreeMap<String, String>,
     include_stack: Vec<PathBuf>,
-    included_files: HashSet<PathBuf>,
+    imported_files: BTreeSet<PathBuf>,
     macros: Vec<MacroDef>,
     settings: Option<SettingsBlock>,
     defines: Vec<DefineRecord>,
     post_compile_hook: Option<PostCompileHook>,
+    warnings: Vec<PreprocessWarning>,
     preprocessing: PreprocessingState,
 }
 
@@ -731,10 +752,20 @@ impl Preprocessor {
                 span,
             ));
         }
-        if self.included_files.contains(&identity) {
+        let import_identity = candidate.clone();
+        if self.imported_files.contains(&import_identity) {
+            self.warnings.push(PreprocessWarning {
+                code: "w_already_imported".to_string(),
+                message: format!(
+                    "The file '{}' was already imported and will not be imported again.",
+                    import_identity.display()
+                ),
+                span,
+            });
             self.record("include", Some(include), span);
             return Ok(());
         }
+        self.imported_files.insert(import_identity);
 
         let text = match overlay_text {
             Some(text) => text,
@@ -766,7 +797,6 @@ impl Preprocessor {
             id: file_id,
             path: display_path,
         });
-        self.included_files.insert(identity.clone());
         self.include_stack.push(identity);
         let saved_prefix = self.preprocessing.rule_prefix.clone();
         let saved_optimization = self.preprocessing.optimization.clone();
@@ -782,7 +812,7 @@ impl Preprocessor {
                 self.include_stack.pop();
                 return Err(OpyError::at(
                     "settings-placement",
-                    "only one project settings block is supported".to_string(),
+                    "only one settings block is supported in a project".to_string(),
                     block.keyword_span,
                 ));
             }
@@ -1004,7 +1034,9 @@ impl Preprocessor {
                 current.push(tokens[cursor].clone());
             } else if kind == TokenKind::RParen {
                 if depth == 0 {
-                    args.push(std::mem::take(&mut current));
+                    if !current.is_empty() || !args.is_empty() {
+                        args.push(std::mem::take(&mut current));
+                    }
                     return Ok((args, cursor + 1));
                 }
                 depth -= 1;
@@ -1488,6 +1520,23 @@ mod tests {
     }
 
     #[test]
+    fn zero_argument_function_define_accepts_empty_invocation() {
+        let (pre, _) = preprocess(
+            "#!define value() 3\nrule \"r\":\n    x = value()\n",
+            "main.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let numbers: Vec<&str> = pre
+            .tokens
+            .iter()
+            .filter(|token| token.kind == TokenKind::Number)
+            .map(|token| token.text.as_str())
+            .collect();
+        assert_eq!(numbers, vec!["3"]);
+    }
+
+    #[test]
     fn macro_expanded_string_can_concatenate_with_following_literal() {
         let (pre, _) = preprocess(
             "#!define PREFIX \"one\"\nrule \"r\":\n    debug(PREFIX\n        \"two\")\n",
@@ -1594,34 +1643,56 @@ mod tests {
 
     #[test]
     fn settings_in_include_is_extracted_with_source_provenance() {
-        let mut overlay = BTreeMap::new();
-        overlay.insert(
+        let overlay = BTreeMap::from([(
             "shared.opy".to_string(),
             "settings {\n    \"gamemodes\": {}\n}\n".to_string(),
-        );
+        )]);
         let main = "#!include \"shared.opy\"\nrule \"r\":\n    pass\n";
-        let (pre, files) =
-            preprocess_with_overlay(main, "main.opy", Path::new("."), &overlay).unwrap();
-        let block = pre.settings.expect("included settings block extracted");
+        let (pre, files) = preprocess_with_overlay(main, "main.opy", Path::new("."), &overlay)
+            .expect("included settings must be extracted");
+        let block = pre.settings.expect("included settings block");
         assert_eq!(block.keyword_span.file, 1);
-        assert_eq!(files.len(), 2);
-        assert_eq!(files[1].id, 1);
+        assert_eq!(files[1].path, "shared.opy");
+        assert!(!pre.tokens.iter().any(|token| token.text == "gamemodes"));
     }
 
     #[test]
-    fn duplicate_include_is_processed_once() {
-        let mut overlay = BTreeMap::new();
-        overlay.insert("shared.opy".to_string(), "#!define VALUE 1\n".to_string());
-        let main = concat!(
-            "#!include \"shared.opy\"\n",
-            "#!include \"shared.opy\"\n",
-            "rule \"r\":\n",
-            "    value = VALUE\n",
-        );
-        let (pre, files) =
-            preprocess_with_overlay(main, "main.opy", Path::new("."), &overlay).unwrap();
+    fn duplicate_include_is_skipped_without_redeclaring_macros() {
+        let overlay =
+            BTreeMap::from([("shared.opy".to_string(), "#!define VALUE 2\n".to_string())]);
+        let main =
+            "#!include \"shared.opy\"\n#!include \"shared.opy\"\nrule \"r\":\n    x = VALUE\n";
+        let (pre, files) = preprocess_with_overlay(main, "main.opy", Path::new("."), &overlay)
+            .expect("duplicate includes must not redeclare macros");
         assert_eq!(pre.defines.len(), 1);
-        assert_eq!(files.len(), 2, "duplicate include must not add a file");
+        assert_eq!(files.len(), 2);
+        assert_eq!(pre.warnings.len(), 1);
+        assert_eq!(pre.warnings[0].code, "w_already_imported");
+        assert_eq!(
+            pre.preprocessing
+                .directives
+                .iter()
+                .filter(|directive| directive.name == "include")
+                .count(),
+            2
+        );
+    }
+
+    #[test]
+    fn alias_include_paths_are_distinct_imports() {
+        let overlay = BTreeMap::from([
+            ("shared.opy".to_string(), "#!define FIRST 1\n".to_string()),
+            (
+                "dir/../shared.opy".to_string(),
+                "#!define SECOND 2\n".to_string(),
+            ),
+        ]);
+        let main = "#!include \"shared.opy\"\n#!include \"dir/../shared.opy\"\nrule \"r\":\n    x = FIRST\n    y = SECOND\n";
+        let (pre, files) = preprocess_with_overlay(main, "main.opy", Path::new("."), &overlay)
+            .expect("alias include paths must remain distinct imports");
+        assert_eq!(files.len(), 3);
+        assert_eq!(pre.defines.len(), 2);
+        assert!(pre.warnings.is_empty());
     }
 
     #[test]

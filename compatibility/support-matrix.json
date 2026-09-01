@@ -394,24 +394,27 @@
       "evidence": [
         "fixtures:synthetic/settings",
         "fixtures:real-world/6v6-adjustments/lobby/lobby.opy",
+        "test:opy-rs::compiler::integration_tests::issue_142_preprocessing::included_settings_are_extracted_with_file_provenance",
         "upstream:src/tests/customGameSettings.opy"
       ],
-      "notes": "Settings lower directly into the neutral workshop-rs carrier; workshop-rs owns key/value validation, locale spellings, and emission. Emitted settings are deliberately not reparseable (round-trip boundary)."
+      "notes": "Settings lower directly into the neutral workshop-rs carrier, including when extracted from an included source; workshop-rs owns key/value validation, locale spellings, and emission. Emitted settings are deliberately not reparseable (round-trip boundary)."
     },
     {
       "id": "preprocessing/include",
-      "name": "#!include: including-file-relative resolution, cycle detection, missing-file diagnostics, file registry",
+      "name": "#!include: including-file-relative resolution, duplicate suppression, cycle detection, missing-file diagnostics, file registry",
       "category": "preprocessing",
       "state": "source-supported",
       "evidence": [
         "fixtures:synthetic/preprocessing",
         "fixtures:real-world/ow1-emulator",
         "fixtures:real-world/6v6-adjustments",
+        "test:opy-rs::preprocess::tests::alias_include_paths_are_distinct_imports",
+        "test:opy-rs::preprocess::tests::duplicate_include_is_skipped_without_redeclaring_macros",
         "upstream:src/tests/include.opy",
         "upstream:src/tests/include3.opy",
         "upstream:src/tests/include5.opy"
       ],
-      "notes": "Includes resolve from the declaring source file, including nested closures; cycle detection, missing-file diagnostics, file registry, and deterministic multi-file provenance are covered."
+      "notes": "Includes resolve from the declaring source file, including nested closures; repeated files are imported once while directive provenance is retained; cycle detection, missing-file diagnostics, file registry, and deterministic multi-file provenance are covered."
     },
     {
       "id": "preprocessing/define-undef",
@@ -440,9 +443,10 @@
         "upstream:src/tests/compression.opy",
         "upstream:src/data/opy/preprocessing.ts",
         "test:opy-rs::preprocess::tests::backend_only_directives_are_validated_and_recorded",
-        "test:opy-rs::preprocess::tests::extension_directive_rejects_unknown_schema_values"
+        "test:opy-rs::preprocess::tests::extension_directive_rejects_unknown_schema_values",
+        "test:opy-rs::compiler::integration_tests::issue_142_preprocessing::duplicate_include_warning_is_exposed_by_frontend_tooling"
       ],
-      "notes": "Issue #29 plus #142: source implementation validates and records main-file provenance, macro-redeclaration policy, backend-only directive state, canonical extension names, and rule-prefix application. Optimizer, localization, extension point accounting, output-file, compression, and generated Workshop effects remain separate."
+      "notes": "Issue #29 plus #142: source implementation validates and records main-file provenance, duplicate-import and macro-redeclaration policy, backend-only directive state, canonical extension names, and rule-prefix application. Optimizer, localization, extension point accounting, output-file, compression, and generated Workshop effects remain separate."
     },
     {
       "id": "preprocessing/directive-effects",

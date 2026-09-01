@@ -17,7 +17,7 @@
 use crate::cst;
 use crate::diag::{OpyError, OpyResult, Position, Span};
 
-/// A top-of-file `settings { ... }` block.
+/// A project `settings { ... }` block.
 #[derive(Debug, Clone)]
 pub struct SettingsBlock {
     /// The raw JSONC text between the braces (braces excluded).
@@ -100,7 +100,7 @@ pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
             let keyword_start = scanner.here();
             let keyword_offset = scanner.pos;
             let word = scanner.read_word();
-            if word == "settings" {
+            if word == "settings" && keyword_start.col == 1 {
                 let keyword_span = Span::new(file_id, keyword_start, scanner.here());
                 if seen_first_construct || !blocks.is_empty() {
                     return Err(OpyError::at(
@@ -728,8 +728,8 @@ mod tests {
     }
 
     #[test]
-    fn settings_word_inside_a_string_is_not_a_block() {
-        let text = "rule \"Workshop Settings\":\n    value = \"special settings\"\n";
+    fn ignores_settings_words_in_strings_and_indented_code() {
+        let text = "rule \"settings\":\n    x = \"settings\"\n";
         assert!(find_blocks(text, 0).unwrap().is_empty());
     }
 

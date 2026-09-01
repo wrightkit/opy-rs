@@ -439,35 +439,34 @@ impl Compiler {
         );
         let catalog = self.catalog.identity();
         let compiler = CompilerIdentity::current();
+        let frontend_diagnostics = outcome
+            .diagnostics
+            .iter()
+            .map(compile_frontend_diagnostic)
+            .collect::<Vec<_>>();
         let Some(hir) = outcome.hir else {
-            let error = outcome
-                .error
-                .expect("failed frontend compile has diagnostic");
-            let diagnostic = CompileDiagnostic {
-                severity: crate::tooling::DiagnosticSeverity::Error,
-                code: error.code,
-                message: error.message,
-                span: error
-                    .span
-                    .and_then(|span| source_location_from_file_records(span, &outcome.files)),
-                script: None,
-            };
             return CompileReport::failure(
                 compiler,
                 catalog,
                 CompileFailureClass::Frontend,
-                vec![diagnostic],
+                frontend_diagnostics,
             );
         };
 
         match self.compile_hir_with_locale_and_hook(&hir, outcome.post_compile_hook, locale) {
-            Ok(artifact) => CompileReport::success(compiler, catalog, artifact),
-            Err(error) => CompileReport::failure(
-                compiler,
-                catalog,
-                CompileFailureClass::Integration,
-                vec![compile_diagnostic(error, &hir.files)],
-            ),
+            Ok(artifact) => {
+                CompileReport::success(compiler, catalog, artifact, frontend_diagnostics)
+            }
+            Err(error) => {
+                let mut diagnostics = frontend_diagnostics;
+                diagnostics.push(compile_diagnostic(error, &hir.files));
+                CompileReport::failure(
+                    compiler,
+                    catalog,
+                    CompileFailureClass::Integration,
+                    diagnostics,
+                )
+            }
         }
     }
 
@@ -523,6 +522,7 @@ impl CompileReport {
         compiler: CompilerIdentity,
         catalog: CatalogIdentity,
         artifact: CompilationArtifact,
+        diagnostics: Vec<CompileDiagnostic>,
     ) -> Self {
         Self {
             schema_version: COMPILE_SCHEMA_VERSION,
@@ -532,7 +532,7 @@ impl CompileReport {
                 status: CompileStatus::Success,
                 exit_code: 0,
                 failure_class: None,
-                diagnostics: Vec::new(),
+                diagnostics,
                 stdout: String::new(),
                 workshop_exact: artifact.final_output.clone(),
                 workshop: normalize_workshop(&artifact.final_output),
@@ -576,17 +576,14 @@ fn compile_diagnostic(error: IntegrationError, files: &[hir::SourceFile]) -> Com
     }
 }
 
-fn source_location_from_file_records(
-    span: crate::diag::Span,
-    files: &[crate::preprocess::FileRecord],
-) -> Option<crate::tooling::SourceLocation> {
-    let path = files.iter().find(|file| file.id == span.file)?.path.clone();
-    Some(crate::tooling::SourceLocation {
-        file_id: span.file,
-        path,
-        start: span.start,
-        end: span.end,
-    })
+fn compile_frontend_diagnostic(diagnostic: &crate::tooling::Diagnostic) -> CompileDiagnostic {
+    CompileDiagnostic {
+        severity: diagnostic.severity,
+        code: diagnostic.code.clone(),
+        message: diagnostic.message.clone(),
+        span: diagnostic.span.clone(),
+        script: None,
+    }
 }
 
 fn source_location_from_hir(
@@ -5259,6 +5256,44 @@ mod tests {
         );
         assert_eq!(
             report.compile.diagnostics[0].span.as_ref().unwrap().path,
+            "broken.opy"
+        );
+    }
+
+    #[test]
+    fn compile_report_preserves_frontend_warnings_on_integration_failure() {
+        let compiler = Compiler::new().unwrap();
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../compatibility/fixtures/synthetic/preprocessing");
+        let report = compiler.compile_source_report_with_locale(
+            concat!(
+                "#!include \"shared.opy\"\n",
+                "#!include \"shared.opy\"\n",
+                "rule \"broken\":\n",
+                "    @Event global\n",
+                "    {\"a\": 1}[\"b\"] = 3\n",
+            ),
+            "broken.opy",
+            &root,
+            &Locale::new("en-US"),
+        );
+        assert_eq!(report.compile.status, CompileStatus::Failure);
+        assert_eq!(
+            report.compile.failure_class,
+            Some(CompileFailureClass::Integration)
+        );
+        assert_eq!(report.compile.diagnostics.len(), 2);
+        assert_eq!(
+            report.compile.diagnostics[0].severity,
+            crate::tooling::DiagnosticSeverity::Warning
+        );
+        assert_eq!(report.compile.diagnostics[0].code, "w_already_imported");
+        assert_eq!(
+            report.compile.diagnostics[1].severity,
+            crate::tooling::DiagnosticSeverity::Error
+        );
+        assert_eq!(
+            report.compile.diagnostics[1].span.as_ref().unwrap().path,
             "broken.opy"
         );
     }

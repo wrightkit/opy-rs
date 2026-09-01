@@ -104,8 +104,9 @@ queryable through `provenance`.
 ## Diagnostics contract
 
 Every diagnostic is `{ severity, code, message, span }`. `code` and `span`
-are the machine contract; `message` and wording are not. All current
-diagnostics are `error` severity.
+are the machine contract; `message` and wording are not. Frontend errors use
+`error`; non-fatal project warnings use `warning` and do not make a project
+unclean.
 
 Span layout: `file_id` indexes the registry, positions are 1-based
 `(line, col)`; the CLI renders them as `path:line:col`.
@@ -120,6 +121,7 @@ Span layout: `file_id` indexes the registry, positions are 1-based
 | `include-invalid` | preprocess | Malformed `#!include` directive |
 | `include-not-found` | preprocess | Included file missing under the root |
 | `include-cycle` | preprocess | Include cycle detected |
+| `w_already_imported` | preprocess | Included file was already imported and was skipped |
 | `unsupported-directive` | preprocess | Unknown `#!` directive |
 | `define-invalid` | preprocess | Malformed `#!define` |
 | `macro-invalid` / `macro-arity` / `macro-recursion` | preprocess | Macro expansion failures |
