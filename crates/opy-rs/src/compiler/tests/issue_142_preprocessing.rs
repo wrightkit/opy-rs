@@ -95,3 +95,29 @@ fn included_settings_are_extracted_with_file_provenance() {
     assert_eq!(settings.span.expect("settings span").file, 1);
     assert_eq!(hir.files[1].path, "shared.opy");
 }
+
+#[test]
+fn duplicate_include_warning_is_exposed_by_frontend_tooling() {
+    let overlay = BTreeMap::from([("shared.opy".to_string(), "#!define VALUE 2\n".to_string())]);
+    let outcome = crate::tooling::check_with_overlay(
+        "#!include \"shared.opy\"\n#!include \"shared.opy\"\nrule \"duplicate include\":\n    @Event global\n    A = VALUE\n",
+        "main.opy",
+        std::path::Path::new("."),
+        &overlay,
+    );
+
+    assert!(outcome.is_clean());
+    let warning = outcome
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == "w_already_imported")
+        .expect("duplicate include warning");
+    assert_eq!(
+        warning.severity,
+        crate::tooling::DiagnosticSeverity::Warning
+    );
+    assert_eq!(
+        warning.span.as_ref().expect("warning span").path,
+        "main.opy"
+    );
+}

@@ -408,6 +408,7 @@
         "fixtures:synthetic/preprocessing",
         "fixtures:real-world/ow1-emulator",
         "fixtures:real-world/6v6-adjustments",
+        "test:opy-rs::preprocess::tests::alias_include_paths_are_distinct_imports",
         "test:opy-rs::preprocess::tests::duplicate_include_is_skipped_without_redeclaring_macros",
         "upstream:src/tests/include.opy",
         "upstream:src/tests/include3.opy",
@@ -442,7 +443,8 @@
         "upstream:src/tests/compression.opy",
         "upstream:src/data/opy/preprocessing.ts",
         "test:opy-rs::preprocess::tests::backend_only_directives_are_validated_and_recorded",
-        "test:opy-rs::preprocess::tests::extension_directive_rejects_unknown_schema_values"
+        "test:opy-rs::preprocess::tests::extension_directive_rejects_unknown_schema_values",
+        "test:opy-rs::compiler::integration_tests::issue_142_preprocessing::duplicate_include_warning_is_exposed_by_frontend_tooling"
       ],
       "notes": "Issue #29 plus #142: source implementation validates and records main-file provenance, duplicate-import and macro-redeclaration policy, backend-only directive state, canonical extension names, and rule-prefix application. Optimizer, localization, extension point accounting, output-file, compression, and generated Workshop effects remain separate."
     },

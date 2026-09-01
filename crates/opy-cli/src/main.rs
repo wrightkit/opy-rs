@@ -130,6 +130,15 @@ fn cmd_compile(args: &CompileArgs, presentation: Presentation) -> ExitCode {
     }
 
     if report.compile.status == CompileStatus::Success {
+        if !report.compile.diagnostics.is_empty() {
+            let diagnostics = report
+                .compile
+                .diagnostics
+                .iter()
+                .map(compile_diagnostic_view)
+                .collect::<Vec<_>>();
+            presentation.render_diagnostics("compile", &diagnostics);
+        }
         print!("{}", report.compile.workshop_exact);
         ExitCode::SUCCESS
     } else {
@@ -158,6 +167,14 @@ fn cmd_inspect(args: &FileArgs, presentation: Presentation) -> ExitCode {
             .collect::<Vec<_>>();
         presentation.render_diagnostics("inspect", &diagnostics);
         return ExitCode::from(1);
+    }
+    if !outcome.diagnostics.is_empty() {
+        let diagnostics = outcome
+            .diagnostics
+            .iter()
+            .map(diagnostic_view)
+            .collect::<Vec<_>>();
+        presentation.render_diagnostics("inspect", &diagnostics);
     }
     let model = outcome
         .model
@@ -259,7 +276,10 @@ fn check_view(outcome: &CheckOutcome) -> CheckView {
 
 fn diagnostic_view(diagnostic: &OpyDiagnostic) -> DiagnosticView {
     DiagnosticView {
-        severity: DiagnosticSeverity::Error,
+        severity: match diagnostic.severity {
+            opy_rs::tooling::DiagnosticSeverity::Error => DiagnosticSeverity::Error,
+            opy_rs::tooling::DiagnosticSeverity::Warning => DiagnosticSeverity::Warning,
+        },
         code: diagnostic.code.clone(),
         message: diagnostic.message.clone(),
         span: diagnostic.span.as_ref().map(|span| SpanView {
@@ -278,7 +298,10 @@ fn diagnostic_view(diagnostic: &OpyDiagnostic) -> DiagnosticView {
 
 fn compile_diagnostic_view(diagnostic: &CompileDiagnostic) -> DiagnosticView {
     DiagnosticView {
-        severity: DiagnosticSeverity::Error,
+        severity: match diagnostic.severity {
+            opy_rs::tooling::DiagnosticSeverity::Error => DiagnosticSeverity::Error,
+            opy_rs::tooling::DiagnosticSeverity::Warning => DiagnosticSeverity::Warning,
+        },
         code: diagnostic.code.clone(),
         message: diagnostic.message.clone(),
         span: diagnostic.span.as_ref().map(|span| SpanView {

@@ -95,6 +95,8 @@ pub struct Preprocessed {
     pub defines: Vec<DefineRecord>,
     /// The project `settings { ... }` block, when present (#86).
     pub settings: Option<SettingsBlock>,
+    /// Warnings emitted while composing the project.
+    pub warnings: Vec<PreprocessWarning>,
     /// The registered `#!postCompileHook` script, when declared.
     pub post_compile_hook: Option<PostCompileHook>,
     /// Frontend-visible preprocessing state; backend effects are not run.
@@ -106,6 +108,14 @@ pub struct Preprocessed {
 pub struct FileRecord {
     pub id: u32,
     pub path: String,
+}
+
+/// A source-attributed preprocessing warning.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreprocessWarning {
+    pub code: String,
+    pub message: String,
+    pub span: Span,
 }
 
 /// Preprocess the main source text with its include root.
@@ -136,6 +146,7 @@ pub fn preprocess_with_overlay(
 pub struct PreprocessOutcome {
     pub result: OpyResult<(Preprocessed, Vec<FileRecord>)>,
     pub files: Vec<FileRecord>,
+    pub warnings: Vec<PreprocessWarning>,
 }
 
 /// Preprocess with open-document overlays while retaining the file registry
@@ -160,6 +171,7 @@ pub fn preprocess_with_overlay_outcome(
         defines: Vec::new(),
         post_compile_hook: None,
         settings: None,
+        warnings: Vec::new(),
         preprocessing: PreprocessingState::default(),
     };
     let mut owned_main_text = None;
@@ -180,6 +192,7 @@ pub fn preprocess_with_overlay_outcome(
                 span,
             )),
             files: pre.files,
+            warnings: pre.warnings,
         };
     }
     if let Some((main_file, span)) = first_main_file_directive(main_text) {
@@ -211,6 +224,7 @@ pub fn preprocess_with_overlay_outcome(
                             span,
                         )),
                         files: pre.files,
+                        warnings: pre.warnings,
                     };
                 };
                 let text = match std::fs::read_to_string(&canonical) {
@@ -223,6 +237,7 @@ pub fn preprocess_with_overlay_outcome(
                                 span,
                             )),
                             files: pre.files,
+                            warnings: pre.warnings,
                         };
                     }
                 };
@@ -256,6 +271,7 @@ pub fn preprocess_with_overlay_outcome(
             return PreprocessOutcome {
                 result: Err(error),
                 files: pre.files,
+                warnings: pre.warnings,
             };
         }
     };
@@ -279,6 +295,7 @@ pub fn preprocess_with_overlay_outcome(
             return PreprocessOutcome {
                 result: Err(error),
                 files: pre.files,
+                warnings: pre.warnings,
             };
         }
     };
@@ -286,6 +303,7 @@ pub fn preprocess_with_overlay_outcome(
         return PreprocessOutcome {
             result: Err(error),
             files: pre.files,
+            warnings: pre.warnings,
         };
     }
     match pre.expand(tokens) {
@@ -295,6 +313,7 @@ pub fn preprocess_with_overlay_outcome(
                     tokens,
                     defines: pre.defines,
                     settings: pre.settings,
+                    warnings: pre.warnings.clone(),
                     post_compile_hook: pre.post_compile_hook,
                     preprocessing: pre.preprocessing,
                 },
@@ -303,11 +322,13 @@ pub fn preprocess_with_overlay_outcome(
             PreprocessOutcome {
                 result,
                 files: pre.files,
+                warnings: pre.warnings,
             }
         }
         Err(error) => PreprocessOutcome {
             result: Err(error),
             files: pre.files,
+            warnings: pre.warnings,
         },
     }
 }
@@ -323,6 +344,7 @@ struct Preprocessor {
     defines: Vec<DefineRecord>,
     post_compile_hook: Option<PostCompileHook>,
     settings: Option<SettingsBlock>,
+    warnings: Vec<PreprocessWarning>,
     preprocessing: PreprocessingState,
 }
 
@@ -730,11 +752,20 @@ impl Preprocessor {
                 span,
             ));
         }
-        if self.imported_files.contains(&identity) {
+        let import_identity = candidate.clone();
+        if self.imported_files.contains(&import_identity) {
+            self.warnings.push(PreprocessWarning {
+                code: "w_already_imported".to_string(),
+                message: format!(
+                    "The file '{}' was already imported and will not be imported again.",
+                    import_identity.display()
+                ),
+                span,
+            });
             self.record("include", Some(include), span);
             return Ok(());
         }
-        self.imported_files.insert(identity.clone());
+        self.imported_files.insert(import_identity);
 
         let text = match overlay_text {
             Some(text) => text,
@@ -1629,6 +1660,8 @@ mod tests {
             .expect("duplicate includes must not redeclare macros");
         assert_eq!(pre.defines.len(), 1);
         assert_eq!(files.len(), 2);
+        assert_eq!(pre.warnings.len(), 1);
+        assert_eq!(pre.warnings[0].code, "w_already_imported");
         assert_eq!(
             pre.preprocessing
                 .directives
@@ -1637,6 +1670,23 @@ mod tests {
                 .count(),
             2
         );
+    }
+
+    #[test]
+    fn alias_include_paths_are_distinct_imports() {
+        let overlay = BTreeMap::from([
+            ("shared.opy".to_string(), "#!define FIRST 1\n".to_string()),
+            (
+                "dir/../shared.opy".to_string(),
+                "#!define SECOND 2\n".to_string(),
+            ),
+        ]);
+        let main = "#!include \"shared.opy\"\n#!include \"dir/../shared.opy\"\nrule \"r\":\n    x = FIRST\n    y = SECOND\n";
+        let (pre, files) = preprocess_with_overlay(main, "main.opy", Path::new("."), &overlay)
+            .expect("alias include paths must remain distinct imports");
+        assert_eq!(files.len(), 3);
+        assert_eq!(pre.defines.len(), 2);
+        assert!(pre.warnings.is_empty());
     }
 
     #[test]

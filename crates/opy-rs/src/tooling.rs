@@ -38,11 +38,11 @@ use crate::hir;
 use crate::hir::types::{
     Declaration, Define, Expr as HirExpr, RuleEntry, SourceFile, Stmt as HirStmt,
 };
-use crate::preprocess::{FileRecord, PreprocessOutcome};
+use crate::preprocess::{FileRecord, PreprocessOutcome, PreprocessWarning};
 
 /// The outcome of [`check`]: structured diagnostics plus the resolved model.
 ///
-/// `model` is present exactly when `diagnostics` is empty (a clean project);
+/// `model` is present exactly when `diagnostics` contains no errors;
 /// `files` is the frontend file registry (main file id 0, then one entry per
 /// include) and is retained even on failure so diagnostics map to real
 /// sources.
@@ -65,7 +65,9 @@ pub struct CheckOutcome {
 impl CheckOutcome {
     /// Whether the project checked clean.
     pub fn is_clean(&self) -> bool {
-        self.diagnostics.is_empty()
+        self.diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.severity != DiagnosticSeverity::Error)
     }
 }
 
@@ -84,13 +86,21 @@ pub fn check_with_overlay(
     root: &Path,
     overlay: &std::collections::BTreeMap<String, String>,
 ) -> CheckOutcome {
-    let PreprocessOutcome { result, files } =
-        crate::preprocess::preprocess_with_overlay_outcome(source, main_path, root, overlay);
+    let PreprocessOutcome {
+        result,
+        files,
+        warnings,
+    } = crate::preprocess::preprocess_with_overlay_outcome(source, main_path, root, overlay);
     let preprocessed = match result {
         Ok((preprocessed, _)) => preprocessed,
         Err(error) => {
+            let mut diagnostics = warnings
+                .iter()
+                .map(|warning| Diagnostic::from_warning(warning, &files))
+                .collect::<Vec<_>>();
+            diagnostics.push(Diagnostic::from_error(error, &files));
             return CheckOutcome {
-                diagnostics: vec![Diagnostic::from_error(error, &files)],
+                diagnostics,
                 model: None,
                 files,
                 post_compile_hook: None,
@@ -104,12 +114,19 @@ pub fn check_with_overlay(
     let Some(mut program) = parsed.program else {
         // The parser recovers at statement boundaries; every collected error
         // is reported (the compile pipeline reads only the first).
-        return CheckOutcome {
-            diagnostics: parsed
+        let mut diagnostics = preprocessed
+            .warnings
+            .iter()
+            .map(|warning| Diagnostic::from_warning(warning, &files))
+            .collect::<Vec<_>>();
+        diagnostics.extend(
+            parsed
                 .errors
                 .iter()
-                .map(|error| Diagnostic::from_error(error.clone(), &files))
-                .collect(),
+                .map(|error| Diagnostic::from_error(error.clone(), &files)),
+        );
+        return CheckOutcome {
+            diagnostics,
             model: None,
             files,
             post_compile_hook: None,
@@ -121,8 +138,14 @@ pub fn check_with_overlay(
         match crate::settings::parse_block(block) {
             Ok(parsed_settings) => program.settings = Some(parsed_settings),
             Err(error) => {
+                let mut diagnostics = preprocessed
+                    .warnings
+                    .iter()
+                    .map(|warning| Diagnostic::from_warning(warning, &files))
+                    .collect::<Vec<_>>();
+                diagnostics.push(Diagnostic::from_error(error, &files));
                 return CheckOutcome {
-                    diagnostics: vec![Diagnostic::from_error(error, &files)],
+                    diagnostics,
                     model: None,
                     files,
                     post_compile_hook: None,
@@ -156,7 +179,11 @@ pub fn check_with_overlay(
         Ok(mut hir) => {
             hir.preprocessing = preprocessed.preprocessing;
             CheckOutcome {
-                diagnostics: Vec::new(),
+                diagnostics: preprocessed
+                    .warnings
+                    .iter()
+                    .map(|warning| Diagnostic::from_warning(warning, &files))
+                    .collect(),
                 model: Some(SemanticModel::build(hir, &program)),
                 files,
                 // The directive was parsed, validated, and recorded by
@@ -166,12 +193,20 @@ pub fn check_with_overlay(
                 post_compile_hook: preprocessed.post_compile_hook,
             }
         }
-        Err(error) => CheckOutcome {
-            diagnostics: vec![Diagnostic::from_error(error, &files)],
-            model: None,
-            files,
-            post_compile_hook: None,
-        },
+        Err(error) => {
+            let mut diagnostics = preprocessed
+                .warnings
+                .iter()
+                .map(|warning| Diagnostic::from_warning(warning, &files))
+                .collect::<Vec<_>>();
+            diagnostics.push(Diagnostic::from_error(error, &files));
+            CheckOutcome {
+                diagnostics,
+                model: None,
+                files,
+                post_compile_hook: None,
+            }
+        }
     }
 }
 
@@ -189,6 +224,15 @@ pub struct Diagnostic {
 }
 
 impl Diagnostic {
+    fn from_warning(warning: &PreprocessWarning, files: &[FileRecord]) -> Diagnostic {
+        Diagnostic {
+            severity: DiagnosticSeverity::Warning,
+            code: warning.code.clone(),
+            message: warning.message.clone(),
+            span: resolve_record_span(warning.span, files),
+        }
+    }
+
     fn from_error(error: OpyError, files: &[FileRecord]) -> Diagnostic {
         Diagnostic {
             severity: DiagnosticSeverity::Error,
@@ -199,18 +243,19 @@ impl Diagnostic {
     }
 }
 
-/// The severity of a diagnostic. All frontend diagnostics are errors today;
-/// the enum is the machine contract for future warning/note severities.
+/// The severity of a diagnostic in the frontend contract.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum DiagnosticSeverity {
     Error,
+    Warning,
 }
 
 impl DiagnosticSeverity {
     pub fn as_str(&self) -> &'static str {
         match self {
             DiagnosticSeverity::Error => "error",
+            DiagnosticSeverity::Warning => "warning",
         }
     }
 }

@@ -133,6 +133,7 @@ pub fn compile_with_overlay(
 pub struct CompileOutcome {
     pub hir: Option<hir::Program>,
     pub error: Option<OpyError>,
+    pub diagnostics: Vec<tooling::Diagnostic>,
     pub files: Vec<preprocess::FileRecord>,
     /// The declared `#!postCompileHook` script, when the source declared one
     /// and compilation succeeded.
@@ -174,16 +175,20 @@ pub fn compile_with_overlay_outcome(
     overlay: &std::collections::BTreeMap<String, String>,
 ) -> CompileOutcome {
     let outcome = tooling::check_with_overlay(source, main_path, root, overlay);
-    // Every failed check carries at least one diagnostic, so a None model
+    // Every failed check carries at least one error diagnostic, so a None model
     // always yields an error (the compile outcome invariant).
-    let error = outcome.diagnostics.first().map(|diagnostic| OpyError {
-        code: diagnostic.code.clone(),
-        message: diagnostic.message.clone(),
-        span: diagnostic
-            .span
-            .as_ref()
-            .map(tooling::SourceLocation::to_span),
-    });
+    let error = outcome
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.severity == tooling::DiagnosticSeverity::Error)
+        .map(|diagnostic| OpyError {
+            code: diagnostic.code.clone(),
+            message: diagnostic.message.clone(),
+            span: diagnostic
+                .span
+                .as_ref()
+                .map(tooling::SourceLocation::to_span),
+        });
     // The directive was parsed, validated, and recorded by preprocessing; the
     // source implementation never executes the hook (real hook execution receives the
     // final Workshop text and is lowering-dependent, issue #8 — see
@@ -196,6 +201,7 @@ pub fn compile_with_overlay_outcome(
     CompileOutcome {
         hir: outcome.model.map(|model| model.hir),
         error,
+        diagnostics: outcome.diagnostics,
         files: outcome.files,
         post_compile_hook,
     }

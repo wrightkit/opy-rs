@@ -11,12 +11,14 @@ use crate::cli::{ColorArg, RendererArg};
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum DiagnosticSeverity {
     Error,
+    Warning,
 }
 
 impl DiagnosticSeverity {
     fn as_str(self) -> &'static str {
         match self {
             Self::Error => "error",
+            Self::Warning => "warning",
         }
     }
 }
@@ -143,9 +145,17 @@ impl Presentation {
                     "::group::{}",
                     escape_workflow_data(&format!("opy-cli {command}"))
                 );
-                eprintln!("ERROR {command} ({} diagnostic(s))", diagnostics.len());
+                let status = if diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error)
+                {
+                    "ERROR"
+                } else {
+                    "WARNING"
+                };
+                eprintln!("{status} {command} ({} diagnostic(s))", diagnostics.len());
                 eprintln!("::endgroup::");
-                emit_summary(command, "ERROR");
+                emit_summary(command, status);
             }
             Renderer::Terminal | Renderer::Plain => {
                 for diagnostic in diagnostics {
@@ -190,7 +200,11 @@ fn format_diagnostic(diagnostic: &DiagnosticView, color: bool) -> String {
         )
     });
     let message = if color {
-        format!("\x1b[31m{}\x1b[0m", diagnostic.message)
+        let color_code = match diagnostic.severity {
+            DiagnosticSeverity::Error => 31,
+            DiagnosticSeverity::Warning => 33,
+        };
+        format!("\x1b[{color_code}m{}\x1b[0m", diagnostic.message)
     } else {
         diagnostic.message.clone()
     };

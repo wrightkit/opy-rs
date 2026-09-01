@@ -439,29 +439,24 @@ impl Compiler {
         );
         let catalog = self.catalog.identity();
         let compiler = CompilerIdentity::current();
+        let frontend_diagnostics = outcome
+            .diagnostics
+            .iter()
+            .map(compile_frontend_diagnostic)
+            .collect::<Vec<_>>();
         let Some(hir) = outcome.hir else {
-            let error = outcome
-                .error
-                .expect("failed frontend compile has diagnostic");
-            let diagnostic = CompileDiagnostic {
-                severity: crate::tooling::DiagnosticSeverity::Error,
-                code: error.code,
-                message: error.message,
-                span: error
-                    .span
-                    .and_then(|span| source_location_from_file_records(span, &outcome.files)),
-                script: None,
-            };
             return CompileReport::failure(
                 compiler,
                 catalog,
                 CompileFailureClass::Frontend,
-                vec![diagnostic],
+                frontend_diagnostics,
             );
         };
 
         match self.compile_hir_with_locale_and_hook(&hir, outcome.post_compile_hook, locale) {
-            Ok(artifact) => CompileReport::success(compiler, catalog, artifact),
+            Ok(artifact) => {
+                CompileReport::success(compiler, catalog, artifact, frontend_diagnostics)
+            }
             Err(error) => CompileReport::failure(
                 compiler,
                 catalog,
@@ -523,6 +518,7 @@ impl CompileReport {
         compiler: CompilerIdentity,
         catalog: CatalogIdentity,
         artifact: CompilationArtifact,
+        diagnostics: Vec<CompileDiagnostic>,
     ) -> Self {
         Self {
             schema_version: COMPILE_SCHEMA_VERSION,
@@ -532,7 +528,7 @@ impl CompileReport {
                 status: CompileStatus::Success,
                 exit_code: 0,
                 failure_class: None,
-                diagnostics: Vec::new(),
+                diagnostics,
                 stdout: String::new(),
                 workshop_exact: artifact.final_output.clone(),
                 workshop: normalize_workshop(&artifact.final_output),
@@ -576,17 +572,14 @@ fn compile_diagnostic(error: IntegrationError, files: &[hir::SourceFile]) -> Com
     }
 }
 
-fn source_location_from_file_records(
-    span: crate::diag::Span,
-    files: &[crate::preprocess::FileRecord],
-) -> Option<crate::tooling::SourceLocation> {
-    let path = files.iter().find(|file| file.id == span.file)?.path.clone();
-    Some(crate::tooling::SourceLocation {
-        file_id: span.file,
-        path,
-        start: span.start,
-        end: span.end,
-    })
+fn compile_frontend_diagnostic(diagnostic: &crate::tooling::Diagnostic) -> CompileDiagnostic {
+    CompileDiagnostic {
+        severity: diagnostic.severity,
+        code: diagnostic.code.clone(),
+        message: diagnostic.message.clone(),
+        span: diagnostic.span.clone(),
+        script: None,
+    }
 }
 
 fn source_location_from_hir(
