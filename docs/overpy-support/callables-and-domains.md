@@ -23,10 +23,11 @@ behavior, and dispatch rule.
 | `raiseToPower(base, exponent)` | ✅ Supported | Two numeric arguments in order; value operation. |
 | `sorted(array[, key])` | ✅ Supported | Optional lambda key; element/index binder is contextual. |
 | `all(array)` / `any(array)` | ✅ Supported | One boolean-array value. |
-| `random.randint(min, max)` | 🚧 Coming soon | Two inclusive integer bounds; integer result. |
-| `random.uniform(min, max)` | 🚧 Coming soon | Two float bounds; float result. |
-| `random.choice(array)` | 🚧 Coming soon | One array; returns an element or supplied non-array value. |
-| `random.shuffle(array)` | 🚧 Coming soon | One array; returns a copied array. |
+| `ceil(value)` / `floor(value)` / `round(value)` | ✅ Supported | Numeric rounding maps to the canonical `Rounding` domain. |
+| `random.randint(min, max)` | ✅ Supported | Two inclusive integer bounds; integer result. |
+| `random.uniform(min, max)` | ✅ Supported | Two float bounds; float result. |
+| `random.choice(array)` | ✅ Supported | One array; returns an element or supplied non-array value. |
+| `random.shuffle(array)` | ✅ Supported | One array; returns a copied array. |
 | `_(contextOrString[, string])` | 🚧 Coming soon | One-argument and two-argument modes differ. |
 
 ## Receiver/member functions

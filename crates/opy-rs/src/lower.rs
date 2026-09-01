@@ -1810,6 +1810,13 @@ impl Lowerer {
             match &slots[index] {
                 Some(value) => bound.push(value.clone()),
                 None => match &param.default {
+                    Some(ParamDefault::Call { call }) => {
+                        bound.push(HirExpr::Call {
+                            name: call.clone(),
+                            args: Vec::new(),
+                            span: None,
+                        });
+                    }
                     Some(ParamDefault::EnumMember(member)) => {
                         let domain = param.domain.clone().unwrap_or_default();
                         bound.push(HirExpr::Enum {
