@@ -1280,7 +1280,7 @@ impl Lowerer {
         member: &str,
         member_span: Span,
         span: Span,
-        _macro_params: &[String],
+        macro_params: &[String],
     ) -> HirExpr {
         if let Expr::Name { name, .. } = receiver {
             // Custom enum member: folds to its numeric constant.
@@ -1381,6 +1381,14 @@ impl Lowerer {
                 );
                 return HirExpr::Null { span: None };
             }
+            if self.player_visible(member) {
+                return HirExpr::PlayerVar {
+                    player: Box::new(self.lower_expr(receiver, macro_params, CallPosition::Value)),
+                    name: member.to_string(),
+                    member_span: Some(member_span.into()),
+                    span: Some(span.into()),
+                };
+            }
             // A bare variable receiver member is valid OPY source syntax even
             // when canonical member existence is deferred to Workshop. Keep
             // both the resolved variable receiver and the source member
@@ -1404,6 +1412,14 @@ impl Lowerer {
                     span: Some(span.into()),
                 };
             }
+        }
+        if self.player_visible(member) {
+            return HirExpr::PlayerVar {
+                player: Box::new(self.lower_expr(receiver, macro_params, CallPosition::Value)),
+                name: member.to_string(),
+                member_span: Some(member_span.into()),
+                span: Some(span.into()),
+            };
         }
         self.error_at(
             "unsupported-member",

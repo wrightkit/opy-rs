@@ -130,6 +130,8 @@ rule \"player contexts\":
     @Condition attacker.isWeaponBroken == true
     @Condition victim.isWeaponBroken == false
     @Condition attacker.isAlive()
+    @Condition target.isWeaponBroken == true
+    @Condition getAllPlayers().isWeaponBroken == true
     target = attacker
 ";
     let outcome = check(source, "main.opy", Path::new(""));
@@ -181,6 +183,22 @@ rule \"player contexts\":
         Expr::ReceiverCall { receiver, name, .. }
             if name == "isAlive"
                 && matches!(receiver.as_ref(), Expr::Call { name, args, .. } if name == "attacker" && args.is_empty())
+    ));
+    assert!(matches!(
+        &rule.conditions[5],
+        Expr::Binary { left, .. }
+            if matches!(left.as_ref(), Expr::PlayerVar { player, name, member_span, .. }
+                if name == "isWeaponBroken"
+                    && member_span.is_some()
+                    && matches!(player.as_ref(), Expr::GlobalVar { name, .. } if name == "target"))
+    ));
+    assert!(matches!(
+        &rule.conditions[6],
+        Expr::Binary { left, .. }
+            if matches!(left.as_ref(), Expr::PlayerVar { player, name, member_span, .. }
+                if name == "isWeaponBroken"
+                    && member_span.is_some()
+                    && matches!(player.as_ref(), Expr::Call { name, args, .. } if name == "getAllPlayers" && args.is_empty()))
     ));
     assert!(matches!(
         rule.actions.first(),
