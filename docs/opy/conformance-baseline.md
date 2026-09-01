@@ -11,9 +11,12 @@ The inventory categories are derived from the pinned OverPy 9.7.10 source
 registries and public project/test evidence recorded in
 [`upstream-references.md`](../compatibility/upstream-references.md) and
 [`language-support/registries.md`](../language-support/registries.md). The
-manifest points each category at representative executable probes. It does
-not derive its declared surface, reference outcome, or expected behavior from
-the current Rust implementation.
+manifest declares structural contracts for each category. Every contract has
+a reviewable claim, one or more probe kinds (`positive`, `negative`,
+`contextual`, or `composition`), and one or more executable fixture probes;
+the validator rejects missing, unknown, or empty mappings. It does not derive
+its declared surface, reference outcome, or expected behavior from the current
+Rust implementation.
 
 The categories are:
 

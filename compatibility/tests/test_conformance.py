@@ -1,3 +1,4 @@
+import copy
 import sys
 import unittest
 from pathlib import Path
@@ -25,6 +26,21 @@ class ConformanceTests(unittest.TestCase):
             for fixture in category["probeFixtures"]
         ]
         self.assertEqual(set(declared), conformance.fixture_ids())
+
+    def test_contract_inventory_requires_executable_evidence(self):
+        conformance.validate_manifest(self.manifest)
+        kinds = {
+            kind
+            for category in self.manifest["categories"]
+            for contract in category["contracts"]
+            for kind in contract["probeKinds"]
+        }
+        self.assertEqual(kinds, conformance.PROBE_KINDS)
+
+        broken = copy.deepcopy(self.manifest)
+        broken["categories"][0]["contracts"][0]["probes"] = []
+        with self.assertRaises(conformance.ConformanceError):
+            conformance.validate_manifest(broken)
 
     def test_native_frontier_uses_failure_class_without_hiding_stage(self):
         result = {

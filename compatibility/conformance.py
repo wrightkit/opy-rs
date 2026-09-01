@@ -27,6 +27,7 @@ FRONTEND_CODES = {
     "w_already_imported": "preprocess",
     "do-while-placement": "semantic",
 }
+PROBE_KINDS = {"positive", "negative", "contextual", "composition"}
 
 
 class ConformanceError(RuntimeError):
@@ -59,11 +60,12 @@ def load_manifest(path: Path = MANIFEST) -> dict[str, Any]:
             raise ConformanceError("each conformance category needs an id")
         if (
             not category.get("authority")
+            or not category.get("contracts")
             or not category.get("probeFixtures")
             or not category.get("owner")
         ):
             raise ConformanceError(
-                f"{category.get('id', '<unknown>')}: authority and probes are required"
+                f"{category.get('id', '<unknown>')}: authority, contracts, and probes are required"
             )
     return manifest
 
@@ -100,6 +102,45 @@ def validate_manifest(manifest: dict[str, Any], fixtures_root: Path = FIXTURES) 
         if category_id in category_ids:
             raise ConformanceError(f"duplicate conformance category: {category_id}")
         category_ids.add(category_id)
+        contracts = category["contracts"]
+        if not isinstance(contracts, list) or not contracts:
+            raise ConformanceError(f"{category_id}: contracts are required")
+        contract_ids = set()
+        contract_probes: list[str] = []
+        for contract in contracts:
+            if not isinstance(contract, dict):
+                raise ConformanceError(f"{category_id}: contract must be an object")
+            contract_id = contract.get("id")
+            if not isinstance(contract_id, str) or not contract_id:
+                raise ConformanceError(f"{category_id}: contract needs an id")
+            if contract_id in contract_ids:
+                raise ConformanceError(f"{category_id}: duplicate contract: {contract_id}")
+            contract_ids.add(contract_id)
+            if not isinstance(contract.get("claim"), str) or not contract["claim"]:
+                raise ConformanceError(f"{category_id}/{contract_id}: claim is required")
+            kinds = contract.get("probeKinds")
+            if (
+                not isinstance(kinds, list)
+                or not kinds
+                or any(kind not in PROBE_KINDS for kind in kinds)
+                or len(set(kinds)) != len(kinds)
+            ):
+                raise ConformanceError(
+                    f"{category_id}/{contract_id}: probeKinds must be distinct known kinds"
+                )
+            probes = contract.get("probes")
+            if not isinstance(probes, list) or not probes:
+                raise ConformanceError(f"{category_id}/{contract_id}: probes are required")
+            for fixture_id in probes:
+                if fixture_id not in actual:
+                    raise ConformanceError(
+                        f"{category_id}/{contract_id}: probe fixture does not exist: {fixture_id}"
+                    )
+                contract_probes.append(fixture_id)
+        if not set(contract_probes) <= set(category["probeFixtures"]):
+            raise ConformanceError(
+                f"{category_id}: contract probes must be declared category probes"
+            )
         for fixture_id in category["probeFixtures"]:
             if fixture_id not in actual:
                 raise ConformanceError(
@@ -344,10 +385,15 @@ def run(args: argparse.Namespace) -> int:
     results = []
     category_by_fixture: dict[str, list[dict[str, str]]] = {}
     for category in manifest["categories"]:
-        for fixture_id in category["probeFixtures"]:
-            category_by_fixture.setdefault(fixture_id, []).append(
-                {"id": category["id"], "owner": category["owner"]}
-            )
+        for contract in category["contracts"]:
+            for fixture_id in contract["probes"]:
+                category_by_fixture.setdefault(fixture_id, []).append(
+                    {
+                        "id": category["id"],
+                        "contract": contract["id"],
+                        "owner": category["owner"],
+                    }
+                )
     for manifest_path in sorted(args.fixtures.glob("**/fixture.json")):
         metadata = load_json(manifest_path)
         fixture_id = metadata["id"]

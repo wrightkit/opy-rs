@@ -217,10 +217,12 @@ Use `--allow-inconclusive` only for local contract checks.
 
 `conformance-manifest.json` is the independent inventory for the pinned
 OverPy source-language baseline. Its categories cite the pinned upstream
-registries or an accepted canonical-WIR contract and point to executable
-fixtures; it contains no native expected outcomes. Reference failures carry
-an audited stage and first-construct frontier tied to text in their pinned
-oracle snapshot.
+registries or an accepted canonical-WIR contract. Each category declares
+structural contracts with a claim, probe kinds (`positive`, `negative`,
+`contextual`, or `composition`), and executable fixture probes; validation
+rejects empty or unknown mappings. It contains no native expected outcomes.
+Reference failures carry an audited stage and first-construct frontier tied to
+text in their pinned oracle snapshot.
 
 Run the baseline after building both CLI targets:
 
