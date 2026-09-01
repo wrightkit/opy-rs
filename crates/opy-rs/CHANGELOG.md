@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.11](https://github.com/wrightkit/opy-rs/compare/v0.1.10...v0.1.11) - 2026-09-01
+
+### Added
+
+- *(opy)* complete final #88 source convergence ([#156](https://github.com/wrightkit/opy-rs/pull/156))
+- *(opy)* complete source semantic and project state convergence ([#155](https://github.com/wrightkit/opy-rs/pull/155))
+- *(opy)* complete rule condition and weapon builtins ([#152](https://github.com/wrightkit/opy-rs/pull/152))
+- *(opy)* complete bounded canonical lowering ([#150](https://github.com/wrightkit/opy-rs/pull/150))
+- *(opy)* expand audited OverPy builtin surface ([#151](https://github.com/wrightkit/opy-rs/pull/151))
+- *(opy)* complete semantic HIR subroutine resolution
+- *(opy)* complete preprocessing, macros, and project composition ([#147](https://github.com/wrightkit/opy-rs/pull/147))
+- *(opy)* complete audited statement grammar surface ([#146](https://github.com/wrightkit/opy-rs/pull/146))
+
+### Fixed
+
+- *(opy)* complete project preprocessing state ([#154](https://github.com/wrightkit/opy-rs/pull/154))
+- *(opy)* preserve top-level semantic order
+
+### Other
+
+- Merge pull request #149 from wrightkit/codex/issue-143-semantic-hir
+
 ## [0.1.10](https://github.com/wrightkit/opy-rs/compare/v0.1.9...v0.1.10) - 2026-08-31
 
 ### Added
