@@ -490,11 +490,11 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         Some("parse-error"),
         "the chained ternary, isDummy, and getHorizontalFacingAngle regressions resolve; the full project reaches the next unknown value (`horizontalAngleOfDirection`). Gap: reference accepts, native rejects (documented).",
     );
-    diagnostic(
+    resolve(
         &mut cases,
         "real-world/overpy-crosshair",
-        Some("unknown-action"),
-        "the SpecVisibility.NEVER and hudSubheader boundaries now resolve; the full project reaches the separate unsupported hudSubtext action. Gap: reference accepts, native rejects (documented).",
+        false,
+        "the frontend resolves the full project through the audited HUD builtin surface; compiler-only lowering retains the separate stringModifier integration boundary.",
     );
     diagnostic(
         &mut cases,

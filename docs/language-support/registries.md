@@ -106,10 +106,10 @@ Reference: `889d9749d1def17f146548cbddb94ea1ab015847`.
 
 | Upstream key | Status | Contract |
 | --- | --- | --- |
-| `random.randint(min, max)` | 🚧 Coming soon | Two inclusive integer bounds; integer result. |
-| `random.uniform(min, max)` | 🚧 Coming soon | Two float bounds; float result. |
-| `random.choice(array)` | 🚧 Coming soon | One array; element result. |
-| `random.shuffle(array)` | 🚧 Coming soon | One array; copied array result. |
+| `random.randint(min, max)` | ✅ Supported | Two inclusive integer bounds; integer result. |
+| `random.uniform(min, max)` | ✅ Supported | Two float bounds; float result. |
+| `random.choice(array)` | ✅ Supported | One array; element result. |
+| `random.shuffle(array)` | ✅ Supported | One array; copied array result. |
 
 ## Built-in macros (`src/data/opy/macros.ts`)
 
@@ -122,7 +122,7 @@ Reference: `889d9749d1def17f146548cbddb94ea1ab015847`.
 | `.getRealPlayerClosestToReticle`, `.getRealPlayersClosestToReticle` | 🚧 Coming soon |
 | `getRealPlayersInRadius`, `.getRealPlayersInViewAngle` | 🚧 Coming soon |
 | `getSign`, `getAllPlayers` | 🚧 Coming soon |
-| `hudHeader`, `hudSubtext` | 🚧 Coming soon |
+| `hudHeader`, `hudSubtext` | ✅ Supported |
 | `hudSubheader` | ✅ Bounded compiler slice |
 | `lerp`, `lineIntersectsSphere` | 🚧 Coming soon |
 | `print`, `.reverse`, `timeToString`, `.unique` | 🚧 Coming soon |
@@ -144,12 +144,12 @@ beginning with `.` are receiver dispatch entries. The separate
 | `.filter` | ✅ Supported |
 | `.map` | ✅ Supported |
 | `arrayToString` | 🚧 Coming soon |
-| `ceil` | 🚧 Coming soon |
-| `floor` | 🚧 Coming soon |
-| `round` | 🚧 Coming soon |
+| `ceil` | ✅ Supported |
+| `floor` | ✅ Supported |
+| `round` | ✅ Supported |
 | `hsl` | 🚧 Coming soon |
 | `chaseAtRate` | ✅ Supported |
-| `chaseOverTime` | 🚧 Coming soon |
+| `chaseOverTime` | ✅ Supported |
 | `compress` | 🚧 Coming soon |
 | `compressed` | 🚧 Coming soon |
 | `decompressNumbers` | 🚧 Coming soon |

@@ -20,6 +20,8 @@ mod issue_130_horizontal_facing_angle;
 mod issue_131_spec_visibility;
 #[path = "tests/issue_142_preprocessing.rs"]
 mod issue_142_preprocessing;
+#[path = "tests/issue_144_builtin_surface.rs"]
+mod issue_144_builtin_surface;
 #[path = "tests/issue_145_lowering.rs"]
 mod issue_145_lowering;
 #[path = "tests/issue_42_oracle.rs"]

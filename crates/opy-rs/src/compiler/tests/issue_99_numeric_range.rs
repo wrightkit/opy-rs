@@ -121,11 +121,11 @@ fn motivating_project_advances_past_numeric_range_frontend_gap() {
         );
 
     assert_eq!(report.compile.status, CompileStatus::Failure);
-    assert_eq!(report.compile.diagnostics[0].code, "unknown-value");
+    assert_eq!(report.compile.diagnostics[0].code, "unknown-identifier");
     assert!(
         report.compile.diagnostics[0]
             .message
-            .contains("isAssemblingHeroes")
+            .contains("RULE_CONDITION")
     );
 }
 

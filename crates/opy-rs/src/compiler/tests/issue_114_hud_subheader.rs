@@ -125,17 +125,31 @@ fn hud_subheader_omitted_spectators_use_default_visibility() {
 }
 
 #[test]
-fn other_hud_helpers_keep_explicit_unknown_action_diagnostics() {
+fn other_hud_helpers_lower_to_their_canonical_text_slots() {
     for helper in ["hudHeader", "hudSubtext"] {
         let source = format!(
             "rule \"r\":\n    @Event global\n    {helper}(getAllPlayers(), \"text\", HudPosition.TOP, 0, Color.WHITE, HudReeval.VISIBILITY, SpecVisibility.DEFAULT)\n"
         );
-        let error = crate::compile(&source, "source.opy", Path::new("."))
-            .expect_err("out-of-scope HUD helper must remain unsupported");
-        assert_eq!(error.code, "unknown-action");
-        assert!(
-            error.message.contains(helper),
-            "diagnostic must name {helper}"
-        );
+        let hir =
+            crate::compile(&source, "source.opy", Path::new(".")).expect("source must resolve");
+        let artifact = Compiler::new()
+            .expect("released workshop contract must load")
+            .compile_hir(&hir)
+            .expect("HUD helper must lower");
+        let rule = artifact
+            .wir
+            .rules
+            .get(workshop_rs::wir::RuleId::from_index(0))
+            .expect("rule must exist");
+        let Action::Call { name, args, .. } = artifact.wir.actions.get(rule.actions[0]).unwrap()
+        else {
+            panic!("HUD helper must lower to a canonical action call");
+        };
+        assert_eq!(name, "createHudText");
+        let text_slot = if helper == "hudHeader" { 1 } else { 3 };
+        assert!(matches!(
+            &artifact.wir.values.get(args[text_slot]).unwrap().value,
+            Value::Call { name, args } if name == "customString" && args.len() == 1
+        ));
     }
 }
