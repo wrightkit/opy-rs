@@ -1,0 +1,538 @@
+{
+  "schemaVersion": 1,
+  "contract": "offline-overpy-conformance",
+  "reference": {
+    "name": "overpy",
+    "version": "9.7.10",
+    "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw=="
+  },
+  "stages": [
+    {"id": "lex", "name": "lexing"},
+    {"id": "parse", "name": "parsing"},
+    {"id": "preprocess", "name": "preprocessing and project composition"},
+    {"id": "semantic", "name": "source semantics"},
+    {"id": "lowering", "name": "canonical-WIR lowering"}
+  ],
+  "categories": [
+    {
+      "id": "syntax.lexing",
+      "stage": "lex",
+      "owner": "opy-rs",
+      "authority": [
+        "OverPy@9.7.10:src/compiler/tokenizer.ts",
+        "docs/language-support/registries.md"
+      ],
+      "contracts": [
+        {
+          "id": "strings-and-modifiers",
+          "claim": "String literals and their interpolation or modifier token boundaries are recognized.",
+          "probeKinds": ["positive", "contextual"],
+          "probes": ["synthetic/issue-28-string-modifiers", "synthetic/issue-33-f-string"]
+        },
+        {
+          "id": "compound-expression-tokens",
+          "claim": "Compound expression punctuation and token adjacency are preserved for the parser.",
+          "probeKinds": ["positive", "contextual"],
+          "probes": ["synthetic/issue-28-syntax"]
+        },
+        {
+          "id": "malformed-lexical-input",
+          "claim": "Malformed lexical input reaches an auditable lexical failure frontier.",
+          "probeKinds": ["negative"],
+          "probes": ["synthetic/issue-28-invalid-syntax", "real-world/overpy-zencopter"]
+        }
+      ],
+      "probeFixtures": [
+        "synthetic/issue-28-string-modifiers",
+        "synthetic/issue-28-syntax",
+        "synthetic/issue-28-invalid-syntax",
+        "synthetic/issue-33-f-string",
+        "real-world/overpy-zencopter"
+      ]
+    },
+    {
+      "id": "syntax.parser-and-control-flow",
+      "stage": "parse",
+      "owner": "opy-rs",
+      "authority": [
+        "OverPy@9.7.10:src/compiler/parser.ts",
+        "OverPy@9.7.10:src/compiler/astParser.ts"
+      ],
+      "contracts": [
+        {
+          "id": "expression-precedence-and-access",
+          "claim": "Expressions, precedence, calls, and indexed access retain their structural boundaries.",
+          "probeKinds": ["positive", "contextual"],
+          "probes": ["synthetic/expressions-values", "synthetic/receiver-calls", "synthetic/issue-60-nested-index"]
+        },
+        {
+          "id": "statement-and-declaration-boundaries",
+          "claim": "Rules and declarations compose into a valid statement stream.",
+          "probeKinds": ["positive", "composition"],
+          "probes": ["synthetic/basic-rule"]
+        },
+        {
+          "id": "branches-loops-and-switches",
+          "claim": "Branches, loops, switch ordering, and break shapes are parsed distinctly.",
+          "probeKinds": ["positive", "contextual", "negative"],
+          "probes": ["synthetic/control-flow", "synthetic/issue-47-control-flow", "synthetic/issue-47-do-while-invalid-placement", "synthetic/issue-47-do-while-shapes", "synthetic/issue-47-switch-multiple-break", "synthetic/issue-47-switch-order", "synthetic/issue-47-switch-structured-target", "synthetic/issue-47-unsupported", "synthetic/issue-33-switch-break", "synthetic/for-range-agentlab"]
+        },
+        {
+          "id": "lambda-and-postfix-context",
+          "claim": "Lambda and postfix forms are distinguished in valid, embedded, and invalid contexts.",
+          "probeKinds": ["contextual", "negative"],
+          "probes": ["synthetic/issue-33-lambda-negative", "synthetic/issue-59-embedded-postfix-negative", "synthetic/issue-59-postfix-assignment", "synthetic/issue-59-postfix-negative"]
+        },
+        {
+          "id": "indexed-assignment-depth",
+          "claim": "Indexed assignment depth has explicit supported and unsupported parser shapes.",
+          "probeKinds": ["contextual", "negative"],
+          "probes": ["synthetic/issue-46-primitives", "synthetic/issue-60-4d-negative"]
+        }
+      ],
+      "probeFixtures": [
+        "synthetic/basic-rule",
+        "synthetic/expressions-values",
+        "synthetic/control-flow",
+        "synthetic/issue-28-syntax",
+        "synthetic/issue-33-lambda-negative",
+        "synthetic/issue-33-switch-break",
+        "synthetic/issue-47-control-flow",
+        "synthetic/issue-47-do-while-invalid-placement",
+        "synthetic/issue-47-do-while-shapes",
+        "synthetic/issue-47-switch-multiple-break",
+        "synthetic/issue-47-switch-order",
+        "synthetic/issue-47-switch-structured-target",
+        "synthetic/issue-47-unsupported",
+        "synthetic/issue-33-switch-break",
+        "synthetic/issue-59-embedded-postfix-negative",
+        "synthetic/issue-59-postfix-assignment",
+        "synthetic/issue-59-postfix-negative",
+        "synthetic/issue-60-4d-negative",
+        "synthetic/issue-60-nested-index",
+        "synthetic/for-range-agentlab",
+        "synthetic/issue-46-primitives",
+        "synthetic/receiver-calls"
+      ]
+    },
+    {
+      "id": "preprocessing.project-composition",
+      "stage": "preprocess",
+      "owner": "opy-rs",
+      "authority": [
+        "OverPy@9.7.10:src/compiler/compiler.ts",
+        "OverPy@9.7.10:src/data/opy/preprocessing.ts"
+      ],
+      "contracts": [
+        {
+          "id": "include-closure-composition",
+          "claim": "Included source files form the expected project closure and preserve source provenance.",
+          "probeKinds": ["positive", "composition"],
+          "probes": ["synthetic/preprocessing", "synthetic/issue-29-main-file", "synthetic/issue-129-included-main-file"]
+        },
+        {
+          "id": "macro-expansion",
+          "claim": "Macro declarations and expansions apply across the supported project composition surface.",
+          "probeKinds": ["positive", "composition"],
+          "probes": ["synthetic/preprocessing", "synthetic/issue-31-positive"]
+        },
+        {
+          "id": "directive-state",
+          "claim": "Preprocessing directives have scoped state and invalid language input has a distinct frontier.",
+          "probeKinds": ["contextual", "composition", "negative"],
+          "probes": ["synthetic/issue-29-directives", "synthetic/issue-31-nested-scope", "synthetic/issue-31-negative"]
+        },
+        {
+          "id": "project-level-preprocessing-failures",
+          "claim": "Real project composition failures retain their preprocessing provenance.",
+          "probeKinds": ["negative", "composition"],
+          "probes": ["real-world/6v6-adjustments", "real-world/overpy-meipocalypse", "real-world/ow1-emulator", "synthetic/issue-29-invalid"]
+        }
+      ],
+      "probeFixtures": [
+        "synthetic/preprocessing",
+        "synthetic/issue-29-directives",
+        "synthetic/issue-29-invalid",
+        "synthetic/issue-29-main-file",
+        "synthetic/issue-31-nested-scope",
+        "synthetic/issue-31-positive",
+        "synthetic/issue-31-negative",
+        "synthetic/issue-129-included-main-file",
+        "real-world/6v6-adjustments",
+        "real-world/overpy-meipocalypse",
+        "real-world/ow1-emulator"
+      ]
+    },
+    {
+      "id": "semantics.declarations-and-settings",
+      "stage": "semantic",
+      "owner": "opy-rs",
+      "authority": [
+        "OverPy@9.7.10:src/compiler/astParser.ts",
+        "OverPy@9.7.10:src/data/opy/annotations.ts",
+        "OverPy@9.7.10:src/data/customGameSettings.ts"
+      ],
+      "contracts": [
+        {
+          "id": "variable-and-rule-declarations",
+          "claim": "Variables, rules, and rule annotations are represented as distinct declarations.",
+          "probeKinds": ["positive", "composition"],
+          "probes": ["synthetic/declarations-numbers", "synthetic/declarations-rules"]
+        },
+        {
+          "id": "initializer-context",
+          "claim": "Initializer expressions are checked in their declaration context.",
+          "probeKinds": ["positive", "contextual"],
+          "probes": ["synthetic/declarations-numbers"]
+        },
+        {
+          "id": "settings-block",
+          "claim": "Custom game settings have a semantic declaration and lowering surface.",
+          "probeKinds": ["positive", "composition"],
+          "probes": ["synthetic/settings"]
+        },
+        {
+          "id": "invalid-declaration-diagnostic",
+          "claim": "Invalid declaration structure retains a semantic diagnostic frontier.",
+          "probeKinds": ["negative"],
+          "probes": ["synthetic/diagnostics"]
+        }
+      ],
+      "probeFixtures": [
+        "synthetic/declarations-numbers",
+        "synthetic/declarations-rules",
+        "synthetic/settings",
+        "synthetic/diagnostics"
+      ]
+    },
+    {
+      "id": "semantics.builtins-members-and-enums",
+      "stage": "semantic",
+      "owner": "opy-rs",
+      "authority": [
+        "OverPy@9.7.10:src/data/opy/functions.ts",
+        "OverPy@9.7.10:src/data/opy/memberFunctions.ts",
+        "OverPy@9.7.10:src/data/opy/constants.ts",
+        "docs/language-support/registries.md"
+      ],
+      "contracts": [
+        {
+          "id": "callable-signatures",
+          "claim": "Catalog-backed callable signatures accept the documented argument and return shapes.",
+          "probeKinds": ["positive", "contextual"],
+          "probes": ["synthetic/chase-condition-agentlab", "synthetic/chase-keywords", "synthetic/receiver-calls"]
+        },
+        {
+          "id": "receiver-dispatch",
+          "claim": "Receiver members dispatch through the documented player and value domains.",
+          "probeKinds": ["positive", "contextual"],
+          "probes": ["synthetic/receiver-calls", "synthetic/receiver-playervar", "synthetic/issue-113-is-dummy", "synthetic/issue-130-horizontal-facing-angle"]
+        },
+        {
+          "id": "enum-domain-context",
+          "claim": "Enum and keyword domains are resolved in the semantic context that consumes them.",
+          "probeKinds": ["positive", "contextual"],
+          "probes": ["synthetic/chase-enums", "synthetic/chase-keywords", "synthetic/issue-131-spec-visibility"]
+        },
+        {
+          "id": "aliases-and-hud-surface",
+          "claim": "Aliases and HUD-facing catalog members lower through their documented names.",
+          "probeKinds": ["positive"],
+          "probes": ["synthetic/issue-114-hud-subheader", "synthetic/issue-130-horizontal-facing-angle"]
+        },
+        {
+          "id": "semantic-boundary-errors",
+          "claim": "Invalid binders and duplicate declarations stop at a semantic diagnostic frontier.",
+          "probeKinds": ["negative"],
+          "probes": ["synthetic/issue-65-invalid-binder", "synthetic/issue-29-invalid"]
+        }
+      ],
+      "probeFixtures": [
+        "synthetic/chase-condition-agentlab",
+        "synthetic/chase-enums",
+        "synthetic/chase-keywords",
+        "synthetic/issue-113-is-dummy",
+        "synthetic/issue-114-hud-subheader",
+        "synthetic/issue-130-horizontal-facing-angle",
+        "synthetic/issue-131-spec-visibility",
+        "synthetic/issue-65-invalid-binder",
+        "synthetic/issue-65-player-range",
+        "synthetic/receiver-calls",
+        "synthetic/receiver-playervar",
+        "synthetic/issue-29-invalid"
+      ]
+    },
+    {
+      "id": "lowering.canonical-wir",
+      "stage": "lowering",
+      "owner": "opy-rs + workshop-rs",
+      "authority": [
+        "workshop-rs canonical WIR contract",
+        "docs/opy/tooling-api.md"
+      ],
+      "contracts": [
+        {
+          "id": "vertical-slice",
+          "claim": "A successful source-to-WIR vertical slice is comparable through the canonical Workshop contract.",
+          "probeKinds": ["positive"],
+          "probes": ["synthetic/issue-35-integration", "synthetic/issue-40-structural"]
+        },
+        {
+          "id": "assignments-and-indexing",
+          "claim": "Assignments and supported indexed forms lower to equivalent canonical WIR.",
+          "probeKinds": ["positive", "contextual"],
+          "probes": ["synthetic/issue-46-primitives", "synthetic/issue-59-postfix-assignment", "synthetic/issue-60-nested-index", "synthetic/issue-65-player-range"]
+        },
+        {
+          "id": "control-flow-lowering",
+          "claim": "Control-flow lowering preserves loop and switch structure in canonical WIR.",
+          "probeKinds": ["positive", "contextual"],
+          "probes": ["synthetic/issue-47-control-flow", "synthetic/issue-47-do-while-shapes", "synthetic/issue-47-switch-order", "synthetic/issue-47-switch-structured-target"]
+        },
+        {
+          "id": "catalog-backed-calls",
+          "claim": "Catalog-backed members and enum visibility lower to semantically equivalent WIR.",
+          "probeKinds": ["positive"],
+          "probes": ["synthetic/issue-113-is-dummy", "synthetic/issue-114-hud-subheader", "synthetic/issue-130-horizontal-facing-angle", "synthetic/issue-131-spec-visibility"]
+        },
+        {
+          "id": "settings-lowering",
+          "claim": "Settings declarations participate in canonical-WIR comparison.",
+          "probeKinds": ["positive", "composition"],
+          "probes": ["synthetic/settings"]
+        },
+        {
+          "id": "unsupported-lowering-boundary",
+          "claim": "Known unsupported integration surfaces remain explicit negative probes rather than expected native passes.",
+          "probeKinds": ["negative"],
+          "probes": ["synthetic/issue-46-unsupported", "synthetic/issue-47-unsupported", "synthetic/issue-47-switch-multiple-break"]
+        },
+        {
+          "id": "opaque-workshop-identity-consumer",
+          "claim": "The canonical-WIR consumer boundary retains opaque Workshop feature identities.",
+          "probeKinds": ["contextual", "composition"],
+          "probes": ["census/workshop-feature-census"]
+        }
+      ],
+      "probeFixtures": [
+        "synthetic/issue-35-integration",
+        "synthetic/issue-40-structural",
+        "synthetic/issue-46-primitives",
+        "synthetic/issue-46-unsupported",
+        "synthetic/issue-47-control-flow",
+        "synthetic/issue-47-do-while-shapes",
+        "synthetic/issue-47-switch-order",
+        "synthetic/issue-47-switch-structured-target",
+        "synthetic/issue-47-unsupported",
+        "synthetic/issue-47-switch-multiple-break",
+        "synthetic/issue-59-postfix-assignment",
+        "synthetic/issue-60-nested-index",
+        "synthetic/issue-65-player-range",
+        "synthetic/issue-113-is-dummy",
+        "synthetic/issue-114-hud-subheader",
+        "synthetic/issue-130-horizontal-facing-angle",
+        "synthetic/issue-131-spec-visibility",
+        "synthetic/settings",
+        "census/workshop-feature-census"
+      ]
+    },
+    {
+      "id": "diagnostics.failure-frontiers",
+      "stages": ["lex", "parse", "preprocess", "semantic", "lowering"],
+      "owner": "opy-rs",
+      "authority": [
+        "OverPy@9.7.10 pinned oracle snapshots",
+        "docs/compatibility/upstream-references.md"
+      ],
+      "contracts": [
+        {
+          "id": "lex-frontier",
+          "claim": "Lexical failures identify the first invalid lexical construct.",
+          "probeKinds": ["negative"],
+          "probes": ["real-world/overpy-zencopter", "synthetic/issue-28-invalid-syntax"]
+        },
+        {
+          "id": "parse-frontier",
+          "claim": "Parser failures identify the first unsupported or malformed syntactic construct.",
+          "probeKinds": ["negative"],
+          "probes": ["synthetic/diagnostics", "synthetic/issue-28-invalid-syntax", "synthetic/issue-33-lambda-negative", "synthetic/issue-59-embedded-postfix-negative", "synthetic/issue-59-postfix-negative"]
+        },
+        {
+          "id": "preprocess-frontier",
+          "claim": "Preprocessing failures retain project and directive provenance.",
+          "probeKinds": ["negative", "composition"],
+          "probes": ["real-world/overpy-meipocalypse", "real-world/ow1-emulator", "synthetic/issue-31-negative"]
+        },
+        {
+          "id": "semantic-frontier",
+          "claim": "Semantic failures identify the first invalid member, placement, or binder construct.",
+          "probeKinds": ["negative", "contextual"],
+          "probes": ["real-world/6v6-adjustments", "synthetic/issue-29-invalid", "synthetic/issue-47-do-while-invalid-placement", "synthetic/issue-65-invalid-binder"]
+        },
+        {
+          "id": "diagnostic-provenance",
+          "claim": "Failure snapshots preserve enough source and diagnostic provenance to audit their frontier.",
+          "probeKinds": ["negative", "composition"],
+          "probes": ["real-world/6v6-adjustments", "real-world/ow1-emulator", "synthetic/issue-60-4d-negative"]
+        }
+      ],
+      "probeFixtures": [
+        "real-world/6v6-adjustments",
+        "real-world/overpy-meipocalypse",
+        "real-world/overpy-zencopter",
+        "real-world/ow1-emulator",
+        "synthetic/diagnostics",
+        "synthetic/issue-28-invalid-syntax",
+        "synthetic/issue-29-invalid",
+        "synthetic/issue-31-negative",
+        "synthetic/issue-33-lambda-negative",
+        "synthetic/issue-47-do-while-invalid-placement",
+        "synthetic/issue-59-embedded-postfix-negative",
+        "synthetic/issue-59-postfix-negative",
+        "synthetic/issue-60-4d-negative",
+        "synthetic/issue-65-invalid-binder"
+      ]
+    },
+    {
+      "id": "projects.real-world",
+      "stage": "preprocess",
+      "owner": "opy-rs",
+      "authority": [
+        "OverPy@9.7.10:examples/",
+        "compatibility/fixtures/README.md"
+      ],
+      "contracts": [
+        {
+          "id": "complete-example-projects",
+          "claim": "Complete multi-file examples preserve their include closure and project-level outcome.",
+          "probeKinds": ["composition"],
+          "probes": ["real-world/6v6-adjustments", "real-world/overpy-meipocalypse", "real-world/ow1-emulator"]
+        },
+        {
+          "id": "upstream-example-successes",
+          "claim": "Pinned upstream examples provide positive project probes across distinct Workshop surfaces.",
+          "probeKinds": ["positive", "composition"],
+          "probes": ["real-world/overpy-cake", "real-world/overpy-santa", "real-world/overpy-pixelart", "real-world/overpy-crosshair"]
+        },
+        {
+          "id": "project-level-lowering",
+          "claim": "Real projects exercise project composition together with canonical-WIR lowering.",
+          "probeKinds": ["positive", "composition"],
+          "probes": ["real-world/overpy-broken-weapons", "real-world/overpy-client-to-server", "real-world/overpy-cronch", "real-world/overpy-inputhud", "real-world/overpy-parabola"]
+        },
+        {
+          "id": "provenance-linked-failures",
+          "claim": "Real-world failures remain linked to their source project and audited failure frontier.",
+          "probeKinds": ["negative", "composition"],
+          "probes": ["real-world/6v6-adjustments", "real-world/overpy-meipocalypse", "real-world/overpy-zencopter", "real-world/ow1-emulator"]
+        }
+      ],
+      "probeFixtures": [
+        "real-world/6v6-adjustments",
+        "real-world/overpy-broken-weapons",
+        "real-world/overpy-cake",
+        "real-world/overpy-client-to-server",
+        "real-world/overpy-cronch",
+        "real-world/overpy-crosshair",
+        "real-world/overpy-inputhud",
+        "real-world/overpy-meipocalypse",
+        "real-world/overpy-parabola",
+        "real-world/overpy-pixelart",
+        "real-world/overpy-santa",
+        "real-world/overpy-zencopter",
+        "real-world/ow1-emulator"
+      ]
+    },
+    {
+      "id": "ownership.workshop-feature-census",
+      "stage": "lowering",
+      "owner": "workshop-rs",
+      "authority": [
+        "workshop-rs#10 feature census contract",
+        "compatibility/fixtures/census/workshop-feature-census/fixture.json"
+      ],
+      "contracts": [
+        {
+          "id": "opaque-workshop-identities",
+          "claim": "The independent census records opaque Workshop identities at the owning workshop-rs boundary.",
+          "probeKinds": ["positive"],
+          "probes": ["census/workshop-feature-census"]
+        }
+      ],
+      "probeFixtures": ["census/workshop-feature-census"]
+    }
+  ],
+  "referenceFrontiers": {
+    "real-world/6v6-adjustments": {
+      "stage": "semantic",
+      "construct": "unknown-member",
+      "diagnosticContains": "Unknown member"
+    },
+    "real-world/overpy-meipocalypse": {
+      "stage": "preprocess",
+      "construct": "script-not-found",
+      "diagnosticContains": "ENOENT"
+    },
+    "real-world/overpy-zencopter": {
+      "stage": "lex",
+      "construct": "lex-error",
+      "diagnosticContains": "Invalid content before string"
+    },
+    "real-world/ow1-emulator": {
+      "stage": "parse",
+      "construct": "parse-error",
+      "diagnosticContains": "Found 'if', but no 'else'"
+    },
+    "synthetic/diagnostics": {
+      "stage": "parse",
+      "construct": "parse-error",
+      "diagnosticContains": "Expected a ':'"
+    },
+    "synthetic/issue-28-invalid-syntax": {
+      "stage": "parse",
+      "construct": "parse-error",
+      "diagnosticContains": "Content is empty"
+    },
+    "synthetic/issue-29-invalid": {
+      "stage": "semantic",
+      "construct": "duplicate-rule-name",
+      "diagnosticContains": "Rule name was already declared"
+    },
+    "synthetic/issue-31-negative": {
+      "stage": "preprocess",
+      "construct": "translations-invalid",
+      "diagnosticContains": "Invalid language"
+    },
+    "synthetic/issue-33-lambda-negative": {
+      "stage": "parse",
+      "construct": "parse-error",
+      "diagnosticContains": "Expected '(' after 'lambda'"
+    },
+    "synthetic/issue-47-do-while-invalid-placement": {
+      "stage": "semantic",
+      "construct": "do-while-placement",
+      "diagnosticContains": "Do/While loops can only be at the beginning"
+    },
+    "synthetic/issue-59-embedded-postfix-negative": {
+      "stage": "parse",
+      "construct": "parse-error",
+      "diagnosticContains": "Cannot modify or assign to operator '='"
+    },
+    "synthetic/issue-59-postfix-negative": {
+      "stage": "parse",
+      "construct": "parse-error",
+      "diagnosticContains": "Expected an action"
+    },
+    "synthetic/issue-60-4d-negative": {
+      "stage": "semantic",
+      "construct": "four-dimensional-assignment",
+      "diagnosticContains": "Cannot assign to 4d array"
+    },
+    "synthetic/issue-65-invalid-binder": {
+      "stage": "semantic",
+      "construct": "invalid-range-binder",
+      "diagnosticContains": "Expected variable for 1st argument"
+    }
+  }
+}

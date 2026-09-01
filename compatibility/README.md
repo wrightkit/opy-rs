@@ -213,6 +213,40 @@ presentation difference. A normalized-output or semantic-WIR regression exits
 a producer.
 Use `--allow-inconclusive` only for local contract checks.
 
+## Offline conformance baseline (issue #158)
+
+`conformance-manifest.json` is the independent inventory for the pinned
+OverPy source-language baseline. Its categories cite the pinned upstream
+registries or an accepted canonical-WIR contract. Each category declares
+structural contracts with a claim, probe kinds (`positive`, `negative`,
+`contextual`, or `composition`), and executable fixture probes; validation
+rejects empty or unknown mappings. It contains no native expected outcomes.
+Reference failures carry an audited stage and first-construct frontier tied to
+text in their pinned oracle snapshot.
+
+Run the baseline after building both CLI targets:
+
+```sh
+python3 compatibility/conformance.py \
+  --binary target/debug/opy-cli \
+  --semantic-binary target/debug/opy-compat \
+  --report target/opy-rs-conformance-report.json
+```
+
+The runner always writes a report, including current divergences. A
+reference-success/native-failure result is a `divergence`; it is never
+converted into a passing or expected-gap result from the native side. For
+reference successes where native compilation succeeds, the `opy-compat`
+target compares the native lowered WIR directly with the oracle Workshop text
+parsed by `workshop-rs::roundtrip::equivalent`. For reference failures, the
+runner compares stage and first construct, retaining both sides' diagnostic
+provenance without requiring diagnostic wording identity.
+
+This baseline is evidence-producing rather than a production implementation
+gate: current divergence is expected to remain visible while follow-up Issues
+resolve root capabilities. Malformed manifests, stale oracle evidence, and
+missing producer data remain hard failures.
+
 The opy-rs producer side of the differential contract is the native Rust
 suite (`crates/opy-rs/tests/differential.rs`), which runs in `cargo test`
 with no Node or OverPy installed; `diff.py` remains the

@@ -22,6 +22,8 @@ architecture, compatibility evidence, APIs, and internal contracts live here.
   feature coverage.
 - [Compatibility baseline](opy/compatibility-baseline.md): planning/reference
   inventory for remaining OverPy surface and compatibility priorities.
+- [Offline conformance baseline](opy/conformance-baseline.md): independent
+  oracle, failure-frontier, and canonical-WIR comparison contract.
 - [Upstream references](compatibility/upstream-references.md): pinned reference
   identity, provenance, licensing notes, and oracle boundaries.
 - [Compatibility harness](../compatibility/README.md): fixtures, snapshots,
