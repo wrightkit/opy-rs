@@ -235,6 +235,27 @@ fn issue_141_nested_loop_continue_targets_the_innermost_loop() {
 }
 
 #[test]
+fn issue_141_continue_skips_later_conditional_branches() {
+    let source = concat!(
+        "globalvar A\n",
+        "rule \"continue if else\":\n",
+        "    @Event global\n",
+        "    while A < 2:\n",
+        "        if A == 0:\n",
+        "            continue\n",
+        "        else:\n",
+        "            A = A + 10\n",
+        "        A = A + 1\n",
+    );
+    let artifact = opy_rs::Compiler::new()
+        .expect("the compiler contract loads")
+        .compile_source(source, "issue-141-continue-if-else.opy", Path::new(""))
+        .expect("continue in an if/else must lower to canonical loop control");
+    assert!(artifact.emitted_workshop.contains("Skip(4);"));
+    assert!(artifact.emitted_workshop.contains("Else;"));
+}
+
+#[test]
 fn issue_141_multiline_grouped_expressions_reach_hir_with_spans() {
     let source = concat!(
         "rule \"multiline expressions\":\n",

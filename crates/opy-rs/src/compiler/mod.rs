@@ -2270,14 +2270,14 @@ impl<'a> Lowering<'a> {
 
     /// Lower one sequence nested inside a loop. `after` contains already
     /// lowered actions that follow this sequence before the loop continues;
-    /// `end_depth` counts enclosing conditional `End` markers crossed on that
-    /// path. This lets a continue remain inside its authored conditional while
-    /// still reaching the nearest loop continuation label.
+    /// `structural_after` counts non-action lines that follow this sequence
+    /// before those actions. This lets a continue remain inside its authored
+    /// conditional while still reaching the nearest loop continuation label.
     fn lower_loop_sequence(
         &mut self,
         statements: &[Stmt],
         after: &[wir::ActionId],
-        end_depth: usize,
+        structural_after: usize,
     ) -> Result<Vec<wir::ActionId>, IntegrationError> {
         let mut actions = Vec::new();
         let mut index = 0;
@@ -2285,9 +2285,9 @@ impl<'a> Lowering<'a> {
             let statement = &statements[index];
             let tail = &statements[index + 1..];
             if let Some(conditions) = pure_continue_conditions(statement) {
-                let tail = self.lower_loop_sequence(tail, after, end_depth)?;
+                let tail = self.lower_loop_sequence(tail, after, structural_after)?;
                 let distance = self.canonical_action_width(&tail, statement.span().copied())?
-                    + end_depth
+                    + structural_after
                     + self.canonical_action_width(after, statement.span().copied())?;
                 if distance > 0 {
                     let mut args = Vec::with_capacity(conditions.len() + 1);
@@ -2324,11 +2324,14 @@ impl<'a> Lowering<'a> {
                 return Ok(actions);
             }
             if contains_loop_continue(statement) {
-                let tail = self.lower_loop_sequence(tail, after, end_depth)?;
+                let tail = self.lower_loop_sequence(tail, after, structural_after)?;
                 let mut continuation_after = tail.clone();
                 continuation_after.extend_from_slice(after);
-                let lowered =
-                    self.lower_if_with_loop_continue(statement, &continuation_after, end_depth)?;
+                let lowered = self.lower_if_with_loop_continue(
+                    statement,
+                    &continuation_after,
+                    structural_after,
+                )?;
                 actions.push(lowered);
                 actions.extend(tail);
                 return Ok(actions);
@@ -2343,7 +2346,7 @@ impl<'a> Lowering<'a> {
         &mut self,
         statement: &Stmt,
         after: &[wir::ActionId],
-        end_depth: usize,
+        structural_after: usize,
     ) -> Result<wir::ActionId, IntegrationError> {
         let Stmt::If {
             branches,
@@ -2353,20 +2356,34 @@ impl<'a> Lowering<'a> {
         else {
             unreachable!("continue-containing loop statement must be an if")
         };
+        let mut lowered_branches = Vec::with_capacity(branches.len());
+        let mut suffix = after.to_vec();
+        let mut suffix_structural = structural_after + 1;
+        let mut lowered_else = None;
+        if let Some(body) = r#else {
+            let body = self.lower_loop_sequence(body, after, suffix_structural)?;
+            suffix.splice(0..0, body.iter().copied());
+            suffix_structural += 1;
+            lowered_else = Some(body);
+        }
+        for index in (0..branches.len()).rev() {
+            let body =
+                self.lower_loop_sequence(&branches[index].body, &suffix, suffix_structural)?;
+            suffix_structural += 1;
+            suffix.splice(0..0, body.iter().copied());
+            lowered_branches.push(body);
+        }
+        lowered_branches.reverse();
         let mut branch_actions = Vec::with_capacity(branches.len());
-        for branch in branches {
+        for (branch, body) in branches.iter().zip(lowered_branches) {
             branch_actions.push(wir::IfBranch {
                 condition: self.lower_value(&branch.condition)?,
-                body: self.lower_loop_sequence(&branch.body, after, end_depth + 1)?,
+                body,
             });
         }
-        let else_body = r#else
-            .as_ref()
-            .map(|body| self.lower_loop_sequence(body, after, end_depth + 1))
-            .transpose()?;
         Ok(self.wir.actions.push(Action::If {
             branches: branch_actions,
-            else_body,
+            else_body: lowered_else,
             span: self.wir_span(*span)?,
         }))
     }
