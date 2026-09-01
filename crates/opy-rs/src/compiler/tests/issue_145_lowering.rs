@@ -91,6 +91,16 @@ fn literal_dict_lookup_hit_and_miss_match_the_pinned_oracle() {
 }
 
 #[test]
+fn nested_indexed_assignments_match_the_pinned_oracle() {
+    assert_fixture_matches_oracle("issue-60-nested-index");
+}
+
+#[test]
+fn translated_implicit_subroutine_fixture_matches_the_pinned_oracle() {
+    assert_fixture_matches_oracle("issue-31-positive");
+}
+
+#[test]
 fn null_initializers_are_dropped_but_float_zero_is_preserved() {
     let source = r#"
 globalvar null_value = null

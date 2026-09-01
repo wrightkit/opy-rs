@@ -667,12 +667,14 @@
       "evidence": [
         "fixtures:synthetic/issue-46-primitives",
         "fixtures:synthetic/issue-59-postfix-assignment",
+        "fixtures:synthetic/issue-60-nested-index",
         "test:opy-rs::compiler-primitive-lowering",
         "test:opy-rs::compiler::integration_tests::issue_59_oracle::issue_59_postfix_assignments_match_the_pinned_oracle",
+        "test:opy-rs::compiler::integration_tests::issue_145_lowering::nested_indexed_assignments_match_the_pinned_oracle",
         "test:opy-rs::compiler::integration_tests::issue_145_lowering::null_initializers_are_dropped_but_float_zero_is_preserved",
         "contract:workshop-rs-v0.1.16"
       ],
-      "notes": "Issue #46/#59/#145. Global/player assignments and augmented assignments (+=, -=, *=, /=, %=, **=, ++, --), literal dictionary lookup folding, single-level indexed variable assignments and modifications (setGlobalVariableAtIndex, modifyGlobalVariableAtIndex, setPlayerVariableAtIndex, modifyPlayerVariableAtIndex), and pass no-op statements lower into canonical workshop-rs WIR. Null and integer-zero declaration initializers are omitted while float zero remains observable; deeper indexed writes remain tracked by #88. Direct global/player modifications carry full statement and target-variable span provenance; the single-level indexed forms lower to canonical Call actions, which carry only the statement-level source span (the canonical WIR Call shape has no separate target-span field)."
+      "notes": "Issue #46/#59/#60/#145. Global/player assignments and augmented assignments (+=, -=, *=, /=, %=, **=, ++, --), literal dictionary lookup folding, single-level and nested indexed variable assignments and modifications (setGlobalVariableAtIndex, modifyGlobalVariableAtIndex, setPlayerVariableAtIndex, modifyPlayerVariableAtIndex), and pass no-op statements lower into canonical workshop-rs WIR. Nested targets are rebuilt through canonical array slices; null and integer-zero declaration initializers are omitted while float zero remains observable. Direct global/player modifications carry full statement and target-variable span provenance; indexed forms lower to canonical Call actions, which carry only the statement-level source span (the canonical WIR Call shape has no separate target-span field)."
     },
     {
       "id": "compilation/opy-implicit-default-variables",

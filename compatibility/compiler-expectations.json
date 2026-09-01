@@ -241,7 +241,7 @@
         "test:opy-rs::compiler::integration_tests::issue_46_oracle::issue_46_literal_dict_lookup_matches_the_pinned_oracle"
       ],
       "owner": "opy-rs#145",
-      "note": "Literal dictionary lookups with literal keys are folded to their selected value, matching the pinned oracle; dictionary-indexed assignment targets remain outside this bounded lowering path.",
+      "note": "Literal dictionary lookups with literal keys are folded to their selected value, or to Null on a literal miss, matching the pinned oracle; dictionary-indexed assignment targets remain outside this bounded lowering path.",
       "semanticEquivalent": true
     },
     {
@@ -765,15 +765,30 @@
     {
       "fixture": "synthetic/issue-31-positive",
       "nativeStatus": "success",
-      "classification": "known-gap",
+      "classification": "match",
       "comparison": "semantic-wir",
       "evidence": [
         "oracle:synthetic/issue-31-positive/oracle.json",
-        "provenance:synthetic/issue-31-positive/fixture.json"
+        "provenance:synthetic/issue-31-positive/fixture.json",
+        "test:opy-rs::compiler::integration_tests::issue_145_lowering::translated_implicit_subroutine_fixture_matches_the_pinned_oracle"
       ],
-      "owner": "opy-rs#88",
-      "note": "The semantic HIR now materializes the implicit def subroutine declaration; optimizer/directive compiler parity remains a separate lowering gap tracked by the parent compatibility program.",
-      "semanticEquivalent": false
+      "owner": "opy-rs#145",
+      "note": "The compiler materializes the implicit def subroutine declaration and the translation helper initialization required by the pinned canonical WIR.",
+      "semanticEquivalent": true
+    },
+    {
+      "fixture": "synthetic/issue-60-nested-index",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "semantic-wir",
+      "evidence": [
+        "oracle:synthetic/issue-60-nested-index/oracle.json",
+        "provenance:synthetic/issue-60-nested-index/fixture.json",
+        "test:opy-rs::compiler::integration_tests::issue_145_lowering::nested_indexed_assignments_match_the_pinned_oracle"
+      ],
+      "owner": "opy-rs#145",
+      "note": "Nested indexed assignments, including compound modification and three-level replacement, lower through canonical array slices and match the pinned canonical WIR.",
+      "semanticEquivalent": true
     },
     {
       "fixture": "synthetic/issue-33-f-string",

@@ -57,6 +57,7 @@ repository:
 | `issue-46-primitives` | #46 oracle-backed primitive lowering probe: assignments and modifications (including `**=`), expressions, indexing, format, initializers, implicit default variables at fixed slots; the snapshot constrains the native compiler through structural equivalence |
 | `issue-46-unsupported` | #145 literal dictionary lookup probe retained from #46: the compiler folds literal key hits and misses to the oracle's selected value or `Null`; dictionary-indexed assignment targets remain a separate boundary |
 | `issue-59-postfix-assignment` | #59 oracle-backed postfix `++`/`--` assignment probe for global, player, and single-level indexed variables; the snapshot constrains native lowering through canonical WIR equivalence |
+| `issue-60-nested-index` | #145 oracle-backed nested indexed-assignment probe for two- and three-level global targets, including compound modification |
 | `issue-59-postfix-negative` | #59 pinned negative probe for rejected prefix `++` with a stable source-attributed parse diagnostic; prefix `--x` remains valid consecutive unary-minus syntax |
 | `issue-59-embedded-postfix-negative` | #59 pinned negative probe for the rejected embedded postfix form with a stable source-attributed parse diagnostic |
 | `issue-65-player-range` | #65 pinned oracle-backed player-variable range binder probe for canonical `For Player Variable` lowering |

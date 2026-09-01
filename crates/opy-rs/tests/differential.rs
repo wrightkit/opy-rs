@@ -217,6 +217,12 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         false,
         "Issue #59 postfix ++/-- assignment probe; global, player, and single-level indexed targets resolve and are constrained by compiler oracle tests.",
     );
+    resolve(
+        &mut cases,
+        "synthetic/issue-60-nested-index",
+        false,
+        "Issue #60 nested indexed assignment probe; global targets resolve and are constrained by the pinned canonical-WIR oracle.",
+    );
     diagnostic(
         &mut cases,
         "synthetic/issue-59-postfix-negative",
