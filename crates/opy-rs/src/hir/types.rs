@@ -469,6 +469,10 @@ pub enum Stmt {
         #[serde(skip_serializing_if = "Option::is_none")]
         span: Option<Span>,
     },
+    Return {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        span: Option<Span>,
+    },
     Continue {
         #[serde(skip_serializing_if = "Option::is_none")]
         span: Option<Span>,
@@ -520,6 +524,7 @@ impl Stmt {
             | Stmt::Switch { span, .. }
             | Stmt::Delete { span, .. }
             | Stmt::Break { span }
+            | Stmt::Return { span }
             | Stmt::Continue { span }
             | Stmt::Goto { span, .. }
             | Stmt::Label { span, .. }

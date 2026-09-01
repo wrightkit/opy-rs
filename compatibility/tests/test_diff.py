@@ -123,28 +123,26 @@ class DiffTests(unittest.TestCase):
         oracle_path = (
             COMPATIBILITY_DIR
             / "fixtures"
-            / "real-world"
-            / "overpy-santa"
+            / "synthetic"
+            / "issue-60-4d-negative"
             / "oracle.json"
         )
         result = json.loads(oracle_path.read_text(encoding="utf-8"))
-        result["compile"]["status"] = "failure"
-        result["compile"]["exitCode"] = 1
-        result["compile"]["diagnostics"] = [{"severity": "error", "text": "Error: do"}]
-        result["compile"]["workshopExact"] = ""
-        result["compile"]["workshop"] = ""
+        result["compile"]["status"] = "success"
+        result["compile"]["exitCode"] = 0
+        result["compile"]["diagnostics"] = []
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             self.write_result(root, result)
             report_result = diff.compare_fixture(
                 COMPATIBILITY_DIR / "fixtures",
-                "real-world/overpy-santa",
+                "synthetic/issue-60-4d-negative",
                 root,
                 None,
             )
         self.assertEqual(report_result["status"], "known-gap")
         self.assertTrue(report_result["referenceGap"])
-        self.assertIn("normalized-output", report_result["regressionStages"])
+        self.assertIn("compile-status", report_result["regressionStages"])
 
     def test_diagnostic_difference_is_regression(self):
         result = copy.deepcopy(self.oracle)

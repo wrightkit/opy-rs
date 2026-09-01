@@ -17,6 +17,7 @@ fn issue_141_surface_reaches_validated_hir_with_spans() {
         "    goto target\n",
         "    goto loc + value\n",
         "    target:\n",
+        "    return\n",
     );
     let program = opy_rs::compile(source, "issue-141.opy", Path::new(""))
         .expect("the issue-141 source surface must lower to HIR");
@@ -86,6 +87,17 @@ fn issue_141_surface_reaches_validated_hir_with_spans() {
         }
     ));
     assert!(matches!(&rule.actions[7], Stmt::Label { name, span: Some(_) } if name == "target"));
+    assert!(matches!(&rule.actions[8], Stmt::Return { span: Some(_) }));
+}
+
+#[test]
+fn issue_141_return_reaches_abort_if_in_canonical_wir() {
+    let source = "rule \"return\":\n    @Event global\n    return\n";
+    let artifact = opy_rs::Compiler::new()
+        .expect("the compiler contract loads")
+        .compile_source(source, "issue-141-return.opy", Path::new(""))
+        .expect("return must lower to a canonical abort action");
+    assert!(artifact.emitted_workshop.contains("Abort If(True)"));
 }
 
 #[test]
@@ -123,10 +135,6 @@ fn issue_141_backend_boundary_is_explicit_for_source_only_statements() {
             "delete statements",
         ),
         (
-            "rule \"continue\":\n    @Event global\n    while A < 1:\n        continue\n",
-            "continue statements",
-        ),
-        (
             "rule \"goto\":\n    @Event global\n    goto target\n",
             "goto statements",
         ),
@@ -148,6 +156,24 @@ fn issue_141_backend_boundary_is_explicit_for_source_only_statements() {
         assert!(error.diagnostic.message.contains(expected_text));
         assert!(error.diagnostic.span.is_some());
     }
+}
+
+#[test]
+fn issue_141_continue_reaches_canonical_loop_control() {
+    let source = concat!(
+        "globalvar A\n",
+        "rule \"continue\":\n",
+        "    @Event global\n",
+        "    while A < 1:\n",
+        "        if A == 0:\n",
+        "            continue\n",
+        "        wait()\n",
+    );
+    let artifact = opy_rs::Compiler::new()
+        .expect("the compiler contract loads")
+        .compile_source(source, "issue-141-continue.opy", Path::new(""))
+        .expect("continue must lower to canonical loop control");
+    assert!(artifact.emitted_workshop.contains("Skip If("));
 }
 
 #[test]

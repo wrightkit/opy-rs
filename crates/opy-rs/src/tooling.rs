@@ -742,6 +742,7 @@ impl SemanticModel {
                 }
             }
             HirStmt::Break { .. } => {}
+            HirStmt::Return { .. } => {}
             HirStmt::Continue { .. } | HirStmt::Label { .. } => {}
             HirStmt::Goto { offset, .. } => {
                 if let Some(offset) = offset {

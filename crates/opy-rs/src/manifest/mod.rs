@@ -122,6 +122,7 @@ pub enum ReceiverCategory {
     Player,
     Variable,
     String,
+    Vector,
     Any,
 }
 
@@ -132,6 +133,7 @@ impl ReceiverCategory {
             ReceiverCategory::Player => "a player-valued expression",
             ReceiverCategory::Variable => "an assignable variable",
             ReceiverCategory::String => "a string literal",
+            ReceiverCategory::Vector => "a vector-valued expression",
             ReceiverCategory::Any => "any expression",
         }
     }
@@ -732,7 +734,7 @@ mod tests {
                 .member("getHero")
                 .expect("getHero entry")
                 .catalog_link,
-            CatalogLink::CatalogGap
+            CatalogLink::Canonical
         );
         assert!(
             !manifest.domain_identity("ChaseReeval"),
@@ -818,7 +820,7 @@ mod tests {
         let alias = manifest
             .resolve_function("stopChasingVariable")
             .expect("alias");
-        assert_eq!(alias.id, "stopChasing");
+        assert_eq!(alias.id, "stopChasingVariable");
         assert!(alias.kind.is_action());
         let member = manifest.resolve_member("getCurrentHero").expect("alias");
         assert_eq!(member.id, "getHero");

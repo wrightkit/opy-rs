@@ -324,6 +324,13 @@ fn dump_stmt(statement: &Stmt, out: &mut String, level: usize) {
                 span_suffix(span.as_ref())
             ));
         }
+        Stmt::Return { span } => {
+            out.push_str(&format!(
+                "{}return{}\n",
+                indent(level),
+                span_suffix(span.as_ref())
+            ));
+        }
         Stmt::Continue { span } => {
             out.push_str(&format!(
                 "{}continue{}\n",

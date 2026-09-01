@@ -836,9 +836,10 @@ impl MacroExpander {
                 rule_start: *rule_start,
                 span: *span,
             },
-            Stmt::Break { .. } | Stmt::CallSubroutine { .. } | Stmt::Pass { .. } => {
-                statement.clone()
-            }
+            Stmt::Break { .. }
+            | Stmt::Return { .. }
+            | Stmt::CallSubroutine { .. }
+            | Stmt::Pass { .. } => statement.clone(),
             Stmt::Continue { .. } | Stmt::Label { .. } => statement.clone(),
         })
     }
@@ -1929,10 +1930,32 @@ impl<'a> Lowering<'a> {
         } else {
             "Hero"
         };
-        let (_, member) = self
+        let locale = Locale::new("en-US");
+        let member = self
             .compiler
             .catalog
-            .resolve_enum_member(domain, &Locale::new("en-US"), &spelling)
+            .resolve_enum_member(domain, &locale, &spelling)
+            .map(|(_, member)| member)
+            .or_else(|| {
+                (domain == "Hero")
+                    .then(|| {
+                        self.compiler
+                            .catalog
+                            .enum_domain(domain)
+                            .and_then(|domain| {
+                                domain
+                                    .members
+                                    .iter()
+                                    .find(|member| {
+                                        member.spellings(&locale).iter().any(|candidate| {
+                                            candidate.eq_ignore_ascii_case(&spelling)
+                                        })
+                                    })
+                                    .map(|member| member.member.clone())
+                            })
+                    })
+                    .flatten()
+            })
             .ok_or_else(|| {
                 self.unsupported(
                     format!("unknown {domain} filter '{spelling}'"),
@@ -2018,7 +2041,7 @@ impl<'a> Lowering<'a> {
                 span,
             } => {
                 let (start, stop, step) = self.lower_range(iterable)?;
-                let body = self.lower_actions(body, Some(BreakTarget::Loop))?;
+                let body = self.lower_loop_body(body)?;
                 match variable.as_ref() {
                     Expr::GlobalVar {
                         name,
@@ -2075,7 +2098,7 @@ impl<'a> Lowering<'a> {
                 span,
             } => {
                 let condition = self.lower_value(condition)?;
-                let body = self.lower_actions(body, Some(BreakTarget::Loop))?;
+                let body = self.lower_loop_body(body)?;
                 Ok(vec![self.wir.actions.push(Action::While {
                     condition,
                     body,
@@ -2110,7 +2133,7 @@ impl<'a> Lowering<'a> {
                 *span,
             )),
             Stmt::Continue { span } => Err(self.unsupported(
-                "continue statements are not representable in canonical WIR",
+                "continue statements are only lowered while constructing a loop body",
                 *span,
             )),
             Stmt::Goto { span, .. } => Err(self.unsupported(
@@ -2140,6 +2163,17 @@ impl<'a> Lowering<'a> {
                     *span,
                 )),
             },
+            Stmt::Return { span } => {
+                let true_value = self.wir.values.push(ValueNode::new(
+                    Value::Bool(true),
+                    self.wir_span(*span)?,
+                ));
+                Ok(vec![self.wir.actions.push(Action::Call {
+                    name: "abortIf".to_string(),
+                    args: vec![true_value],
+                    span: self.wir_span(*span)?,
+                })])
+            }
             Stmt::Expr { expr, span } => match expr.as_ref() {
                 Expr::Call { name, args, .. } => {
                     if name == "disableInspector" && args.is_empty() {
@@ -2181,6 +2215,74 @@ impl<'a> Lowering<'a> {
                 })])
             }
         }
+    }
+
+    /// Lower a loop body while preserving OverPy's continue jump layout.
+    /// Continue skips the remaining canonical actions in the current body;
+    /// when it is the sole action of a conditional branch, the conditional
+    /// jump is lifted to the loop body's action list so its distance reaches
+    /// the loop continuation label.
+    fn lower_loop_body(
+        &mut self,
+        statements: &[Stmt],
+    ) -> Result<Vec<wir::ActionId>, IntegrationError> {
+        let mut actions = Vec::new();
+        let mut index = 0;
+        while index < statements.len() {
+            let statement = &statements[index];
+            let tail = &statements[index + 1..];
+            if let Stmt::Continue { span } = statement {
+                let tail = self.lower_loop_body(tail)?;
+                let distance = self.canonical_action_width(&tail, *span)?;
+                if distance > 0 {
+                    let distance = self.wir.values.push(ValueNode::new(
+                        Value::Number {
+                            value: distance as f64,
+                            text: distance.to_string(),
+                        },
+                        self.wir_span(*span)?,
+                    ));
+                    actions.push(self.wir.actions.push(Action::Call {
+                        name: "skip".to_string(),
+                        args: vec![distance],
+                        span: self.wir_span(*span)?,
+                    }));
+                }
+                actions.extend(tail);
+                return Ok(actions);
+            }
+            if let Stmt::If {
+                branches,
+                r#else: None,
+                span,
+            } = statement
+                && branches.len() == 1
+                && matches!(branches[0].body.as_slice(), [Stmt::Continue { .. }])
+            {
+                let tail = self.lower_loop_body(tail)?;
+                let distance = self.canonical_action_width(&tail, *span)?;
+                if distance > 0 {
+                    let condition = self.lower_value(&branches[0].condition)?;
+                    let distance = self.wir.values.push(ValueNode::new(
+                        Value::Number {
+                            value: distance as f64,
+                            text: distance.to_string(),
+                        },
+                        self.wir_span(*span)?,
+                    ));
+                    actions.push(self.wir.actions.push(Action::Call {
+                        name: "skipIf".to_string(),
+                        args: vec![condition, distance],
+                        span: self.wir_span(*span)?,
+                    }));
+                }
+                actions.extend(tail);
+                return Ok(actions);
+            }
+            actions.extend(self.lower_action(statement, Some(BreakTarget::Loop))?);
+            index += 1;
+        }
+        Ok(actions)
     }
 
     fn lower_do_while_body(
@@ -3999,38 +4101,68 @@ impl<'a> Lowering<'a> {
                 if !matches!(function.kind, FunctionKind::MemberValue) {
                     return Err(self.unsupported(format!("'{name}' is not a member value"), span));
                 }
-                let catalog_id = function.catalog_id.as_ref().ok_or_else(|| {
-                    self.unsupported(
-                        format!(
-                            "member value '{}' has no canonical catalog identity",
-                            function.id
-                        ),
-                        span,
-                    )
-                })?;
-                let mut lowered = Vec::with_capacity(args.len() + 1);
-                lowered.push(self.lower_value(receiver)?);
-                lowered.extend(
-                    args.iter()
-                        .map(|arg| self.lower_value(arg))
-                        .collect::<Result<Vec<_>, _>>()?,
-                );
-                Value::Call {
-                    name: catalog_id.clone(),
-                    args: lowered,
+                if matches!(function.id.as_str(), "concat" | "exclude") {
+                    let [value] = args.as_slice() else {
+                        return Err(self.unsupported(
+                            format!("{} requires exactly one argument", function.id),
+                            span,
+                        ));
+                    };
+                    Value::Call {
+                        name: if function.id == "concat" {
+                            "appendToArray"
+                        } else {
+                            "removeFromArray"
+                        }
+                        .to_string(),
+                        args: vec![self.lower_value(receiver)?, self.lower_value(value)?],
+                    }
+                } else {
+                    let catalog_id = function.catalog_id.as_ref().ok_or_else(|| {
+                        self.unsupported(
+                            format!(
+                                "member value '{}' has no canonical catalog identity",
+                                function.id
+                            ),
+                            span,
+                        )
+                    })?;
+                    let mut lowered = Vec::with_capacity(args.len() + 1);
+                    lowered.push(self.lower_value(receiver)?);
+                    lowered.extend(
+                        args.iter()
+                            .map(|arg| self.lower_value(arg))
+                            .collect::<Result<Vec<_>, _>>()?,
+                    );
+                    Value::Call {
+                        name: catalog_id.clone(),
+                        args: lowered,
+                    }
                 }
             }
             Expr::Member {
                 receiver, member, ..
             } => {
                 let receiver = self.lower_value(receiver)?;
-                let member = self.wir.values.push(ValueNode::new(
-                    Value::String(member.clone()),
-                    self.wir_span(span)?,
-                ));
-                Value::Call {
-                    name: "memberAccess".to_string(),
-                    args: vec![receiver, member],
+                if let Some(name) = match member.as_str() {
+                    "x" => Some("__xComponentOf__"),
+                    "y" => Some("__yComponentOf__"),
+                    "z" => Some("__zComponentOf__"),
+                    _ => None,
+                } {
+                    Value::Call {
+                        name: name.to_string(),
+                        args: vec![receiver],
+                    }
+                } else {
+                    let member = self.wir.values.push(ValueNode::new(
+                        Value::String(member.clone()),
+                        self.wir_span(span)?,
+                    ));
+                    Value::Call {
+                        name: "memberAccess".to_string(),
+                        args: vec![receiver, member],
+                    }
                 }
             }
             Expr::Comprehension {
@@ -4444,6 +4576,7 @@ fn collect_implicit_stmts(
                 }
             }
             Stmt::Break { .. }
+            | Stmt::Return { .. }
             | Stmt::Continue { .. }
             | Stmt::Label { .. }
             | Stmt::CallSubroutine { .. }

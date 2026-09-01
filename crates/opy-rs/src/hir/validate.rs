@@ -43,6 +43,7 @@ const STMT_KINDS: &[&str] = &[
     "switch",
     "delete",
     "break",
+    "return",
     "continue",
     "goto",
     "label",
@@ -636,6 +637,7 @@ fn statement_exprs(statements: &[Stmt]) -> Vec<&Expr> {
                 }
             }
             Stmt::Break { .. }
+            | Stmt::Return { .. }
             | Stmt::Continue { .. }
             | Stmt::Label { .. }
             | Stmt::CallSubroutine { .. }
@@ -737,6 +739,7 @@ fn for_each_stmt<'a>(statements: &'a [Stmt], f: &mut impl FnMut(&'a Stmt)) {
             | Stmt::Assign { .. }
             | Stmt::Delete { .. }
             | Stmt::Break { .. }
+            | Stmt::Return { .. }
             | Stmt::Continue { .. }
             | Stmt::Goto { .. }
             | Stmt::Label { .. }

@@ -934,6 +934,11 @@ impl Parser<'_> {
                     let token = self.advance();
                     return Ok(Stmt::Break { span: token.span });
                 }
+                "return" => {
+                    let token = self.advance();
+                    self.expect_statement_end("the return statement")?;
+                    return Ok(Stmt::Return { span: token.span });
+                }
                 "pass" => {
                     let start = self.advance();
                     return Ok(Stmt::Pass { span: start.span });

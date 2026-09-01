@@ -10,7 +10,8 @@ use std::process::ExitCode;
 use opy_rs::Compiler;
 use serde::Serialize;
 use serde_json::Value;
-use workshop_rs::catalog::{Catalog, Locale};
+use workshop_rs::catalog::{Catalog, Kind, Locale};
+use workshop_rs::signatures::ExpectedDomain;
 
 const ALGORITHM: &str = "workshop-rs::roundtrip::equivalent";
 
@@ -38,6 +39,29 @@ struct SemanticWIRComparison {
     input_sha256: String,
     reference_input_sha256: String,
     equivalent: bool,
+}
+
+struct CompatibilityExpectedDomain<'a> {
+    catalog: &'a Catalog,
+}
+
+impl ExpectedDomain for CompatibilityExpectedDomain<'_> {
+    fn expected_domain(&self, catalog_id: &str, arg_index: usize) -> Option<&str> {
+        for kind in [Kind::Action, Kind::Value] {
+            let Some(entry) = self.catalog.entry(kind, catalog_id) else {
+                continue;
+            };
+            if let Some(domain) = entry.param_domain(arg_index) {
+                return Some(domain);
+            }
+            if let Some(type_name) = entry.param_type(arg_index)
+                && self.catalog.enum_domain(type_name).is_some()
+            {
+                return Some(type_name);
+            }
+        }
+        None
+    }
 }
 
 fn main() -> ExitCode {
@@ -82,9 +106,14 @@ fn run() -> Result<CompatibilityResult, String> {
         )
         .map_err(|error| error.to_string())?;
     let catalog = Catalog::builtin().map_err(|error| error.to_string())?;
-    let reference_wir =
-        workshop_rs::parser::parse(reference_workshop, &catalog, &Locale::new("en-US"))
-            .map_err(|error| error.to_string())?;
+    let context = CompatibilityExpectedDomain { catalog: &catalog };
+    let reference_wir = workshop_rs::parser::parse_with_context(
+        reference_workshop,
+        &catalog,
+        &Locale::new("en-US"),
+        &context,
+    )
+    .map_err(|error| error.to_string())?;
 
     Ok(CompatibilityResult {
         schema_version: 1,

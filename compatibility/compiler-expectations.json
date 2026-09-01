@@ -432,17 +432,16 @@
     },
     {
       "fixture": "real-world/overpy-broken-weapons",
-      "nativeStatus": "failure",
+      "nativeStatus": "success",
       "classification": "known-gap",
-      "comparison": "diagnostic-code",
+      "comparison": "semantic-wir",
       "evidence": [
         "oracle:real-world/overpy-broken-weapons/oracle.json",
         "provenance:real-world/overpy-broken-weapons/fixture.json"
       ],
-      "owner": "opy-rs#144",
-      "note": "The full real-world project now resolves all audited player-variable receiver contexts, including attacker and victim; it remains outside the compiler baseline at the next unimplemented builtin action (bigMessage).",
-      "failureClass": "frontend",
-      "diagnosticCode": "unknown-action"
+      "owner": "opy-rs#88",
+      "note": "The full real-world project now compiles through the final #141 grammar and #144 builtin/member/enum residuals; canonical WIR equivalence remains an explicit compiler boundary for the existing real-world lowering differences.",
+      "semanticEquivalent": false
     },
     {
       "fixture": "real-world/overpy-cake",
@@ -459,31 +458,29 @@
     },
     {
       "fixture": "real-world/overpy-client-to-server",
-      "nativeStatus": "failure",
+      "nativeStatus": "success",
       "classification": "known-gap",
-      "comparison": "diagnostic-code",
+      "comparison": "semantic-wir",
       "evidence": [
         "oracle:real-world/overpy-client-to-server/oracle.json",
         "provenance:real-world/overpy-client-to-server/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The chained ternary, isDummy, getHorizontalFacingAngle, horizontalAngleOfDirection, and getFacingDirection boundaries now lower; the full real-world project remains outside the #38 compiler baseline at the next unknown member (`startFacing`).",
-      "failureClass": "frontend",
-      "diagnosticCode": "unknown-member"
+      "note": "The full real-world project now compiles through the final #141 grammar and #144 builtin/member/enum residuals; canonical WIR equivalence remains an explicit compiler boundary for the existing real-world lowering differences.",
+      "semanticEquivalent": false
     },
     {
       "fixture": "real-world/overpy-cronch",
-      "nativeStatus": "failure",
+      "nativeStatus": "success",
       "classification": "known-gap",
-      "comparison": "diagnostic-code",
+      "comparison": "semantic-wir",
       "evidence": [
         "oracle:real-world/overpy-cronch/oracle.json",
         "provenance:real-world/overpy-cronch/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The postfix increment regression and createDummy action now lower; the full real-world project remains outside the #38 compiler baseline at the existing SpecVisibility enum boundary.",
-      "failureClass": "frontend",
-      "diagnosticCode": "unknown-enum-member"
+      "note": "The full real-world project now compiles through the final #141 grammar and #144 builtin/member/enum residuals; canonical WIR equivalence remains an explicit compiler boundary for the existing real-world lowering differences.",
+      "semanticEquivalent": false
     },
     {
       "fixture": "real-world/overpy-crosshair",
@@ -500,17 +497,16 @@
     },
     {
       "fixture": "real-world/overpy-inputhud",
-      "nativeStatus": "failure",
+      "nativeStatus": "success",
       "classification": "known-gap",
-      "comparison": "diagnostic-code",
+      "comparison": "semantic-wir",
       "evidence": [
         "oracle:real-world/overpy-inputhud/oracle.json",
         "provenance:real-world/overpy-inputhud/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The full real-world project now parses the multiline conditional-value expression; it remains outside the #38 compiler baseline at the unsupported `strContains` value.",
-      "failureClass": "frontend",
-      "diagnosticCode": "unknown-value"
+      "note": "The full real-world project now compiles through the final #141 grammar and #144 builtin/member/enum residuals; canonical WIR equivalence remains an explicit compiler boundary for the existing real-world lowering differences.",
+      "semanticEquivalent": false
     },
     {
       "fixture": "real-world/overpy-meipocalypse",
@@ -528,17 +524,16 @@
     },
     {
       "fixture": "real-world/overpy-parabola",
-      "nativeStatus": "failure",
+      "nativeStatus": "success",
       "classification": "known-gap",
-      "comparison": "diagnostic-code",
+      "comparison": "semantic-wir",
       "evidence": [
         "oracle:real-world/overpy-parabola/oracle.json",
         "provenance:real-world/overpy-parabola/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The multiline parenthesized expression now parses; the full real-world project remains outside the #38 compiler baseline and currently stops at the unsupported `getServerLoad` value.",
-      "failureClass": "frontend",
-      "diagnosticCode": "unknown-value"
+      "note": "The full real-world project now compiles through the final #141 grammar and #144 builtin/member/enum residuals; canonical WIR equivalence remains an explicit compiler boundary for the existing real-world lowering differences.",
+      "semanticEquivalent": false
     },
     {
       "fixture": "real-world/overpy-pixelart",
@@ -555,17 +550,16 @@
     },
     {
       "fixture": "real-world/overpy-santa",
-      "nativeStatus": "failure",
+      "nativeStatus": "success",
       "classification": "known-gap",
-      "comparison": "diagnostic-code",
+      "comparison": "semantic-wir",
       "evidence": [
         "oracle:real-world/overpy-santa/oracle.json",
         "provenance:real-world/overpy-santa/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The multiline conditional expression now parses; the full real-world project remains outside the #38 compiler baseline and currently stops at the unsupported `concat` member.",
-      "failureClass": "frontend",
-      "diagnosticCode": "unknown-member"
+      "note": "The full real-world project now compiles through the final #141 grammar and #144 builtin/member/enum residuals; canonical WIR equivalence remains an explicit compiler boundary for the existing real-world lowering differences.",
+      "semanticEquivalent": false
     },
     {
       "fixture": "real-world/overpy-zencopter",

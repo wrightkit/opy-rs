@@ -93,21 +93,15 @@ fn catalog_enum_members_lower_and_validate() {
 }
 
 #[test]
-fn catalog_gap_member_is_explicitly_rejected() {
+fn aliased_member_lowers_to_the_canonical_catalog_identity() {
     let source =
         "rule \"r\":\n    @Event eachPlayer\n    @Condition eventPlayer.getHero() == None\n";
     let hir = crate::compile(source, "source.opy", Path::new(".")).expect("frontend resolves");
-    let error = match Compiler::new().expect("compiler loads").compile_hir(&hir) {
-        Ok(_) => panic!("catalog-gap member must remain explicit"),
-        Err(error) => error,
-    };
-    assert_eq!(error.diagnostic.code, "unsupported-integration-surface");
-    assert!(
-        error
-            .diagnostic
-            .message
-            .contains("canonical catalog identity")
-    );
+    let artifact = Compiler::new()
+        .expect("compiler loads")
+        .compile_hir(&hir)
+        .expect("the member alias must lower to Hero Of");
+    assert!(artifact.emitted.contains("Hero Of(Event Player)"));
 }
 
 #[test]
