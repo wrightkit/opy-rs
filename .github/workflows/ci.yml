@@ -75,7 +75,7 @@ jobs:
 
       - name: Upload compiler compatibility report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: opy-rs-compiler-compatibility-report
           path: target/opy-rs-compiler-report.json

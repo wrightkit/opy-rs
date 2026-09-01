@@ -426,7 +426,7 @@
         "provenance:real-world/6v6-adjustments/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The full real-world project now resolves included-file #!mainFile, #!defineMember directives, and included settings; it remains outside the compiler baseline at the next parser boundary in the included constants.",
+      "note": "The full real-world project now resolves included-file settings, #!mainFile, and #!defineMember directives; it remains outside the compiler baseline at the next macro declaration syntax boundary.",
       "failureClass": "frontend",
       "diagnosticCode": "parse-error"
     },
@@ -439,10 +439,10 @@
         "oracle:real-world/overpy-broken-weapons/oracle.json",
         "provenance:real-world/overpy-broken-weapons/fixture.json"
       ],
-      "owner": "opy-rs#88",
-      "note": "The full real-world project now resolves RULE_CONDITION and the audited weapon/ammo receiver builtins; it remains outside the #38 compiler baseline at the non-eventPlayer custom player-variable member boundary (attacker.isWeaponBroken).",
+      "owner": "opy-rs#144",
+      "note": "The full real-world project now resolves all audited player-variable receiver contexts, including attacker and victim; it remains outside the compiler baseline at the next unimplemented builtin action (bigMessage).",
       "failureClass": "frontend",
-      "diagnosticCode": "unsupported-member"
+      "diagnosticCode": "unknown-action"
     },
     {
       "fixture": "real-world/overpy-cake",
@@ -522,7 +522,7 @@
         "provenance:real-world/overpy-meipocalypse/fixture.json"
       ],
       "owner": "opy-rs#88",
-      "note": "The full real-world project now resolves its included settings block and reaches the pinned missing generator-script boundary.",
+      "note": "The full real-world project now resolves included settings; it remains outside the compiler baseline at the fixture's missing generateWalls.js script resource.",
       "failureClass": "frontend",
       "diagnosticCode": "script-not-found"
     },

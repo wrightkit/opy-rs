@@ -3839,6 +3839,9 @@ impl<'a> Lowering<'a> {
                 if name == "createWorkshopSetting" {
                     return self.lower_workshop_setting(args, span);
                 }
+                if matches!(name.as_str(), "attacker" | "victim") && args.is_empty() {
+                    return Ok(self.push_call(name, Vec::new()));
+                }
                 if name == "ruleCondition" {
                     if !args.is_empty() {
                         return Err(

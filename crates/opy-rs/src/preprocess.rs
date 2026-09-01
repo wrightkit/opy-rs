@@ -341,9 +341,9 @@ struct Preprocessor {
     include_stack: Vec<PathBuf>,
     imported_files: BTreeSet<PathBuf>,
     macros: Vec<MacroDef>,
+    settings: Option<SettingsBlock>,
     defines: Vec<DefineRecord>,
     post_compile_hook: Option<PostCompileHook>,
-    settings: Option<SettingsBlock>,
     warnings: Vec<PreprocessWarning>,
     preprocessing: PreprocessingState,
 }
@@ -789,7 +789,7 @@ impl Preprocessor {
                 })?
             }
         };
-        // Each include registers a file in the registry (reference behavior).
+        // Each newly processed include registers one file in the registry.
         let file_id = self.next_file_id;
         self.next_file_id += 1;
         let display_path = self.include_display_path(&candidate, include);
@@ -800,26 +800,32 @@ impl Preprocessor {
         self.include_stack.push(identity);
         let saved_prefix = self.preprocessing.rule_prefix.clone();
         let saved_optimization = self.preprocessing.optimization.clone();
-        let included_settings = {
-            let mut blocks = crate::settings::find_blocks(&text, file_id)?;
-            blocks.pop()
+        let settings = match crate::settings::find_blocks(&text, file_id) {
+            Err(error) => {
+                self.include_stack.pop();
+                return Err(error);
+            }
+            Ok(mut blocks) => blocks.pop(),
         };
-        if let Some(block) = included_settings.as_ref() {
+        if let Some(block) = settings {
             if self.settings.is_some() {
+                self.include_stack.pop();
                 return Err(OpyError::at(
                     "settings-placement",
                     "only one settings block is supported in a project".to_string(),
                     block.keyword_span,
                 ));
             }
-            self.settings = included_settings.clone();
+            self.settings = Some(block);
         }
-        let lex_text = included_settings
+        let sanitized = self
+            .settings
             .as_ref()
+            .filter(|block| block.span.file == file_id)
             .map(|block| crate::settings::sanitize_for_lex(&text, block));
         let mut included = lex(LexInput {
             file_id,
-            text: lex_text.as_deref().unwrap_or(&text),
+            text: sanitized.as_deref().unwrap_or(&text),
         })?;
         let allow_leading_main_file = text
             .lines()

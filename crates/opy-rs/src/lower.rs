@@ -1226,13 +1226,10 @@ impl Lowerer {
                 span: Some(span.into()),
             };
         }
+        if let Some(player) = context_player_expr(name, Some(span)) {
+            return player;
+        }
         match name {
-            "eventPlayer" => HirExpr::EventPlayer {
-                span: Some(span.into()),
-            },
-            "hostPlayer" => HirExpr::HostPlayer {
-                span: Some(span.into()),
-            },
             "RULE_CONDITION" | "ruleCondition" => HirExpr::Call {
                 name: "ruleCondition".to_string(),
                 args: Vec::new(),
@@ -1283,7 +1280,7 @@ impl Lowerer {
         member: &str,
         member_span: Span,
         span: Span,
-        _macro_params: &[String],
+        macro_params: &[String],
     ) -> HirExpr {
         if let Expr::Name { name, .. } = receiver {
             // Custom enum member: folds to its numeric constant.
@@ -1349,8 +1346,11 @@ impl Lowerer {
                     span: Some(span.into()),
                 };
             }
-            // Event-player member: a player-variable reference.
-            if name == "eventPlayer" {
+            // Context-player member: a player-variable reference.
+            if matches!(
+                name.as_str(),
+                "eventPlayer" | "hostPlayer" | "attacker" | "victim"
+            ) {
                 if !default_var_index(member).is_some() && !self.player_visible(member) {
                     self.error_at(
                         "unknown-identifier",
@@ -1359,24 +1359,14 @@ impl Lowerer {
                     );
                     return HirExpr::Null { span: None };
                 }
+                let player = context_player_expr(
+                    name,
+                    (!matches!(name.as_str(), "eventPlayer" | "hostPlayer"))
+                        .then_some(receiver.span()),
+                )
+                .expect("context-player receiver name is exhaustive");
                 return HirExpr::PlayerVar {
-                    player: Box::new(HirExpr::EventPlayer { span: None }),
-                    name: member.to_string(),
-                    member_span: Some(member_span.into()),
-                    span: Some(span.into()),
-                };
-            }
-            if name == "hostPlayer" {
-                if !default_var_index(member).is_some() && !self.player_visible(member) {
-                    self.error_at(
-                        "unknown-identifier",
-                        format!("unknown player variable '{member}'"),
-                        member_span,
-                    );
-                    return HirExpr::Null { span: None };
-                }
-                return HirExpr::PlayerVar {
-                    player: Box::new(HirExpr::HostPlayer { span: None }),
+                    player: Box::new(player),
                     name: member.to_string(),
                     member_span: Some(member_span.into()),
                     span: Some(span.into()),
@@ -1390,6 +1380,14 @@ impl Lowerer {
                     span,
                 );
                 return HirExpr::Null { span: None };
+            }
+            if self.player_visible(member) {
+                return HirExpr::PlayerVar {
+                    player: Box::new(self.lower_expr(receiver, macro_params, CallPosition::Value)),
+                    name: member.to_string(),
+                    member_span: Some(member_span.into()),
+                    span: Some(span.into()),
+                };
             }
             // A bare variable receiver member is valid OPY source syntax even
             // when canonical member existence is deferred to Workshop. Keep
@@ -1414,6 +1412,14 @@ impl Lowerer {
                     span: Some(span.into()),
                 };
             }
+        }
+        if self.player_visible(member) {
+            return HirExpr::PlayerVar {
+                player: Box::new(self.lower_expr(receiver, macro_params, CallPosition::Value)),
+                name: member.to_string(),
+                member_span: Some(member_span.into()),
+                span: Some(span.into()),
+            };
         }
         self.error_at(
             "unsupported-member",
@@ -2053,9 +2059,19 @@ impl Lowerer {
         };
         // `eventPlayer.member(...)` → receiver call on the event player.
         if let Expr::Name { name: root, .. } = receiver {
-            if root == "eventPlayer" {
+            if matches!(
+                root.as_str(),
+                "eventPlayer" | "hostPlayer" | "attacker" | "victim"
+            ) {
                 return HirExpr::ReceiverCall {
-                    receiver: Box::new(HirExpr::EventPlayer { span: None }),
+                    receiver: Box::new(
+                        context_player_expr(
+                            root,
+                            (!matches!(root.as_str(), "eventPlayer" | "hostPlayer"))
+                                .then_some(receiver.span()),
+                        )
+                        .expect("context-player receiver name is exhaustive"),
+                    ),
                     name: member_name,
                     args: lowered,
                     span: Some(span.into()),
@@ -2219,13 +2235,37 @@ fn arg_span(args: &[CallArg]) -> Span {
     })
 }
 
+/// Lower a source-level player context value without adding a new HIR node
+/// kind. `attacker` and `victim` are catalog-backed zero-argument values;
+/// using the existing `Call` node keeps their source identity and span while
+/// leaving canonical value ownership with Workshop.
+fn context_player_expr(name: &str, span: Option<Span>) -> Option<HirExpr> {
+    match name {
+        "eventPlayer" => Some(HirExpr::EventPlayer {
+            span: span.map(Into::into),
+        }),
+        "hostPlayer" => Some(HirExpr::HostPlayer {
+            span: span.map(Into::into),
+        }),
+        "attacker" | "victim" => Some(HirExpr::Call {
+            name: name.to_string(),
+            args: Vec::new(),
+            span: span.map(Into::into),
+        }),
+        _ => None,
+    }
+}
+
 /// Whether a CST receiver is assignable (the `.append` receiver rule): a
 /// variable name (including macro parameters), an array literal, or an index
 /// expression — matching the pinned reference, which rejects constant and
 /// function receivers ("Cannot modify or assign to …").
 fn assignable_receiver(receiver: &Expr) -> bool {
     match receiver {
-        Expr::Name { name, .. } => name != "eventPlayer",
+        Expr::Name { name, .. } => !matches!(
+            name.as_str(),
+            "eventPlayer" | "hostPlayer" | "attacker" | "victim"
+        ),
         Expr::Array { .. } | Expr::Index { .. } => true,
         _ => false,
     }
@@ -2981,6 +3021,10 @@ mod tests {
         // `.append` requires an assignable receiver; `.format` a string
         // literal (both reference-enforced categories).
         let error = compile_error(&action_source("3.append(1)"), 4);
+        assert_eq!(error.code, "invalid-receiver");
+        assert!(error.message.contains("append"));
+
+        let error = compile_error(&action_source("attacker.append(1)"), 4);
         assert_eq!(error.code, "invalid-receiver");
         assert!(error.message.contains("append"));
 
