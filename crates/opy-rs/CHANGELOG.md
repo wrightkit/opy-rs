@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.12](https://github.com/wrightkit/opy-rs/compare/v0.1.11...v0.1.12) - 2026-09-02
+
+### Fixed
+
+- *(opy)* converge source failure frontiers ([#168](https://github.com/wrightkit/opy-rs/pull/168))
+- *(opy)* converge semantic failure frontiers ([#166](https://github.com/wrightkit/opy-rs/pull/166))
+- *(opy)* converge project preprocessing composition ([#164](https://github.com/wrightkit/opy-rs/pull/164))
+
 ## [0.1.11](https://github.com/wrightkit/opy-rs/compare/v0.1.10...v0.1.11) - 2026-09-01
 
 ### Added
