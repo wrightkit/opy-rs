@@ -71,6 +71,19 @@ class ConformanceTests(unittest.TestCase):
             {"stage": "parse", "construct": "parse-error"},
         )
 
+    def test_native_frontier_normalizes_lambda_context_to_parse_frontier(self):
+        result = {
+            "compile": {
+                "status": "failure",
+                "failureClass": "frontend",
+                "diagnostics": [{"code": "lambda-context"}],
+            }
+        }
+        self.assertEqual(
+            conformance.native_frontier(result),
+            {"stage": "parse", "construct": "parse-error"},
+        )
+
     def test_reference_success_native_failure_is_divergence(self):
         oracle = {
             "compile": {"status": "success", "diagnostics": []},

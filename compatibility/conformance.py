@@ -27,6 +27,9 @@ FRONTEND_CODES = {
     "w_already_imported": "preprocess",
     "do-while-placement": "semantic",
 }
+FRONTIER_CONSTRUCTS = {
+    "lambda-context": "parse-error",
+}
 PROBE_KINDS = {"positive", "negative", "contextual", "composition"}
 
 
@@ -220,7 +223,7 @@ def native_frontier(result: dict[str, Any]) -> dict[str, str] | None:
     if stage is None:
         failure_class = compile_result.get("failureClass")
         stage = "lowering" if failure_class == "integration" else "semantic"
-    return {"stage": stage, "construct": code}
+    return {"stage": stage, "construct": FRONTIER_CONSTRUCTS.get(code, code)}
 
 
 def run_compile(binary: Path, directory: Path, metadata: dict[str, Any]) -> dict[str, Any]:
