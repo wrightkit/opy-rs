@@ -555,7 +555,7 @@ impl Jsonc<'_> {
                         "expected a value in settings block".to_string(),
                     ));
                 }
-                cst::SettingsNode::String {
+                cst::SettingsNode::Raw {
                     name: String::new(),
                     value,
                     span: Span::new(self.file, start, self.here()),
@@ -755,6 +755,11 @@ fn build_node(
             value,
             span,
         },
+        cst::SettingsNode::Raw { value, .. } => cst::SettingsNode::Raw {
+            name: key,
+            value,
+            span,
+        },
         cst::SettingsNode::List { elements, .. } => cst::SettingsNode::List {
             name: key,
             elements,
@@ -908,7 +913,7 @@ mod tests {
         let cst::SettingsNode::Group { children, .. } = &parsed.children[0] else {
             panic!("lobby group");
         };
-        let cst::SettingsNode::String { value, .. } = &children[0] else {
+        let cst::SettingsNode::Raw { value, .. } = &children[0] else {
             panic!("expression-valued setting");
         };
         assert_eq!(value, "GAMEMODE_NAME\" \"GAMEMODE_VERSION");

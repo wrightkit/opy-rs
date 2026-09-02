@@ -58,6 +58,12 @@ pub enum SettingsNode {
         value: String,
         span: Span,
     },
+    /// An unquoted settings expression preserved without assigning it a type.
+    Raw {
+        name: String,
+        value: String,
+        span: Span,
+    },
     List {
         name: String,
         elements: Vec<SettingsListElement>,

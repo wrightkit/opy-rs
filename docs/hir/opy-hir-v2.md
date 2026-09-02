@@ -67,6 +67,13 @@ These nodes are source-semantic and preserve provenance. The bounded compiler
 reports an explicit integration diagnostic for them until canonical WIR owns
 the corresponding Workshop control-flow semantics.
 
+## Additive raw settings node
+
+Settings expressions that are syntactically valid but not literal JSONC
+values are carried as a `raw` settings node. This preserves the source value
+without misrepresenting it as a string literal; the Workshop-owned settings
+carrier may emit it or report its semantic incompleteness.
+
 ## Consumer migration
 
 Every external `wright/opy-hir` consumer must migrate its protocol gate and

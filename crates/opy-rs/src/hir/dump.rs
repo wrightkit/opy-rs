@@ -425,6 +425,15 @@ fn dump_settings_node(node: &SettingsNode, out: &mut String, level: usize) {
                 span_suffix(span.as_ref())
             ));
         }
+        SettingsNode::Raw { name, value, span } => {
+            out.push_str(&format!(
+                "{}raw {} {:?}{}\n",
+                indent(level),
+                name,
+                value,
+                span_suffix(span.as_ref())
+            ));
+        }
         SettingsNode::List {
             name,
             elements,

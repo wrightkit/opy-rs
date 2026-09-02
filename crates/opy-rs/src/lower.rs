@@ -583,6 +583,11 @@ fn lower_settings_node(node: &cst::SettingsNode) -> HirSettingsNode {
             value: value.clone(),
             span: Some((*span).into()),
         },
+        cst::SettingsNode::Raw { name, value, span } => HirSettingsNode::Raw {
+            name: name.clone(),
+            value: value.clone(),
+            span: Some((*span).into()),
+        },
         cst::SettingsNode::List {
             name,
             elements,

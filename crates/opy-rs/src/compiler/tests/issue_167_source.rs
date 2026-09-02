@@ -2,6 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::hir::SettingsNode;
 use crate::{CompileFailureClass, CompileStatus, Compiler};
 use workshop_rs::catalog::Locale;
 
@@ -61,4 +62,26 @@ fn six_v_six_reaches_the_pinned_unknown_member_frontier() {
     let span = diagnostic.span.as_ref().unwrap();
     assert_eq!(span.path, "utilities/custom_hp.opy");
     assert_eq!(span.start.line, 31);
+}
+
+#[test]
+fn expression_valued_setting_stays_raw_through_compiler() {
+    let source = "settings {\n    \"lobby\": {\n        \"modeName\": GAMEMODE_NAME\" \"GAMEMODE_VERSION,\n    },\n    \"gamemodes\": {}\n}\nrule \"r\":\n    @Event global\n    pass\n";
+    let hir = crate::compile(source, "source.opy", Path::new(".")).unwrap();
+    let lobby = match &hir.settings.as_ref().unwrap().children[0] {
+        SettingsNode::Group { children, .. } => children,
+        other => panic!("expected lobby group, got {other:?}"),
+    };
+    assert!(matches!(
+        &lobby[0],
+        SettingsNode::Raw { value, .. }
+            if value == "GAMEMODE_NAME\" \"GAMEMODE_VERSION"
+    ));
+
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+    assert!(
+        artifact
+            .emitted
+            .contains("modeName: GAMEMODE_NAME\" \"GAMEMODE_VERSION")
+    );
 }
