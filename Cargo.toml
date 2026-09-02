@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/opy-rs", "crates/opy-cli"]
+members = ["crates/opy-rs", "crates/opy-cli", "crates/opy-provider"]
 resolver = "3"
 
 [workspace.package]

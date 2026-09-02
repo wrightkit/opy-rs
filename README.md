@@ -67,6 +67,16 @@ opy-cli completion bash
 opy-cli version
 ```
 
+The first-party LPP process is available as `opy-provider`; it accepts an
+entry-based OPY project request so clients do not need to enumerate includes:
+
+```sh
+cargo run --release -p opy-provider
+```
+
+See the [provider contract](docs/opy/provider.md) for its capabilities and
+artifact format.
+
 The Rust library surface, including the bounded Workshop compiler, lives in
 `crates/opy-rs`; `opy-cli` is the standalone executable surface. See the
 [tooling API reference](docs/opy/tooling-api.md) and

@@ -377,6 +377,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "opy-provider"
+version = "0.1.12"
+dependencies = [
+ "opy-rs",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "opy-rs"
 version = "0.1.12"
 dependencies = [

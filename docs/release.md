@@ -32,3 +32,13 @@ These checks do not prove publication. Completion requires observing all package
 versions on crates.io and the matching tag after a real release. If publication
 fails, correct the failed package and rerun the release path; do not republish
 an already-published version under a different version.
+
+## First-party provider artifacts
+
+The tag-driven `provider-release` workflow builds `opy-provider` for the
+supported Wright targets and uploads one archive plus checksum per target to the
+same GitHub Release. Artifact names are
+`opy-provider-<version>-<target>.tar.gz` and
+`opy-provider-<version>-<target>.tar.gz.sha256`. The archive contains only the
+provider executable (`opy-provider` or `opy-provider.exe`); it is independent of
+the crates.io publication path.

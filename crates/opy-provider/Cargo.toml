@@ -1,0 +1,19 @@
+[package]
+name = "opy-provider"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "First-party Language Provider Protocol process for OverPy projects."
+
+[[bin]]
+name = "opy-provider"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+opy-rs.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true

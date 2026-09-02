@@ -13,6 +13,8 @@ architecture, compatibility evidence, APIs, and internal contracts live here.
   compiler/reconstruction boundaries, and dependency direction.
 - [Tooling API](opy/tooling-api.md): Rust library and CLI contracts for checking,
   inspection, overlays, diagnostics, and support queries.
+- [LPP provider](opy/provider.md): first-party provider capabilities, entry-based
+  project loading, artifact boundary, and release archive contract.
 - [Source-edit policy](opy/trivia-retention-policy.md): provenance and trivia
   requirements for validated source-oriented edits.
 
