@@ -154,7 +154,7 @@ pub struct CompileOutcome {
 /// frontend never fabricates a Workshop payload.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PostCompileHookRecord {
-    /// The script path as declared (root-relative).
+    /// The resolved project-relative script path.
     pub script: String,
     /// The resolved script source, retained for the backend hook ABI.
     pub source: String,

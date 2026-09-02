@@ -64,7 +64,7 @@ pub struct DefineRecord {
 /// A resolved `__script__("…")` macro backing.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScriptMacro {
-    /// The script path as declared, used for diagnostics and
+    /// The resolved project-relative script path, used for diagnostics and
     /// runtime attribution.
     pub path: String,
     /// The script text, read at the define site.
@@ -78,7 +78,7 @@ pub struct ScriptMacro {
 /// lowering-dependent (issue #8).
 #[derive(Debug, Clone, PartialEq)]
 pub struct PostCompileHook {
-    /// The script path as declared (root-relative).
+    /// The resolved project-relative script path.
     pub path: String,
     /// The script text, read at the directive site.
     pub source: String,
@@ -390,7 +390,7 @@ fn display_path(candidate: &Path, canonical: Option<&Path>, root: &Path, fallbac
         match component {
             std::path::Component::CurDir => {}
             std::path::Component::ParentDir => {
-                components.pop();
+                components.push("..".to_string());
             }
             std::path::Component::Normal(component) => {
                 components.push(component.to_string_lossy().into_owned());
@@ -723,13 +723,13 @@ impl Preprocessor {
         let path = path.replace('\\', "/");
         let candidate = base.join(&path);
         let canonical = candidate.canonicalize().ok();
-        let relative_path =
+        let resolved_path =
             display_path(&candidate, canonical.as_deref(), &self.display_root, &path);
         let overlay_source = self
             .overlay
             .get(&path)
             .or_else(|| self.overlay.get(&candidate.to_string_lossy().into_owned()))
-            .or_else(|| self.overlay.get(&relative_path))
+            .or_else(|| self.overlay.get(&resolved_path))
             .or_else(|| {
                 canonical
                     .as_ref()
@@ -758,7 +758,10 @@ impl Preprocessor {
                 })?
             }
         };
-        Ok(ScriptMacro { path, source })
+        Ok(ScriptMacro {
+            path: resolved_path,
+            source,
+        })
     }
 
     /// Resolve, lex, and splice one included file or directory.
@@ -812,23 +815,26 @@ impl Preprocessor {
     ) -> OpyResult<()> {
         let canonical = std::fs::canonicalize(candidate).ok();
         let candidate_path = candidate.to_string_lossy().into_owned();
-        let relative_path = display_path(
+        let canonical_path = display_path(
             candidate,
             canonical.as_deref(),
             &self.display_root,
             requested,
         );
+        let lexical_path = display_path(candidate, None, &self.display_root, requested);
         let overlay_text = self
             .overlay
             .get(requested)
             .or_else(|| self.overlay.get(&candidate_path))
-            .or_else(|| self.overlay.get(&relative_path))
+            .or_else(|| self.overlay.get(&lexical_path))
+            .or_else(|| self.overlay.get(&canonical_path))
             .or_else(|| {
                 canonical
                     .as_ref()
                     .and_then(|path| self.overlay.get(&path.to_string_lossy().into_owned()))
             })
             .cloned();
+        let uses_overlay = overlay_text.is_some();
         let identity = canonical.clone().unwrap_or_else(|| candidate.to_path_buf());
         if self.include_stack.contains(&identity) {
             return Err(OpyError::at(
@@ -880,7 +886,11 @@ impl Preprocessor {
         self.next_file_id += 1;
         self.files.push(FileRecord {
             id: file_id,
-            path: relative_path,
+            path: if uses_overlay {
+                lexical_path
+            } else {
+                canonical_path
+            },
         });
         self.include_stack.push(identity);
         let saved_prefix = self.preprocessing.rule_prefix.clone();
@@ -1755,6 +1765,8 @@ mod tests {
         let (pre, files) = preprocess_with_overlay(main, "main.opy", Path::new("."), &overlay)
             .expect("alias include paths must remain distinct imports");
         assert_eq!(files.len(), 3);
+        assert_eq!(files[1].path, "shared.opy");
+        assert_eq!(files[2].path, "dir/../shared.opy");
         assert_eq!(pre.defines.len(), 2);
         assert!(pre.warnings.is_empty());
     }

@@ -51,6 +51,20 @@ fn included_script_macro_resolves_relative_to_its_definition_file() {
 }
 
 #[test]
+fn included_script_macro_errors_keep_the_resolved_script_provenance() {
+    let dir = fixture_dir();
+    let source = std::fs::read_to_string(dir.join("main.opy")).unwrap();
+    let source = format!("{source}\nrule \"script error\":\n    @Event global\n    A = fail(1)\n");
+    let error = crate::compile(&source, "main.opy", &dir).expect_err("script must fail");
+    assert_eq!(error.code, "script-error");
+    assert!(
+        error.message.contains("modules/nested/scripts/fail.js"),
+        "{}",
+        error.message
+    );
+}
+
+#[test]
 fn included_script_macro_reads_an_open_document_overlay() {
     let dir = fixture_dir();
     let source = std::fs::read_to_string(dir.join("main.opy")).unwrap();
