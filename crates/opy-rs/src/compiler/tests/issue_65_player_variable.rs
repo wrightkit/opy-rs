@@ -79,19 +79,3 @@ fn player_variable_range_binder_matches_the_pinned_oracle() {
         Value::Call { ref name, ref args } if name == "hostPlayer" && args.is_empty()
     ));
 }
-
-#[test]
-fn invalid_range_binder_has_a_stable_source_diagnostic() {
-    let dir = fixture_dir("issue-65-invalid-binder");
-    let source = std::fs::read_to_string(dir.join("source.opy")).expect("source must be readable");
-    let hir = crate::compile(&source, "source.opy", &dir).expect("fixture must resolve to HIR");
-    let error = match Compiler::new()
-        .expect("released workshop contract must load")
-        .compile_hir(&hir)
-    {
-        Ok(_) => panic!("non-variable range binders must be rejected"),
-        Err(error) => error,
-    };
-    assert_eq!(error.diagnostic.code, "unsupported-integration-surface");
-    assert_eq!(error.diagnostic.span.unwrap().start.line, 3);
-}

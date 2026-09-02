@@ -813,11 +813,20 @@ impl Lowerer {
                 target,
                 value,
                 span,
-            } => HirStmt::Assign {
-                target: Box::new(self.lower_expr(target, macro_params, CallPosition::Value)),
-                value: Box::new(self.lower_expr(value, macro_params, CallPosition::Value)),
-                span: Some(span.into()),
-            },
+            } => {
+                if indexed_expr_depth(target) >= 4 {
+                    self.error_at(
+                        "four-dimensional-assignment",
+                        "Cannot assign to 4d array".to_string(),
+                        target.span(),
+                    );
+                }
+                HirStmt::Assign {
+                    target: Box::new(self.lower_expr(target, macro_params, CallPosition::Value)),
+                    value: Box::new(self.lower_expr(value, macro_params, CallPosition::Value)),
+                    span: Some(span.into()),
+                }
+            }
             Stmt::If {
                 branches,
                 r#else,
@@ -989,7 +998,21 @@ impl Lowerer {
                 span: Some((*span).into()),
             };
         }
-        self.lower_expr(variable, macro_params, CallPosition::Value)
+        let lowered = self.lower_expr(variable, macro_params, CallPosition::Value);
+        if !matches!(
+            lowered,
+            HirExpr::GlobalVar { .. } | HirExpr::PlayerVar { .. }
+        ) {
+            self.error_at(
+                "invalid-range-binder",
+                format!(
+                    "Expected variable for 1st argument of function 'for', but got {}",
+                    lowered.kind_name()
+                ),
+                variable.span(),
+            );
+        }
+        lowered
     }
 
     fn lower_macro_body(&mut self, body: &[Stmt], params: &[String]) -> Vec<HirStmt> {
@@ -2304,6 +2327,13 @@ fn assignable_receiver(receiver: &Expr) -> bool {
         ),
         Expr::Array { .. } | Expr::Index { .. } => true,
         _ => false,
+    }
+}
+
+fn indexed_expr_depth(expr: &Expr) -> usize {
+    match expr {
+        Expr::Index { array, .. } => 1 + indexed_expr_depth(array),
+        _ => 0,
     }
 }
 

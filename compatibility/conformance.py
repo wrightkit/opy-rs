@@ -26,6 +26,8 @@ FRONTEND_CODES = {
     "script-not-found": "preprocess",
     "w_already_imported": "preprocess",
     "do-while-placement": "semantic",
+    "invalid-range-binder": "semantic",
+    "four-dimensional-assignment": "semantic",
 }
 FRONTIER_CONSTRUCTS = {
     "lambda-context": "parse-error",

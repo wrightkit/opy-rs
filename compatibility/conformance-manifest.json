@@ -217,7 +217,7 @@
           "id": "callable-signatures",
           "claim": "Catalog-backed callable signatures accept the documented argument and return shapes.",
           "probeKinds": ["positive", "contextual"],
-          "probes": ["synthetic/chase-condition-agentlab", "synthetic/chase-keywords", "synthetic/receiver-calls"]
+          "probes": ["synthetic/chase-condition-agentlab", "synthetic/receiver-calls"]
         },
         {
           "id": "receiver-dispatch",
@@ -229,7 +229,7 @@
           "id": "enum-domain-context",
           "claim": "Enum and keyword domains are resolved in the semantic context that consumes them.",
           "probeKinds": ["positive", "contextual"],
-          "probes": ["synthetic/chase-enums", "synthetic/chase-keywords", "synthetic/issue-131-spec-visibility"]
+          "probes": ["synthetic/issue-131-spec-visibility"]
         },
         {
           "id": "aliases-and-hud-surface",
@@ -239,24 +239,22 @@
         },
         {
           "id": "semantic-boundary-errors",
-          "claim": "Invalid binders and duplicate declarations stop at a semantic diagnostic frontier.",
+          "claim": "Invalid binders and source-owned assignment boundaries stop at a semantic diagnostic frontier.",
           "probeKinds": ["negative"],
-          "probes": ["synthetic/issue-65-invalid-binder", "synthetic/issue-29-invalid"]
+          "probes": ["synthetic/issue-65-invalid-binder", "synthetic/issue-60-4d-negative"]
         }
       ],
       "probeFixtures": [
         "synthetic/chase-condition-agentlab",
-        "synthetic/chase-enums",
-        "synthetic/chase-keywords",
         "synthetic/issue-113-is-dummy",
         "synthetic/issue-114-hud-subheader",
         "synthetic/issue-130-horizontal-facing-angle",
         "synthetic/issue-131-spec-visibility",
         "synthetic/issue-65-invalid-binder",
+        "synthetic/issue-60-4d-negative",
         "synthetic/issue-65-player-range",
         "synthetic/receiver-calls",
-        "synthetic/receiver-playervar",
-        "synthetic/issue-29-invalid"
+        "synthetic/receiver-playervar"
       ]
     },
     {
@@ -291,6 +289,12 @@
           "claim": "Catalog-backed members and enum visibility lower to semantically equivalent WIR.",
           "probeKinds": ["positive"],
           "probes": ["synthetic/issue-113-is-dummy", "synthetic/issue-114-hud-subheader", "synthetic/issue-130-horizontal-facing-angle", "synthetic/issue-131-spec-visibility"]
+        },
+        {
+          "id": "semantic-to-wir-boundary",
+          "claim": "Source-semantic callable and enum forms are compared at the canonical-WIR boundary.",
+          "probeKinds": ["positive", "contextual"],
+          "probes": ["synthetic/chase-enums", "synthetic/chase-keywords"]
         },
         {
           "id": "settings-lowering",
@@ -330,6 +334,8 @@
         "synthetic/issue-114-hud-subheader",
         "synthetic/issue-130-horizontal-facing-angle",
         "synthetic/issue-131-spec-visibility",
+        "synthetic/chase-enums",
+        "synthetic/chase-keywords",
         "synthetic/settings",
         "census/workshop-feature-census"
       ]
@@ -353,7 +359,7 @@
           "id": "parse-frontier",
           "claim": "Parser failures identify the first unsupported or malformed syntactic construct.",
           "probeKinds": ["negative"],
-          "probes": ["synthetic/diagnostics", "synthetic/issue-28-invalid-syntax", "synthetic/issue-33-lambda-negative", "synthetic/issue-59-embedded-postfix-negative", "synthetic/issue-59-postfix-negative"]
+          "probes": ["synthetic/diagnostics", "synthetic/issue-28-invalid-syntax", "synthetic/issue-29-invalid", "synthetic/issue-33-lambda-negative", "synthetic/issue-59-embedded-postfix-negative", "synthetic/issue-59-postfix-negative"]
         },
         {
           "id": "preprocess-frontier",
@@ -365,7 +371,7 @@
           "id": "semantic-frontier",
           "claim": "Semantic failures identify the first invalid member, placement, or binder construct.",
           "probeKinds": ["negative", "contextual"],
-          "probes": ["real-world/6v6-adjustments", "synthetic/issue-29-invalid", "synthetic/issue-47-do-while-invalid-placement", "synthetic/issue-65-invalid-binder"]
+          "probes": ["real-world/6v6-adjustments", "synthetic/issue-47-do-while-invalid-placement", "synthetic/issue-65-invalid-binder"]
         },
         {
           "id": "diagnostic-provenance",
