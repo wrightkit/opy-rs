@@ -58,6 +58,12 @@ pub enum SettingsNode {
         value: String,
         span: Span,
     },
+    /// An unquoted settings expression preserved without assigning it a type.
+    Raw {
+        name: String,
+        value: String,
+        span: Span,
+    },
     List {
         name: String,
         elements: Vec<SettingsListElement>,
@@ -102,6 +108,12 @@ pub enum Decl {
     Enum {
         name: String,
         members: Vec<(String, Span)>,
+        span: Span,
+    },
+    /// A source-level constant declared with `macro name = expression`.
+    Constant {
+        name: String,
+        value: Expr,
         span: Span,
     },
     /// A `macro` declaration with parameterized statement body.

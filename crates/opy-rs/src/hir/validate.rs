@@ -82,7 +82,7 @@ const EXPR_KINDS: &[&str] = &[
     "format",
 ];
 /// Settings node `kind` values understood by this consumer.
-const SETTINGS_NODE_KINDS: &[&str] = &["group", "number", "bool", "string", "list"];
+const SETTINGS_NODE_KINDS: &[&str] = &["group", "number", "bool", "string", "raw", "list"];
 
 /// Declared names, collected before reference validation.
 struct NameTables<'a> {
@@ -338,6 +338,7 @@ fn node_name(node: &SettingsNode) -> &str {
         | SettingsNode::Number { name, .. }
         | SettingsNode::Bool { name, .. }
         | SettingsNode::String { name, .. }
+        | SettingsNode::Raw { name, .. }
         | SettingsNode::List { name, .. } => name,
     }
 }

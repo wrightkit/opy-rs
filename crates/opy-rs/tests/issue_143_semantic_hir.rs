@@ -231,7 +231,7 @@ rule \"invalid player member\":
         .diagnostics
         .first()
         .expect("unknown player member diagnostic");
-    assert_eq!(diagnostic.code, "unknown-identifier");
+    assert_eq!(diagnostic.code, "unknown-member");
     assert_eq!(diagnostic.span.as_ref().expect("member span").start.line, 4);
     assert_eq!(diagnostic.span.as_ref().expect("member span").start.col, 25);
 }

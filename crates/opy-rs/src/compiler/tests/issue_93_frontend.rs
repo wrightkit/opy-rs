@@ -14,7 +14,7 @@ fn frontend_diagnostics_are_public_and_source_attributed() {
         (
             "issue-29-invalid.opy",
             "globalvar value\n\nrule \"invalid directive\":\n    @Event global\n    @Name \"wrong\"\n    value = 1\n",
-            "parse-error",
+            "duplicate-rule-name",
         ),
         (
             "issue-31-negative.opy",

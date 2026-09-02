@@ -248,6 +248,13 @@ pub enum SettingsNode {
         #[serde(skip_serializing_if = "Option::is_none")]
         span: Option<Span>,
     },
+    /// A settings expression preserved without assigning it a literal type.
+    Raw {
+        name: String,
+        value: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        span: Option<Span>,
+    },
     List {
         name: String,
         #[serde(default)]
@@ -265,6 +272,7 @@ impl SettingsNode {
             | SettingsNode::Number { span, .. }
             | SettingsNode::Bool { span, .. }
             | SettingsNode::String { span, .. }
+            | SettingsNode::Raw { span, .. }
             | SettingsNode::List { span, .. } => span.as_ref(),
         }
     }

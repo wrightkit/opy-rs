@@ -351,12 +351,41 @@ impl Jsonc<'_> {
     }
 
     fn skip_whitespace(&mut self) {
-        while let Some(ch) = self.peek() {
-            if ch.is_whitespace() {
-                self.advance();
-            } else {
-                break;
+        loop {
+            while let Some(ch) = self.peek() {
+                if ch.is_whitespace() {
+                    self.advance();
+                } else {
+                    break;
+                }
             }
+            if self.peek() == Some('#') {
+                while self.peek().is_some_and(|ch| ch != '\n') {
+                    self.advance();
+                }
+                continue;
+            }
+            if self.text[self.pos..].starts_with("//") {
+                self.advance();
+                self.advance();
+                while self.peek().is_some_and(|ch| ch != '\n') {
+                    self.advance();
+                }
+                continue;
+            }
+            if self.text[self.pos..].starts_with("/*") {
+                self.advance();
+                self.advance();
+                while self.peek().is_some() && !self.text[self.pos..].starts_with("*/") {
+                    self.advance();
+                }
+                if self.text[self.pos..].starts_with("*/") {
+                    self.advance();
+                    self.advance();
+                }
+                continue;
+            }
+            break;
         }
     }
 
@@ -519,14 +548,57 @@ impl Jsonc<'_> {
                 }
             }
             _ => {
-                return Err(self.error(
-                    "settings-invalid",
-                    "expected a value in settings block".to_string(),
-                ));
+                let value = self.parse_expression_value();
+                if value.trim().is_empty() {
+                    return Err(self.error(
+                        "settings-invalid",
+                        "expected a value in settings block".to_string(),
+                    ));
+                }
+                cst::SettingsNode::Raw {
+                    name: String::new(),
+                    value,
+                    span: Span::new(self.file, start, self.here()),
+                }
             }
         };
         let end = self.here();
         Ok((node, end))
+    }
+
+    /// Preserve an unquoted setting expression as an opaque value. Commas and
+    /// closing braces delimit it only outside nested expression delimiters and
+    /// string literals.
+    fn parse_expression_value(&mut self) -> String {
+        let mut value = String::new();
+        let mut depth = 0usize;
+        let mut quote = None;
+        while let Some(ch) = self.peek() {
+            if let Some(expected) = quote {
+                value.push(self.advance().expect("peeked character exists"));
+                if ch == expected {
+                    quote = None;
+                }
+                continue;
+            }
+            match ch {
+                '"' | '\'' => {
+                    quote = Some(ch);
+                    value.push(self.advance().expect("peeked character exists"));
+                }
+                '(' | '[' | '{' => {
+                    depth += 1;
+                    value.push(self.advance().expect("peeked character exists"));
+                }
+                ')' | ']' => {
+                    depth = depth.saturating_sub(1);
+                    value.push(self.advance().expect("peeked character exists"));
+                }
+                ',' | '}' if depth == 0 => break,
+                _ => value.push(self.advance().expect("peeked character exists")),
+            }
+        }
+        value.trim().to_string()
     }
 
     fn expect_word(&mut self, word: &str) -> OpyResult<()> {
@@ -683,6 +755,11 @@ fn build_node(
             value,
             span,
         },
+        cst::SettingsNode::Raw { value, .. } => cst::SettingsNode::Raw {
+            name: key,
+            value,
+            span,
+        },
         cst::SettingsNode::List { elements, .. } => cst::SettingsNode::List {
             name: key,
             elements,
@@ -825,6 +902,21 @@ mod tests {
             panic!("description");
         };
         assert_eq!(value, "line\n\t\"quoted\"");
+    }
+
+    #[test]
+    fn parse_block_accepts_comments_and_expression_values() {
+        let found = block(
+            "settings {\n    # keep the source expression intact\n    \"lobby\": {\n        \"modeName\": GAMEMODE_NAME\" \"GAMEMODE_VERSION,\n    },\n    \"gamemodes\": {}\n}\n",
+        );
+        let parsed = parse_block(&found).unwrap();
+        let cst::SettingsNode::Group { children, .. } = &parsed.children[0] else {
+            panic!("lobby group");
+        };
+        let cst::SettingsNode::Raw { value, .. } = &children[0] else {
+            panic!("expression-valued setting");
+        };
+        assert_eq!(value, "GAMEMODE_NAME\" \"GAMEMODE_VERSION");
     }
 
     #[test]

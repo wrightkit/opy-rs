@@ -191,5 +191,5 @@ catalogue.
 | Upstream key | Status |
 | --- | --- |
 | `Vector` (`UP`, `DOWN`, `LEFT`, `RIGHT`, `FORWARD`, `BACKWARD`) | ✅ Supported |
-| `Math` (`PI`, `E`, `INFINITY`, `EPSILON`, and documented spacing/radius constants) | 🚧 Coming soon |
+| `Math` (`PI`, `E`, `INFINITY`, `EPSILON`) | ✅ Supported (documented spacing/radius constants remain deferred) |
 | `Texture` (complete texture constant registry) | 🚧 Coming soon |

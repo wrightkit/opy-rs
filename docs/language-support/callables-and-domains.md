@@ -50,7 +50,7 @@ behavior, and dispatch rule.
 | --- | --- | --- |
 | `Hero`, `Map`, `Gamemode`, `Team`, `Slot`, `Color`, `Button` domains | 🚧 Coming soon | Membership and spelling are domain-specific. |
 | `Vector.UP/DOWN/LEFT/RIGHT/FORWARD/BACKWARD` | ✅ Supported | Constants are separate from arbitrary vectors. |
-| `Math.PI`, `Math.E`, `Math.INFINITY`, `Math.EPSILON` | 🚧 Coming soon | Numeric constants are distinct leaves. |
+| `Math.PI`, `Math.E`, `Math.INFINITY`, `Math.EPSILON` | ✅ Supported | Numeric constants lower to source-attributed numeric leaves. |
 | User enum assignment and inferred increments | ✅ Supported | Separate from Workshop catalog domains. |
 | Contextual `None`/reevaluation enum dispatch | 🚧 Coming soon | `ChaseTimeReeval`, `ChaseRateReeval` and `Invis` differ. |
 | Alias resolution (`getCurrentHero`, `hasStatusEffect`, `ChaseReeval`) | ✅ Supported | Non-contextual and call-context aliases differ. |

@@ -1150,6 +1150,11 @@ fn convert_settings_node(node: crate::hir::SettingsNode) -> workshop_rs::setting
             value,
             span: span.map(convert_settings_span),
         },
+        SourceNode::Raw { name, value, span } => TargetNode::Raw {
+            name,
+            value,
+            span: span.map(convert_settings_span),
+        },
         SourceNode::List {
             name,
             elements,

@@ -28,6 +28,8 @@ FRONTEND_CODES = {
     "do-while-placement": "semantic",
     "invalid-range-binder": "semantic",
     "four-dimensional-assignment": "semantic",
+    "duplicate-rule-name": "semantic",
+    "unknown-member": "semantic",
 }
 FRONTIER_CONSTRUCTS = {
     "lambda-context": "parse-error",
