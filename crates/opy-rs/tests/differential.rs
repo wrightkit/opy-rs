@@ -364,8 +364,8 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
     diagnostic(
         &mut cases,
         "synthetic/issue-29-invalid",
-        None,
-        "malformed directive and annotation forms; oracle status failure.",
+        Some("duplicate-rule-name"),
+        "ordinary-rule @Name reaches the pinned duplicate-rule-name semantic frontier; oracle status failure.",
     );
     resolve(
         &mut cases,
@@ -531,8 +531,8 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
     diagnostic(
         &mut cases,
         "real-world/6v6-adjustments",
-        Some("unsupported-directive"),
-        "reference fails on 'Unknown member '_hp_reset''; the native frontend accepts the included-file #!mainFile directives and reaches the next unsupported #!defineMember directive with source attribution. Gap: rejection reason differs (documented).",
+        Some("unknown-member"),
+        "the native frontend reaches the pinned unknown-member semantic frontier after resolving the demonstrated source constructs.",
     );
 
     cases

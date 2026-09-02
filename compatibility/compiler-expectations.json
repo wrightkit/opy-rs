@@ -425,10 +425,10 @@
         "oracle:real-world/6v6-adjustments/oracle.json",
         "provenance:real-world/6v6-adjustments/fixture.json"
       ],
-      "owner": "opy-rs#157",
-      "note": "The full real-world project now resolves included-file settings, #!mainFile, and #!defineMember directives; it remains outside the compiler baseline at the next macro declaration syntax boundary.",
+      "owner": "opy-rs#167",
+      "note": "The source frontend reaches the pinned semantic unknown-member frontier after resolving the demonstrated macro constants, settings expressions, multiline comprehensions, and catalog-backed receiver members; canonical lowering remains outside this issue.",
       "failureClass": "frontend",
-      "diagnosticCode": "parse-error"
+      "diagnosticCode": "unknown-member"
     },
     {
       "fixture": "real-world/overpy-broken-weapons",
@@ -720,12 +720,12 @@
       "evidence": [
         "oracle:synthetic/issue-29-invalid/oracle.json",
         "provenance:synthetic/issue-29-invalid/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_93_frontend::frontend_diagnostics_are_public_and_source_attributed"
+        "test:opy-rs::compiler::integration_tests::issue_167_source::issue_29_reaches_the_duplicate_rule_name_frontier"
       ],
-      "owner": "opy-rs#93",
-      "note": "The public compiler reports the invalid annotation as a source-attributed parse diagnostic.",
+      "owner": "opy-rs#167",
+      "note": "An ordinary rule @Name annotation reaches the pinned duplicate-rule-name semantic frontier with source attribution.",
       "failureClass": "frontend",
-      "diagnosticCode": "parse-error"
+      "diagnosticCode": "duplicate-rule-name"
     },
     {
       "fixture": "synthetic/issue-31-negative",

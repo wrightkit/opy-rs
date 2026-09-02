@@ -4,8 +4,8 @@
     {
       "expect": "success",
       "id": "builtin-surface",
-      "outputSha256": "ffb418c68c01871487609a8c7896d432409f724f7d6906c767b9d61584ea256b",
-      "sha256": "9e0fe683e2299e3ca97714e0b6099fb4a8c2a99ee1c95ab820c69bb6f6bb33bf",
+      "outputSha256": "244fe58d2880586b673b349beacf278e7ebe7bad4a2331e8cf5ed7fe580b610d",
+      "sha256": "9321d1e736a9b6bd2b137170e4b05e5bc51e5971e7240cc6dafc6b18d596ece7",
       "source": "builtin-surface.opy"
     },
     {

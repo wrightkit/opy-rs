@@ -57,6 +57,9 @@ enum CallPosition {
     ForIterable,
     /// An expression occupying a signature-approved lambda argument slot.
     LambdaArgument,
+    /// An expression in a macro body, whose final call position is determined
+    /// when the macro is expanded.
+    MacroBody,
 }
 
 /// The lowerer's symbol context, built from the CST declarations.
@@ -65,6 +68,7 @@ struct Lowerer {
     player_declarations: HashMap<String, usize>,
     subroutine_declarations: HashMap<String, usize>,
     subroutine_definitions: Vec<(String, usize)>,
+    constant_declarations: HashMap<String, usize>,
     macro_declarations: HashMap<String, usize>,
     enums: HashMap<String, Vec<String>>,
     enum_declarations: HashMap<String, usize>,
@@ -116,6 +120,7 @@ pub fn lower_with_preprocessing(
         player_declarations: HashMap::new(),
         subroutine_declarations: HashMap::new(),
         subroutine_definitions: Vec::new(),
+        constant_declarations: HashMap::new(),
         macro_declarations: HashMap::new(),
         enums: HashMap::new(),
         enum_declarations: HashMap::new(),
@@ -174,6 +179,13 @@ pub fn lower_with_preprocessing(
                 Decl::Enum { .. } => {
                     // Custom enums fold to numeric constants at use sites and
                     // produce no HIR declaration (reference behavior).
+                }
+                Decl::Constant { name, value, span } => {
+                    declarations.push(Declaration::Constant {
+                        name: name.clone(),
+                        span: Some(span.into()),
+                        value: Box::new(lowerer.lower_expr(value, &[], CallPosition::Value)),
+                    });
                 }
                 Decl::Macro {
                     name,
@@ -635,6 +647,19 @@ impl Lowerer {
                         );
                     }
                 }
+                Decl::Constant { name, span, .. } => {
+                    let duplicate = self.constant_declarations.contains_key(name);
+                    self.constant_declarations
+                        .entry(name.clone())
+                        .or_insert(order);
+                    if duplicate {
+                        self.error_at(
+                            "duplicate-declaration",
+                            format!("duplicate constant '{name}'"),
+                            *span,
+                        );
+                    }
+                }
                 Decl::Enum { name, members, .. } => {
                     self.enum_declarations.entry(name.clone()).or_insert(order);
                     self.enums.entry(name.clone()).or_insert_with(|| {
@@ -693,6 +718,12 @@ impl Lowerer {
             .is_some_and(|order| *order <= self.current_order)
     }
 
+    fn constant_visible(&self, name: &str) -> bool {
+        self.constant_declarations
+            .get(name)
+            .is_some_and(|order| *order <= self.current_order)
+    }
+
     fn enum_visible(&self, name: &str) -> bool {
         self.enum_declarations
             .get(name)
@@ -717,6 +748,17 @@ impl Lowerer {
         files: &[SourceFile],
         preprocessing: &PreprocessingState,
     ) -> OpyResult<Rule> {
+        if let Some(annotation) = rule
+            .annotations
+            .iter()
+            .find(|annotation| annotation.name == "Name")
+        {
+            self.error_at(
+                "duplicate-rule-name",
+                "Rule name was already declared".to_string(),
+                annotation.span,
+            );
+        }
         let conditions = rule
             .conditions
             .iter()
@@ -1016,7 +1058,15 @@ impl Lowerer {
     }
 
     fn lower_macro_body(&mut self, body: &[Stmt], params: &[String]) -> Vec<HirStmt> {
-        self.lower_block(body, params, false, false, false)
+        body.iter()
+            .map(|stmt| match stmt {
+                Stmt::Expr { expr, span } => HirStmt::Expr {
+                    expr: Box::new(self.lower_expr(expr, params, CallPosition::MacroBody)),
+                    span: Some(span.into()),
+                },
+                _ => self.lower_stmt(stmt, params, false, false),
+            })
+            .collect()
     }
 
     fn lower_expr(
@@ -1276,6 +1326,10 @@ impl Lowerer {
                 member_span: None,
                 span: Some(span.into()),
             },
+            _ if self.constant_visible(name) => HirExpr::Constant {
+                name: name.to_string(),
+                span: Some(span.into()),
+            },
             _ if self.enum_visible(name) => {
                 self.error_at(
                     "enum-type-without-member",
@@ -1332,6 +1386,21 @@ impl Lowerer {
                         HirExpr::Null { span: None }
                     }
                 };
+            }
+            if name == "Math" {
+                if let Some((value, text)) = match member {
+                    "PI" => Some((std::f64::consts::PI, "3.141592653589793")),
+                    "E" => Some((std::f64::consts::E, "2.718281828459045")),
+                    "INFINITY" => Some((999_999_999_999.0, "999999999999")),
+                    "EPSILON" => Some((1192093e-13, "0.0000001192093")),
+                    _ => None,
+                } {
+                    return HirExpr::Number {
+                        value,
+                        text: text.to_string(),
+                        span: Some(span.into()),
+                    };
+                }
             }
             // Builtin Workshop enum: the domain name is a declared OPY
             // signature identity (manifest `param.domain`); the member list
@@ -1397,8 +1466,8 @@ impl Lowerer {
             ) {
                 if !default_var_index(member).is_some() && !self.player_visible(member) {
                     self.error_at(
-                        "unknown-identifier",
-                        format!("unknown player variable '{member}'"),
+                        "unknown-member",
+                        format!("unknown member '{member}'"),
                         member_span,
                     );
                     return HirExpr::Null { span: None };
@@ -1508,6 +1577,9 @@ impl Lowerer {
                             format!("for-loop iterable '{name}' must be a range(...) call"),
                         ),
                         CallPosition::LambdaArgument => {
+                            ("unknown-value", format!("unknown value '{name}'"))
+                        }
+                        CallPosition::MacroBody => {
                             ("unknown-value", format!("unknown value '{name}'"))
                         }
                     };
@@ -2203,6 +2275,7 @@ impl Lowerer {
                     );
                 }
             }
+            CallPosition::MacroBody => {}
         }
     }
 

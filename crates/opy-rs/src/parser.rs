@@ -381,6 +381,16 @@ impl Parser<'_> {
             Ok(name) => name,
             Err(()) => return false,
         };
+        if self.peek_kind() == TokenKind::Assign {
+            self.advance();
+            let value = match self.parse_expr() {
+                Ok(value) => value,
+                Err(()) => return false,
+            };
+            let span = Span::new(start.span.file, start.span.start, value.span().end);
+            declarations.push(Decl::Constant { name, value, span });
+            return true;
+        }
         let args = match self.parse_param_list() {
             Some(args) => args,
             None => return false,
@@ -638,12 +648,6 @@ impl Parser<'_> {
                 if args.len() != 1 || !self.annotation_arg_is_string(&args[0]) {
                     self.error_at_current(
                         "@Name expects exactly one plain string literal".to_string(),
-                    );
-                    return false;
-                }
-                if !subroutine {
-                    self.error_at_current(
-                        "@Name is only supported on subroutine definitions".to_string(),
                     );
                     return false;
                 }
@@ -1821,25 +1825,32 @@ impl Parser<'_> {
                     self.advance();
                     let variable_token =
                         self.expect(TokenKind::Ident, "a comprehension variable")?;
+                    self.skip_newlines();
                     let index = if self.peek_kind() == TokenKind::Comma {
                         self.advance();
+                        self.skip_newlines();
                         let index = self.expect(TokenKind::Ident, "a comprehension index")?;
                         Some((index.text, index.span))
                     } else {
                         None
                     };
+                    self.skip_newlines();
                     if !self.is_ident("in") {
                         self.error_at_current("expected `in` in list comprehension".to_string());
                         return Err(());
                     }
                     self.advance();
+                    self.skip_newlines();
                     let iterable = self.parse_or()?;
+                    self.skip_newlines();
                     let condition = if self.is_ident("if") {
                         self.advance();
+                        self.skip_newlines();
                         Some(Box::new(self.parse_or()?))
                     } else {
                         None
                     };
+                    self.skip_newlines();
                     let end = self.expect(TokenKind::RBracket, "']'")?.span.end;
                     return Ok(Expr::Comprehension {
                         element: Box::new(first),
@@ -2445,11 +2456,12 @@ mod tests {
     #[test]
     fn def_and_macro_parse() {
         let program = parse_ok(
-            "subroutine showStatus\n\ndef showStatus():\n    print(\"hi\")\n\nmacro double(value):\n    value + value\n",
+            "subroutine showStatus\n\nmacro VERSION = \"1.4.3\"\n\ndef showStatus():\n    print(\"hi\")\n\nmacro double(value):\n    value + value\n",
         );
-        assert_eq!(program.declarations.len(), 2);
-        assert!(matches!(program.declarations[1], Decl::Macro { .. }));
-        let Decl::Macro { args, body, .. } = &program.declarations[1] else {
+        assert_eq!(program.declarations.len(), 3);
+        assert!(matches!(program.declarations[1], Decl::Constant { .. }));
+        assert!(matches!(program.declarations[2], Decl::Macro { .. }));
+        let Decl::Macro { args, body, .. } = &program.declarations[2] else {
             panic!();
         };
         assert_eq!(args, &vec!["value".to_string()]);

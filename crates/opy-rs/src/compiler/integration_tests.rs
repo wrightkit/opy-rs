@@ -28,6 +28,8 @@ mod issue_145_lowering;
 mod issue_161_preprocessing;
 #[path = "tests/issue_162_semantic.rs"]
 mod issue_162_semantic;
+#[path = "tests/issue_167_source.rs"]
+mod issue_167_source;
 #[path = "tests/issue_42_oracle.rs"]
 mod issue_42_oracle;
 #[path = "tests/issue_46_oracle.rs"]

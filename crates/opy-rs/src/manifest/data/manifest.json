@@ -1439,6 +1439,20 @@
       "receiver": "Any"
     },
     {
+      "catalogId": "indexOfArrayValue",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "index",
+      "kind": "memberValue",
+      "params": [
+        {
+          "name": "value"
+        }
+      ],
+      "receiver": "Any"
+    },
+    {
       "catalogId": "setMoveSpeed",
       "evidence": [
         "receiver-calls"
@@ -2204,6 +2218,125 @@
         "member-aliases"
       ],
       "id": "getHero",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getVelocity",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getVelocity",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getSpeed",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getSpeed",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getMaxHealthOfType",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getMaxHealthOfType",
+      "kind": "memberValue",
+      "params": [
+        {
+          "domain": "Health",
+          "name": "healthType"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "applyImpulse",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "applyImpulse",
+      "kind": "memberAction",
+      "params": [
+        {
+          "domain": "Vector",
+          "name": "direction"
+        },
+        {
+          "name": "speed"
+        },
+        {
+          "domain": "Relativity",
+          "name": "relativity"
+        },
+        {
+          "domain": "Impulse",
+          "name": "motion"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setHealingDealt",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "setHealingDealt",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "healingPercent"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "removeAllHealthPoolsFromPlayer",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "removeAllHealthPools",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "addHealthPool",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "addHealthPool",
+      "kind": "memberAction",
+      "params": [
+        {
+          "domain": "Health",
+          "name": "healthType"
+        },
+        {
+          "name": "amount"
+        },
+        {
+          "name": "isPermanent"
+        },
+        {
+          "name": "receivesHealing"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getHeroOfDuplication",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getHeroOfDuplication",
       "kind": "memberValue",
       "params": [],
       "receiver": "Player"

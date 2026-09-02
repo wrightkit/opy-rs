@@ -104,6 +104,12 @@ pub enum Decl {
         members: Vec<(String, Span)>,
         span: Span,
     },
+    /// A source-level constant declared with `macro name = expression`.
+    Constant {
+        name: String,
+        value: Expr,
+        span: Span,
+    },
     /// A `macro` declaration with parameterized statement body.
     Macro {
         name: String,
