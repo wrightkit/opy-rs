@@ -492,7 +492,7 @@
         "test:opy-rs-differential",
         "fixtures:real-world/overpy-meipocalypse"
       ],
-      "notes": "Issue #6 + #7 part B. `#!define name(args) __script__(\"path.js\")` parsed (root-relative script resolution, script-not-found at the define site like the reference's ENOENT), expanded through opy_macro_js::MacroRuntime with the reference's var-injection ABI, indentation rule, and string-only completion contract — compile-time expansion executes and is source-supported. `#!postCompileHook` is parsed, validated, and recorded (duplicate rejection); compiler execution against final Workshop text is tracked by hooks/post-compile-workshop. Structured script-* diagnostics carry script provenance. Catalog constants remain lowering-dependent; `#!require` does not exist in the pinned reference."
+      "notes": "Issue #6 + #7 part B. `#!define name(args) __script__(\"path.js\")` parsed (script resolution relative to the definition file, script-not-found at the define site like the reference's ENOENT), expanded through opy_macro_js::MacroRuntime with the reference's var-injection ABI, indentation rule, and string-only completion contract — compile-time expansion executes and is source-supported. `#!postCompileHook` is parsed, validated, and recorded (duplicate rejection); compiler execution against final Workshop text is tracked by hooks/post-compile-workshop. Structured script-* diagnostics carry script provenance. Catalog constants remain lowering-dependent; `#!require` does not exist in the pinned reference."
     },
     {
       "id": "hooks/post-compile-workshop",
