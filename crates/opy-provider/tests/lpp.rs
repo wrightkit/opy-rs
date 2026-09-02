@@ -57,7 +57,7 @@ impl Session {
             "jsonrpc": "2.0",
             "id": 1,
             "method": "lpp/initialize",
-            "params": { "protocolVersion": "1.0" },
+            "params": { "protocolVersion": "1.1" },
         }))
     }
 
@@ -87,20 +87,32 @@ fn entry_check_loads_the_owner_project_closure_without_documents() {
         initialized["result"]["languages"][0]["extensions"],
         json!(["opy"])
     );
+    assert_eq!(initialized["result"]["protocolVersion"], "1.1");
     assert_eq!(initialized["result"]["capabilities"]["check"], true);
     assert_eq!(initialized["result"]["capabilities"]["compile"], true);
+    assert_eq!(
+        initialized["result"]["capabilities"]["projectLoading"],
+        true
+    );
     assert_eq!(initialized["result"]["capabilities"]["symbols"], false);
 
     let checked = session.request(json!({
         "jsonrpc": "2.0",
         "id": 2,
         "method": "lpp/check",
-        "params": { "entryUri": file_uri(MULTI_FILE_MAIN) },
+        "params": {
+            "entry": {
+                "uri": file_uri(MULTI_FILE_MAIN),
+                "languageId": "opy",
+                "version": 7,
+            }
+        },
     }));
     let documents = checked["result"]["documents"]
         .as_array()
         .expect("documents");
     assert_eq!(documents.len(), 2, "main plus reachable include");
+    assert!(documents.iter().all(|document| document["version"] == 7));
     assert!(
         documents
             .iter()
@@ -123,7 +135,13 @@ fn compile_returns_canonical_workshop_text_and_no_artifact_on_error() {
         "jsonrpc": "2.0",
         "id": 2,
         "method": "lpp/compile",
-        "params": { "entryUri": file_uri(BASIC_RULE) },
+        "params": {
+            "entry": {
+                "uri": file_uri(BASIC_RULE),
+                "languageId": "opy",
+                "version": 7,
+            }
+        },
     }));
     assert_eq!(
         compiled["result"]["artifact"]["format"],
@@ -140,7 +158,13 @@ fn compile_returns_canonical_workshop_text_and_no_artifact_on_error() {
         "jsonrpc": "2.0",
         "id": 3,
         "method": "lpp/compile",
-        "params": { "entryUri": file_uri(UNSUPPORTED) },
+        "params": {
+            "entry": {
+                "uri": file_uri(UNSUPPORTED),
+                "languageId": "opy",
+                "version": 7,
+            }
+        },
     }));
     assert_eq!(failed["result"]["artifact"], Value::Null);
     assert!(
@@ -155,7 +179,13 @@ fn compile_returns_canonical_workshop_text_and_no_artifact_on_error() {
 #[test]
 fn single_document_v1_requests_keep_the_client_version() {
     let mut session = Session::spawn();
-    session.initialize();
+    let initialized = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "lpp/initialize",
+        "params": { "protocolVersion": "1.0" },
+    }));
+    assert_eq!(initialized["result"]["protocolVersion"], "1.0");
     let path = Path::new(BASIC_RULE).canonicalize().expect("fixture path");
     let uri = file_uri(BASIC_RULE);
     let source = std::fs::read_to_string(&path).expect("fixture source");
@@ -187,7 +217,13 @@ fn check_preserves_owner_diagnostic_identity_and_range() {
         "jsonrpc": "2.0",
         "id": 2,
         "method": "lpp/check",
-        "params": { "entryUri": file_uri(DIAGNOSTICS) },
+        "params": {
+            "entry": {
+                "uri": file_uri(DIAGNOSTICS),
+                "languageId": "opy",
+                "version": 7,
+            }
+        },
     }));
     let document = &checked["result"]["documents"][0];
     assert!(
@@ -195,11 +231,128 @@ fn check_preserves_owner_diagnostic_identity_and_range() {
             .as_str()
             .is_some_and(|uri| uri.ends_with("/diagnostics/source.opy"))
     );
-    assert_eq!(document["version"], 0);
+    assert_eq!(document["version"], 7);
     let diagnostic = &document["diagnostics"][0];
     assert_eq!(diagnostic["severity"], "error");
     assert_eq!(diagnostic["source"], "opy");
     assert_eq!(diagnostic["range"]["start"]["line"], 0);
+    session.shutdown();
+}
+
+#[test]
+fn document_check_analyzes_every_supplied_document() {
+    let mut session = Session::spawn();
+    session.initialize();
+    let checked = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "lpp/check",
+        "params": {
+            "documents": {
+                "file:///project/clean.opy": {
+                    "uri": "file:///project/clean.opy",
+                    "languageId": "opy",
+                    "version": 3,
+                    "text": "rule \"clean\":\n    @Event global\n"
+                },
+                "file:///project/broken.opy": {
+                    "uri": "file:///project/broken.opy",
+                    "languageId": "opy",
+                    "version": 4,
+                    "text": "rule \"broken\":\n    @Event global\n    ???\n"
+                }
+            }
+        }
+    }));
+    let documents = checked["result"]["documents"]
+        .as_array()
+        .expect("documents");
+    assert_eq!(documents.len(), 2);
+    let clean = documents
+        .iter()
+        .find(|document| document["uri"] == "file:///project/clean.opy")
+        .expect("clean document");
+    assert_eq!(clean["version"], 3);
+    assert!(
+        clean["diagnostics"]
+            .as_array()
+            .expect("diagnostics")
+            .is_empty()
+    );
+    let broken = documents
+        .iter()
+        .find(|document| document["uri"] == "file:///project/broken.opy")
+        .expect("broken document");
+    assert_eq!(broken["version"], 4);
+    assert!(
+        !broken["diagnostics"]
+            .as_array()
+            .expect("diagnostics")
+            .is_empty()
+    );
+    let refused = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "lpp/compile",
+        "params": {
+            "documents": {
+                "file:///project/clean.opy": {
+                    "uri": "file:///project/clean.opy",
+                    "languageId": "opy",
+                    "version": 3,
+                    "text": "rule \"clean\":\n    @Event global\n"
+                },
+                "file:///project/broken.opy": {
+                    "uri": "file:///project/broken.opy",
+                    "languageId": "opy",
+                    "version": 4,
+                    "text": "rule \"broken\":\n    @Event global\n    ???\n"
+                }
+            }
+        }
+    }));
+    assert_eq!(refused["error"]["data"]["lpp"]["kind"], "refusal");
+    assert_eq!(
+        refused["error"]["data"]["lpp"]["details"]["refusalCode"],
+        "compile.requiresSingleDocument"
+    );
+    session.shutdown();
+}
+
+#[test]
+fn entry_errors_follow_lpp_11_project_loading_contract() {
+    let mut session = Session::spawn();
+    session.initialize();
+    let missing = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "lpp/check",
+        "params": {
+            "entry": {
+                "uri": "file:///project/missing.opy",
+                "languageId": "opy",
+                "version": 7
+            }
+        }
+    }));
+    assert_eq!(missing["error"]["data"]["lpp"]["kind"], "projectLoadFailed");
+    assert_eq!(
+        missing["error"]["data"]["lpp"]["details"]["entryUri"],
+        "file:///project/missing.opy"
+    );
+    let unsupported = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "lpp/check",
+        "params": {
+            "entry": {
+                "uri": "untitled:entry.opy",
+                "languageId": "opy",
+                "version": 7
+            }
+        }
+    }));
+    assert_eq!(unsupported["error"]["data"]["lpp"]["kind"], "invalidEntry");
     session.shutdown();
 }
 

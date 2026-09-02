@@ -67,8 +67,9 @@ opy-cli completion bash
 opy-cli version
 ```
 
-The first-party LPP process is available as `opy-provider`; it accepts an
-entry-based OPY project request so clients do not need to enumerate includes:
+The first-party LPP process is available as `opy-provider`; it supports LPP
+1.1 entry-based OPY project requests so clients do not need to enumerate
+includes:
 
 ```sh
 cargo run --release -p opy-provider

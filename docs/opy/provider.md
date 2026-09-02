@@ -4,29 +4,36 @@
 Protocol. It is an owner-side adapter over the existing `opy-rs` frontend and
 compiler; it does not expose OPY AST/HIR or Workshop WIR.
 
-## Capabilities
+## Protocol and capabilities
 
-The provider serves language id `opy` and the `opy` extension. Its initial
-capabilities are:
+The provider serves language id `opy` and the `opy` extension. It supports LPP
+`1.0` for document-supplied requests and LPP `1.1` for the additive
+provider-owned project-loading capability.
 
 | Capability | Method | Behavior |
 | --- | --- | --- |
 | Check | `lpp/check` | Loads the selected entry's OPY project and returns source diagnostics. |
 | Compile | `lpp/compile` | Uses the same project loading path and returns canonical Workshop text when clean. |
+| Project loading | `lpp/check`, `lpp/compile` | LPP 1.1 only: loads a complete OPY project from a client-selected entry. |
 
 All other LPP v1 capabilities are advertised as unavailable until they are
 implemented end to end.
 
 ## Entry-based project loading
 
-For the entry/project-loading extension owned by
-`language-provider-protocol#16`, `lpp/check` and `lpp/compile` accept an
-`entryUri` file URI without a complete `documents` map:
+For the entry/project-loading extension defined by
+`language-provider-protocol#16`, the client must negotiate LPP 1.1. Then
+`lpp/check` and `lpp/compile` accept an `entry` object without a complete
+`documents` map:
 
 ```json
 {
-  "entryUri": "file:///workspace/main.opy",
-  "locale": "en-US"
+  "entry": {
+    "uri": "file:///workspace/main.opy",
+    "languageId": "opy",
+    "version": 7
+  },
+  "projectRoot": "file:///workspace"
 }
 ```
 
@@ -39,8 +46,15 @@ the client to enumerate the source closure.
 
 Results identify every file discovered by preprocessing with a `file://` URI.
 Owner source spans are converted to LPP's zero-based UTF-16 positions, and
-filesystem-discovered documents use version `0` because they are not client
-overlays.
+every filesystem-loaded result echoes the entry version. Missing or unreadable
+required files fail the request with the structured `projectLoadFailed` error;
+unsupported entry URI, language, or version uses `invalidEntry`.
+
+Document-supplied requests remain available in both protocol versions. The
+provider analyzes every supplied document from that request snapshot. A
+document-supplied compile request with more than one document is refused with
+`compile.requiresSingleDocument` because the OPY compiler emits one project
+artifact.
 
 ## Compile artifact
 
