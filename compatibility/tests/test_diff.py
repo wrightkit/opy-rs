@@ -119,31 +119,6 @@ class DiffTests(unittest.TestCase):
         self.assertEqual(report_result["status"], "unexpected-divergence")
         self.assertTrue(report_result["referenceGap"])
 
-    def test_declared_reference_gap_is_reported_as_known_gap(self):
-        oracle_path = (
-            COMPATIBILITY_DIR
-            / "fixtures"
-            / "synthetic"
-            / "issue-60-4d-negative"
-            / "oracle.json"
-        )
-        result = json.loads(oracle_path.read_text(encoding="utf-8"))
-        result["compile"]["status"] = "success"
-        result["compile"]["exitCode"] = 0
-        result["compile"]["diagnostics"] = []
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            self.write_result(root, result)
-            report_result = diff.compare_fixture(
-                COMPATIBILITY_DIR / "fixtures",
-                "synthetic/issue-60-4d-negative",
-                root,
-                None,
-            )
-        self.assertEqual(report_result["status"], "known-gap")
-        self.assertTrue(report_result["referenceGap"])
-        self.assertIn("compile-status", report_result["regressionStages"])
-
     def test_diagnostic_difference_is_regression(self):
         result = copy.deepcopy(self.oracle)
         result["compile"]["diagnostics"] = [

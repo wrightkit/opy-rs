@@ -223,11 +223,11 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         false,
         "Issue #60 nested indexed assignment probe; global targets resolve and are constrained by the pinned canonical-WIR oracle.",
     );
-    resolve(
+    diagnostic(
         &mut cases,
         "synthetic/issue-60-4d-negative",
-        false,
-        "Issue #60 four-dimensional negative probe; the frontend resolves the source while the compiler preserves the pinned rejection boundary.",
+        Some("four-dimensional-assignment"),
+        "Issue #60 four-dimensional negative probe; source semantics reject the assignment at a stable, source-attributed diagnostic frontier before canonical lowering.",
     );
     diagnostic(
         &mut cases,
@@ -250,8 +250,8 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
     diagnostic(
         &mut cases,
         "synthetic/issue-65-invalid-binder",
-        Some("invalid-structure"),
-        "Issue #65 non-variable range binder is rejected by HIR validation with a stable source-attributed diagnostic.",
+        Some("invalid-range-binder"),
+        "Issue #65 non-variable range binder is rejected by source semantics with a stable source-attributed diagnostic before canonical lowering.",
     );
     resolve(
         &mut cases,

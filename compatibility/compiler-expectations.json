@@ -310,12 +310,12 @@
       "evidence": [
         "oracle:synthetic/issue-65-invalid-binder/oracle.json",
         "provenance:synthetic/issue-65-invalid-binder/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_65_player_variable::invalid_range_binder_has_a_stable_source_diagnostic"
+        "test:opy-rs::compiler::integration_tests::issue_162_semantic::semantic_boundary_errors_are_reported_before_lowering"
       ],
-      "owner": "opy-rs#65",
-      "note": "The pinned oracle and native source boundary reject a non-variable range binder with source-attributed diagnostics.",
-      "failureClass": "integration",
-      "diagnosticCode": "unsupported-integration-surface"
+      "owner": "opy-rs#162",
+      "note": "The pinned oracle and native source semantic boundary reject a non-variable range binder with a source-attributed diagnostic before canonical lowering.",
+      "failureClass": "frontend",
+      "diagnosticCode": "invalid-range-binder"
     },
     {
       "fixture": "synthetic/issue-113-is-dummy",
@@ -791,12 +791,12 @@
       "evidence": [
         "oracle:synthetic/issue-60-4d-negative/oracle.json",
         "provenance:synthetic/issue-60-4d-negative/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_145_lowering::four_dimensional_indexed_assignment_is_rejected_at_the_pinned_boundary"
+        "test:opy-rs::compiler::integration_tests::issue_162_semantic::semantic_boundary_errors_are_reported_before_lowering"
       ],
-      "owner": "opy-rs#145",
-      "note": "The pinned OverPy implementation rejects four-dimensional indexed assignments; native lowering preserves this boundary with a source-attributed integration diagnostic.",
-      "failureClass": "integration",
-      "diagnosticCode": "unsupported-integration-surface"
+      "owner": "opy-rs#162",
+      "note": "The pinned OverPy implementation rejects four-dimensional indexed assignments; native source semantics now preserves that boundary before canonical lowering.",
+      "failureClass": "frontend",
+      "diagnosticCode": "four-dimensional-assignment"
     },
     {
       "fixture": "synthetic/issue-33-f-string",
