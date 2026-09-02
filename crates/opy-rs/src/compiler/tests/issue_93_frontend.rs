@@ -24,7 +24,7 @@ fn frontend_diagnostics_are_public_and_source_attributed() {
         (
             "issue-33-lambda-negative.opy",
             "globalvar value\n\nrule \"issue 33 lambda negative\":\n    @Event global\n    debug(lambda item: item)\n",
-            "parse-error",
+            "lambda-context",
         ),
     ];
     let compiler = Compiler::new().expect("released Workshop contract must load");

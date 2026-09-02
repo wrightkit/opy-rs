@@ -1089,7 +1089,7 @@ impl Lowerer {
             Expr::Lambda { params, body, span } => {
                 if position != CallPosition::LambdaArgument {
                     self.error_at(
-                        "parse-error",
+                        "lambda-context",
                         "lambda expressions are only valid as array operation arguments"
                             .to_string(),
                         *span,
@@ -3423,7 +3423,7 @@ mod tests {
             "globalvar x\nrule \"r\":\n    @Event global\n    x = lambda value: value\n",
             4,
         );
-        assert_eq!(lambda_error.code, "parse-error");
+        assert_eq!(lambda_error.code, "lambda-context");
     }
 
     #[test]
