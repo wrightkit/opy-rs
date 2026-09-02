@@ -15,7 +15,7 @@
 //!
 //! A function-like define whose replacement starts with `__script__("…")`
 //! (OverPy 9.7.10 ABI, `src/compiler/tokenizer.ts`) is a script macro: the
-//! script path resolves root-relative at the define site (missing files are a
+//! script path resolves relative to the definition file (missing files are a
 //! `script-not-found` diagnostic, mirroring the reference's ENOENT failure),
 //! and each expansion runs the script through [`crate::macro_js::MacroRuntime`]
 //! with the call-site arguments injected as `var <name>=<raw>;` declarations
@@ -64,7 +64,7 @@ pub struct DefineRecord {
 /// A resolved `__script__("…")` macro backing.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScriptMacro {
-    /// The script path as declared (root-relative), used for diagnostics and
+    /// The resolved project-relative script path, used for diagnostics and
     /// runtime attribution.
     pub path: String,
     /// The script text, read at the define site.
@@ -78,7 +78,7 @@ pub struct ScriptMacro {
 /// lowering-dependent (issue #8).
 #[derive(Debug, Clone, PartialEq)]
 pub struct PostCompileHook {
-    /// The script path as declared (root-relative).
+    /// The resolved project-relative script path.
     pub path: String,
     /// The script text, read at the directive site.
     pub source: String,
@@ -157,13 +157,15 @@ pub fn preprocess_with_overlay_outcome(
     root: &Path,
     overlay: &BTreeMap<String, String>,
 ) -> PreprocessOutcome {
+    let resolved_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
     let mut pre = Preprocessor {
         files: vec![FileRecord {
             id: 0,
             path: main_path.to_string(),
         }],
         next_file_id: 1,
-        root: root.to_path_buf(),
+        root: resolved_root.clone(),
+        display_root: resolved_root,
         overlay: overlay.clone(),
         include_stack: Vec::new(),
         imported_files: BTreeSet::new(),
@@ -196,7 +198,7 @@ pub fn preprocess_with_overlay_outcome(
         };
     }
     if let Some((main_file, span)) = first_main_file_directive(main_text) {
-        let candidate = root.join(&main_file);
+        let candidate = pre.root.join(&main_file);
         let canonical = std::fs::canonicalize(&candidate).ok();
         let overlay_text = overlay
             .get(&main_file)
@@ -206,14 +208,13 @@ pub fn preprocess_with_overlay_outcome(
                     .and_then(|path| overlay.get(&path.to_string_lossy().into_owned()))
             })
             .cloned();
-        let (text, display_path, new_root) = match overlay_text {
+        let (text, canonical_path, new_root) = match overlay_text {
             Some(text) => {
-                let display_path = candidate.to_string_lossy().into_owned();
                 let new_root = candidate
                     .parent()
                     .map(Path::to_path_buf)
-                    .unwrap_or_else(|| root.to_path_buf());
-                (text, display_path, new_root)
+                    .unwrap_or_else(|| pre.root.clone());
+                (text, canonical, new_root)
             }
             None => {
                 let Some(canonical) = canonical else {
@@ -244,10 +245,12 @@ pub fn preprocess_with_overlay_outcome(
                 let new_root = canonical
                     .parent()
                     .map(Path::to_path_buf)
-                    .unwrap_or_else(|| root.to_path_buf());
-                (text, canonical.to_string_lossy().into_owned(), new_root)
+                    .unwrap_or_else(|| pre.root.clone());
+                (text, Some(canonical), new_root)
             }
         };
+        let display_path =
+            display_path(&candidate, canonical_path.as_deref(), &new_root, &main_file);
         owned_main_text = Some(text);
         source_file_id = 1;
         pre.files.push(FileRecord {
@@ -255,7 +258,8 @@ pub fn preprocess_with_overlay_outcome(
             path: display_path,
         });
         pre.next_file_id = 2;
-        pre.root = new_root;
+        pre.root = new_root.clone();
+        pre.display_root = new_root;
         pre.preprocessing.main_file = Some(DirectiveValue {
             value: main_file.clone(),
             span: Some(span.into()),
@@ -337,6 +341,7 @@ struct Preprocessor {
     files: Vec<FileRecord>,
     next_file_id: u32,
     root: PathBuf,
+    display_root: PathBuf,
     overlay: BTreeMap<String, String>,
     include_stack: Vec<PathBuf>,
     imported_files: BTreeSet<PathBuf>,
@@ -373,6 +378,31 @@ fn first_main_file_directive(text: &str) -> Option<(String, Span)> {
             crate::diag::Position::new(1, end_col),
         ),
     ))
+}
+
+fn display_path(candidate: &Path, canonical: Option<&Path>, root: &Path, fallback: &str) -> String {
+    let path = canonical.unwrap_or(candidate);
+    let Some(relative) = path.strip_prefix(root).ok() else {
+        return path.to_string_lossy().replace('\\', "/");
+    };
+    let mut components = Vec::new();
+    for component in relative.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                components.push("..".to_string());
+            }
+            std::path::Component::Normal(component) => {
+                components.push(component.to_string_lossy().into_owned());
+            }
+            _ => {}
+        }
+    }
+    if components.is_empty() {
+        fallback.to_string()
+    } else {
+        components.join("/")
+    }
 }
 
 impl Preprocessor {
@@ -476,7 +506,7 @@ impl Preprocessor {
                     span,
                 ));
             }
-            let hook = self.resolve_script(path, span)?;
+            let hook = self.resolve_script(path, span, &self.root)?;
             self.post_compile_hook = Some(PostCompileHook {
                 path: hook.path,
                 source: hook.source,
@@ -688,60 +718,124 @@ impl Preprocessor {
         });
     }
 
-    /// Resolve a script path relative to the project root and read its text.
-    fn resolve_script(&self, path: &str, span: Span) -> OpyResult<ScriptMacro> {
-        let canonical = self.root.join(path).canonicalize().map_err(|_| {
-            OpyError::at(
-                "script-not-found",
-                format!(
-                    "cannot find script '{path}' under root '{}'",
-                    self.root.display()
-                ),
-                span,
-            )
-        })?;
-        let source = std::fs::read_to_string(&canonical).map_err(|error| {
-            OpyError::at(
-                "script-not-found",
-                format!("cannot read script '{path}': {error}"),
-                span,
-            )
-        })?;
-        Ok(ScriptMacro {
-            path: path.to_string(),
-            source,
-        })
-    }
-
-    /// Resolve, lex, and splice one included file.
-    fn include(&mut self, include: &str, span: Span, out: &mut Vec<Token>) -> OpyResult<()> {
-        // Includes resolve relative to the source file containing the
-        // directive. The main source uses the project root as its base.
-        let candidate = self.include_base().join(include);
-        let canonical = std::fs::canonicalize(&candidate).ok();
-        let candidate_path = candidate.to_string_lossy().into_owned();
-        let candidate_without_dot = candidate_path
-            .strip_prefix("./")
-            .unwrap_or(&candidate_path)
-            .to_string();
-        // An open-document overlay (an unsaved editor buffer) takes
-        // precedence over the filesystem. Overlays are keyed by the include
-        // string and by the resolved canonical path, so both spellings work.
-        let overlay_text = self
+    /// Resolve a script path relative to the supplied base and read its text.
+    fn resolve_script(&self, path: &str, span: Span, base: &Path) -> OpyResult<ScriptMacro> {
+        let path = path.replace('\\', "/");
+        let candidate = base.join(&path);
+        let canonical = candidate.canonicalize().ok();
+        let resolved_path =
+            display_path(&candidate, canonical.as_deref(), &self.display_root, &path);
+        let overlay_source = self
             .overlay
-            .get(include)
-            .or_else(|| self.overlay.get(&candidate_path))
-            .or_else(|| self.overlay.get(&candidate_without_dot))
+            .get(&path)
+            .or_else(|| self.overlay.get(&candidate.to_string_lossy().into_owned()))
+            .or_else(|| self.overlay.get(&resolved_path))
             .or_else(|| {
                 canonical
                     .as_ref()
                     .and_then(|path| self.overlay.get(&path.to_string_lossy().into_owned()))
             })
             .cloned();
+        let source = match overlay_source {
+            Some(source) => source,
+            None => {
+                let canonical = canonical.ok_or_else(|| {
+                    OpyError::at(
+                        "script-not-found",
+                        format!(
+                            "cannot find script '{path}' under root '{}'",
+                            base.display()
+                        ),
+                        span,
+                    )
+                })?;
+                std::fs::read_to_string(&canonical).map_err(|error| {
+                    OpyError::at(
+                        "script-not-found",
+                        format!("cannot read script '{path}': {error}"),
+                        span,
+                    )
+                })?
+            }
+        };
+        Ok(ScriptMacro {
+            path: resolved_path,
+            source,
+        })
+    }
 
-        // The include-cycle identity: the canonical path when the file exists,
-        // otherwise the candidate path (overlays may not have a disk backing).
-        let identity = canonical.clone().unwrap_or_else(|| candidate.clone());
+    /// Resolve, lex, and splice one included file or directory.
+    fn include(&mut self, include: &str, span: Span, out: &mut Vec<Token>) -> OpyResult<()> {
+        // Includes resolve relative to the source file containing the
+        // directive. The main source uses the project root as its base.
+        let include = include.replace('\\', "/");
+        let candidate = self.include_base().join(&include);
+        let canonical = std::fs::canonicalize(&candidate).ok();
+        if canonical.as_deref().is_some_and(Path::is_dir) {
+            let mut files = std::fs::read_dir(&candidate)
+                .map_err(|error| {
+                    OpyError::at(
+                        "include-not-found",
+                        format!("cannot read included directory '{include}': {error}"),
+                        span,
+                    )
+                })?
+                .filter_map(Result::ok)
+                .map(|entry| entry.path())
+                .filter(|path| {
+                    path.extension()
+                        .is_some_and(|extension| extension.eq_ignore_ascii_case("opy"))
+                        && path.is_file()
+                })
+                .collect::<Vec<_>>();
+            files.sort();
+            if files.is_empty() {
+                return Err(OpyError::at(
+                    "include-not-found",
+                    format!("included directory '{include}' has no .opy files"),
+                    span,
+                ));
+            }
+            for file in files {
+                self.include_file(&file, &include, span, out)?;
+            }
+        } else {
+            self.include_file(&candidate, &include, span, out)?;
+        }
+        self.record("include", Some(&include), span);
+        Ok(())
+    }
+
+    fn include_file(
+        &mut self,
+        candidate: &Path,
+        requested: &str,
+        span: Span,
+        out: &mut Vec<Token>,
+    ) -> OpyResult<()> {
+        let canonical = std::fs::canonicalize(candidate).ok();
+        let candidate_path = candidate.to_string_lossy().into_owned();
+        let canonical_path = display_path(
+            candidate,
+            canonical.as_deref(),
+            &self.display_root,
+            requested,
+        );
+        let lexical_path = display_path(candidate, None, &self.display_root, requested);
+        let overlay_text = self
+            .overlay
+            .get(requested)
+            .or_else(|| self.overlay.get(&candidate_path))
+            .or_else(|| self.overlay.get(&lexical_path))
+            .or_else(|| self.overlay.get(&canonical_path))
+            .or_else(|| {
+                canonical
+                    .as_ref()
+                    .and_then(|path| self.overlay.get(&path.to_string_lossy().into_owned()))
+            })
+            .cloned();
+        let uses_overlay = overlay_text.is_some();
+        let identity = canonical.clone().unwrap_or_else(|| candidate.to_path_buf());
         if self.include_stack.contains(&identity) {
             return Err(OpyError::at(
                 "include-cycle",
@@ -752,7 +846,7 @@ impl Preprocessor {
                 span,
             ));
         }
-        let import_identity = candidate.clone();
+        let import_identity = candidate.to_path_buf();
         if self.imported_files.contains(&import_identity) {
             self.warnings.push(PreprocessWarning {
                 code: "w_already_imported".to_string(),
@@ -762,7 +856,6 @@ impl Preprocessor {
                 ),
                 span,
             });
-            self.record("include", Some(include), span);
             return Ok(());
         }
         self.imported_files.insert(import_identity);
@@ -774,7 +867,7 @@ impl Preprocessor {
                     OpyError::at(
                         "include-not-found",
                         format!(
-                            "cannot find included file '{include}' under root '{}'",
+                            "cannot find included file '{requested}' under root '{}'",
                             self.root.display()
                         ),
                         span,
@@ -783,71 +876,61 @@ impl Preprocessor {
                 std::fs::read_to_string(&canonical).map_err(|error| {
                     OpyError::at(
                         "include-not-found",
-                        format!("cannot read included file '{include}': {error}"),
+                        format!("cannot read included file '{requested}': {error}"),
                         span,
                     )
                 })?
             }
         };
-        // Each newly processed include registers one file in the registry.
         let file_id = self.next_file_id;
         self.next_file_id += 1;
-        let display_path = self.include_display_path(&candidate, include);
         self.files.push(FileRecord {
             id: file_id,
-            path: display_path,
+            path: if uses_overlay {
+                lexical_path
+            } else {
+                canonical_path
+            },
         });
         self.include_stack.push(identity);
         let saved_prefix = self.preprocessing.rule_prefix.clone();
         let saved_optimization = self.preprocessing.optimization.clone();
-        let settings = match crate::settings::find_blocks(&text, file_id) {
-            Err(error) => {
-                self.include_stack.pop();
-                return Err(error);
+        let result = (|| {
+            let settings = match crate::settings::find_blocks(&text, file_id) {
+                Err(error) => return Err(error),
+                Ok(mut blocks) => blocks.pop(),
+            };
+            if let Some(block) = settings {
+                if self.settings.is_some() {
+                    return Err(OpyError::at(
+                        "settings-placement",
+                        "only one settings block is supported in a project".to_string(),
+                        block.keyword_span,
+                    ));
+                }
+                self.settings = Some(block);
             }
-            Ok(mut blocks) => blocks.pop(),
-        };
-        if let Some(block) = settings {
-            if self.settings.is_some() {
-                self.include_stack.pop();
-                return Err(OpyError::at(
-                    "settings-placement",
-                    "only one settings block is supported in a project".to_string(),
-                    block.keyword_span,
-                ));
-            }
-            self.settings = Some(block);
-        }
-        let sanitized = self
-            .settings
-            .as_ref()
-            .filter(|block| block.span.file == file_id)
-            .map(|block| crate::settings::sanitize_for_lex(&text, block));
-        let mut included = lex(LexInput {
-            file_id,
-            text: sanitized.as_deref().unwrap_or(&text),
-        })?;
-        let allow_leading_main_file = text
-            .lines()
-            .next()
-            .is_some_and(|line| line.trim_end_matches('\r').starts_with("#!mainFile"));
-        let processed = self.process_directives(&mut included, allow_leading_main_file);
+            let sanitized = self
+                .settings
+                .as_ref()
+                .filter(|block| block.span.file == file_id)
+                .map(|block| crate::settings::sanitize_for_lex(&text, block));
+            let mut included = lex(LexInput {
+                file_id,
+                text: sanitized.as_deref().unwrap_or(&text),
+            })?;
+            let allow_leading_main_file = text
+                .lines()
+                .next()
+                .is_some_and(|line| line.trim_end_matches('\r').starts_with("#!mainFile"));
+            self.process_directives(&mut included, allow_leading_main_file)?;
+            included.retain(|token| token.kind != TokenKind::Eof);
+            Ok(included)
+        })();
         self.preprocessing.rule_prefix = saved_prefix;
         self.preprocessing.optimization = saved_optimization;
-        if let Err(error) = processed {
-            self.include_stack.pop();
-            return Err(error);
-        }
-        // Drop the included file's Eof token (it terminates the file, not
-        // the spliced stream).
-        included.retain(|token| token.kind != TokenKind::Eof);
-        // Included tokens keep their real positions so the parser's
-        // indentation model works; span comparison is normalized away by the
-        // differential suite. File identity beyond the main file is preserved
-        // in diagnostics (include cycles/not-found name the real path).
-        out.extend(included);
         self.include_stack.pop();
-        self.record("include", Some(include), span);
+        out.extend(result?);
         Ok(())
     }
 
@@ -859,19 +942,6 @@ impl Preprocessor {
             .unwrap_or_else(|| self.root.clone())
     }
 
-    fn include_display_path(&self, candidate: &Path, fallback: &str) -> String {
-        candidate
-            .strip_prefix(&self.root)
-            .ok()
-            .and_then(|path| (!path.as_os_str().is_empty()).then_some(path))
-            .map(|path| path.to_string_lossy().into_owned())
-            .or_else(|| {
-                let path = candidate.to_string_lossy();
-                Some(path.strip_prefix("./").unwrap_or(&path).to_string())
-            })
-            .unwrap_or_else(|| fallback.to_string())
-    }
-
     /// Register one `#!define` (object- or function-like).
     ///
     /// A define is function-like when `(` immediately follows the name
@@ -879,8 +949,8 @@ impl Preprocessor {
     /// (`#!define X (a + b)`) keeps its parentheses as value tokens.
     fn define(&mut self, rest: &str, span: Span, is_member: bool) -> OpyResult<()> {
         let rest = rest.trim();
-        let first_open = rest.find('(').unwrap_or(usize::MAX);
-        let first_space = rest.find(char::is_whitespace).unwrap_or(usize::MAX);
+        let first_open = rest.find('(').unwrap_or(rest.len());
+        let first_space = rest.find(char::is_whitespace).unwrap_or(rest.len());
         let is_function_like = first_open < first_space;
 
         let (name, params, body_text) = if is_function_like {
@@ -902,17 +972,20 @@ impl Preprocessor {
             (name.to_string(), params, body.to_string())
         } else {
             let name = rest[..first_space].trim();
-            let body = if first_space == usize::MAX {
-                String::new()
-            } else {
-                rest[first_space..].trim().to_string()
-            };
+            let body = rest[first_space..].trim().to_string();
             (name.to_string(), Vec::new(), body)
         };
         if name.is_empty() {
             return Err(OpyError::at(
                 "define-invalid",
                 "malformed `#!define` directive: missing macro name",
+                span,
+            ));
+        }
+        if body_text.is_empty() {
+            return Err(OpyError::at(
+                "define-invalid",
+                format!("malformed `#!define {rest}`: missing replacement"),
                 span,
             ));
         }
@@ -930,8 +1003,8 @@ impl Preprocessor {
         let script = if is_function_like && body_text.starts_with("__script__(") {
             // The OverPy script-macro ABI: the replacement is exactly
             // `__script__("path.js")`; the reference extracts the path from
-            // the text between the parentheses and resolves it root-relative
-            // at the define site (missing files fail at compile time).
+            // the text between the parentheses and resolves it relative to the
+            // definition file (missing files fail at compile time).
             let inner = &body_text["__script__(".len()..];
             let inner = inner.strip_suffix(')').ok_or_else(|| {
                 OpyError::at(
@@ -951,7 +1024,8 @@ impl Preprocessor {
                     span,
                 ));
             };
-            Some(self.resolve_script(path, span)?)
+            let base = self.include_base();
+            Some(self.resolve_script(path, span, &base)?)
         } else {
             None
         };
@@ -1691,6 +1765,8 @@ mod tests {
         let (pre, files) = preprocess_with_overlay(main, "main.opy", Path::new("."), &overlay)
             .expect("alias include paths must remain distinct imports");
         assert_eq!(files.len(), 3);
+        assert_eq!(files[1].path, "shared.opy");
+        assert_eq!(files[2].path, "dir/../shared.opy");
         assert_eq!(pre.defines.len(), 2);
         assert!(pre.warnings.is_empty());
     }

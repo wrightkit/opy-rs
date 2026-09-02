@@ -24,6 +24,8 @@ mod issue_142_preprocessing;
 mod issue_144_builtin_surface;
 #[path = "tests/issue_145_lowering.rs"]
 mod issue_145_lowering;
+#[path = "tests/issue_161_preprocessing.rs"]
+mod issue_161_preprocessing;
 #[path = "tests/issue_42_oracle.rs"]
 mod issue_42_oracle;
 #[path = "tests/issue_46_oracle.rs"]
