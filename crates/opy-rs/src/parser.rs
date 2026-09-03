@@ -340,7 +340,10 @@ impl Parser<'_> {
             );
             return false;
         }
-        let end = self.peek().span.start;
+        let end = self
+            .tokens
+            .get(self.pos.saturating_sub(1))
+            .map_or(start.span.end, |token| token.span.end);
         let span = Span::new(start.span.file, start.span.start, end);
         let decl = if global {
             Decl::GlobalVariable {
@@ -377,7 +380,10 @@ impl Parser<'_> {
         } else {
             start.span
         };
-        let end = self.peek().span.start;
+        let end = self
+            .tokens
+            .get(self.pos.saturating_sub(1))
+            .map_or(start.span.end, |token| token.span.end);
         declarations.push(Decl::Subroutine {
             name,
             span: Span::new(start.span.file, start.span.start, end),
@@ -690,7 +696,9 @@ impl Parser<'_> {
                 {
                     return false;
                 }
-                let end = self.peek().span.start;
+                let end = args
+                    .last()
+                    .map_or(event_annotation_arg.span.end, |arg| arg.span().end);
                 *event = Some(Event {
                     name: event_name,
                     args,
@@ -707,7 +715,7 @@ impl Parser<'_> {
                 let start = self.pos;
                 match self.parse_expr() {
                     Ok(expr) => {
-                        let end = self.peek().span.start;
+                        let end = expr.span().end;
                         conditions.push(expr);
                         annotations.push(Annotation {
                             name,
@@ -741,7 +749,7 @@ impl Parser<'_> {
                     self.error_at_current("@Slot and @Hero cannot be used together".to_string());
                     return false;
                 }
-                let end = self.peek().span.start;
+                let end = args.last().map_or(at.span.end, |arg| arg.span.end);
                 annotations.push(Annotation {
                     name,
                     args,
@@ -757,7 +765,7 @@ impl Parser<'_> {
                     );
                     return false;
                 }
-                let end = self.peek().span.start;
+                let end = args.last().map_or(at.span.end, |arg| arg.span.end);
                 annotations.push(Annotation {
                     name,
                     args,
@@ -773,7 +781,7 @@ impl Parser<'_> {
                     );
                     return false;
                 }
-                let end = self.peek().span.start;
+                let end = args.last().map_or(at.span.end, |arg| arg.span.end);
                 annotations.push(Annotation {
                     name,
                     args,
@@ -817,7 +825,7 @@ impl Parser<'_> {
                     );
                     return false;
                 }
-                let end = self.peek().span.start;
+                let end = args.last().map_or(at.span.end, |arg| arg.span.end);
                 *new_page = args.first().map(|arg| unquote_annotation_arg(&arg.text));
                 annotations.push(Annotation {
                     name,
@@ -1146,7 +1154,7 @@ impl Parser<'_> {
             TokenKind::Assign => {
                 self.advance();
                 let value = self.parse_expr()?;
-                let end = self.peek().span.start;
+                let end = value.span().end;
                 Ok(Stmt::Assign {
                     target: expr,
                     value,
@@ -1171,7 +1179,7 @@ impl Parser<'_> {
                 .to_string();
                 self.advance();
                 let rhs = self.parse_expr()?;
-                let end = self.peek().span.start;
+                let end = rhs.span().end;
                 let value = Expr::Binary {
                     op,
                     left: Box::new(expr.clone()),
@@ -1191,7 +1199,7 @@ impl Parser<'_> {
                 let op = self.advance().text;
                 self.advance();
                 let rhs = self.parse_expr()?;
-                let end = self.peek().span.start;
+                let end = rhs.span().end;
                 let value = Expr::Binary {
                     op,
                     left: Box::new(expr.clone()),
@@ -1235,7 +1243,7 @@ impl Parser<'_> {
                 })
             }
             _ => {
-                let end = self.peek().span.start;
+                let end = expr.span().end;
                 Ok(Stmt::Expr {
                     expr,
                     span: Span::new(start.file, start.start, end),

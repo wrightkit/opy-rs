@@ -2599,6 +2599,16 @@
       "receiver": "Any"
     },
     {
+      "catalogId": "raycastHitNormal",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getNormal",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Any"
+    },
+    {
       "catalogId": "__xComponentOf__",
       "evidence": [
         "builtin-surface"
@@ -4325,6 +4335,7 @@
           "name": "damagePercent"
         },
         {
+          "default": "RECEIVERS_DAMAGERS_AND_DMGPERCENT",
           "domain": "DamageReeval",
           "name": "reevaluation"
         }
@@ -4525,6 +4536,61 @@
       "params": []
     },
     {
+      "catalogId": "getLastDamageOverTimeId",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getLastDamageOverTimeId",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "stopDamageOverTime",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "stopDamageOverTime",
+      "kind": "action",
+      "params": [
+        {
+          "name": "damageOverTimeId"
+        }
+      ]
+    },
+    {
+      "catalogId": "eventWasCriticalHit",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "eventWasCriticalHit",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "stopAllDamageOverTime",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "stopAllDamageOverTime",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setRespawnTime",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "setRespawnTime",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "time"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
       "catalogId": "setAbilityResource",
       "evidence": [
         "builtin-surface"
@@ -4541,6 +4607,131 @@
         }
       ],
       "receiver": "Player"
+    },
+    {
+      "catalogId": "setEnvironmentCreditPlayer",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "setEnvironmentalKillCreditor",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "creditor"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getHeroStatistic",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getHeroStatistic",
+      "kind": "memberValue",
+      "params": [
+        {
+          "domain": "Hero",
+          "name": "hero"
+        },
+        {
+          "domain": "HeroStat",
+          "name": "statistic"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "magnitude",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "magnitude",
+      "kind": "value",
+      "params": [
+        {
+          "domain": "Vector",
+          "name": "vector"
+        }
+      ]
+    },
+    {
+      "catalogId": "communicate",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "communicate",
+      "kind": "memberAction",
+      "params": [
+        {
+          "domain": "Comms",
+          "name": "message"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "cos",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "cos",
+      "kind": "value",
+      "params": [
+        {
+          "name": "radians"
+        }
+      ]
+    },
+    {
+      "catalogId": "getPlayersInViewAngle",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getPlayersInViewAngle",
+      "kind": "memberValue",
+      "params": [
+        {
+          "name": "team"
+        },
+        {
+          "name": "viewAngle"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "destroyIcon",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "destroyIcon",
+      "kind": "action",
+      "params": [
+        {
+          "name": "iconId"
+        }
+      ]
+    },
+    {
+      "catalogId": "localVector",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "localVector",
+      "kind": "value",
+      "params": [
+        {
+          "name": "vector"
+        },
+        {
+          "name": "player"
+        },
+        {
+          "domain": "Transform",
+          "name": "transform"
+        }
+      ]
     }
   ],
   "provenance": {

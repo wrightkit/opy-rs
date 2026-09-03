@@ -1410,11 +1410,13 @@ impl Lowerer {
                 args: Vec::new(),
                 span: Some(span.into()),
             },
-            "eventAbility" | "eventDamage" | "eventHealing" => HirExpr::Call {
-                name: name.to_string(),
-                args: Vec::new(),
-                span: Some(span.into()),
-            },
+            "eventAbility" | "eventDamage" | "eventHealing" | "eventWasCriticalHit" => {
+                HirExpr::Call {
+                    name: name.to_string(),
+                    args: Vec::new(),
+                    span: Some(span.into()),
+                }
+            }
             _ if self.global_visible(name) => HirExpr::GlobalVar {
                 name: name.to_string(),
                 span: Some(span.into()),

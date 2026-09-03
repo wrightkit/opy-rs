@@ -1347,6 +1347,8 @@ struct Lowering<'a> {
     array_bindings: Vec<ArrayBinding>,
     current_rule_conditions: Option<Vec<wir::ValueId>>,
     visible_labels: Vec<HashSet<String>>,
+    deferred_gotos: Vec<(wir::ActionId, String, Option<HirSpan>)>,
+    outer_goto_targets: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -1452,6 +1454,8 @@ impl<'a> Lowering<'a> {
             array_bindings: Vec::new(),
             current_rule_conditions: None,
             visible_labels: Vec::new(),
+            deferred_gotos: Vec::new(),
+            outer_goto_targets: Vec::new(),
         })
     }
 
@@ -2177,10 +2181,18 @@ impl<'a> Lowering<'a> {
             "Hero"
         };
         let locale = Locale::new("en-US");
+        let catalog_spelling = match (domain, spelling.as_str()) {
+            ("Hero", "mccree") => "CASSIDY",
+            ("Hero", "hammond") => "WRECKING_BALL",
+            ("Hero", "soldier") => "SOLDIER_76",
+            ("Hero", "domina") => "JINYU",
+            ("Hero", "dmon") => "D_MON",
+            _ => spelling.as_str(),
+        };
         let member = self
             .compiler
             .catalog
-            .resolve_enum_member(domain, &locale, &spelling)
+            .resolve_enum_member(domain, &locale, catalog_spelling)
             .map(|(_, member)| member)
             .or_else(|| {
                 (domain == "Hero")
@@ -2193,19 +2205,21 @@ impl<'a> Lowering<'a> {
                                     .members
                                     .iter()
                                     .find(|member| {
-                                        member.spellings(&locale).iter().any(|candidate| {
-                                            candidate.eq_ignore_ascii_case(&spelling)
-                                        }) || member
-                                            .member
-                                            .chars()
-                                            .filter(|c| c.is_ascii_alphanumeric())
-                                            .collect::<String>()
-                                            .eq_ignore_ascii_case(
-                                                &spelling
-                                                    .chars()
-                                                    .filter(|c| c.is_ascii_alphanumeric())
-                                                    .collect::<String>(),
-                                            )
+                                        member.member.eq_ignore_ascii_case(catalog_spelling)
+                                            || member.spellings(&locale).iter().any(|candidate| {
+                                                candidate.eq_ignore_ascii_case(catalog_spelling)
+                                            })
+                                            || member
+                                                .member
+                                                .chars()
+                                                .filter(|c| c.is_ascii_alphanumeric())
+                                                .collect::<String>()
+                                                .eq_ignore_ascii_case(
+                                                    &catalog_spelling
+                                                        .chars()
+                                                        .filter(|c| c.is_ascii_alphanumeric())
+                                                        .collect::<String>(),
+                                                )
                                     })
                                     .map(|member| member.member.clone())
                             })
@@ -2299,11 +2313,17 @@ impl<'a> Lowering<'a> {
                         .find_map(|(branch_index, branch)| {
                             let (conditions, label) = pure_goto_conditions(branch.body.last()?)?;
                             let target = statements[index + 1..]
-                        .iter()
-                        .position(|candidate| {
-                            matches!(candidate, Stmt::Label { name, .. } if name == label)
-                        })
-                        .map(|offset| index + 1 + offset)?;
+                                .iter()
+                                .position(|candidate| {
+                                    matches!(candidate, Stmt::Label { name, .. } if name == label)
+                                })
+                                .map(|offset| index + 1 + offset)
+                                .or_else(|| {
+                                    self.outer_goto_targets
+                                        .last()
+                                        .is_some_and(|target| target == label)
+                                        .then_some(statements.len())
+                                })?;
                             Some((
                                 branch_index,
                                 conditions.into_iter().cloned().collect::<Vec<_>>(),
@@ -2311,9 +2331,12 @@ impl<'a> Lowering<'a> {
                                 target,
                             ))
                         });
-                if let Some((exit_branch, exit_conditions, _label, target)) = external_jump {
-                    let middle =
-                        self.lower_actions(&statements[index + 1..target], break_target)?;
+                if let Some((exit_branch, exit_conditions, label, target)) = external_jump {
+                    self.outer_goto_targets.push(label.clone());
+                    let middle_result =
+                        self.lower_actions(&statements[index + 1..target], break_target);
+                    let middle = middle_result?;
+                    self.resolve_deferred_gotos(&middle, label.as_str(), middle.len())?;
                     let distance = self.canonical_action_width(&middle, *span)?;
                     let mut lowered_branches = Vec::with_capacity(branches.len());
                     for (branch_index, branch) in branches.iter().enumerate() {
@@ -2331,6 +2354,7 @@ impl<'a> Lowering<'a> {
                         .as_ref()
                         .map(|body| self.lower_actions(body, break_target))
                         .transpose()?;
+                    self.outer_goto_targets.pop();
                     actions.push(self.wir.actions.push(Action::If {
                         branches: lowered_branches,
                         else_body,
@@ -2358,11 +2382,21 @@ impl<'a> Lowering<'a> {
                     .position(
                         |candidate| matches!(candidate, Stmt::Label { name, .. } if name == label),
                     )
-                    .map(|offset| index + 1 + offset);
+                    .map(|offset| index + 1 + offset)
+                    .or_else(|| {
+                        self.outer_goto_targets
+                            .last()
+                            .is_some_and(|target| target == label)
+                            .then_some(statements.len())
+                    });
                 if let Some(target) = target {
-                    let middle =
-                        self.lower_actions(&statements[index + 1..target], break_target)?;
+                    self.outer_goto_targets.push(label.to_string());
+                    let middle_result =
+                        self.lower_actions(&statements[index + 1..target], break_target);
+                    self.outer_goto_targets.pop();
+                    let middle = middle_result?;
                     let span = statement.span().copied();
+                    self.resolve_deferred_gotos(&middle, label, middle.len())?;
                     let distance = self.canonical_action_width(&middle, span)?;
                     let mut args = Vec::with_capacity(conditions.len() + 1);
                     if let Some((first, rest)) = conditions.split_first() {
@@ -2435,6 +2469,14 @@ impl<'a> Lowering<'a> {
                     return Err(self.unsupported("goto is missing a label or offset", span));
                 };
                 let Some(&target) = labels.get(&label) else {
+                    if self
+                        .visible_labels
+                        .iter()
+                        .any(|labels| labels.contains(&label))
+                    {
+                        self.deferred_gotos.push((action, label, span));
+                        continue;
+                    }
                     return Err(self.unsupported(format!("unknown goto label '{label}'"), span));
                 };
                 if target < position {
@@ -2449,8 +2491,45 @@ impl<'a> Lowering<'a> {
             };
             args[0] = distance;
         }
+        if self.visible_labels.len() == 1 && !self.deferred_gotos.is_empty() {
+            let (_, label, span) = self.deferred_gotos.remove(0);
+            return Err(self.unsupported(format!("unknown goto label '{label}'"), span));
+        }
         self.visible_labels.pop();
         Ok(actions)
+    }
+
+    fn resolve_deferred_gotos(
+        &mut self,
+        actions: &[wir::ActionId],
+        label: &str,
+        target: usize,
+    ) -> Result<(), IntegrationError> {
+        let deferred = std::mem::take(&mut self.deferred_gotos);
+        let mut remaining = Vec::new();
+        for (action, deferred_label, span) in deferred {
+            if deferred_label != label {
+                remaining.push((action, deferred_label, span));
+                continue;
+            }
+            let Some(position) = actions.iter().position(|candidate| *candidate == action) else {
+                remaining.push((action, deferred_label, span));
+                continue;
+            };
+            if target < position {
+                return Err(
+                    self.unsupported("backward goto is not representable in canonical WIR", span)
+                );
+            }
+            let width = self.canonical_action_width(&actions[position + 1..target], span)?;
+            let distance = self.push_number(width as f64, &width.to_string());
+            let Some(Action::Call { args, .. }) = self.wir.actions.get_mut(action) else {
+                unreachable!("deferred goto placeholder must be a call action")
+            };
+            args[0] = distance;
+        }
+        self.deferred_gotos = remaining;
+        Ok(())
     }
 
     fn lower_action(
@@ -4943,7 +5022,10 @@ impl<'a> Lowering<'a> {
                 if !matches!(function.kind, FunctionKind::MemberValue) {
                     return Err(self.unsupported(format!("'{name}' is not a member value"), span));
                 }
-                if matches!(function.id.as_str(), "getHitPosition" | "getPlayerHit") {
+                if matches!(
+                    function.id.as_str(),
+                    "getHitPosition" | "getPlayerHit" | "getNormal"
+                ) {
                     let member_name = function.id.as_str();
                     let Expr::Call {
                         name: receiver_name,
@@ -5729,11 +5811,13 @@ fn player_event_kind(name: &str) -> Option<PlayerEventKind> {
         "playerDealtDamage" => PlayerEventKind::DealtDamage,
         "playerDealtFinalBlow" => PlayerEventKind::DealtFinalBlow,
         "playerDealtHealing" => PlayerEventKind::DealtHealing,
+        "playerDealtKnockback" => PlayerEventKind::DealtKnockback,
         "playerDied" => PlayerEventKind::Died,
         "playerEarnedElimination" => PlayerEventKind::EarnedElimination,
         "playerJoined" => PlayerEventKind::Joined,
         "playerLeft" => PlayerEventKind::Left,
         "playerReceivedHealing" => PlayerEventKind::ReceivedHealing,
+        "playerReceivedKnockback" => PlayerEventKind::ReceivedKnockback,
         "playerTookDamage" => PlayerEventKind::TookDamage,
         _ => return None,
     })
@@ -6504,6 +6588,30 @@ mod tests {
             }
         ));
         assert!(artifact.emitted.contains("Player Joined Match;"));
+    }
+
+    #[test]
+    fn hero_event_filters_accept_legacy_aliases() {
+        let compiler = Compiler::new().unwrap();
+        let hir = crate::compile(
+            "rule \"hero\":\n    @Event eachPlayer\n    @Hero soldier\n    disableInspector()\n",
+            "hero-filter.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        assert!(matches!(
+            &artifact
+                .wir
+                .rules
+                .get(workshop_rs::wir::RuleId::from_index(0))
+                .unwrap()
+                .event,
+            workshop_rs::wir::Event::EachPlayerWithFilters {
+                target: workshop_rs::wir::EventTarget::Hero(hero),
+                ..
+            } if hero == "SOLDIER_76"
+        ));
     }
 
     #[test]
