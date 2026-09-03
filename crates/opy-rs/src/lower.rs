@@ -181,10 +181,14 @@ pub fn lower_with_preprocessing(
                     // produce no HIR declaration (reference behavior).
                 }
                 Decl::Constant { name, value, span } => {
+                    let previous = lowerer.allow_dict_literal;
+                    lowerer.allow_dict_literal = true;
+                    let value = lowerer.lower_expr(value, &[], CallPosition::Value);
+                    lowerer.allow_dict_literal = previous;
                     declarations.push(Declaration::Constant {
                         name: name.clone(),
                         span: Some(span.into()),
-                        value: Box::new(lowerer.lower_expr(value, &[], CallPosition::Value)),
+                        value: Box::new(value),
                     });
                 }
                 Decl::Macro {
@@ -809,25 +813,115 @@ impl Lowerer {
         allow_do_while: bool,
         loopable: bool,
     ) -> Vec<HirStmt> {
-        stmts
-            .iter()
-            .enumerate()
-            .map(|(index, stmt)| {
-                if matches!(stmt, Stmt::DoWhile { .. })
-                    && (!allow_do_while
-                        || stmts[..index]
-                            .iter()
-                            .any(|previous| !matches!(previous, Stmt::Pass { .. })))
-                {
-                    self.error_at(
-                        "do-while-placement",
-                        "do-while must be at the beginning of a rule, subroutine, or do-while body; only pass statements may precede it".to_string(),
-                        stmt.span(),
-                    );
+        let mut lowered = Vec::new();
+        for (index, stmt) in stmts.iter().enumerate() {
+            if matches!(stmt, Stmt::DoWhile { .. })
+                && (!allow_do_while
+                    || stmts[..index]
+                        .iter()
+                        .any(|previous| !matches!(previous, Stmt::Pass { .. })))
+            {
+                self.error_at(
+                    "do-while-placement",
+                    "do-while must be at the beginning of a rule, subroutine, or do-while body; only pass statements may precede it".to_string(),
+                    stmt.span(),
+                );
+            }
+            if let Stmt::Expr {
+                expr: Expr::Call { name, args, .. },
+                span,
+            } = stmt
+            {
+                if name == "splitDictArray" {
+                    lowered.extend(self.lower_split_dict_array(args, *span, macro_params));
+                    continue;
                 }
-                self.lower_stmt(stmt, macro_params, breakable, loopable)
-            })
-            .collect()
+            }
+            lowered.push(self.lower_stmt(stmt, macro_params, breakable, loopable));
+        }
+        lowered
+    }
+
+    fn lower_split_dict_array(
+        &mut self,
+        args: &[cst::CallArg],
+        span: Span,
+        macro_params: &[String],
+    ) -> Vec<HirStmt> {
+        let Some(fields) = args.first().map(|arg| &arg.value) else {
+            self.error_at(
+                "split-dict-array-arity",
+                "splitDictArray requires a field mapping and data array".to_string(),
+                span,
+            );
+            return Vec::new();
+        };
+        let Some(rows) = args.get(1).map(|arg| &arg.value) else {
+            self.error_at(
+                "split-dict-array-arity",
+                "splitDictArray requires a field mapping and data array".to_string(),
+                span,
+            );
+            return Vec::new();
+        };
+        let Expr::Dict {
+            entries: field_entries,
+            ..
+        } = fields
+        else {
+            self.error_at(
+                "split-dict-array-arguments",
+                "splitDictArray first argument must be a dictionary".to_string(),
+                fields.span(),
+            );
+            return Vec::new();
+        };
+        let Expr::Array { elements, .. } = rows else {
+            self.error_at(
+                "split-dict-array-arguments",
+                "splitDictArray second argument must be an array".to_string(),
+                rows.span(),
+            );
+            return Vec::new();
+        };
+
+        let mut result = Vec::with_capacity(field_entries.len());
+        for field in field_entries {
+            let Some(field_name) = expr_identifier(&field.key) else {
+                self.error_at(
+                    "split-dict-array-key",
+                    "splitDictArray field keys must be identifiers".to_string(),
+                    field.key.span(),
+                );
+                continue;
+            };
+            let target = self.lower_expr(&field.value, macro_params, CallPosition::Value);
+            let previous = self.allow_dict_literal;
+            self.allow_dict_literal = true;
+            let values = elements
+                .iter()
+                .map(|element| match element {
+                    Expr::Dict { entries, .. } => entries
+                        .iter()
+                        .find(|entry| expr_identifier(&entry.key) == Some(field_name))
+                        .map(|entry| {
+                            self.lower_expr(&entry.value, macro_params, CallPosition::Value)
+                        })
+                        .unwrap_or(HirExpr::Null { span: None }),
+                    _ => HirExpr::Null { span: None },
+                })
+                .collect();
+            self.allow_dict_literal = previous;
+            result.push(HirStmt::Assign {
+                target: Box::new(target),
+                value: Box::new(HirExpr::Array {
+                    elements: values,
+                    span: Some(span.into()),
+                }),
+                span: Some(span.into()),
+            });
+        }
+        result
     }
 
     fn lower_stmt(
@@ -1316,7 +1410,7 @@ impl Lowerer {
                 args: Vec::new(),
                 span: Some(span.into()),
             },
-            "eventAbility" | "eventDamage" => HirExpr::Call {
+            "eventAbility" | "eventDamage" | "eventHealing" => HirExpr::Call {
                 name: name.to_string(),
                 args: Vec::new(),
                 span: Some(span.into()),
@@ -1372,6 +1466,13 @@ impl Lowerer {
         span: Span,
         macro_params: &[String],
     ) -> HirExpr {
+        if let Some(name) = self.qualified_macro_for_member(member) {
+            return HirExpr::MacroCall {
+                name,
+                args: vec![self.lower_expr(receiver, macro_params, CallPosition::Value)],
+                span: Some(span.into()),
+            };
+        }
         if let Expr::Name { name, .. } = receiver {
             // Custom enum member: folds to its numeric constant.
             if self.enum_visible(name) {
@@ -1414,21 +1515,34 @@ impl Lowerer {
             // against the canonical Workshop catalog.
             let catalog_domain = match name.as_str() {
                 "Clip" => "Clipping",
+                "AsyncBehavior" => "StartRuleBehavior",
                 _ => name.as_str(),
             };
             if self.manifest.domain_identity(name)
+                || self.catalog.enum_domain(name).is_some()
+                || self.catalog.enum_domain(catalog_domain).is_some()
                 || (name == "Clip" && self.manifest.domain_identity(catalog_domain))
             {
                 let locale = Locale::new("en-US");
                 let catalog_member = match (name.as_str(), member) {
+                    ("Map", "BLIZZ_WORLD") => "BLIZZARD_WORLD",
+                    ("Map", "BLIZZ_WORLD_WINTER") => "BLIZZARD_WORLD_WINTER",
+                    ("Map", "ROUTE66") => "ROUTE_66",
+                    ("Map", "VOLSKAYA") => "VOLSKAYA_INDUSTRIES",
                     ("Clip", "NONE") => "DO_NOT_CLIP",
+                    ("Clip", "SURFACES") => "CLIP_AGAINST_SURFACES",
                     ("SpecVisibility", "ALWAYS") => "VISIBLE_ALWAYS",
                     ("SpecVisibility", "NEVER") => "VISIBLE_NEVER",
                     ("EffectReeval", "VISIBILITY_POSITION_AND_RADIUS") => {
                         "VISIBLE_TO_POSITION_AND_RADIUS"
                     }
+                    ("HudReeval", "VISIBILITY_AND_COLOR") => "VISIBLE_TO_AND_COLOR",
+                    ("HudReeval", "VISIBILITY_STRING_AND_COLOR") => "VISIBLE_TO_STRING_AND_COLOR",
                     ("Hero", "MCCREE") => "CASSIDY",
                     ("Hero", "HAMMOND") => "WRECKING_BALL",
+                    ("Hero", "SOLDIER") => "SOLDIER_76",
+                    ("Hero", "DOMINA") => "JINYU",
+                    ("Hero", "DMON") => "D_MON",
                     _ => member,
                 };
                 let canonical_member = self
@@ -1440,6 +1554,18 @@ impl Lowerer {
                             .iter()
                             .find(|candidate| candidate.member == catalog_member)
                             .map(|candidate| candidate.member.clone())
+                            .or_else(|| {
+                                (name == "Map").then(|| {
+                                    let normalized = catalog_member.replace('_', "");
+                                    domain
+                                        .members
+                                        .iter()
+                                        .find(|candidate| {
+                                            candidate.member.replace('_', "") == normalized
+                                        })
+                                        .map(|candidate| candidate.member.clone())
+                                })?
+                            })
                     })
                     .or_else(|| {
                         if name == "Team" && member.parse::<u32>().is_ok() {
@@ -1449,6 +1575,10 @@ impl Lowerer {
                         } else {
                             None
                         }
+                    })
+                    .or_else(|| {
+                        (name == "HudReeval" && member == "VISIBILITY_STRING_AND_COLOR")
+                            .then_some(catalog_member.to_string())
                     });
                 let Some(canonical_member) = canonical_member else {
                     self.error_at(
@@ -1566,6 +1696,22 @@ impl Lowerer {
         if name == "createWorkshopSetting" {
             return self.lower_workshop_setting(args, span, macro_params);
         }
+        if name == "compressed" && args.len() == 1 {
+            return self.lower_expr(&args[0].value, macro_params, CallPosition::Value);
+        }
+        if matches!(
+            name,
+            "createWorkshopSettingBool"
+                | "createWorkshopSettingEnum"
+                | "createWorkshopSettingInt"
+                | "createWorkshopSettingFloat"
+        ) {
+            return HirExpr::Call {
+                name: name.to_string(),
+                args: self.lower_arg_values(args, macro_params),
+                span: Some(span.into()),
+            };
+        }
         // Builtin identity and position checks run before the special forms
         // so that a misplaced `wait`/`vect` still diagnoses its position.
         if !self.macro_visible(name) && !self.subroutine_visible(name) && name != "sorted" {
@@ -1647,6 +1793,35 @@ impl Lowerer {
                     return HirExpr::MacroCall {
                         name: name.to_string(),
                         args: self.lower_arg_values(args, macro_params),
+                        span: Some(span.into()),
+                    };
+                }
+                if name == "async" {
+                    let lowered = args
+                        .iter()
+                        .enumerate()
+                        .map(|(index, arg)| {
+                            if index == 0 && arg.keyword.is_none() {
+                                if let cst::Expr::Name {
+                                    name: subroutine,
+                                    span,
+                                } = &arg.value
+                                {
+                                    if self.subroutine_visible(subroutine) {
+                                        return HirExpr::Call {
+                                            name: subroutine.clone(),
+                                            args: Vec::new(),
+                                            span: Some((*span).into()),
+                                        };
+                                    }
+                                }
+                            }
+                            self.lower_expr(&arg.value, macro_params, CallPosition::Value)
+                        })
+                        .collect();
+                    return HirExpr::Call {
+                        name: name.to_string(),
+                        args: lowered,
                         span: Some(span.into()),
                     };
                 }
@@ -1965,6 +2140,12 @@ impl Lowerer {
                             span: None,
                         });
                     }
+                    Some(ParamDefault::Bool(value)) => {
+                        bound.push(HirExpr::Bool {
+                            value: *value,
+                            span: None,
+                        });
+                    }
                     Some(ParamDefault::Number(number)) => {
                         bound.push(HirExpr::Number {
                             value: *number,
@@ -2119,6 +2300,15 @@ impl Lowerer {
         macro_params: &[String],
         position: CallPosition,
     ) -> HirExpr {
+        if let Some(macro_name) = self.qualified_macro_for_member(name) {
+            return HirExpr::MacroCall {
+                name: macro_name,
+                args: std::iter::once(self.lower_expr(receiver, macro_params, CallPosition::Value))
+                    .chain(self.lower_arg_values(args, macro_params))
+                    .collect(),
+                span: Some(span.into()),
+            };
+        }
         if matches!(name, "map" | "filter" | "all" | "any") {
             let lowered = HirExpr::ReceiverCall {
                 receiver: Box::new(self.lower_expr(receiver, macro_params, CallPosition::Value)),
@@ -2214,6 +2404,15 @@ impl Lowerer {
             args: lowered,
             span: Some(span.into()),
         }
+    }
+
+    fn qualified_macro_for_member(&self, member: &str) -> Option<String> {
+        let suffix = format!(".{member}");
+        self.macro_declarations
+            .iter()
+            .filter(|(name, order)| name.ends_with(&suffix) && **order <= self.current_order)
+            .map(|(name, _)| name.clone())
+            .next()
     }
 
     /// Check a builtin entry against its call position: action/value
@@ -2384,7 +2583,7 @@ fn context_player_expr(name: &str, span: Option<Span>) -> Option<HirExpr> {
         "hostPlayer" => Some(HirExpr::HostPlayer {
             span: span.map(Into::into),
         }),
-        "attacker" | "victim" => Some(HirExpr::Call {
+        "attacker" | "victim" | "healer" | "healee" => Some(HirExpr::Call {
             name: name.to_string(),
             args: Vec::new(),
             span: span.map(Into::into),
@@ -2403,8 +2602,15 @@ fn assignable_receiver(receiver: &Expr) -> bool {
             name.as_str(),
             "eventPlayer" | "hostPlayer" | "attacker" | "victim"
         ),
-        Expr::Array { .. } | Expr::Index { .. } => true,
+        Expr::Array { .. } | Expr::Index { .. } | Expr::Member { .. } => true,
         _ => false,
+    }
+}
+
+fn expr_identifier(expr: &Expr) -> Option<&str> {
+    match expr {
+        Expr::Name { name, .. } => Some(name.as_str()),
+        _ => None,
     }
 }
 

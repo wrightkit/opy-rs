@@ -133,8 +133,12 @@ impl Lexer {
                     self.line += 1;
                     self.col = 1;
                 }
-                ' ' | '\t' | '\r' => {
+                ' ' | '\r' => {
                     self.advance();
+                }
+                '\t' => {
+                    self.pos += 1;
+                    self.col += 4;
                 }
                 '\\' => {
                     if !self.skip_line_continuation() {

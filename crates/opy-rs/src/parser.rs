@@ -103,7 +103,75 @@ impl Parser<'_> {
     }
 
     fn skip_expression_newlines(&mut self) {
-        if self.inside_delimiter_group() {
+        if self.peek_kind() != TokenKind::Newline {
+            return;
+        }
+        let previous = self.tokens[..self.pos]
+            .iter()
+            .rev()
+            .find(|token| !matches!(token.kind, TokenKind::Indent(_)));
+        let previous_allows_continuation = previous.is_some_and(|token| {
+            matches!(
+                token.kind,
+                TokenKind::LParen
+                    | TokenKind::LBracket
+                    | TokenKind::LBrace
+                    | TokenKind::Comma
+                    | TokenKind::Colon
+                    | TokenKind::Assign
+                    | TokenKind::Plus
+                    | TokenKind::Minus
+                    | TokenKind::Star
+                    | TokenKind::Slash
+                    | TokenKind::Percent
+                    | TokenKind::DoubleStar
+                    | TokenKind::Eq
+                    | TokenKind::Ne
+                    | TokenKind::Lt
+                    | TokenKind::Le
+                    | TokenKind::Gt
+                    | TokenKind::Ge
+            ) || (token.kind == TokenKind::Ident
+                && matches!(token.text.as_str(), "and" | "or" | "in" | "not" | "if"))
+        });
+        let mut next = self.pos;
+        while self.tokens[next].kind == TokenKind::Newline {
+            next += 1;
+        }
+        let inside_delimiter_group = self.inside_delimiter_group();
+        let next_allows_continuation = matches!(
+            self.tokens[next].kind,
+            TokenKind::Plus
+                | TokenKind::Minus
+                | TokenKind::Star
+                | TokenKind::Slash
+                | TokenKind::Percent
+                | TokenKind::DoubleStar
+                | TokenKind::Eq
+                | TokenKind::Ne
+                | TokenKind::Lt
+                | TokenKind::Le
+                | TokenKind::Gt
+                | TokenKind::Ge
+        ) || (inside_delimiter_group
+            && matches!(
+                self.tokens[next].kind,
+                TokenKind::LParen
+                    | TokenKind::LBracket
+                    | TokenKind::Dot
+                    | TokenKind::RParen
+                    | TokenKind::RBracket
+                    | TokenKind::RBrace
+            ))
+            || (self.tokens[next].kind == TokenKind::Ident
+                && matches!(
+                    self.tokens[next].text.as_str(),
+                    "and" | "or" | "in" | "not" | "else"
+                ))
+            || (inside_delimiter_group
+                && self.tokens[next].kind == TokenKind::Ident
+                && matches!(self.tokens[next].text.as_str(), "if" | "for"));
+        if previous_allows_continuation || next_allows_continuation {
             self.skip_newlines();
         }
     }
@@ -214,7 +282,11 @@ impl Parser<'_> {
     }
 
     fn expect_statement_end(&mut self, what: &str) -> Result<(), ()> {
-        if matches!(self.peek_kind(), TokenKind::Newline | TokenKind::Eof) {
+        let continued_line = self
+            .tokens
+            .get(self.pos.saturating_sub(1))
+            .is_some_and(|previous| self.peek().span.start.line > previous.span.end.line);
+        if matches!(self.peek_kind(), TokenKind::Newline | TokenKind::Eof) || continued_line {
             Ok(())
         } else {
             self.error_at_current(format!("expected the end of {what}"));
@@ -350,6 +422,13 @@ impl Parser<'_> {
                     ));
                 }
                 members.push((member.text, member_span));
+                if self.peek_kind() == TokenKind::Assign {
+                    self.advance();
+                    if self.parse_expr().is_err() {
+                        self.recover_line();
+                        continue;
+                    }
+                }
             } else {
                 self.error_at_current("expected an enum member name".to_string());
                 self.recover_line();
@@ -377,9 +456,21 @@ impl Parser<'_> {
     fn parse_macro(&mut self, declarations: &mut Vec<Decl>) -> bool {
         let start = self.advance();
         let name_token = self.peek().clone();
-        let name = match self.expect_ident("a macro name") {
+        let mut name = match self.expect_ident("a macro name") {
             Ok(name) => name,
             Err(()) => return false,
+        };
+        let qualified = if self.peek_kind() == TokenKind::Dot {
+            self.advance();
+            let member = match self.expect_ident("a macro member name") {
+                Ok(member) => member,
+                Err(()) => return false,
+            };
+            name.push('.');
+            name.push_str(&member);
+            true
+        } else {
+            false
         };
         if self.peek_kind() == TokenKind::Assign {
             self.advance();
@@ -388,13 +479,25 @@ impl Parser<'_> {
                 Err(()) => return false,
             };
             let span = Span::new(start.span.file, start.span.start, value.span().end);
-            declarations.push(Decl::Constant { name, value, span });
+            if qualified {
+                declarations.push(Decl::Macro {
+                    name,
+                    args: vec!["self".to_string()],
+                    body: vec![Stmt::Expr { expr: value, span }],
+                    span,
+                });
+            } else {
+                declarations.push(Decl::Constant { name, value, span });
+            }
             return true;
         }
-        let args = match self.parse_param_list() {
+        let mut args = match self.parse_param_list() {
             Some(args) => args,
             None => return false,
         };
+        if qualified {
+            args.insert(0, "self".to_string());
+        }
         if self
             .expect(TokenKind::Colon, "':' after the macro signature")
             .is_err()
@@ -489,10 +592,13 @@ impl Parser<'_> {
             return false;
         }
         let line_indent = start.span.start.col;
-        let body_indent = match self.block_indent(line_indent) {
-            Some(indent) => indent,
-            None => return false,
-        };
+        if self.block_indent(line_indent).is_none() {
+            return false;
+        }
+        // OverPy accepts a small amount of indentation drift between rule
+        // directives and actions. The rule itself is still top-level, so any
+        // indentation greater than its column belongs to this rule.
+        let body_indent = line_indent + 1;
         let mut event = None;
         let mut conditions = Vec::new();
         let mut annotations = Vec::new();
@@ -1015,6 +1121,25 @@ impl Parser<'_> {
     }
 
     fn parse_expr_statement(&mut self) -> Result<Stmt, ()> {
+        if self.peek_kind() == TokenKind::LParen {
+            let save_pos = self.pos;
+            let save_errors = self.errors.len();
+            let start = self.advance().span;
+            if let Ok(target) = self.parse_postfix()
+                && self.peek_kind() == TokenKind::Assign
+            {
+                self.advance();
+                let value = self.parse_expr()?;
+                let end = self.expect(TokenKind::RParen, "')'")?.span.end;
+                return Ok(Stmt::Assign {
+                    target,
+                    value,
+                    span: Span::new(start.file, start.start, end),
+                });
+            }
+            self.pos = save_pos;
+            self.errors.truncate(save_errors);
+        }
         let start = self.peek().span;
         let expr = self.parse_expr()?;
         match self.peek_kind() {
@@ -1129,19 +1254,18 @@ impl Parser<'_> {
         {
             return Err(());
         }
-        let body_indent = self.block_indent(line_indent).ok_or(())?;
-        let body = self.parse_block(body_indent);
+        let body = self.parse_colon_body(line_indent)?;
         let mut branches = vec![IfBranch { condition, body }];
         let mut r#else = None;
         loop {
             let save = self.pos;
             self.skip_newlines();
-            if self.peek_kind() == TokenKind::Eof || self.peek().span.start.col != line_indent {
+            if self.peek_kind() == TokenKind::Eof || self.peek().span.start.col > line_indent {
                 self.pos = save;
                 break;
             }
             if self.is_ident("elif") {
-                self.advance();
+                let branch_start = self.advance();
                 let condition = match self.parse_expr() {
                     Ok(expr) => expr,
                     Err(()) => return Err(()),
@@ -1152,16 +1276,27 @@ impl Parser<'_> {
                 {
                     return Err(());
                 }
-                let body_indent = self.block_indent(line_indent).ok_or(())?;
-                let body = self.parse_block(body_indent);
+                let body = self.parse_colon_body(branch_start.span.start.col)?;
                 branches.push(IfBranch { condition, body });
             } else if self.is_ident("else") {
-                self.advance();
+                let branch_start = self.advance();
+                if self.is_ident("if") {
+                    self.advance();
+                    let condition = self.parse_expr()?;
+                    if self
+                        .expect(TokenKind::Colon, "':' after the else-if condition")
+                        .is_err()
+                    {
+                        return Err(());
+                    }
+                    let body = self.parse_colon_body(branch_start.span.start.col)?;
+                    branches.push(IfBranch { condition, body });
+                    continue;
+                }
                 if self.expect(TokenKind::Colon, "':' after `else`").is_err() {
                     return Err(());
                 }
-                let body_indent = self.block_indent(line_indent).ok_or(())?;
-                let body = self.parse_block(body_indent);
+                let body = self.parse_colon_body(branch_start.span.start.col)?;
                 r#else = Some(body);
                 break;
             } else {
@@ -1174,6 +1309,25 @@ impl Parser<'_> {
             r#else,
             span: start.span,
         })
+    }
+
+    fn parse_colon_body(&mut self, line_indent: u32) -> Result<Vec<Stmt>, ()> {
+        if matches!(self.peek_kind(), TokenKind::Newline | TokenKind::Eof) {
+            let save = self.pos;
+            self.skip_newlines();
+            if self.peek_kind() != TokenKind::Eof && self.peek().span.start.col == line_indent {
+                let statement = self.parse_statement()?;
+                self.expect_statement_end("the inline statement")?;
+                return Ok(vec![statement]);
+            }
+            self.pos = save;
+            let body_indent = self.block_indent(line_indent).ok_or(())?;
+            Ok(self.parse_block(body_indent))
+        } else {
+            let statement = self.parse_statement()?;
+            self.expect_statement_end("the inline statement")?;
+            Ok(vec![statement])
+        }
     }
 
     fn parse_for(&mut self) -> Result<Stmt, ()> {
@@ -1322,25 +1476,48 @@ impl Parser<'_> {
     // ---- expressions ----
 
     fn parse_expr(&mut self) -> Result<Expr, ()> {
+        self.parse_expr_inner(false)
+    }
+
+    fn parse_expr_inner(&mut self, allow_multiline_conditional: bool) -> Result<Expr, ()> {
         self.skip_expression_newlines();
         let then_value = self.parse_or()?;
-        self.skip_expression_newlines();
+        let has_newline_before_conditional = self.tokens[..self.pos].iter().any(|token| {
+            token.kind == TokenKind::Newline
+                && token.span.file == then_value.span().file
+                && token.span.start.line > then_value.span().end.line
+        });
+        if self.is_ident("if")
+            && !self.inside_delimiter_group()
+            && has_newline_before_conditional
+            && self.peek().span.start.line != then_value.span().end.line
+        {
+            return Ok(then_value);
+        }
+        if allow_multiline_conditional && self.inside_delimiter_group() {
+            self.skip_newlines();
+        }
         if !self.is_ident("if") {
             return Ok(then_value);
         }
 
+        let conditional_start = self.pos;
         self.advance();
         self.skip_expression_newlines();
         let condition = self.parse_or()?;
         self.skip_expression_newlines();
         if !self.is_ident("else") {
+            if self.peek_kind() == TokenKind::Colon {
+                self.pos = conditional_start;
+                return Ok(then_value);
+            }
             self.error_at_current("expected `else` in conditional expression".to_string());
             return Err(());
         }
         self.advance();
         // Conditional expressions are right-associative, so a chained form
         // such as `a if c else b if d else e` groups at the else branch.
-        let else_value = self.parse_expr()?;
+        let else_value = self.parse_expr_inner(true)?;
         let span = Span::new(
             then_value.span().file,
             then_value.span().start,
@@ -2426,6 +2603,21 @@ mod tests {
         );
         assert!(!errors.is_empty());
         assert!(errors.iter().all(|error| error.code == "parse-error"));
+    }
+
+    #[test]
+    fn parses_explicit_enum_member_values() {
+        let program = parse_ok("enum EventType:\n    BUFF = 0\n    DEBUFF\n    MECH = 2\n");
+        let Decl::Enum { members, .. } = &program.declarations[0] else {
+            panic!("expected enum");
+        };
+        assert_eq!(
+            members
+                .iter()
+                .map(|(name, _)| name.as_str())
+                .collect::<Vec<_>>(),
+            ["BUFF", "DEBUFF", "MECH"]
+        );
     }
 
     #[test]

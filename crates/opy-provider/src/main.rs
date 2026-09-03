@@ -439,6 +439,12 @@ impl Server {
                 message: format!("cannot initialize compiler: {error}"),
             })?);
         }
+        let check_outcome = opy_rs::tooling::check(
+            &project.source,
+            &path_string(&project.main_path),
+            &project.root,
+        );
+        ensure_entry_sources_loaded(&project, &check_outcome)?;
         let report = self
             .compiler
             .as_ref()
@@ -449,8 +455,12 @@ impl Server {
                 &project.root,
                 &project.locale,
             );
-        ensure_entry_compile_sources_loaded(&project, &report)?;
-        let diagnostics = compile_diagnostics(&project, &report.compile.diagnostics);
+        let paths = check_outcome
+            .files
+            .iter()
+            .map(|file| file.path.clone())
+            .collect::<Vec<_>>();
+        let diagnostics = compile_diagnostics(&project, &paths, &report.compile.diagnostics);
         let artifact = (report.compile.status == opy_rs::CompileStatus::Success).then(|| {
             json!({
                 "format": WORKSHOP_ARTIFACT_FORMAT,
@@ -734,26 +744,6 @@ fn ensure_entry_sources_loaded(
     Ok(())
 }
 
-fn ensure_entry_compile_sources_loaded(
-    project: &LoadedProject,
-    report: &opy_rs::CompileReport,
-) -> Result<(), HandlerError> {
-    if report.compile.diagnostics.iter().any(|diagnostic| {
-        matches!(
-            diagnostic.code.as_str(),
-            "include-not-found" | "main-file-not-found" | "script-not-found"
-        )
-    }) {
-        return Err(HandlerError::project_load_failed(
-            &project.entry_uri,
-            "requiredSourceUnavailable",
-            None,
-            "a required OPY project source could not be loaded",
-        ));
-    }
-    Ok(())
-}
-
 fn supplied_uri_for_path(
     documents: &BTreeMap<String, Document>,
     root: &Path,
@@ -858,12 +848,12 @@ fn check_result(project: &LoadedProject, outcome: &CheckOutcome) -> Value {
     })
 }
 
-fn compile_diagnostics(project: &LoadedProject, diagnostics: &[CompileDiagnostic]) -> Vec<Value> {
-    let paths = diagnostics
-        .iter()
-        .filter_map(|diagnostic| diagnostic.span.as_ref().map(|span| span.path.clone()))
-        .collect::<Vec<_>>();
-    let mut entries = file_entries(project, &paths);
+fn compile_diagnostics(
+    project: &LoadedProject,
+    paths: &[String],
+    diagnostics: &[CompileDiagnostic],
+) -> Vec<Value> {
+    let mut entries = file_entries(project, paths);
     for diagnostic in diagnostics {
         let path = diagnostic.span.as_ref().map(|span| span.path.as_str());
         let index = path

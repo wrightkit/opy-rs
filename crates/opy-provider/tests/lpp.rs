@@ -10,6 +10,10 @@ const MULTI_FILE_MAIN: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../opy-rs/tests/fixtures/multi-file/main.opy"
 );
+const CLEAN_MULTI_FILE_MAIN: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../opy-rs/tests/fixtures/issue-161-project/main.opy"
+);
 const BASIC_RULE: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../compatibility/fixtures/synthetic/basic-rule/source.opy"
@@ -123,6 +127,28 @@ fn entry_check_loads_the_owner_project_closure_without_documents() {
             .as_str()
             .is_some_and(|uri| uri.ends_with("/shared/defs.opy"))
     }));
+
+    let compiled = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "lpp/compile",
+        "params": {
+            "entry": {
+                "uri": file_uri(CLEAN_MULTI_FILE_MAIN),
+                "languageId": "opy",
+                "version": 7,
+            }
+        },
+    }));
+    let compiled_documents = compiled["result"]["diagnostics"]
+        .as_array()
+        .expect("compile diagnostics documents");
+    assert_eq!(compiled_documents.len(), 5, "all reachable source files");
+    assert!(
+        compiled_documents
+            .iter()
+            .all(|document| { document["version"] == 7 && document["diagnostics"] == json!([]) })
+    );
     session.shutdown();
 }
 
