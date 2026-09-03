@@ -69,7 +69,7 @@ repository:
 | `issue-47-unsupported` | #47 negative probe: a break hidden inside a conditional switch arm is accepted by the source implementation/oracle but rejected by the compiler with a stable source-attributed diagnostic |
 | `issue-47-switch-order` | #47 pinned oracle probe for a default arm before later case arms and source-order fallthrough |
 | `issue-47-switch-structured-target` | #47 pinned oracle probe for nested if/while structure in an earlier arm and later case/default targets |
-| `issue-47-switch-multiple-break` | #47 pinned oracle probe for multiple direct breaks; the source implementation preserves the source while the compiler reports the canonical multi-target WIR gap |
+| `issue-47-switch-multiple-break` | #47 pinned oracle probe for multiple direct breaks lowered through canonical nested switch-exit WIR |
 | `issue-47-do-while-shapes` | #47 pinned oracle probe for direct, conditional, and nested do-while break lowering |
 | `issue-47-do-while-invalid-placement` | #47 pinned negative probe for the stable do-while placement diagnostic |
 | `issue-29-*` | directive/include/main-file preprocessing probes |
