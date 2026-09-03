@@ -14,10 +14,35 @@ jobs:
       github-token: ${{ secrets.GH_TOKEN }}
       cargo-registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
-  provider:
-    name: Provider (${{ matrix.target }})
+  release-context:
+    name: Resolve opy-rs release
     if: needs.release-plz.outputs.releases_created == 'true'
     needs: release-plz
+    runs-on: ubuntu-latest
+    outputs:
+      opy_release_created: ${{ steps.resolve.outputs.opy_release_created }}
+      opy_release_tag: ${{ steps.resolve.outputs.opy_release_tag }}
+
+    steps:
+      - name: Select opy-rs release metadata
+        id: resolve
+        env:
+          RELEASES: ${{ needs.release-plz.outputs.releases }}
+        run: |
+          set -euo pipefail
+          opy_release_tag="$(jq -r 'map(select(.package_name == "opy-rs")) | first | .tag // empty' <<<"$RELEASES")"
+          if [[ -n "$opy_release_tag" ]]; then
+            echo "opy_release_created=true" >> "$GITHUB_OUTPUT"
+            echo "opy_release_tag=$opy_release_tag" >> "$GITHUB_OUTPUT"
+          else
+            echo "opy_release_created=false" >> "$GITHUB_OUTPUT"
+            echo "opy_release_tag=" >> "$GITHUB_OUTPUT"
+          fi
+
+  provider:
+    name: Provider (${{ matrix.target }})
+    if: needs.release-context.outputs.opy_release_created == 'true'
+    needs: release-context
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -36,7 +61,7 @@ jobs:
       - name: Check out release source
         uses: actions/checkout@v7
         with:
-          ref: ${{ fromJSON(needs.release-plz.outputs.releases)[0].tag }}
+          ref: ${{ needs.release-context.outputs.opy_release_tag }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@master
@@ -51,7 +76,7 @@ jobs:
         shell: bash
         env:
           TARGET: ${{ matrix.target }}
-          VERSION: ${{ fromJSON(needs.release-plz.outputs.releases)[0].tag }}
+          VERSION: ${{ needs.release-context.outputs.opy_release_tag }}
         run: |
           VERSION="${VERSION#v}"
           mkdir -p dist
@@ -80,9 +105,9 @@ jobs:
 
   publish-provider:
     name: Publish provider release artifacts
-    if: needs.release-plz.outputs.releases_created == 'true'
+    if: needs.release-context.outputs.opy_release_created == 'true'
     needs:
-      - release-plz
+      - release-context
       - provider
     runs-on: ubuntu-latest
     permissions:
@@ -97,7 +122,7 @@ jobs:
       - name: Upload provider artifacts to the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ fromJSON(needs.release-plz.outputs.releases)[0].tag }}
+          RELEASE_TAG: ${{ needs.release-context.outputs.opy_release_tag }}
         run: |
           set -euo pipefail
           gh release upload "$RELEASE_TAG" \
