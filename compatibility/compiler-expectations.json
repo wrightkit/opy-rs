@@ -398,10 +398,11 @@
         "oracle:synthetic/issue-47-switch-multiple-break/oracle.json",
         "oracle:synthetic/issue-47-switch-multiple-break/semantic-oracle.json",
         "provenance:synthetic/issue-47-switch-multiple-break/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_47_oracle::issue_47_multiple_switch_breaks_match_independent_semantic_oracle"
+        "test:opy-rs::compiler::integration_tests::issue_47_oracle::issue_47_multiple_switch_breaks_match_independent_semantic_oracle",
+        "test:opy-rs::compiler::integration_tests::issue_47_oracle::pinned_overpy_switch_action_trace"
       ],
       "owner": "opy-rs#172",
-      "note": "The pinned OverPy snapshot is preserved as source evidence; its successive Else switch encoding is normalized into this independent canonical Workshop semantic oracle so the compatibility gate directly compares native canonical WIR. The nested exit layers cover case selection, local break, fallthrough, and default behavior."
+      "note": "The pinned OverPy snapshot is preserved as source evidence; its successive Else switch encoding is normalized into the canonical Workshop semantic oracle used by the compatibility gate. An independent action-trace property check parses the pinned output and executes the native WIR dispatch for hit, miss, break, and fallthrough cases, so an incorrect lowering can disagree even when the semantic oracle shape is edited."
     },
     {
       "fixture": "census/workshop-feature-census",

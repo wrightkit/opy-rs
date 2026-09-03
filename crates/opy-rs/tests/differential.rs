@@ -305,7 +305,7 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         &mut cases,
         "synthetic/issue-47-switch-multiple-break",
         false,
-        "Issue #47 multi-break probe; the frontend preserves all authored arms and breaks while the compiler reports the canonical WIR capability gap.",
+        "Issue #47 multi-break probe; the frontend preserves all authored arms and breaks while the compiler lowers them through canonical nested switch-exit WIR.",
     );
     resolve(
         &mut cases,
