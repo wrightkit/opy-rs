@@ -390,18 +390,16 @@
     },
     {
       "fixture": "synthetic/issue-47-switch-multiple-break",
-      "nativeStatus": "failure",
-      "classification": "unsupported",
-      "comparison": "diagnostic-code",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "compiler-contract",
       "evidence": [
         "oracle:synthetic/issue-47-switch-multiple-break/oracle.json",
         "provenance:synthetic/issue-47-switch-multiple-break/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_47_oracle::issue_47_multiple_switch_breaks_are_not_silently_dropped"
+        "test:opy-rs::compiler::integration_tests::issue_47_oracle::issue_47_multiple_switch_breaks_use_shared_switch_exit_layers"
       ],
-      "owner": "workshop-rs#123",
-      "note": "The released workshop-rs v0.1.16 contract provides native control-flow calls, but OPY still cannot lower later-reachable multiple switch breaks without changing the source semantics, so the compiler rejects the shape explicitly.",
-      "failureClass": "integration",
-      "diagnosticCode": "unsupported-integration-surface"
+      "owner": "opy-rs#172",
+      "note": "Multiple direct case-local breaks lower through nested canonical WIR exit layers and preserve later case selection. The pinned OverPy text uses successive Else markers that workshop-rs v0.1.16 cannot represent losslessly, so the stable compiler-contract test is the decisive evidence for this slice."
     },
     {
       "fixture": "census/workshop-feature-census",
