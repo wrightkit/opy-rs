@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.14](https://github.com/wrightkit/opy-rs/compare/v0.1.12...v0.1.14) - 2026-09-03
+
+### Added
+
+- *(provider)* ship first-party LPP provider ([#171](https://github.com/wrightkit/opy-rs/pull/171))
+
+### Other
+
+- release v0.1.13 ([#169](https://github.com/wrightkit/opy-rs/pull/169))
+
 ## [0.1.13](https://github.com/wrightkit/opy-rs/compare/v0.1.12...v0.1.13) - 2026-09-03
 
 ### Added
