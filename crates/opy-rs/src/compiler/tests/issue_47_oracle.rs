@@ -5,7 +5,6 @@ use std::path::{Path, PathBuf};
 use crate::Compiler;
 use workshop_rs::catalog::{Catalog, Locale};
 use workshop_rs::roundtrip::equivalent;
-use workshop_rs::wir::Action;
 
 fn fixture_dir(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -58,7 +57,7 @@ fn issue_47_do_while_break_shapes_match_the_pinned_oracle() {
 }
 
 #[test]
-fn issue_47_multiple_switch_breaks_use_shared_switch_exit_layers() {
+fn issue_47_multiple_switch_breaks_match_independent_semantic_oracle() {
     let compiler = Compiler::new().unwrap();
     let dir = fixture_dir("issue-47-switch-multiple-break");
     let source = std::fs::read_to_string(dir.join("source.opy")).unwrap();
@@ -66,36 +65,21 @@ fn issue_47_multiple_switch_breaks_use_shared_switch_exit_layers() {
     let artifact = compiler
         .compile_hir(&hir)
         .expect("multi-break switch must lower");
-    let rule = artifact
-        .wir
-        .rules
-        .iter()
-        .find(|rule| rule.name == "issue 47 switch multiple break")
-        .expect("fixture rule must be present");
-    let Action::If {
-        branches,
-        else_body: Some(else_body),
-        ..
-    } = artifact.wir.actions.get(rule.actions[0]).unwrap()
-    else {
-        panic!("multi-break switch must have an outer switch-exit layer")
-    };
-    assert_eq!(branches.len(), 1);
-    assert_eq!(branches[0].body.len(), 2);
-    assert_eq!(else_body.len(), 1);
-
-    let Action::If {
-        branches,
-        else_body: Some(else_body),
-        ..
-    } = artifact.wir.actions.get(else_body[0]).unwrap()
-    else {
-        panic!("the later case break must have its own exit layer")
-    };
-    assert_eq!(branches.len(), 1);
-    assert_eq!(branches[0].body.len(), 1);
-    assert_eq!(else_body.len(), 2);
-    assert!(artifact.emitted.contains("Array(6, 0, 2, 5)"));
+    let semantic_oracle: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.join("semantic-oracle.json")).unwrap())
+            .unwrap();
+    let catalog = Catalog::builtin().unwrap();
+    let semantic_wir = workshop_rs::parser::parse(
+        semantic_oracle["compile"]["workshop"].as_str().unwrap(),
+        &catalog,
+        &Locale::new("en-US"),
+    )
+    .unwrap();
+    assert!(
+        equivalent(&artifact.wir, &semantic_wir),
+        "native WIR diverged from the independent switch semantic oracle\n{}",
+        artifact.emitted
+    );
 }
 
 #[test]

@@ -55,6 +55,7 @@ def run_semantic_evidence(
     project_sha256: str,
 ) -> dict[str, Any]:
     source = directory / metadata["source"]
+    oracle = directory / metadata.get("semanticOracle", "oracle.json")
     completed = subprocess.run(
         [
             str(binary),
@@ -63,7 +64,7 @@ def run_semantic_evidence(
             "--root",
             ".",
             "--oracle",
-            "oracle.json",
+            oracle.name,
             "--input-sha256",
             project_sha256,
         ],

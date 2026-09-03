@@ -392,14 +392,16 @@
       "fixture": "synthetic/issue-47-switch-multiple-break",
       "nativeStatus": "success",
       "classification": "match",
-      "comparison": "compiler-contract",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": true,
       "evidence": [
         "oracle:synthetic/issue-47-switch-multiple-break/oracle.json",
+        "oracle:synthetic/issue-47-switch-multiple-break/semantic-oracle.json",
         "provenance:synthetic/issue-47-switch-multiple-break/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_47_oracle::issue_47_multiple_switch_breaks_use_shared_switch_exit_layers"
+        "test:opy-rs::compiler::integration_tests::issue_47_oracle::issue_47_multiple_switch_breaks_match_independent_semantic_oracle"
       ],
       "owner": "opy-rs#172",
-      "note": "Multiple direct case-local breaks lower through nested canonical WIR exit layers and preserve later case selection. The pinned OverPy text uses successive Else markers that workshop-rs v0.1.16 cannot represent losslessly, so the stable compiler-contract test is the decisive evidence for this slice."
+      "note": "The pinned OverPy snapshot is preserved as source evidence; its successive Else switch encoding is normalized into this independent canonical Workshop semantic oracle so the compatibility gate directly compares native canonical WIR. The nested exit layers cover case selection, local break, fallthrough, and default behavior."
     },
     {
       "fixture": "census/workshop-feature-census",

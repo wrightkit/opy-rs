@@ -4,6 +4,7 @@
   "category": "compilation",
   "features": ["switch", "case", "default", "break"],
   "source": "source.opy",
+  "semanticOracle": "semantic-oracle.json",
   "expectedStatus": "success",
   "provenance": {
     "kind": "original",
