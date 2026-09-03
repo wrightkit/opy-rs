@@ -1134,14 +1134,28 @@ fn expand_settings_node(
             name,
             children,
             span,
-        } => SettingsNode::Group {
-            name,
-            children: children
+        } => {
+            let children = children
                 .into_iter()
                 .map(|child| expand_settings_node(child, constants))
-                .collect(),
-            span,
-        },
+                .collect::<Vec<_>>();
+            let children = if matches!(name.as_str(), "team1" | "team2" | "allTeams") {
+                children
+                    .into_iter()
+                    .flat_map(|child| match child {
+                        SettingsNode::Group { name, children, .. } if name == "general" => children,
+                        child => vec![child],
+                    })
+                    .collect()
+            } else {
+                children
+            };
+            SettingsNode::Group {
+                name,
+                children,
+                span,
+            }
+        }
         SettingsNode::Raw { name, value, span } => constants
             .get(&value)
             .and_then(|expr| settings_node_from_expr(name.clone(), expr, constants, span))
@@ -3808,6 +3822,27 @@ impl<'a> Lowering<'a> {
         }
     }
 
+    fn value_is_known_player(&self, value: wir::ValueId) -> bool {
+        match &self
+            .wir
+            .values
+            .get(value)
+            .expect("lowered value must exist")
+            .value
+        {
+            Value::EventPlayer => true,
+            Value::Call { name, .. } => self
+                .compiler
+                .catalog
+                .entry(Kind::Value, name)
+                .and_then(|entry| entry.return_type())
+                .is_some_and(|return_type| {
+                    return_type.split('|').any(|part| part.trim() == "Player")
+                }),
+            _ => false,
+        }
+    }
+
     fn push_value(&mut self, value: Value) -> wir::ValueId {
         self.wir.values.push(ValueNode::new(value, None))
     }
@@ -5294,6 +5329,11 @@ impl<'a> Lowering<'a> {
                     ));
                 }
                 let iterable = self.lower_value(iterable)?;
+                let iterable = if self.value_is_known_player(iterable) {
+                    self.push_call("array", vec![iterable])
+                } else {
+                    iterable
+                };
                 let binding = ArrayBinding {
                     element: variable.clone(),
                     index: index.clone(),
