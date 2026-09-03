@@ -167,6 +167,31 @@ fn real_world_cake_exercises_catalog_lowering_end_to_end() {
     }
 }
 
+#[test]
+fn scalar_player_comprehension_is_wrapped_before_filtering() {
+    let source = "globalvar x\nrule \"r\":\n    @Event eachPlayer\n    x = [player for player in eventPlayer.getRealPlayerClosestToReticle(Team.ALL) if player.isAlive()]\n";
+    let hir = crate::compile(source, "source.opy", Path::new(".")).expect("frontend resolves");
+    let artifact = Compiler::new()
+        .expect("released workshop contract must load")
+        .compile_hir(&hir)
+        .expect("scalar player comprehension must lower to canonical WIR");
+    assert!(artifact.emitted.contains(
+        "Filtered Array(Array(Player Closest To Reticle(Event Player, Team(All Teams))), Is Alive(Current Array Element))"
+    ));
+}
+
+#[test]
+fn hero_general_settings_are_emitted_at_team_scope() {
+    let source = "settings {\n    \"gamemodes\": {},\n    \"heroes\": {\n        \"team1\": {\n            \"general\": {\n                \"damageReceived%\": 50\n            }\n        }\n    }\n}\nrule \"r\":\n    @Event global\n    pass\n";
+    let hir = crate::compile(source, "source.opy", Path::new(".")).expect("settings resolve");
+    let artifact = Compiler::new()
+        .expect("released workshop contract must load")
+        .compile_hir(&hir)
+        .expect("hero general settings must lower at team scope");
+    assert!(artifact.emitted.contains("Team 1 {"));
+    assert!(artifact.emitted.contains("Damage Received: 50%"));
+}
+
 fn collect_action_calls<'a>(
     program: &'a workshop_rs::wir::Program,
     actions: &[workshop_rs::wir::ActionId],

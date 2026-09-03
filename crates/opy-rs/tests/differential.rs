@@ -305,7 +305,7 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         &mut cases,
         "synthetic/issue-47-switch-multiple-break",
         false,
-        "Issue #47 multi-break probe; the frontend preserves all authored arms and breaks while the compiler reports the canonical WIR capability gap.",
+        "Issue #47 multi-break probe; the frontend preserves all authored arms and breaks while the compiler lowers them through canonical nested switch-exit WIR.",
     );
     resolve(
         &mut cases,
@@ -522,11 +522,11 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         Some("lex-error"),
         "reference rejects the example ('Invalid content before string: 'arena'', upstream example bug); the native frontend rejects the triple-quoted-string surface (baseline category 1b, declared rejection, unterminated-string lex error). Gap: rejection reasons differ (documented).",
     );
-    diagnostic(
+    resolve(
         &mut cases,
         "real-world/ow1-emulator",
-        Some("unsupported-directive"),
-        "reference fails on semantic member checks; the native frontend accepts the included-file #!mainFile directives and reaches the next unsupported #!defineMember directive with source attribution. Gap: rejection reason differs (documented).",
+        false,
+        "the pinned oracle snapshot still records the pre-fix parser failure, while the native frontend now resolves the complete include closure; the independent compiler gate reaches the existing canonical WIR multiple-switch-break limitation.",
     );
     diagnostic(
         &mut cases,

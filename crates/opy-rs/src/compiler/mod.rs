@@ -1110,6 +1110,110 @@ impl CompilationArtifact {
     }
 }
 
+fn expand_settings_constants(
+    settings: crate::hir::Settings,
+    constants: &HashMap<String, &Expr>,
+) -> crate::hir::Settings {
+    crate::hir::Settings {
+        span: settings.span,
+        children: settings
+            .children
+            .into_iter()
+            .map(|node| expand_settings_node(node, constants))
+            .collect(),
+    }
+}
+
+fn expand_settings_node(
+    node: crate::hir::SettingsNode,
+    constants: &HashMap<String, &Expr>,
+) -> crate::hir::SettingsNode {
+    use crate::hir::SettingsNode;
+    match node {
+        SettingsNode::Group {
+            name,
+            children,
+            span,
+        } => {
+            let children = children
+                .into_iter()
+                .map(|child| expand_settings_node(child, constants))
+                .collect::<Vec<_>>();
+            let children = if matches!(name.as_str(), "team1" | "team2" | "allTeams") {
+                children
+                    .into_iter()
+                    .flat_map(|child| match child {
+                        SettingsNode::Group { name, children, .. } if name == "general" => children,
+                        child => vec![child],
+                    })
+                    .collect()
+            } else {
+                children
+            };
+            SettingsNode::Group {
+                name,
+                children,
+                span,
+            }
+        }
+        SettingsNode::Raw { name, value, span } => constants
+            .get(&value)
+            .and_then(|expr| settings_node_from_expr(name.clone(), expr, constants, span))
+            .unwrap_or(SettingsNode::Raw { name, value, span }),
+        node => node,
+    }
+}
+
+fn settings_node_from_expr(
+    name: String,
+    expr: &Expr,
+    constants: &HashMap<String, &Expr>,
+    span: Option<HirSpan>,
+) -> Option<crate::hir::SettingsNode> {
+    use crate::hir::SettingsNode;
+    match expr {
+        Expr::Constant { name: value, .. } => constants
+            .get(value)
+            .and_then(|expr| settings_node_from_expr(name, expr, constants, span)),
+        Expr::Dict { entries, .. } => Some(SettingsNode::Group {
+            name,
+            children: entries
+                .iter()
+                .filter_map(|entry| {
+                    let Expr::String {
+                        value: child_name, ..
+                    } = entry.key.as_ref()
+                    else {
+                        return None;
+                    };
+                    settings_node_from_expr(child_name.clone(), &entry.value, constants, entry.span)
+                })
+                .flat_map(|child| match child {
+                    SettingsNode::Group { name, children, .. } if name == "general" => children,
+                    child => vec![child],
+                })
+                .collect(),
+            span,
+        }),
+        Expr::Number { value, .. } => Some(SettingsNode::Number {
+            name,
+            value: *value,
+            span,
+        }),
+        Expr::Bool { value, .. } => Some(SettingsNode::Bool {
+            name,
+            value: *value,
+            span,
+        }),
+        Expr::String { value, .. } => Some(SettingsNode::String {
+            name,
+            value: value.clone(),
+            span,
+        }),
+        _ => None,
+    }
+}
+
 fn convert_settings(settings: crate::hir::Settings) -> workshop_rs::settings::Settings {
     workshop_rs::settings::Settings {
         span: settings.span.map(convert_settings_span),
@@ -1130,6 +1234,14 @@ fn convert_settings_node(node: crate::hir::SettingsNode) -> workshop_rs::setting
             name,
             children,
             span,
+        } if name == "workshop" => TargetNode::Workshop {
+            children: children.into_iter().map(convert_workshop_node).collect(),
+            span: span.map(convert_settings_span),
+        },
+        SourceNode::Group {
+            name,
+            children,
+            span,
         } => TargetNode::Group {
             name,
             children: children.into_iter().map(convert_settings_node).collect(),
@@ -1146,8 +1258,12 @@ fn convert_settings_node(node: crate::hir::SettingsNode) -> workshop_rs::setting
             span: span.map(convert_settings_span),
         },
         SourceNode::String { name, value, span } => TargetNode::String {
-            name,
-            value,
+            name: name.clone(),
+            value: if name == "mapRotation" && value == "afterGame" {
+                "afterAGame".to_string()
+            } else {
+                value
+            },
             span: span.map(convert_settings_span),
         },
         SourceNode::Raw { name, value, span } => TargetNode::Raw {
@@ -1168,6 +1284,56 @@ fn convert_settings_node(node: crate::hir::SettingsNode) -> workshop_rs::setting
                     span: element.span.map(convert_settings_span),
                 })
                 .collect(),
+            span: span.map(convert_settings_span),
+        },
+    }
+}
+
+fn convert_workshop_node(node: crate::hir::SettingsNode) -> workshop_rs::settings::SettingsNode {
+    use crate::hir::SettingsNode as SourceNode;
+    use workshop_rs::settings::SettingsNode as TargetNode;
+
+    match node {
+        SourceNode::Group {
+            name,
+            children,
+            span,
+        } => TargetNode::Group {
+            name,
+            children: children.into_iter().map(convert_workshop_node).collect(),
+            span: span.map(convert_settings_span),
+        },
+        SourceNode::Number { name, value, span } => TargetNode::Raw {
+            name,
+            value: value.to_string(),
+            span: span.map(convert_settings_span),
+        },
+        SourceNode::Bool { name, value, span } => TargetNode::Raw {
+            name,
+            value: value.to_string(),
+            span: span.map(convert_settings_span),
+        },
+        SourceNode::String { name, value, span } | SourceNode::Raw { name, value, span } => {
+            TargetNode::Raw {
+                name,
+                value,
+                span: span.map(convert_settings_span),
+            }
+        }
+        SourceNode::List {
+            name,
+            elements,
+            span,
+        } => TargetNode::Raw {
+            name,
+            value: format!(
+                "[{}]",
+                elements
+                    .into_iter()
+                    .map(|element| element.value)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
             span: span.map(convert_settings_span),
         },
     }
@@ -1194,6 +1360,9 @@ struct Lowering<'a> {
     defined_subroutines: HashSet<wir::SubroutineId>,
     array_bindings: Vec<ArrayBinding>,
     current_rule_conditions: Option<Vec<wir::ValueId>>,
+    visible_labels: Vec<HashSet<String>>,
+    deferred_gotos: Vec<(wir::ActionId, String, Option<HirSpan>)>,
+    outer_goto_targets: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -1209,8 +1378,17 @@ enum BreakTarget {
     Switch,
 }
 
+enum DeleteAssignment {
+    Global(wir::GlobalVarId),
+    Player {
+        player: wir::ValueId,
+        variable: wir::PlayerVarId,
+    },
+}
+
 type SwitchBreak = (usize, HirSpan);
 type LoweredSwitchBody = (Vec<wir::ActionId>, Option<SwitchBreak>);
+type LoweredSwitchArm<'a> = (Option<&'a Expr>, Vec<wir::ActionId>, Option<SwitchBreak>);
 
 /// Return the condition path when a statement consists only of a continue.
 /// An empty path represents an unconditional continue; a non-empty path is
@@ -1226,6 +1404,30 @@ fn pure_continue_conditions(statement: &Stmt) -> Option<Vec<&Expr>> {
             let mut conditions = pure_continue_conditions(&branches[0].body[0])?;
             conditions.insert(0, &branches[0].condition);
             Some(conditions)
+        }
+        _ => None,
+    }
+}
+
+/// Return the condition path when a statement consists only of a forward
+/// label jump. The path is folded into a canonical `skipIf` action so jumps
+/// out of a nested conditional can still target the surrounding sequence.
+fn pure_goto_conditions(statement: &Stmt) -> Option<(Vec<&Expr>, &str)> {
+    match statement {
+        Stmt::Goto {
+            label: Some(label),
+            offset: None,
+            rule_start: false,
+            ..
+        } => Some((Vec::new(), label.as_str())),
+        Stmt::If {
+            branches,
+            r#else: None,
+            ..
+        } if branches.len() == 1 && branches[0].body.len() == 1 => {
+            let (mut conditions, label) = pure_goto_conditions(&branches[0].body[0])?;
+            conditions.insert(0, &branches[0].condition);
+            Some((conditions, label))
         }
         _ => None,
     }
@@ -1266,11 +1468,27 @@ impl<'a> Lowering<'a> {
             defined_subroutines: HashSet::new(),
             array_bindings: Vec::new(),
             current_rule_conditions: None,
+            visible_labels: Vec::new(),
+            deferred_gotos: Vec::new(),
+            outer_goto_targets: Vec::new(),
         })
     }
 
     fn copy_files(&mut self) -> Result<(), IntegrationError> {
-        self.wir.settings = self.hir.settings.clone().map(convert_settings);
+        let settings_constants = self
+            .hir
+            .declarations
+            .iter()
+            .filter_map(|declaration| match declaration {
+                hir::Declaration::Constant { name, value, .. } => {
+                    Some((name.clone(), value.as_ref()))
+                }
+                _ => None,
+            })
+            .collect();
+        self.wir.settings = self.hir.settings.clone().map(|settings| {
+            convert_settings(expand_settings_constants(settings, &settings_constants))
+        });
         for file in &self.hir.files {
             if self.files.contains_key(&file.id) {
                 return Err(IntegrationError::new(
@@ -1680,6 +1898,9 @@ impl<'a> Lowering<'a> {
     }
 
     fn lower_rule(&mut self, rule: &hir::Rule) -> Result<(), IntegrationError> {
+        if rule.disabled {
+            return Ok(());
+        }
         self.reject_rule_metadata(rule)?;
         let event = self.lower_event(&rule.event, &rule.annotations)?;
         let conditions = rule
@@ -1975,10 +2196,18 @@ impl<'a> Lowering<'a> {
             "Hero"
         };
         let locale = Locale::new("en-US");
+        let catalog_spelling = match (domain, spelling.as_str()) {
+            ("Hero", "mccree") => "CASSIDY",
+            ("Hero", "hammond") => "WRECKING_BALL",
+            ("Hero", "soldier") => "SOLDIER_76",
+            ("Hero", "domina") => "JINYU",
+            ("Hero", "dmon") => "D_MON",
+            _ => spelling.as_str(),
+        };
         let member = self
             .compiler
             .catalog
-            .resolve_enum_member(domain, &locale, &spelling)
+            .resolve_enum_member(domain, &locale, catalog_spelling)
             .map(|(_, member)| member)
             .or_else(|| {
                 (domain == "Hero")
@@ -1991,9 +2220,21 @@ impl<'a> Lowering<'a> {
                                     .members
                                     .iter()
                                     .find(|member| {
-                                        member.spellings(&locale).iter().any(|candidate| {
-                                            candidate.eq_ignore_ascii_case(&spelling)
-                                        })
+                                        member.member.eq_ignore_ascii_case(catalog_spelling)
+                                            || member.spellings(&locale).iter().any(|candidate| {
+                                                candidate.eq_ignore_ascii_case(catalog_spelling)
+                                            })
+                                            || member
+                                                .member
+                                                .chars()
+                                                .filter(|c| c.is_ascii_alphanumeric())
+                                                .collect::<String>()
+                                                .eq_ignore_ascii_case(
+                                                    &catalog_spelling
+                                                        .chars()
+                                                        .filter(|c| c.is_ascii_alphanumeric())
+                                                        .collect::<String>(),
+                                                )
                                     })
                                     .map(|member| member.member.clone())
                             })
@@ -2035,11 +2276,275 @@ impl<'a> Lowering<'a> {
         statements: &[Stmt],
         break_target: Option<BreakTarget>,
     ) -> Result<Vec<wir::ActionId>, IntegrationError> {
+        self.visible_labels.push(
+            statements
+                .iter()
+                .filter_map(|statement| match statement {
+                    Stmt::Label { name, .. } => Some(name.clone()),
+                    _ => None,
+                })
+                .collect(),
+        );
         let mut actions = Vec::new();
-        for statement in statements {
-            actions.extend(self.lower_action(statement, break_target)?);
+        let mut labels = HashMap::new();
+        let mut gotos = Vec::new();
+        let mut index = 0;
+        while index < statements.len() {
+            let statement = &statements[index];
+            if let Stmt::If {
+                branches,
+                r#else,
+                span,
+            } = statement
+            {
+                if branches.len() == 1 && r#else.is_none() {
+                    let branch = &branches[0];
+                    if let Some((conditions, label)) =
+                        branch.body.first().and_then(pure_goto_conditions)
+                    {
+                        let target = statements[index + 1..]
+                            .iter()
+                            .position(|candidate| {
+                                matches!(candidate, Stmt::Label { name, .. } if name == label)
+                            });
+                        if target.is_some() && conditions.is_empty() {
+                            let condition = self.lower_value(&branch.condition)?;
+                            let condition = self.push_call("not", vec![condition]);
+                            let body = self.lower_actions(&branch.body[1..], break_target)?;
+                            actions.push(self.wir.actions.push(Action::If {
+                                branches: vec![wir::IfBranch { condition, body }],
+                                else_body: None,
+                                span: self.wir_span(*span)?,
+                            }));
+                            index += 1;
+                            continue;
+                        }
+                    }
+                }
+                let external_jump =
+                    branches
+                        .iter()
+                        .enumerate()
+                        .find_map(|(branch_index, branch)| {
+                            let (conditions, label) = pure_goto_conditions(branch.body.last()?)?;
+                            let target = statements[index + 1..]
+                                .iter()
+                                .position(|candidate| {
+                                    matches!(candidate, Stmt::Label { name, .. } if name == label)
+                                })
+                                .map(|offset| index + 1 + offset)
+                                .or_else(|| {
+                                    self.outer_goto_targets
+                                        .last()
+                                        .is_some_and(|target| target == label)
+                                        .then_some(statements.len())
+                                })?;
+                            Some((
+                                branch_index,
+                                conditions.into_iter().cloned().collect::<Vec<_>>(),
+                                label.to_string(),
+                                target,
+                            ))
+                        });
+                if let Some((exit_branch, exit_conditions, label, target)) = external_jump {
+                    self.outer_goto_targets.push(label.clone());
+                    let middle_result =
+                        self.lower_actions(&statements[index + 1..target], break_target);
+                    let middle = middle_result?;
+                    self.resolve_deferred_gotos(&middle, label.as_str(), middle.len())?;
+                    let distance = self.canonical_action_width(&middle, *span)?;
+                    let mut lowered_branches = Vec::with_capacity(branches.len());
+                    for (branch_index, branch) in branches.iter().enumerate() {
+                        let body = if branch_index == exit_branch {
+                            &branch.body[..branch.body.len() - 1]
+                        } else {
+                            &branch.body[..]
+                        };
+                        lowered_branches.push(wir::IfBranch {
+                            condition: self.lower_value(&branch.condition)?,
+                            body: self.lower_actions(body, break_target)?,
+                        });
+                    }
+                    let else_body = r#else
+                        .as_ref()
+                        .map(|body| self.lower_actions(body, break_target))
+                        .transpose()?;
+                    self.outer_goto_targets.pop();
+                    actions.push(self.wir.actions.push(Action::If {
+                        branches: lowered_branches,
+                        else_body,
+                        span: self.wir_span(*span)?,
+                    }));
+                    let mut condition = self.lower_value(&branches[exit_branch].condition)?;
+                    for expression in exit_conditions {
+                        let right = self.lower_value(&expression)?;
+                        condition = self.push_call("and", vec![condition, right]);
+                    }
+                    let distance_value = self.push_number(distance as f64, &distance.to_string());
+                    actions.push(self.wir.actions.push(Action::Call {
+                        name: "skipIf".to_string(),
+                        args: vec![condition, distance_value],
+                        span: self.wir_span(*span)?,
+                    }));
+                    actions.extend(middle);
+                    index = target + 1;
+                    continue;
+                }
+            }
+            if let Some((conditions, label)) = pure_goto_conditions(statement) {
+                let target = statements[index + 1..]
+                    .iter()
+                    .position(
+                        |candidate| matches!(candidate, Stmt::Label { name, .. } if name == label),
+                    )
+                    .map(|offset| index + 1 + offset)
+                    .or_else(|| {
+                        self.outer_goto_targets
+                            .last()
+                            .is_some_and(|target| target == label)
+                            .then_some(statements.len())
+                    });
+                if let Some(target) = target {
+                    self.outer_goto_targets.push(label.to_string());
+                    let middle_result =
+                        self.lower_actions(&statements[index + 1..target], break_target);
+                    self.outer_goto_targets.pop();
+                    let middle = middle_result?;
+                    let span = statement.span().copied();
+                    self.resolve_deferred_gotos(&middle, label, middle.len())?;
+                    let distance = self.canonical_action_width(&middle, span)?;
+                    let mut args = Vec::with_capacity(conditions.len() + 1);
+                    if let Some((first, rest)) = conditions.split_first() {
+                        let mut condition = self.lower_value(first)?;
+                        for expression in rest {
+                            let right = self.lower_value(expression)?;
+                            condition = self.push_call("and", vec![condition, right]);
+                        }
+                        args.push(condition);
+                    }
+                    args.push(self.push_number(distance as f64, &distance.to_string()));
+                    actions.push(
+                        self.wir.actions.push(Action::Call {
+                            name: if conditions.is_empty() {
+                                "skip"
+                            } else {
+                                "skipIf"
+                            }
+                            .to_string(),
+                            args,
+                            span: self.wir_span(span)?,
+                        }),
+                    );
+                    actions.extend(middle);
+                    index = target + 1;
+                    continue;
+                }
+            }
+            match statement {
+                Stmt::Label { name, .. } => {
+                    labels.insert(name.clone(), actions.len());
+                }
+                Stmt::Goto {
+                    label,
+                    offset,
+                    rule_start,
+                    span,
+                } => {
+                    if *rule_start {
+                        return Err(self.unsupported(
+                            "goto RULE_START is not representable in canonical WIR",
+                            *span,
+                        ));
+                    }
+                    let placeholder = self.push_number(0.0, "0");
+                    let action = self.wir.actions.push(Action::Call {
+                        name: "skip".to_string(),
+                        args: vec![placeholder],
+                        span: self.wir_span(*span)?,
+                    });
+                    let position = actions.len();
+                    actions.push(action);
+                    gotos.push((
+                        action,
+                        position,
+                        label.clone(),
+                        offset.clone(),
+                        span.map(Into::into),
+                    ));
+                }
+                _ => actions.extend(self.lower_action(statement, break_target)?),
+            }
+            index += 1;
         }
+        for (action, position, label, offset, span) in gotos {
+            let distance = if let Some(offset) = offset {
+                self.lower_value(&offset)?
+            } else {
+                let Some(label) = label else {
+                    return Err(self.unsupported("goto is missing a label or offset", span));
+                };
+                let Some(&target) = labels.get(&label) else {
+                    if self
+                        .visible_labels
+                        .iter()
+                        .any(|labels| labels.contains(&label))
+                    {
+                        self.deferred_gotos.push((action, label, span));
+                        continue;
+                    }
+                    return Err(self.unsupported(format!("unknown goto label '{label}'"), span));
+                };
+                if target < position {
+                    return Err(self
+                        .unsupported("backward goto is not representable in canonical WIR", span));
+                }
+                let width = self.canonical_action_width(&actions[position + 1..target], span)?;
+                self.push_number(width as f64, &width.to_string())
+            };
+            let Some(Action::Call { args, .. }) = self.wir.actions.get_mut(action) else {
+                unreachable!("goto placeholder must be a call action")
+            };
+            args[0] = distance;
+        }
+        if self.visible_labels.len() == 1 && !self.deferred_gotos.is_empty() {
+            let (_, label, span) = self.deferred_gotos.remove(0);
+            return Err(self.unsupported(format!("unknown goto label '{label}'"), span));
+        }
+        self.visible_labels.pop();
         Ok(actions)
+    }
+
+    fn resolve_deferred_gotos(
+        &mut self,
+        actions: &[wir::ActionId],
+        label: &str,
+        target: usize,
+    ) -> Result<(), IntegrationError> {
+        let deferred = std::mem::take(&mut self.deferred_gotos);
+        let mut remaining = Vec::new();
+        for (action, deferred_label, span) in deferred {
+            if deferred_label != label {
+                remaining.push((action, deferred_label, span));
+                continue;
+            }
+            let Some(position) = actions.iter().position(|candidate| *candidate == action) else {
+                remaining.push((action, deferred_label, span));
+                continue;
+            };
+            if target < position {
+                return Err(
+                    self.unsupported("backward goto is not representable in canonical WIR", span)
+                );
+            }
+            let width = self.canonical_action_width(&actions[position + 1..target], span)?;
+            let distance = self.push_number(width as f64, &width.to_string());
+            let Some(Action::Call { args, .. }) = self.wir.actions.get_mut(action) else {
+                unreachable!("deferred goto placeholder must be a call action")
+            };
+            args[0] = distance;
+        }
+        self.deferred_gotos = remaining;
+        Ok(())
     }
 
     fn lower_action(
@@ -2172,10 +2677,7 @@ impl<'a> Lowering<'a> {
                 arms,
                 span,
             } => self.lower_switch(value, arms, *span).map(|action| vec![action]),
-            Stmt::Delete { span, .. } => Err(self.unsupported(
-                "delete statements are not representable in canonical WIR",
-                *span,
-            )),
+            Stmt::Delete { target, span } => self.lower_delete(target, *span).map(|action| vec![action]),
             Stmt::Continue { span } => Err(self.unsupported(
                 "continue statements are only lowered while constructing a loop body",
                 *span,
@@ -2341,6 +2843,92 @@ impl<'a> Lowering<'a> {
                 actions.extend(tail);
                 return Ok(actions);
             }
+            if let Some((conditions, label)) = pure_goto_conditions(statement) {
+                if let Some(target) = statements[index + 1..]
+                    .iter()
+                    .position(
+                        |candidate| matches!(candidate, Stmt::Label { name, .. } if name == label),
+                    )
+                    .map(|offset| index + 1 + offset)
+                {
+                    let middle = self.lower_loop_sequence(
+                        &statements[index + 1..target],
+                        after,
+                        structural_after,
+                    )?;
+                    let suffix = self.lower_loop_sequence(
+                        &statements[target + 1..],
+                        after,
+                        structural_after,
+                    )?;
+                    let distance =
+                        self.canonical_action_width(&middle, statement.span().copied())?;
+                    let mut args = Vec::with_capacity(conditions.len() + 1);
+                    if let Some((first, rest)) = conditions.split_first() {
+                        let mut condition = self.lower_value(first)?;
+                        for expression in rest {
+                            let right = self.lower_value(expression)?;
+                            condition = self.push_call("and", vec![condition, right]);
+                        }
+                        args.push(condition);
+                    }
+                    args.push(self.push_number(distance as f64, &distance.to_string()));
+                    actions.push(
+                        self.wir.actions.push(Action::Call {
+                            name: if conditions.is_empty() {
+                                "skip"
+                            } else {
+                                "skipIf"
+                            }
+                            .to_string(),
+                            args,
+                            span: self.wir_span(statement.span().copied())?,
+                        }),
+                    );
+                    actions.extend(middle);
+                    actions.extend(suffix);
+                    return Ok(actions);
+                }
+            }
+            if let Some((conditions, label)) = pure_goto_conditions(statement) {
+                let local_label = statements.iter().any(
+                    |candidate| matches!(candidate, Stmt::Label { name, .. } if name == label),
+                );
+                let outer_label = self
+                    .visible_labels
+                    .last()
+                    .is_some_and(|labels| labels.contains(label));
+                if !local_label && outer_label {
+                    let span = statement.span().copied();
+                    let mut condition = None;
+                    for expression in conditions {
+                        let value = self.lower_value(expression)?;
+                        condition = Some(match condition {
+                            Some(left) => self.push_call("and", vec![left, value]),
+                            None => value,
+                        });
+                    }
+                    let break_action = self.wir.actions.push(Action::Call {
+                        name: "break".to_string(),
+                        args: Vec::new(),
+                        span: self.wir_span(span)?,
+                    });
+                    actions.push(if let Some(condition) = condition {
+                        self.wir.actions.push(Action::If {
+                            branches: vec![wir::IfBranch {
+                                condition,
+                                body: vec![break_action],
+                            }],
+                            else_body: None,
+                            span: self.wir_span(span)?,
+                        })
+                    } else {
+                        break_action
+                    });
+                    index += 1;
+                    continue;
+                }
+            }
             actions.extend(self.lower_action(statement, Some(BreakTarget::Loop))?);
             index += 1;
         }
@@ -2503,9 +3091,10 @@ impl<'a> Lowering<'a> {
         let selector = self.lower_value(value)?;
         let mut case_values = Vec::new();
         let mut lowered_arms = Vec::with_capacity(arms.len());
-        let mut case_offsets = Vec::new();
-        let mut offset = 0usize;
-        let mut default_offset = None;
+        let mut has_default = false;
+        let mut legacy_case_offsets = Vec::new();
+        let mut legacy_offset = 0;
+        let mut legacy_default_offset = None;
 
         for arm in arms {
             let (value, (body, break_at)) = match arm {
@@ -2514,47 +3103,115 @@ impl<'a> Lowering<'a> {
                     (Some(value), self.lower_switch_body(body)?)
                 }
                 SwitchArm::Default { body, span } => {
-                    if default_offset.is_some() {
+                    if has_default {
                         return Err(
                             self.unsupported("a switch may contain at most one default arm", *span)
                         );
                     }
-                    default_offset = Some(offset);
+                    has_default = true;
+                    legacy_default_offset = Some(legacy_offset);
                     (None, self.lower_switch_body(body)?)
                 }
             };
             if value.is_some() {
-                case_offsets.push(offset);
+                legacy_case_offsets.push(legacy_offset);
             }
-            offset += self.canonical_action_width(&body, span)? + usize::from(break_at.is_some());
-            lowered_arms.push((value, body, break_at));
+            legacy_offset +=
+                self.canonical_action_width(&body, span)? + usize::from(break_at.is_some());
+            lowered_arms.push((value.map(Box::as_ref), body, break_at));
         }
-        let default_offset = default_offset.unwrap_or(offset);
 
         let break_arms: Vec<_> = lowered_arms
             .iter()
             .enumerate()
             .filter_map(|(index, (_, _, break_at))| break_at.map(|break_at| (index, break_at)))
             .collect();
-        if break_arms.len() > 1 {
-            let (first_index, first_break) = break_arms[0];
-            let has_actions_after_first = lowered_arms[first_index].1.len() > first_break.0
-                || lowered_arms
-                    .iter()
-                    .skip(first_index + 1)
-                    .any(|(_, body, _)| !body.is_empty());
-            if has_actions_after_first {
-                return Err(self.unsupported(
-                    "multiple switch breaks with later reachable actions require canonical switch targets",
-                    Some(break_arms[1].1.1),
-                ));
-            }
-        }
+        let first_break = break_arms.first().copied();
+        let has_later_reachable_actions =
+            first_break.is_some_and(|(break_index, (break_at, _))| {
+                lowered_arms[break_index].1.len() > break_at
+                    || lowered_arms
+                        .iter()
+                        .skip(break_index + 1)
+                        .any(|(_, body, _)| !body.is_empty())
+            });
+        let use_shared_exit = break_arms.len() > 1 && has_later_reachable_actions;
 
         let case_values = self.lower_array(case_values, span)?;
         let value_span = self.wir_span(span)?;
+        if !use_shared_exit {
+            let default_offset = legacy_default_offset.unwrap_or(legacy_offset);
+            let offset_values = std::iter::once(default_offset)
+                .chain(legacy_case_offsets)
+                .map(|value| {
+                    self.wir.values.push(ValueNode::new(
+                        Value::Number {
+                            value: value as f64,
+                            text: value.to_string(),
+                        },
+                        value_span,
+                    ))
+                })
+                .collect();
+            let offsets = self.lower_array(offset_values, span)?;
+            let skip = self.lower_switch_selector(selector, case_values, offsets, span)?;
+            let true_value = self
+                .wir
+                .values
+                .push(ValueNode::new(Value::Bool(true), self.wir_span(span)?));
+            let mut branch_body = vec![skip];
+            let else_body = if let Some((break_index, (break_at, _))) = first_break {
+                for (index, (_, body, _)) in lowered_arms.iter().enumerate() {
+                    if index < break_index {
+                        branch_body.extend(body.iter().copied());
+                    } else if index == break_index {
+                        branch_body.extend(body[..break_at].iter().copied());
+                    }
+                }
+                let mut tail = Vec::new();
+                tail.extend(lowered_arms[break_index].1[break_at..].iter().copied());
+                for (_, body, _) in lowered_arms.iter().skip(break_index + 1) {
+                    tail.extend(body.iter().copied());
+                }
+                Some(tail)
+            } else {
+                for (_, body, _) in &lowered_arms {
+                    branch_body.extend(body.iter().copied());
+                }
+                None
+            };
+            return Ok(self.wir.actions.push(Action::If {
+                branches: vec![wir::IfBranch {
+                    condition: true_value,
+                    body: branch_body,
+                }],
+                else_body,
+                span: self.wir_span(span)?,
+            }));
+        }
+
+        let offsets = self
+            .wir
+            .values
+            .push(ValueNode::new(Value::Array(Vec::new()), value_span));
+        let skip = self.lower_switch_selector(selector, case_values, offsets, span)?;
+        let mut arm_offsets = vec![None; lowered_arms.len()];
+        let (switch, switch_end) =
+            self.lower_switch_level(&lowered_arms, 0, Some(skip), 0, &mut arm_offsets, span)?;
+
+        let default_offset = lowered_arms
+            .iter()
+            .enumerate()
+            .find_map(|(index, (value, _, _))| value.is_none().then(|| arm_offsets[index].unwrap()))
+            .unwrap_or(switch_end);
         let offset_values = std::iter::once(default_offset)
-            .chain(case_offsets)
+            .chain(
+                lowered_arms
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, (value, _, _))| value.is_some())
+                    .map(|(index, _)| arm_offsets[index].unwrap()),
+            )
             .map(|value| {
                 self.wir.values.push(ValueNode::new(
                     Value::Number {
@@ -2565,7 +3222,29 @@ impl<'a> Lowering<'a> {
                 ))
             })
             .collect();
-        let offsets = self.lower_array(offset_values, span)?;
+        let offset_values = self.lower_array(offset_values, span)?;
+        let offset_value = self
+            .wir
+            .values
+            .get(offset_values)
+            .expect("switch offset array must exist")
+            .value
+            .clone();
+        let Some(node) = self.wir.values.get_mut(offsets) else {
+            unreachable!("switch offset placeholder must exist")
+        };
+        node.value = offset_value;
+
+        Ok(switch)
+    }
+
+    fn lower_switch_selector(
+        &mut self,
+        selector: wir::ValueId,
+        case_values: wir::ValueId,
+        offsets: wir::ValueId,
+        span: Option<HirSpan>,
+    ) -> Result<wir::ActionId, IntegrationError> {
         let one = self.wir.values.push(ValueNode::new(
             Value::Number {
                 value: 1.0,
@@ -2594,47 +3273,93 @@ impl<'a> Lowering<'a> {
             },
             self.wir_span(span)?,
         ));
-        let skip = self.wir.actions.push(Action::Call {
+        Ok(self.wir.actions.push(Action::Call {
             name: "skip".to_string(),
             args: vec![skip_condition],
             span: self.wir_span(span)?,
-        });
+        }))
+    }
+
+    fn lower_switch_level(
+        &mut self,
+        arms: &[LoweredSwitchArm<'_>],
+        start: usize,
+        selector_skip: Option<wir::ActionId>,
+        level_offset: usize,
+        arm_offsets: &mut [Option<usize>],
+        span: Option<HirSpan>,
+    ) -> Result<(wir::ActionId, usize), IntegrationError> {
+        let break_index = (start..arms.len())
+            .find(|index| arms[*index].2.is_some())
+            .expect("switch level must contain a break");
+        let mut branch_body = Vec::new();
+        if let Some(selector_skip) = selector_skip {
+            branch_body.push(selector_skip);
+        }
+        let mut branch_offset = 0;
+        for index in start..=break_index {
+            arm_offsets[index] = Some(if selector_skip.is_some() {
+                level_offset + branch_offset
+            } else if index == start {
+                level_offset
+            } else {
+                level_offset + 1 + branch_offset
+            });
+            let (_, body, break_at) = &arms[index];
+            let body = if index == break_index {
+                &body[..break_at.as_ref().unwrap().0]
+            } else {
+                body.as_slice()
+            };
+            branch_offset += self.canonical_action_width(body, span)?;
+            branch_body.extend(body.iter().copied());
+        }
+        let branch_width = self.canonical_action_width(&branch_body, span)?;
+        let (_, break_body, Some((break_at, _))) = &arms[break_index] else {
+            unreachable!("break index must point to a switch break")
+        };
+        let mut else_body = break_body[*break_at..].to_vec();
+        let tail_width = self.canonical_action_width(&else_body, span)?;
+        let else_content_start = if selector_skip.is_some() {
+            level_offset + branch_width + tail_width
+        } else {
+            level_offset + branch_width + tail_width + 2
+        };
+        let has_next_break = (break_index + 1..arms.len()).any(|index| arms[index].2.is_some());
+        let end_offset = if has_next_break {
+            let (child, child_end) = self.lower_switch_level(
+                arms,
+                break_index + 1,
+                None,
+                else_content_start,
+                arm_offsets,
+                span,
+            )?;
+            else_body.push(child);
+            child_end
+        } else {
+            let mut offset = else_content_start;
+            for index in break_index + 1..arms.len() {
+                arm_offsets[index] = Some(offset);
+                let (_, body, _) = &arms[index];
+                offset += self.canonical_action_width(body, span)?;
+                else_body.extend(body.iter().copied());
+            }
+            offset
+        };
         let true_value = self
             .wir
             .values
             .push(ValueNode::new(Value::Bool(true), self.wir_span(span)?));
-
-        let first_break = break_arms.first().copied();
-        let mut branch_body = vec![skip];
-        let else_body = if let Some((break_index, (break_at, _))) = first_break {
-            for (index, (_, body, _)) in lowered_arms.iter().enumerate() {
-                if index < break_index {
-                    branch_body.extend(body.iter().copied());
-                } else if index == break_index {
-                    branch_body.extend(body[..break_at].iter().copied());
-                }
-            }
-            let mut tail = Vec::new();
-            tail.extend(lowered_arms[break_index].1[break_at..].iter().copied());
-            for (_, body, _) in lowered_arms.iter().skip(break_index + 1) {
-                tail.extend(body.iter().copied());
-            }
-            Some(tail)
-        } else {
-            for (_, body, _) in &lowered_arms {
-                branch_body.extend(body.iter().copied());
-            }
-            None
-        };
-
-        Ok(self.wir.actions.push(Action::If {
+        let switch = self.wir.actions.push(Action::If {
             branches: vec![wir::IfBranch {
                 condition: true_value,
                 body: branch_body,
             }],
-            else_body,
+            else_body: Some(else_body),
             span: self.wir_span(span)?,
-        }))
+        });
+        Ok((switch, end_offset))
     }
 
     fn lower_switch_body(
@@ -3097,6 +3822,27 @@ impl<'a> Lowering<'a> {
         }
     }
 
+    fn value_is_known_player(&self, value: wir::ValueId) -> bool {
+        match &self
+            .wir
+            .values
+            .get(value)
+            .expect("lowered value must exist")
+            .value
+        {
+            Value::EventPlayer => true,
+            Value::Call { name, .. } => self
+                .compiler
+                .catalog
+                .entry(Kind::Value, name)
+                .and_then(|entry| entry.return_type())
+                .is_some_and(|return_type| {
+                    return_type.split('|').any(|part| part.trim() == "Player")
+                }),
+            _ => false,
+        }
+    }
+
     fn push_value(&mut self, value: Value) -> wir::ValueId {
         self.wir.values.push(ValueNode::new(value, None))
     }
@@ -3177,6 +3923,84 @@ impl<'a> Lowering<'a> {
             },
             self.wir_span(expr.span().copied())?,
         )))
+    }
+
+    fn lower_delete(
+        &mut self,
+        target: &Expr,
+        span: Option<HirSpan>,
+    ) -> Result<wir::ActionId, IntegrationError> {
+        let Expr::Index { array, index, .. } = target else {
+            return Err(self.unsupported(
+                "delete statements require an indexed global or player variable",
+                span,
+            ));
+        };
+        let (root, assignment) = match array.as_ref() {
+            Expr::GlobalVar {
+                name,
+                span: target_span,
+            } => {
+                let variable = *self.globals.get(name).ok_or_else(|| {
+                    self.unsupported(format!("unknown global variable '{name}'"), *target_span)
+                })?;
+                let value = self.wir.values.push(ValueNode::new(
+                    Value::GlobalVariable(variable),
+                    self.wir_span(*target_span)?,
+                ));
+                (value, DeleteAssignment::Global(variable))
+            }
+            Expr::PlayerVar {
+                player,
+                name,
+                span: target_span,
+                ..
+            } => {
+                let variable = *self.players.get(name).ok_or_else(|| {
+                    self.unsupported(format!("unknown player variable '{name}'"), *target_span)
+                })?;
+                let player = self.lower_value(player)?;
+                let value = self.wir.values.push(ValueNode::new(
+                    Value::PlayerVariable { player, variable },
+                    self.wir_span(*target_span)?,
+                ));
+                (value, DeleteAssignment::Player { player, variable })
+            }
+            _ => {
+                return Err(self.unsupported(
+                    "delete statements are only representable for global or player variables",
+                    target.span().copied(),
+                ));
+            }
+        };
+        let index = self.lower_value(index)?;
+        let zero = self.push_number(0.0, "0");
+        let one = self.push_number(1.0, "1");
+        let end = self.push_call("add", vec![index, one]);
+        let maximum = self.push_number(999_999_999_999.0, "999999999999");
+        let prefix = self.push_call("slice", vec![root, zero, index]);
+        let suffix = self.push_call("slice", vec![root, end, maximum]);
+        let value = self.push_call("appendToArray", vec![prefix, suffix]);
+        let span = self.wir_span(span)?;
+        Ok(match assignment {
+            DeleteAssignment::Global(variable) => {
+                self.wir.actions.push(Action::SetGlobalVariable {
+                    variable,
+                    value,
+                    span,
+                    target_span: span,
+                })
+            }
+            DeleteAssignment::Player { player, variable } => {
+                self.wir.actions.push(Action::SetPlayerVariable {
+                    player,
+                    variable,
+                    value,
+                    span,
+                    target_span: span,
+                })
+            }
+        })
     }
 
     fn lower_assign(
@@ -3537,6 +4361,15 @@ impl<'a> Lowering<'a> {
         args: &[Expr],
         span: Option<HirSpan>,
     ) -> Result<wir::ActionId, IntegrationError> {
+        if args.is_empty() {
+            if let Some(&subroutine) = self.subroutines.get(name) {
+                return Ok(self.wir.actions.push(Action::CallSubroutine {
+                    subroutine,
+                    span: self.wir_span(span)?,
+                    callee_span: self.wir_span(span)?,
+                }));
+            }
+        }
         if name == "chaseAtRate" {
             let args = args
                 .iter()
@@ -3555,6 +4388,35 @@ impl<'a> Lowering<'a> {
             .ok_or_else(|| self.unsupported(format!("unknown action '{name}'"), span))?;
         if !matches!(function.kind, FunctionKind::Action) {
             return Err(self.unsupported(format!("'{name}' is not a generic OPY action"), span));
+        }
+        if function.id == "async" {
+            let [subroutine, behavior] = args else {
+                return Err(
+                    self.unsupported("async requires a subroutine and an AsyncBehavior", span)
+                );
+            };
+            let subroutine_name = match subroutine {
+                Expr::Call { name, args, .. } if args.is_empty() => name,
+                _ => {
+                    return Err(self.unsupported(
+                        "async requires a declared subroutine",
+                        subroutine.span().copied(),
+                    ));
+                }
+            };
+            let subroutine_id = *self.subroutines.get(subroutine_name).ok_or_else(|| {
+                self.unsupported(
+                    format!("unknown subroutine '{subroutine_name}'"),
+                    subroutine.span().copied(),
+                )
+            })?;
+            let subroutine = self.push_value(Value::Subroutine(subroutine_id));
+            let behavior = self.lower_value(behavior)?;
+            return Ok(self.wir.actions.push(Action::Call {
+                name: "startRule".to_string(),
+                args: vec![subroutine, behavior],
+                span: self.wir_span(span)?,
+            }));
         }
         if matches!(
             function.id.as_str(),
@@ -3600,11 +4462,44 @@ impl<'a> Lowering<'a> {
             .iter()
             .map(|expr| self.lower_value(expr))
             .collect::<Result<Vec<_>, _>>()?;
+        let args = self.normalize_catalog_argument_domains(catalog_id, args);
         Ok(self.wir.actions.push(Action::Call {
             name: catalog_id.clone(),
             args,
             span: self.wir_span(span)?,
         }))
+    }
+
+    fn normalize_catalog_argument_domains(
+        &mut self,
+        catalog_id: &str,
+        mut args: Vec<wir::ValueId>,
+    ) -> Vec<wir::ValueId> {
+        let Some(entry) = self.compiler.catalog.entry(Kind::Action, catalog_id) else {
+            return args;
+        };
+        for (index, argument) in args.iter_mut().enumerate() {
+            let Some(domain) = entry.param_domain(index) else {
+                continue;
+            };
+            let Some(ValueNode {
+                value: Value::Enum { value_type, value },
+                span,
+            }) = self.wir.values.get(*argument)
+            else {
+                continue;
+            };
+            if value_type == "Team" && domain == "Color" {
+                *argument = self.wir.values.push(ValueNode::new(
+                    Value::Enum {
+                        value_type: domain.to_string(),
+                        value: value.clone(),
+                    },
+                    *span,
+                ));
+            }
+        }
+        args
     }
 
     fn lower_hud_text(
@@ -3694,11 +4589,19 @@ impl<'a> Lowering<'a> {
 
         // `append` is an OPY mutation, represented by the canonical variable
         // modify actions rather than a catalog action call.
-        if function.id == "append" {
+        if matches!(function.id.as_str(), "append" | "remove") {
             let [value] = args else {
-                return Err(self.unsupported("append requires exactly one argument", span));
+                return Err(self.unsupported(
+                    format!("{} requires exactly one argument", function.id),
+                    span,
+                ));
             };
             let value = self.lower_value(value)?;
+            let op = if function.id == "append" {
+                wir::ModifyOp::AppendToArray
+            } else {
+                wir::ModifyOp::RemoveFromArray
+            };
             return match receiver {
                 Expr::GlobalVar {
                     name,
@@ -3709,7 +4612,7 @@ impl<'a> Lowering<'a> {
                     })?;
                     Ok(self.wir.actions.push(Action::ModifyGlobalVariable {
                         variable,
-                        op: wir::ModifyOp::AppendToArray,
+                        op,
                         value,
                         span: self.wir_span(span)?,
                         target_span: self.wir_span(*target_span)?,
@@ -3728,7 +4631,7 @@ impl<'a> Lowering<'a> {
                     Ok(self.wir.actions.push(Action::ModifyPlayerVariable {
                         player,
                         variable,
-                        op: wir::ModifyOp::AppendToArray,
+                        op,
                         value,
                         span: self.wir_span(span)?,
                         target_span: self.wir_span(*target_span)?,
@@ -3897,17 +4800,47 @@ impl<'a> Lowering<'a> {
                 if let Some(value) = fold_literal_format(text, args) {
                     return self.lower_custom_string(value, span);
                 }
-                let text_node = self.wir.values.push(ValueNode::new(
-                    Value::String(canonical_format_text(text)),
-                    self.wir_span(span)?,
-                ));
-                let mut call_args = vec![text_node];
-                for arg in args {
-                    call_args.push(self.lower_value(arg)?);
-                }
-                Value::Call {
-                    name: "customString".to_string(),
-                    args: call_args,
+                let format_text = canonical_format_text(text);
+                if args.len() <= 3 {
+                    let text_node = self.wir.values.push(ValueNode::new(
+                        Value::String(format_text),
+                        self.wir_span(span)?,
+                    ));
+                    let mut call_args = vec![text_node];
+                    for arg in args {
+                        call_args.push(self.lower_value(arg)?);
+                    }
+                    Value::Call {
+                        name: "customString".to_string(),
+                        args: call_args,
+                    }
+                } else {
+                    let chunks = split_format_chunks(&format_text, args.len()).ok_or_else(|| {
+                        self.unsupported(
+                            "format strings with more than three replacements require sequential placeholders",
+                            span,
+                        )
+                    })?;
+                    let lowered_args = args
+                        .iter()
+                        .map(|arg| self.lower_value(arg))
+                        .collect::<Result<Vec<_>, _>>()?;
+                    let mut parts = Vec::with_capacity(chunks.len());
+                    for (chunk, indices) in chunks {
+                        let text = self
+                            .wir
+                            .values
+                            .push(ValueNode::new(Value::String(chunk), self.wir_span(span)?));
+                        let mut call_args = vec![text];
+                        call_args.extend(indices.into_iter().map(|index| lowered_args[index]));
+                        parts.push(self.push_call("customString", call_args));
+                    }
+                    let separator = self.push_value(Value::String("{0}{1}".to_string()));
+                    let mut value = parts[0];
+                    for part in parts.into_iter().skip(1) {
+                        value = self.push_call("customString", vec![separator, value, part]);
+                    }
+                    return Ok(value);
                 }
             }
             Expr::Conditional {
@@ -4079,6 +5012,30 @@ impl<'a> Lowering<'a> {
                         y: self.lower_value(&args[1])?,
                         z: self.lower_value(&args[2])?,
                     }
+                } else if matches!(
+                    name.as_str(),
+                    "createWorkshopSettingBool"
+                        | "createWorkshopSettingEnum"
+                        | "createWorkshopSettingInt"
+                        | "createWorkshopSettingFloat"
+                ) {
+                    let mut lowered = args
+                        .iter()
+                        .map(|arg| self.lower_value(arg))
+                        .collect::<Result<Vec<_>, _>>()?;
+                    if name == "createWorkshopSettingFloat" && lowered.len() == 5 {
+                        lowered.push(self.push_number(0.0, "0"));
+                    }
+                    Value::Call {
+                        name: match name.as_str() {
+                            "createWorkshopSettingBool" => "workshopSettingToggle",
+                            "createWorkshopSettingEnum" => "workshopSettingCombo",
+                            "createWorkshopSettingInt" => "workshopSettingInteger",
+                            _ => name,
+                        }
+                        .to_string(),
+                        args: lowered,
+                    }
                 } else if matches!(name.as_str(), "all" | "any") {
                     let call_name = if name == "all" {
                         "isTrueForAll"
@@ -4206,13 +5163,93 @@ impl<'a> Lowering<'a> {
                 args,
                 ..
             } => {
+                if matches!(name.as_str(), "all" | "any") {
+                    let [
+                        Expr::Lambda {
+                            params, body, span, ..
+                        },
+                    ] = args.as_slice()
+                    else {
+                        return Err(
+                            self.unsupported(format!("{name} requires one lambda argument"), span)
+                        );
+                    };
+                    let condition = self.lower_array_callback(params, body, *span)?;
+                    let receiver = self.lower_value(receiver)?;
+                    return Ok(self.wir.values.push(ValueNode::new(
+                        Value::Call {
+                            name: if name == "all" {
+                                "isTrueForAll"
+                            } else {
+                                "isTrueForAny"
+                            }
+                            .to_string(),
+                            args: vec![receiver, condition],
+                        },
+                        self.wir_span(*span)?,
+                    )));
+                }
                 let function = self.compiler.manifest.resolve_member(name).ok_or_else(|| {
                     self.unsupported(format!("unknown member value '{name}'"), span)
                 })?;
                 if !matches!(function.kind, FunctionKind::MemberValue) {
                     return Err(self.unsupported(format!("'{name}' is not a member value"), span));
                 }
-                if matches!(function.id.as_str(), "concat" | "exclude") {
+                if matches!(
+                    function.id.as_str(),
+                    "getHitPosition" | "getPlayerHit" | "getNormal"
+                ) {
+                    let member_name = function.id.as_str();
+                    let Expr::Call {
+                        name: receiver_name,
+                        args: receiver_args,
+                        ..
+                    } = receiver.as_ref()
+                    else {
+                        return Err(self.unsupported(
+                            format!("{member_name} requires a raycast receiver"),
+                            span,
+                        ));
+                    };
+                    if receiver_name != "raycast" || !args.is_empty() {
+                        return Err(self.unsupported(
+                            format!("{member_name} requires raycast(...) with no member arguments"),
+                            span,
+                        ));
+                    }
+                    let catalog_id = function.catalog_id.clone().ok_or_else(|| {
+                        self.unsupported(
+                            format!("{member_name} has no canonical catalog identity"),
+                            span,
+                        )
+                    })?;
+                    let lowered_args = receiver_args
+                        .iter()
+                        .map(|arg| self.lower_value(arg))
+                        .collect::<Result<Vec<_>, _>>()?;
+                    return Ok(self.wir.values.push(ValueNode::new(
+                        Value::Call {
+                            name: catalog_id,
+                            args: lowered_args,
+                        },
+                        self.wir_span(span)?,
+                    )));
+                }
+                if function.id == "filter" {
+                    let [
+                        Expr::Lambda {
+                            params, body, span, ..
+                        },
+                    ] = args.as_slice()
+                    else {
+                        return Err(self.unsupported("filter requires one lambda argument", span));
+                    };
+                    let condition = self.lower_array_callback(params, body, *span)?;
+                    Value::Call {
+                        name: "filteredArray".to_string(),
+                        args: vec![self.lower_value(receiver)?, condition],
+                    }
+                } else if matches!(function.id.as_str(), "concat" | "exclude") {
                     let [value] = args.as_slice() else {
                         return Err(self.unsupported(
                             format!("{} requires exactly one argument", function.id),
@@ -4292,6 +5329,11 @@ impl<'a> Lowering<'a> {
                     ));
                 }
                 let iterable = self.lower_value(iterable)?;
+                let iterable = if self.value_is_known_player(iterable) {
+                    self.push_call("array", vec![iterable])
+                } else {
+                    iterable
+                };
                 let binding = ArrayBinding {
                     element: variable.clone(),
                     index: index.clone(),
@@ -4947,11 +5989,13 @@ fn player_event_kind(name: &str) -> Option<PlayerEventKind> {
         "playerDealtDamage" => PlayerEventKind::DealtDamage,
         "playerDealtFinalBlow" => PlayerEventKind::DealtFinalBlow,
         "playerDealtHealing" => PlayerEventKind::DealtHealing,
+        "playerDealtKnockback" => PlayerEventKind::DealtKnockback,
         "playerDied" => PlayerEventKind::Died,
         "playerEarnedElimination" => PlayerEventKind::EarnedElimination,
         "playerJoined" => PlayerEventKind::Joined,
         "playerLeft" => PlayerEventKind::Left,
         "playerReceivedHealing" => PlayerEventKind::ReceivedHealing,
+        "playerReceivedKnockback" => PlayerEventKind::ReceivedKnockback,
         "playerTookDamage" => PlayerEventKind::TookDamage,
         _ => return None,
     })
@@ -5153,6 +6197,59 @@ fn canonical_format_text(text: &str) -> String {
         }
     }
     output
+}
+
+fn split_format_chunks(text: &str, arg_count: usize) -> Option<Vec<(String, Vec<usize>)>> {
+    let mut chunks = Vec::new();
+    let mut current = String::new();
+    let mut indices = Vec::new();
+    let mut pending = String::new();
+    let mut cursor = 0;
+    while cursor < text.len() {
+        let Some(open_rel) = text[cursor..].find('{') else {
+            pending.push_str(&text[cursor..]);
+            break;
+        };
+        let open = cursor + open_rel;
+        let Some(close_rel) = text[open + 1..].find('}') else {
+            pending.push_str(&text[cursor..]);
+            break;
+        };
+        let close = open + 1 + close_rel;
+        let marker = &text[open + 1..close];
+        let Ok(index) = marker.parse::<usize>() else {
+            pending.push_str(&text[cursor..=close]);
+            cursor = close + 1;
+            continue;
+        };
+        if index >= arg_count {
+            return None;
+        }
+        pending.push_str(&text[cursor..open]);
+        if indices.len() == 3 && !indices.contains(&index) {
+            chunks.push((current, indices));
+            current = String::new();
+            indices = Vec::new();
+        }
+        current.push_str(&pending);
+        pending.clear();
+        let local = if let Some(local) = indices.iter().position(|candidate| *candidate == index) {
+            local
+        } else {
+            indices.push(index);
+            indices.len() - 1
+        };
+        current.push('{');
+        current.push_str(&local.to_string());
+        current.push('}');
+        cursor = close + 1;
+    }
+    current.push_str(&pending);
+    if current.is_empty() && chunks.is_empty() {
+        return Some(vec![(text.to_string(), Vec::new())]);
+    }
+    chunks.push((current, indices));
+    Some(chunks)
 }
 
 fn fold_literal_format(text: &str, args: &[hir::Expr]) -> Option<String> {
@@ -5669,6 +6766,30 @@ mod tests {
             }
         ));
         assert!(artifact.emitted.contains("Player Joined Match;"));
+    }
+
+    #[test]
+    fn hero_event_filters_accept_legacy_aliases() {
+        let compiler = Compiler::new().unwrap();
+        let hir = crate::compile(
+            "rule \"hero\":\n    @Event eachPlayer\n    @Hero soldier\n    disableInspector()\n",
+            "hero-filter.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        assert!(matches!(
+            &artifact
+                .wir
+                .rules
+                .get(workshop_rs::wir::RuleId::from_index(0))
+                .unwrap()
+                .event,
+            workshop_rs::wir::Event::EachPlayerWithFilters {
+                target: workshop_rs::wir::EventTarget::Hero(hero),
+                ..
+            } if hero == "SOLDIER_76"
+        ));
     }
 
     #[test]

@@ -1057,11 +1057,15 @@ impl Preprocessor {
 
     /// Expand all macros across the token stream, recursively.
     fn expand(&self, tokens: Vec<Token>) -> OpyResult<Vec<Token>> {
-        let mut out = Vec::new();
+        let mut out: Vec<Token> = Vec::new();
         let mut index = 0;
         while index < tokens.len() {
             let token = &tokens[index];
-            if token.kind == TokenKind::Ident {
+            if token.kind == TokenKind::Ident
+                && !out.last().is_some_and(|previous| {
+                    previous.kind == TokenKind::Ident && previous.text == "macro"
+                })
+            {
                 let name = token.text.clone();
                 if let Some(mac) = self.macros.iter().find(|m| m.name == name) {
                     if mac.is_function {
@@ -1103,7 +1107,10 @@ impl Preprocessor {
         let mut cursor = open + 1;
         while cursor < tokens.len() {
             let kind = tokens[cursor].kind;
-            if kind == TokenKind::LParen {
+            if matches!(
+                kind,
+                TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace
+            ) {
                 depth += 1;
                 current.push(tokens[cursor].clone());
             } else if kind == TokenKind::RParen {
@@ -1114,6 +1121,9 @@ impl Preprocessor {
                     return Ok((args, cursor + 1));
                 }
                 depth -= 1;
+                current.push(tokens[cursor].clone());
+            } else if matches!(kind, TokenKind::RBracket | TokenKind::RBrace) {
+                depth = depth.saturating_sub(1);
                 current.push(tokens[cursor].clone());
             } else if kind == TokenKind::Comma && depth == 0 {
                 args.push(std::mem::take(&mut current));
@@ -1243,7 +1253,11 @@ impl Preprocessor {
         let mut index = 0;
         while index < tokens.len() {
             let token = &tokens[index];
-            if token.kind == TokenKind::Ident {
+            if token.kind == TokenKind::Ident
+                && !out.last().is_some_and(|previous| {
+                    previous.kind == TokenKind::Ident && previous.text == "macro"
+                })
+            {
                 let name = token.text.clone();
                 if let Some(mac) = self.macros.iter().find(|m| m.name == name) {
                     if stack.iter().any(|s| s == &name) {
@@ -1254,7 +1268,7 @@ impl Preprocessor {
                     }
                     if mac.is_function {
                         if index + 1 < tokens.len() && tokens[index + 1].kind == TokenKind::LParen {
-                            let (args, after) = self.collect_args(tokens, index)?;
+                            let (args, after) = self.collect_args(tokens, index + 1)?;
                             let mut expanded = self.expand_macro(mac, args, token.span)?;
                             stack.push(name.clone());
                             self.expand_into(&mut expanded, stack, depth + 1)?;
@@ -1591,6 +1605,23 @@ mod tests {
             .map(|t| t.text.as_str())
             .collect();
         assert_eq!(numbers, vec!["3", "3"]);
+    }
+
+    #[test]
+    fn function_define_keeps_commas_inside_nested_collections() {
+        let (pre, _) = preprocess(
+            "#!define first(xs, fallback) xs[0]\nrule \"r\":\n    x = first([1, 2], 3)\n",
+            "main.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let numbers: Vec<&str> = pre
+            .tokens
+            .iter()
+            .filter(|token| token.kind == TokenKind::Number)
+            .map(|token| token.text.as_str())
+            .collect();
+        assert_eq!(numbers, vec!["1", "2", "0"]);
     }
 
     #[test]

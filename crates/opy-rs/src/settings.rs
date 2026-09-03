@@ -590,6 +590,7 @@ impl Jsonc<'_> {
                     depth += 1;
                     value.push(self.advance().expect("peeked character exists"));
                 }
+                ']' if depth == 0 => break,
                 ')' | ']' => {
                     depth = depth.saturating_sub(1);
                     value.push(self.advance().expect("peeked character exists"));
@@ -658,14 +659,20 @@ impl Jsonc<'_> {
         loop {
             self.skip_whitespace();
             let start = self.here();
-            let value = match self.parse_string_value() {
-                Some(value) => value,
-                None => {
+            let value = match self.peek() {
+                Some('"') | Some('\'') => self.parse_string_value().ok_or_else(|| {
+                    self.error(
+                        "settings-invalid",
+                        "unterminated string in settings list".to_string(),
+                    )
+                })?,
+                Some(']') | Some(',') | None => {
                     return Err(self.error(
                         "settings-invalid",
-                        "settings list elements must be strings".to_string(),
+                        "settings list elements must not be empty".to_string(),
                     ));
                 }
+                _ => self.parse_expression_value(),
             };
             let span = Span::new(self.file, start, self.here());
             elements.push(cst::SettingsListElement { value, span });

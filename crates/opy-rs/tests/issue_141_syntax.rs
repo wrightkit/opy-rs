@@ -131,20 +131,12 @@ fn issue_141_invalid_statement_contexts_are_source_diagnostics() {
 fn issue_141_backend_boundary_is_explicit_for_source_only_statements() {
     let cases = [
         (
-            "rule \"delete\":\n    @Event global\n    del A[1]\n",
-            "delete statements",
-        ),
-        (
             "rule \"goto\":\n    @Event global\n    goto target\n",
-            "goto statements",
+            "unknown goto label",
         ),
         (
             "rule \"goto rule start\":\n    @Event global\n    goto RULE_START\n",
-            "goto statements",
-        ),
-        (
-            "rule \"label\":\n    @Event global\n    target:\n",
-            "labels",
+            "goto RULE_START",
         ),
     ];
     let compiler = opy_rs::Compiler::new().expect("the compiler contract loads");
@@ -156,6 +148,18 @@ fn issue_141_backend_boundary_is_explicit_for_source_only_statements() {
         assert!(error.diagnostic.message.contains(expected_text));
         assert!(error.diagnostic.span.is_some());
     }
+}
+
+#[test]
+fn issue_141_delete_reaches_canonical_array_reconstruction() {
+    let source = "globalvar A\nrule \"delete\":\n    @Event global\n    del A[1]\n";
+    let artifact = opy_rs::Compiler::new()
+        .expect("the compiler contract loads")
+        .compile_source(source, "issue-141-delete.opy", Path::new(""))
+        .expect("indexed delete must lower to canonical array operations");
+    assert!(artifact.emitted_workshop.contains(
+        "Set Global Variable(A, Append To Array(Array Slice(Global.A, 0, 1), Array Slice(Global.A, Add(1, 1), 999999999999)))"
+    ));
 }
 
 #[test]

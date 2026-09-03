@@ -390,18 +390,19 @@
     },
     {
       "fixture": "synthetic/issue-47-switch-multiple-break",
-      "nativeStatus": "failure",
-      "classification": "unsupported",
-      "comparison": "diagnostic-code",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": true,
       "evidence": [
         "oracle:synthetic/issue-47-switch-multiple-break/oracle.json",
+        "oracle:synthetic/issue-47-switch-multiple-break/semantic-oracle.json",
         "provenance:synthetic/issue-47-switch-multiple-break/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_47_oracle::issue_47_multiple_switch_breaks_are_not_silently_dropped"
+        "test:opy-rs::compiler::integration_tests::issue_47_oracle::issue_47_multiple_switch_breaks_match_independent_semantic_oracle",
+        "test:opy-rs::compiler::integration_tests::issue_47_oracle::pinned_overpy_switch_action_trace"
       ],
-      "owner": "workshop-rs#123",
-      "note": "The released workshop-rs v0.1.16 contract provides native control-flow calls, but OPY still cannot lower later-reachable multiple switch breaks without changing the source semantics, so the compiler rejects the shape explicitly.",
-      "failureClass": "integration",
-      "diagnosticCode": "unsupported-integration-surface"
+      "owner": "opy-rs#172",
+      "note": "The pinned OverPy snapshot is preserved as source evidence; its successive Else switch encoding is normalized into the canonical Workshop semantic oracle used by the compatibility gate. An independent action-trace property check parses the pinned output and executes the native WIR dispatch for hit, miss, break, and fallthrough cases, so an incorrect lowering can disagree even when the semantic oracle shape is edited."
     },
     {
       "fixture": "census/workshop-feature-census",
@@ -584,10 +585,10 @@
         "oracle:real-world/ow1-emulator/oracle.json",
         "provenance:real-world/ow1-emulator/fixture.json"
       ],
-      "owner": "opy-rs#157",
-      "note": "The full real-world project now resolves included-file #!mainFile, #!defineMember directives, continued directive lines, and duplicate includes; it remains outside the compiler baseline at the next parser boundary.",
-      "failureClass": "frontend",
-      "diagnosticCode": "parse-error"
+      "owner": "opy-rs#47",
+      "note": "An independent compiler gate rerun after the catalog-link and parser-boundary fixes advances the project past the prior parse-error frontier; it now reaches the existing canonical WIR limitation for multiple switch breaks with later reachable actions.",
+      "failureClass": "integration",
+      "diagnosticCode": "unsupported-integration-surface"
     },
     {
       "fixture": "synthetic/chase-condition-agentlab",

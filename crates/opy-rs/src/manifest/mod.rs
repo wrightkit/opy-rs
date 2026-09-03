@@ -146,6 +146,7 @@ impl ReceiverCategory {
 pub enum ParamDefault {
     Call { call: String },
     EnumMember(String),
+    Bool(bool),
     Number(f64),
 }
 

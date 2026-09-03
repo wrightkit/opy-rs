@@ -87,6 +87,38 @@
       "kind": "memberAlias",
       "source": "disableHeroHUD",
       "target": "disableHeroHud"
+    },
+    {
+      "evidence": [
+        "builtin-surface"
+      ],
+      "kind": "functionAlias",
+      "source": "getLastCreatedText",
+      "target": "lastCreatedEntity"
+    },
+    {
+      "evidence": [
+        "builtin-surface"
+      ],
+      "kind": "functionAlias",
+      "source": "getTankHeroes",
+      "target": "allTankHeroes"
+    },
+    {
+      "evidence": [
+        "builtin-surface"
+      ],
+      "kind": "functionAlias",
+      "source": "getDamageHeroes",
+      "target": "allDamageHeroes"
+    },
+    {
+      "evidence": [
+        "builtin-surface"
+      ],
+      "kind": "functionAlias",
+      "source": "getSupportHeroes",
+      "target": "allSupportHeroes"
     }
   ],
   "functions": [
@@ -110,6 +142,272 @@
       ]
     },
     {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "async",
+      "kind": "action",
+      "params": [
+        {
+          "name": "subroutine"
+        },
+        {
+          "domain": "StartRuleBehavior",
+          "name": "behavior"
+        }
+      ]
+    },
+    {
+      "catalogId": "getObjectivePosition",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getObjectivePosition",
+      "kind": "value",
+      "params": [
+        {
+          "name": "objective"
+        }
+      ]
+    },
+    {
+      "catalogId": "getAbilityCooldown",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getAbilityCooldown",
+      "kind": "memberValue",
+      "params": [
+        {
+          "domain": "Button",
+          "name": "button"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getAbilityCharge",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getAbilityCharge",
+      "kind": "memberValue",
+      "params": [
+        {
+          "domain": "Button",
+          "name": "button"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getPlayerClosestToReticle",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getRealPlayerClosestToReticle",
+      "kind": "memberValue",
+      "params": [
+        {
+          "domain": "Team",
+          "name": "team"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "teamOf",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getTeam",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getTotalTimeElapsed",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getTotalTimeElapsed",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "isHeroBeingPlayed",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "isHeroBeingPlayed",
+      "kind": "value",
+      "params": [
+        {
+          "domain": "Hero",
+          "name": "hero"
+        },
+        {
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
+      "catalogId": "healer",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "healer",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "healee",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "healee",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "eventHealing",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "eventHealing",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "angleBetweenVectors",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "angleBetweenVectors",
+      "kind": "value",
+      "params": [
+        {
+          "name": "direction1"
+        },
+        {
+          "name": "direction2"
+        }
+      ]
+    },
+    {
+      "catalogId": "verticalAngleFromDirection",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "verticalAngleOfDirection",
+      "kind": "value",
+      "params": [
+        {
+          "name": "direction"
+        }
+      ]
+    },
+    {
+      "catalogId": "directionTowards",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "directionTowards",
+      "kind": "value",
+      "params": [
+        {
+          "name": "start"
+        },
+        {
+          "name": "end"
+        }
+      ]
+    },
+    {
+      "catalogId": "getPlayersOnHero",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getPlayersOnHero",
+      "kind": "value",
+      "params": [
+        {
+          "domain": "Hero",
+          "name": "hero"
+        },
+        {
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
+      "catalogId": "oppositeTeamOf",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getOppositeTeam",
+      "kind": "value",
+      "params": [
+        {
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
+      "catalogId": "isMatchBetweenRounds",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "isMatchBetweenRounds",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "min",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "min",
+      "kind": "value",
+      "params": [
+        {
+          "name": "a"
+        },
+        {
+          "name": "b"
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "raycast",
+      "kind": "value",
+      "params": [
+        {
+          "name": "startPosition"
+        },
+        {
+          "name": "endPosition"
+        },
+        {
+          "name": "playersToInclude"
+        },
+        {
+          "name": "playersToExclude"
+        },
+        {
+          "name": "includePlayerOwnedObjects"
+        }
+      ]
+    },
+    {
       "catalogId": "waitUntil",
       "evidence": [
         "builtin-surface"
@@ -121,7 +419,27 @@
           "name": "condition"
         },
         {
+          "default": 999999999999,
           "name": "timeout"
+        }
+      ]
+    },
+    {
+      "catalogId": "damage",
+      "evidence": [
+        "generic-builtins"
+      ],
+      "id": "damage",
+      "kind": "action",
+      "params": [
+        {
+          "name": "target"
+        },
+        {
+          "name": "attacker"
+        },
+        {
+          "name": "amount"
         }
       ]
     },
@@ -144,6 +462,51 @@
       "params": [
         {
           "name": "value"
+        }
+      ]
+    },
+    {
+      "catalogId": "logToInspector",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "printLog",
+      "kind": "action",
+      "params": [
+        {
+          "name": "text"
+        }
+      ]
+    },
+    {
+      "catalogId": "logToInspector",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "logToInspector",
+      "kind": "action",
+      "params": [
+        {
+          "name": "text"
+        }
+      ]
+    },
+    {
+      "catalogId": "heal",
+      "evidence": [
+        "generic-builtins"
+      ],
+      "id": "heal",
+      "kind": "action",
+      "params": [
+        {
+          "name": "target"
+        },
+        {
+          "name": "healer"
+        },
+        {
+          "name": "amount"
         }
       ]
     },
@@ -470,6 +833,7 @@
           "name": "reevaluation"
         },
         {
+          "default": "WHITE",
           "domain": "Color",
           "name": "textColor"
         },
@@ -487,6 +851,261 @@
       ],
       "id": "destroyAllHudText",
       "kind": "action",
+      "params": []
+    },
+    {
+      "catalogId": "progressBarHud",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "progressBarHud",
+      "kind": "action",
+      "params": [
+        {
+          "name": "visibleTo"
+        },
+        {
+          "name": "value"
+        },
+        {
+          "name": "text"
+        },
+        {
+          "name": "position"
+        },
+        {
+          "name": "scale"
+        },
+        {
+          "name": "barColor"
+        },
+        {
+          "name": "textColor"
+        },
+        {
+          "name": "reevaluation"
+        },
+        {
+          "name": "spectators"
+        }
+      ]
+    },
+    {
+      "catalogId": "destroyHudText",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "destroyHudText",
+      "kind": "action",
+      "params": [
+        {
+          "name": "textId"
+        }
+      ]
+    },
+    {
+      "catalogId": "destroyProgressBarInWorldText",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "destroyProgressBarInWorldText",
+      "kind": "action",
+      "params": [
+        {
+          "name": "textId"
+        }
+      ]
+    },
+    {
+      "catalogId": "destroyProgressBarHud",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "destroyProgressBarHud",
+      "kind": "action",
+      "params": [
+        {
+          "name": "textId"
+        }
+      ]
+    },
+    {
+      "catalogId": "destroyInWorldText",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "destroyInWorldText",
+      "kind": "action",
+      "params": [
+        {
+          "name": "textId"
+        }
+      ]
+    },
+    {
+      "catalogId": "destroyEffect",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "destroyEffect",
+      "kind": "action",
+      "params": [
+        {
+          "name": "effectId"
+        }
+      ]
+    },
+    {
+      "catalogId": "loop",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "loop",
+      "kind": "action",
+      "params": []
+    },
+    {
+      "catalogId": "removeHealthPool",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "removeHealthPool",
+      "kind": "action",
+      "params": [
+        {
+          "name": "healthPoolId"
+        }
+      ]
+    },
+    {
+      "catalogId": "startHealingOverTime",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "startHoT",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "healer"
+        },
+        {
+          "name": "duration"
+        },
+        {
+          "name": "healing"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "startDamageOverTime",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "startDamageOverTime",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "attacker"
+        },
+        {
+          "name": "duration"
+        },
+        {
+          "name": "damage"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "startHealingOverTime",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "startHealingOverTime",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "healer"
+        },
+        {
+          "name": "duration"
+        },
+        {
+          "name": "healing"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "stopHealingOverTime",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "stopHoT",
+      "kind": "action",
+      "params": [
+        {
+          "name": "healingOverTimeId"
+        }
+      ]
+    },
+    {
+      "catalogId": "stopHealingOverTime",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "stopHealingOverTime",
+      "kind": "action",
+      "params": [
+        {
+          "name": "healingOverTimeId"
+        }
+      ]
+    },
+    {
+      "catalogId": "stopHealingModification",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "stopHealingModification",
+      "kind": "action",
+      "params": [
+        {
+          "name": "player"
+        }
+      ]
+    },
+    {
+      "catalogId": "startHealingModification",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "startHealingModification",
+      "kind": "action",
+      "params": [
+        {
+          "name": "target"
+        },
+        {
+          "name": "healer"
+        },
+        {
+          "name": "amount"
+        },
+        {
+          "domain": "HealingReeval",
+          "name": "reevaluation"
+        }
+      ]
+    },
+    {
+      "catalogId": "getLastHealingModification",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getLastHealingModification",
+      "kind": "value",
       "params": []
     },
     {
@@ -567,6 +1186,133 @@
       "params": []
     },
     {
+      "catalogId": "currentMap",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getCurrentMap",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "isInLoS",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "isInLoS",
+      "kind": "value",
+      "params": [
+        {
+          "name": "startPosition"
+        },
+        {
+          "name": "endPosition"
+        },
+        {
+          "default": "BLOCKED_BY_ALL_BARRIERS",
+          "domain": "BarrierLos",
+          "name": "barriers"
+        }
+      ]
+    },
+    {
+      "catalogId": "kill",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "kill",
+      "kind": "action",
+      "params": [
+        {
+          "name": "target"
+        },
+        {
+          "name": "killer"
+        }
+      ]
+    },
+    {
+      "catalogId": "getSpawnPoints",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getSpawnPoints",
+      "kind": "value",
+      "params": [
+        {
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
+      "catalogId": "getPlayersInRadius",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getRealPlayersInRadius",
+      "kind": "value",
+      "params": [
+        {
+          "name": "center"
+        },
+        {
+          "name": "radius"
+        },
+        {
+          "domain": "Team",
+          "name": "team"
+        },
+        {
+          "domain": "LosCheck",
+          "name": "losCheck"
+        }
+      ]
+    },
+    {
+      "catalogId": "getLivingPlayers",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getLivingPlayers",
+      "kind": "value",
+      "params": [
+        {
+          "default": "ALL",
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
+      "catalogId": "nearestWalkablePosition",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "nearestWalkablePosition",
+      "kind": "value",
+      "params": [
+        {
+          "name": "position"
+        }
+      ]
+    },
+    {
+      "catalogId": "numberOfPlayers",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getNumberOfPlayers",
+      "kind": "value",
+      "params": [
+        {
+          "default": "ALL",
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
       "catalogId": "lastCreatedEntity",
       "evidence": [
         "builtin-surface"
@@ -574,6 +1320,46 @@
       "id": "lastCreatedEntity",
       "kind": "value",
       "params": []
+    },
+    {
+      "catalogId": "getLastHealingOverTimeId",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getLastHoT",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "getLastCreatedHealthPool",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getLastCreatedHealthPool",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "getLastHealingOverTimeId",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getLastHealingOverTimeId",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "entityExists",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "entityExists",
+      "kind": "value",
+      "params": [
+        {
+          "name": "entity"
+        }
+      ]
     },
     {
       "catalogId": "max",
@@ -1126,6 +1912,93 @@
       "params": []
     },
     {
+      "catalogId": "allTankHeroes",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "allTankHeroes",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "allDamageHeroes",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "allDamageHeroes",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "allSupportHeroes",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "allSupportHeroes",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "iconString",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "iconString",
+      "kind": "value",
+      "params": [
+        {
+          "domain": "Icon",
+          "name": "icon"
+        }
+      ]
+    },
+    {
+      "catalogId": "createProgressBarInWorldText",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "createProgressBarInWorldText",
+      "kind": "action",
+      "params": [
+        {
+          "name": "visibleTo"
+        },
+        {
+          "name": "value"
+        },
+        {
+          "name": "text"
+        },
+        {
+          "name": "position"
+        },
+        {
+          "name": "scale"
+        },
+        {
+          "domain": "Clipping",
+          "name": "clipping"
+        },
+        {
+          "domain": "Color",
+          "name": "headerColor"
+        },
+        {
+          "domain": "Color",
+          "name": "textColor"
+        },
+        {
+          "domain": "ProgressWorldTextReeval",
+          "name": "reevaluation"
+        },
+        {
+          "default": "DEFAULT",
+          "domain": "SpecVisibility",
+          "name": "spectators"
+        }
+      ]
+    },
+    {
       "catalogId": "heroIconString",
       "evidence": [
         "builtin-surface"
@@ -1159,6 +2032,20 @@
           "name": "array"
         }
       ]
+    },
+    {
+      "catalogId": "filteredArray",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "filter",
+      "kind": "memberValue",
+      "params": [
+        {
+          "name": "condition"
+        }
+      ],
+      "receiver": "Any"
     },
     {
       "catalogLink": "special-lowering",
@@ -1397,6 +2284,20 @@
       "receiver": "Variable"
     },
     {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "remove",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "value"
+        }
+      ],
+      "receiver": "Variable"
+    },
+    {
       "catalogId": "charAt",
       "evidence": [
         "builtin-surface"
@@ -1406,6 +2307,55 @@
       "params": [
         {
           "name": "index"
+        }
+      ],
+      "receiver": "Any"
+    },
+    {
+      "catalogId": "stringSplit",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "split",
+      "kind": "memberValue",
+      "params": [
+        {
+          "name": "separator"
+        }
+      ],
+      "receiver": "Any"
+    },
+    {
+      "catalogId": "slice",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "slice",
+      "kind": "memberValue",
+      "params": [
+        {
+          "name": "startIndex"
+        },
+        {
+          "default": 999999999999,
+          "name": "count"
+        }
+      ],
+      "receiver": "Any"
+    },
+    {
+      "catalogId": "stringReplace",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "replace",
+      "kind": "memberValue",
+      "params": [
+        {
+          "name": "search"
+        },
+        {
+          "name": "replacement"
         }
       ],
       "receiver": "Any"
@@ -1639,6 +2589,26 @@
       "receiver": "Player"
     },
     {
+      "catalogId": "raycastHitPosition",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getHitPosition",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Any"
+    },
+    {
+      "catalogId": "raycastHitNormal",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getNormal",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Any"
+    },
+    {
       "catalogId": "__xComponentOf__",
       "evidence": [
         "builtin-surface"
@@ -1704,6 +2674,21 @@
       "receiver": "Player"
     },
     {
+      "catalogId": "getHealthOfType",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getHealthOfType",
+      "kind": "memberValue",
+      "params": [
+        {
+          "domain": "Health",
+          "name": "healthType"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
       "catalogId": "getMaxAmmo",
       "evidence": [
         "receiver-calls"
@@ -1712,9 +2697,20 @@
       "kind": "memberValue",
       "params": [
         {
+          "default": 0,
           "name": "clip"
         }
       ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "isDuplicatingAHero",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "isDuplicatingAHero",
+      "kind": "memberValue",
+      "params": [],
       "receiver": "Player"
     },
     {
@@ -1792,6 +2788,66 @@
       "receiver": "Player"
     },
     {
+      "catalogId": "getNormalizedHealth",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getNormalizedHealth",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "isReloading",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "isReloading",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "isMoving",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "isMoving",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "isCommunicatingEmote",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "isCommunicatingEmote",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "isInAir",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "isInAir",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "isUsingAbility2",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "isUsingAbility2",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
       "catalogId": "disallowButton",
       "evidence": [
         "builtin-surface"
@@ -1807,6 +2863,26 @@
       "receiver": "Player"
     },
     {
+      "catalogId": "isUsingAbility1",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "isUsingAbility1",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "isInAlternateForm",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "isInAlternateForm",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
       "catalogId": "allowButton",
       "evidence": [
         "builtin-surface"
@@ -1819,6 +2895,16 @@
           "name": "button"
         }
       ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "isUsingUltimate",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "isUsingUltimate",
+      "kind": "memberValue",
+      "params": [],
       "receiver": "Player"
     },
     {
@@ -1849,6 +2935,26 @@
       "receiver": "Player"
     },
     {
+      "catalogId": "isDead",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "isDead",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "allowedHeroes",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getAllowedHeroes",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
       "catalogId": "startHealingOverTime",
       "evidence": [
         "builtin-surface"
@@ -1869,6 +2975,16 @@
       "receiver": "Player"
     },
     {
+      "catalogId": "isInSpawnRoom",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "isInSpawnRoom",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
       "catalogId": "attachTo",
       "evidence": [
         "builtin-surface"
@@ -1886,6 +3002,16 @@
       "receiver": "Player"
     },
     {
+      "catalogId": "isMeleeing",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "isMeleeing",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
       "catalogId": "disableMovementCollisionWithEnvironment",
       "evidence": [
         "builtin-surface"
@@ -1897,6 +3023,26 @@
           "name": "includeFloors"
         }
       ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "isJumping",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "isJumping",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getVerticalFacingAngle",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getVerticalFacingAngle",
+      "kind": "memberValue",
+      "params": [],
       "receiver": "Player"
     },
     {
@@ -1927,6 +3073,36 @@
       "id": "getThrottle",
       "kind": "memberValue",
       "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getSpeedInDirection",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getSpeedInDirection",
+      "kind": "memberValue",
+      "params": [
+        {
+          "domain": "Vector",
+          "name": "direction"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getStatistic",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getStatistic",
+      "kind": "memberValue",
+      "params": [
+        {
+          "domain": "Stat",
+          "name": "statistic"
+        }
+      ],
       "receiver": "Player"
     },
     {
@@ -1985,6 +3161,333 @@
       "receiver": "Player"
     },
     {
+      "catalogId": "isOnGround",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "isOnGround",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "startCamera",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "startCamera",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "eyePosition"
+        },
+        {
+          "name": "lookAtPosition"
+        },
+        {
+          "default": 0,
+          "name": "facing"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "startScalingSize",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "startScalingSize",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "scale"
+        },
+        {
+          "name": "relative"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "stopScalingSize",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "stopScalingSize",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "stopScalingBarriers",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "stopScalingBarriers",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "startScalingBarriers",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "startScalingBarriers",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "scale"
+        },
+        {
+          "name": "relative"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "startForcingThrottle",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "startForcingThrottle",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "forward"
+        },
+        {
+          "name": "backward"
+        },
+        {
+          "name": "left"
+        },
+        {
+          "name": "right"
+        },
+        {
+          "name": "up"
+        },
+        {
+          "name": "down"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "startThrottleInDirection",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "startThrottleInDirection",
+      "kind": "memberAction",
+      "params": [
+        {
+          "domain": "Vector",
+          "name": "direction"
+        },
+        {
+          "name": "speed"
+        },
+        {
+          "domain": "Relativity",
+          "name": "relativity"
+        },
+        {
+          "default": "REPLACE_EXISTING",
+          "domain": "Throttle",
+          "name": "throttle"
+        },
+        {
+          "default": "NONE",
+          "domain": "ThrottleReeval",
+          "name": "reevaluation"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "disableMovementCollisionWithPlayers",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "disablePlayerCollision",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "enableMovementCollisionWithPlayers",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "enablePlayerCollision",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "resurrect",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "resurrect",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "respawn",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "respawn",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "stopCamera",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "stopCamera",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "stopForcingThrottle",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "stopForcingThrottle",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "stopThrottleInDirection",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "stopThrottleInDirection",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "stopModifyingVoicelinePitch",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "stopModifyingVoicelinePitch",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "startModifyingVoicelinePitch",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "startModifyingVoicelinePitch",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "pitch"
+        },
+        {
+          "name": "relative"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "startAcceleration",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "startAcceleration",
+      "kind": "memberAction",
+      "params": [
+        {
+          "domain": "Vector",
+          "name": "direction"
+        },
+        {
+          "name": "rate"
+        },
+        {
+          "name": "maxSpeed"
+        },
+        {
+          "domain": "Relativity",
+          "name": "relativity"
+        },
+        {
+          "default": "DIRECTION_RATE_AND_MAX_SPEED",
+          "domain": "AccelReeval",
+          "name": "reevaluation"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setAmmo",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "setAmmo",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "clip"
+        },
+        {
+          "name": "ammo"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setMaxAmmo",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "setMaxAmmo",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "clip"
+        },
+        {
+          "name": "ammo"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "stopAcceleration",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "stopAcceleration",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "raycastHitPlayer",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getPlayerHit",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Any"
+    },
+    {
       "catalogId": "startFacing",
       "evidence": [
         "builtin-surface"
@@ -1996,13 +3499,16 @@
           "name": "direction"
         },
         {
+          "default": 999999999999,
           "name": "turnRate"
         },
         {
+          "default": "TO_WORLD",
           "domain": "Relativity",
           "name": "relativity"
         },
         {
+          "default": "DIRECTION_AND_TURN_RATE",
           "domain": "FacingReeval",
           "name": "reevaluation"
         }
@@ -2019,6 +3525,20 @@
       "params": [
         {
           "domain": "Hero",
+          "name": "hero"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "preloadHero",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "preloadHero",
+      "kind": "memberAction",
+      "params": [
+        {
           "name": "hero"
         }
       ],
@@ -2048,6 +3568,41 @@
       "params": [
         {
           "name": "enabled"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setAbilityCooldown",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "setAbilityCooldown",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "button"
+        },
+        {
+          "name": "cooldown"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setAbilityCharge",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "setAbilityCharge",
+      "kind": "memberAction",
+      "params": [
+        {
+          "domain": "Button",
+          "name": "button"
+        },
+        {
+          "name": "charge"
         }
       ],
       "receiver": "Player"
@@ -2095,6 +3650,100 @@
       "receiver": "Player"
     },
     {
+      "catalogId": "setMeleeEnabled",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "setMeleeEnabled",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "enabled"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setJumpEnabled",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "setJumpEnabled",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "enabled"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setCrouchEnabled",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "setCrouchEnabled",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "enabled"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setReloadEnabled",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "setReloadEnabled",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "enabled"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setProjectileSpeed",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "setProjectileSpeed",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "speed"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setProjectileGravity",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "setProjectileGravity",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "gravity"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "removeFromGame",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "removeFromGame",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
       "catalogId": "clearStatusEffect",
       "evidence": [
         "builtin-surface"
@@ -2107,6 +3756,26 @@
           "name": "status"
         }
       ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "disableRespawn",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "disableRespawn",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "enableRespawn",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "enableRespawn",
+      "kind": "memberAction",
+      "params": [],
       "receiver": "Player"
     },
     {
@@ -2277,6 +3946,7 @@
           "name": "relativity"
         },
         {
+          "default": "INCORPORATE_CONTRARY_MOTION",
           "domain": "Impulse",
           "name": "motion"
         }
@@ -2295,6 +3965,73 @@
           "name": "healingPercent"
         }
       ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setHealingReceived",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "setHealingReceived",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "healingPercent"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setKnockbackReceived",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "setKnockbackReceived",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "percent"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setKnockbackDealt",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "setKnockbackDealt",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "percent"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setAllowedHeroes",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "setAllowedHeroes",
+      "kind": "memberAction",
+      "params": [
+        {
+          "domain": "Hero",
+          "name": "heroes"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "cancelPrimaryAction",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "cancelPrimaryAction",
+      "kind": "memberAction",
+      "params": [],
       "receiver": "Player"
     },
     {
@@ -2367,6 +4104,634 @@
       "params": [],
       "receiver": "String",
       "unbounded": true
+    },
+    {
+      "catalogId": "startForcingSpawn",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "startForcingSpawn",
+      "kind": "action",
+      "params": [
+        {
+          "domain": "Team",
+          "name": "team"
+        },
+        {
+          "name": "spawnRoom"
+        }
+      ]
+    },
+    {
+      "catalogId": "disableBuiltinGameModeAnnouncer",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "disableAnnouncer",
+      "kind": "action",
+      "params": []
+    },
+    {
+      "catalogId": "enableAnnouncer",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "enableAnnouncer",
+      "kind": "action",
+      "params": []
+    },
+    {
+      "catalogId": "disableBuiltinGameModeMusic",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "disableMusic",
+      "kind": "action",
+      "params": []
+    },
+    {
+      "catalogId": "pauseMatchTime",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "pauseMatchTime",
+      "kind": "action",
+      "params": []
+    },
+    {
+      "catalogId": "unpauseMatchTime",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "unpauseMatchTime",
+      "kind": "action",
+      "params": []
+    },
+    {
+      "catalogId": "getCurrentGamemode",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getCurrentGamemode",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "destroyAllIcons",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "destroyAllIcons",
+      "kind": "action",
+      "params": []
+    },
+    {
+      "catalogId": "destroyAllInWorldText",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "destroyAllInWorldTexts",
+      "kind": "action",
+      "params": []
+    },
+    {
+      "catalogId": "destroyAllProgressBarHudText",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "destroyAllProgressBarHuds",
+      "kind": "action",
+      "params": []
+    },
+    {
+      "catalogId": "disableMessages",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "disableMessages",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "createIcon",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "createIcon",
+      "kind": "action",
+      "params": [
+        {
+          "name": "visibleTo"
+        },
+        {
+          "name": "position"
+        },
+        {
+          "domain": "Icon",
+          "name": "icon"
+        },
+        {
+          "domain": "IconReeval",
+          "name": "reevaluation"
+        },
+        {
+          "domain": "Color",
+          "name": "color"
+        },
+        {
+          "default": false,
+          "name": "showWhenOffscreen"
+        }
+      ]
+    },
+    {
+      "catalogId": "sin",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "sin",
+      "kind": "value",
+      "params": [
+        {
+          "name": "value"
+        }
+      ]
+    },
+    {
+      "catalogId": "enableBuiltinGameModeMusic",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "enableMusic",
+      "kind": "action",
+      "params": []
+    },
+    {
+      "catalogId": "restartMatch",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "restartMatch",
+      "kind": "action",
+      "params": []
+    },
+    {
+      "catalogId": "getClosestPlayer",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getRealClosestPlayer",
+      "kind": "value",
+      "params": [
+        {
+          "name": "center"
+        },
+        {
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
+      "catalogId": "startForcingName",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "startForcingName",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "name"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "stopForcingName",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "stopForcingName",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "startDamageModification",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "startDamageModification",
+      "kind": "action",
+      "params": [
+        {
+          "name": "receivers"
+        },
+        {
+          "name": "damagers"
+        },
+        {
+          "name": "damagePercent"
+        },
+        {
+          "default": "RECEIVERS_DAMAGERS_AND_DMGPERCENT",
+          "domain": "DamageReeval",
+          "name": "reevaluation"
+        }
+      ]
+    },
+    {
+      "catalogId": "stopDamageModification",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "stopDamageModification",
+      "kind": "action",
+      "params": [
+        {
+          "name": "damageModificationId"
+        }
+      ]
+    },
+    {
+      "catalogId": "disableGameModeHud",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "disableGamemodeHud",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "disableGameModeInworldUI",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "disableGamemodeInWorldUi",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "enableMovementCollisionWithEnvironment",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "enableEnvironmentCollision",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "stopForcingPosition",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "stopForcingPosition",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "startForcingOutlineFor",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "startForcingOutlineFor",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "viewingPlayers"
+        },
+        {
+          "name": "visible"
+        },
+        {
+          "domain": "Color",
+          "name": "color"
+        },
+        {
+          "domain": "OutlineVisibility",
+          "name": "visibility"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "stopForcingOutlineFor",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "stopForcingOutlineFor",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "viewingPlayers"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getPlayersInSlot",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getPlayersInSlot",
+      "kind": "value",
+      "params": [
+        {
+          "name": "slot"
+        },
+        {
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
+      "catalogId": "isWaitingForPlayers",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "isWaitingForPlayers",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "isOnObjective",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "isOnObjective",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getPayloadPosition",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getPayloadPosition",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "getPlayersOnObjective",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getPlayersOnObjective",
+      "kind": "value",
+      "params": [
+        {
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
+      "catalogId": "getPayloadProgressPercentage",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getPayloadProgressPercentage",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "getAltitude",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getAltitude",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getAbilityResource",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getAbilityResource",
+      "kind": "memberValue",
+      "params": [
+        {
+          "domain": "Button",
+          "name": "ability"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getLastDamageModification",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getLastDamageModification",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "getLastDamageOverTimeId",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getLastDamageOverTimeId",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "stopDamageOverTime",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "stopDamageOverTime",
+      "kind": "action",
+      "params": [
+        {
+          "name": "damageOverTimeId"
+        }
+      ]
+    },
+    {
+      "catalogId": "eventWasCriticalHit",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "eventWasCriticalHit",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "stopAllDamageOverTime",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "stopAllDamageOverTime",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setRespawnTime",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "setRespawnTime",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "time"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setAbilityResource",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "setAbilityResource",
+      "kind": "memberAction",
+      "params": [
+        {
+          "domain": "Button",
+          "name": "ability"
+        },
+        {
+          "name": "resource"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setEnvironmentCreditPlayer",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "setEnvironmentalKillCreditor",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "creditor"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getHeroStatistic",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getHeroStatistic",
+      "kind": "memberValue",
+      "params": [
+        {
+          "domain": "Hero",
+          "name": "hero"
+        },
+        {
+          "domain": "HeroStat",
+          "name": "statistic"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "magnitude",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "magnitude",
+      "kind": "value",
+      "params": [
+        {
+          "domain": "Vector",
+          "name": "vector"
+        }
+      ]
+    },
+    {
+      "catalogId": "communicate",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "communicate",
+      "kind": "memberAction",
+      "params": [
+        {
+          "domain": "Comms",
+          "name": "message"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "cos",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "cos",
+      "kind": "value",
+      "params": [
+        {
+          "name": "radians"
+        }
+      ]
+    },
+    {
+      "catalogId": "getPlayersInViewAngle",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getPlayersInViewAngle",
+      "kind": "memberValue",
+      "params": [
+        {
+          "name": "team"
+        },
+        {
+          "name": "viewAngle"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "destroyIcon",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "destroyIcon",
+      "kind": "action",
+      "params": [
+        {
+          "name": "iconId"
+        }
+      ]
+    },
+    {
+      "catalogId": "localVector",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "localVector",
+      "kind": "value",
+      "params": [
+        {
+          "name": "vector"
+        },
+        {
+          "name": "player"
+        },
+        {
+          "domain": "Transform",
+          "name": "transform"
+        }
+      ]
     }
   ],
   "provenance": {

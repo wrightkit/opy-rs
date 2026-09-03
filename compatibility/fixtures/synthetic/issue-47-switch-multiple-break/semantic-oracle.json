@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "fixture": "synthetic/issue-47-switch-multiple-break",
+  "input": {
+    "sha256": "c51625efd490b713cb2a8d17e188458cf24c4c142a0e62562e7477a27bd33f33"
+  },
+  "compile": {
+    "status": "success",
+    "workshop": "variables {\n    global:\n        0: value\n}\n\nrule (\"issue 47 switch multiple break\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        If(True);\n            Skip(Value In Array(Array(6, 0, 2, 5), Add(1, Index Of Array Value(Array(1, 2, 3), Global.value))));\n            Set Global Variable(value, 1);\n        Else;\n            If(True);\n                Set Global Variable(value, 2);\n            Else;\n                Set Global Variable(value, 3);\n                Set Global Variable(value, 4);\n            End;\n    }\n}\n"
+  }
+}
