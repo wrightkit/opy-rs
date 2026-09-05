@@ -62,7 +62,7 @@ its fixture entries retain both reference and native diagnostics. It is the
 current divergence inventory used to group follow-up work. No current native
 failure is entered into the manifest as an expected pass.
 
-The broad `synthetic/issue-28-syntax` probe is inventoried under the
+The broad `synthetic/syntax-surface` probe is inventoried under the
 canonical-WIR boundary rather than lexical conformance. Its source compiles
 successfully, but the pinned Workshop output contains `0X20`, which the
 released `workshop-rs` parser does not currently reparse; this is a

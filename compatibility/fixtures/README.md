@@ -42,9 +42,9 @@ repository:
 | `declarations-numbers` | numeric literal forms and variable-index declarations |
 | `expressions-values` | expressions, arrays, strings, vectors, calls, `.format` |
 | `preprocessing` | `#!include` (with `shared.opy`), `#!define` object/function-like, `#!undef` |
-| `issue-31-positive` | Pinned positive probe for rule-prefix templates, include prefix restoration, macro/enum redeclaration, and normalized translations |
-| `issue-31-negative` | Pinned negative probe for a translation code outside the oracle's exact set |
-| `issue-31-nested-scope` | Pinned nested-include probe for observable optimization state transitions |
+| `directives-scoped` | Pinned positive probe for rule-prefix templates, include prefix restoration, macro/enum redeclaration, and normalized translations |
+| `translations-invalid` | Pinned negative probe for a translation code outside the oracle's exact set |
+| `include-scope` | Pinned nested-include probe for observable optimization state transitions |
 | `diagnostics` | expected-failure fixture with a syntax diagnostic |
 | `settings` | top-of-file `settings { … }` JSONC block |
 | `receiver-calls` | receiver/member call forms (derived from the real-world overpy-meipocalypse corpus; see its `fixture.json` provenance note) |
@@ -52,28 +52,28 @@ repository:
 | `chase-condition-agentlab` | `chaseOverTime(...)` in rule conditions (agent-lab regression) |
 | `chase-keywords` | named/keyword arguments and the `chase`/`ChaseReeval` contextual forms |
 | `for-range-agentlab` | `for` with implicit default-variable binder (agent-lab regression, `kind: derived`) |
-| `issue-28-*` | pure OPY syntax probes for switch, do-while, hex, membership, modifiers, dicts, comprehensions, lambda, and negative diagnostics |
-| `issue-35-integration` | minimal OPY HIR to canonical Workshop WIR validation and deterministic emission slice |
-| `issue-46-primitives` | #46 oracle-backed primitive lowering probe: assignments and modifications (including `**=`), expressions, indexing, format, initializers, implicit default variables at fixed slots; the snapshot constrains the native compiler through structural equivalence |
-| `issue-46-unsupported` | #145 literal dictionary lookup probe retained from #46: the compiler folds literal key hits and misses to the oracle's selected value or `Null`; dictionary-indexed assignment targets remain a separate boundary |
-| `issue-59-postfix-assignment` | #59 oracle-backed postfix `++`/`--` assignment probe for global, player, and single-level indexed variables; the snapshot constrains native lowering through canonical WIR equivalence |
-| `issue-60-nested-index` | #145 oracle-backed nested indexed-assignment probe for two- and three-level global targets, including compound modification |
-| `issue-60-4d-negative` | #162 pinned negative probe preserving OverPy's structured rejection of four-dimensional indexed assignments at the source semantic boundary |
-| `issue-59-postfix-negative` | #59 pinned negative probe for rejected prefix `++` with a stable source-attributed parse diagnostic; prefix `--x` remains valid consecutive unary-minus syntax |
-| `issue-59-embedded-postfix-negative` | #59 pinned negative probe for the rejected embedded postfix form with a stable source-attributed parse diagnostic |
-| `issue-65-player-range` | #65 pinned oracle-backed player-variable range binder probe for canonical `For Player Variable` lowering |
-| `issue-65-invalid-binder` | #162 pinned negative probe for a non-variable range binder with a stable source-attributed semantic diagnostic |
-| `issue-130-horizontal-facing-angle` | #130 catalog-backed `eventPlayer.getHorizontalFacingAngle()` member-value lowering |
-| `issue-131-spec-visibility` | #131 `SpecVisibility.NEVER` to canonical `VISIBLE_NEVER` enum mapping |
-| `issue-47-control-flow` | #47 pinned oracle-backed control-flow lowering probe: if/elif/else, while, range-for, do-while expansion, switch fallthrough/default, and direct break |
-| `issue-47-unsupported` | #47 negative probe: a break hidden inside a conditional switch arm is accepted by the source implementation/oracle but rejected by the compiler with a stable source-attributed diagnostic |
-| `issue-47-switch-order` | #47 pinned oracle probe for a default arm before later case arms and source-order fallthrough |
-| `issue-47-switch-structured-target` | #47 pinned oracle probe for nested if/while structure in an earlier arm and later case/default targets |
-| `issue-47-switch-multiple-break` | #47 pinned oracle probe for multiple direct breaks lowered through canonical nested switch-exit WIR |
-| `issue-47-do-while-shapes` | #47 pinned oracle probe for direct, conditional, and nested do-while break lowering |
-| `issue-47-do-while-invalid-placement` | #47 pinned negative probe for the stable do-while placement diagnostic |
-| `issue-29-*` | directive/include/main-file preprocessing probes |
-| `issue-33-*` | switch break/fallthrough, f-string interpolation, and lambda negative probes |
+| `syntax-surface`, `syntax-invalid`, `string-modifiers` | pure OPY syntax probes for switch, do-while, hex, membership, modifiers, dicts, comprehensions, lambda, and negative diagnostics |
+| `compiler-vertical-slice` | minimal OPY HIR to canonical Workshop WIR validation and deterministic emission slice |
+| `primitive-lowering` | #46 oracle-backed primitive lowering probe: assignments and modifications (including `**=`), expressions, indexing, format, initializers, implicit default variables at fixed slots; the snapshot constrains the native compiler through structural equivalence |
+| `dictionary-lookup` | #145 literal dictionary lookup probe retained from #46: the compiler folds literal key hits and misses to the oracle's selected value or `Null`; dictionary-indexed assignment targets remain a separate boundary |
+| `postfix-assignment` | #59 oracle-backed postfix `++`/`--` assignment probe for global, player, and single-level indexed variables; the snapshot constrains native lowering through canonical WIR equivalence |
+| `indexed-assignment-nested` | #145 oracle-backed nested indexed-assignment probe for two- and three-level global targets, including compound modification |
+| `indexed-assignment-4d-invalid` | #162 pinned negative probe preserving OverPy's structured rejection of four-dimensional indexed assignments at the source semantic boundary |
+| `postfix-prefix-invalid` | #59 pinned negative probe for rejected prefix `++` with a stable source-attributed parse diagnostic; prefix `--x` remains valid consecutive unary-minus syntax |
+| `postfix-embedded-invalid` | #59 pinned negative probe for the rejected embedded postfix form with a stable source-attributed parse diagnostic |
+| `range-player-variable` | #65 pinned oracle-backed player-variable range binder probe for canonical `For Player Variable` lowering |
+| `range-invalid-binder` | #162 pinned negative probe for a non-variable range binder with a stable source-attributed semantic diagnostic |
+| `member-angle` | #130 catalog-backed `eventPlayer.getHorizontalFacingAngle()` member-value lowering |
+| `hud-visibility` | #131 `SpecVisibility.NEVER` to canonical `VISIBLE_NEVER` enum mapping |
+| `control-flow-lowering` | #47 pinned oracle-backed control-flow lowering probe: if/elif/else, while, range-for, do-while expansion, switch fallthrough/default, and direct break |
+| `switch-break-unsupported` | #47 negative probe: a break hidden inside a conditional switch arm is accepted by the source implementation/oracle but rejected by the compiler with a stable source-attributed diagnostic |
+| `switch-order` | #47 pinned oracle probe for a default arm before later case arms and source-order fallthrough |
+| `switch-structured-target` | #47 pinned oracle probe for nested if/while structure in an earlier arm and later case/default targets |
+| `switch-multiple-break` | #47 pinned oracle probe for multiple direct breaks lowered through canonical nested switch-exit WIR |
+| `do-while-break` | #47 pinned oracle probe for direct, conditional, and nested do-while break lowering |
+| `do-while-invalid` | #47 pinned negative probe for the stable do-while placement diagnostic |
+| `directives`, `duplicate-rule-diagnostic`, `project-main-file` | directive/include/main-file preprocessing probes |
+| `switch-break`, `strings-and-lambda`, `lambda-invalid` | switch break/fallthrough, f-string interpolation, and lambda negative probes |
 | `receiver-playervar` | bare variable member expression `A = B.C` with preserved receiver/member provenance |
 
 ## Real-world fixtures

@@ -1,0 +1,33 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: reserved\n        1: first\n        2: explicit\n        3: next\n}\n\nsubroutines {\n    0: helper\n}\n\nrule (\"[Source] renamed helper\") {\n    event {\n        Subroutine;\n        helper;\n    }\n    actions {\n        Set Global Variable(first, 1);\n    }\n}\n\nrule (\"[Source] joined\") {\n    event {\n        Player Joined Match;\n        Team 1;\n        Slot 2;\n    }\n    actions {\n        Call Subroutine(helper);\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: reserved\n        1: first\n        2: explicit\n        3: next\n}\n\nsubroutines {\n    0: helper\n}\n\nrule (\"[Source] renamed helper\") {\n    event {\n        Subroutine;\n        helper;\n    }\n    actions {\n        Set Global Variable(first, 1);\n    }\n}\n\nrule (\"[Source] joined\") {\n    event {\n        Player Joined Match;\n        Team 1;\n        Slot 2;\n    }\n    actions {\n        Call Subroutine(helper);\n    }\n}\n\n",
+    "workshopSha256": "9cadaf38b68d2b864c2f7bb822c649ab5d0fff5eaf17712d02eb3ccbef75df34"
+  },
+  "fixture": "synthetic/compiler-structure",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "c3a1daee735d48e670cf98fed74872b02480d9a7064a3340eadae3278d4eb7b8"
+      }
+    ],
+    "sha256": "587fe2fb76b196f8eafb7817784710f6f5e03c789d1216f5e253f84d88bd8d40",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

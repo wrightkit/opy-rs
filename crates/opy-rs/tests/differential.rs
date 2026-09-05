@@ -1,4 +1,4 @@
-//! Native-vs-reference differential suite (issue #7, part B; issue #2).
+//! Native-vs-reference differential suite.
 //!
 //! Runs the declared compatibility corpus
 //! (`compatibility/fixtures/**/fixture.json`) through the native frontend and
@@ -165,169 +165,169 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
     );
     resolve(
         &mut cases,
-        "synthetic/issue-28-syntax",
+        "synthetic/syntax-surface",
         true,
         "Issue #28 pure OPY syntax: switch, do-while, hex, membership, dict indexing, comprehensions, lambda arguments, and string modifiers.",
     );
     resolve(
         &mut cases,
-        "synthetic/issue-28-string-modifiers",
+        "synthetic/string-modifiers",
         true,
         "Issue #28 inventory-backed string modifiers; translation-dependent l/t are syntax-carried outside the fixture.",
     );
     resolve(
         &mut cases,
-        "synthetic/issue-33-switch-break",
+        "synthetic/switch-break",
         true,
         "Issue #33 switch arms preserve source-order fallthrough and explicit break statements validate nested switch/loop context.",
     );
     resolve(
         &mut cases,
-        "synthetic/issue-33-f-string",
+        "synthetic/strings-and-lambda",
         true,
         "Issue #33 f-string interpolation preserves source-spanned expressions and the approved sorted lambda argument slot.",
     );
     resolve(
         &mut cases,
-        "synthetic/issue-35-integration",
+        "synthetic/compiler-vertical-slice",
         true,
         "Issue #35 OPY-to-Workshop integration fixture; the frontend resolves the source and the internal compiler module independently validates the canonical WIR slice.",
     );
     resolve(
         &mut cases,
-        "synthetic/issue-40-structural",
+        "synthetic/compiler-structure",
         false,
         "Issue #40 oracle-backed structural probe; the frontend resolves the source while the internal compiler module independently checks canonical WIR identity, allocation, and event filters.",
     );
     resolve(
         &mut cases,
-        "synthetic/issue-46-primitives",
+        "synthetic/primitive-lowering",
         false,
         "Issue #46 oracle-backed non-control-flow primitives probe; the frontend resolves the source while the compiler test suite constrains native lowering against the pinned oracle through the canonical workshop-rs parser and structural equivalence.",
     );
     resolve(
         &mut cases,
-        "synthetic/issue-46-unsupported",
+        "synthetic/dictionary-lookup",
         false,
         "Issue #46 negative primitive-lowering probe; the frontend and the pinned oracle accept the dict-indexed assignment while the compiler rejects it with the stable source-attributed unsupported-integration-surface diagnostic.",
     );
     resolve(
         &mut cases,
-        "synthetic/issue-59-postfix-assignment",
+        "synthetic/postfix-assignment",
         false,
         "Issue #59 postfix ++/-- assignment probe; global, player, and single-level indexed targets resolve and are constrained by compiler oracle tests.",
     );
     resolve(
         &mut cases,
-        "synthetic/issue-60-nested-index",
+        "synthetic/indexed-assignment-nested",
         false,
         "Issue #60 nested indexed assignment probe; global targets resolve and are constrained by the pinned canonical-WIR oracle.",
     );
     diagnostic(
         &mut cases,
-        "synthetic/issue-60-4d-negative",
+        "synthetic/indexed-assignment-4d-invalid",
         Some("four-dimensional-assignment"),
         "Issue #60 four-dimensional negative probe; source semantics reject the assignment at a stable, source-attributed diagnostic frontier before canonical lowering.",
     );
     diagnostic(
         &mut cases,
-        "synthetic/issue-59-postfix-negative",
+        "synthetic/postfix-prefix-invalid",
         Some("parse-error"),
         "Issue #59 prefix ++ remains a stable source-attributed parse error; prefix --x remains valid consecutive unary-minus syntax.",
     );
     diagnostic(
         &mut cases,
-        "synthetic/issue-59-embedded-postfix-negative",
+        "synthetic/postfix-embedded-invalid",
         Some("parse-error"),
         "Issue #59 embedded postfix form remains a stable source-attributed parse error with independent pinned oracle evidence.",
     );
     resolve(
         &mut cases,
-        "synthetic/issue-65-player-range",
+        "synthetic/range-player-variable",
         false,
         "Issue #65 player-variable range binder resolves in HIR; canonical For Player Variable lowering is constrained by the dedicated compiler test.",
     );
     diagnostic(
         &mut cases,
-        "synthetic/issue-65-invalid-binder",
+        "synthetic/range-invalid-binder",
         Some("invalid-range-binder"),
         "Issue #65 non-variable range binder is rejected by source semantics with a stable source-attributed diagnostic before canonical lowering.",
     );
     resolve(
         &mut cases,
-        "synthetic/issue-113-is-dummy",
+        "synthetic/member-values",
         true,
         "Issue #113 catalog-backed eventPlayer.isDummy() member predicate; canonical WIR lowering is constrained by the dedicated compiler test.",
     );
     resolve(
         &mut cases,
-        "synthetic/issue-114-hud-subheader",
+        "synthetic/hud-subheader",
         true,
         "Issue #114 shared hudSubheader action; canonical WIR lowering is constrained by the dedicated compiler test.",
     );
     resolve(
         &mut cases,
-        "synthetic/issue-130-horizontal-facing-angle",
+        "synthetic/member-angle",
         true,
         "Issue #130 catalog-backed eventPlayer.getHorizontalFacingAngle() member value; canonical WIR lowering is constrained by the dedicated compiler test.",
     );
     resolve(
         &mut cases,
-        "synthetic/issue-131-spec-visibility",
+        "synthetic/hud-visibility",
         true,
         "Issue #131 maps SpecVisibility.NEVER to the canonical VISIBLE_NEVER member; canonical WIR lowering is constrained by the dedicated compiler test.",
     );
     resolve(
         &mut cases,
-        "synthetic/issue-47-control-flow",
+        "synthetic/control-flow-lowering",
         false,
         "Issue #47 oracle-backed control-flow lowering probe; the frontend resolves the source while the compiler independently constrains canonical WIR against the pinned oracle.",
     );
     resolve(
         &mut cases,
-        "synthetic/issue-47-unsupported",
+        "synthetic/switch-break-unsupported",
         false,
         "Issue #47 negative probe; the frontend preserves the nested conditional switch-break HIR while the compiler rejects it at the canonical WIR integration boundary.",
     );
     resolve(
         &mut cases,
-        "synthetic/issue-47-switch-order",
+        "synthetic/switch-order",
         false,
         "Issue #47 source-order switch probe; default-before-case fallthrough remains represented in ordered HIR arms.",
     );
     resolve(
         &mut cases,
-        "synthetic/issue-47-switch-structured-target",
+        "synthetic/switch-structured-target",
         false,
         "Issue #47 structured switch-target probe; nested canonical control-flow widths preserve later case/default targets.",
     );
     resolve(
         &mut cases,
-        "synthetic/issue-47-switch-multiple-break",
+        "synthetic/switch-multiple-break",
         false,
         "Issue #47 multi-break probe; the frontend preserves all authored arms and breaks while the compiler lowers them through canonical nested switch-exit WIR.",
     );
     resolve(
         &mut cases,
-        "synthetic/issue-47-do-while-shapes",
+        "synthetic/do-while-break",
         false,
         "Issue #47 do-while probe; direct, conditional, and nested break shapes resolve in the frontend and are constrained by compiler oracle tests.",
     );
     diagnostic(
         &mut cases,
-        "synthetic/issue-47-do-while-invalid-placement",
+        "synthetic/do-while-invalid",
         Some("do-while-placement"),
         "Issue #47 invalid do-while placement remains a stable source-attributed frontend diagnostic.",
     );
     diagnostic(
         &mut cases,
-        "synthetic/issue-33-lambda-negative",
+        "synthetic/lambda-invalid",
         Some("lambda-context"),
         "Issue #33 standalone lambda use remains rejected outside a signature-approved argument position.",
     );
     diagnostic(
         &mut cases,
-        "synthetic/issue-28-invalid-syntax",
+        "synthetic/syntax-invalid",
         Some("parse-error"),
         "Issue #28 malformed do-while and dictionary syntax remains a structured parse failure.",
     );
@@ -357,43 +357,43 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
     );
     resolve(
         &mut cases,
-        "synthetic/issue-29-directives",
+        "synthetic/directives",
         true,
         "advanced directive state and source annotations; oracle status success.",
     );
     diagnostic(
         &mut cases,
-        "synthetic/issue-29-invalid",
+        "synthetic/duplicate-rule-diagnostic",
         Some("duplicate-rule-name"),
         "ordinary-rule @Name reaches the pinned duplicate-rule-name semantic frontier; oracle status failure.",
     );
     resolve(
         &mut cases,
-        "synthetic/issue-29-main-file",
+        "synthetic/project-main-file",
         true,
         "mainFile entry-point redirect and child-include scope; oracle status success.",
     );
     resolve(
         &mut cases,
-        "synthetic/issue-129-included-main-file",
+        "synthetic/project-entry",
         true,
         "included-file mainFile scope and root entry-point preservation; oracle status success.",
     );
     resolve(
         &mut cases,
-        "synthetic/issue-31-positive",
+        "synthetic/directives-scoped",
         false,
         "pinned positive probe for global rulePrefixTemplate, include prefix restoration, AST macro/enum redeclaration, and translation normalization.",
     );
     diagnostic(
         &mut cases,
-        "synthetic/issue-31-negative",
+        "synthetic/translations-invalid",
         Some("translations-invalid"),
         "pinned negative probe for a language code outside the exact translation set.",
     );
     resolve(
         &mut cases,
-        "synthetic/issue-31-nested-scope",
+        "synthetic/include-scope",
         false,
         "nested include optimization directives are retained as observable scoped state; optimizer execution remains outside opy-rs.",
     );

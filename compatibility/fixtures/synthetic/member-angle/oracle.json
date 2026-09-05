@@ -1,0 +1,33 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: horizontalAngle\n}\n\nrule (\"horizontal facing angle\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Set Global Variable(horizontalAngle, Horizontal Facing Angle Of(Event Player));\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: horizontalAngle\n}\n\nrule (\"horizontal facing angle\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Set Global Variable(horizontalAngle, Horizontal Facing Angle Of(Event Player));\n    }\n}\n\n",
+    "workshopSha256": "cfa82e04854ba3836ac997c475a095afa044b8f5c1ca803fa32f3c1b909c35c9"
+  },
+  "fixture": "synthetic/member-angle",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "114a0e69c9c49618e3233a5b76eb32948edd0a1478a1d24303db5f910343c949"
+      }
+    ],
+    "sha256": "b70bd3106b5293de1ec9408833a8e1a8744579238ddd0f5400246826c3d5f2dd",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

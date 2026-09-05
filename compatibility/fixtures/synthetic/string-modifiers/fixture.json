@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/string-modifiers",
+  "category": "syntax",
+  "features": ["syntax/string-modifiers"],
+  "source": "source.opy",
+  "expectedStatus": "success",
+  "provenance": {
+    "kind": "original",
+    "origin": "opy-rs Issue #28 minimized pinned-oracle string modifier probe",
+    "license": "AGPL-3.0-or-later",
+    "redistributable": true
+  }
+}

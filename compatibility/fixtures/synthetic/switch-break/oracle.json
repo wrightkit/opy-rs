@@ -1,0 +1,33 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: value\n}\n\nrule (\"issue 33 switch break\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        If(True);\n            Skip(Value In Array(Array(3, 0, 1), Add(1, Index Of Array Value(Array(1, 2), Global.value))));\n        //__label_switch_2_0__:\n        Set Global Variable(value, 2);\n        //__label_switch_2_1__:\n        Set Global Variable(value, 3);\n        Else;\n        //__label_switch_2_default__:\n        Set Global Variable(value, 4);\n        End;\n        While(Compare(Global.value, <, 10));\n            If(True);\n                Skip(Value In Array(Array(1, 0), Add(1, Index Of Array Value(Array(3), Global.value))));\n            //__label_switch_3_0__:\n            Else;\n            //__label_switch_3_default__:\n            Else;\n            End;\n            Break;\n        End;\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: value\n}\n\nrule (\"issue 33 switch break\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        If(True);\n            Skip(Value In Array(Array(3, 0, 1), Add(1, Index Of Array Value(Array(1, 2), Global.value))));\n        //__label_switch_2_0__:\n        Set Global Variable(value, 2);\n        //__label_switch_2_1__:\n        Set Global Variable(value, 3);\n        Else;\n        //__label_switch_2_default__:\n        Set Global Variable(value, 4);\n        End;\n        While(Compare(Global.value, <, 10));\n            If(True);\n                Skip(Value In Array(Array(1, 0), Add(1, Index Of Array Value(Array(3), Global.value))));\n            //__label_switch_3_0__:\n            Else;\n            //__label_switch_3_default__:\n            Else;\n            End;\n            Break;\n        End;\n    }\n}\n\n",
+    "workshopSha256": "8a2c12836e3b5d17e5c51b17be7b5f3d6f1979263f77a3dfdd933341888a78b3"
+  },
+  "fixture": "synthetic/switch-break",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "fd00440c1b07806b8e2f8aa3757e37b9b4375a6f0b9717eda0f89a01c95167f1"
+      }
+    ],
+    "sha256": "4e7bd1a2eb3fbf70418b2b5a1385dcfcce6d77f0b6601c97798e5a34f9810e1e",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

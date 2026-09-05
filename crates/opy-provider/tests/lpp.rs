@@ -12,7 +12,7 @@ const MULTI_FILE_MAIN: &str = concat!(
 );
 const CLEAN_MULTI_FILE_MAIN: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../opy-rs/tests/fixtures/issue-161-project/main.opy"
+    "/../opy-rs/tests/fixtures/project-preprocessing/main.opy"
 );
 const BASIC_RULE: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -20,7 +20,7 @@ const BASIC_RULE: &str = concat!(
 );
 const UNSUPPORTED: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../compatibility/fixtures/synthetic/issue-47-unsupported/source.opy"
+    "/../../compatibility/fixtures/synthetic/switch-break-unsupported/source.opy"
 );
 const DIAGNOSTICS: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),

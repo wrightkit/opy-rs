@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/dictionary-lookup",
+  "category": "synthetic",
+  "features": [
+    "compilation/opy-literal-dict-lookup"
+  ],
+  "source": "source.opy",
+  "expectedStatus": "success",
+  "provenance": {
+    "kind": "original",
+    "origin": "opy-rs Issue #145 literal dictionary lookup lowering probe, retained from the Issue #46 source fixture",
+    "license": "AGPL-3.0-or-later",
+    "redistributable": true
+  }
+}

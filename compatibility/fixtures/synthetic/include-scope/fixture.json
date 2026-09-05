@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/include-scope",
+  "category": "preprocessing",
+  "features": ["preprocessing/scoped-state", "preprocessing/include-restoration", "preprocessing/optimization"],
+  "source": "source.opy",
+  "expectedStatus": "success",
+  "provenance": {
+    "kind": "original",
+    "origin": "opy-rs Issue #31 minimized pinned-oracle nested-scope probe",
+    "license": "AGPL-3.0-or-later",
+    "redistributable": true
+  }
+}

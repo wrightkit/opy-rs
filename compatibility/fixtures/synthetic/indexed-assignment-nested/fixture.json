@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/indexed-assignment-nested",
+  "category": "compilation",
+  "features": ["compilation/opy-assignment-lowering"],
+  "source": "source.opy",
+  "expectedStatus": "success",
+  "provenance": {
+    "kind": "original",
+    "origin": "opy-rs Issue #60 nested indexed-assignment probe",
+    "license": "AGPL-3.0-or-later",
+    "redistributable": true
+  }
+}

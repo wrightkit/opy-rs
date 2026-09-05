@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/range-invalid-binder",
+  "category": "diagnostics",
+  "features": ["for", "range", "invalid-binder-diagnostic"],
+  "source": "source.opy",
+  "expectedStatus": "failure",
+  "provenance": {
+    "kind": "original",
+    "origin": "opy-rs Issue #65 pinned OverPy invalid range-for binder probe",
+    "license": "AGPL-3.0-or-later",
+    "redistributable": true
+  }
+}

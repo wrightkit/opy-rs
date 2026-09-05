@@ -28,7 +28,7 @@
           "id": "strings-and-modifiers",
           "claim": "String literals and their interpolation or modifier token boundaries are recognized.",
           "probeKinds": ["positive", "contextual"],
-          "probes": ["synthetic/issue-28-string-modifiers", "synthetic/issue-33-f-string"]
+          "probes": ["synthetic/string-modifiers", "synthetic/strings-and-lambda"]
         },
         {
           "id": "compound-expression-tokens",
@@ -40,14 +40,14 @@
           "id": "malformed-lexical-input",
           "claim": "Malformed lexical input reaches an auditable lexical failure frontier.",
           "probeKinds": ["negative"],
-          "probes": ["synthetic/issue-28-invalid-syntax", "real-world/overpy-zencopter"]
+          "probes": ["synthetic/syntax-invalid", "real-world/overpy-zencopter"]
         }
       ],
       "probeFixtures": [
-        "synthetic/issue-28-string-modifiers",
+        "synthetic/string-modifiers",
         "synthetic/expressions-values",
-        "synthetic/issue-28-invalid-syntax",
-        "synthetic/issue-33-f-string",
+        "synthetic/syntax-invalid",
+        "synthetic/strings-and-lambda",
         "real-world/overpy-zencopter"
       ]
     },
@@ -64,7 +64,7 @@
           "id": "expression-precedence-and-access",
           "claim": "Expressions, precedence, calls, and indexed access retain their structural boundaries.",
           "probeKinds": ["positive", "contextual"],
-          "probes": ["synthetic/expressions-values", "synthetic/receiver-calls", "synthetic/issue-60-nested-index"]
+          "probes": ["synthetic/expressions-values", "synthetic/receiver-calls", "synthetic/indexed-assignment-nested"]
         },
         {
           "id": "statement-and-declaration-boundaries",
@@ -76,39 +76,39 @@
           "id": "branches-loops-and-switches",
           "claim": "Branches, loops, switch ordering, and break shapes are parsed distinctly.",
           "probeKinds": ["positive", "contextual", "negative"],
-          "probes": ["synthetic/control-flow", "synthetic/issue-47-control-flow", "synthetic/issue-47-do-while-invalid-placement", "synthetic/issue-47-do-while-shapes", "synthetic/issue-47-switch-order", "synthetic/issue-47-switch-structured-target", "synthetic/issue-33-switch-break", "synthetic/for-range-agentlab"]
+          "probes": ["synthetic/control-flow", "synthetic/control-flow-lowering", "synthetic/do-while-invalid", "synthetic/do-while-break", "synthetic/switch-order", "synthetic/switch-structured-target", "synthetic/switch-break", "synthetic/for-range-agentlab"]
         },
         {
           "id": "lambda-and-postfix-context",
           "claim": "Lambda and postfix forms are distinguished in valid, embedded, and invalid contexts.",
           "probeKinds": ["contextual", "negative"],
-          "probes": ["synthetic/issue-33-lambda-negative", "synthetic/issue-59-embedded-postfix-negative", "synthetic/issue-59-postfix-assignment", "synthetic/issue-59-postfix-negative"]
+          "probes": ["synthetic/lambda-invalid", "synthetic/postfix-embedded-invalid", "synthetic/postfix-assignment", "synthetic/postfix-prefix-invalid"]
         },
         {
           "id": "indexed-assignment-depth",
           "claim": "Indexed assignment and access forms retain their structural boundaries before lowering.",
           "probeKinds": ["contextual"],
-          "probes": ["synthetic/issue-46-primitives"]
+          "probes": ["synthetic/primitive-lowering"]
         }
       ],
       "probeFixtures": [
         "synthetic/basic-rule",
         "synthetic/expressions-values",
         "synthetic/control-flow",
-        "synthetic/issue-33-lambda-negative",
-        "synthetic/issue-33-switch-break",
-        "synthetic/issue-47-control-flow",
-        "synthetic/issue-47-do-while-invalid-placement",
-        "synthetic/issue-47-do-while-shapes",
-        "synthetic/issue-47-switch-order",
-        "synthetic/issue-47-switch-structured-target",
-        "synthetic/issue-33-switch-break",
-        "synthetic/issue-59-embedded-postfix-negative",
-        "synthetic/issue-59-postfix-assignment",
-        "synthetic/issue-59-postfix-negative",
-        "synthetic/issue-60-nested-index",
+        "synthetic/lambda-invalid",
+        "synthetic/switch-break",
+        "synthetic/control-flow-lowering",
+        "synthetic/do-while-invalid",
+        "synthetic/do-while-break",
+        "synthetic/switch-order",
+        "synthetic/switch-structured-target",
+        "synthetic/switch-break",
+        "synthetic/postfix-embedded-invalid",
+        "synthetic/postfix-assignment",
+        "synthetic/postfix-prefix-invalid",
+        "synthetic/indexed-assignment-nested",
         "synthetic/for-range-agentlab",
-        "synthetic/issue-46-primitives",
+        "synthetic/primitive-lowering",
         "synthetic/receiver-calls"
       ]
     },
@@ -125,36 +125,36 @@
           "id": "include-closure-composition",
           "claim": "Included source files form the expected project closure and preserve source provenance.",
           "probeKinds": ["positive", "composition"],
-          "probes": ["synthetic/preprocessing", "synthetic/issue-29-main-file", "synthetic/issue-129-included-main-file"]
+          "probes": ["synthetic/preprocessing", "synthetic/project-main-file", "synthetic/project-entry"]
         },
         {
           "id": "macro-expansion",
           "claim": "Macro declarations and expansions apply across the supported project composition surface.",
           "probeKinds": ["positive", "composition"],
-          "probes": ["synthetic/preprocessing", "synthetic/issue-31-positive"]
+          "probes": ["synthetic/preprocessing", "synthetic/directives-scoped"]
         },
         {
           "id": "directive-state",
           "claim": "Preprocessing directives have scoped state and invalid language input has a distinct frontier.",
           "probeKinds": ["contextual", "composition", "negative"],
-          "probes": ["synthetic/issue-29-directives", "synthetic/issue-31-nested-scope", "synthetic/issue-31-negative"]
+          "probes": ["synthetic/directives", "synthetic/include-scope", "synthetic/translations-invalid"]
         },
         {
           "id": "project-level-preprocessing-failures",
           "claim": "Real project composition failures retain their preprocessing provenance.",
           "probeKinds": ["negative", "composition"],
-          "probes": ["real-world/6v6-adjustments", "real-world/overpy-meipocalypse", "real-world/ow1-emulator", "synthetic/issue-29-invalid"]
+          "probes": ["real-world/6v6-adjustments", "real-world/overpy-meipocalypse", "real-world/ow1-emulator", "synthetic/duplicate-rule-diagnostic"]
         }
       ],
       "probeFixtures": [
         "synthetic/preprocessing",
-        "synthetic/issue-29-directives",
-        "synthetic/issue-29-invalid",
-        "synthetic/issue-29-main-file",
-        "synthetic/issue-31-nested-scope",
-        "synthetic/issue-31-positive",
-        "synthetic/issue-31-negative",
-        "synthetic/issue-129-included-main-file",
+        "synthetic/directives",
+        "synthetic/duplicate-rule-diagnostic",
+        "synthetic/project-main-file",
+        "synthetic/include-scope",
+        "synthetic/directives-scoped",
+        "synthetic/translations-invalid",
+        "synthetic/project-entry",
         "real-world/6v6-adjustments",
         "real-world/overpy-meipocalypse",
         "real-world/ow1-emulator"
@@ -223,36 +223,36 @@
           "id": "receiver-dispatch",
           "claim": "Receiver members dispatch through the documented player and value domains.",
           "probeKinds": ["positive", "contextual"],
-          "probes": ["synthetic/receiver-calls", "synthetic/receiver-playervar", "synthetic/issue-113-is-dummy", "synthetic/issue-130-horizontal-facing-angle"]
+          "probes": ["synthetic/receiver-calls", "synthetic/receiver-playervar", "synthetic/member-values", "synthetic/member-angle"]
         },
         {
           "id": "enum-domain-context",
           "claim": "Enum and keyword domains are resolved in the semantic context that consumes them.",
           "probeKinds": ["positive", "contextual"],
-          "probes": ["synthetic/issue-131-spec-visibility"]
+          "probes": ["synthetic/hud-visibility"]
         },
         {
           "id": "aliases-and-hud-surface",
           "claim": "Aliases and HUD-facing catalog members lower through their documented names.",
           "probeKinds": ["positive"],
-          "probes": ["synthetic/issue-114-hud-subheader", "synthetic/issue-130-horizontal-facing-angle"]
+          "probes": ["synthetic/hud-subheader", "synthetic/member-angle"]
         },
         {
           "id": "semantic-boundary-errors",
           "claim": "Invalid binders and source-owned assignment boundaries stop at a semantic diagnostic frontier.",
           "probeKinds": ["negative"],
-          "probes": ["synthetic/issue-65-invalid-binder", "synthetic/issue-60-4d-negative"]
+          "probes": ["synthetic/range-invalid-binder", "synthetic/indexed-assignment-4d-invalid"]
         }
       ],
       "probeFixtures": [
         "synthetic/chase-condition-agentlab",
-        "synthetic/issue-113-is-dummy",
-        "synthetic/issue-114-hud-subheader",
-        "synthetic/issue-130-horizontal-facing-angle",
-        "synthetic/issue-131-spec-visibility",
-        "synthetic/issue-65-invalid-binder",
-        "synthetic/issue-60-4d-negative",
-        "synthetic/issue-65-player-range",
+        "synthetic/member-values",
+        "synthetic/hud-subheader",
+        "synthetic/member-angle",
+        "synthetic/hud-visibility",
+        "synthetic/range-invalid-binder",
+        "synthetic/indexed-assignment-4d-invalid",
+        "synthetic/range-player-variable",
         "synthetic/receiver-calls",
         "synthetic/receiver-playervar"
       ]
@@ -270,25 +270,25 @@
           "id": "vertical-slice",
           "claim": "A successful source-to-WIR vertical slice is comparable through the canonical Workshop contract.",
           "probeKinds": ["positive"],
-          "probes": ["synthetic/issue-35-integration", "synthetic/issue-40-structural", "synthetic/issue-28-syntax"]
+          "probes": ["synthetic/compiler-vertical-slice", "synthetic/compiler-structure", "synthetic/syntax-surface"]
         },
         {
           "id": "assignments-and-indexing",
           "claim": "Assignments and supported indexed forms lower to equivalent canonical WIR.",
           "probeKinds": ["positive", "contextual"],
-          "probes": ["synthetic/issue-46-primitives", "synthetic/issue-59-postfix-assignment", "synthetic/issue-60-nested-index", "synthetic/issue-65-player-range"]
+          "probes": ["synthetic/primitive-lowering", "synthetic/postfix-assignment", "synthetic/indexed-assignment-nested", "synthetic/range-player-variable"]
         },
         {
           "id": "control-flow-lowering",
           "claim": "Control-flow lowering preserves loop and switch structure in canonical WIR.",
           "probeKinds": ["positive", "contextual"],
-          "probes": ["synthetic/issue-47-control-flow", "synthetic/issue-47-do-while-shapes", "synthetic/issue-47-switch-order", "synthetic/issue-47-switch-structured-target"]
+          "probes": ["synthetic/control-flow-lowering", "synthetic/do-while-break", "synthetic/switch-order", "synthetic/switch-structured-target"]
         },
         {
           "id": "catalog-backed-calls",
           "claim": "Catalog-backed members and enum visibility lower to semantically equivalent WIR.",
           "probeKinds": ["positive"],
-          "probes": ["synthetic/issue-113-is-dummy", "synthetic/issue-114-hud-subheader", "synthetic/issue-130-horizontal-facing-angle", "synthetic/issue-131-spec-visibility"]
+          "probes": ["synthetic/member-values", "synthetic/hud-subheader", "synthetic/member-angle", "synthetic/hud-visibility"]
         },
         {
           "id": "semantic-to-wir-boundary",
@@ -306,7 +306,7 @@
           "id": "unsupported-lowering-boundary",
           "claim": "Known unsupported integration surfaces remain explicit negative probes rather than expected native passes.",
           "probeKinds": ["negative"],
-          "probes": ["synthetic/issue-46-unsupported", "synthetic/issue-47-unsupported", "synthetic/issue-47-switch-multiple-break"]
+          "probes": ["synthetic/dictionary-lookup", "synthetic/switch-break-unsupported", "synthetic/switch-multiple-break"]
         },
         {
           "id": "opaque-workshop-identity-consumer",
@@ -316,24 +316,24 @@
         }
       ],
       "probeFixtures": [
-        "synthetic/issue-35-integration",
-        "synthetic/issue-40-structural",
-        "synthetic/issue-28-syntax",
-        "synthetic/issue-46-primitives",
-        "synthetic/issue-46-unsupported",
-        "synthetic/issue-47-control-flow",
-        "synthetic/issue-47-do-while-shapes",
-        "synthetic/issue-47-switch-order",
-        "synthetic/issue-47-switch-structured-target",
-        "synthetic/issue-47-unsupported",
-        "synthetic/issue-47-switch-multiple-break",
-        "synthetic/issue-59-postfix-assignment",
-        "synthetic/issue-60-nested-index",
-        "synthetic/issue-65-player-range",
-        "synthetic/issue-113-is-dummy",
-        "synthetic/issue-114-hud-subheader",
-        "synthetic/issue-130-horizontal-facing-angle",
-        "synthetic/issue-131-spec-visibility",
+        "synthetic/compiler-vertical-slice",
+        "synthetic/compiler-structure",
+        "synthetic/syntax-surface",
+        "synthetic/primitive-lowering",
+        "synthetic/dictionary-lookup",
+        "synthetic/control-flow-lowering",
+        "synthetic/do-while-break",
+        "synthetic/switch-order",
+        "synthetic/switch-structured-target",
+        "synthetic/switch-break-unsupported",
+        "synthetic/switch-multiple-break",
+        "synthetic/postfix-assignment",
+        "synthetic/indexed-assignment-nested",
+        "synthetic/range-player-variable",
+        "synthetic/member-values",
+        "synthetic/hud-subheader",
+        "synthetic/member-angle",
+        "synthetic/hud-visibility",
         "synthetic/chase-enums",
         "synthetic/chase-keywords",
         "synthetic/settings",
@@ -353,31 +353,31 @@
           "id": "lex-frontier",
           "claim": "Lexical failures identify the first invalid lexical construct.",
           "probeKinds": ["negative"],
-          "probes": ["real-world/overpy-zencopter", "synthetic/issue-28-invalid-syntax"]
+          "probes": ["real-world/overpy-zencopter", "synthetic/syntax-invalid"]
         },
         {
           "id": "parse-frontier",
           "claim": "Parser failures identify the first unsupported or malformed syntactic construct.",
           "probeKinds": ["negative"],
-          "probes": ["synthetic/diagnostics", "synthetic/issue-28-invalid-syntax", "synthetic/issue-29-invalid", "synthetic/issue-33-lambda-negative", "synthetic/issue-59-embedded-postfix-negative", "synthetic/issue-59-postfix-negative"]
+          "probes": ["synthetic/diagnostics", "synthetic/syntax-invalid", "synthetic/duplicate-rule-diagnostic", "synthetic/lambda-invalid", "synthetic/postfix-embedded-invalid", "synthetic/postfix-prefix-invalid"]
         },
         {
           "id": "preprocess-frontier",
           "claim": "Preprocessing failures retain project and directive provenance.",
           "probeKinds": ["negative", "composition"],
-          "probes": ["real-world/overpy-meipocalypse", "real-world/ow1-emulator", "synthetic/issue-31-negative"]
+          "probes": ["real-world/overpy-meipocalypse", "real-world/ow1-emulator", "synthetic/translations-invalid"]
         },
         {
           "id": "semantic-frontier",
           "claim": "Semantic failures identify the first invalid member, placement, or binder construct.",
           "probeKinds": ["negative", "contextual"],
-          "probes": ["real-world/6v6-adjustments", "synthetic/issue-47-do-while-invalid-placement", "synthetic/issue-65-invalid-binder"]
+          "probes": ["real-world/6v6-adjustments", "synthetic/do-while-invalid", "synthetic/range-invalid-binder"]
         },
         {
           "id": "diagnostic-provenance",
           "claim": "Failure snapshots preserve enough source and diagnostic provenance to audit their frontier.",
           "probeKinds": ["negative", "composition"],
-          "probes": ["real-world/6v6-adjustments", "real-world/ow1-emulator", "synthetic/issue-60-4d-negative"]
+          "probes": ["real-world/6v6-adjustments", "real-world/ow1-emulator", "synthetic/indexed-assignment-4d-invalid"]
         }
       ],
       "probeFixtures": [
@@ -386,15 +386,15 @@
         "real-world/overpy-zencopter",
         "real-world/ow1-emulator",
         "synthetic/diagnostics",
-        "synthetic/issue-28-invalid-syntax",
-        "synthetic/issue-29-invalid",
-        "synthetic/issue-31-negative",
-        "synthetic/issue-33-lambda-negative",
-        "synthetic/issue-47-do-while-invalid-placement",
-        "synthetic/issue-59-embedded-postfix-negative",
-        "synthetic/issue-59-postfix-negative",
-        "synthetic/issue-60-4d-negative",
-        "synthetic/issue-65-invalid-binder"
+        "synthetic/syntax-invalid",
+        "synthetic/duplicate-rule-diagnostic",
+        "synthetic/translations-invalid",
+        "synthetic/lambda-invalid",
+        "synthetic/do-while-invalid",
+        "synthetic/postfix-embedded-invalid",
+        "synthetic/postfix-prefix-invalid",
+        "synthetic/indexed-assignment-4d-invalid",
+        "synthetic/range-invalid-binder"
       ]
     },
     {
@@ -492,47 +492,47 @@
       "construct": "parse-error",
       "diagnosticContains": "Expected a ':'"
     },
-    "synthetic/issue-28-invalid-syntax": {
+    "synthetic/syntax-invalid": {
       "stage": "parse",
       "construct": "parse-error",
       "diagnosticContains": "Content is empty"
     },
-    "synthetic/issue-29-invalid": {
+    "synthetic/duplicate-rule-diagnostic": {
       "stage": "semantic",
       "construct": "duplicate-rule-name",
       "diagnosticContains": "Rule name was already declared"
     },
-    "synthetic/issue-31-negative": {
+    "synthetic/translations-invalid": {
       "stage": "preprocess",
       "construct": "translations-invalid",
       "diagnosticContains": "Invalid language"
     },
-    "synthetic/issue-33-lambda-negative": {
+    "synthetic/lambda-invalid": {
       "stage": "parse",
       "construct": "parse-error",
       "diagnosticContains": "Expected '(' after 'lambda'"
     },
-    "synthetic/issue-47-do-while-invalid-placement": {
+    "synthetic/do-while-invalid": {
       "stage": "semantic",
       "construct": "do-while-placement",
       "diagnosticContains": "Do/While loops can only be at the beginning"
     },
-    "synthetic/issue-59-embedded-postfix-negative": {
+    "synthetic/postfix-embedded-invalid": {
       "stage": "parse",
       "construct": "parse-error",
       "diagnosticContains": "Cannot modify or assign to operator '='"
     },
-    "synthetic/issue-59-postfix-negative": {
+    "synthetic/postfix-prefix-invalid": {
       "stage": "parse",
       "construct": "parse-error",
       "diagnosticContains": "Expected an action"
     },
-    "synthetic/issue-60-4d-negative": {
+    "synthetic/indexed-assignment-4d-invalid": {
       "stage": "semantic",
       "construct": "four-dimensional-assignment",
       "diagnosticContains": "Cannot assign to 4d array"
     },
-    "synthetic/issue-65-invalid-binder": {
+    "synthetic/range-invalid-binder": {
       "stage": "semantic",
       "construct": "invalid-range-binder",
       "diagnosticContains": "Expected variable for 1st argument"

@@ -1,0 +1,33 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: value\n}\n\nrule (\"issue 47 do while direct\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Modify Global Variable(value, Add, 1);\n        Skip(2);\n        Modify Global Variable(value, Add, 10);\n        Loop If(Compare(Global.value, <, 2));\n        //__label_break_2__:\n    }\n}\n\nrule (\"issue 47 do while conditional\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Modify Global Variable(value, Add, 1);\n        Skip If(Compare(Global.value, ==, 1), 2);\n        Modify Global Variable(value, Add, 10);\n        Loop If(Compare(Global.value, <, 2));\n        //__label_break_3__:\n    }\n}\n\nrule (\"issue 47 do while nested\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Modify Global Variable(value, Add, 1);\n        Skip(1);\n        Loop If(Compare(Global.value, <, 2));\n        //__label_break_4__:\n        Modify Global Variable(value, Add, 10);\n        Loop If(Compare(Global.value, <, 2));\n    }\n}\n\nrule (\"issue 47 do while structured tail\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Modify Global Variable(value, Add, 1);\n        Skip(5);\n        If(Compare(Global.value, ==, 1));\n            Modify Global Variable(value, Add, 2);\n        End;\n        Modify Global Variable(value, Add, 10);\n        Loop If(Compare(Global.value, <, 2));\n        //__label_break_5__:\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: value\n}\n\nrule (\"issue 47 do while direct\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Modify Global Variable(value, Add, 1);\n        Skip(2);\n        Modify Global Variable(value, Add, 10);\n        Loop If(Compare(Global.value, <, 2));\n        //__label_break_2__:\n    }\n}\n\nrule (\"issue 47 do while conditional\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Modify Global Variable(value, Add, 1);\n        Skip If(Compare(Global.value, ==, 1), 2);\n        Modify Global Variable(value, Add, 10);\n        Loop If(Compare(Global.value, <, 2));\n        //__label_break_3__:\n    }\n}\n\nrule (\"issue 47 do while nested\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Modify Global Variable(value, Add, 1);\n        Skip(1);\n        Loop If(Compare(Global.value, <, 2));\n        //__label_break_4__:\n        Modify Global Variable(value, Add, 10);\n        Loop If(Compare(Global.value, <, 2));\n    }\n}\n\nrule (\"issue 47 do while structured tail\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Modify Global Variable(value, Add, 1);\n        Skip(5);\n        If(Compare(Global.value, ==, 1));\n            Modify Global Variable(value, Add, 2);\n        End;\n        Modify Global Variable(value, Add, 10);\n        Loop If(Compare(Global.value, <, 2));\n        //__label_break_5__:\n    }\n}\n\n",
+    "workshopSha256": "7e211d3d3e0f2c2e386fea86cbc33ba28c060529354ae91147f0d4983fcbb613"
+  },
+  "fixture": "synthetic/do-while-break",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "6e0baa620c74b51b98ecb2576a353bcae83f335bd50ba904c73347f8b87b9a9c"
+      }
+    ],
+    "sha256": "52487c06f49d4649a34064d41c45d81a7bcbf0c5c4f3cd17af1a05d6b94c2f8a",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

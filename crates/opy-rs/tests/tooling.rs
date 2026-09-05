@@ -1,4 +1,4 @@
-//! Integration tests for the Workshop-independent tooling API (issue #7):
+//! Integration tests for the Workshop-independent tooling API:
 //! multi-file project validation through [`opy_rs::tooling::check`],
 //! semantic queries on the resolved model, and stable diagnostic codes for
 //! representative malformed inputs.
