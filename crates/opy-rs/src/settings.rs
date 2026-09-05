@@ -14,8 +14,11 @@
 //! that validation is `lowering-dependent` (issue #8) and lives at the
 //! Workshop integration boundary, never in a local allowlist here.
 
+use std::collections::HashMap;
+
 use crate::cst;
 use crate::diag::{OpyError, OpyResult, Position, Span};
+use crate::hir;
 
 /// A project `settings { ... }` block.
 #[derive(Debug, Clone)]
@@ -252,7 +255,192 @@ pub fn parse_block(block: &SettingsBlock) -> OpyResult<cst::Settings> {
     })
 }
 
-/// A char scanner with 1-based line/col tracking.
+/// Resolve parsed settings values through the ordinary OPY HIR expression path.
+///
+/// Token-level `#!define` expansion is performed by [`crate::preprocess`]
+/// before this function runs. Source macros and constants are resolved from
+/// the same HIR program used by ordinary OPY lowering.
+pub(crate) fn resolve_hir_settings(
+    program: &mut hir::Program,
+    cst_program: &cst::Program,
+) -> OpyResult<()> {
+    let constants = program
+        .declarations
+        .iter()
+        .filter_map(|declaration| match declaration {
+            hir::Declaration::Constant { name, value, .. } => {
+                Some((name.clone(), value.as_ref().clone()))
+            }
+            _ => None,
+        })
+        .collect::<HashMap<_, _>>();
+    let constant_refs = constants
+        .iter()
+        .map(|(name, value)| (name.clone(), value))
+        .collect::<HashMap<_, _>>();
+    let mut expander = crate::compiler::MacroExpander::from_program(program);
+    let Some(settings) = program.settings.take() else {
+        return Ok(());
+    };
+    let children = settings
+        .children
+        .into_iter()
+        .map(|node| resolve_hir_node(node, cst_program, &constant_refs, &mut expander))
+        .collect::<OpyResult<Vec<_>>>()?;
+    program.settings = Some(hir::Settings {
+        span: settings.span,
+        children,
+    });
+    Ok(())
+}
+
+fn resolve_hir_node(
+    node: hir::SettingsNode,
+    cst_program: &cst::Program,
+    constants: &HashMap<String, &hir::Expr>,
+    expander: &mut crate::compiler::MacroExpander,
+) -> OpyResult<hir::SettingsNode> {
+    match node {
+        hir::SettingsNode::Group {
+            name,
+            children,
+            span,
+        } => Ok(hir::SettingsNode::Group {
+            name,
+            children: children
+                .into_iter()
+                .map(|child| resolve_hir_node(child, cst_program, constants, expander))
+                .collect::<OpyResult<Vec<_>>>()?,
+            span,
+        }),
+        hir::SettingsNode::Raw { name, value, span } => {
+            let Some(span) = span else {
+                return Err(OpyError::new(
+                    "settings-expression",
+                    "settings value has no source span",
+                ));
+            };
+            let diag_span = hir_span_to_diag_span(span);
+            let expression = crate::lower::lower_settings_expression(
+                cst_program,
+                &value,
+                span.file,
+                Position::new(span.start.line, span.start.col),
+            )
+            .map_err(|error| settings_expression_error(diag_span, error.message))?;
+            let expression =
+                expander
+                    .expand_expr(&expression, &HashMap::new())
+                    .map_err(|error| {
+                        let error_span = error
+                            .diagnostic
+                            .span
+                            .map(hir_span_to_diag_span)
+                            .unwrap_or(diag_span);
+                        OpyError::at(error.diagnostic.code, error.diagnostic.message, error_span)
+                    })?;
+            let mut stack = Vec::new();
+            let value =
+                crate::compile_time::evaluate(&expression, constants, &HashMap::new(), &mut stack)
+                    .ok_or_else(|| {
+                        settings_expression_error(
+                            diag_span,
+                            "expression is not a compile-time value".to_string(),
+                        )
+                    })?;
+            node_from_value(name, value, diag_span)
+        }
+        node => Ok(node),
+    }
+}
+
+fn hir_span_to_diag_span(span: hir::Span) -> Span {
+    Span::new(
+        span.file,
+        Position::new(span.start.line, span.start.col),
+        Position::new(span.end.line, span.end.col),
+    )
+}
+
+fn settings_expression_error(span: Span, message: String) -> OpyError {
+    OpyError::at(
+        "settings-expression",
+        format!("settings value is not a compile-time value: {message}"),
+        span,
+    )
+}
+
+fn node_from_value(
+    name: String,
+    value: crate::compile_time::Value,
+    span: Span,
+) -> OpyResult<hir::SettingsNode> {
+    let node = match value {
+        crate::compile_time::Value::Number(value) if value.is_finite() => {
+            hir::SettingsNode::Number {
+                name,
+                value,
+                span: Some(span.into()),
+            }
+        }
+        crate::compile_time::Value::Number(_) => {
+            return Err(settings_expression_error(
+                span,
+                "compile-time number is not finite".to_string(),
+            ));
+        }
+        crate::compile_time::Value::String(value) => hir::SettingsNode::String {
+            name,
+            value,
+            span: Some(span.into()),
+        },
+        crate::compile_time::Value::Bool(value) => hir::SettingsNode::Bool {
+            name,
+            value,
+            span: Some(span.into()),
+        },
+        crate::compile_time::Value::Array(values) => hir::SettingsNode::List {
+            name,
+            elements: values
+                .into_iter()
+                .map(|value| {
+                    Ok(hir::SettingsListElement {
+                        value: display_value(&value)?,
+                        span: Some(span.into()),
+                    })
+                })
+                .collect::<Result<Vec<_>, String>>()
+                .map_err(|message| settings_expression_error(span, message))?,
+            span: Some(span.into()),
+        },
+        crate::compile_time::Value::Object(entries) => hir::SettingsNode::Group {
+            name,
+            children: entries
+                .into_iter()
+                .map(|(key, value)| {
+                    let crate::compile_time::Value::String(name) = key else {
+                        return Err(settings_expression_error(
+                            span,
+                            "compile-time object keys must be strings".to_string(),
+                        ));
+                    };
+                    node_from_value(name, value, span)
+                })
+                .collect::<OpyResult<Vec<_>>>()?,
+            span: Some(span.into()),
+        },
+    };
+    Ok(node)
+}
+
+fn display_value(value: &crate::compile_time::Value) -> Result<String, String> {
+    match value {
+        crate::compile_time::Value::Number(value) if value.is_finite() => Ok(value.to_string()),
+        crate::compile_time::Value::String(value) => Ok(value.clone()),
+        crate::compile_time::Value::Bool(value) => Ok(value.to_string()),
+        _ => Err("settings list can only contain primitive values".to_string()),
+    }
+}
 struct Scanner<'a> {
     chars: &'a [char],
     pos: usize,
@@ -495,40 +683,93 @@ impl Jsonc<'_> {
         let ch = self.peek();
         let node = match ch {
             Some('"') | Some('\'') => {
-                let value = self.parse_string_value().ok_or_else(|| {
+                let saved = (self.pos, self.line, self.col);
+                let value = self.parse_string_expression().ok_or_else(|| {
                     self.error(
                         "settings-invalid",
                         "unterminated string in settings value".to_string(),
                     )
                 })?;
-                cst::SettingsNode::String {
-                    name: String::new(),
-                    value,
-                    span: Span::new(self.file, start, self.here()),
+                self.skip_inline_whitespace();
+                if self.is_expression_continuation() {
+                    self.pos = saved.0;
+                    self.line = saved.1;
+                    self.col = saved.2;
+                    cst::SettingsNode::Raw {
+                        name: String::new(),
+                        value: self.parse_expression_value(),
+                        span: Span::new(self.file, start, self.here()),
+                    }
+                } else {
+                    cst::SettingsNode::String {
+                        name: String::new(),
+                        value,
+                        span: Span::new(self.file, start, self.here()),
+                    }
                 }
             }
             Some('t') => {
+                let saved = (self.pos, self.line, self.col);
                 self.expect_word("true")?;
-                cst::SettingsNode::Bool {
-                    name: String::new(),
-                    value: true,
-                    span: Span::new(self.file, start, self.here()),
+                self.skip_inline_whitespace();
+                if self.is_expression_continuation() {
+                    self.pos = saved.0;
+                    self.line = saved.1;
+                    self.col = saved.2;
+                    cst::SettingsNode::Raw {
+                        name: String::new(),
+                        value: self.parse_expression_value(),
+                        span: Span::new(self.file, start, self.here()),
+                    }
+                } else {
+                    cst::SettingsNode::Bool {
+                        name: String::new(),
+                        value: true,
+                        span: Span::new(self.file, start, self.here()),
+                    }
                 }
             }
             Some('f') => {
+                let saved = (self.pos, self.line, self.col);
                 self.expect_word("false")?;
-                cst::SettingsNode::Bool {
-                    name: String::new(),
-                    value: false,
-                    span: Span::new(self.file, start, self.here()),
+                self.skip_inline_whitespace();
+                if self.is_expression_continuation() {
+                    self.pos = saved.0;
+                    self.line = saved.1;
+                    self.col = saved.2;
+                    cst::SettingsNode::Raw {
+                        name: String::new(),
+                        value: self.parse_expression_value(),
+                        span: Span::new(self.file, start, self.here()),
+                    }
+                } else {
+                    cst::SettingsNode::Bool {
+                        name: String::new(),
+                        value: false,
+                        span: Span::new(self.file, start, self.here()),
+                    }
                 }
             }
             Some(c) if c.is_ascii_digit() || c == '-' => {
+                let saved = (self.pos, self.line, self.col);
                 let value = self.parse_number()?;
-                cst::SettingsNode::Number {
-                    name: String::new(),
-                    value,
-                    span: Span::new(self.file, start, self.here()),
+                self.skip_inline_whitespace();
+                if self.is_expression_continuation() {
+                    self.pos = saved.0;
+                    self.line = saved.1;
+                    self.col = saved.2;
+                    let value = self.parse_expression_value();
+                    cst::SettingsNode::Raw {
+                        name: String::new(),
+                        value,
+                        span: Span::new(self.file, start, self.here()),
+                    }
+                } else {
+                    cst::SettingsNode::Number {
+                        name: String::new(),
+                        value,
+                        span: Span::new(self.file, start, self.here()),
+                    }
                 }
             }
             Some('[') => {
@@ -660,7 +901,7 @@ impl Jsonc<'_> {
             self.skip_whitespace();
             let start = self.here();
             let value = match self.peek() {
-                Some('"') | Some('\'') => self.parse_string_value().ok_or_else(|| {
+                Some('"') | Some('\'') => self.parse_string_expression().ok_or_else(|| {
                     self.error(
                         "settings-invalid",
                         "unterminated string in settings list".to_string(),
@@ -729,6 +970,50 @@ impl Jsonc<'_> {
                 value.push(ch);
             }
         }
+    }
+
+    /// Parse adjacent quoted strings as one compile-time string value. This
+    /// is the settings equivalent of OPY's implicit string concatenation and
+    /// is used after macro expansion has turned identifiers into literals.
+    fn parse_string_expression(&mut self) -> Option<String> {
+        let mut value = self.parse_string_value()?;
+        loop {
+            let saved = (self.pos, self.line, self.col);
+            self.skip_inline_whitespace();
+            if self.peek() != Some('"') && self.peek() != Some('\'') {
+                self.pos = saved.0;
+                self.line = saved.1;
+                self.col = saved.2;
+                break;
+            }
+            let next = self.parse_string_value()?;
+            value.push_str(&next);
+        }
+        Some(value)
+    }
+
+    fn skip_inline_whitespace(&mut self) {
+        while matches!(self.peek(), Some(' ' | '\t' | '\r')) {
+            self.advance();
+        }
+    }
+
+    fn is_expression_continuation(&self) -> bool {
+        if matches!(
+            self.peek(),
+            Some('+' | '-' | '*' | '/' | '%' | '<' | '>' | '=')
+        ) {
+            return true;
+        }
+        ["and", "or", "if"].iter().any(|word| {
+            self.text[self.pos..]
+                .strip_prefix(word)
+                .is_some_and(|rest| {
+                    rest.chars().next().is_none_or(|character| {
+                        !character.is_ascii_alphanumeric() && character != '_'
+                    })
+                })
+        })
     }
 }
 

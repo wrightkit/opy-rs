@@ -276,6 +276,48 @@ pub fn lower_with_preprocessing(
     })
 }
 
+/// Lower a settings expression through the same CST-to-HIR semantic path as
+/// ordinary OPY expressions.
+pub(crate) fn lower_settings_expression(
+    program: &cst::Program,
+    text: &str,
+    file: u32,
+    origin: crate::diag::Position,
+) -> OpyResult<HirExpr> {
+    let expression = crate::parser::parse_expression_fragment(text, file, origin)?;
+    let manifest = Manifest::builtin().map_err(|error| {
+        OpyError::new(
+            "manifest-error",
+            format!("cannot load the OPY semantic compatibility manifest: {error}"),
+        )
+    })?;
+    let catalog = Catalog::builtin().map_err(|error| {
+        OpyError::new(
+            "catalog-error",
+            format!("cannot load the Workshop catalog: {error}"),
+        )
+    })?;
+    let mut lowerer = Lowerer {
+        global_declarations: HashMap::new(),
+        player_declarations: HashMap::new(),
+        subroutine_declarations: HashMap::new(),
+        subroutine_definitions: Vec::new(),
+        constant_declarations: HashMap::new(),
+        macro_declarations: HashMap::new(),
+        enums: HashMap::new(),
+        enum_declarations: HashMap::new(),
+        locals: Vec::new(),
+        current_order: program.top_level.len(),
+        allow_dict_literal: true,
+        manifest,
+        catalog,
+        errors: Vec::new(),
+    };
+    lowerer.collect_symbols(program);
+    let lowered = lowerer.lower_expr(&expression, &[], CallPosition::Value);
+    lowerer.errors.into_iter().next().map_or(Ok(lowered), Err)
+}
+
 fn prefixed_rule_name(name: &str, prefix: Option<&str>, delimiter: bool) -> String {
     match prefix {
         Some(prefix) if !prefix.is_empty() && !delimiter && !name.is_empty() => {

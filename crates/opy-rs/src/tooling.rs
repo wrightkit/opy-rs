@@ -132,8 +132,9 @@ pub fn check_with_overlay(
             post_compile_hook: None,
         };
     };
-    // Parse the extracted settings block into the CST; errors flow through
-    // the same diagnostic path (#86).
+    // Parse the extracted settings block into the CST; expression values are
+    // resolved after ordinary CST-to-HIR lowering so they use the shared OPY
+    // semantic path (#86, #188).
     if let Some(block) = &preprocessed.settings {
         match crate::settings::parse_block(block) {
             Ok(parsed_settings) => program.settings = Some(parsed_settings),
@@ -178,6 +179,20 @@ pub fn check_with_overlay(
     ) {
         Ok(mut hir) => {
             hir.preprocessing = preprocessed.preprocessing;
+            if let Err(error) = crate::settings::resolve_hir_settings(&mut hir, &program) {
+                let mut diagnostics = preprocessed
+                    .warnings
+                    .iter()
+                    .map(|warning| Diagnostic::from_warning(warning, &files))
+                    .collect::<Vec<_>>();
+                diagnostics.push(Diagnostic::from_error(error, &files));
+                return CheckOutcome {
+                    diagnostics,
+                    model: None,
+                    files,
+                    post_compile_hook: None,
+                };
+            }
             CheckOutcome {
                 diagnostics: preprocessed
                     .warnings
