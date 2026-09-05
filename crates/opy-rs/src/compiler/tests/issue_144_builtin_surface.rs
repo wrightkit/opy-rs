@@ -269,7 +269,7 @@ fn create_dummy_uses_the_reference_facing_default() {
         .compile_hir(&hir)
         .expect("createDummy's facing default must lower");
     assert!(artifact.emitted.contains("Create Dummy Bot"));
-    assert!(artifact.emitted.contains("Vector(0, 0, 0)"));
+    assert!(artifact.emitted.contains("Null"));
 }
 
 #[test]

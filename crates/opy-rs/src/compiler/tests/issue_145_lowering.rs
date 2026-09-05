@@ -96,6 +96,40 @@ fn nested_indexed_assignments_match_the_pinned_oracle() {
 }
 
 #[test]
+fn indexed_assignment_indices_use_catalog_numeric_coercions() {
+    let source = r#"
+globalvar values = [0]
+globalvar nested = [[0]]
+
+rule "boolean indices":
+    @Event global
+    values[true] = 1
+    values[false] += 1
+    nested[true][false] = 2
+"#;
+    let hir = crate::compile(source, "issue-185.opy", Path::new(".")).expect("source resolves");
+    let artifact = Compiler::new()
+        .expect("released workshop contract must load")
+        .compile_hir(&hir)
+        .expect("boolean indexed assignments must lower");
+    assert!(
+        artifact
+            .emitted
+            .contains("Set Global Variable At Index(values, 1, 1);")
+    );
+    assert!(
+        artifact
+            .emitted
+            .contains("Modify Global Variable At Index(values, 0, Add, 1);")
+    );
+    assert!(
+        artifact
+            .emitted
+            .contains("Set Global Variable At Index(nested, 1,")
+    );
+}
+
+#[test]
 fn translated_implicit_subroutine_fixture_matches_the_pinned_oracle() {
     assert_fixture_matches_oracle("issue-31-positive");
 }

@@ -384,7 +384,7 @@
         "test:opy-rs::compiler::integration_tests::issue_47_oracle::issue_47_nested_switch_break_is_source_attributed_when_not_representable"
       ],
       "owner": "workshop-rs#123",
-      "note": "The released workshop-rs v0.1.16 contract provides native Break, Skip, and Skip If calls, but this nested conditional switch-break shape still has no lossless OPY-owned lowering and remains explicitly rejected.",
+      "note": "The released workshop-rs v0.1.18 contract provides native Break, Skip, and Skip If calls, but this nested conditional switch-break shape still has no lossless OPY-owned lowering and remains explicitly rejected.",
       "failureClass": "integration",
       "diagnosticCode": "unsupported-integration-surface"
     },
@@ -454,7 +454,7 @@
         "provenance:real-world/overpy-cake/fixture.json"
       ],
       "owner": "workshop-rs#124",
-      "note": "The released workshop-rs v0.1.16 catalog resolves `Visible To` through the canonical call-signature domain, so the native WIR can be compared directly with the pinned oracle; remaining arithmetic and implicit-value lowering differences keep this real-world case an explicit compiler gap.",
+      "note": "The released workshop-rs v0.1.18 catalog resolves `Visible To` through the canonical call-signature domain, so the native WIR can be compared directly with the pinned oracle; remaining arithmetic and implicit-value lowering differences keep this real-world case an explicit compiler gap.",
       "semanticEquivalent": false
     },
     {
@@ -600,7 +600,7 @@
         "provenance:synthetic/chase-condition-agentlab/fixture.json"
       ],
       "owner": "workshop-rs#124",
-      "note": "The released workshop-rs v0.1.16 catalog resolves `None` through the canonical call-signature domain, so the native WIR can be compared directly with the pinned oracle.",
+      "note": "The released workshop-rs v0.1.18 catalog resolves `None` through the canonical call-signature domain, so the native WIR can be compared directly with the pinned oracle.",
       "semanticEquivalent": true
     },
     {

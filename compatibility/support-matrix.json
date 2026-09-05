@@ -646,9 +646,9 @@
       "evidence": [
         "fixtures:synthetic/issue-35-integration",
         "test:opy-rs::compiler-vertical-slice",
-        "contract:workshop-rs-v0.1.16"
+        "contract:workshop-rs-v0.1.18"
       ],
-      "notes": "Issue #35. The internal compiler module consumes resolved OPY HIR, preserves source files/spans in workshop-rs WIR, cross-checks manifest catalogId/domain links against Catalog, validates canonical WIR, and emits deterministic en-US Workshop through the published workshop-rs v0.1.16 contract. This is a bounded first slice; broader OPY lowering remains lowering-dependent and is not reclassified by this fixture."
+      "notes": "Issue #35. The internal compiler module consumes resolved OPY HIR, preserves source files/spans in workshop-rs WIR, cross-checks manifest catalogId/domain links against Catalog, validates canonical WIR, and emits deterministic en-US Workshop through the published workshop-rs v0.1.18 contract. This is a bounded first slice; broader OPY lowering remains lowering-dependent and is not reclassified by this fixture."
     },
     {
       "id": "compilation/opy-structural-lowering",
@@ -659,7 +659,7 @@
         "fixtures:synthetic/issue-35-integration",
         "fixtures:synthetic/issue-40-structural",
         "test:opy-rs::compiler-structural-lowering",
-        "contract:workshop-rs-v0.1.16"
+        "contract:workshop-rs-v0.1.18"
       ],
       "notes": "Issue #40. Global/player variables and subroutines use deterministic canonical indices with source/name spans; subroutine definitions and calls, rule disabled state, conditions, supported event/filter identities, and source-file provenance lower directly into workshop-rs WIR. Unsupported settings, declarations, annotations, events, filters, and statement forms remain explicit source-attributed integration diagnostics. This does not claim full statement/expression, catalog/member/enum, settings, locale, optimizer, hook, or decompilation coverage."
     },
@@ -678,7 +678,7 @@
         "test:opy-rs::compiler::integration_tests::issue_145_lowering::nested_indexed_assignments_match_the_pinned_oracle",
         "test:opy-rs::compiler::integration_tests::issue_162_semantic::semantic_boundary_errors_are_reported_before_lowering",
         "test:opy-rs::compiler::integration_tests::issue_145_lowering::null_initializers_are_dropped_but_float_zero_is_preserved",
-        "contract:workshop-rs-v0.1.16"
+        "contract:workshop-rs-v0.1.18"
       ],
       "notes": "Issue #46/#59/#60/#145/#162. Global/player assignments and augmented assignments (+=, -=, *=, /=, %=, **=, ++, --), literal dictionary lookup folding, single-level and nested indexed variable assignments and modifications (setGlobalVariableAtIndex, modifyGlobalVariableAtIndex, setPlayerVariableAtIndex, modifyPlayerVariableAtIndex), and pass no-op statements lower into canonical workshop-rs WIR. Nested targets are rebuilt through canonical array slices, while four-dimensional assignments are rejected by source semantics at the pinned diagnostic frontier before lowering; null and integer-zero declaration initializers are omitted while float zero remains observable. Direct global/player modifications carry full statement and target-variable span provenance; indexed forms lower to canonical Call actions, which carry only the statement-level source span (the canonical WIR Call shape has no separate target-span field)."
     },
@@ -690,7 +690,7 @@
       "evidence": [
         "fixtures:synthetic/issue-46-primitives",
         "test:opy-rs::compiler-implicit-default-variables",
-        "contract:workshop-rs-v0.1.16"
+        "contract:workshop-rs-v0.1.18"
       ],
       "notes": "Issue #46. Undeclared A-Z, AA-AZ, ..., DA-DX global references and eventPlayer.<name> player references resolve through the source implementation default_var_index contract and lower to separate Workshop variable namespaces at their fixed reference slots (A=0 ... DX=127); used implicit slots are reserved independently for declared global/player allocation, an explicit declared index colliding with a used implicit slot fails with the stable source-attributed index-collision diagnostic, and a declared name wins in its own namespace. The pinned oracle snapshot for the issue-46 fixture constrains global and player slots through structural equivalence."
     },
@@ -714,7 +714,7 @@
         "fixtures:synthetic/issue-46-primitives",
         "test:opy-rs::compiler-primitive-lowering",
         "test:opy-rs::compiler::integration_tests::issue_100_conditional",
-        "contract:workshop-rs-v0.1.16"
+        "contract:workshop-rs-v0.1.18"
       ],
       "notes": "Issue #46/#100/#145. Literals (numbers, strings, booleans, null), arrays, vectors (vect), enum constants, global/player/eventPlayer variable references, literal dictionary lookup, array indexing (valueInArray; a literal zero index lowers to firstOf, matching the pinned oracle), string formatting (customString), f/w/b/c literal string modifiers, arithmetic/comparison/logical binary operations, unary operations (not, -; not on a comparison lowers to the negated comparison, matching the pinned oracle), right-associative conditional values (ifThenElse), and power operations lower into canonical workshop-rs WIR. Value-position power uses the canonical raiseToPower Value contract; direct and indexed power modifications use the canonical Workshop Operation contract."
     },
@@ -735,9 +735,9 @@
         "fixtures:synthetic/issue-65-invalid-binder",
         "fixtures:synthetic/issue-33-switch-break",
         "test:opy-rs::compiler-issue-47-residual-native-wir-gaps",
-        "contract:workshop-rs-v0.1.16"
+        "contract:workshop-rs-v0.1.18"
       ],
-      "notes": "Issue #47/#65/#162. If/elif/else, while, global- and player-variable range-for, do-while expansion, source-ordered switch fallthrough/default, and direct loop/switch/do-while break lower into canonical workshop-rs WIR. Player-variable binders preserve their receiver and source span through HIR and use the existing For Player Variable contract; non-variable range binders are rejected by source semantics before lowering. Switch offsets and do-while distances use workshop-rs v0.1.16 canonical emitted action widths; direct, conditional, and nested do-while shapes are pinned and oracle-equivalent. Residual native-WIR differences in switch-break and switch-target shapes remain explicit compiler gaps; nested conditional switch break remains a stable source-attributed unsupported-integration-surface diagnostic, while multiple direct switch breaks use canonical nested exit layers with pinned action-trace evidence."
+      "notes": "Issue #47/#65/#162. If/elif/else, while, global- and player-variable range-for, do-while expansion, source-ordered switch fallthrough/default, and direct loop/switch/do-while break lower into canonical workshop-rs WIR. Player-variable binders preserve their receiver and source span through HIR and use the existing For Player Variable contract; non-variable range binders are rejected by source semantics before lowering. Switch offsets and do-while distances use workshop-rs v0.1.18 canonical emitted action widths; direct, conditional, and nested do-while shapes are pinned and oracle-equivalent. Residual native-WIR differences in switch-break and switch-target shapes remain explicit compiler gaps; nested conditional switch break remains a stable source-attributed unsupported-integration-surface diagnostic, while multiple direct switch breaks use canonical nested exit layers with pinned action-trace evidence."
     },
     {
       "id": "compilation/workshop-lowering",
@@ -748,7 +748,7 @@
         "fixtures:synthetic",
         "fixtures:real-world"
       ],
-      "notes": "Issue #38 exposes the bounded compiler/library/CLI surface over the released workshop-rs v0.1.16 contract. Full OPY statement/expression lowering, catalog/member/enum breadth, optimizer effects, and remaining real-project gaps stay explicit in compiler-expectations.json and the native corpus report; no temporary Workshop IR is introduced here."
+      "notes": "Issue #38 exposes the bounded compiler/library/CLI surface over the released workshop-rs v0.1.18 contract. Full OPY statement/expression lowering, catalog/member/enum breadth, optimizer effects, and remaining real-project gaps stay explicit in compiler-expectations.json and the native corpus report; no temporary Workshop IR is introduced here."
     },
     {
       "id": "compilation/end-to-end",
