@@ -23,6 +23,29 @@ pnpm install --dir compatibility/oracle
 
 The oracle is not bundled into opy-rs and is not imported by the Rust core.
 
+## Pinned feature-contract inventory
+
+[`feature-contracts.json`](feature-contracts.json) is the machine-readable
+leaf inventory for the pinned OverPy source surface. It records the exact
+registry keys, materially distinct compiler/parser/tooling branches, status
+and coverage limits, production ownership, and executable or upstream
+evidence. Its reference pin must match `conformance-manifest.json`.
+
+The normal conformance run validates the inventory without requiring the
+upstream checkout. To additionally detect registry drift against a local
+checkout of the pinned OverPy content, pass its root explicitly:
+
+```sh
+python3 compatibility/conformance.py \
+  --binary target/debug/opy-cli \
+  --semantic-binary target/debug/opy-compat \
+  --upstream-root /path/to/overpy-at-889d974
+```
+
+The upstream checkout is audit input only and is not committed to this
+repository. Inventory gaps remain visible in the report's
+`featureInventory.gaps`; they are not treated as compatibility matches.
+
 ## Fixture layout
 
 Each fixture lives in its own directory:

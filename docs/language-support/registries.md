@@ -1,8 +1,9 @@
-# OverPy audited inventory: complete source registries
+# OverPy audited registry notes
 
-This page is the leaf inventory for the named upstream registries. Every key
-in the pinned OverPy `9.7.10` files is listed below; no current `opy-rs`
-manifest or fixture is used to define the set. The upstream registry supplies
+The exact leaf inventory for the named upstream registries lives in
+[`compatibility/feature-contracts.json`](../../compatibility/feature-contracts.json).
+This page provides human-readable compatibility notes; grouped aliases or
+notes below must not be used to reconstruct the source set. The upstream registry supplies
 the full argument order, argument type/domain, defaults, return behavior and
 dispatch rule. The user-facing status is reconciled against current
 `opy-rs` evidence.
