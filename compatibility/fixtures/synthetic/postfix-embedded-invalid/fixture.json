@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/postfix-embedded-invalid",
+  "category": "synthetic",
+  "features": [
+    "syntax/postfix-assignment"
+  ],
+  "source": "source.opy",
+  "expectedStatus": "failure",
+  "provenance": {
+    "kind": "original",
+    "origin": "opy-rs Issue #59 embedded postfix assignment rejection probe",
+    "license": "AGPL-3.0-or-later",
+    "redistributable": true
+  }
+}

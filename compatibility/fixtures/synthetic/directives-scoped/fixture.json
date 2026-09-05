@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/directives-scoped",
+  "category": "preprocessing",
+  "features": ["preprocessing/rule-prefix-template", "preprocessing/macro-redeclaration", "preprocessing/translations"],
+  "source": "source.opy",
+  "expectedStatus": "success",
+  "provenance": {
+    "kind": "original",
+    "origin": "opy-rs Issue #31 minimized pinned-oracle positive probe",
+    "license": "AGPL-3.0-or-later",
+    "redistributable": true
+  }
+}

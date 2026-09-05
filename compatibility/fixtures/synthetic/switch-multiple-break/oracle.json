@@ -1,0 +1,33 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: value\n}\n\nrule (\"issue 47 switch multiple break\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        If(True);\n            Skip(Value In Array(Array(5, 0, 2, 4), Add(1, Index Of Array Value(Array(1, 2, 3), Global.value))));\n        //__label_switch_2_0__:\n        Set Global Variable(value, 1);\n        Else;\n        //__label_switch_2_1__:\n        Set Global Variable(value, 2);\n        Else;\n        //__label_switch_2_2__:\n        Set Global Variable(value, 3);\n        //__label_switch_2_default__:\n        Set Global Variable(value, 4);\n        End;\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: value\n}\n\nrule (\"issue 47 switch multiple break\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        If(True);\n            Skip(Value In Array(Array(5, 0, 2, 4), Add(1, Index Of Array Value(Array(1, 2, 3), Global.value))));\n        //__label_switch_2_0__:\n        Set Global Variable(value, 1);\n        Else;\n        //__label_switch_2_1__:\n        Set Global Variable(value, 2);\n        Else;\n        //__label_switch_2_2__:\n        Set Global Variable(value, 3);\n        //__label_switch_2_default__:\n        Set Global Variable(value, 4);\n        End;\n    }\n}\n\n",
+    "workshopSha256": "17fcd581475f835de2682061f86ccae110747783a6751e391301709b22130657"
+  },
+  "fixture": "synthetic/switch-multiple-break",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "e800e97e748ab8ed301e14064e88f115b74fd9953052f5b2108b510d084fedb3"
+      }
+    ],
+    "sha256": "c51625efd490b713cb2a8d17e188458cf24c4c142a0e62562e7477a27bd33f33",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

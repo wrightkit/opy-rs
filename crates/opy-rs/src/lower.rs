@@ -3720,7 +3720,7 @@ mod tests {
     }
 
     #[test]
-    fn issue_28_constructs_lower_to_provenance_preserving_hir() {
+    fn syntax_constructs_lower_to_provenance_preserving_hir() {
         let hir = lower_ok(
             "globalvar x\nrule \"r\":\n    @Event global\n    do:\n        x = {\"x\": 1}[\"x\"]\n    while x not in [2, 3]\n    switch x:\n        case 0x10:\n            x = 1 in [1, 2]\n        default:\n            x = 2\n    x = [value * 2 for value, index in [1, 2] if value > index]\n    x = sorted([1, 2], key=lambda value: value)\n    x = w\"wide\"\n",
         );
@@ -3771,7 +3771,7 @@ mod tests {
     }
 
     #[test]
-    fn issue_28_rejects_reference_invalid_bare_dict_and_lambda() {
+    fn syntax_rejects_reference_invalid_bare_dict_and_lambda() {
         let dict_error = compile_error(
             "globalvar x\nrule \"r\":\n    @Event global\n    x = {\"x\": 1}\n",
             4,

@@ -25,7 +25,7 @@
       "classification": "match",
       "comparison": "normalized-output",
       "evidence": [
-        "test:opy-rs::compiler::integration_tests::issue_42_oracle::catalog_enum_members_lower_and_validate"
+        "test:opy-rs::compiler::integration_tests::catalog_lowering::catalog_enum_members_lower_and_validate"
       ],
       "owner": "opy-rs#38",
       "note": "Catalog enum members emit through the canonical catalog-backed compiler slice."
@@ -53,30 +53,30 @@
       "note": "The supported global range binder has a stable normalized Workshop result."
     },
     {
-      "fixture": "synthetic/issue-29-main-file",
+      "fixture": "synthetic/project-main-file",
       "nativeStatus": "success",
       "classification": "match",
       "comparison": "normalized-output",
       "evidence": [
-        "oracle:synthetic/issue-29-main-file/oracle.json"
+        "oracle:synthetic/project-main-file/oracle.json"
       ],
       "owner": "opy-rs#38",
       "note": "mainFile scope remains covered by the bounded compiler output contract."
     },
     {
-      "fixture": "synthetic/issue-129-included-main-file",
+      "fixture": "synthetic/project-entry",
       "nativeStatus": "success",
       "classification": "match",
       "comparison": "normalized-output",
       "evidence": [
-        "oracle:synthetic/issue-129-included-main-file/oracle.json",
-        "provenance:synthetic/issue-129-included-main-file/fixture.json"
+        "oracle:synthetic/project-entry/oracle.json",
+        "provenance:synthetic/project-entry/fixture.json"
       ],
       "owner": "opy-rs#129",
       "note": "An included-file mainFile directive is accepted at the file start without changing the declared root entry point."
     },
     {
-      "fixture": "synthetic/issue-35-integration",
+      "fixture": "synthetic/compiler-vertical-slice",
       "nativeStatus": "success",
       "classification": "match",
       "comparison": "normalized-output",
@@ -92,7 +92,7 @@
       "classification": "match",
       "comparison": "normalized-output",
       "evidence": [
-        "test:opy-rs::compiler::integration_tests::issue_42_oracle::catalog_backed_receiver_calls_match_the_pinned_oracle"
+        "test:opy-rs::compiler::integration_tests::catalog_lowering::catalog_backed_receiver_calls_match_the_pinned_oracle"
       ],
       "owner": "opy-rs#38",
       "note": "The exercised catalog-backed receiver call is canonical-WIR equivalent to the pinned oracle."
@@ -111,94 +111,94 @@
       "semanticEquivalent": true
     },
     {
-      "fixture": "synthetic/issue-33-switch-break",
+      "fixture": "synthetic/switch-break",
       "nativeStatus": "success",
       "classification": "match",
       "comparison": "semantic-wir",
       "evidence": [
-        "oracle:synthetic/issue-33-switch-break/oracle.json",
-        "provenance:synthetic/issue-33-switch-break/fixture.json"
+        "oracle:synthetic/switch-break/oracle.json",
+        "provenance:synthetic/switch-break/fixture.json"
       ],
       "owner": "opy-rs#89",
       "note": "The native switch-break lowering is directly equivalent to the pinned canonical WIR.",
       "semanticEquivalent": true
     },
     {
-      "fixture": "synthetic/issue-40-structural",
+      "fixture": "synthetic/compiler-structure",
       "nativeStatus": "success",
       "classification": "match",
       "comparison": "semantic-wir",
       "semanticEquivalent": true,
       "evidence": [
-        "oracle:synthetic/issue-40-structural/oracle.json",
-        "provenance:synthetic/issue-40-structural/fixture.json",
-        "test:opy-rs::compiler::tests::issue_40_oracle_fixture_and_wir_lowering_agree"
+        "oracle:synthetic/compiler-structure/oracle.json",
+        "provenance:synthetic/compiler-structure/fixture.json",
+        "test:opy-rs::compiler::tests::compiler_structure_matches_the_pinned_oracle"
       ],
       "owner": "opy-rs#38",
       "note": "Issue #40 structural lowering is independently checked against the pinned oracle and WIR invariants."
     },
     {
-      "fixture": "synthetic/issue-46-primitives",
+      "fixture": "synthetic/primitive-lowering",
       "nativeStatus": "success",
       "classification": "match",
       "comparison": "semantic-wir",
       "evidence": [
-        "oracle:synthetic/issue-46-primitives/oracle.json",
-        "provenance:synthetic/issue-46-primitives/fixture.json"
+        "oracle:synthetic/primitive-lowering/oracle.json",
+        "provenance:synthetic/primitive-lowering/fixture.json"
       ],
       "owner": "opy-rs#89",
       "note": "The native #46 primitive lowering is directly equivalent to the pinned canonical WIR.",
       "semanticEquivalent": true
     },
     {
-      "fixture": "synthetic/issue-47-control-flow",
+      "fixture": "synthetic/control-flow-lowering",
       "nativeStatus": "success",
       "classification": "match",
       "comparison": "semantic-wir",
       "evidence": [
-        "oracle:synthetic/issue-47-control-flow/oracle.json",
-        "provenance:synthetic/issue-47-control-flow/fixture.json"
+        "oracle:synthetic/control-flow-lowering/oracle.json",
+        "provenance:synthetic/control-flow-lowering/fixture.json"
       ],
       "owner": "opy-rs#89",
       "note": "The native #47 control-flow lowering is directly equivalent to the pinned canonical WIR.",
       "semanticEquivalent": true
     },
     {
-      "fixture": "synthetic/issue-47-switch-order",
+      "fixture": "synthetic/switch-order",
       "nativeStatus": "success",
       "classification": "match",
       "comparison": "semantic-wir",
       "evidence": [
-        "oracle:synthetic/issue-47-switch-order/oracle.json",
-        "provenance:synthetic/issue-47-switch-order/fixture.json"
+        "oracle:synthetic/switch-order/oracle.json",
+        "provenance:synthetic/switch-order/fixture.json"
       ],
       "owner": "opy-rs#89",
       "note": "The native authored switch order is directly equivalent to the pinned canonical WIR.",
       "semanticEquivalent": true
     },
     {
-      "fixture": "synthetic/issue-47-switch-structured-target",
+      "fixture": "synthetic/switch-structured-target",
       "nativeStatus": "success",
       "classification": "match",
       "comparison": "semantic-wir",
       "evidence": [
-        "oracle:synthetic/issue-47-switch-structured-target/oracle.json",
-        "provenance:synthetic/issue-47-switch-structured-target/fixture.json"
+        "oracle:synthetic/switch-structured-target/oracle.json",
+        "provenance:synthetic/switch-structured-target/fixture.json"
       ],
       "owner": "opy-rs#89",
       "note": "The native structured switch targets are directly equivalent to the pinned canonical WIR.",
       "semanticEquivalent": true
     },
     {
-      "fixture": "synthetic/issue-47-do-while-shapes",
+      "fixture": "synthetic/do-while-break",
       "nativeStatus": "success",
       "classification": "match",
       "comparison": "semantic-wir",
       "semanticEquivalent": true,
       "evidence": [
-        "oracle:synthetic/issue-47-do-while-shapes/oracle.json",
-        "provenance:synthetic/issue-47-do-while-shapes/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_47_oracle::issue_47_do_while_break_shapes_match_the_pinned_oracle"
+        "oracle:synthetic/do-while-break/oracle.json",
+        "provenance:synthetic/do-while-break/fixture.json",
+        "test:opy-rs::compiler::integration_tests::control_flow::do_while_break_shapes_match_the_pinned_oracle"
       ],
       "owner": "opy-rs#38",
       "note": "Supported do-while break shapes are independently checked through canonical WIR equivalence."
@@ -218,12 +218,12 @@
       "note": "Settings emission is covered by the compiler's Workshop-owned structural comparison."
     },
     {
-      "fixture": "synthetic/issue-47-do-while-invalid-placement",
+      "fixture": "synthetic/do-while-invalid",
       "nativeStatus": "failure",
       "classification": "match",
       "comparison": "diagnostic-code",
       "evidence": [
-        "test:opy-rs::compiler::integration_tests::issue_47_oracle::issue_47_invalid_do_while_placement_is_source_attributed"
+        "test:opy-rs::compiler::integration_tests::control_flow::invalid_do_while_placement_is_source_attributed"
       ],
       "owner": "opy-rs#38",
       "note": "Invalid do-while placement is a stable source-attributed compiler failure.",
@@ -231,42 +231,42 @@
       "diagnosticCode": "do-while-placement"
     },
     {
-      "fixture": "synthetic/issue-46-unsupported",
+      "fixture": "synthetic/dictionary-lookup",
       "nativeStatus": "success",
       "classification": "match",
       "comparison": "semantic-wir",
       "evidence": [
-        "oracle:synthetic/issue-46-unsupported/oracle.json",
-        "provenance:synthetic/issue-46-unsupported/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_46_oracle::issue_46_literal_dict_lookup_matches_the_pinned_oracle"
+        "oracle:synthetic/dictionary-lookup/oracle.json",
+        "provenance:synthetic/dictionary-lookup/fixture.json",
+        "test:opy-rs::compiler::integration_tests::dictionary_lowering::literal_dictionary_lookup_matches_the_pinned_oracle"
       ],
       "owner": "opy-rs#145",
       "note": "Literal dictionary lookups with literal keys are folded to their selected value, or to Null on a literal miss, matching the pinned oracle; dictionary-indexed assignment targets remain outside this bounded lowering path.",
       "semanticEquivalent": true
     },
     {
-      "fixture": "synthetic/issue-59-postfix-assignment",
+      "fixture": "synthetic/postfix-assignment",
       "nativeStatus": "success",
       "classification": "match",
       "comparison": "semantic-wir",
       "evidence": [
-        "oracle:synthetic/issue-59-postfix-assignment/oracle.json",
-        "provenance:synthetic/issue-59-postfix-assignment/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_59_oracle::issue_59_postfix_assignments_match_the_pinned_oracle"
+        "oracle:synthetic/postfix-assignment/oracle.json",
+        "provenance:synthetic/postfix-assignment/fixture.json",
+        "test:opy-rs::compiler::integration_tests::postfix_assignments::postfix_assignments_match_the_pinned_oracle"
       ],
       "owner": "opy-rs#59",
       "note": "Postfix ++/-- assignments lower to canonical Add/Subtract modifications for global, player, and single-level indexed variables.",
       "semanticEquivalent": true
     },
     {
-      "fixture": "synthetic/issue-59-postfix-negative",
+      "fixture": "synthetic/postfix-prefix-invalid",
       "nativeStatus": "failure",
       "classification": "match",
       "comparison": "diagnostic-code",
       "evidence": [
-        "oracle:synthetic/issue-59-postfix-negative/oracle.json",
-        "provenance:synthetic/issue-59-postfix-negative/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_59_oracle::issue_59_rejected_prefix_increment_form_has_stable_source_diagnostic"
+        "oracle:synthetic/postfix-prefix-invalid/oracle.json",
+        "provenance:synthetic/postfix-prefix-invalid/fixture.json",
+        "test:opy-rs::compiler::integration_tests::postfix_assignments::rejected_prefix_increment_form_has_stable_source_diagnostic"
       ],
       "owner": "opy-rs#59",
       "note": "The pinned oracle rejects prefix ++ and native reports the stable source-attributed frontend diagnostic; prefix --x remains valid consecutive unary-minus syntax.",
@@ -274,14 +274,14 @@
       "diagnosticCode": "parse-error"
     },
     {
-      "fixture": "synthetic/issue-59-embedded-postfix-negative",
+      "fixture": "synthetic/postfix-embedded-invalid",
       "nativeStatus": "failure",
       "classification": "match",
       "comparison": "diagnostic-code",
       "evidence": [
-        "oracle:synthetic/issue-59-embedded-postfix-negative/oracle.json",
-        "provenance:synthetic/issue-59-embedded-postfix-negative/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_59_oracle::issue_59_rejected_embedded_postfix_form_has_stable_source_diagnostic"
+        "oracle:synthetic/postfix-embedded-invalid/oracle.json",
+        "provenance:synthetic/postfix-embedded-invalid/fixture.json",
+        "test:opy-rs::compiler::integration_tests::postfix_assignments::rejected_embedded_postfix_form_has_stable_source_diagnostic"
       ],
       "owner": "opy-rs#59",
       "note": "The pinned oracle independently rejects the embedded postfix form and native reports the stable source-attributed frontend diagnostic.",
@@ -289,28 +289,28 @@
       "diagnosticCode": "parse-error"
     },
     {
-      "fixture": "synthetic/issue-65-player-range",
+      "fixture": "synthetic/range-player-variable",
       "nativeStatus": "success",
       "classification": "match",
       "comparison": "semantic-wir",
       "evidence": [
-        "oracle:synthetic/issue-65-player-range/oracle.json",
-        "provenance:synthetic/issue-65-player-range/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_65_player_variable::player_variable_range_binder_matches_the_pinned_oracle"
+        "oracle:synthetic/range-player-variable/oracle.json",
+        "provenance:synthetic/range-player-variable/fixture.json",
+        "test:opy-rs::compiler::integration_tests::range_bindings::player_variable_range_binder_matches_the_pinned_oracle"
       ],
       "owner": "opy-rs#65",
       "note": "The pinned hostPlayer.I range binder lowers to the existing canonical For Player Variable WIR contract and is directly equivalent to the oracle.",
       "semanticEquivalent": true
     },
     {
-      "fixture": "synthetic/issue-65-invalid-binder",
+      "fixture": "synthetic/range-invalid-binder",
       "nativeStatus": "failure",
       "classification": "match",
       "comparison": "diagnostic-code",
       "evidence": [
-        "oracle:synthetic/issue-65-invalid-binder/oracle.json",
-        "provenance:synthetic/issue-65-invalid-binder/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_162_semantic::semantic_boundary_errors_are_reported_before_lowering"
+        "oracle:synthetic/range-invalid-binder/oracle.json",
+        "provenance:synthetic/range-invalid-binder/fixture.json",
+        "test:opy-rs::compiler::integration_tests::semantic_diagnostics::semantic_boundary_errors_are_reported_before_lowering"
       ],
       "owner": "opy-rs#162",
       "note": "The pinned oracle and native source semantic boundary reject a non-variable range binder with a source-attributed diagnostic before canonical lowering.",
@@ -318,70 +318,70 @@
       "diagnosticCode": "invalid-range-binder"
     },
     {
-      "fixture": "synthetic/issue-113-is-dummy",
+      "fixture": "synthetic/member-values",
       "nativeStatus": "success",
       "classification": "match",
       "comparison": "semantic-wir",
       "evidence": [
-        "oracle:synthetic/issue-113-is-dummy/oracle.json",
-        "provenance:synthetic/issue-113-is-dummy/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_113_is_dummy::is_dummy_member_lowers_to_the_catalog_value_in_canonical_wir"
+        "oracle:synthetic/member-values/oracle.json",
+        "provenance:synthetic/member-values/fixture.json",
+        "test:opy-rs::compiler::integration_tests::member_values::is_dummy_member_lowers_to_the_catalog_value_in_canonical_wir"
       ],
       "owner": "opy-rs#113",
       "note": "The catalog-backed eventPlayer.isDummy() predicate lowers to a canonical WIR value call equivalent to the pinned oracle.",
       "semanticEquivalent": true
     },
     {
-      "fixture": "synthetic/issue-114-hud-subheader",
+      "fixture": "synthetic/hud-subheader",
       "nativeStatus": "success",
       "classification": "match",
       "comparison": "semantic-wir",
       "evidence": [
-        "oracle:synthetic/issue-114-hud-subheader/oracle.json",
-        "provenance:synthetic/issue-114-hud-subheader/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_114_hud_subheader::hud_subheader_matches_the_pinned_canonical_wir"
+        "oracle:synthetic/hud-subheader/oracle.json",
+        "provenance:synthetic/hud-subheader/fixture.json",
+        "test:opy-rs::compiler::integration_tests::hud::hud_subheader_matches_the_pinned_canonical_wir"
       ],
       "owner": "opy-rs#114",
       "note": "The shared hudSubheader action lowers to canonical Create HUD Text WIR with the pinned argument order and visibility semantics.",
       "semanticEquivalent": true
     },
     {
-      "fixture": "synthetic/issue-130-horizontal-facing-angle",
+      "fixture": "synthetic/member-angle",
       "nativeStatus": "success",
       "classification": "match",
       "comparison": "semantic-wir",
       "evidence": [
-        "oracle:synthetic/issue-130-horizontal-facing-angle/oracle.json",
-        "provenance:synthetic/issue-130-horizontal-facing-angle/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_130_horizontal_facing_angle::horizontal_facing_angle_member_matches_the_pinned_canonical_wir"
+        "oracle:synthetic/member-angle/oracle.json",
+        "provenance:synthetic/member-angle/fixture.json",
+        "test:opy-rs::compiler::integration_tests::member_angles::horizontal_facing_angle_member_matches_the_pinned_canonical_wir"
       ],
       "owner": "opy-rs#130",
       "note": "The catalog-backed eventPlayer.getHorizontalFacingAngle() member value lowers to canonical WIR equivalent to the pinned oracle.",
       "semanticEquivalent": true
     },
     {
-      "fixture": "synthetic/issue-131-spec-visibility",
+      "fixture": "synthetic/hud-visibility",
       "nativeStatus": "success",
       "classification": "match",
       "comparison": "semantic-wir",
       "evidence": [
-        "oracle:synthetic/issue-131-spec-visibility/oracle.json",
-        "provenance:synthetic/issue-131-spec-visibility/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_131_spec_visibility::never_maps_to_visible_never_in_canonical_wir"
+        "oracle:synthetic/hud-visibility/oracle.json",
+        "provenance:synthetic/hud-visibility/fixture.json",
+        "test:opy-rs::compiler::integration_tests::hud_visibility::never_maps_to_visible_never_in_canonical_wir"
       ],
       "owner": "opy-rs#131",
       "note": "The OPY SpecVisibility.NEVER spelling lowers to the canonical VISIBLE_NEVER enum member and is equivalent to the pinned oracle WIR; unrelated SpecVisibility members remain unchanged.",
       "semanticEquivalent": true
     },
     {
-      "fixture": "synthetic/issue-47-unsupported",
+      "fixture": "synthetic/switch-break-unsupported",
       "nativeStatus": "failure",
       "classification": "unsupported",
       "comparison": "diagnostic-code",
       "evidence": [
-        "oracle:synthetic/issue-47-unsupported/oracle.json",
-        "provenance:synthetic/issue-47-unsupported/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_47_oracle::issue_47_nested_switch_break_is_source_attributed_when_not_representable"
+        "oracle:synthetic/switch-break-unsupported/oracle.json",
+        "provenance:synthetic/switch-break-unsupported/fixture.json",
+        "test:opy-rs::compiler::integration_tests::control_flow::nested_switch_break_is_source_attributed_when_not_representable"
       ],
       "owner": "workshop-rs#123",
       "note": "The released workshop-rs v0.1.18 contract provides native Break, Skip, and Skip If calls, but this nested conditional switch-break shape still has no lossless OPY-owned lowering and remains explicitly rejected.",
@@ -389,17 +389,17 @@
       "diagnosticCode": "unsupported-integration-surface"
     },
     {
-      "fixture": "synthetic/issue-47-switch-multiple-break",
+      "fixture": "synthetic/switch-multiple-break",
       "nativeStatus": "success",
       "classification": "match",
       "comparison": "semantic-wir",
       "semanticEquivalent": true,
       "evidence": [
-        "oracle:synthetic/issue-47-switch-multiple-break/oracle.json",
-        "oracle:synthetic/issue-47-switch-multiple-break/semantic-oracle.json",
-        "provenance:synthetic/issue-47-switch-multiple-break/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_47_oracle::issue_47_multiple_switch_breaks_match_independent_semantic_oracle",
-        "test:opy-rs::compiler::integration_tests::issue_47_oracle::pinned_overpy_switch_action_trace"
+        "oracle:synthetic/switch-multiple-break/oracle.json",
+        "oracle:synthetic/switch-multiple-break/semantic-oracle.json",
+        "provenance:synthetic/switch-multiple-break/fixture.json",
+        "test:opy-rs::compiler::integration_tests::control_flow::multiple_switch_breaks_match_independent_semantic_oracle",
+        "test:opy-rs::compiler::integration_tests::control_flow::pinned_overpy_switch_action_trace"
       ],
       "owner": "opy-rs#172",
       "note": "The pinned OverPy snapshot is preserved as source evidence; its successive Else switch encoding is normalized into the canonical Workshop semantic oracle used by the compatibility gate. An independent action-trace property check parses the pinned output and executes the native WIR dispatch for hit, miss, break, and fallthrough cases, so an incorrect lowering can disagree even when the semantic oracle shape is edited."
@@ -611,7 +611,7 @@
       "evidence": [
         "oracle:synthetic/chase-keywords/oracle.json",
         "provenance:synthetic/chase-keywords/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_145_lowering::contextual_chase_lowering_matches_the_pinned_oracle"
+        "test:opy-rs::compiler::integration_tests::catalog_lowering::catalog_backed_contextual_chase_calls_match_the_pinned_oracle"
       ],
       "owner": "opy-rs#157",
       "note": "The complete chase keyword source now compiles through the audited builtin surface, while canonical WIR equivalence remains an explicit follow-up for the native compiler's variable presentation and constant-folding differences.",
@@ -658,14 +658,14 @@
       "diagnosticCode": "parse-error"
     },
     {
-      "fixture": "synthetic/issue-28-invalid-syntax",
+      "fixture": "synthetic/syntax-invalid",
       "nativeStatus": "failure",
       "classification": "match",
       "comparison": "diagnostic-code",
       "evidence": [
-        "oracle:synthetic/issue-28-invalid-syntax/oracle.json",
-        "provenance:synthetic/issue-28-invalid-syntax/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_93_frontend::frontend_diagnostics_are_public_and_source_attributed"
+        "oracle:synthetic/syntax-invalid/oracle.json",
+        "provenance:synthetic/syntax-invalid/fixture.json",
+        "test:opy-rs::compiler::integration_tests::frontend_diagnostics::frontend_diagnostics_are_public_and_source_attributed"
       ],
       "owner": "opy-rs#93",
       "note": "The public compiler reports the pinned malformed syntax as a source-attributed parse diagnostic.",
@@ -673,40 +673,40 @@
       "diagnosticCode": "parse-error"
     },
     {
-      "fixture": "synthetic/issue-28-string-modifiers",
+      "fixture": "synthetic/string-modifiers",
       "nativeStatus": "success",
       "classification": "match",
       "comparison": "semantic-wir",
       "evidence": [
-        "oracle:synthetic/issue-28-string-modifiers/oracle.json",
-        "provenance:synthetic/issue-28-string-modifiers/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_145_lowering::string_modifier_lowering_matches_the_pinned_oracle"
+        "oracle:synthetic/string-modifiers/oracle.json",
+        "provenance:synthetic/string-modifiers/fixture.json",
+        "test:opy-rs::compiler::integration_tests::string_modifiers::string_modifier_lowering_matches_the_pinned_oracle"
       ],
       "owner": "opy-rs#145",
       "note": "The compiler lowers the evidenced f/w/b/c literal string modifiers to canonical Custom String values; l/t remain translation-carried source constructs.",
       "semanticEquivalent": true
     },
     {
-      "fixture": "synthetic/issue-28-syntax",
+      "fixture": "synthetic/syntax-surface",
       "nativeStatus": "success",
       "classification": "known-gap",
       "comparison": "compiler-contract",
       "evidence": [
-        "oracle:synthetic/issue-28-syntax/oracle.json",
-        "provenance:synthetic/issue-28-syntax/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_145_lowering::broad_supported_syntax_lowering_reaches_canonical_wir"
+        "oracle:synthetic/syntax-surface/oracle.json",
+        "provenance:synthetic/syntax-surface/fixture.json",
+        "test:opy-rs::compiler::integration_tests::syntax_lowering::broad_supported_syntax_lowering_reaches_canonical_wir"
       ],
       "owner": "opy-rs#157",
-      "note": "The supported issue-28 syntax slice lowers through the native canonical-WIR contract; the pinned oracle snapshot currently cannot be reparsed by the released Workshop parser because of its uppercase hexadecimal spelling, so full semantic comparison remains a declared compiler boundary with follow-up under open opy-rs#157 rather than an unowned OPY lowering gap."
+      "note": "The supported syntax slice lowers through the native canonical-WIR contract; the pinned oracle snapshot currently cannot be reparsed by the released Workshop parser because of its uppercase hexadecimal spelling, so full semantic comparison remains a declared compiler boundary with follow-up under open opy-rs#157 rather than an unowned OPY lowering gap."
     },
     {
-      "fixture": "synthetic/issue-29-directives",
+      "fixture": "synthetic/directives",
       "nativeStatus": "failure",
       "classification": "known-gap",
       "comparison": "diagnostic-code",
       "evidence": [
-        "oracle:synthetic/issue-29-directives/oracle.json",
-        "provenance:synthetic/issue-29-directives/fixture.json"
+        "oracle:synthetic/directives/oracle.json",
+        "provenance:synthetic/directives/fixture.json"
       ],
       "owner": "opy-rs#157",
       "note": "Optimizer/backend directive execution remains outside the declared compiler baseline.",
@@ -714,14 +714,14 @@
       "diagnosticCode": "backend-directive-unsupported"
     },
     {
-      "fixture": "synthetic/issue-29-invalid",
+      "fixture": "synthetic/duplicate-rule-diagnostic",
       "nativeStatus": "failure",
       "classification": "match",
       "comparison": "diagnostic-code",
       "evidence": [
-        "oracle:synthetic/issue-29-invalid/oracle.json",
-        "provenance:synthetic/issue-29-invalid/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_167_source::issue_29_reaches_the_duplicate_rule_name_frontier"
+        "oracle:synthetic/duplicate-rule-diagnostic/oracle.json",
+        "provenance:synthetic/duplicate-rule-diagnostic/fixture.json",
+        "test:opy-rs::compiler::integration_tests::diagnostic_frontiers::duplicate_rule_name_reaches_the_source_frontier"
       ],
       "owner": "opy-rs#167",
       "note": "An ordinary rule @Name annotation reaches the pinned duplicate-rule-name semantic frontier with source attribution.",
@@ -729,14 +729,14 @@
       "diagnosticCode": "duplicate-rule-name"
     },
     {
-      "fixture": "synthetic/issue-31-negative",
+      "fixture": "synthetic/translations-invalid",
       "nativeStatus": "failure",
       "classification": "match",
       "comparison": "diagnostic-code",
       "evidence": [
-        "oracle:synthetic/issue-31-negative/oracle.json",
-        "provenance:synthetic/issue-31-negative/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_93_frontend::frontend_diagnostics_are_public_and_source_attributed"
+        "oracle:synthetic/translations-invalid/oracle.json",
+        "provenance:synthetic/translations-invalid/fixture.json",
+        "test:opy-rs::compiler::integration_tests::frontend_diagnostics::frontend_diagnostics_are_public_and_source_attributed"
       ],
       "owner": "opy-rs#93",
       "note": "The public compiler reports the invalid translation code as a source-attributed frontend diagnostic.",
@@ -744,55 +744,55 @@
       "diagnosticCode": "translations-invalid"
     },
     {
-      "fixture": "synthetic/issue-31-nested-scope",
+      "fixture": "synthetic/include-scope",
       "nativeStatus": "success",
       "classification": "known-gap",
       "comparison": "semantic-wir",
       "evidence": [
-        "oracle:synthetic/issue-31-nested-scope/oracle.json",
-        "provenance:synthetic/issue-31-nested-scope/fixture.json"
+        "oracle:synthetic/include-scope/oracle.json",
+        "provenance:synthetic/include-scope/fixture.json"
       ],
       "owner": "opy-rs#157",
       "note": "Optimizer scope is represented in source state, but optimizer execution is outside the compiler baseline.",
       "semanticEquivalent": false
     },
     {
-      "fixture": "synthetic/issue-31-positive",
+      "fixture": "synthetic/directives-scoped",
       "nativeStatus": "success",
       "classification": "match",
       "comparison": "semantic-wir",
       "evidence": [
-        "oracle:synthetic/issue-31-positive/oracle.json",
-        "provenance:synthetic/issue-31-positive/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_145_lowering::translated_implicit_subroutine_fixture_matches_the_pinned_oracle"
+        "oracle:synthetic/directives-scoped/oracle.json",
+        "provenance:synthetic/directives-scoped/fixture.json",
+        "test:opy-rs::compiler::integration_tests::directive_lowering::translated_implicit_subroutine_fixture_matches_the_pinned_oracle"
       ],
       "owner": "opy-rs#145",
       "note": "The compiler materializes the implicit def subroutine declaration and the translation helper initialization required by the pinned canonical WIR.",
       "semanticEquivalent": true
     },
     {
-      "fixture": "synthetic/issue-60-nested-index",
+      "fixture": "synthetic/indexed-assignment-nested",
       "nativeStatus": "success",
       "classification": "match",
       "comparison": "semantic-wir",
       "evidence": [
-        "oracle:synthetic/issue-60-nested-index/oracle.json",
-        "provenance:synthetic/issue-60-nested-index/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_145_lowering::nested_indexed_assignments_match_the_pinned_oracle"
+        "oracle:synthetic/indexed-assignment-nested/oracle.json",
+        "provenance:synthetic/indexed-assignment-nested/fixture.json",
+        "test:opy-rs::compiler::integration_tests::indexed_assignments::nested_indexed_assignments_match_the_pinned_oracle"
       ],
       "owner": "opy-rs#145",
       "note": "Nested indexed assignments, including compound modification and three-level replacement, lower through canonical array slices and match the pinned canonical WIR.",
       "semanticEquivalent": true
     },
     {
-      "fixture": "synthetic/issue-60-4d-negative",
+      "fixture": "synthetic/indexed-assignment-4d-invalid",
       "nativeStatus": "failure",
       "classification": "match",
       "comparison": "diagnostic-code",
       "evidence": [
-        "oracle:synthetic/issue-60-4d-negative/oracle.json",
-        "provenance:synthetic/issue-60-4d-negative/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_162_semantic::semantic_boundary_errors_are_reported_before_lowering"
+        "oracle:synthetic/indexed-assignment-4d-invalid/oracle.json",
+        "provenance:synthetic/indexed-assignment-4d-invalid/fixture.json",
+        "test:opy-rs::compiler::integration_tests::semantic_diagnostics::semantic_boundary_errors_are_reported_before_lowering"
       ],
       "owner": "opy-rs#162",
       "note": "The pinned OverPy implementation rejects four-dimensional indexed assignments; native source semantics now preserves that boundary before canonical lowering.",
@@ -800,27 +800,27 @@
       "diagnosticCode": "four-dimensional-assignment"
     },
     {
-      "fixture": "synthetic/issue-33-f-string",
+      "fixture": "synthetic/strings-and-lambda",
       "nativeStatus": "success",
       "classification": "match",
       "comparison": "semantic-wir",
       "evidence": [
-        "oracle:synthetic/issue-33-f-string/oracle.json",
-        "provenance:synthetic/issue-33-f-string/fixture.json"
+        "oracle:synthetic/strings-and-lambda/oracle.json",
+        "provenance:synthetic/strings-and-lambda/fixture.json"
       ],
       "owner": "opy-rs#103",
       "note": "The demonstrated sorted-array key lambda lowers to canonical Sorted Array WIR and matches the pinned oracle.",
       "semanticEquivalent": true
     },
     {
-      "fixture": "synthetic/issue-33-lambda-negative",
+      "fixture": "synthetic/lambda-invalid",
       "nativeStatus": "failure",
       "classification": "match",
       "comparison": "diagnostic-code",
       "evidence": [
-        "oracle:synthetic/issue-33-lambda-negative/oracle.json",
-        "provenance:synthetic/issue-33-lambda-negative/fixture.json",
-        "test:opy-rs::compiler::integration_tests::issue_93_frontend::frontend_diagnostics_are_public_and_source_attributed"
+        "oracle:synthetic/lambda-invalid/oracle.json",
+        "provenance:synthetic/lambda-invalid/fixture.json",
+        "test:opy-rs::compiler::integration_tests::frontend_diagnostics::frontend_diagnostics_are_public_and_source_attributed"
       ],
       "owner": "opy-rs#93",
       "note": "The public compiler reports standalone lambda use as a source-attributed lambda-context diagnostic.",

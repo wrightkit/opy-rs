@@ -1,4 +1,4 @@
-//! Integration tests for the `opy-cli` binary (issue #7): exit-code contract
+//! Integration tests for the `opy-cli` binary: exit-code contract
 //! (0 clean / 1 diagnostics / 2 usage and I/O errors), stderr diagnostics,
 //! and the JSON surfaces. Uses `std::process::Command` on the built binary
 //! via `CARGO_BIN_EXE_opy-cli` — no extra test dependencies.
@@ -19,9 +19,9 @@ const BASIC_RULE: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../compatibility/fixtures/synthetic/basic-rule/source.opy"
 );
-const ISSUE_46_LITERAL_DICT_LOOKUP: &str = concat!(
+const LITERAL_DICT_LOOKUP_FIXTURE: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../compatibility/fixtures/synthetic/issue-46-unsupported/source.opy"
+    "/../../compatibility/fixtures/synthetic/dictionary-lookup/source.opy"
 );
 fn run(args: &[&str]) -> std::process::Output {
     run_with_env(args, &[])
@@ -150,7 +150,7 @@ fn compile_missing_file_is_an_io_usage_error() {
 
 #[test]
 fn compile_json_reports_literal_dict_lookup_success() {
-    let output = run(&["compile", "--format", "json", ISSUE_46_LITERAL_DICT_LOOKUP]);
+    let output = run(&["compile", "--format", "json", LITERAL_DICT_LOOKUP_FIXTURE]);
     assert_eq!(output.status.code(), Some(0));
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("compile JSON");
     assert_eq!(json["compile"]["status"], "success");

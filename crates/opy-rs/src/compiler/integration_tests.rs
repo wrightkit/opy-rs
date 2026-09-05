@@ -1,54 +1,62 @@
-#[path = "tests/issue_100_conditional.rs"]
-mod issue_100_conditional;
-#[path = "tests/issue_101_implicit_string.rs"]
-mod issue_101_implicit_string;
-#[path = "tests/issue_102_numeric_enum.rs"]
-mod issue_102_numeric_enum;
-#[path = "tests/issue_103_higher_order.rs"]
-mod issue_103_higher_order;
-#[path = "tests/issue_113_is_dummy.rs"]
-mod issue_113_is_dummy;
-#[path = "tests/issue_114_hud_subheader.rs"]
-mod issue_114_hud_subheader;
-#[path = "tests/issue_115_string_continuation.rs"]
-mod issue_115_string_continuation;
-#[path = "tests/issue_129_included_main_file.rs"]
-mod issue_129_included_main_file;
-#[path = "tests/issue_130_horizontal_facing_angle.rs"]
-mod issue_130_horizontal_facing_angle;
-#[path = "tests/issue_131_spec_visibility.rs"]
-mod issue_131_spec_visibility;
-#[path = "tests/issue_142_preprocessing.rs"]
-mod issue_142_preprocessing;
-#[path = "tests/issue_144_builtin_surface.rs"]
-mod issue_144_builtin_surface;
-#[path = "tests/issue_145_lowering.rs"]
-mod issue_145_lowering;
-#[path = "tests/issue_161_preprocessing.rs"]
-mod issue_161_preprocessing;
-#[path = "tests/issue_162_semantic.rs"]
-mod issue_162_semantic;
-#[path = "tests/issue_167_source.rs"]
-mod issue_167_source;
-#[path = "tests/issue_188_settings.rs"]
-mod issue_188_settings;
-#[path = "tests/issue_42_oracle.rs"]
-mod issue_42_oracle;
-#[path = "tests/issue_46_oracle.rs"]
-mod issue_46_oracle;
-#[path = "tests/issue_47_oracle.rs"]
-mod issue_47_oracle;
-#[path = "tests/issue_59_oracle.rs"]
-mod issue_59_oracle;
-#[path = "tests/issue_65_player_variable.rs"]
-mod issue_65_player_variable;
-#[path = "tests/issue_85_preprocessing.rs"]
-mod issue_85_preprocessing;
-#[path = "tests/issue_89_oracle.rs"]
-mod issue_89_oracle;
-#[path = "tests/issue_93_frontend.rs"]
-mod issue_93_frontend;
-#[path = "tests/issue_94_semantics.rs"]
-mod issue_94_semantics;
-#[path = "tests/issue_99_numeric_range.rs"]
-mod issue_99_numeric_range;
+#[path = "tests/builtins.rs"]
+mod builtins;
+#[path = "tests/catalog_lowering.rs"]
+mod catalog_lowering;
+#[path = "tests/compiler_semantics.rs"]
+mod compiler_semantics;
+#[path = "tests/conditionals.rs"]
+mod conditionals;
+#[path = "tests/control_flow.rs"]
+mod control_flow;
+#[path = "tests/diagnostic_frontiers.rs"]
+mod diagnostic_frontiers;
+#[path = "tests/dictionary_lowering.rs"]
+mod dictionary_lowering;
+#[path = "tests/directive_lowering.rs"]
+mod directive_lowering;
+#[path = "tests/enum_members.rs"]
+mod enum_members;
+#[path = "tests/frontend_diagnostics.rs"]
+mod frontend_diagnostics;
+#[path = "tests/higher_order.rs"]
+mod higher_order;
+#[path = "tests/hud.rs"]
+mod hud;
+#[path = "tests/hud_visibility.rs"]
+mod hud_visibility;
+#[path = "tests/indexed_assignments.rs"]
+mod indexed_assignments;
+#[path = "tests/macro_preprocessing.rs"]
+mod macro_preprocessing;
+#[path = "tests/member_angles.rs"]
+mod member_angles;
+#[path = "tests/member_values.rs"]
+mod member_values;
+#[path = "tests/numeric_settings.rs"]
+mod numeric_settings;
+#[path = "tests/postfix_assignments.rs"]
+mod postfix_assignments;
+#[path = "tests/preprocessing.rs"]
+mod preprocessing;
+#[path = "tests/primitive_lowering.rs"]
+mod primitive_lowering;
+#[path = "tests/project_loading.rs"]
+mod project_loading;
+#[path = "tests/project_preprocessing.rs"]
+mod project_preprocessing;
+#[path = "tests/range_bindings.rs"]
+mod range_bindings;
+#[path = "tests/semantic_diagnostics.rs"]
+mod semantic_diagnostics;
+#[path = "tests/settings_expressions.rs"]
+mod settings_expressions;
+#[path = "tests/string_continuations.rs"]
+mod string_continuations;
+#[path = "tests/string_literals.rs"]
+mod string_literals;
+#[path = "tests/string_modifiers.rs"]
+mod string_modifiers;
+#[path = "tests/syntax_lowering.rs"]
+mod syntax_lowering;
+#[path = "tests/variable_initializers.rs"]
+mod variable_initializers;

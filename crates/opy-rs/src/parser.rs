@@ -2520,7 +2520,7 @@ mod tests {
     }
 
     #[test]
-    fn parses_issue_141_statement_surface() {
+    fn parses_source_statement_surface() {
         let program = parse_ok(concat!(
             "globalvar value\n",
             "rule \"r\":\n",
@@ -2580,7 +2580,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_invalid_issue_141_statement_forms() {
+    fn rejects_invalid_source_statement_forms() {
         for source in [
             "rule \"r\":\n    @Event global\n    del value\n",
             "rule \"r\":\n    @Event global\n    goto\n",
@@ -2597,7 +2597,7 @@ mod tests {
     }
 
     #[test]
-    fn parses_issue_28_constructs() {
+    fn parses_syntax_constructs() {
         let program = parse_ok(
             "globalvar x\nrule \"r\":\n    @Event global\n    switch x:\n        case 0x10:\n            x = 1 in [1, 2]\n        default:\n            do:\n                x = {\"x\": 1}[\"x\"]\n            while x not in [2, 3]\n    x = [value * 2 for value, index in [1, 2] if value > index]\n    x = sorted([1, 2], key=lambda value: value)\n    x = w\"wide\"\n",
         );

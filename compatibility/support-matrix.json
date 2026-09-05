@@ -59,9 +59,9 @@
       "evidence": [
         "fixtures:synthetic/expressions-values",
         "fixtures:synthetic/receiver-calls",
-        "fixtures:synthetic/issue-59-postfix-assignment",
-        "fixtures:synthetic/issue-59-postfix-negative",
-        "fixtures:synthetic/issue-59-embedded-postfix-negative",
+        "fixtures:synthetic/postfix-assignment",
+        "fixtures:synthetic/postfix-prefix-invalid",
+        "fixtures:synthetic/postfix-embedded-invalid",
         "fixtures:real-world/overpy-cake",
         "upstream:src/tests/operators.opy",
         "upstream:src/tests/arrays.opy",
@@ -94,7 +94,7 @@
         "fixtures:synthetic/control-flow",
         "fixtures:synthetic/for-range-agentlab",
         "fixtures:synthetic/chase-condition-agentlab",
-        "fixtures:synthetic/issue-59-postfix-assignment",
+        "fixtures:synthetic/postfix-assignment",
         "upstream:src/tests/loops.opy",
         "upstream:src/tests/conditions.opy"
       ],
@@ -105,7 +105,7 @@
       "name": "switch/case/default",
       "category": "syntax",
       "state": "source-supported",
-      "evidence": ["fixtures:synthetic/issue-28-syntax", "fixtures:synthetic/issue-33-switch-break", "upstream:src/tests/switches.opy"],
+      "evidence": ["fixtures:synthetic/syntax-surface", "fixtures:synthetic/switch-break", "upstream:src/tests/switches.opy"],
       "notes": "Issue #28/#33: switch/case/default preserve source-order arms and fall through into subsequent arms; explicit break exits the innermost switch or loop. Workshop lowering remains out of scope."
     },
     {
@@ -113,7 +113,7 @@
       "name": "break statements in switch and loops",
       "category": "syntax",
       "state": "source-supported",
-      "evidence": ["fixtures:synthetic/issue-33-switch-break", "upstream:src/tests/switches.opy", "upstream:src/tests/loops.opy"],
+      "evidence": ["fixtures:synthetic/switch-break", "upstream:src/tests/switches.opy", "upstream:src/tests/loops.opy"],
       "notes": "Issue #33: break is a real HIR statement, validates its enclosing switch/loop context, and is retained without implicit arm exits."
     },
     {
@@ -121,7 +121,7 @@
       "name": "del, continue, goto, labels, and dynamic loc+ targets",
       "category": "syntax",
       "state": "source-supported",
-      "evidence": ["tests:crates/opy-rs/tests/issue_141_syntax.rs", "upstream:src/tests/loops.opy", "upstream:src/tests/gotos.opy"],
+      "evidence": ["tests:crates/opy-rs/tests/source_syntax.rs", "upstream:src/tests/loops.opy", "upstream:src/tests/gotos.opy"],
       "notes": "Issue #141: audited statements lower to source HIR nodes with spans; continue context and malformed targets produce structured diagnostics. Canonical WIR lowering remains an explicit integration boundary."
     },
     {
@@ -129,7 +129,7 @@
       "name": "min= and max= modification forms",
       "category": "syntax",
       "state": "source-supported",
-      "evidence": ["tests:crates/opy-rs/tests/issue_141_syntax.rs", "upstream:src/tests/operators.opy"],
+      "evidence": ["tests:crates/opy-rs/tests/source_syntax.rs", "upstream:src/tests/operators.opy"],
       "notes": "Issue #141: min=/max= are retained as source-semantic binary modifications with provenance; Workshop support is not claimed."
     },
     {
@@ -137,7 +137,7 @@
       "name": "do … while",
       "category": "syntax",
       "state": "source-supported",
-      "evidence": ["fixtures:synthetic/issue-28-syntax", "upstream:src/tests/loops.opy"],
+      "evidence": ["fixtures:synthetic/syntax-surface", "upstream:src/tests/loops.opy"],
       "notes": "Issue #28: the body executes before the condition and the condition is retained as an OPY HIR expression; malformed/truncated conditions remain structured parse errors."
     },
     {
@@ -145,7 +145,7 @@
       "name": "Hexadecimal numeric literals (0x/0X)",
       "category": "syntax",
       "state": "source-supported",
-      "evidence": ["fixtures:synthetic/issue-28-syntax", "upstream:src/tests/operators.opy"],
+      "evidence": ["fixtures:synthetic/syntax-surface", "upstream:src/tests/operators.opy"],
       "notes": "Issue #28: hexadecimal source spelling is preserved in the numeric HIR text while the numeric value is decoded independently."
     },
     {
@@ -153,7 +153,7 @@
       "name": "Expression-level in/not in membership",
       "category": "syntax",
       "state": "source-supported",
-      "evidence": ["fixtures:synthetic/issue-28-syntax", "upstream:src/tests/operators.opy"],
+      "evidence": ["fixtures:synthetic/syntax-surface", "upstream:src/tests/operators.opy"],
       "notes": "Issue #28: in/not in are represented as source-semantic binary operators; no Workshop Array Contains catalog or lowering is copied here."
     },
     {
@@ -161,7 +161,7 @@
       "name": "String modifiers (f/w/l/b/c/t)",
       "category": "syntax",
       "state": "source-supported",
-      "evidence": ["fixtures:synthetic/issue-28-string-modifiers", "fixtures:synthetic/issue-28-syntax", "fixtures:synthetic/issue-33-f-string", "upstream:src/tests/strings.opy"],
+      "evidence": ["fixtures:synthetic/string-modifiers", "fixtures:synthetic/syntax-surface", "fixtures:synthetic/strings-and-lambda", "upstream:src/tests/strings.opy"],
       "notes": "Issue #28/#33: f-string interpolation lowers to a semantic format node with source-spanned arguments; w/b/c remain semantic string modifiers and l/t remain syntax-carried without duplicating translation data."
     },
     {
@@ -169,7 +169,7 @@
       "name": "Dictionary literals and keyed access",
       "category": "syntax",
       "state": "source-supported",
-      "evidence": ["fixtures:synthetic/issue-28-syntax", "upstream:src/tests/dicts.opy"],
+      "evidence": ["fixtures:synthetic/syntax-surface", "upstream:src/tests/dicts.opy"],
       "notes": "Issue #28: dictionary entries and keyed access are represented in OPY HIR; bare dictionaries and malformed entries produce structured diagnostics."
     },
     {
@@ -177,7 +177,7 @@
       "name": "List comprehensions (mapping/filtering, element and index binders)",
       "category": "syntax",
       "state": "source-supported",
-      "evidence": ["fixtures:synthetic/issue-28-syntax", "upstream:src/tests/dicts.opy"],
+      "evidence": ["fixtures:synthetic/syntax-surface", "upstream:src/tests/dicts.opy"],
       "notes": "Issue #28: one-for-clause comprehensions with an optional filter and optional element/index binders preserve local scope in HIR."
     },
     {
@@ -185,7 +185,7 @@
       "name": "Lambda expressions for array operations",
       "category": "syntax",
       "state": "source-supported",
-      "evidence": ["fixtures:synthetic/issue-28-syntax", "fixtures:synthetic/issue-33-f-string", "fixtures:synthetic/issue-33-lambda-negative", "upstream:src/tests/dicts.opy"],
+      "evidence": ["fixtures:synthetic/syntax-surface", "fixtures:synthetic/strings-and-lambda", "fixtures:synthetic/lambda-invalid", "upstream:src/tests/dicts.opy"],
       "notes": "Issue #28/#33: lambda x: expr is accepted only in signature-approved positions (sorted index 1/key and array map/filter/all/any index 0); standalone and other argument positions produce a structured diagnostic."
     },
     {
@@ -222,7 +222,7 @@
       "state": "semantic-supported",
       "evidence": [
         "fixtures:synthetic/for-range-agentlab",
-        "fixtures:synthetic/issue-65-player-range",
+        "fixtures:synthetic/range-player-variable",
         "upstream:src/tests/loops.opy"
       ],
       "notes": "for-loop binders resolve to declared globals or player variables, including implicit default variables (A-Z .. DA-DX); player receivers such as eventPlayer, hostPlayer, and variable expressions are preserved in HIR."
@@ -394,7 +394,7 @@
       "evidence": [
         "fixtures:synthetic/settings",
         "fixtures:real-world/6v6-adjustments/lobby/lobby.opy",
-        "test:opy-rs::compiler::integration_tests::issue_142_preprocessing::included_settings_are_extracted_with_file_provenance",
+        "test:opy-rs::compiler::integration_tests::preprocessing::included_settings_are_extracted_with_file_provenance",
         "upstream:src/tests/customGameSettings.opy"
       ],
       "notes": "Settings lower directly into the neutral workshop-rs carrier, including when extracted from an included source; workshop-rs owns key/value validation, locale spellings, and emission. Emitted settings are deliberately not reparseable (round-trip boundary)."
@@ -424,8 +424,8 @@
       "evidence": [
         "fixtures:synthetic/preprocessing",
         "fixtures:real-world/overpy-cake",
-        "test:opy-rs::compiler::integration_tests::issue_142_preprocessing::included_define_member_expands_with_definition_provenance",
-        "test:opy-rs::compiler::integration_tests::issue_142_preprocessing::nested_includes_resolve_relative_to_the_including_file",
+        "test:opy-rs::compiler::integration_tests::preprocessing::included_define_member_expands_with_definition_provenance",
+        "test:opy-rs::compiler::integration_tests::preprocessing::nested_includes_resolve_relative_to_the_including_file",
         "upstream:src/tests/macros.opy",
         "upstream:src/tests/builtinmacros.opy"
       ],
@@ -437,14 +437,14 @@
       "category": "preprocessing",
       "state": "semantic-supported",
       "evidence": [
-        "fixtures:synthetic/issue-29-directives",
-        "fixtures:synthetic/issue-29-main-file",
+        "fixtures:synthetic/directives",
+        "fixtures:synthetic/project-main-file",
         "upstream:src/tests/rulePrefix.opy",
         "upstream:src/tests/compression.opy",
         "upstream:src/data/opy/preprocessing.ts",
         "test:opy-rs::preprocess::tests::backend_only_directives_are_validated_and_recorded",
         "test:opy-rs::preprocess::tests::extension_directive_rejects_unknown_schema_values",
-        "test:opy-rs::compiler::integration_tests::issue_142_preprocessing::duplicate_include_warning_is_exposed_by_frontend_tooling"
+        "test:opy-rs::compiler::integration_tests::preprocessing::duplicate_include_warning_is_exposed_by_frontend_tooling"
       ],
       "notes": "Issue #29 plus #142: source implementation validates and records main-file provenance, duplicate-import and macro-redeclaration policy, backend-only directive state, canonical extension names, and rule-prefix application. Optimizer, localization, extension point accounting, output-file, compression, and generated Workshop effects remain separate."
     },
@@ -454,7 +454,7 @@
       "category": "preprocessing",
       "state": "lowering-dependent",
       "evidence": [
-        "fixtures:synthetic/issue-29-directives",
+        "fixtures:synthetic/directives",
         "upstream:src/data/opy/preprocessing.ts"
       ],
       "notes": "Rule-prefix metadata is already reflected in HIR rule names. Optimizer controls remain non-blocking presentation differences. The compiler rejects replacement directives at their source anchor until a canonical lowering and corpus evidence exist; it does not silently drop or approximate semantic rewrites."
@@ -528,8 +528,8 @@
       "category": "directives",
       "state": "semantic-supported",
       "evidence": [
-        "fixtures:synthetic/issue-29-directives",
-        "fixtures:synthetic/issue-29-invalid",
+        "fixtures:synthetic/directives",
+        "fixtures:synthetic/duplicate-rule-diagnostic",
         "upstream:src/data/opy/annotations.ts"
       ],
       "notes": "Issue #29: annotation arguments, rule metadata, and source diagnostics are retained in OPY HIR; hero/team/slot domain validation and Workshop UI effects remain lowering-dependent."
@@ -554,7 +554,7 @@
       "category": "translations",
       "state": "semantic-supported",
       "evidence": [
-        "fixtures:synthetic/issue-29-directives",
+        "fixtures:synthetic/directives",
         "upstream:src/tests/translations.opy",
         "upstream:src/tests/translations2.opy",
         "upstream:src/tests/translations.es.po",
@@ -581,7 +581,7 @@
       "category": "optimization",
       "state": "semantic-supported",
       "evidence": [
-        "fixtures:synthetic/issue-29-directives",
+        "fixtures:synthetic/directives",
         "upstream:src/tests/compression.opy",
         "upstream:src/data/opy/preprocessing.ts"
       ],
@@ -593,7 +593,7 @@
       "category": "optimization",
       "state": "lowering-dependent",
       "evidence": [
-        "fixtures:synthetic/issue-29-directives",
+        "fixtures:synthetic/directives",
         "upstream:src/data/opy/preprocessing.ts"
       ],
       "notes": "Optimizer transformations and replacement rewrites remain lowering-dependent. Optimizer controls remain non-blocking; replacement directives fail explicitly rather than silently changing Workshop output."
@@ -644,7 +644,7 @@
       "category": "compilation",
       "state": "end-to-end-supported",
       "evidence": [
-        "fixtures:synthetic/issue-35-integration",
+        "fixtures:synthetic/compiler-vertical-slice",
         "test:opy-rs::compiler-vertical-slice",
         "contract:workshop-rs-v0.1.18"
       ],
@@ -656,8 +656,8 @@
       "category": "compilation",
       "state": "end-to-end-supported",
       "evidence": [
-        "fixtures:synthetic/issue-35-integration",
-        "fixtures:synthetic/issue-40-structural",
+        "fixtures:synthetic/compiler-vertical-slice",
+        "fixtures:synthetic/compiler-structure",
         "test:opy-rs::compiler-structural-lowering",
         "contract:workshop-rs-v0.1.18"
       ],
@@ -669,15 +669,15 @@
       "category": "compilation",
       "state": "end-to-end-supported",
       "evidence": [
-        "fixtures:synthetic/issue-46-primitives",
-        "fixtures:synthetic/issue-59-postfix-assignment",
-        "fixtures:synthetic/issue-60-nested-index",
-        "fixtures:synthetic/issue-60-4d-negative",
+        "fixtures:synthetic/primitive-lowering",
+        "fixtures:synthetic/postfix-assignment",
+        "fixtures:synthetic/indexed-assignment-nested",
+        "fixtures:synthetic/indexed-assignment-4d-invalid",
         "test:opy-rs::compiler-primitive-lowering",
-        "test:opy-rs::compiler::integration_tests::issue_59_oracle::issue_59_postfix_assignments_match_the_pinned_oracle",
-        "test:opy-rs::compiler::integration_tests::issue_145_lowering::nested_indexed_assignments_match_the_pinned_oracle",
-        "test:opy-rs::compiler::integration_tests::issue_162_semantic::semantic_boundary_errors_are_reported_before_lowering",
-        "test:opy-rs::compiler::integration_tests::issue_145_lowering::null_initializers_are_dropped_but_float_zero_is_preserved",
+        "test:opy-rs::compiler::integration_tests::postfix_assignments::postfix_assignments_match_the_pinned_oracle",
+        "test:opy-rs::compiler::integration_tests::indexed_assignments::nested_indexed_assignments_match_the_pinned_oracle",
+        "test:opy-rs::compiler::integration_tests::semantic_diagnostics::semantic_boundary_errors_are_reported_before_lowering",
+        "test:opy-rs::compiler::integration_tests::variable_initializers::null_initializers_are_dropped_but_float_zero_is_preserved",
         "contract:workshop-rs-v0.1.18"
       ],
       "notes": "Issue #46/#59/#60/#145/#162. Global/player assignments and augmented assignments (+=, -=, *=, /=, %=, **=, ++, --), literal dictionary lookup folding, single-level and nested indexed variable assignments and modifications (setGlobalVariableAtIndex, modifyGlobalVariableAtIndex, setPlayerVariableAtIndex, modifyPlayerVariableAtIndex), and pass no-op statements lower into canonical workshop-rs WIR. Nested targets are rebuilt through canonical array slices, while four-dimensional assignments are rejected by source semantics at the pinned diagnostic frontier before lowering; null and integer-zero declaration initializers are omitted while float zero remains observable. Direct global/player modifications carry full statement and target-variable span provenance; indexed forms lower to canonical Call actions, which carry only the statement-level source span (the canonical WIR Call shape has no separate target-span field)."
@@ -688,11 +688,11 @@
       "category": "compilation",
       "state": "lowering-dependent",
       "evidence": [
-        "fixtures:synthetic/issue-46-primitives",
+        "fixtures:synthetic/primitive-lowering",
         "test:opy-rs::compiler-implicit-default-variables",
         "contract:workshop-rs-v0.1.18"
       ],
-      "notes": "Issue #46. Undeclared A-Z, AA-AZ, ..., DA-DX global references and eventPlayer.<name> player references resolve through the source implementation default_var_index contract and lower to separate Workshop variable namespaces at their fixed reference slots (A=0 ... DX=127); used implicit slots are reserved independently for declared global/player allocation, an explicit declared index colliding with a used implicit slot fails with the stable source-attributed index-collision diagnostic, and a declared name wins in its own namespace. The pinned oracle snapshot for the issue-46 fixture constrains global and player slots through structural equivalence."
+      "notes": "Issue #46. Undeclared A-Z, AA-AZ, ..., DA-DX global references and eventPlayer.<name> player references resolve through the source implementation default_var_index contract and lower to separate Workshop variable namespaces at their fixed reference slots (A=0 ... DX=127); used implicit slots are reserved independently for declared global/player allocation, an explicit declared index colliding with a used implicit slot fails with the stable source-attributed index-collision diagnostic, and a declared name wins in its own namespace. The pinned oracle snapshot for the primitive-lowering fixture constrains global and player slots through structural equivalence."
     },
     {
       "id": "compilation/opy-literal-dict-lookup",
@@ -700,8 +700,8 @@
       "category": "compilation",
       "state": "end-to-end-supported",
       "evidence": [
-        "fixtures:synthetic/issue-46-unsupported",
-        "test:opy-rs::compiler::integration_tests::issue_145_lowering::literal_dict_lookup_hit_and_miss_match_the_pinned_oracle"
+        "fixtures:synthetic/dictionary-lookup",
+        "test:opy-rs::compiler::integration_tests::dictionary_lowering::literal_dictionary_lookup_matches_the_pinned_oracle"
       ],
       "notes": "Issue #145. Literal dictionary lookups with literal keys are folded to the selected value, or to Null on a literal miss, and compared directly with the pinned oracle WIR. Dictionary-indexed assignment targets remain outside this bounded path and are not silently guessed."
     },
@@ -711,9 +711,9 @@
       "category": "compilation",
       "state": "end-to-end-supported",
       "evidence": [
-        "fixtures:synthetic/issue-46-primitives",
+        "fixtures:synthetic/primitive-lowering",
         "test:opy-rs::compiler-primitive-lowering",
-        "test:opy-rs::compiler::integration_tests::issue_100_conditional",
+        "test:opy-rs::compiler::integration_tests::conditionals",
         "contract:workshop-rs-v0.1.18"
       ],
       "notes": "Issue #46/#100/#145. Literals (numbers, strings, booleans, null), arrays, vectors (vect), enum constants, global/player/eventPlayer variable references, literal dictionary lookup, array indexing (valueInArray; a literal zero index lowers to firstOf, matching the pinned oracle), string formatting (customString), f/w/b/c literal string modifiers, arithmetic/comparison/logical binary operations, unary operations (not, -; not on a comparison lowers to the negated comparison, matching the pinned oracle), right-associative conditional values (ifThenElse), and power operations lower into canonical workshop-rs WIR. Value-position power uses the canonical raiseToPower Value contract; direct and indexed power modifications use the canonical Workshop Operation contract."
@@ -724,17 +724,17 @@
       "category": "compilation",
       "state": "lowering-dependent",
       "evidence": [
-        "fixtures:synthetic/issue-47-control-flow",
-        "fixtures:synthetic/issue-47-unsupported",
-        "fixtures:synthetic/issue-47-switch-order",
-        "fixtures:synthetic/issue-47-switch-structured-target",
-        "fixtures:synthetic/issue-47-switch-multiple-break",
-        "fixtures:synthetic/issue-47-do-while-shapes",
-        "fixtures:synthetic/issue-47-do-while-invalid-placement",
-        "fixtures:synthetic/issue-65-player-range",
-        "fixtures:synthetic/issue-65-invalid-binder",
-        "fixtures:synthetic/issue-33-switch-break",
-        "test:opy-rs::compiler-issue-47-residual-native-wir-gaps",
+        "fixtures:synthetic/control-flow-lowering",
+        "fixtures:synthetic/switch-break-unsupported",
+        "fixtures:synthetic/switch-order",
+        "fixtures:synthetic/switch-structured-target",
+        "fixtures:synthetic/switch-multiple-break",
+        "fixtures:synthetic/do-while-break",
+        "fixtures:synthetic/do-while-invalid",
+        "fixtures:synthetic/range-player-variable",
+        "fixtures:synthetic/range-invalid-binder",
+        "fixtures:synthetic/switch-break",
+        "test:opy-rs::compiler::integration_tests::control_flow::switch_lowering_matches_the_pinned_oracle",
         "contract:workshop-rs-v0.1.18"
       ],
       "notes": "Issue #47/#65/#162. If/elif/else, while, global- and player-variable range-for, do-while expansion, source-ordered switch fallthrough/default, and direct loop/switch/do-while break lower into canonical workshop-rs WIR. Player-variable binders preserve their receiver and source span through HIR and use the existing For Player Variable contract; non-variable range binders are rejected by source semantics before lowering. Switch offsets and do-while distances use workshop-rs v0.1.18 canonical emitted action widths; direct, conditional, and nested do-while shapes are pinned and oracle-equivalent. Residual native-WIR differences in switch-break and switch-target shapes remain explicit compiler gaps; nested conditional switch break remains a stable source-attributed unsupported-integration-surface diagnostic, while multiple direct switch breaks use canonical nested exit layers with pinned action-trace evidence."

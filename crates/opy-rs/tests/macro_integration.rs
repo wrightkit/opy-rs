@@ -1,4 +1,4 @@
-//! Frontend integration of the JavaScript macro runtime (issue #5/#6).
+//! Frontend integration of the JavaScript macro runtime.
 //!
 //! OverPy-compatible `__script__("…")` macros run at compile time through
 //! `opy_macro_js::MacroRuntime`; `#!postCompileHook` scripts are parsed,

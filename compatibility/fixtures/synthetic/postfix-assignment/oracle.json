@@ -1,0 +1,33 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: counter\n        1: indexed\n    player:\n        0: points\n}\n\nrule (\"Initialize global variables\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(indexed, Array(0));\n    }\n}\n\nrule (\"postfix assignments\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Modify Global Variable(counter, Add, 1);\n        Modify Global Variable(counter, Subtract, 1);\n        Modify Global Variable At Index(indexed, 0, Add, 1);\n        Modify Global Variable At Index(indexed, 0, Subtract, 1);\n        Modify Player Variable(Event Player, points, Add, 1);\n        Modify Player Variable(Event Player, points, Subtract, 1);\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: counter\n        1: indexed\n    player:\n        0: points\n}\n\nrule (\"Initialize global variables\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(indexed, Array(0));\n    }\n}\n\nrule (\"postfix assignments\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Modify Global Variable(counter, Add, 1);\n        Modify Global Variable(counter, Subtract, 1);\n        Modify Global Variable At Index(indexed, 0, Add, 1);\n        Modify Global Variable At Index(indexed, 0, Subtract, 1);\n        Modify Player Variable(Event Player, points, Add, 1);\n        Modify Player Variable(Event Player, points, Subtract, 1);\n    }\n}\n\n",
+    "workshopSha256": "45e24a9b68d3082c72ff24b0bc5b0db924f185a485b771ee2ae8fc0164bb97d9"
+  },
+  "fixture": "synthetic/postfix-assignment",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "2d8ee92b6915416909e51d6383b2c0e6a6dd8b711032797e9e3475941ca9849a"
+      }
+    ],
+    "sha256": "894581c2fbe6b4713de0473bc44895e3643d75ea7b366daaf98d17f496943256",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

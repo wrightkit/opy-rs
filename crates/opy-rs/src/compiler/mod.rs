@@ -6928,7 +6928,7 @@ mod tests {
         let compiler = Compiler::new().unwrap();
         let hir = crate::compile(
             "globalvar A\nrule \"issue 35 integration\":\n    @Event global\n    A = 1\n    disableInspector()\n",
-            "issue-35-integration.opy",
+            "compiler-vertical-slice.opy",
             Path::new("."),
         )
         .unwrap();
@@ -6940,7 +6940,7 @@ mod tests {
                 .get(workshop_rs::source::FileId::from_index(0))
                 .unwrap()
                 .path,
-            "issue-35-integration.opy"
+            "compiler-vertical-slice.opy"
         );
         let rule = artifact
             .wir
@@ -7418,10 +7418,10 @@ rule "allocation":
     }
 
     #[test]
-    fn issue_40_oracle_fixture_and_wir_lowering_agree() {
+    fn compiler_structure_matches_the_pinned_oracle() {
         let compiler = Compiler::new().unwrap();
         let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../compatibility/fixtures/synthetic/issue-40-structural");
+            .join("../../compatibility/fixtures/synthetic/compiler-structure");
         let source = std::fs::read_to_string(fixture.join("source.opy")).unwrap();
         let hir = crate::compile(&source, "source.opy", &fixture).unwrap();
         let artifact = compiler.compile_hir(&hir).unwrap();

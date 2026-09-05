@@ -1,0 +1,33 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: nested\n}\n\nrule (\"nested indexed assignments\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable At Index(nested, 0, Append To Array(Append To Array(Array Slice(First Of(Global.nested), 0, 1), Array(2)), Array Slice(First Of(Global.nested), Add(1, 1), 999999999999)));\n        Set Global Variable At Index(nested, 1, Append To Array(Append To Array(Array Slice(Value In Array(Global.nested, 1), 0, 0), Array(Add(First Of(Value In Array(Global.nested, 1)), 3))), Array Slice(Value In Array(Global.nested, 1), Add(0, 1), 999999999999)));\n        Set Global Variable At Index(nested, 0, Append To Array(Append To Array(Array Slice(First Of(Global.nested), 0, 1), Array(Append To Array(Append To Array(Array Slice(Value In Array(First Of(Global.nested), 1), 0, 2), Array(4)), Array Slice(Value In Array(First Of(Global.nested), 1), Add(2, 1), 999999999999)))), Array Slice(First Of(Global.nested), Add(1, 1), 999999999999)));\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: nested\n}\n\nrule (\"nested indexed assignments\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable At Index(nested, 0, Append To Array(Append To Array(Array Slice(First Of(Global.nested), 0, 1), Array(2)), Array Slice(First Of(Global.nested), Add(1, 1), 999999999999)));\n        Set Global Variable At Index(nested, 1, Append To Array(Append To Array(Array Slice(Value In Array(Global.nested, 1), 0, 0), Array(Add(First Of(Value In Array(Global.nested, 1)), 3))), Array Slice(Value In Array(Global.nested, 1), Add(0, 1), 999999999999)));\n        Set Global Variable At Index(nested, 0, Append To Array(Append To Array(Array Slice(First Of(Global.nested), 0, 1), Array(Append To Array(Append To Array(Array Slice(Value In Array(First Of(Global.nested), 1), 0, 2), Array(4)), Array Slice(Value In Array(First Of(Global.nested), 1), Add(2, 1), 999999999999)))), Array Slice(First Of(Global.nested), Add(1, 1), 999999999999)));\n    }\n}\n\n",
+    "workshopSha256": "0c7c44f00d322e04f446a3427455e58eff37c7b4a788a254f22b7d597e126c4e"
+  },
+  "fixture": "synthetic/indexed-assignment-nested",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "63781406b769292a295b018ddf74da3b10e5344efec7754ec458077bf9bfca85"
+      }
+    ],
+    "sha256": "79b68ce9ac592c75369c3b4cb640f1b6cdf49eb6c51fa08abc071d010f1d99b4",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}
