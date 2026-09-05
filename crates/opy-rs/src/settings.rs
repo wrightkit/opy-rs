@@ -18,6 +18,7 @@ use std::collections::HashMap;
 
 use crate::cst;
 use crate::diag::{OpyError, OpyResult, Position, Span};
+use crate::hir;
 
 /// A project `settings { ... }` block.
 #[derive(Debug, Clone)]
@@ -254,61 +255,111 @@ pub fn parse_block(block: &SettingsBlock) -> OpyResult<cst::Settings> {
     })
 }
 
-/// Parse and resolve settings values that use OPY compile-time expressions.
+/// Resolve parsed settings values through the ordinary OPY HIR expression path.
 ///
 /// Token-level `#!define` expansion is performed by [`crate::preprocess`]
-/// before this function runs. Source `macro name = value` declarations are
-/// supplied separately so both forms share the same expression evaluator.
-pub(crate) fn resolve_block(
-    block: &SettingsBlock,
-    constants: &HashMap<String, &cst::Expr>,
-    macros: &HashMap<String, (Vec<String>, cst::Expr)>,
-) -> OpyResult<cst::Settings> {
-    let settings = parse_block(block)?;
-    Ok(cst::Settings {
+/// before this function runs. Source macros and constants are resolved from
+/// the same HIR program used by ordinary OPY lowering.
+pub(crate) fn resolve_hir_settings(
+    program: &mut hir::Program,
+    cst_program: &cst::Program,
+) -> OpyResult<()> {
+    let constants = program
+        .declarations
+        .iter()
+        .filter_map(|declaration| match declaration {
+            hir::Declaration::Constant { name, value, .. } => {
+                Some((name.clone(), value.as_ref().clone()))
+            }
+            _ => None,
+        })
+        .collect::<HashMap<_, _>>();
+    let constant_refs = constants
+        .iter()
+        .map(|(name, value)| (name.clone(), value))
+        .collect::<HashMap<_, _>>();
+    let mut expander = crate::compiler::MacroExpander::from_program(program);
+    let Some(settings) = program.settings.take() else {
+        return Ok(());
+    };
+    let children = settings
+        .children
+        .into_iter()
+        .map(|node| resolve_hir_node(node, cst_program, &constant_refs, &mut expander))
+        .collect::<OpyResult<Vec<_>>>()?;
+    program.settings = Some(hir::Settings {
         span: settings.span,
-        children: settings
-            .children
-            .into_iter()
-            .map(|node| resolve_node(node, constants, macros))
-            .collect::<OpyResult<Vec<_>>>()?,
-    })
+        children,
+    });
+    Ok(())
 }
 
-fn resolve_node(
-    node: cst::SettingsNode,
-    constants: &HashMap<String, &cst::Expr>,
-    macros: &HashMap<String, (Vec<String>, cst::Expr)>,
-) -> OpyResult<cst::SettingsNode> {
+fn resolve_hir_node(
+    node: hir::SettingsNode,
+    cst_program: &cst::Program,
+    constants: &HashMap<String, &hir::Expr>,
+    expander: &mut crate::compiler::MacroExpander,
+) -> OpyResult<hir::SettingsNode> {
     match node {
-        cst::SettingsNode::Group {
+        hir::SettingsNode::Group {
             name,
             children,
             span,
-        } => Ok(cst::SettingsNode::Group {
+        } => Ok(hir::SettingsNode::Group {
             name,
             children: children
                 .into_iter()
-                .map(|node| resolve_node(node, constants, macros))
+                .map(|child| resolve_hir_node(child, cst_program, constants, expander))
                 .collect::<OpyResult<Vec<_>>>()?,
             span,
         }),
-        cst::SettingsNode::Raw { name, value, span } => {
-            let expression =
-                crate::parser::parse_expression_fragment(&value, span.file, span.start)
-                    .map_err(|error| settings_expression_error(span, error.message))?;
-            let value = evaluate_expression(
-                &expression,
-                constants,
-                macros,
-                &HashMap::new(),
-                &mut Vec::new(),
+        hir::SettingsNode::Raw { name, value, span } => {
+            let Some(span) = span else {
+                return Err(OpyError::new(
+                    "settings-expression",
+                    "settings value has no source span",
+                ));
+            };
+            let diag_span = hir_span_to_diag_span(span);
+            let expression = crate::lower::lower_settings_expression(
+                cst_program,
+                &value,
+                span.file,
+                Position::new(span.start.line, span.start.col),
             )
-            .map_err(|message| settings_expression_error(span, message))?;
-            node_from_value(name, value, span)
+            .map_err(|error| settings_expression_error(diag_span, error.message))?;
+            let expression =
+                expander
+                    .expand_expr(&expression, &HashMap::new())
+                    .map_err(|error| {
+                        let error_span = error
+                            .diagnostic
+                            .span
+                            .map(hir_span_to_diag_span)
+                            .unwrap_or(diag_span);
+                        OpyError::at(error.diagnostic.code, error.diagnostic.message, error_span)
+                    })?;
+            let mut stack = Vec::new();
+            let value =
+                crate::compile_time::evaluate(&expression, constants, &HashMap::new(), &mut stack)
+                    .ok_or_else(|| {
+                        settings_expression_error(
+                            diag_span,
+                            "expression is not a compile-time value".to_string(),
+                        )
+                    })?;
+            node_from_value(name, value, diag_span)
         }
         node => Ok(node),
     }
+}
+
+fn hir_span_to_diag_span(span: hir::Span) -> Span {
+    Span::new(
+        span.file,
+        Position::new(span.start.line, span.start.col),
+        Position::new(span.end.line, span.end.col),
+    )
 }
 
 fn settings_expression_error(span: Span, message: String) -> OpyError {
@@ -319,313 +370,55 @@ fn settings_expression_error(span: Span, message: String) -> OpyError {
     )
 }
 
-#[derive(Debug, Clone, PartialEq)]
-enum CompileTimeValue {
-    Number(f64),
-    String(String),
-    Bool(bool),
-    Array(Vec<CompileTimeValue>),
-    Object(Vec<(CompileTimeValue, CompileTimeValue)>),
-}
-
-fn evaluate_expression(
-    expression: &cst::Expr,
-    constants: &HashMap<String, &cst::Expr>,
-    macros: &HashMap<String, (Vec<String>, cst::Expr)>,
-    bindings: &HashMap<String, CompileTimeValue>,
-    stack: &mut Vec<String>,
-) -> Result<CompileTimeValue, String> {
-    use cst::Expr;
-
-    match expression {
-        Expr::Number { value, .. } => Ok(CompileTimeValue::Number(*value)),
-        Expr::String { value, .. } => Ok(CompileTimeValue::String(value.clone())),
-        Expr::Bool { value, .. } => Ok(CompileTimeValue::Bool(*value)),
-        Expr::Array { elements, .. } => Ok(CompileTimeValue::Array(
-            elements
-                .iter()
-                .map(|element| evaluate_expression(element, constants, macros, bindings, stack))
-                .collect::<Result<Vec<_>, _>>()?,
-        )),
-        Expr::Dict { entries, .. } => Ok(CompileTimeValue::Object(
-            entries
-                .iter()
-                .map(|entry| {
-                    Ok((
-                        evaluate_expression(&entry.key, constants, macros, bindings, stack)?,
-                        evaluate_expression(&entry.value, constants, macros, bindings, stack)?,
-                    ))
-                })
-                .collect::<Result<Vec<_>, String>>()?,
-        )),
-        Expr::Name { name, .. } => {
-            if let Some(value) = bindings.get(name) {
-                return Ok(value.clone());
-            }
-            let Some(value) = constants.get(name) else {
-                return Err(format!("unknown compile-time identifier '{name}'"));
-            };
-            if stack.iter().any(|active| active == name) {
-                return Err(format!("recursive compile-time constant '{name}'"));
-            }
-            stack.push(name.clone());
-            let result = evaluate_expression(value, constants, macros, bindings, stack);
-            stack.pop();
-            result
-        }
-        Expr::StringModifier {
-            modifier,
-            value,
-            format_text,
-            interpolations,
-            ..
-        } => {
-            if interpolations.is_empty() {
-                return Ok(CompileTimeValue::String(value.clone()));
-            }
-            if *modifier != 'f' {
-                return Err(format!(
-                    "string modifier '{modifier}' cannot be resolved in settings"
-                ));
-            }
-            let mut result = format_text.clone().unwrap_or_else(|| value.clone());
-            for (index, interpolation) in interpolations.iter().enumerate() {
-                let value = evaluate_expression(interpolation, constants, macros, bindings, stack)?;
-                let value = display_value(&value)?;
-                result = result.replace(&format!("{{{index}}}"), &value);
-            }
-            Ok(CompileTimeValue::String(result))
-        }
-        Expr::Binary {
-            op, left, right, ..
-        } => {
-            let left = evaluate_expression(left, constants, macros, bindings, stack)?;
-            let right = evaluate_expression(right, constants, macros, bindings, stack)?;
-            evaluate_binary(op, left, right)
-        }
-        Expr::Conditional {
-            then_value,
-            condition,
-            else_value,
-            ..
-        } => {
-            if is_truthy(&evaluate_expression(
-                condition, constants, macros, bindings, stack,
-            )?)? {
-                evaluate_expression(then_value, constants, macros, bindings, stack)
-            } else {
-                evaluate_expression(else_value, constants, macros, bindings, stack)
-            }
-        }
-        Expr::Unary { op, operand, .. } => {
-            let value = evaluate_expression(operand, constants, macros, bindings, stack)?;
-            match (op.as_str(), value) {
-                ("-", CompileTimeValue::Number(value)) => Ok(CompileTimeValue::Number(-value)),
-                ("not", CompileTimeValue::Bool(value)) => Ok(CompileTimeValue::Bool(!value)),
-                (_, value) => Err(format!("operator '{op}' cannot be applied to {value:?}")),
-            }
-        }
-        Expr::Index { array, index, .. } => {
-            let array = evaluate_expression(array, constants, macros, bindings, stack)?;
-            let index = evaluate_expression(index, constants, macros, bindings, stack)?;
-            evaluate_index(array, index)
-        }
-        Expr::Call { name, args, .. } => {
-            let values = args
-                .iter()
-                .map(|arg| evaluate_expression(&arg.value, constants, macros, bindings, stack))
-                .collect::<Result<Vec<_>, _>>()?;
-            if let Some(value) = evaluate_builtin(name, &values)? {
-                return Ok(value);
-            }
-            let Some((params, body)) = macros.get(name) else {
-                return Err(format!("unknown compile-time function '{name}'"));
-            };
-            if params.len() != args.len() {
-                return Err(format!(
-                    "compile-time function '{name}' expects {} argument(s) but got {}",
-                    params.len(),
-                    args.len()
-                ));
-            }
-            if stack.iter().any(|active| active == name) {
-                return Err(format!("recursive compile-time function '{name}'"));
-            }
-            let local_bindings = params.iter().cloned().zip(values).collect();
-            stack.push(name.clone());
-            let result = evaluate_expression(body, constants, macros, &local_bindings, stack);
-            stack.pop();
-            result
-        }
-        _ => Err("expression is not compile-time resolvable".to_string()),
-    }
-}
-
-fn evaluate_builtin(
-    name: &str,
-    values: &[CompileTimeValue],
-) -> Result<Option<CompileTimeValue>, String> {
-    let Some(value) = (match name {
-        "sqrt" => {
-            let [CompileTimeValue::Number(value)] = values else {
-                return Err("compile-time sqrt expects one number".to_string());
-            };
-            Some(CompileTimeValue::Number(value.sqrt()))
-        }
-        "round" => {
-            let [CompileTimeValue::Number(value)] = values else {
-                return Err("compile-time round expects one number".to_string());
-            };
-            Some(CompileTimeValue::Number(value.round()))
-        }
-        "abs" => {
-            let [CompileTimeValue::Number(value)] = values else {
-                return Err("compile-time abs expects one number".to_string());
-            };
-            Some(CompileTimeValue::Number(value.abs()))
-        }
-        "min" | "max" => {
-            if values.is_empty() {
-                return Err(format!("compile-time {name} expects at least one number"));
-            }
-            let mut numbers = values.iter().map(|value| match value {
-                CompileTimeValue::Number(value) => Ok(*value),
-                _ => Err(format!("compile-time {name} expects only numbers")),
-            });
-            let first = numbers.next().expect("values is non-empty")?;
-            let mut value = first;
-            for next in numbers {
-                let next = next?;
-                value = if name == "min" {
-                    value.min(next)
-                } else {
-                    value.max(next)
-                };
-            }
-            Some(CompileTimeValue::Number(value))
-        }
-        _ => None,
-    }) else {
-        return Ok(None);
-    };
-    Ok(Some(value))
-}
-
-fn evaluate_binary(
-    op: &str,
-    left: CompileTimeValue,
-    right: CompileTimeValue,
-) -> Result<CompileTimeValue, String> {
-    match (op, left, right) {
-        ("+", CompileTimeValue::Number(left), CompileTimeValue::Number(right)) => {
-            Ok(CompileTimeValue::Number(left + right))
-        }
-        ("+", CompileTimeValue::String(left), CompileTimeValue::String(right)) => {
-            Ok(CompileTimeValue::String(left + &right))
-        }
-        ("-", CompileTimeValue::Number(left), CompileTimeValue::Number(right)) => {
-            Ok(CompileTimeValue::Number(left - right))
-        }
-        ("*", CompileTimeValue::Number(left), CompileTimeValue::Number(right)) => {
-            Ok(CompileTimeValue::Number(left * right))
-        }
-        ("/", CompileTimeValue::Number(left), CompileTimeValue::Number(right)) if right != 0.0 => {
-            Ok(CompileTimeValue::Number(left / right))
-        }
-        ("%", CompileTimeValue::Number(left), CompileTimeValue::Number(right)) if right != 0.0 => {
-            Ok(CompileTimeValue::Number(left % right))
-        }
-        ("**", CompileTimeValue::Number(left), CompileTimeValue::Number(right)) => {
-            Ok(CompileTimeValue::Number(left.powf(right)))
-        }
-        ("and", CompileTimeValue::Bool(left), CompileTimeValue::Bool(right)) => {
-            Ok(CompileTimeValue::Bool(left && right))
-        }
-        ("or", CompileTimeValue::Bool(left), CompileTimeValue::Bool(right)) => {
-            Ok(CompileTimeValue::Bool(left || right))
-        }
-        ("==", left, right) => Ok(CompileTimeValue::Bool(left == right)),
-        ("!=", left, right) => Ok(CompileTimeValue::Bool(left != right)),
-        (op, left, right) => Err(format!(
-            "operator '{op}' cannot be applied to {left:?} and {right:?}"
-        )),
-    }
-}
-
-fn is_truthy(value: &CompileTimeValue) -> Result<bool, String> {
-    match value {
-        CompileTimeValue::Bool(value) => Ok(*value),
-        CompileTimeValue::Number(value) => Ok(*value != 0.0),
-        CompileTimeValue::String(value) => Ok(!value.is_empty()),
-        _ => Err(format!(
-            "conditional requires a primitive value, got {value:?}"
-        )),
-    }
-}
-
-fn evaluate_index(
-    collection: CompileTimeValue,
-    index: CompileTimeValue,
-) -> Result<CompileTimeValue, String> {
-    match collection {
-        CompileTimeValue::Array(values) => {
-            let CompileTimeValue::Number(index) = index else {
-                return Err("array index must be a number".to_string());
-            };
-            if index.fract() != 0.0 || index < 0.0 {
-                return Err("array index must be a non-negative integer".to_string());
-            }
-            values
-                .into_iter()
-                .nth(index as usize)
-                .ok_or_else(|| "array index is out of bounds".to_string())
-        }
-        CompileTimeValue::Object(entries) => entries
-            .into_iter()
-            .find(|(key, _)| *key == index)
-            .map(|(_, value)| value)
-            .ok_or_else(|| "object key is not present".to_string()),
-        value => Err(format!("cannot index compile-time value {value:?}")),
-    }
-}
-
 fn node_from_value(
     name: String,
-    value: CompileTimeValue,
+    value: crate::compile_time::Value,
     span: Span,
-) -> OpyResult<cst::SettingsNode> {
+) -> OpyResult<hir::SettingsNode> {
     let node = match value {
-        CompileTimeValue::Number(value) if value.is_finite() => {
-            cst::SettingsNode::Number { name, value, span }
+        crate::compile_time::Value::Number(value) if value.is_finite() => {
+            hir::SettingsNode::Number {
+                name,
+                value,
+                span: Some(span.into()),
+            }
         }
-        CompileTimeValue::Number(_) => {
+        crate::compile_time::Value::Number(_) => {
             return Err(settings_expression_error(
                 span,
                 "compile-time number is not finite".to_string(),
             ));
         }
-        CompileTimeValue::String(value) => cst::SettingsNode::String { name, value, span },
-        CompileTimeValue::Bool(value) => cst::SettingsNode::Bool { name, value, span },
-        CompileTimeValue::Array(values) => cst::SettingsNode::List {
+        crate::compile_time::Value::String(value) => hir::SettingsNode::String {
+            name,
+            value,
+            span: Some(span.into()),
+        },
+        crate::compile_time::Value::Bool(value) => hir::SettingsNode::Bool {
+            name,
+            value,
+            span: Some(span.into()),
+        },
+        crate::compile_time::Value::Array(values) => hir::SettingsNode::List {
             name,
             elements: values
                 .into_iter()
                 .map(|value| {
-                    Ok(cst::SettingsListElement {
+                    Ok(hir::SettingsListElement {
                         value: display_value(&value)?,
-                        span,
+                        span: Some(span.into()),
                     })
                 })
                 .collect::<Result<Vec<_>, String>>()
                 .map_err(|message| settings_expression_error(span, message))?,
-            span,
+            span: Some(span.into()),
         },
-        CompileTimeValue::Object(entries) => cst::SettingsNode::Group {
+        crate::compile_time::Value::Object(entries) => hir::SettingsNode::Group {
             name,
             children: entries
                 .into_iter()
                 .map(|(key, value)| {
-                    let CompileTimeValue::String(name) = key else {
+                    let crate::compile_time::Value::String(name) = key else {
                         return Err(settings_expression_error(
                             span,
                             "compile-time object keys must be strings".to_string(),
@@ -634,22 +427,20 @@ fn node_from_value(
                     node_from_value(name, value, span)
                 })
                 .collect::<OpyResult<Vec<_>>>()?,
-            span,
+            span: Some(span.into()),
         },
     };
     Ok(node)
 }
 
-fn display_value(value: &CompileTimeValue) -> Result<String, String> {
+fn display_value(value: &crate::compile_time::Value) -> Result<String, String> {
     match value {
-        CompileTimeValue::Number(value) if value.is_finite() => Ok(value.to_string()),
-        CompileTimeValue::String(value) => Ok(value.clone()),
-        CompileTimeValue::Bool(value) => Ok(value.to_string()),
-        value => Err(format!("settings list cannot contain {value:?}")),
+        crate::compile_time::Value::Number(value) if value.is_finite() => Ok(value.to_string()),
+        crate::compile_time::Value::String(value) => Ok(value.clone()),
+        crate::compile_time::Value::Bool(value) => Ok(value.to_string()),
+        _ => Err("settings list can only contain primitive values".to_string()),
     }
 }
-
-/// A char scanner with 1-based line/col tracking.
 struct Scanner<'a> {
     chars: &'a [char],
     pos: usize,

@@ -30,7 +30,8 @@
 //! compiler, Workshop→OPY reconstruction, and the isolated differential
 //! harness entry points.
 
-mod compiler;
+pub(crate) mod compile_time;
+pub(crate) mod compiler;
 pub mod cst;
 pub mod diag;
 pub mod hir;

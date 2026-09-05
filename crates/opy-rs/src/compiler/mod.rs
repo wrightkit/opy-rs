@@ -654,28 +654,34 @@ fn reject_unlowered_directives(hir: &hir::Program) -> Result<(), IntegrationErro
     Ok(())
 }
 
-type MacroBindings = HashMap<String, Expr>;
+pub(crate) type MacroBindings = HashMap<String, Expr>;
 
-struct MacroExpander {
+pub(crate) struct MacroExpander {
     macros: HashMap<String, (Vec<String>, Vec<Stmt>)>,
     stack: Vec<String>,
 }
 
+impl MacroExpander {
+    pub(crate) fn from_program(program: &hir::Program) -> Self {
+        let macros = program
+            .declarations
+            .iter()
+            .filter_map(|declaration| match declaration {
+                hir::Declaration::Macro {
+                    name, args, body, ..
+                } => Some((name.clone(), (args.clone(), body.clone()))),
+                _ => None,
+            })
+            .collect();
+        Self {
+            macros,
+            stack: Vec::new(),
+        }
+    }
+}
+
 fn expand_macros(program: &hir::Program) -> Result<hir::Program, IntegrationError> {
-    let macros = program
-        .declarations
-        .iter()
-        .filter_map(|declaration| match declaration {
-            hir::Declaration::Macro {
-                name, args, body, ..
-            } => Some((name.clone(), (args.clone(), body.clone()))),
-            _ => None,
-        })
-        .collect();
-    let mut expander = MacroExpander {
-        macros,
-        stack: Vec::new(),
-    };
+    let mut expander = MacroExpander::from_program(program);
     let mut expanded = program.clone();
     let bindings = MacroBindings::new();
 
@@ -844,7 +850,7 @@ impl MacroExpander {
         })
     }
 
-    fn expand_expr(
+    pub(crate) fn expand_expr(
         &mut self,
         expression: &Expr,
         bindings: &MacroBindings,
@@ -4905,6 +4911,28 @@ impl<'a> Lowering<'a> {
 
     fn lower_value(&mut self, expr: &Expr) -> Result<wir::ValueId, IntegrationError> {
         let span = expr.span().copied();
+        if matches!(expr, Expr::Binary { .. } | Expr::Unary { .. }) {
+            let bindings = HashMap::new();
+            let mut stack = Vec::new();
+            if let Some(value) =
+                crate::compile_time::evaluate(expr, &self.constants, &bindings, &mut stack)
+            {
+                match value {
+                    crate::compile_time::Value::Number(value) if value.is_finite() => {
+                        return Ok(self.push_number(value, &computed_number_text(value)));
+                    }
+                    crate::compile_time::Value::String(value) => {
+                        return self.lower_custom_string(value, span);
+                    }
+                    crate::compile_time::Value::Bool(value) => {
+                        return Ok(self.push_value(Value::Bool(value)));
+                    }
+                    crate::compile_time::Value::Array(_)
+                    | crate::compile_time::Value::Object(_) => {}
+                    crate::compile_time::Value::Number(_) => {}
+                }
+            }
+        }
         let value = match expr {
             Expr::Number { value, text, .. } => Value::Number {
                 value: *value,

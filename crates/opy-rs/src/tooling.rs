@@ -28,7 +28,6 @@
 //! and report the first error, so `check` never disagrees with `compile`
 //! about whether a project is clean.
 
-use std::collections::HashMap;
 use std::path::Path;
 
 use serde::Serialize;
@@ -133,38 +132,11 @@ pub fn check_with_overlay(
             post_compile_hook: None,
         };
     };
-    // Parse the extracted settings block into the CST; errors flow through
-    // the same diagnostic path (#86).
+    // Parse the extracted settings block into the CST; expression values are
+    // resolved after ordinary CST-to-HIR lowering so they use the shared OPY
+    // semantic path (#86, #188).
     if let Some(block) = &preprocessed.settings {
-        let resolved = {
-            let constants = program
-                .top_level
-                .iter()
-                .filter_map(|item| match item {
-                    cst::TopLevel::Declaration(cst::Decl::Constant { name, value, .. }) => {
-                        Some((name.clone(), value))
-                    }
-                    _ => None,
-                })
-                .collect::<HashMap<_, _>>();
-            let macros = program
-                .top_level
-                .iter()
-                .filter_map(|item| match item {
-                    cst::TopLevel::Declaration(cst::Decl::Macro {
-                        name, args, body, ..
-                    }) => body.first().and_then(|statement| match statement {
-                        cst::Stmt::Expr { expr, .. } if body.len() == 1 => {
-                            Some((name.clone(), (args.clone(), expr.clone())))
-                        }
-                        _ => None,
-                    }),
-                    _ => None,
-                })
-                .collect::<HashMap<_, _>>();
-            crate::settings::resolve_block(block, &constants, &macros)
-        };
-        match resolved {
+        match crate::settings::parse_block(block) {
             Ok(parsed_settings) => program.settings = Some(parsed_settings),
             Err(error) => {
                 let mut diagnostics = preprocessed
@@ -207,6 +179,20 @@ pub fn check_with_overlay(
     ) {
         Ok(mut hir) => {
             hir.preprocessing = preprocessed.preprocessing;
+            if let Err(error) = crate::settings::resolve_hir_settings(&mut hir, &program) {
+                let mut diagnostics = preprocessed
+                    .warnings
+                    .iter()
+                    .map(|warning| Diagnostic::from_warning(warning, &files))
+                    .collect::<Vec<_>>();
+                diagnostics.push(Diagnostic::from_error(error, &files));
+                return CheckOutcome {
+                    diagnostics,
+                    model: None,
+                    files,
+                    post_compile_hook: None,
+                };
+            }
             CheckOutcome {
                 diagnostics: preprocessed
                     .warnings
