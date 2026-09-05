@@ -2297,7 +2297,11 @@ impl Parser<'_> {
 
 /// Parse one f-string expression fragment and shift its local token spans
 /// into the original source file.
-fn parse_expression_fragment(text: &str, file: u32, origin: Position) -> Result<Expr, OpyError> {
+pub(crate) fn parse_expression_fragment(
+    text: &str,
+    file: u32,
+    origin: Position,
+) -> Result<Expr, OpyError> {
     let mut tokens = crate::lexer::lex(crate::lexer::LexInput {
         file_id: file,
         text,

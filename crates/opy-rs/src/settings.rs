@@ -14,6 +14,8 @@
 //! that validation is `lowering-dependent` (issue #8) and lives at the
 //! Workshop integration boundary, never in a local allowlist here.
 
+use std::collections::HashMap;
+
 use crate::cst;
 use crate::diag::{OpyError, OpyResult, Position, Span};
 
@@ -250,6 +252,401 @@ pub fn parse_block(block: &SettingsBlock) -> OpyResult<cst::Settings> {
         span: block.span,
         children,
     })
+}
+
+/// Parse and resolve settings values that use OPY compile-time expressions.
+///
+/// Token-level `#!define` expansion is performed by [`crate::preprocess`]
+/// before this function runs. Source `macro name = value` declarations are
+/// supplied separately so both forms share the same expression evaluator.
+pub(crate) fn resolve_block(
+    block: &SettingsBlock,
+    constants: &HashMap<String, &cst::Expr>,
+    macros: &HashMap<String, (Vec<String>, cst::Expr)>,
+) -> OpyResult<cst::Settings> {
+    let settings = parse_block(block)?;
+    Ok(cst::Settings {
+        span: settings.span,
+        children: settings
+            .children
+            .into_iter()
+            .map(|node| resolve_node(node, constants, macros))
+            .collect::<OpyResult<Vec<_>>>()?,
+    })
+}
+
+fn resolve_node(
+    node: cst::SettingsNode,
+    constants: &HashMap<String, &cst::Expr>,
+    macros: &HashMap<String, (Vec<String>, cst::Expr)>,
+) -> OpyResult<cst::SettingsNode> {
+    match node {
+        cst::SettingsNode::Group {
+            name,
+            children,
+            span,
+        } => Ok(cst::SettingsNode::Group {
+            name,
+            children: children
+                .into_iter()
+                .map(|node| resolve_node(node, constants, macros))
+                .collect::<OpyResult<Vec<_>>>()?,
+            span,
+        }),
+        cst::SettingsNode::Raw { name, value, span } => {
+            let expression =
+                crate::parser::parse_expression_fragment(&value, span.file, span.start)
+                    .map_err(|error| settings_expression_error(span, error.message))?;
+            let value = evaluate_expression(
+                &expression,
+                constants,
+                macros,
+                &HashMap::new(),
+                &mut Vec::new(),
+            )
+            .map_err(|message| settings_expression_error(span, message))?;
+            node_from_value(name, value, span)
+        }
+        node => Ok(node),
+    }
+}
+
+fn settings_expression_error(span: Span, message: String) -> OpyError {
+    OpyError::at(
+        "settings-expression",
+        format!("settings value is not a compile-time value: {message}"),
+        span,
+    )
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum CompileTimeValue {
+    Number(f64),
+    String(String),
+    Bool(bool),
+    Array(Vec<CompileTimeValue>),
+    Object(Vec<(CompileTimeValue, CompileTimeValue)>),
+}
+
+fn evaluate_expression(
+    expression: &cst::Expr,
+    constants: &HashMap<String, &cst::Expr>,
+    macros: &HashMap<String, (Vec<String>, cst::Expr)>,
+    bindings: &HashMap<String, CompileTimeValue>,
+    stack: &mut Vec<String>,
+) -> Result<CompileTimeValue, String> {
+    use cst::Expr;
+
+    match expression {
+        Expr::Number { value, .. } => Ok(CompileTimeValue::Number(*value)),
+        Expr::String { value, .. } => Ok(CompileTimeValue::String(value.clone())),
+        Expr::Bool { value, .. } => Ok(CompileTimeValue::Bool(*value)),
+        Expr::Array { elements, .. } => Ok(CompileTimeValue::Array(
+            elements
+                .iter()
+                .map(|element| evaluate_expression(element, constants, macros, bindings, stack))
+                .collect::<Result<Vec<_>, _>>()?,
+        )),
+        Expr::Dict { entries, .. } => Ok(CompileTimeValue::Object(
+            entries
+                .iter()
+                .map(|entry| {
+                    Ok((
+                        evaluate_expression(&entry.key, constants, macros, bindings, stack)?,
+                        evaluate_expression(&entry.value, constants, macros, bindings, stack)?,
+                    ))
+                })
+                .collect::<Result<Vec<_>, String>>()?,
+        )),
+        Expr::Name { name, .. } => {
+            if let Some(value) = bindings.get(name) {
+                return Ok(value.clone());
+            }
+            let Some(value) = constants.get(name) else {
+                return Err(format!("unknown compile-time identifier '{name}'"));
+            };
+            if stack.iter().any(|active| active == name) {
+                return Err(format!("recursive compile-time constant '{name}'"));
+            }
+            stack.push(name.clone());
+            let result = evaluate_expression(value, constants, macros, bindings, stack);
+            stack.pop();
+            result
+        }
+        Expr::StringModifier {
+            modifier,
+            value,
+            format_text,
+            interpolations,
+            ..
+        } => {
+            if interpolations.is_empty() {
+                return Ok(CompileTimeValue::String(value.clone()));
+            }
+            if *modifier != 'f' {
+                return Err(format!(
+                    "string modifier '{modifier}' cannot be resolved in settings"
+                ));
+            }
+            let mut result = format_text.clone().unwrap_or_else(|| value.clone());
+            for (index, interpolation) in interpolations.iter().enumerate() {
+                let value = evaluate_expression(interpolation, constants, macros, bindings, stack)?;
+                let value = display_value(&value)?;
+                result = result.replace(&format!("{{{index}}}"), &value);
+            }
+            Ok(CompileTimeValue::String(result))
+        }
+        Expr::Binary {
+            op, left, right, ..
+        } => {
+            let left = evaluate_expression(left, constants, macros, bindings, stack)?;
+            let right = evaluate_expression(right, constants, macros, bindings, stack)?;
+            evaluate_binary(op, left, right)
+        }
+        Expr::Conditional {
+            then_value,
+            condition,
+            else_value,
+            ..
+        } => {
+            if is_truthy(&evaluate_expression(
+                condition, constants, macros, bindings, stack,
+            )?)? {
+                evaluate_expression(then_value, constants, macros, bindings, stack)
+            } else {
+                evaluate_expression(else_value, constants, macros, bindings, stack)
+            }
+        }
+        Expr::Unary { op, operand, .. } => {
+            let value = evaluate_expression(operand, constants, macros, bindings, stack)?;
+            match (op.as_str(), value) {
+                ("-", CompileTimeValue::Number(value)) => Ok(CompileTimeValue::Number(-value)),
+                ("not", CompileTimeValue::Bool(value)) => Ok(CompileTimeValue::Bool(!value)),
+                (_, value) => Err(format!("operator '{op}' cannot be applied to {value:?}")),
+            }
+        }
+        Expr::Index { array, index, .. } => {
+            let array = evaluate_expression(array, constants, macros, bindings, stack)?;
+            let index = evaluate_expression(index, constants, macros, bindings, stack)?;
+            evaluate_index(array, index)
+        }
+        Expr::Call { name, args, .. } => {
+            let values = args
+                .iter()
+                .map(|arg| evaluate_expression(&arg.value, constants, macros, bindings, stack))
+                .collect::<Result<Vec<_>, _>>()?;
+            if let Some(value) = evaluate_builtin(name, &values)? {
+                return Ok(value);
+            }
+            let Some((params, body)) = macros.get(name) else {
+                return Err(format!("unknown compile-time function '{name}'"));
+            };
+            if params.len() != args.len() {
+                return Err(format!(
+                    "compile-time function '{name}' expects {} argument(s) but got {}",
+                    params.len(),
+                    args.len()
+                ));
+            }
+            if stack.iter().any(|active| active == name) {
+                return Err(format!("recursive compile-time function '{name}'"));
+            }
+            let local_bindings = params.iter().cloned().zip(values).collect();
+            stack.push(name.clone());
+            let result = evaluate_expression(body, constants, macros, &local_bindings, stack);
+            stack.pop();
+            result
+        }
+        _ => Err("expression is not compile-time resolvable".to_string()),
+    }
+}
+
+fn evaluate_builtin(
+    name: &str,
+    values: &[CompileTimeValue],
+) -> Result<Option<CompileTimeValue>, String> {
+    let Some(value) = (match name {
+        "sqrt" => {
+            let [CompileTimeValue::Number(value)] = values else {
+                return Err("compile-time sqrt expects one number".to_string());
+            };
+            Some(CompileTimeValue::Number(value.sqrt()))
+        }
+        "round" => {
+            let [CompileTimeValue::Number(value)] = values else {
+                return Err("compile-time round expects one number".to_string());
+            };
+            Some(CompileTimeValue::Number(value.round()))
+        }
+        "abs" => {
+            let [CompileTimeValue::Number(value)] = values else {
+                return Err("compile-time abs expects one number".to_string());
+            };
+            Some(CompileTimeValue::Number(value.abs()))
+        }
+        "min" | "max" => {
+            if values.is_empty() {
+                return Err(format!("compile-time {name} expects at least one number"));
+            }
+            let mut numbers = values.iter().map(|value| match value {
+                CompileTimeValue::Number(value) => Ok(*value),
+                _ => Err(format!("compile-time {name} expects only numbers")),
+            });
+            let first = numbers.next().expect("values is non-empty")?;
+            let mut value = first;
+            for next in numbers {
+                let next = next?;
+                value = if name == "min" {
+                    value.min(next)
+                } else {
+                    value.max(next)
+                };
+            }
+            Some(CompileTimeValue::Number(value))
+        }
+        _ => None,
+    }) else {
+        return Ok(None);
+    };
+    Ok(Some(value))
+}
+
+fn evaluate_binary(
+    op: &str,
+    left: CompileTimeValue,
+    right: CompileTimeValue,
+) -> Result<CompileTimeValue, String> {
+    match (op, left, right) {
+        ("+", CompileTimeValue::Number(left), CompileTimeValue::Number(right)) => {
+            Ok(CompileTimeValue::Number(left + right))
+        }
+        ("+", CompileTimeValue::String(left), CompileTimeValue::String(right)) => {
+            Ok(CompileTimeValue::String(left + &right))
+        }
+        ("-", CompileTimeValue::Number(left), CompileTimeValue::Number(right)) => {
+            Ok(CompileTimeValue::Number(left - right))
+        }
+        ("*", CompileTimeValue::Number(left), CompileTimeValue::Number(right)) => {
+            Ok(CompileTimeValue::Number(left * right))
+        }
+        ("/", CompileTimeValue::Number(left), CompileTimeValue::Number(right)) if right != 0.0 => {
+            Ok(CompileTimeValue::Number(left / right))
+        }
+        ("%", CompileTimeValue::Number(left), CompileTimeValue::Number(right)) if right != 0.0 => {
+            Ok(CompileTimeValue::Number(left % right))
+        }
+        ("**", CompileTimeValue::Number(left), CompileTimeValue::Number(right)) => {
+            Ok(CompileTimeValue::Number(left.powf(right)))
+        }
+        ("and", CompileTimeValue::Bool(left), CompileTimeValue::Bool(right)) => {
+            Ok(CompileTimeValue::Bool(left && right))
+        }
+        ("or", CompileTimeValue::Bool(left), CompileTimeValue::Bool(right)) => {
+            Ok(CompileTimeValue::Bool(left || right))
+        }
+        ("==", left, right) => Ok(CompileTimeValue::Bool(left == right)),
+        ("!=", left, right) => Ok(CompileTimeValue::Bool(left != right)),
+        (op, left, right) => Err(format!(
+            "operator '{op}' cannot be applied to {left:?} and {right:?}"
+        )),
+    }
+}
+
+fn is_truthy(value: &CompileTimeValue) -> Result<bool, String> {
+    match value {
+        CompileTimeValue::Bool(value) => Ok(*value),
+        CompileTimeValue::Number(value) => Ok(*value != 0.0),
+        CompileTimeValue::String(value) => Ok(!value.is_empty()),
+        _ => Err(format!(
+            "conditional requires a primitive value, got {value:?}"
+        )),
+    }
+}
+
+fn evaluate_index(
+    collection: CompileTimeValue,
+    index: CompileTimeValue,
+) -> Result<CompileTimeValue, String> {
+    match collection {
+        CompileTimeValue::Array(values) => {
+            let CompileTimeValue::Number(index) = index else {
+                return Err("array index must be a number".to_string());
+            };
+            if index.fract() != 0.0 || index < 0.0 {
+                return Err("array index must be a non-negative integer".to_string());
+            }
+            values
+                .into_iter()
+                .nth(index as usize)
+                .ok_or_else(|| "array index is out of bounds".to_string())
+        }
+        CompileTimeValue::Object(entries) => entries
+            .into_iter()
+            .find(|(key, _)| *key == index)
+            .map(|(_, value)| value)
+            .ok_or_else(|| "object key is not present".to_string()),
+        value => Err(format!("cannot index compile-time value {value:?}")),
+    }
+}
+
+fn node_from_value(
+    name: String,
+    value: CompileTimeValue,
+    span: Span,
+) -> OpyResult<cst::SettingsNode> {
+    let node = match value {
+        CompileTimeValue::Number(value) if value.is_finite() => {
+            cst::SettingsNode::Number { name, value, span }
+        }
+        CompileTimeValue::Number(_) => {
+            return Err(settings_expression_error(
+                span,
+                "compile-time number is not finite".to_string(),
+            ));
+        }
+        CompileTimeValue::String(value) => cst::SettingsNode::String { name, value, span },
+        CompileTimeValue::Bool(value) => cst::SettingsNode::Bool { name, value, span },
+        CompileTimeValue::Array(values) => cst::SettingsNode::List {
+            name,
+            elements: values
+                .into_iter()
+                .map(|value| {
+                    Ok(cst::SettingsListElement {
+                        value: display_value(&value)?,
+                        span,
+                    })
+                })
+                .collect::<Result<Vec<_>, String>>()
+                .map_err(|message| settings_expression_error(span, message))?,
+            span,
+        },
+        CompileTimeValue::Object(entries) => cst::SettingsNode::Group {
+            name,
+            children: entries
+                .into_iter()
+                .map(|(key, value)| {
+                    let CompileTimeValue::String(name) = key else {
+                        return Err(settings_expression_error(
+                            span,
+                            "compile-time object keys must be strings".to_string(),
+                        ));
+                    };
+                    node_from_value(name, value, span)
+                })
+                .collect::<OpyResult<Vec<_>>>()?,
+            span,
+        },
+    };
+    Ok(node)
+}
+
+fn display_value(value: &CompileTimeValue) -> Result<String, String> {
+    match value {
+        CompileTimeValue::Number(value) if value.is_finite() => Ok(value.to_string()),
+        CompileTimeValue::String(value) => Ok(value.clone()),
+        CompileTimeValue::Bool(value) => Ok(value.to_string()),
+        value => Err(format!("settings list cannot contain {value:?}")),
+    }
 }
 
 /// A char scanner with 1-based line/col tracking.
@@ -495,40 +892,93 @@ impl Jsonc<'_> {
         let ch = self.peek();
         let node = match ch {
             Some('"') | Some('\'') => {
-                let value = self.parse_string_value().ok_or_else(|| {
+                let saved = (self.pos, self.line, self.col);
+                let value = self.parse_string_expression().ok_or_else(|| {
                     self.error(
                         "settings-invalid",
                         "unterminated string in settings value".to_string(),
                     )
                 })?;
-                cst::SettingsNode::String {
-                    name: String::new(),
-                    value,
-                    span: Span::new(self.file, start, self.here()),
+                self.skip_inline_whitespace();
+                if self.is_expression_continuation() {
+                    self.pos = saved.0;
+                    self.line = saved.1;
+                    self.col = saved.2;
+                    cst::SettingsNode::Raw {
+                        name: String::new(),
+                        value: self.parse_expression_value(),
+                        span: Span::new(self.file, start, self.here()),
+                    }
+                } else {
+                    cst::SettingsNode::String {
+                        name: String::new(),
+                        value,
+                        span: Span::new(self.file, start, self.here()),
+                    }
                 }
             }
             Some('t') => {
+                let saved = (self.pos, self.line, self.col);
                 self.expect_word("true")?;
-                cst::SettingsNode::Bool {
-                    name: String::new(),
-                    value: true,
-                    span: Span::new(self.file, start, self.here()),
+                self.skip_inline_whitespace();
+                if self.is_expression_continuation() {
+                    self.pos = saved.0;
+                    self.line = saved.1;
+                    self.col = saved.2;
+                    cst::SettingsNode::Raw {
+                        name: String::new(),
+                        value: self.parse_expression_value(),
+                        span: Span::new(self.file, start, self.here()),
+                    }
+                } else {
+                    cst::SettingsNode::Bool {
+                        name: String::new(),
+                        value: true,
+                        span: Span::new(self.file, start, self.here()),
+                    }
                 }
             }
             Some('f') => {
+                let saved = (self.pos, self.line, self.col);
                 self.expect_word("false")?;
-                cst::SettingsNode::Bool {
-                    name: String::new(),
-                    value: false,
-                    span: Span::new(self.file, start, self.here()),
+                self.skip_inline_whitespace();
+                if self.is_expression_continuation() {
+                    self.pos = saved.0;
+                    self.line = saved.1;
+                    self.col = saved.2;
+                    cst::SettingsNode::Raw {
+                        name: String::new(),
+                        value: self.parse_expression_value(),
+                        span: Span::new(self.file, start, self.here()),
+                    }
+                } else {
+                    cst::SettingsNode::Bool {
+                        name: String::new(),
+                        value: false,
+                        span: Span::new(self.file, start, self.here()),
+                    }
                 }
             }
             Some(c) if c.is_ascii_digit() || c == '-' => {
+                let saved = (self.pos, self.line, self.col);
                 let value = self.parse_number()?;
-                cst::SettingsNode::Number {
-                    name: String::new(),
-                    value,
-                    span: Span::new(self.file, start, self.here()),
+                self.skip_inline_whitespace();
+                if self.is_expression_continuation() {
+                    self.pos = saved.0;
+                    self.line = saved.1;
+                    self.col = saved.2;
+                    let value = self.parse_expression_value();
+                    cst::SettingsNode::Raw {
+                        name: String::new(),
+                        value,
+                        span: Span::new(self.file, start, self.here()),
+                    }
+                } else {
+                    cst::SettingsNode::Number {
+                        name: String::new(),
+                        value,
+                        span: Span::new(self.file, start, self.here()),
+                    }
                 }
             }
             Some('[') => {
@@ -660,7 +1110,7 @@ impl Jsonc<'_> {
             self.skip_whitespace();
             let start = self.here();
             let value = match self.peek() {
-                Some('"') | Some('\'') => self.parse_string_value().ok_or_else(|| {
+                Some('"') | Some('\'') => self.parse_string_expression().ok_or_else(|| {
                     self.error(
                         "settings-invalid",
                         "unterminated string in settings list".to_string(),
@@ -729,6 +1179,50 @@ impl Jsonc<'_> {
                 value.push(ch);
             }
         }
+    }
+
+    /// Parse adjacent quoted strings as one compile-time string value. This
+    /// is the settings equivalent of OPY's implicit string concatenation and
+    /// is used after macro expansion has turned identifiers into literals.
+    fn parse_string_expression(&mut self) -> Option<String> {
+        let mut value = self.parse_string_value()?;
+        loop {
+            let saved = (self.pos, self.line, self.col);
+            self.skip_inline_whitespace();
+            if self.peek() != Some('"') && self.peek() != Some('\'') {
+                self.pos = saved.0;
+                self.line = saved.1;
+                self.col = saved.2;
+                break;
+            }
+            let next = self.parse_string_value()?;
+            value.push_str(&next);
+        }
+        Some(value)
+    }
+
+    fn skip_inline_whitespace(&mut self) {
+        while matches!(self.peek(), Some(' ' | '\t' | '\r')) {
+            self.advance();
+        }
+    }
+
+    fn is_expression_continuation(&self) -> bool {
+        if matches!(
+            self.peek(),
+            Some('+' | '-' | '*' | '/' | '%' | '<' | '>' | '=')
+        ) {
+            return true;
+        }
+        ["and", "or", "if"].iter().any(|word| {
+            self.text[self.pos..]
+                .strip_prefix(word)
+                .is_some_and(|rest| {
+                    rest.chars().next().is_none_or(|character| {
+                        !character.is_ascii_alphanumeric() && character != '_'
+                    })
+                })
+        })
     }
 }
 

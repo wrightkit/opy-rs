@@ -28,6 +28,7 @@
 //! and report the first error, so `check` never disagrees with `compile`
 //! about whether a project is clean.
 
+use std::collections::HashMap;
 use std::path::Path;
 
 use serde::Serialize;
@@ -135,7 +136,35 @@ pub fn check_with_overlay(
     // Parse the extracted settings block into the CST; errors flow through
     // the same diagnostic path (#86).
     if let Some(block) = &preprocessed.settings {
-        match crate::settings::parse_block(block) {
+        let resolved = {
+            let constants = program
+                .top_level
+                .iter()
+                .filter_map(|item| match item {
+                    cst::TopLevel::Declaration(cst::Decl::Constant { name, value, .. }) => {
+                        Some((name.clone(), value))
+                    }
+                    _ => None,
+                })
+                .collect::<HashMap<_, _>>();
+            let macros = program
+                .top_level
+                .iter()
+                .filter_map(|item| match item {
+                    cst::TopLevel::Declaration(cst::Decl::Macro {
+                        name, args, body, ..
+                    }) => body.first().and_then(|statement| match statement {
+                        cst::Stmt::Expr { expr, .. } if body.len() == 1 => {
+                            Some((name.clone(), (args.clone(), expr.clone())))
+                        }
+                        _ => None,
+                    }),
+                    _ => None,
+                })
+                .collect::<HashMap<_, _>>();
+            crate::settings::resolve_block(block, &constants, &macros)
+        };
+        match resolved {
             Ok(parsed_settings) => program.settings = Some(parsed_settings),
             Err(error) => {
                 let mut diagnostics = preprocessed

@@ -312,11 +312,26 @@ pub fn preprocess_with_overlay_outcome(
     }
     match pre.expand(tokens) {
         Ok(tokens) => {
+            let settings = match pre
+                .settings
+                .take()
+                .map(|block| pre.expand_settings(block))
+                .transpose()
+            {
+                Ok(settings) => settings,
+                Err(error) => {
+                    return PreprocessOutcome {
+                        result: Err(error),
+                        files: pre.files,
+                        warnings: pre.warnings,
+                    };
+                }
+            };
             let result = Ok((
                 Preprocessed {
                     tokens,
                     defines: pre.defines,
-                    settings: pre.settings,
+                    settings,
                     warnings: pre.warnings.clone(),
                     post_compile_hook: pre.post_compile_hook,
                     preprocessing: pre.preprocessing,
@@ -335,6 +350,58 @@ pub fn preprocess_with_overlay_outcome(
             warnings: pre.warnings,
         },
     }
+}
+
+fn render_tokens(tokens: &[Token]) -> String {
+    let mut rendered = String::new();
+    let mut previous: Option<&Token> = None;
+    for token in tokens {
+        if token.kind == TokenKind::Eof {
+            continue;
+        }
+        if let Some(previous) = previous
+            && can_merge_without_separator(previous.kind, token.kind)
+        {
+            rendered.push(' ');
+        }
+        if token.kind == TokenKind::Newline {
+            rendered.push('\n');
+        } else if token.kind == TokenKind::String {
+            rendered.push('"');
+            rendered.push_str(token.raw.as_deref().unwrap_or(&token.text));
+            rendered.push('"');
+        } else {
+            rendered.push_str(&token.text);
+        }
+        previous = Some(token);
+    }
+    rendered
+}
+
+fn can_merge_without_separator(previous: TokenKind, current: TokenKind) -> bool {
+    matches!(previous, TokenKind::Ident | TokenKind::Number)
+        && matches!(current, TokenKind::Ident | TokenKind::Number)
+}
+
+fn shift_settings_span(span: Span, origin: crate::diag::Position) -> Span {
+    fn shift(
+        position: crate::diag::Position,
+        origin: crate::diag::Position,
+    ) -> crate::diag::Position {
+        crate::diag::Position::new(
+            origin.line + position.line.saturating_sub(1),
+            if position.line == 1 {
+                origin.col + position.col.saturating_sub(1)
+            } else {
+                position.col
+            },
+        )
+    }
+    Span::new(
+        span.file,
+        shift(span.start, origin),
+        shift(span.end, origin),
+    )
 }
 
 struct Preprocessor {
@@ -406,6 +473,26 @@ fn display_path(candidate: &Path, canonical: Option<&Path>, root: &Path, fallbac
 }
 
 impl Preprocessor {
+    /// Apply the same token macro expansion used by ordinary OPY source to
+    /// the extracted settings values. Settings are removed before the source
+    /// token stream is processed, so this pass is the point where `#!define`
+    /// values become visible to the settings parser.
+    fn expand_settings(&self, block: SettingsBlock) -> OpyResult<SettingsBlock> {
+        let tokens = lex(LexInput {
+            file_id: block.span.file,
+            text: &block.text,
+        })?;
+        let mut tokens = tokens;
+        for token in &mut tokens {
+            token.span = shift_settings_span(token.span, block.text_start);
+        }
+        let tokens = self.expand(tokens)?;
+        Ok(SettingsBlock {
+            text: render_tokens(&tokens),
+            ..block
+        })
+    }
+
     /// Process `#!` directive tokens, splicing includes and registering
     /// defines. Non-directive tokens are kept in place.
     fn process_directives(
@@ -1244,9 +1331,11 @@ impl Preprocessor {
         depth: usize,
     ) -> OpyResult<()> {
         if depth > 64 {
-            return Err(OpyError::new(
-                "macro-recursion",
-                "macro expansion exceeded the recursion limit (possible recursive define)",
+            let message =
+                "macro expansion exceeded the recursion limit (possible recursive define)";
+            return Err(tokens.first().map_or_else(
+                || OpyError::new("macro-recursion", message),
+                |token| OpyError::at("macro-recursion", message, token.span),
             ));
         }
         let mut out: Vec<Token> = Vec::with_capacity(tokens.len());
@@ -1261,9 +1350,10 @@ impl Preprocessor {
                 let name = token.text.clone();
                 if let Some(mac) = self.macros.iter().find(|m| m.name == name) {
                     if stack.iter().any(|s| s == &name) {
-                        return Err(OpyError::new(
+                        return Err(OpyError::at(
                             "macro-recursion",
                             format!("recursive macro expansion detected for '{name}'"),
+                            token.span,
                         ));
                     }
                     if mac.is_function {
