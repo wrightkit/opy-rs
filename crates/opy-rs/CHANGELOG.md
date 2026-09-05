@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.18](https://github.com/wrightkit/opy-rs/compare/v0.1.17...v0.1.18) - 2026-09-05
+
+### Fixed
+
+- *(deps)* consume workshop-rs 0.1.18 ([#186](https://github.com/wrightkit/opy-rs/pull/186))
+
 ## [0.1.15](https://github.com/wrightkit/opy-rs/compare/v0.1.14...v0.1.15) - 2026-09-04
 
 ### Other
