@@ -104,6 +104,7 @@ fn array_values(program: &wir::Program, value_id: wir::ValueId) -> Vec<wir::Valu
 fn numeric_value(program: &wir::Program, value_id: wir::ValueId, selector: i64) -> i64 {
     match &program.values.get(value_id).unwrap().value {
         Value::Number { value, .. } => *value as i64,
+        Value::Null => 0,
         Value::GlobalVariable(_) => selector,
         Value::Array(values) => panic!("array value must be consumed by a call: {values:?}"),
         Value::Call { name, args } => match name.as_str() {

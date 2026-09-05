@@ -1,6 +1,6 @@
 //! OPY-to-Workshop integration, kept behind the `opy-rs` library boundary.
 //!
-//! This module pins the released `workshop-rs` v0.1.16 contract, checks the OPY
+//! This module pins the released `workshop-rs` v0.1.18 contract, checks the OPY
 //! manifest links against the canonical catalog, and lowers the supported OPY
 //! program structure into canonical WIR before validation and deterministic
 //! Workshop emission.
@@ -10,7 +10,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use crate::hir::{self, Expr, RuleEntry, Span as HirSpan, Stmt, SwitchArm, default_var_index};
 use crate::manifest::{FunctionKind, Manifest};
 use serde::Serialize;
-use workshop_rs::catalog::{Catalog, CatalogIdentity, Kind, Locale};
+use workshop_rs::catalog::{Catalog, CatalogIdentity, Kind, Locale, ParamCoercions};
 use workshop_rs::source::{Position as WorkshopPosition, SourceFile, Span as WorkshopSpan};
 use workshop_rs::wir::{self, Action, Event, PlayerEventKind, Program, Value, ValueNode};
 
@@ -20,7 +20,7 @@ pub mod reconstruct;
 mod integration_tests;
 
 /// The exact released dependency contract consumed by this crate.
-pub const WORKSHOP_RS_VERSION: &str = "0.1.16";
+pub const WORKSHOP_RS_VERSION: &str = "0.1.18";
 
 const TRANSLATION_HELPER_NAME: &str = "__overpyTranslationHelper__";
 
@@ -3426,6 +3426,7 @@ impl<'a> Lowering<'a> {
         } else {
             "array"
         };
+        let elements = self.normalize_contextual_arguments(name, elements);
         Ok(self.wir.values.push(ValueNode::new(
             Value::Call {
                 name: name.to_string(),
@@ -3528,9 +3529,9 @@ impl<'a> Lowering<'a> {
             value_type: "SpecVisibility".to_string(),
             value: "DEFAULT".to_string(),
         });
-        Ok(self.wir.actions.push(Action::Call {
-            name: "createHudText".to_string(),
-            args: vec![
+        let args = self.normalize_contextual_arguments(
+            "createHudText",
+            vec![
                 all_players,
                 null_value,
                 text,
@@ -3543,6 +3544,10 @@ impl<'a> Lowering<'a> {
                 reevaluation,
                 visibility,
             ],
+        );
+        Ok(self.wir.actions.push(Action::Call {
+            name: "createHudText".to_string(),
+            args,
             span: self.wir_span(span)?,
         }))
     }
@@ -3592,9 +3597,9 @@ impl<'a> Lowering<'a> {
             value_type: "SpecVisibility".to_string(),
             value: "DEFAULT".to_string(),
         });
-        Ok(self.wir.actions.push(Action::Call {
-            name: "createHudText".to_string(),
-            args: vec![
+        let args = self.normalize_contextual_arguments(
+            "createHudText",
+            vec![
                 all_players,
                 message,
                 body,
@@ -3607,6 +3612,10 @@ impl<'a> Lowering<'a> {
                 reevaluation,
                 visibility,
             ],
+        );
+        Ok(self.wir.actions.push(Action::Call {
+            name: "createHudText".to_string(),
+            args,
             span: self.wir_span(span)?,
         }))
     }
@@ -3848,10 +3857,189 @@ impl<'a> Lowering<'a> {
     }
 
     fn push_call(&mut self, name: &str, args: Vec<wir::ValueId>) -> wir::ValueId {
+        let args = self.normalize_contextual_arguments(name, args);
         self.push_value(Value::Call {
             name: name.to_string(),
             args,
         })
+    }
+
+    fn contextual_coercions(&self, call_id: &str, arg_index: usize) -> Option<ParamCoercions> {
+        [Kind::Action, Kind::Value].into_iter().find_map(|kind| {
+            self.compiler
+                .catalog
+                .entry(kind, call_id)
+                .and_then(|entry| entry.param_coercions(arg_index))
+                .copied()
+        })
+    }
+
+    fn is_zero_number(&self, value_id: wir::ValueId) -> bool {
+        matches!(
+            self.wir.values.get(value_id),
+            Some(ValueNode {
+                value: Value::Number { value, .. },
+                ..
+            }) if *value == 0.0
+        )
+    }
+
+    fn is_empty_string(&self, value_id: wir::ValueId) -> bool {
+        matches!(
+            self.wir.values.get(value_id),
+            Some(ValueNode {
+                value: Value::String(value),
+                ..
+            }) if value.is_empty()
+        )
+    }
+
+    fn normalize_value_with_coercions(
+        &mut self,
+        coercions: ParamCoercions,
+        value_id: wir::ValueId,
+    ) -> wir::ValueId {
+        let Some(node) = self.wir.values.get(value_id) else {
+            return value_id;
+        };
+        let span = node.span;
+        let replacement = match &node.value {
+            Value::Bool(false) if coercions.false_as_number => Some(Value::Number {
+                value: 0.0,
+                text: "0".to_string(),
+            }),
+            Value::Bool(true) if coercions.true_as_number => Some(Value::Number {
+                value: 1.0,
+                text: "1".to_string(),
+            }),
+            Value::Number { value, .. } if coercions.zero_as_null && *value == 0.0 => {
+                Some(Value::Null)
+            }
+            Value::Vector { x, y, z }
+                if coercions.null_vector_as_null
+                    && self.is_zero_number(*x)
+                    && self.is_zero_number(*y)
+                    && self.is_zero_number(*z) =>
+            {
+                Some(Value::Null)
+            }
+            Value::Call { name, args }
+                if coercions.null_vector_as_null
+                    && name == "vector"
+                    && args.len() == 3
+                    && args.iter().all(|value_id| self.is_zero_number(*value_id)) =>
+            {
+                Some(Value::Null)
+            }
+            Value::Call { name, args }
+                if coercions.empty_array_as_string && name == "emptyArray" && args.is_empty() =>
+            {
+                Some(Value::String(String::new()))
+            }
+            Value::Call { name, args }
+                if coercions.empty_array_as_string
+                    && name == "customString"
+                    && args.len() == 1
+                    && self.is_empty_string(args[0]) =>
+            {
+                Some(Value::String(String::new()))
+            }
+            Value::Array(elements) if coercions.empty_array_as_string && elements.is_empty() => {
+                Some(Value::String(String::new()))
+            }
+            _ => None,
+        };
+        let Some(value) = replacement else {
+            return value_id;
+        };
+        self.wir.values.push(ValueNode::new(value, span))
+    }
+
+    fn normalize_contextual_argument(
+        &mut self,
+        call_id: &str,
+        arg_index: usize,
+        value_id: wir::ValueId,
+    ) -> wir::ValueId {
+        let Some(coercions) = self.contextual_coercions(call_id, arg_index) else {
+            return value_id;
+        };
+        self.normalize_value_with_coercions(coercions, value_id)
+    }
+
+    fn normalize_modify_value(
+        &mut self,
+        op: wir::ModifyOp,
+        value_id: wir::ValueId,
+    ) -> wir::ValueId {
+        let coercions = match op {
+            wir::ModifyOp::Add
+            | wir::ModifyOp::Subtract
+            | wir::ModifyOp::Modulo
+            | wir::ModifyOp::Min
+            | wir::ModifyOp::Max
+            | wir::ModifyOp::RemoveFromArrayByIndex => ParamCoercions {
+                false_as_number: true,
+                true_as_number: true,
+                ..Default::default()
+            },
+            wir::ModifyOp::AppendToArray | wir::ModifyOp::RemoveFromArray => ParamCoercions {
+                zero_as_null: true,
+                ..Default::default()
+            },
+            wir::ModifyOp::Multiply | wir::ModifyOp::Divide | wir::ModifyOp::RaiseToPower => {
+                return value_id;
+            }
+        };
+        self.normalize_value_with_coercions(coercions, value_id)
+    }
+
+    fn modify_op_from_value(&self, value_id: wir::ValueId) -> Option<wir::ModifyOp> {
+        let Value::Call { name, args } = &self.wir.values.get(value_id)?.value else {
+            return None;
+        };
+        if !args.is_empty() {
+            return None;
+        }
+        match name.as_str() {
+            "add" => Some(wir::ModifyOp::Add),
+            "subtract" => Some(wir::ModifyOp::Subtract),
+            "multiply" => Some(wir::ModifyOp::Multiply),
+            "divide" => Some(wir::ModifyOp::Divide),
+            "modulo" => Some(wir::ModifyOp::Modulo),
+            "min" => Some(wir::ModifyOp::Min),
+            "max" => Some(wir::ModifyOp::Max),
+            "raiseToPower" => Some(wir::ModifyOp::RaiseToPower),
+            "appendToArray" => Some(wir::ModifyOp::AppendToArray),
+            "removeFromArray" | "removeFromArrayByValue" => Some(wir::ModifyOp::RemoveFromArray),
+            "removeFromArrayByIndex" => Some(wir::ModifyOp::RemoveFromArrayByIndex),
+            _ => None,
+        }
+    }
+
+    fn normalize_contextual_arguments(
+        &mut self,
+        call_id: &str,
+        mut args: Vec<wir::ValueId>,
+    ) -> Vec<wir::ValueId> {
+        let mut index = 0;
+        while index < args.len() {
+            args[index] = self.normalize_contextual_argument(call_id, index, args[index]);
+            if matches!(
+                call_id,
+                "modifyGlobalVariableAtIndex" | "modifyPlayerVariableAtIndex"
+            ) && index == 3
+            {
+                if let Some(op) = args
+                    .get(2)
+                    .and_then(|value_id| self.modify_op_from_value(*value_id))
+                {
+                    args[index] = self.normalize_modify_value(op, args[index]);
+                }
+            }
+            index += 1;
+        }
+        args
     }
 
     fn lower_custom_string(
@@ -4037,7 +4225,8 @@ impl<'a> Lowering<'a> {
                     {
                         if left_name == name {
                             if let Some(modify_op) = modify_op_from_str(op) {
-                                let val = self.lower_value(right)?;
+                                let right = self.lower_value(right)?;
+                                let val = self.normalize_modify_value(modify_op, right);
                                 return Ok(self.wir.actions.push(Action::ModifyGlobalVariable {
                                     variable,
                                     op: modify_op,
@@ -4079,7 +4268,8 @@ impl<'a> Lowering<'a> {
                     {
                         if left_name == name && left_player.as_ref() == player.as_ref() {
                             if let Some(modify_op) = modify_op_from_str(op) {
-                                let val = self.lower_value(right)?;
+                                let right = self.lower_value(right)?;
+                                let val = self.normalize_modify_value(modify_op, right);
                                 return Ok(self.wir.actions.push(Action::ModifyPlayerVariable {
                                     player: player_val,
                                     variable,
@@ -4131,7 +4321,9 @@ impl<'a> Lowering<'a> {
                             if left_arr.as_ref() == array.as_ref()
                                 && left_idx.as_ref() == index.as_ref()
                             {
-                                if let Some(op_id) = modify_catalog_name_from_str(op) {
+                                if let Some(modify_op) = modify_op_from_str(op) {
+                                    let op_id = modify_catalog_name_from_str(op)
+                                        .expect("known modify operator has a catalog name");
                                     let op_node = self.wir.values.push(ValueNode::new(
                                         Value::Call {
                                             name: op_id.to_string(),
@@ -4139,10 +4331,15 @@ impl<'a> Lowering<'a> {
                                         },
                                         None,
                                     ));
-                                    let right_val = self.lower_value(right)?;
+                                    let right = self.lower_value(right)?;
+                                    let right_val = self.normalize_modify_value(modify_op, right);
+                                    let args = self.normalize_contextual_arguments(
+                                        "modifyGlobalVariableAtIndex",
+                                        vec![var_node, index_val, op_node, right_val],
+                                    );
                                     return Ok(self.wir.actions.push(Action::Call {
                                         name: "modifyGlobalVariableAtIndex".to_string(),
-                                        args: vec![var_node, index_val, op_node, right_val],
+                                        args,
                                         span: self.wir_span(span)?,
                                     }));
                                 }
@@ -4150,9 +4347,13 @@ impl<'a> Lowering<'a> {
                         }
                     }
                     let val = self.lower_value(value)?;
+                    let args = self.normalize_contextual_arguments(
+                        "setGlobalVariableAtIndex",
+                        vec![var_node, index_val, val],
+                    );
                     Ok(self.wir.actions.push(Action::Call {
                         name: "setGlobalVariableAtIndex".to_string(),
-                        args: vec![var_node, index_val, val],
+                        args,
                         span: self.wir_span(span)?,
                     }))
                 }
@@ -4187,7 +4388,9 @@ impl<'a> Lowering<'a> {
                             if left_arr.as_ref() == array.as_ref()
                                 && left_idx.as_ref() == index.as_ref()
                             {
-                                if let Some(op_id) = modify_catalog_name_from_str(op) {
+                                if let Some(modify_op) = modify_op_from_str(op) {
+                                    let op_id = modify_catalog_name_from_str(op)
+                                        .expect("known modify operator has a catalog name");
                                     let op_node = self.wir.values.push(ValueNode::new(
                                         Value::Call {
                                             name: op_id.to_string(),
@@ -4195,14 +4398,19 @@ impl<'a> Lowering<'a> {
                                         },
                                         None,
                                     ));
-                                    let right_val = self.lower_value(right)?;
+                                    let right = self.lower_value(right)?;
+                                    let right_val = self.normalize_modify_value(modify_op, right);
+                                    let args = self.normalize_contextual_arguments(
+                                        "modifyPlayerVariableAtIndex",
+                                        vec![var_node, index_val, op_node, right_val],
+                                    );
                                     // The canonical signature takes the
                                     // player-variable value node (which
                                     // carries the player) as its first
                                     // argument.
                                     return Ok(self.wir.actions.push(Action::Call {
                                         name: "modifyPlayerVariableAtIndex".to_string(),
-                                        args: vec![var_node, index_val, op_node, right_val],
+                                        args,
                                         span: self.wir_span(span)?,
                                     }));
                                 }
@@ -4210,12 +4418,16 @@ impl<'a> Lowering<'a> {
                         }
                     }
                     let val = self.lower_value(value)?;
+                    let args = self.normalize_contextual_arguments(
+                        "setPlayerVariableAtIndex",
+                        vec![var_node, index_val, val],
+                    );
                     // The canonical signature takes the player-variable
                     // value node (which carries the player) as its first
                     // argument.
                     Ok(self.wir.actions.push(Action::Call {
                         name: "setPlayerVariableAtIndex".to_string(),
-                        args: vec![var_node, index_val, val],
+                        args,
                         span: self.wir_span(span)?,
                     }))
                 }
@@ -4284,9 +4496,13 @@ impl<'a> Lowering<'a> {
         let outer_array = self.lower_indexed_read(root_value, indices[0], outer_index)?;
         let replacement =
             self.rebuild_indexed_value(outer_array, &indices[1..], target, value, span)?;
+        let args = self.normalize_contextual_arguments(
+            action_name,
+            vec![root_value, outer_index, replacement],
+        );
         Ok(self.wir.actions.push(Action::Call {
             name: action_name.to_string(),
-            args: vec![root_value, outer_index, replacement],
+            args,
             span: self.wir_span(span)?,
         }))
     }
@@ -4443,9 +4659,10 @@ impl<'a> Lowering<'a> {
                 }));
             }
             lowered.push(self.push_call("vector", zero_vector));
+            let args = self.normalize_contextual_arguments("createDummyBot", lowered);
             return Ok(self.wir.actions.push(Action::Call {
                 name: "createDummyBot".to_string(),
-                args: lowered,
+                args,
                 span: self.wir_span(span)?,
             }));
         }
@@ -4475,29 +4692,45 @@ impl<'a> Lowering<'a> {
         catalog_id: &str,
         mut args: Vec<wir::ValueId>,
     ) -> Vec<wir::ValueId> {
-        let Some(entry) = self.compiler.catalog.entry(Kind::Action, catalog_id) else {
+        if self
+            .compiler
+            .catalog
+            .entry(Kind::Action, catalog_id)
+            .is_none()
+        {
             return args;
-        };
-        for (index, argument) in args.iter_mut().enumerate() {
-            let Some(domain) = entry.param_domain(index) else {
+        }
+        let mut index = 0;
+        while index < args.len() {
+            args[index] = self.normalize_contextual_argument(catalog_id, index, args[index]);
+            let Some(domain) = self
+                .compiler
+                .catalog
+                .entry(Kind::Action, catalog_id)
+                .and_then(|entry| entry.param_domain(index))
+                .map(str::to_string)
+            else {
+                index += 1;
                 continue;
             };
             let Some(ValueNode {
                 value: Value::Enum { value_type, value },
                 span,
-            }) = self.wir.values.get(*argument)
+            }) = self.wir.values.get(args[index])
             else {
+                index += 1;
                 continue;
             };
             if value_type == "Team" && domain == "Color" {
-                *argument = self.wir.values.push(ValueNode::new(
+                args[index] = self.wir.values.push(ValueNode::new(
                     Value::Enum {
-                        value_type: domain.to_string(),
+                        value_type: domain,
                         value: value.clone(),
                     },
                     *span,
                 ));
             }
+            index += 1;
         }
         args
     }
@@ -4551,6 +4784,7 @@ impl<'a> Lowering<'a> {
             self.lower_value(reevaluation)?,
             self.lower_value(spectators)?,
         ];
+        let args = self.normalize_contextual_arguments("createHudText", args);
         Ok(self.wir.actions.push(Action::Call {
             name: "createHudText".to_string(),
             args,
@@ -4596,12 +4830,13 @@ impl<'a> Lowering<'a> {
                     span,
                 ));
             };
-            let value = self.lower_value(value)?;
             let op = if function.id == "append" {
                 wir::ModifyOp::AppendToArray
             } else {
                 wir::ModifyOp::RemoveFromArray
             };
+            let value = self.lower_value(value)?;
+            let value = self.normalize_modify_value(op, value);
             return match receiver {
                 Expr::GlobalVar {
                     name,
@@ -4660,9 +4895,10 @@ impl<'a> Lowering<'a> {
                 .map(|arg| self.lower_value(arg))
                 .collect::<Result<Vec<_>, _>>()?,
         );
+        let args = self.normalize_contextual_arguments(catalog_id, lowered);
         Ok(self.wir.actions.push(Action::Call {
             name: catalog_id.clone(),
-            args: lowered,
+            args,
             span: self.wir_span(span)?,
         }))
     }
@@ -5392,10 +5628,30 @@ impl<'a> Lowering<'a> {
                 ));
             }
         };
-        Ok(self
+        let value_id = self
             .wir
             .values
-            .push(ValueNode::new(value, self.wir_span(span)?)))
+            .push(ValueNode::new(value, self.wir_span(span)?));
+        let Some(ValueNode {
+            value: Value::Call { name, args },
+            ..
+        }) = self.wir.values.get(value_id)
+        else {
+            return Ok(value_id);
+        };
+        let name = name.clone();
+        let args = args.clone();
+        let args = self.normalize_contextual_arguments(&name, args);
+        if let Some(ValueNode {
+            value: Value::Call {
+                args: target_args, ..
+            },
+            ..
+        }) = self.wir.values.get_mut(value_id)
+        {
+            *target_args = args;
+        }
+        Ok(value_id)
     }
 
     fn lower_array_callback(
@@ -6666,7 +6922,7 @@ mod tests {
         assert_eq!(rule.span.unwrap().file.index(), 0);
         assert_eq!(rule.name_span.unwrap().start.line, 2);
         assert!(artifact.emitted.contains("Disable Inspector Recording;"));
-        assert_eq!(artifact.catalog_identity.implementation_version, "0.1.16");
+        assert_eq!(artifact.catalog_identity.implementation_version, "0.1.18");
     }
 
     #[test]
