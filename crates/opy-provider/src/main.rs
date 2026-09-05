@@ -1014,7 +1014,18 @@ fn file_uri_path(value: &str) -> Option<PathBuf> {
     if !path.starts_with('/') {
         return None;
     }
-    Some(PathBuf::from(percent_decode(path)?))
+    let path = percent_decode(path)?;
+    #[cfg(windows)]
+    let path = path
+        .strip_prefix('/')
+        .filter(|path| {
+            let bytes = path.as_bytes();
+            bytes.first().is_some_and(u8::is_ascii_alphabetic)
+                && bytes.get(1) == Some(&b':')
+                && bytes.get(2) == Some(&b'/')
+        })
+        .unwrap_or(&path);
+    Some(PathBuf::from(path))
 }
 
 fn percent_decode(value: &str) -> Option<String> {
@@ -1105,6 +1116,17 @@ mod tests {
             filesystem_path(&path_to_file_uri(path)),
             Some(path.to_path_buf())
         );
+    }
+
+    #[test]
+    fn file_uri_path_handles_windows_drive_letter_uris() {
+        let path = file_uri_path("file:///D:/path/to/project.opy").expect("file URI path");
+        let expected = if cfg!(windows) {
+            PathBuf::from("D:/path/to/project.opy")
+        } else {
+            PathBuf::from("/D:/path/to/project.opy")
+        };
+        assert_eq!(path, expected);
     }
 
     #[test]
