@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.19](https://github.com/wrightkit/opy-rs/compare/v0.1.18...v0.1.19) - 2026-09-05
+
+### Fixed
+
+- *(opy)* resolve compile-time settings expressions ([#189](https://github.com/wrightkit/opy-rs/pull/189))
+
 ## [0.1.18](https://github.com/wrightkit/opy-rs/compare/v0.1.17...v0.1.18) - 2026-09-05
 
 ### Fixed
