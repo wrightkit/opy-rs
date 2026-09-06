@@ -1,6 +1,6 @@
 """Machine-readable support-matrix consistency checks (issue #2).
 
-The support matrix (compatibility/support-matrix.json) is the mechanically
+The support matrix (crates/opy-rs/support-matrix.json) is the mechanically
 checkable artifact behind docs/opy/support-matrix.md. These checks enforce:
 
 * the envelope: schemaVersion, pinned reference identity, declared states and
@@ -8,7 +8,7 @@ checkable artifact behind docs/opy/support-matrix.md. These checks enforce:
 * every feature has a unique id, a declared state, a declared category,
   evidence, and notes;
 * every `fixtures:` evidence path exists in the corpus (relative to
-  compatibility/fixtures); and
+  crates/opy-rs/tests/fixtures/corpus); and
 * the embedded summary counts match the feature array (self-reporting
   artifact).
 """
@@ -19,10 +19,9 @@ import unittest
 from pathlib import Path
 
 
-COMPATIBILITY_DIR = Path(__file__).resolve().parents[1]
-MATRIX_PATH = COMPATIBILITY_DIR / "support-matrix.json"
-PACKAGED_MATRIX_PATH = COMPATIBILITY_DIR.parent / "crates/opy-rs/support-matrix.json"
-FIXTURES_DIR = COMPATIBILITY_DIR / "fixtures"
+ROOT = Path(__file__).resolve().parents[3]
+MATRIX_PATH = ROOT / "crates/opy-rs/support-matrix.json"
+FIXTURES_DIR = ROOT / "crates/opy-rs/tests/fixtures/corpus"
 
 STATES = {
     "planned",
@@ -99,13 +98,6 @@ class SupportMatrixTests(unittest.TestCase):
         self.assertEqual(
             sum(self.matrix["summary"]["byState"].values()),
             len(self.features),
-        )
-
-    def test_packaged_matrix_matches_canonical_matrix(self):
-        self.assertEqual(
-            PACKAGED_MATRIX_PATH.read_bytes(),
-            MATRIX_PATH.read_bytes(),
-            "the published opy-rs crate must ship the validated support matrix",
         )
 
     def test_semantic_ownership_split_is_explicit(self):

@@ -192,7 +192,7 @@ current executable evidence.
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-targets --all-features
-python3 -m unittest discover -s compatibility/tests
+python3 -m unittest discover -s tools/overpy/tests
 ```
 
 Oracle-required compatibility probes run separately against the pinned
@@ -204,7 +204,7 @@ addition to focused tests.
 - [`implementation-role.md`](implementation-role.md) — repository identity and
   relationship to Wright/workshop-rs.
 - [`support-matrix.md`](support-matrix.md) — human-readable current support.
-- [`../../compatibility/support-matrix.json`](../../compatibility/support-matrix.json)
+- [`../../crates/opy-rs/support-matrix.json`](../../crates/opy-rs/support-matrix.json)
   — machine-readable support state.
 - [`compat-manifest-spec.md`](compat-manifest-spec.md) — OPY semantic manifest.
 - [`../hir/opy-hir-v2.md`](../hir/opy-hir-v2.md) — current Opy HIR contract.

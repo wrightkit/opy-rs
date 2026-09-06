@@ -17,11 +17,11 @@ const MULTI_MAIN: &str = concat!(
 );
 const BASIC_RULE: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../compatibility/fixtures/synthetic/basic-rule/source.opy"
+    "/../opy-rs/tests/fixtures/corpus/synthetic/basic-rule/source.opy"
 );
 const LITERAL_DICT_LOOKUP_FIXTURE: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../compatibility/fixtures/synthetic/dictionary-lookup/source.opy"
+    "/../opy-rs/tests/fixtures/corpus/synthetic/dictionary-lookup/source.opy"
 );
 fn run(args: &[&str]) -> std::process::Output {
     run_with_env(args, &[])

@@ -5,7 +5,7 @@ use workshop_rs::catalog::{Catalog, Locale};
 
 fn fixture_dir(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../compatibility/fixtures/synthetic")
+        .join("tests/fixtures/corpus/synthetic")
         .join(name)
 }
 

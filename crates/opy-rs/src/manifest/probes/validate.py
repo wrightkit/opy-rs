@@ -15,7 +15,7 @@ This is the reference-validated evidence for the Wright-authored manifest
 data (`../data/manifest.json`): every manifest entry records the probe (or
 probe batch) that validates it. A changed oracle pin or a behavioral drift
 fails here deterministically and requires a reviewed data update, mirroring
-the `compatibility/` harness rules (`python3 compatibility/run_oracle.py`).
+the OverPy evidence harness rules (`python3 tools/overpy/run_oracle.py`).
 
 Stdlib-only; run from anywhere:
 
@@ -34,7 +34,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # crates/opy-rs/src/manifest/probes -> repository root (5 levels up).
 WORKSPACE = os.path.abspath(os.path.join(HERE, "..", "..", "..", "..", ".."))
 ORACLE = os.path.join(
-    WORKSPACE, "compatibility", "oracle", "node_modules", "overpy", "cli.js"
+    WORKSPACE, "tools", "overpy", "oracle", "node_modules", "overpy", "cli.js"
 )
 PROBES_JSON = os.path.join(HERE, "probes.json")
 LANGUAGE = "en-US"
@@ -105,7 +105,7 @@ def main():
     if not os.path.isfile(ORACLE):
         print(
             f"oracle not installed at {ORACLE}; run "
-            f"`pnpm install --dir compatibility/oracle` first",
+            f"`pnpm install --dir tools/overpy/oracle` first",
             file=sys.stderr,
         )
         return 2

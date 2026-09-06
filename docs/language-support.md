@@ -3,9 +3,9 @@
 This is the canonical, human-readable compatibility contract for `opy-rs`.
 The detailed inventories linked here are part of the same contract. The
 machine-readable leaf inventory is
-[`compatibility/feature-contracts.json`](../compatibility/feature-contracts.json).
-Its completeness is checked against the independent pinned-source catalog in
-[`compatibility/pinned-overpy-audit.json`](../compatibility/pinned-overpy-audit.json).
+[`feature-contracts.json`](language-support/feature-contracts.json). Its
+completeness is checked against the independent pinned-source catalog in
+[`pinned-overpy-audit.json`](language-support/pinned-overpy-audit.json).
 
 ## Reference and audit boundary
 
@@ -57,11 +57,10 @@ explicit instead of hiding them in a category-level green row.
 
 ## Contract maintenance
 
-`compatibility/support-matrix.json` is retained as **internal engineering
-metadata** for fixture relationships, provenance and implementation tracking.
-It is not a public inventory and its internal states are not public support
-states. `docs/opy/support-matrix.md` is retained as historical context and
-must not introduce another public status vocabulary.
+The embedded `crates/opy-rs/support-matrix.json` is an operational CLI
+projection for fixture relationships and implementation tracking. It is not a
+second public inventory or status vocabulary; the exhaustive public contract
+is this document and the linked leaf inventories.
 
 The feature-contract validator expands every registry key into a leaf, checks
 the inventory pin against the conformance manifest, and can compare registry

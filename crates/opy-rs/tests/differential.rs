@@ -1,9 +1,9 @@
 //! Native-vs-reference differential suite.
 //!
 //! Runs the declared compatibility corpus
-//! (`compatibility/fixtures/**/fixture.json`) through the native frontend and
+//! (`crates/opy-rs/tests/fixtures/corpus/**/fixture.json`) through the native frontend and
 //! compares the outcome against the recorded reference evidence
-//! (`oracle.json`, produced by `compatibility/run_oracle.py` against the
+//! (`oracle.json`, produced by `tools/overpy/run_oracle.py` against the
 //! pinned OverPy 9.7.10 oracle).
 //!
 //! # What is compared
@@ -88,13 +88,13 @@ fn workspace_root() -> PathBuf {
 }
 
 fn fixtures_root() -> PathBuf {
-    workspace_root().join("compatibility").join("fixtures")
+    workspace_root().join("crates/opy-rs/tests/fixtures/corpus")
 }
 
 fn differential_expectations() -> Value {
     serde_json::from_str(
         &std::fs::read_to_string(
-            workspace_root().join("compatibility/differential-expectations.json"),
+            workspace_root().join("crates/opy-rs/tests/differential-expectations.json"),
         )
         .expect("differential-expectations.json must be readable"),
     )
@@ -139,7 +139,7 @@ fn case(expect: Expect, rule_names: bool, note: &'static str) -> Case {
 }
 
 /// The declared corpus expectation table. Every fixture in
-/// `compatibility/fixtures` must appear here; unknown fixtures fail the suite
+/// `crates/opy-rs/tests/fixtures/corpus` must appear here; unknown fixtures fail the suite
 /// so new corpus entries are deliberate.
 fn declared_corpus() -> BTreeMap<&'static str, Case> {
     let mut cases = BTreeMap::new();
@@ -686,7 +686,7 @@ fn native_and_reference_agree_on_the_declared_corpus() {
     let corpus = declared_corpus();
     let expectations = differential_expectations();
     let matrix: Value = serde_json::from_str(
-        &std::fs::read_to_string(workspace_root().join("compatibility/support-matrix.json"))
+        &std::fs::read_to_string(workspace_root().join("crates/opy-rs/support-matrix.json"))
             .unwrap(),
     )
     .expect("support-matrix.json must parse");
@@ -967,7 +967,7 @@ fn native_and_reference_agree_on_the_declared_corpus() {
         .collect();
     assert!(
         missing.is_empty(),
-        "declared corpus entries missing from compatibility/fixtures: {missing:?}"
+        "declared corpus entries missing from crates/opy-rs/tests/fixtures/corpus: {missing:?}"
     );
     let extra_expectations: Vec<&str> = expectations["cases"]
         .as_array()

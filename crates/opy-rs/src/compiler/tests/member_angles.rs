@@ -8,8 +8,7 @@ use workshop_rs::roundtrip::equivalent;
 use workshop_rs::wir::{Action, Value};
 
 fn fixture_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../compatibility/fixtures/synthetic/member-angle")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/corpus/synthetic/member-angle")
 }
 
 #[test]

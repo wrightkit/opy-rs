@@ -9,7 +9,7 @@ use workshop_rs::wir::{Action, Value};
 
 fn fixture_dir(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../compatibility/fixtures/synthetic")
+        .join("tests/fixtures/corpus/synthetic")
         .join(name)
 }
 

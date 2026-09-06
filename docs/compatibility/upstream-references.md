@@ -30,9 +30,9 @@ not legal advice and does not settle questions that require a qualified lawyer.
 | Repository | <https://github.com/Zezombye/overpy> |
 | Pinned reference | npm `overpy@9.7.10` |
 | Content commit | `889d9749d1def17f146548cbddb94ea1ab015847` (git tag `v9.7.10`; byte-verified) |
-| Registry integrity | `sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==` (recorded in `compatibility/oracle/oracle-metadata.json` and the lockfile) |
+| Registry integrity | `sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==` (recorded in `tools/overpy/oracle/oracle-metadata.json` and the lockfile) |
 | Recorded `gitHead` | `1e2688954302a402d076944b46db07efb14d7b61`. npm's `gitHead` field lags the tarball content by one release; it is the `v9.7.9` tag commit and must **not** be treated as the content commit |
-| License assumption | GPL-3.0-only (engineering assumption, not a legal conclusion; the npm `package.json` ships no `license` field, see `compatibility/oracle/oracle-metadata.json`) |
+| License assumption | GPL-3.0-only (engineering assumption, not a legal conclusion; the npm `package.json` ships no `license` field, see `tools/overpy/oracle/oracle-metadata.json`) |
 | Language | en-US (Workshop locale for reference evidence) |
 
 The integrity hash pins the content. Reproduction uses the recorded identity,
@@ -45,16 +45,16 @@ never `latest` or a range (see the pinning policy below).
   the pinned content commit `889d9749d1def17f146548cbddb94ea1ab015847` (tag
   `v9.7.10`). The durable record is the tarball integrity hash and the content
   commit, not any machine-specific extraction path.
-* The npm package is installed separately into `compatibility/oracle/` via the
+* The npm package is installed separately into `tools/overpy/oracle/` via the
   pinned `pnpm-lock.yaml`; `pnpm install` resolves `overpy@9.7.10` by its
   integrity hash.
 * The compatibility corpus was re-run against a fresh install of the pinned
   package on 2026-08-17; the fixture snapshots present at that date
-  (`compatibility/fixtures/**/oracle.json`) matched byte-for-byte. Each current
+  (`crates/opy-rs/tests/fixtures/corpus/**/oracle.json`) matched byte-for-byte. Each current
   fixture carries its own oracle snapshot from the same pinned package; rerun
-  `python3 compatibility/run_oracle.py` to re-verify the full corpus.
+  `python3 tools/overpy/run_oracle.py` to re-verify the full corpus.
 * The imported example fixtures were verified byte-identical to the pinned
-  tree's `examples/` content (see `compatibility/fixtures/README.md`).
+  tree's `examples/` content (see `crates/opy-rs/tests/fixtures/corpus/README.md`).
 
 ### Oracle role
 
@@ -64,8 +64,8 @@ dependency of `opy-rs` and is never bundled into release artifacts. Concretely,
 it serves as:
 
 * the reference for S (syntax), D (diagnostic), and N (normalized-output)
-  evidence in the compatibility corpus (`compatibility/fixtures/**`,
-  `compatibility/oracle/`);
+  evidence in the compatibility corpus (`crates/opy-rs/tests/fixtures/corpus/**`,
+  `tools/overpy/oracle/`);
 * the source of systematic probe validation for the proactive compatibility
   baseline (see [`docs/opy/compatibility-baseline.md`](../opy/compatibility-baseline.md)
   and [`docs/opy/compat-manifest-spec.md`](../opy/compat-manifest-spec.md));
@@ -80,7 +80,7 @@ it serves as:
 
 The harness invokes the oracle only through documented, isolated entry points:
 
-* **CLI** (`compatibility/run_oracle.py`, run with cwd = `compatibility/oracle/`):
+* **CLI** (`tools/overpy/run_oracle.py`, run with cwd = `tools/overpy/oracle/`):
 
   ```sh
   pnpm exec overpy compile --input <source.opy> --output <workshop.txt> \
@@ -109,7 +109,7 @@ grounded in the pinned tree, specifically:
 
 * `README.md`: user-visible syntax tour (rules, annotations, subroutines,
   macros, enums, settings) and advertised feature surface;
-* `examples/`: real-world OPY corpus (see `compatibility/fixtures/README.md`
+* `examples/`: real-world OPY corpus (see `crates/opy-rs/tests/fixtures/corpus/README.md`
   for the ported subset and the per-file mapping);
 * `src/tests/`: 60 `.opy` compile tests with 50 pinned result files plus 17
   decompiler inputs (16 pinned results) covering arrays, macros, enums,
@@ -142,7 +142,7 @@ component boundary (wright `docs/licensing.md`) and reference pinning policy
 | --- | --- | --- |
 | `opy-rs` core (lexer, preprocess, CST/parser, semantic resolution, HIR, diagnostics) | No | Independently implemented code. It must not link to the reference, copy its source, import its internal AST/types, or compile against its generated artifacts. |
 | Compatibility harness / oracle tool | Yes, for isolated evaluation | It may invoke a separately installed/pinned reference and compare documented or generated results. It must remain separable from the core build and runtime distribution. |
-| Compatibility fixtures (upstream example/test corpus) | Only after provenance review | Provenance/license/redistribution-reviewed upstream example and test fixture files (e.g. the GPL-3.0 OverPy `examples/*.opy` corpus) may be retained under `compatibility/fixtures/` as documented, isolated oracle evidence, with per-file origin, license, redistribution status, byte-identity against the pinned content commit, and SHA-256 records (see the fixture corpus policy below). They are never imported by core code and never bundled into core builds or release artifacts. |
+| Compatibility fixtures (upstream example/test corpus) | Only after provenance review | Provenance/license/redistribution-reviewed upstream example and test fixture files (e.g. the GPL-3.0 OverPy `examples/*.opy` corpus) may be retained under `crates/opy-rs/tests/fixtures/corpus/` as documented, isolated oracle evidence, with per-file origin, license, redistribution status, byte-identity against the pinned content commit, and SHA-256 records (see the fixture corpus policy below). They are never imported by core code and never bundled into core builds or release artifacts. |
 | Generated reference artifacts (oracle snapshots, manifests) | Only after provenance review | Store identifiers, hashes, generators, or reviewable artifacts only when their license and redistribution status are recorded. Do not add reference implementation/data content or unclear third-party content. |
 | CI and development scripts | Yes, when isolated | They may install or invoke a pinned external oracle for a compatibility check, but must not silently turn it into a core dependency or bundled release component. |
 
@@ -153,12 +153,12 @@ or README and linked from this document before it is used.
 
 ### Fixture corpus policy
 
-`compatibility/fixtures/` may retain provenance/license/redistribution-reviewed
+`crates/opy-rs/tests/fixtures/corpus/` may retain provenance/license/redistribution-reviewed
 upstream example and test fixture files, e.g. the GPL-3.0 OverPy
 `examples/*.opy` corpus, as documented, isolated oracle evidence. Each
 imported file carries its per-file record (origin, license, redistribution
 status, byte-identity against the pinned content commit, SHA-256) in
-`compatibility/fixtures/README.md` and its `fixture.json`; that record is
+`crates/opy-rs/tests/fixtures/corpus/README.md` and its `fixture.json`; that record is
 authoritative and is not duplicated here. The fixture corpus is oracle
 evidence, not a core input: core code never imports it, and it is never
 bundled into core builds or release artifacts. Content with unclear
@@ -204,8 +204,8 @@ The oracle pin is **version-exact and content-pinned**, and it is changed only
 on **demonstrated behavioral need**, never on release recency:
 
 1. **Version-exact.** The pin is an exact npm version plus its integrity hash,
-   recorded in `compatibility/oracle/package.json`,
-   `compatibility/oracle/pnpm-lock.yaml`, and `oracle-metadata.json`. No range
+   recorded in `tools/overpy/oracle/package.json`,
+   `tools/overpy/oracle/pnpm-lock.yaml`, and `oracle-metadata.json`. No range
    specifiers, no `latest`, no caret.
 2. **Content-pinned.** The recorded identity includes the npm integrity hash
    and the byte-verified git content commit. A version bump alone is not an
@@ -265,6 +265,6 @@ when the oracle is absent.
 * [`docs/opy/compatibility-baseline.md`](../opy/compatibility-baseline.md): tiered planning baseline
 * [`docs/opy/compat-manifest-spec.md`](../opy/compat-manifest-spec.md): machine-readable semantic manifest specification
 * [`docs/opy/tooling-notes.md`](../opy/tooling-notes.md): harness usage
-* [`compatibility/README.md`](../../compatibility/README.md): oracle and fixture layout
-* [`compatibility/fixtures/README.md`](../../compatibility/fixtures/README.md): corpus provenance
+* [`tools/overpy/README.md`](../../tools/overpy/README.md): oracle and fixture layout
+* [`crates/opy-rs/tests/fixtures/corpus/README.md`](../../crates/opy-rs/tests/fixtures/corpus/README.md): corpus provenance
 * WrightKit's policy sources this document adapts: `wright/docs/licensing.md`, wright ADR-0004 (OverPy licensing and clean-room boundary), ADR-0007 (reference pinning policy)

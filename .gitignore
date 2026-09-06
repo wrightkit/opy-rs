@@ -2,8 +2,8 @@
 **/*.rs.bk
 .DS_Store
 .env
-# Pinned oracle installs (pnpm install --dir compatibility/oracle)
-compatibility/oracle/node_modules/
+# Pinned oracle installs (pnpm install --dir tools/overpy/oracle)
+tools/overpy/oracle/node_modules/
 # Python harness caches
 __pycache__/
 *.pyc

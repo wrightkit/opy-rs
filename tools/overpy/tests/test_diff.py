@@ -6,8 +6,9 @@ import unittest
 from pathlib import Path
 
 
-COMPATIBILITY_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(COMPATIBILITY_DIR))
+TOOLS_DIR = Path(__file__).resolve().parents[1]
+CORPUS_DIR = TOOLS_DIR.parents[1] / "crates/opy-rs/tests/fixtures/corpus"
+sys.path.insert(0, str(TOOLS_DIR))
 
 import diff  # noqa: E402
 import run_oracle  # noqa: E402
@@ -17,8 +18,7 @@ class DiffTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         snapshot = (
-            COMPATIBILITY_DIR
-            / "fixtures"
+            CORPUS_DIR
             / "synthetic"
             / "basic-rule"
             / "oracle.json"
@@ -27,7 +27,7 @@ class DiffTests(unittest.TestCase):
 
     def test_expectations_cover_every_fixture_with_evidence(self):
         expectations = diff.load_expectations()
-        fixtures = set(diff.fixture_ids(COMPATIBILITY_DIR / "fixtures"))
+        fixtures = set(diff.fixture_ids(CORPUS_DIR))
         self.assertEqual(set(expectations), fixtures)
         for fixture, expectation in expectations.items():
             self.assertTrue(expectation["evidence"], fixture)
@@ -36,7 +36,7 @@ class DiffTests(unittest.TestCase):
     def test_compiler_expectations_are_separate_and_cover_every_fixture(self):
         source = diff.load_expectations()
         compiler = diff.load_compiler_expectations()
-        fixtures = set(diff.fixture_ids(COMPATIBILITY_DIR / "fixtures"))
+        fixtures = set(diff.fixture_ids(CORPUS_DIR))
         self.assertEqual(set(compiler), fixtures)
         self.assertNotIn("comparison", source["synthetic/basic-rule"])
         for fixture, expectation in compiler.items():
@@ -57,7 +57,7 @@ class DiffTests(unittest.TestCase):
             root = Path(temporary)
             self.write_result(root, result)
             report_result = diff.compare_fixture(
-                COMPATIBILITY_DIR / "fixtures",
+                CORPUS_DIR,
                 "synthetic/basic-rule",
                 root,
                 None,
@@ -76,7 +76,7 @@ class DiffTests(unittest.TestCase):
             root = Path(temporary)
             self.write_result(root, result)
             report_result = diff.compare_fixture(
-                COMPATIBILITY_DIR / "fixtures",
+                CORPUS_DIR,
                 "synthetic/basic-rule",
                 root,
                 None,
@@ -92,7 +92,7 @@ class DiffTests(unittest.TestCase):
             root = Path(temporary)
             self.write_result(root, result)
             report_result = diff.compare_fixture(
-                COMPATIBILITY_DIR / "fixtures",
+                CORPUS_DIR,
                 "synthetic/basic-rule",
                 root,
                 None,
@@ -111,7 +111,7 @@ class DiffTests(unittest.TestCase):
             root = Path(temporary)
             self.write_result(root, result)
             report_result = diff.compare_fixture(
-                COMPATIBILITY_DIR / "fixtures",
+                CORPUS_DIR,
                 "synthetic/basic-rule",
                 root,
                 None,
@@ -128,7 +128,7 @@ class DiffTests(unittest.TestCase):
             root = Path(temporary)
             self.write_result(root, result)
             report_result = diff.compare_fixture(
-                COMPATIBILITY_DIR / "fixtures",
+                CORPUS_DIR,
                 "synthetic/basic-rule",
                 root,
                 None,
@@ -144,7 +144,7 @@ class DiffTests(unittest.TestCase):
             self.write_result(root, result)
             with self.assertRaises(diff.DiffError):
                 diff.compare_fixture(
-                    COMPATIBILITY_DIR / "fixtures",
+                    CORPUS_DIR,
                     "synthetic/basic-rule",
                     root,
                     None,
@@ -160,7 +160,7 @@ class DiffTests(unittest.TestCase):
             root = Path(temporary)
             self.write_result(root, result)
             report_result = diff.compare_compiler_fixture(
-                COMPATIBILITY_DIR / "fixtures",
+                CORPUS_DIR,
                 "synthetic/basic-rule",
                 root,
                 diff.load_compiler_expectations(),
@@ -176,7 +176,7 @@ class DiffTests(unittest.TestCase):
             self.write_result(root, result)
             with self.assertRaises(diff.DiffError):
                 diff.compare_compiler_fixture(
-                    COMPATIBILITY_DIR / "fixtures",
+                    CORPUS_DIR,
                     "synthetic/basic-rule",
                     root,
                     diff.load_compiler_expectations(),
@@ -192,8 +192,7 @@ class DiffTests(unittest.TestCase):
         fixture = "synthetic/expressions-values"
         oracle = json.loads(
             (
-                COMPATIBILITY_DIR
-                / "fixtures"
+                CORPUS_DIR
                 / fixture
                 / "oracle.json"
             ).read_text(encoding="utf-8")
@@ -213,7 +212,7 @@ class DiffTests(unittest.TestCase):
             root = Path(temporary)
             self.write_result(root, result)
             report_result = diff.compare_compiler_fixture(
-                COMPATIBILITY_DIR / "fixtures",
+                CORPUS_DIR,
                 fixture,
                 root,
                 diff.load_compiler_expectations(),
@@ -229,7 +228,7 @@ class DiffTests(unittest.TestCase):
             root = Path(temporary)
             self.write_result(root, result)
             report_result = diff.compare_compiler_fixture(
-                COMPATIBILITY_DIR / "fixtures",
+                CORPUS_DIR,
                 fixture,
                 root,
                 diff.load_compiler_expectations(),
@@ -246,7 +245,7 @@ class DiffTests(unittest.TestCase):
             root = Path(temporary)
             self.write_result(root, result)
             report_result = diff.compare_compiler_fixture(
-                COMPATIBILITY_DIR / "fixtures",
+                CORPUS_DIR,
                 fixture,
                 root,
                 diff.load_compiler_expectations(),
@@ -268,7 +267,7 @@ class DiffTests(unittest.TestCase):
 
     def test_missing_producer_is_inconclusive(self):
         report_result = diff.compare_fixture(
-            COMPATIBILITY_DIR / "fixtures",
+            CORPUS_DIR,
             "synthetic/basic-rule",
             None,
             None,

@@ -5,8 +5,8 @@ import unittest
 from pathlib import Path
 
 
-COMPATIBILITY_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(COMPATIBILITY_DIR))
+TOOLS_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(TOOLS_DIR))
 
 import conformance  # noqa: E402
 
@@ -129,7 +129,7 @@ class ConformanceTests(unittest.TestCase):
             ],
             "branches": [{"id": "branch/test", "source": "src/compiler/parser.ts"}],
         }
-        with tempfile.TemporaryDirectory(dir=COMPATIBILITY_DIR) as directory:
+        with tempfile.TemporaryDirectory(dir=TOOLS_DIR) as directory:
             source = Path(directory) / "src/data/opy/keywords.ts"
             source.parent.mkdir(parents=True)
             source.write_text('export const opyKeywords = {"and": 1, "or": 1};\n', encoding="utf-8")

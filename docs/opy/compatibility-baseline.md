@@ -21,7 +21,7 @@ pinned oracle (the declared corpus now contains 42 provenance-linked
 snapshots). The opy-rs source implementation foundation and #7 readiness work are
 implemented on `main` (issues #3–#7, #28–#30, and #33); the category table is the
 **tier assignment contract** for the remaining surface. The state column of
-`compatibility/support-matrix.json` tracks actual implementation progress
+`crates/opy-rs/support-matrix.json` tracks actual implementation progress
 against it, and rows marked `baseline-supported` in this document are
 implemented unless the table says otherwise.
 
@@ -87,7 +87,7 @@ rejected/documented-absent dimension, `—` an inapplicable dimension, and
 ## Current `planned` entries
 
 There are no remaining `planned` entries in
-`compatibility/support-matrix.json`. The pinned OPY source implementation surface from
+`crates/opy-rs/support-matrix.json`. The pinned OPY source implementation surface from
 #28/#29/#30/#33 is represented as source implementation- or semantic-supported; Workshop
 catalog, emission, and runtime effects remain explicitly
 `lowering-dependent`. Their tiers above
@@ -142,5 +142,5 @@ and remaining gaps stay classified rather than being filed per-symbol.
 * [`docs/compatibility/upstream-references.md`](../compatibility/upstream-references.md): pinned reference identity and provenance
 * [`support-matrix.md`](support-matrix.md): corpus-evidenced declared surface
 * [`compat-manifest-spec.md`](compat-manifest-spec.md): machine-readable semantic manifest specification (data in `crates/opy-rs/src/manifest/`)
-* [`compatibility/support-matrix.json`](../../compatibility/support-matrix.json): machine-readable state tracking
-* [`compatibility/README.md`](../../compatibility/README.md): corpus and harness layout
+* [`crates/opy-rs/support-matrix.json`](../../crates/opy-rs/support-matrix.json): machine-readable state tracking
+* [`tools/overpy/README.md`](../../tools/overpy/README.md): corpus and harness layout

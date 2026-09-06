@@ -28,8 +28,8 @@ architecture, compatibility evidence, APIs, and internal contracts live here.
   oracle, failure-frontier, and canonical-WIR comparison contract.
 - [Upstream references](compatibility/upstream-references.md): pinned reference
   identity, provenance, licensing notes, and oracle boundaries.
-- [Compatibility harness](../compatibility/README.md): fixtures, snapshots,
-  differential testing, and machine-readable support data.
+- [OverPy evidence harness](../tools/overpy/README.md): oracle tooling,
+  snapshots, and differential testing.
 
 ## Internals
 

@@ -79,7 +79,7 @@ pub struct MatrixSummary {
 }
 
 /// The machine-readable support matrix, mirroring
-/// `compatibility/support-matrix.json`.
+/// `crates/opy-rs/support-matrix.json`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SupportMatrix {
     #[serde(rename = "schemaVersion")]

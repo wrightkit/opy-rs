@@ -403,7 +403,7 @@
       "owner": "opy-rs",
       "authority": [
         "OverPy@9.7.10:examples/",
-        "compatibility/fixtures/README.md"
+        "crates/opy-rs/tests/fixtures/corpus/README.md"
       ],
       "contracts": [
         {
@@ -453,7 +453,7 @@
       "owner": "workshop-rs",
       "authority": [
         "workshop-rs#10 feature census contract",
-        "compatibility/fixtures/census/workshop-feature-census/fixture.json"
+        "crates/opy-rs/tests/fixtures/corpus/census/workshop-feature-census/fixture.json"
       ],
       "contracts": [
         {

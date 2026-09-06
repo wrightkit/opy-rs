@@ -799,7 +799,7 @@
       "status": "partial",
       "coverage": "partial",
       "production": [
-        "compatibility/fixtures/README.md"
+        "crates/opy-rs/tests/fixtures/corpus/README.md"
       ],
       "evidence": [
         "fixture:real-world/overpy-cake"

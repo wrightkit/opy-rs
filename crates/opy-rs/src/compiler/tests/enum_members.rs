@@ -7,8 +7,7 @@ use workshop_rs::catalog::Locale;
 use workshop_rs::wir::Value;
 
 fn fixture_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../compatibility/fixtures/real-world/overpy-parabola")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/corpus/real-world/overpy-parabola")
 }
 
 #[test]

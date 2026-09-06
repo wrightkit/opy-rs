@@ -570,7 +570,7 @@
       "state": "end-to-end-supported",
       "evidence": [
         "upstream:src/data/localizedStrings.ts",
-        "oracle:CLI --language en-US invocation recorded in compatibility/run_oracle.py",
+        "oracle:CLI --language en-US invocation recorded in tools/overpy/run_oracle.py",
         "test:opy-rs::compiler"
       ],
       "notes": "Compiler locale selection delegates to workshop-rs catalog coverage and rejects undeclared locales explicitly; missing per-identity mappings remain fail-explicit."
@@ -760,7 +760,7 @@
         "fixtures:real-world",
         "fixtures:census/workshop-feature-census"
       ],
-      "notes": "Full OPY-to-Workshop parity remains broader than the declared #38 baseline. compatibility/run_native.py compiles every fixture through the versioned CLI contract and compares it with the separate compiler-expectations.json baseline. Source/frontend expectations remain independent; entries are separately classified and no unverified case is counted as compiler parity."
+      "notes": "Full OPY-to-Workshop parity remains broader than the declared #38 baseline. tools/overpy/run_native.py compiles every fixture through the versioned CLI contract and compares it with the separate compiler-expectations.json baseline. Source/frontend expectations remain independent; entries are separately classified and no unverified case is counted as compiler parity."
     },
     {
       "id": "decompilation/workshop-to-opy",

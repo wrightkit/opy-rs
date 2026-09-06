@@ -45,7 +45,7 @@ input digests; the public compile report and `opy-cli compile` have no oracle
 input or compatibility-evidence field.
 
 The compatibility runner uses the separate
-[`compatibility/compiler-expectations.json`](../../compatibility/compiler-expectations.json)
+[`tools/overpy/compiler-expectations.json`](../../tools/overpy/compiler-expectations.json)
 baseline for compiler outcomes. The source/frontend expectation contract is
 kept in `differential-expectations.json`; it is not reused as compiler parity
 evidence. Compiler gaps must carry durable evidence and an owner, while
@@ -147,10 +147,11 @@ reporting depth differs.
 
 ## Support-matrix accessor (`opy_rs::support`)
 
-`compatibility/support-matrix.json` is the repository's machine-readable
-support state source (merged with the evidence base, PR #10) and is consumed
-read-only. It is embedded at build time via `include_str!` (the
-crate rebuilds when the file changes), parsed once, and exposed as
+`crates/opy-rs/support-matrix.json` is the read-only machine projection used by
+the support query CLI. The exhaustive public support contract is
+[`language-support.md`](../language-support.md) and its linked inventories.
+The projection is embedded at build time via `include_str!` (the crate rebuilds
+when the file changes), parsed once, and exposed as
 `SupportMatrix`:
 
 * `SupportMatrix::builtin() -> Result<&'static SupportMatrix, …>`
@@ -159,7 +160,7 @@ crate rebuilds when the file changes), parsed once, and exposed as
   slices
 * `categories()`, `declared_states()`, `summary()`: declared surface
 
-The five declared states (`planned`, `source-supported`,
+The five projection states (`planned`, `source-supported`,
 `semantic-supported`, `lowering-dependent`, `end-to-end-supported`) are
 documented in the matrix itself. Workshop-dependent items stay
 `lowering-dependent`; nothing here approximates them.

@@ -5,8 +5,9 @@ import unittest
 from pathlib import Path
 
 
-COMPATIBILITY_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(COMPATIBILITY_DIR))
+TOOLS_DIR = Path(__file__).resolve().parents[1]
+CORPUS_DIR = TOOLS_DIR.parents[1] / "crates/opy-rs/tests/fixtures/corpus"
+sys.path.insert(0, str(TOOLS_DIR))
 
 import run_oracle  # noqa: E402
 import input_identity  # noqa: E402
@@ -58,7 +59,7 @@ class RunnerTests(unittest.TestCase):
 
     def test_repository_fixture_metadata_and_snapshots_are_valid(self):
         fixtures = run_oracle.discover_fixtures(
-            COMPATIBILITY_DIR / "fixtures"
+            CORPUS_DIR
         )
         for fixture_path, fixture in fixtures:
             snapshot = fixture_path.parent / "oracle.json"
@@ -89,7 +90,7 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(overpy_cake["provenance"]["kind"], "imported-example")
 
     def test_real_world_gaps_have_minimized_provenance_linked_regressions(self):
-        fixtures = run_oracle.discover_fixtures(COMPATIBILITY_DIR / "fixtures")
+        fixtures = run_oracle.discover_fixtures(CORPUS_DIR)
         gaps = [
             fixture
             for _, fixture in fixtures
@@ -110,7 +111,7 @@ class RunnerTests(unittest.TestCase):
             self.assertIsInstance(regressions, list, fixture["id"])
             self.assertGreaterEqual(len(regressions), 1, fixture["id"])
             for regression in regressions:
-                source = (COMPATIBILITY_DIR / "fixtures" / fixture["id"] / regression["source"]).resolve()
+                source = (CORPUS_DIR / fixture["id"] / regression["source"]).resolve()
                 self.assertTrue(source.is_file(), regression["id"])
                 self.assertEqual(regression["derivedFrom"], fixture["source"])
                 self.assertEqual(regression["expectedReferenceStatus"], fixture["expectedStatus"])
@@ -120,7 +121,7 @@ class RunnerTests(unittest.TestCase):
     def test_census_uses_opaque_workshop_owned_feature_ids(self):
         _, census = next(
             fixture
-            for fixture in run_oracle.discover_fixtures(COMPATIBILITY_DIR / "fixtures")
+            for fixture in run_oracle.discover_fixtures(CORPUS_DIR)
             if fixture[1]["id"] == "census/workshop-feature-census"
         )
         self.assertEqual(census["censusContract"]["owner"], "workshop-rs")

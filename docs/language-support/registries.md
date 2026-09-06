@@ -1,7 +1,7 @@
 # OverPy audited registry notes
 
 The exact leaf inventory for the named upstream registries lives in
-[`compatibility/feature-contracts.json`](../../compatibility/feature-contracts.json).
+[`feature-contracts.json`](feature-contracts.json).
 This page provides human-readable compatibility notes; grouped aliases or
 notes below must not be used to reconstruct the source set. The upstream registry supplies
 the full argument order, argument type/domain, defaults, return behavior and
