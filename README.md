@@ -80,7 +80,7 @@ artifact format.
 The Rust library surface, including the bounded Workshop compiler, lives in
 `crates/opy-rs`; `opy-cli` is the standalone executable surface. See the
 [tooling API reference](docs/opy/tooling-api.md) and
-[implementation role](docs/opy/implementation-role.md) for the durable boundary.
+[current architecture routing](docs/architecture/README.md) for the durable boundary.
 
 ## Compatibility
 
@@ -134,8 +134,8 @@ Python test suites.
 
 ## Documentation
 
-Architecture, compatibility evidence, APIs, HIR, provenance, and maintainer
-references are indexed in [`docs/README.md`](docs/README.md).
+Current architecture, compatibility evidence, APIs, HIR, provenance, and
+maintainer references are indexed in [`docs/README.md`](docs/README.md).
 
 ## Contributing
 
