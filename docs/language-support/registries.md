@@ -1,13 +1,21 @@
-# OverPy audited inventory: complete source registries
+# OverPy audited registry notes
 
-This page is the leaf inventory for the named upstream registries. Every key
-in the pinned OverPy `9.7.10` files is listed below; no current `opy-rs`
-manifest or fixture is used to define the set. The upstream registry supplies
+The exact leaf inventory for the named upstream registries lives in
+[`compatibility/feature-contracts.json`](../../compatibility/feature-contracts.json).
+This page provides human-readable compatibility notes; grouped aliases or
+notes below must not be used to reconstruct the source set. The upstream registry supplies
 the full argument order, argument type/domain, defaults, return behavior and
 dispatch rule. The user-facing status is reconciled against current
 `opy-rs` evidence.
 
 Reference: `889d9749d1def17f146548cbddb94ea1ab015847`.
+
+## String entities (`src/data/opy/stringEntities.ts`)
+
+The `opyStringEntities` registry defines the user-visible `\\&name;` escape
+family. Its exact 67 keys and current status/coverage are maintained in the
+machine inventory; string parsing and escaping behavior remains a separate
+contract.
 
 ## Keywords (`src/data/opy/keywords.ts`)
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -17,6 +18,8 @@ import input_identity
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "compatibility" / "fixtures"
 MANIFEST = ROOT / "compatibility" / "conformance-manifest.json"
+INVENTORY = ROOT / "compatibility" / "feature-contracts.json"
+PINNED_AUDIT = ROOT / "compatibility" / "pinned-overpy-audit.json"
 DEFAULT_REPORT = ROOT / "target" / "opy-rs-conformance-report.json"
 FRONTEND_CODES = {
     "lex-error": "lex",
@@ -35,6 +38,14 @@ FRONTIER_CONSTRUCTS = {
     "lambda-context": "parse-error",
 }
 PROBE_KINDS = {"positive", "negative", "contextual", "composition"}
+INVENTORY_STATUSES = {"implemented", "partial", "unsupported", "external-owner", "unclear"}
+INVENTORY_COVERAGE = {"covered", "partial", "uncovered"}
+TOOLING_CONTRACTS = {
+    "tooling.decompile",
+    "tooling.javascript-macros",
+    "tooling.metadata",
+    "tooling.post-compile-hook",
+}
 
 
 class ConformanceError(RuntimeError):
@@ -75,6 +86,325 @@ def load_manifest(path: Path = MANIFEST) -> dict[str, Any]:
                 f"{category.get('id', '<unknown>')}: authority, contracts, and probes are required"
             )
     return manifest
+
+
+def load_inventory(path: Path = INVENTORY) -> dict[str, Any]:
+    inventory = load_json(path)
+    if inventory.get("schemaVersion") != 1:
+        raise ConformanceError("feature contract inventory schemaVersion must be 1")
+    if inventory.get("contract") != "pinned-overpy-feature-contract-inventory":
+        raise ConformanceError("unsupported feature contract inventory")
+    if not isinstance(inventory.get("reference"), dict):
+        raise ConformanceError("feature contract inventory has no pinned reference")
+    status_vocabulary = inventory.get("statusVocabulary")
+    if not isinstance(status_vocabulary, dict) or set(status_vocabulary) != INVENTORY_STATUSES:
+        raise ConformanceError("feature contract inventory status vocabulary is incomplete")
+    coverage_vocabulary = inventory.get("coverageVocabulary")
+    if not isinstance(coverage_vocabulary, dict) or set(coverage_vocabulary) != INVENTORY_COVERAGE:
+        raise ConformanceError("feature contract inventory coverage vocabulary is incomplete")
+    for key in ("registries", "branches"):
+        if not isinstance(inventory.get(key), list) or not inventory[key]:
+            raise ConformanceError(f"feature contract inventory needs {key}")
+    for key in ("requiredRegistries", "requiredBranches"):
+        values = inventory.get(key)
+        if (
+            not isinstance(values, list)
+            or not values
+            or any(not isinstance(value, str) or not value for value in values)
+            or len(values) != len(set(values))
+        ):
+            raise ConformanceError(f"feature contract inventory needs distinct {key}")
+    return inventory
+
+
+def load_pinned_audit(path: Path = PINNED_AUDIT) -> dict[str, Any]:
+    audit = load_json(path)
+    if audit.get("schemaVersion") != 1:
+        raise ConformanceError("pinned OverPy audit schemaVersion must be 1")
+    if audit.get("contract") != "pinned-overpy-source-audit":
+        raise ConformanceError("unsupported pinned OverPy audit")
+    if not isinstance(audit.get("reference"), dict):
+        raise ConformanceError("pinned OverPy audit has no reference")
+    for key in ("registries", "branches"):
+        values = audit.get(key)
+        if (
+            not isinstance(values, list)
+            or not values
+            or any(not isinstance(value, dict) for value in values)
+            or any(not isinstance(value.get("id"), str) or not value["id"] for value in values)
+            or len({value["id"] for value in values}) != len(values)
+        ):
+            raise ConformanceError(f"pinned OverPy audit needs distinct {key}")
+    for registry in audit["registries"]:
+        source = registry.get("source")
+        if (
+            not isinstance(source, dict)
+            or not isinstance(source.get("path"), str)
+            or not source["path"]
+            or not isinstance(source.get("objectPath"), str)
+            or not source["objectPath"]
+        ):
+            raise ConformanceError(f"{registry['id']}: pinned audit source is incomplete")
+    for branch in audit["branches"]:
+        if not isinstance(branch.get("source"), str) or not branch["source"]:
+            raise ConformanceError(f"{branch['id']}: pinned audit source is incomplete")
+    return audit
+
+
+def _validate_evidence(
+    evidence: Any, fixture_set: set[str], leaf_id: str
+) -> None:
+    if not isinstance(evidence, list):
+        raise ConformanceError(f"{leaf_id}: evidence must be a list")
+    for item in evidence:
+        if not isinstance(item, str) or not item:
+            raise ConformanceError(f"{leaf_id}: evidence entries must be non-empty strings")
+        if item.startswith("fixture:"):
+            fixture_id = item.removeprefix("fixture:")
+            if not fixture_id or fixture_id not in fixture_set:
+                raise ConformanceError(f"{leaf_id}: evidence fixture does not exist: {item}")
+        elif item.startswith("upstream:"):
+            if not item.removeprefix("upstream:"):
+                raise ConformanceError(f"{leaf_id}: upstream evidence path is empty")
+        else:
+            raise ConformanceError(f"{leaf_id}: unsupported evidence reference: {item}")
+
+
+def _validate_production(production: Any, leaf_id: str) -> None:
+    if not isinstance(production, list):
+        raise ConformanceError(f"{leaf_id}: production must be a list")
+    for item in production:
+        if not isinstance(item, str) or not item:
+            raise ConformanceError(f"{leaf_id}: production entries must be non-empty strings")
+        if item != "workshop-rs" and not (ROOT / item).is_file():
+            raise ConformanceError(f"{leaf_id}: production path does not exist: {item}")
+
+
+def inventory_leaves(inventory: dict[str, Any]) -> list[dict[str, Any]]:
+    leaves: list[dict[str, Any]] = []
+    for registry in inventory["registries"]:
+        defaults = registry["defaults"]
+        overrides = registry.get("overrides", {})
+        for key in registry["keys"]:
+            leaf = dict(defaults)
+            leaf.update(overrides.get(key, {}))
+            leaf["id"] = f"{registry['id']}/{key}"
+            leaf["registry"] = registry["id"]
+            leaf["upstreamKey"] = key
+            leaf["contract"] = registry["contract"]
+            leaves.append(leaf)
+    leaves.extend(inventory["branches"])
+    return leaves
+
+
+def _direct_object_properties(text: str, opening: int) -> dict[str, int | None]:
+    properties: dict[str, int | None] = {}
+    depth = 0
+    quote: str | None = None
+    escaped = False
+    comment: str | None = None
+    i = opening
+    while i < len(text):
+        char = text[i]
+        following = text[i + 1] if i + 1 < len(text) else ""
+        if comment == "line":
+            if char == "\n":
+                comment = None
+            i += 1
+            continue
+        if comment == "block":
+            if char == "*" and following == "/":
+                comment = None
+                i += 2
+                continue
+            i += 1
+            continue
+        if depth == 1:
+            match = re.match(r"\s*([\"'])([^\"']+)\1\s*:", text[i:])
+            if match:
+                key = match.group(2)
+                value_start = i + match.end()
+                while value_start < len(text) and text[value_start].isspace():
+                    value_start += 1
+                properties[key] = value_start if value_start < len(text) and text[value_start] == "{" else None
+                i += match.end()
+                continue
+        if quote:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == quote:
+                quote = None
+            i += 1
+            continue
+        if char in "'\"`":
+            quote = char
+            i += 1
+            continue
+        if char == "/" and following == "/":
+            comment = "line"
+            i += 2
+            continue
+        if char == "/" and following == "*":
+            comment = "block"
+            i += 2
+            continue
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                break
+        i += 1
+    return properties
+
+
+def _upstream_object_keys(source: Path, object_path: str) -> set[str]:
+    text = source.read_text(encoding="utf-8")
+    parts = object_path.split(".")
+    declaration = re.search(rf"export\s+const\s+{re.escape(parts[0])}\b.*?=", text, re.DOTALL)
+    if declaration is None:
+        raise ConformanceError(f"upstream object is missing: {source}#{object_path}")
+    opening = text.find("{", declaration.end())
+    if opening < 0:
+        raise ConformanceError(f"upstream object has no body: {source}#{object_path}")
+    for part in parts[1:]:
+        child = _direct_object_properties(text, opening).get(part)
+        if child is None:
+            raise ConformanceError(f"upstream object is missing: {source}#{object_path}")
+        opening = child
+    return set(_direct_object_properties(text, opening))
+
+
+def validate_inventory(
+    inventory: dict[str, Any],
+    manifest: dict[str, Any],
+    fixtures_root: Path = FIXTURES,
+    upstream_root: Path | None = None,
+    audit: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    audit = load_pinned_audit() if audit is None else audit
+    if inventory["reference"] != manifest["reference"]:
+        raise ConformanceError("feature contract inventory reference pin disagrees with conformance manifest")
+    if audit["reference"] != manifest["reference"]:
+        raise ConformanceError("pinned OverPy audit reference pin disagrees with conformance manifest")
+    fixture_set = fixture_ids(fixtures_root)
+    category_contracts = {
+        f"{category['id']}/{contract['id']}"
+        for category in manifest["categories"]
+        for contract in category["contracts"]
+    }
+    surfaces = inventory["registries"]
+    if any(not isinstance(surface, dict) for surface in surfaces):
+        raise ConformanceError("feature contract registries must be objects")
+    surface_ids = [surface.get("id") for surface in surfaces]
+    if any(not isinstance(item, str) or not item for item in surface_ids) or len(set(surface_ids)) != len(surface_ids):
+        raise ConformanceError("feature contract registry ids must be unique")
+    required_surfaces = set(inventory["requiredRegistries"])
+    if required_surfaces != set(surface_ids):
+        raise ConformanceError(
+            "feature contract registry catalog differs from required registries: "
+            f"missing={sorted(required_surfaces - set(surface_ids))}, "
+            f"extra={sorted(set(surface_ids) - required_surfaces)}"
+        )
+    audit_surfaces = {surface["id"]: surface for surface in audit["registries"]}
+    if required_surfaces != set(audit_surfaces):
+        raise ConformanceError(
+            "feature contract registry catalog differs from pinned audit: "
+            f"missing={sorted(set(audit_surfaces) - required_surfaces)}, "
+            f"extra={sorted(required_surfaces - set(audit_surfaces))}"
+        )
+    if any(not isinstance(branch, dict) for branch in inventory["branches"]):
+        raise ConformanceError("feature contract branches must be objects")
+    leaves = inventory_leaves(inventory)
+    leaf_ids = [leaf.get("id") for leaf in leaves]
+    if any(not isinstance(item, str) or not item for item in leaf_ids) or len(set(leaf_ids)) != len(leaf_ids):
+        raise ConformanceError("feature contract leaf ids must be unique")
+    branch_ids = [branch.get("id") for branch in inventory["branches"]]
+    required_branches = set(inventory["requiredBranches"])
+    if required_branches != set(branch_ids):
+        raise ConformanceError(
+            "feature contract branch catalog differs from required branches: "
+            f"missing={sorted(required_branches - set(branch_ids))}, "
+            f"extra={sorted(set(branch_ids) - required_branches)}"
+        )
+    audit_branches = {branch["id"]: branch for branch in audit["branches"]}
+    if required_branches != set(audit_branches):
+        raise ConformanceError(
+            "feature contract branch catalog differs from pinned audit: "
+            f"missing={sorted(set(audit_branches) - required_branches)}, "
+            f"extra={sorted(required_branches - set(audit_branches))}"
+        )
+    for branch in inventory["branches"]:
+        if (
+            not isinstance(branch, dict)
+            or branch.get("kind") != "compiler-branch"
+            or not isinstance(branch.get("id"), str)
+            or not branch["id"]
+            or not isinstance(branch.get("authority"), str)
+            or not branch["authority"]
+        ):
+            raise ConformanceError("feature contract branches need compiler kind, id, and authority")
+    for registry in surfaces:
+        registry_id = registry["id"]
+        if registry.get("kind") != "registry" or not isinstance(registry.get("authority"), str):
+            raise ConformanceError(f"{registry_id}: malformed registry surface")
+        if (
+            not isinstance(registry.get("source"), dict)
+            or not isinstance(registry["source"].get("path"), str)
+            or not registry["source"].get("path")
+            or not isinstance(registry["source"].get("objectPath"), str)
+            or not registry["source"].get("objectPath")
+        ):
+            raise ConformanceError(f"{registry_id}: source path and object path are required")
+        if registry["source"] != audit_surfaces[registry_id]["source"]:
+            raise ConformanceError(f"{registry_id}: source differs from pinned audit")
+        keys = registry.get("keys")
+        if not isinstance(keys, list) or not keys or len(keys) != len(set(keys)) or any(not isinstance(key, str) or not key for key in keys):
+            raise ConformanceError(f"{registry_id}: registry keys must be distinct non-empty strings")
+        defaults = registry.get("defaults")
+        if not isinstance(defaults, dict):
+            raise ConformanceError(f"{registry_id}: defaults are required")
+        overrides = registry.get("overrides", {})
+        if not isinstance(overrides, dict) or set(overrides) - set(keys):
+            raise ConformanceError(f"{registry_id}: overrides must name declared registry keys")
+        if upstream_root is not None:
+            source = upstream_root / registry["source"]["path"]
+            actual = _upstream_object_keys(source, registry["source"]["objectPath"])
+            if actual != set(keys):
+                missing = sorted(actual - set(keys))
+                extra = sorted(set(keys) - actual)
+                raise ConformanceError(f"{registry_id}: upstream key set differs (missing={missing}, extra={extra})")
+    if upstream_root is not None:
+        for branch in audit["branches"]:
+            source = upstream_root / branch["source"]
+            if not source.exists():
+                raise ConformanceError(f"{branch['id']}: pinned audit source does not exist: {source}")
+    for leaf in leaves:
+        leaf_id = leaf["id"]
+        status = leaf.get("status")
+        coverage = leaf.get("coverage")
+        if status not in INVENTORY_STATUSES:
+            raise ConformanceError(f"{leaf_id}: invalid inventory status")
+        if coverage not in INVENTORY_COVERAGE:
+            raise ConformanceError(f"{leaf_id}: invalid inventory coverage")
+        if not isinstance(leaf.get("contract"), str) or not leaf["contract"]:
+            raise ConformanceError(f"{leaf_id}: contract is required")
+        if leaf["contract"] not in category_contracts and leaf["contract"] not in TOOLING_CONTRACTS:
+            raise ConformanceError(f"{leaf_id}: contract is not declared by conformance inventory")
+        if coverage != "covered" or status != "implemented":
+            if not isinstance(leaf.get("limits"), str) or not leaf["limits"]:
+                raise ConformanceError(f"{leaf_id}: bounded or unresolved claims need limits")
+        if status == "implemented" and coverage == "covered":
+            if not isinstance(leaf.get("production"), list) or not leaf["production"]:
+                raise ConformanceError(f"{leaf_id}: covered implementation needs production evidence")
+            if not isinstance(leaf.get("evidence"), list) or not leaf["evidence"]:
+                raise ConformanceError(f"{leaf_id}: covered implementation needs executable evidence")
+        if "production" in leaf:
+            _validate_production(leaf["production"], leaf_id)
+        _validate_evidence(leaf.get("evidence", []), fixture_set, leaf_id)
+    return leaves
 
 
 def fixture_ids(fixtures_root: Path = FIXTURES) -> set[str]:
@@ -383,6 +713,9 @@ def compare_case(
 def run(args: argparse.Namespace) -> int:
     manifest = load_manifest(args.manifest)
     validate_manifest(manifest, args.fixtures)
+    inventory = load_inventory(args.inventory)
+    audit = load_pinned_audit()
+    leaves = validate_inventory(inventory, manifest, args.fixtures, args.upstream_root, audit)
     frontiers = manifest["referenceFrontiers"]
     selected = set(args.fixture)
     discovered = fixture_ids(args.fixtures)
@@ -450,6 +783,25 @@ def run(args: argparse.Namespace) -> int:
         "generatedBy": "compatibility/conformance.py",
         "contract": manifest["contract"],
         "reference": manifest["reference"],
+        "featureInventory": {
+            "contract": inventory["contract"],
+            "registries": len(inventory["registries"]),
+            "registryLeaves": sum(len(registry["keys"]) for registry in inventory["registries"]),
+            "branches": len(inventory["branches"]),
+            "byStatus": {
+                status: sum(1 for leaf in leaves if leaf["status"] == status)
+                for status in sorted(INVENTORY_STATUSES)
+            },
+            "byCoverage": {
+                coverage: sum(1 for leaf in leaves if leaf["coverage"] == coverage)
+                for coverage in sorted(INVENTORY_COVERAGE)
+            },
+            "gaps": [
+                leaf["id"]
+                for leaf in leaves
+                if leaf["coverage"] != "covered" or leaf["status"] != "implemented"
+            ],
+        },
         "comparison": {
             "stages": [stage["id"] for stage in manifest["stages"]],
             "success": "canonical WIR equivalence via workshop-rs::roundtrip::equivalent",
@@ -480,6 +832,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--fixtures", type=Path, default=FIXTURES)
     parser.add_argument("--manifest", type=Path, default=MANIFEST)
+    parser.add_argument("--inventory", type=Path, default=INVENTORY)
+    parser.add_argument(
+        "--upstream-root",
+        type=Path,
+        help="optional checkout of the pinned OverPy content for registry key-set verification",
+    )
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
     parser.add_argument("--fixture", action="append", default=[])
     args = parser.parse_args(argv)
@@ -487,6 +845,9 @@ def main(argv: list[str] | None = None) -> int:
     args.semantic_binary = args.semantic_binary.resolve()
     args.fixtures = args.fixtures.resolve()
     args.manifest = args.manifest.resolve()
+    args.inventory = args.inventory.resolve()
+    if args.upstream_root is not None:
+        args.upstream_root = args.upstream_root.resolve()
     args.report = args.report.resolve()
     if not args.binary.is_file():
         parser.error(f"compiler binary does not exist: {args.binary}")

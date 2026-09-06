@@ -1,5 +1,6 @@
 import copy
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -14,6 +15,7 @@ class ConformanceTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.manifest = conformance.load_manifest()
+        cls.audit = conformance.load_pinned_audit()
 
     def test_inventory_covers_the_corpus_and_audits_failures(self):
         conformance.validate_manifest(self.manifest)
@@ -41,6 +43,116 @@ class ConformanceTests(unittest.TestCase):
         broken["categories"][0]["contracts"][0]["probes"] = []
         with self.assertRaises(conformance.ConformanceError):
             conformance.validate_manifest(broken)
+
+    def test_feature_contract_inventory_is_leaf_explicit(self):
+        inventory = conformance.load_inventory()
+        leaves = conformance.validate_inventory(
+            inventory, self.manifest, audit=self.audit
+        )
+        self.assertEqual(
+            {registry["id"] for registry in inventory["registries"]},
+            set(inventory["requiredRegistries"]),
+        )
+        self.assertEqual(
+            {branch["id"] for branch in inventory["branches"]},
+            set(inventory["requiredBranches"]),
+        )
+        self.assertEqual(len(leaves), len(conformance.inventory_leaves(inventory)))
+        self.assertIn("unclear", {leaf["status"] for leaf in leaves})
+        self.assertIn("unsupported", {leaf["status"] for leaf in leaves})
+
+    def test_feature_contract_inventory_requires_evidence_for_covered_claims(self):
+        inventory = conformance.load_inventory()
+        broken = copy.deepcopy(inventory)
+        broken["branches"][0]["evidence"] = []
+        with self.assertRaises(conformance.ConformanceError):
+            conformance.validate_inventory(broken, self.manifest, audit=self.audit)
+
+    def test_feature_contract_inventory_requires_every_audited_branch(self):
+        inventory = conformance.load_inventory()
+        broken = copy.deepcopy(inventory)
+        broken["branches"].pop()
+        broken["requiredBranches"].pop()
+        with self.assertRaises(conformance.ConformanceError):
+            conformance.validate_inventory(broken, self.manifest, audit=self.audit)
+
+    def test_feature_contract_inventory_requires_every_audited_registry(self):
+        inventory = conformance.load_inventory()
+        broken = copy.deepcopy(inventory)
+        broken["registries"].pop()
+        broken["requiredRegistries"].pop()
+        with self.assertRaises(conformance.ConformanceError):
+            conformance.validate_inventory(broken, self.manifest, audit=self.audit)
+
+    def test_feature_contract_inventory_detects_pinned_registry_drift(self):
+        inventory = {
+            "reference": self.manifest["reference"],
+            "requiredRegistries": ["registry/test"],
+            "requiredBranches": ["branch/test"],
+            "registries": [
+                {
+                    "id": "registry/test",
+                    "kind": "registry",
+                    "authority": "OverPy@9.7.10:src/data/opy/keywords.ts#opyKeywords",
+                    "source": {"path": "src/data/opy/keywords.ts", "objectPath": "opyKeywords"},
+                    "contract": "syntax.parser-and-control-flow/statement-and-declaration-boundaries",
+                    "keys": ["and", "or"],
+                    "defaults": {
+                        "status": "unclear",
+                        "coverage": "uncovered",
+                        "limits": "test inventory",
+                    },
+                }
+            ],
+            "branches": [
+                {
+                    "id": "branch/test",
+                    "kind": "compiler-branch",
+                    "authority": "OverPy@9.7.10:src/compiler/parser.ts",
+                    "contract": "syntax.parser-and-control-flow/statement-and-declaration-boundaries",
+                    "status": "partial",
+                    "coverage": "uncovered",
+                    "limits": "test branch",
+                }
+            ],
+        }
+        audit = {
+            "reference": self.manifest["reference"],
+            "registries": [
+                {
+                    "id": "registry/test",
+                    "source": {
+                        "path": "src/data/opy/keywords.ts",
+                        "objectPath": "opyKeywords",
+                    },
+                }
+            ],
+            "branches": [{"id": "branch/test", "source": "src/compiler/parser.ts"}],
+        }
+        with tempfile.TemporaryDirectory(dir=COMPATIBILITY_DIR) as directory:
+            source = Path(directory) / "src/data/opy/keywords.ts"
+            source.parent.mkdir(parents=True)
+            source.write_text('export const opyKeywords = {"and": 1, "or": 1};\n', encoding="utf-8")
+            branch_source = Path(directory) / "src/compiler/parser.ts"
+            branch_source.parent.mkdir(parents=True)
+            branch_source.write_text("// pinned branch source\n", encoding="utf-8")
+            conformance.validate_inventory(
+                inventory,
+                self.manifest,
+                upstream_root=Path(directory),
+                audit=audit,
+            )
+            source.write_text(
+                'export const opyKeywords = {"and": 1, "or": 1, "new": 1};\n',
+                encoding="utf-8",
+            )
+            with self.assertRaises(conformance.ConformanceError):
+                conformance.validate_inventory(
+                    inventory,
+                    self.manifest,
+                    upstream_root=Path(directory),
+                    audit=audit,
+                )
 
     def test_native_frontier_uses_failure_class_without_hiding_stage(self):
         result = {

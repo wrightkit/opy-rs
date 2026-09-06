@@ -1,0 +1,943 @@
+{
+  "schemaVersion": 1,
+  "contract": "pinned-overpy-feature-contract-inventory",
+  "reference": {
+    "name": "overpy",
+    "version": "9.7.10",
+    "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw=="
+  },
+  "statusVocabulary": {
+    "implemented": "opy-rs production behavior is implemented for the stated leaf.",
+    "partial": "Only the stated slice is implemented; limits are mandatory.",
+    "unsupported": "The leaf is explicitly outside the current opy-rs contract.",
+    "external-owner": "The behavior belongs to an owning repository boundary.",
+    "unclear": "The pinned surface is recorded but implementation/evidence is not yet resolved."
+  },
+  "coverageVocabulary": {
+    "covered": "Executable evidence exercises the stated leaf contract.",
+    "partial": "Evidence covers a bounded slice and names its limits.",
+    "uncovered": "No opy-rs executable leaf evidence is claimed."
+  },
+  "requiredRegistries": [
+    "registry/keywords",
+    "registry/directives",
+    "registry/annotations",
+    "registry/random-module",
+    "registry/macros",
+    "registry/functions",
+    "registry/member-functions",
+    "registry/vector-constants",
+    "registry/math-constants",
+    "registry/textures",
+    "registry/string-entities"
+  ],
+  "requiredBranches": [
+    "branch/lexer-token-boundaries",
+    "branch/parser-expressions",
+    "branch/parser-declarations",
+    "branch/parser-control-flow",
+    "branch/parser-contextual-lambda",
+    "branch/parser-goto-and-dynamic-targets",
+    "branch/compiler-project-closure",
+    "branch/compiler-macro-expansion",
+    "branch/compiler-directive-state",
+    "branch/compiler-translations",
+    "branch/compiler-settings",
+    "branch/semantic-dispatch",
+    "branch/semantic-diagnostic-frontiers",
+    "branch/lowering-canonical-wir",
+    "branch/lowering-unsupported-boundary",
+    "branch/project-real-world",
+    "branch/workshop-catalog-boundary",
+    "branch/workshop-value-boundary",
+    "branch/cli-compile-contract",
+    "branch/cli-decompile-contract",
+    "branch/compile-metadata",
+    "branch/javascript-macro-runtime",
+    "branch/post-compile-hook",
+    "branch/quickjs-failure-abi",
+    "branch/cli-project-input"
+  ],
+  "registries": [
+    {
+      "id": "registry/keywords",
+      "kind": "registry",
+      "authority": "OverPy@9.7.10:src/data/opy/keywords.ts#opyKeywords",
+      "source": {
+        "path": "src/data/opy/keywords.ts",
+        "objectPath": "opyKeywords"
+      },
+      "contract": "syntax.parser-and-control-flow/statement-and-declaration-boundaries",
+      "keys": [
+        "and",
+        "bool",
+        "case",
+        "def",
+        "default",
+        "del",
+        "elif",
+        "else",
+        "enum",
+        "float",
+        "for",
+        "if",
+        "in",
+        "int",
+        "globalvar",
+        "goto",
+        "lambda",
+        "loc",
+        "macro",
+        "not",
+        "or",
+        "playervar",
+        "rule",
+        "self",
+        "settings",
+        "signed",
+        "switch",
+        "subroutine",
+        "unsigned",
+        "while"
+      ],
+      "defaults": {
+        "status": "unclear",
+        "coverage": "uncovered",
+        "limits": "Keyword leaves are individually inventoried; contexts and lowering remain separate."
+      }
+    },
+    {
+      "id": "registry/directives",
+      "kind": "registry",
+      "authority": "OverPy@9.7.10:src/data/opy/preprocessing.ts#preprocessingDirectives",
+      "source": {
+        "path": "src/data/opy/preprocessing.ts",
+        "objectPath": "preprocessingDirectives"
+      },
+      "contract": "preprocessing.project-composition/directive-state",
+      "keys": [
+        "allowMacroRedeclaration",
+        "define",
+        "debugElementCount",
+        "disableInspector",
+        "suppressWarnings",
+        "mainFile",
+        "include",
+        "excludeVariablesInCompilation",
+        "setupTags",
+        "disableOptimizations",
+        "enableOptimizations",
+        "optimizeForSize",
+        "optimizeForSizeAggressive",
+        "disableOptimizeForSize",
+        "optimizeStrict",
+        "disableOptimizeStrict",
+        "replace0ByCapturePercentage",
+        "replace0ByPayloadProgressPercentage",
+        "replace0ByIsMatchComplete",
+        "replace1ByMatchRound",
+        "replaceTeam1ByControlScoringTeam",
+        "replaceEmptyStringByEmptyArray",
+        "replaceEmptyStringByVariable",
+        "translations",
+        "translateWithPlayerVar",
+        "useVariableForCompressionAlphabet",
+        "extension",
+        "globalvarInitRuleName",
+        "playervarInitRuleName",
+        "keepUnusedTranslations",
+        "disableTranslationSourceLines",
+        "writeToOutputFile",
+        "postCompileHook",
+        "rulePrefix",
+        "rulePrefixTemplate"
+      ],
+      "defaults": {
+        "status": "unclear",
+        "coverage": "uncovered",
+        "limits": "Directive recognition, scoped state, and backend effects are separate contracts."
+      }
+    },
+    {
+      "id": "registry/annotations",
+      "kind": "registry",
+      "authority": "OverPy@9.7.10:src/data/opy/annotations.ts#opyAnnotations",
+      "source": {
+        "path": "src/data/opy/annotations.ts",
+        "objectPath": "opyAnnotations"
+      },
+      "contract": "semantics.declarations-and-settings/variable-and-rule-declarations",
+      "keys": [
+        "@Name",
+        "@Event",
+        "@Team",
+        "@Slot",
+        "@Hero",
+        "@Condition",
+        "@SuppressWarnings",
+        "@Disabled",
+        "@Delimiter",
+        "@NewPage"
+      ],
+      "defaults": {
+        "status": "unclear",
+        "coverage": "uncovered",
+        "limits": "Annotation arguments and rule lifecycle have distinct behavior."
+      }
+    },
+    {
+      "id": "registry/random-module",
+      "kind": "registry",
+      "authority": "OverPy@9.7.10:src/data/opy/modules.ts#opyModules.random",
+      "source": {
+        "path": "src/data/opy/modules.ts",
+        "objectPath": "opyModules.random"
+      },
+      "contract": "semantics.builtins-members-and-enums/callable-signatures",
+      "keys": [
+        "randint",
+        "uniform",
+        "choice",
+        "shuffle"
+      ],
+      "defaults": {
+        "status": "unclear",
+        "coverage": "uncovered",
+        "limits": "The module namespace is not a callable leaf."
+      }
+    },
+    {
+      "id": "registry/macros",
+      "kind": "registry",
+      "authority": "OverPy@9.7.10:src/data/opy/macros.ts#opyMacros",
+      "source": {
+        "path": "src/data/opy/macros.ts",
+        "objectPath": "opyMacros"
+      },
+      "contract": "preprocessing.project-composition/macro-expansion",
+      "keys": [
+        "buttonToString",
+        ".getEffectiveHero",
+        ".getOppositeTeam",
+        "getRealClosestPlayer",
+        "getRealClosestPlayers",
+        "getRealFarthestPlayer",
+        "getRealFarthestPlayers",
+        ".getRealPlayerClosestToReticle",
+        ".getRealPlayersClosestToReticle",
+        "getRealPlayersInRadius",
+        ".getRealPlayersInViewAngle",
+        "getSign",
+        "getAllPlayers",
+        "hudHeader",
+        "hudSubheader",
+        "hudSubtext",
+        "lerp",
+        "lineIntersectsSphere",
+        "print",
+        ".reverse",
+        "timeToString",
+        ".unique"
+      ],
+      "defaults": {
+        "status": "unclear",
+        "coverage": "uncovered",
+        "limits": "Expansion, receiver context, and runtime behavior differ."
+      }
+    },
+    {
+      "id": "registry/functions",
+      "kind": "registry",
+      "authority": "OverPy@9.7.10:src/data/opy/functions.ts#opyFuncs",
+      "source": {
+        "path": "src/data/opy/functions.ts",
+        "objectPath": "opyFuncs"
+      },
+      "contract": "semantics.builtins-members-and-enums/callable-signatures",
+      "keys": [
+        "_",
+        "__",
+        "___",
+        "all",
+        "any",
+        ".append",
+        ".all",
+        ".any",
+        ".filter",
+        ".map",
+        "arrayToString",
+        "ceil",
+        "chaseAtRate",
+        "chaseOverTime",
+        "compress",
+        "compressed",
+        "decompressNumbers",
+        "decompressVectors",
+        "createCasedProgressBarIwt",
+        "debug",
+        "floor",
+        ".format",
+        "getCurrentMap",
+        ".getNormal",
+        ".getPlayerHit",
+        ".getHitPosition",
+        "hsl",
+        "log",
+        "pass",
+        "range",
+        "raycast",
+        ".remove",
+        "round",
+        "ruleCondition",
+        "sorted",
+        "spacesForString",
+        "spacesForLength",
+        "splitDictArray",
+        "stopChasing",
+        "strVisualLength",
+        "tabular",
+        ".toArray"
+      ],
+      "defaults": {
+        "status": "unclear",
+        "coverage": "uncovered",
+        "limits": "A function name does not imply signature, context, or lowering coverage."
+      }
+    },
+    {
+      "id": "registry/member-functions",
+      "kind": "registry",
+      "authority": "OverPy@9.7.10:src/data/opy/memberFunctions.ts#opyMemberFuncs",
+      "source": {
+        "path": "src/data/opy/memberFunctions.ts",
+        "objectPath": "opyMemberFuncs"
+      },
+      "contract": "semantics.builtins-members-and-enums/receiver-dispatch",
+      "keys": [
+        "x",
+        "y",
+        "z"
+      ],
+      "defaults": {
+        "status": "unclear",
+        "coverage": "uncovered",
+        "limits": "Property receiver dispatch is separate from callable members."
+      }
+    },
+    {
+      "id": "registry/vector-constants",
+      "kind": "registry",
+      "authority": "OverPy@9.7.10:src/data/opy/constants.ts#opyConstants.Vector",
+      "source": {
+        "path": "src/data/opy/constants.ts",
+        "objectPath": "opyConstants.Vector"
+      },
+      "contract": "semantics.builtins-members-and-enums/enum-domain-context",
+      "keys": [
+        "UP",
+        "DOWN",
+        "LEFT",
+        "RIGHT",
+        "FORWARD",
+        "BACKWARD"
+      ],
+      "defaults": {
+        "status": "unclear",
+        "coverage": "uncovered",
+        "limits": "Source identities are tracked without copying Workshop data."
+      }
+    },
+    {
+      "id": "registry/math-constants",
+      "kind": "registry",
+      "authority": "OverPy@9.7.10:src/data/opy/constants.ts#opyConstants.Math",
+      "source": {
+        "path": "src/data/opy/constants.ts",
+        "objectPath": "opyConstants.Math"
+      },
+      "contract": "semantics.builtins-members-and-enums/enum-domain-context",
+      "keys": [
+        "PI",
+        "E",
+        "FUCKTON_OF_SPACES",
+        "FUCKTON_OF_NEWLINES",
+        "LOTS_OF_SPACES",
+        "INFINITY",
+        "EPSILON",
+        "SPHERE_HORIZONTAL_RADIUS_MULT",
+        "SPHERE_VERTICAL_RADIUS_MULT",
+        "INNER_RING_RADIUS_MULT",
+        "OUTER_RING_RADIUS_MULT",
+        "RING_EXPLOSION_RADIUS_MULT"
+      ],
+      "defaults": {
+        "status": "unclear",
+        "coverage": "uncovered",
+        "limits": "Spacing and radius helpers have distinct support."
+      }
+    },
+    {
+      "id": "registry/textures",
+      "kind": "registry",
+      "authority": "OverPy@9.7.10:src/data/opy/textures.ts#opyTextures",
+      "source": {
+        "path": "src/data/opy/textures.ts",
+        "objectPath": "opyTextures"
+      },
+      "contract": "semantics.builtins-members-and-enums/enum-domain-context",
+      "keys": [
+        "GROUP_UP",
+        "ULTIMATE",
+        "NEED_HEALING",
+        "ATTACKING",
+        "EMOTE",
+        "HELLO",
+        "NEED_HELP",
+        "THANKS",
+        "DEFENDING",
+        "FALL_BACK",
+        "GO",
+        "GOING_IN",
+        "INCOMING",
+        "NO",
+        "ON_MY_WAY",
+        "PRESS_THE_ATTACK",
+        "PUSH_FORWARD",
+        "SORRY",
+        "WITH_YOU",
+        "MERCY_ANGELIC_DESCENT",
+        "BRIGITTE_SHIELD_BASH",
+        "LUCIO_HEALING_CROSSFADE",
+        "REAPER_PASSIVE",
+        "TORBJORN_SCRAP_COLLECTOR",
+        "JUNKRAT_PASSIVE",
+        "DVA_LIGHT_GUN",
+        "DVA_ALTERNATE_ULT",
+        "DVA_PASSIVE",
+        "SOMBRA_STEALTH",
+        "SOMBRA_PASSIVE",
+        "DOOMFIST_PASSIVE",
+        "BRIGITTE_PASSIVE",
+        "HANZO_LUNGE",
+        "JUNKER_QUEEN_PASSIVE",
+        "HALLOWEEN_TERROR",
+        "BLIZZARD_SPECIAL",
+        "SUMMER_GAMES",
+        "OVERWATCH_LEAGUE_TOKENS",
+        "PINK_MERCY_HEART",
+        "LOCK",
+        "OVERWATCH_COINS",
+        "COMPETITIVE_POINTS",
+        "ESCORT",
+        "ELIMINATION",
+        "DEATHMATCH",
+        "CAPTURE_THE_FLAG",
+        "CONTROL",
+        "ASSAULT",
+        "FLASHPOINT",
+        "TEAM_DEATHMATCH",
+        "SKIRMISH",
+        "HYBRID",
+        "PUSH",
+        "PRACTICE_RANGE",
+        "EXPERIMENTAL_MODE_DARK",
+        "FLAG_IRELAND",
+        "FLAG_ARGENTINA",
+        "FLAG_BELGIUM",
+        "FLAG_BULGARIA",
+        "FLAG_CHILE",
+        "FLAG_COLOMBIA",
+        "FLAG_GREECE",
+        "FLAG_ICELAND",
+        "FLAG_INDIA",
+        "RIGHT_CLICK",
+        "SCROLL_UP",
+        "SCROLL_DOWN",
+        "SCROLL",
+        "MOUSE_SIDE_BUTTON",
+        "DPAD_UP_ARROW",
+        "DPAD_DOWN_ARROW",
+        "DPAD_LEFT_ARROW",
+        "DPAD_RIGHT_ARROW",
+        "Y_BUTTON",
+        "B_BUTTON",
+        "A_BUTTON",
+        "MOUSE_CURSOR",
+        "MICROPHONE",
+        "WORKSHOP",
+        "HERO_BORDER",
+        "BRONZE_BORDER",
+        "PACKET_LOSS",
+        "CONNECTIVITY_ISSUE",
+        "EXPLOSION_DARK",
+        "TARGET_WITH_CHECKMARK_DARK",
+        "FIRE_DARK",
+        "HEALING_PLUS_DARK",
+        "TARGET_WITH_PERSON_DARK",
+        "TRACER_ICON_DARK",
+        "COMPETITIVE_ICON",
+        "GAME_BROWSER_ICON_DARK",
+        "UNRANKED_ICON_DARK",
+        "SQUARE_GRADIENT_TRANSPARENT_BLACK"
+      ],
+      "defaults": {
+        "status": "unclear",
+        "coverage": "uncovered",
+        "limits": "Texture names are inventoried without copying texture data."
+      }
+    },
+    {
+      "id": "registry/string-entities",
+      "kind": "registry",
+      "authority": "OverPy@9.7.10:src/data/opy/stringEntities.ts#opyStringEntities",
+      "source": {
+        "path": "src/data/opy/stringEntities.ts",
+        "objectPath": "opyStringEntities"
+      },
+      "contract": "syntax.lexing/strings-and-modifiers",
+      "keys": [
+        "copyright",
+        "registered",
+        "macron",
+        "middle_dot",
+        "zero_width_space",
+        "horizontal_bar",
+        "reference_mark",
+        "asterism",
+        "left_arrow",
+        "up_arrow",
+        "right_arrow",
+        "down_arrow",
+        "horizontal_arrow",
+        "vertical_arrow",
+        "top_left_arrow",
+        "top_right_arrow",
+        "bottom_right_arrow",
+        "bottom_left_arrow",
+        "right_double_arrow",
+        "horizontal_double_arrow",
+        "infinity",
+        "fullwidth_block",
+        "black_square",
+        "white_square",
+        "square_in_square",
+        "square_horizontal_lines",
+        "square_vertical_lines",
+        "square_grid_lines",
+        "square_top_left_bottom_right_lines",
+        "square_top_right_bottom_left_lines",
+        "square_diagonal_lines",
+        "up_black_triangle",
+        "up_white_triangle",
+        "right_black_triangle",
+        "right_white_triangle",
+        "down_black_triangle",
+        "down_white_triangle",
+        "left_black_triangle",
+        "left_white_triangle",
+        "black_diamond",
+        "white_diamond",
+        "diamond_in_diamond",
+        "white_circle",
+        "black_circle",
+        "black_star",
+        "white_star",
+        "black_phone",
+        "white_phone",
+        "left_hand",
+        "right_hand",
+        "female",
+        "male",
+        "black_spades",
+        "white_heart",
+        "black_clubs",
+        "white_spades",
+        "black_heart",
+        "white_clubs",
+        "java",
+        "quarter_note",
+        "eighth_note",
+        "sixteenth_double_note",
+        "flat_note",
+        "fullwidth_space",
+        "industrial_symbol",
+        "postal_face",
+        "box_with_x"
+      ],
+      "defaults": {
+        "status": "unclear",
+        "coverage": "uncovered",
+        "limits": "String entity names are inventoried separately from string parsing and escaping semantics."
+      }
+    }
+  ],
+  "branches": [
+    {
+      "id": "branch/lexer-token-boundaries",
+      "kind": "compiler-branch",
+      "authority": "OverPy@9.7.10:src/compiler/tokenizer.ts",
+      "contract": "syntax.lexing/compound-expression-tokens",
+      "status": "implemented",
+      "coverage": "covered",
+      "production": [
+        "crates/opy-rs/src/lexer.rs"
+      ],
+      "evidence": [
+        "fixture:synthetic/syntax-surface"
+      ]
+    },
+    {
+      "id": "branch/parser-expressions",
+      "kind": "compiler-branch",
+      "authority": "OverPy@9.7.10:src/compiler/parser.ts",
+      "contract": "syntax.parser-and-control-flow/expression-precedence-and-access",
+      "status": "implemented",
+      "coverage": "covered",
+      "production": [
+        "crates/opy-rs/src/parser.rs"
+      ],
+      "evidence": [
+        "fixture:synthetic/expressions-values"
+      ]
+    },
+    {
+      "id": "branch/parser-declarations",
+      "kind": "compiler-branch",
+      "authority": "OverPy@9.7.10:src/compiler/astParser.ts",
+      "contract": "semantics.declarations-and-settings/variable-and-rule-declarations",
+      "status": "implemented",
+      "coverage": "covered",
+      "production": [
+        "crates/opy-rs/src/parser.rs"
+      ],
+      "evidence": [
+        "fixture:synthetic/declarations-rules"
+      ]
+    },
+    {
+      "id": "branch/parser-control-flow",
+      "kind": "compiler-branch",
+      "authority": "OverPy@9.7.10:src/compiler/parser.ts",
+      "contract": "syntax.parser-and-control-flow/branches-loops-and-switches",
+      "status": "implemented",
+      "coverage": "covered",
+      "production": [
+        "crates/opy-rs/src/parser.rs"
+      ],
+      "evidence": [
+        "fixture:synthetic/control-flow"
+      ]
+    },
+    {
+      "id": "branch/parser-contextual-lambda",
+      "kind": "compiler-branch",
+      "authority": "OverPy@9.7.10:src/compiler/parser.ts",
+      "contract": "syntax.parser-and-control-flow/lambda-and-postfix-context",
+      "status": "partial",
+      "coverage": "partial",
+      "production": [
+        "crates/opy-rs/src/parser.rs"
+      ],
+      "evidence": [
+        "fixture:synthetic/strings-and-lambda"
+      ],
+      "limits": "This branch is separate from its broader category; unlisted contexts are not claimed."
+    },
+    {
+      "id": "branch/parser-goto-and-dynamic-targets",
+      "kind": "compiler-branch",
+      "authority": "OverPy@9.7.10:src/compiler/parser.ts",
+      "contract": "syntax.parser-and-control-flow/statement-and-declaration-boundaries",
+      "status": "partial",
+      "coverage": "uncovered",
+      "production": [
+        "crates/opy-rs/src/parser.rs"
+      ],
+      "evidence": [
+        "upstream:src/tests/gotos.opy"
+      ],
+      "limits": "This branch is separate from its broader category; unlisted contexts are not claimed."
+    },
+    {
+      "id": "branch/compiler-project-closure",
+      "kind": "compiler-branch",
+      "authority": "OverPy@9.7.10:src/compiler/compiler.ts",
+      "contract": "preprocessing.project-composition/include-closure-composition",
+      "status": "implemented",
+      "coverage": "covered",
+      "production": [
+        "crates/opy-rs/src/preprocess.rs"
+      ],
+      "evidence": [
+        "fixture:synthetic/project-entry"
+      ]
+    },
+    {
+      "id": "branch/compiler-macro-expansion",
+      "kind": "compiler-branch",
+      "authority": "OverPy@9.7.10:src/compiler/tokenizer.ts",
+      "contract": "preprocessing.project-composition/macro-expansion",
+      "status": "partial",
+      "coverage": "partial",
+      "production": [
+        "crates/opy-rs/src/preprocess.rs"
+      ],
+      "evidence": [
+        "fixture:synthetic/preprocessing"
+      ],
+      "limits": "This branch is separate from its broader category; unlisted contexts are not claimed."
+    },
+    {
+      "id": "branch/compiler-directive-state",
+      "kind": "compiler-branch",
+      "authority": "OverPy@9.7.10:src/compiler/compiler.ts",
+      "contract": "preprocessing.project-composition/directive-state",
+      "status": "partial",
+      "coverage": "partial",
+      "production": [
+        "crates/opy-rs/src/preprocess.rs"
+      ],
+      "evidence": [
+        "fixture:synthetic/directives-scoped"
+      ],
+      "limits": "This branch is separate from its broader category; unlisted contexts are not claimed."
+    },
+    {
+      "id": "branch/compiler-translations",
+      "kind": "compiler-branch",
+      "authority": "OverPy@9.7.10:src/compiler/translations.ts",
+      "contract": "preprocessing.project-composition/project-level-preprocessing-failures",
+      "status": "unsupported",
+      "coverage": "uncovered",
+      "production": [
+        "crates/opy-rs/src/preprocess.rs"
+      ],
+      "evidence": [
+        "upstream:src/tests/translations.opy"
+      ],
+      "limits": "This branch is separate from its broader category; unlisted contexts are not claimed."
+    },
+    {
+      "id": "branch/compiler-settings",
+      "kind": "compiler-branch",
+      "authority": "OverPy@9.7.10:src/compiler/parser.ts",
+      "contract": "semantics.declarations-and-settings/settings-block",
+      "status": "partial",
+      "coverage": "partial",
+      "production": [
+        "crates/opy-rs/src/compiler/mod.rs"
+      ],
+      "evidence": [
+        "fixture:synthetic/settings"
+      ],
+      "limits": "This branch is separate from its broader category; unlisted contexts are not claimed."
+    },
+    {
+      "id": "branch/semantic-dispatch",
+      "kind": "compiler-branch",
+      "authority": "OverPy@9.7.10:src/data/opy/functions.ts",
+      "contract": "semantics.builtins-members-and-enums/receiver-dispatch",
+      "status": "implemented",
+      "coverage": "covered",
+      "production": [
+        "crates/opy-rs/src/manifest/mod.rs"
+      ],
+      "evidence": [
+        "fixture:synthetic/receiver-calls"
+      ]
+    },
+    {
+      "id": "branch/semantic-diagnostic-frontiers",
+      "kind": "compiler-branch",
+      "authority": "OverPy@9.7.10:src/compiler/compiler.ts",
+      "contract": "diagnostics.failure-frontiers/diagnostic-provenance",
+      "status": "implemented",
+      "coverage": "covered",
+      "production": [
+        "crates/opy-rs/src/diag.rs"
+      ],
+      "evidence": [
+        "fixture:synthetic/diagnostics"
+      ]
+    },
+    {
+      "id": "branch/lowering-canonical-wir",
+      "kind": "compiler-branch",
+      "authority": "OverPy@9.7.10:src/compiler/astToWorkshop.ts",
+      "contract": "lowering.canonical-wir/vertical-slice",
+      "status": "partial",
+      "coverage": "partial",
+      "production": [
+        "crates/opy-rs/src/lower.rs"
+      ],
+      "evidence": [
+        "fixture:synthetic/compiler-vertical-slice"
+      ],
+      "limits": "This branch is separate from its broader category; unlisted contexts are not claimed."
+    },
+    {
+      "id": "branch/lowering-unsupported-boundary",
+      "kind": "compiler-branch",
+      "authority": "OverPy@9.7.10:src/compiler/astToWorkshop.ts",
+      "contract": "lowering.canonical-wir/unsupported-lowering-boundary",
+      "status": "partial",
+      "coverage": "partial",
+      "production": [
+        "crates/opy-rs/src/lower.rs"
+      ],
+      "evidence": [
+        "fixture:synthetic/switch-break-unsupported"
+      ],
+      "limits": "This branch is separate from its broader category; unlisted contexts are not claimed."
+    },
+    {
+      "id": "branch/project-real-world",
+      "kind": "compiler-branch",
+      "authority": "OverPy@9.7.10:examples/",
+      "contract": "projects.real-world/complete-example-projects",
+      "status": "partial",
+      "coverage": "partial",
+      "production": [
+        "compatibility/fixtures/README.md"
+      ],
+      "evidence": [
+        "fixture:real-world/overpy-cake"
+      ],
+      "limits": "This branch is separate from its broader category; unlisted contexts are not claimed."
+    },
+    {
+      "id": "branch/workshop-catalog-boundary",
+      "kind": "compiler-branch",
+      "authority": "OverPy@9.7.10:src/data/actions.ts",
+      "contract": "ownership.workshop-feature-census/opaque-workshop-identities",
+      "status": "external-owner",
+      "coverage": "partial",
+      "production": [
+        "workshop-rs"
+      ],
+      "evidence": [
+        "fixture:census/workshop-feature-census"
+      ],
+      "limits": "This branch is separate from its broader category; unlisted contexts are not claimed."
+    },
+    {
+      "id": "branch/workshop-value-boundary",
+      "kind": "compiler-branch",
+      "authority": "OverPy@9.7.10:src/data/values.ts",
+      "contract": "ownership.workshop-feature-census/opaque-workshop-identities",
+      "status": "external-owner",
+      "coverage": "partial",
+      "production": [
+        "workshop-rs"
+      ],
+      "evidence": [
+        "fixture:census/workshop-feature-census"
+      ],
+      "limits": "This branch is separate from its broader category; unlisted contexts are not claimed."
+    },
+    {
+      "id": "branch/cli-compile-contract",
+      "kind": "compiler-branch",
+      "authority": "OverPy@9.7.10:src/cli.ts",
+      "contract": "projects.real-world/complete-example-projects",
+      "status": "implemented",
+      "coverage": "covered",
+      "production": [
+        "crates/opy-cli/src/main.rs"
+      ],
+      "evidence": [
+        "fixture:synthetic/basic-rule"
+      ]
+    },
+    {
+      "id": "branch/cli-decompile-contract",
+      "kind": "compiler-branch",
+      "authority": "OverPy@9.7.10:src/decompiler/decompiler.ts",
+      "contract": "tooling.decompile",
+      "status": "unsupported",
+      "coverage": "uncovered",
+      "production": [
+        "crates/opy-rs/src/compiler/reconstruct.rs"
+      ],
+      "evidence": [
+        "upstream:src/decompiler/"
+      ],
+      "limits": "This branch is separate from its broader category; unlisted contexts are not claimed."
+    },
+    {
+      "id": "branch/compile-metadata",
+      "kind": "compiler-branch",
+      "authority": "OverPy@9.7.10:src/compiler/compiler.ts",
+      "contract": "tooling.metadata",
+      "status": "partial",
+      "coverage": "uncovered",
+      "production": [
+        "crates/opy-rs/src/tooling.rs"
+      ],
+      "evidence": [
+        "upstream:overpy.d.ts"
+      ],
+      "limits": "This branch is separate from its broader category; unlisted contexts are not claimed."
+    },
+    {
+      "id": "branch/javascript-macro-runtime",
+      "kind": "compiler-branch",
+      "authority": "OverPy@9.7.10:src/compiler/tokenizer.ts",
+      "contract": "tooling.javascript-macros",
+      "status": "partial",
+      "coverage": "partial",
+      "production": [
+        "crates/opy-rs/src/macro_js/runtime.rs"
+      ],
+      "evidence": [
+        "upstream:src/tests/quickjs-modern.js"
+      ],
+      "limits": "This branch is separate from its broader category; unlisted contexts are not claimed."
+    },
+    {
+      "id": "branch/post-compile-hook",
+      "kind": "compiler-branch",
+      "authority": "OverPy@9.7.10:src/compiler/compiler.ts",
+      "contract": "tooling.post-compile-hook",
+      "status": "partial",
+      "coverage": "partial",
+      "production": [
+        "crates/opy-rs/src/macro_js/runtime.rs"
+      ],
+      "evidence": [
+        "fixture:synthetic/directives"
+      ],
+      "limits": "This branch is separate from its broader category; unlisted contexts are not claimed."
+    },
+    {
+      "id": "branch/quickjs-failure-abi",
+      "kind": "compiler-branch",
+      "authority": "OverPy@9.7.10:src/quickjs.ts",
+      "contract": "diagnostics.failure-frontiers/diagnostic-provenance",
+      "status": "partial",
+      "coverage": "uncovered",
+      "production": [
+        "crates/opy-rs/src/macro_js/runtime.rs"
+      ],
+      "evidence": [
+        "upstream:src/tests/quickjs-invalid-return.js"
+      ],
+      "limits": "This branch is separate from its broader category; unlisted contexts are not claimed."
+    },
+    {
+      "id": "branch/cli-project-input",
+      "kind": "compiler-branch",
+      "authority": "OverPy@9.7.10:src/cli.ts",
+      "contract": "projects.real-world/complete-example-projects",
+      "status": "implemented",
+      "coverage": "covered",
+      "production": [
+        "crates/opy-cli/src/main.rs"
+      ],
+      "evidence": [
+        "fixture:synthetic/project-entry"
+      ]
+    }
+  ]
+}

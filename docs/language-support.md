@@ -1,7 +1,11 @@
 # OverPy support
 
 This is the canonical, human-readable compatibility contract for `opy-rs`.
-The detailed inventories linked here are part of the same contract.
+The detailed inventories linked here are part of the same contract. The
+machine-readable leaf inventory is
+[`compatibility/feature-contracts.json`](../compatibility/feature-contracts.json).
+Its completeness is checked against the independent pinned-source catalog in
+[`compatibility/pinned-overpy-audit.json`](../compatibility/pinned-overpy-audit.json).
 
 ## Reference and audit boundary
 
@@ -59,7 +63,8 @@ It is not a public inventory and its internal states are not public support
 states. `docs/opy/support-matrix.md` is retained as historical context and
 must not introduce another public status vocabulary.
 
-The next step is a separate exhaustive conformance issue driven by the audited
-leaf identities in these documents. This issue does not turn the inventory
-into a fixed feature-count assertion or silently convert known gaps into
-passing cases.
+The feature-contract validator expands every registry key into a leaf, checks
+the inventory pin against the conformance manifest, and can compare registry
+keys with a local checkout of the pinned source. The inventory is not a fixed
+feature-count assertion: status, coverage, ownership, limits, and evidence are
+reported separately, and unresolved leaves never become passing cases.
