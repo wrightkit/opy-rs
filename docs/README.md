@@ -1,44 +1,71 @@
 # opy-rs Documentation
 
 This directory is the documentation index for `opy-rs`. The root
-[`README.md`](../README.md) is the user-facing project overview; detailed
-architecture, compatibility evidence, APIs, and internal contracts live here.
+[`README.md`](../README.md) is the user-facing overview.
 
-## Architecture and APIs
+## Documentation model
 
-- [Implementation role](opy/implementation-role.md): standalone OverPy
-  implementation identity, relationship with `workshop-rs`, and Wright
-  integration terminology.
-- [Architecture](opy/architecture.md): source parsing, semantic HIR,
-  compiler/reconstruction boundaries, and dependency direction.
-- [Tooling API](opy/tooling-api.md): Rust library and CLI contracts for checking,
-  inspection, overlays, and diagnostics.
-- [LPP provider](opy/provider.md): first-party provider capabilities, entry-based
-  project loading, artifact boundary, and release archive contract.
-- [Source-edit policy](opy/trivia-retention-policy.md): provenance and trivia
-  requirements for validated source-oriented edits.
+```text
+architecture/README.md       current architecture routing
+  ├─ language-core.md        current OverPy semantic/scope contract
+  └─ workshop-boundary.md    current canonical Workshop boundary
+language-support.md          current evidenced support
+compatibility/               pinned reference/provenance
+opy/ + hir/                  public/API/provider and implementation notes
+source/tests/corpus          current implementation reality
+Issues / PRs / releases      mutable execution state
+```
 
-## Compatibility
+For substantive implementation work, start from
+[`architecture/README.md`](architecture/README.md), then inspect the relevant
+source/tests and Issue contract. Current support is established by executable
+evidence and [`language-support.md`](language-support.md), not by architecture
+intent alone.
 
-- [OverPy support contract](language-support.md): audited, human-readable OverPy
-  feature coverage.
-- [Offline conformance evidence](opy/conformance-baseline.md): oracle,
-  failure-frontier, and canonical-WIR comparison contract.
-- [Upstream references](compatibility/upstream-references.md): pinned reference
-  identity, provenance, licensing notes, and oracle boundaries.
-- [OverPy evidence harness](../tools/overpy/README.md): oracle tooling,
-  snapshots, and differential testing.
+## Current architecture
 
-## Internals
+- [Architecture routing](architecture/README.md)
+- [OverPy language core](architecture/language-core.md): upstream core as the
+  executable specification, semantic ownership, typed implementation, and
+  feature locality.
+- [OverPy / Workshop boundary](architecture/workshop-boundary.md): lowering,
+  canonical WIR, reconstruction, and dependency direction.
+- [Repository agent guidance](../AGENTS.md): implementation preflight,
+  provenance, validation, and delivery.
 
-- [Opy HIR v2](hir/opy-hir-v2.md): current semantic representation and wire contract.
-- [Opy HIR v1](hir/opy-hir-v1.md): prior wire contract and migration baseline.
-- [Semantic compatibility manifest](opy/compat-manifest-spec.md): builtin,
-  signature, alias, and catalog-link metadata owned by the OPY implementation.
-- [Tooling notes](opy/tooling-notes.md): focused implementation notes that do
-  not belong in the public README.
+Legacy links to [`opy/architecture.md`](opy/architecture.md) and
+[`opy/implementation-role.md`](opy/implementation-role.md) are retained as
+compatibility pointers rather than separate architecture authorities.
+
+## Compatibility and current support
+
+- [OverPy support contract](language-support.md): current evidenced feature
+  coverage.
+- [Offline conformance evidence](opy/conformance-baseline.md): oracle and
+  comparison methodology.
+- [Upstream references](compatibility/upstream-references.md): pinned upstream
+  identity, provenance, licensing, and reference boundaries.
+- [OverPy evidence harness](../tools/overpy/README.md): probes/snapshots and
+  differential testing.
+
+Inventories and evidence describe implementation completeness; they do not
+narrow the established upstream core-language scope.
+
+## APIs and implementation notes
+
+- [Tooling API](opy/tooling-api.md): standalone Rust and CLI contracts.
+- [LPP provider](opy/provider.md): integration/process contract.
+- [Source-edit policy](opy/trivia-retention-policy.md): provenance/trivia
+  requirements.
+- [Opy HIR v2](hir/opy-hir-v2.md): current HIR representation/wire contract,
+  subject to the current architecture contracts and code reality.
+- [Opy HIR v1](hir/opy-hir-v1.md): prior wire/migration baseline.
+- [Compatibility manifest implementation note](opy/compat-manifest-spec.md):
+  current manifest mechanism and its architecture limitations. It is not the
+  semantic authority for OverPy.
+- [Tooling notes](opy/tooling-notes.md): focused implementation notes.
 
 > [!NOTE]
-> GitHub issues and pull requests own implementation sequencing and acceptance
-> criteria. Documents here describe durable architecture, interfaces, evidence,
-> or current compatibility boundaries.
+> Source-language behavior is implemented directly by `opy-rs`; canonical raw
+> Workshop concepts remain owned by `workshop-rs`. Wright/provider integration
+> does not redefine either language boundary.

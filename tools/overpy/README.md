@@ -239,7 +239,7 @@ presentation difference. A normalized-output or semantic-WIR regression exits
 a producer.
 Use `--allow-inconclusive` only for local contract checks.
 
-## Offline conformance baseline (issue #158)
+## Offline conformance evidence (issue #158)
 
 `../../docs/language-support/conformance-manifest.json` is the linked
 executable-evidence inventory for the canonical pinned OverPy source-language
@@ -247,11 +247,11 @@ contract. Its categories cite the pinned upstream registries or an accepted
 canonical-WIR contract. Each category declares structural contracts with a
 claim, probe kinds (`positive`, `negative`, `contextual`, or `composition`),
 and executable fixture probes; validation rejects empty or unknown mappings.
-It contains no native expected outcomes or alternate support status.
+It contains no native expected outcomes or alternate feature-support authority.
 Reference failures carry an audited stage and first-construct frontier tied to
 text in their pinned oracle snapshot.
 
-Run the baseline after building both CLI targets:
+Run the evidence check after building both CLI targets:
 
 ```sh
 python3 tools/overpy/conformance.py \
@@ -269,7 +269,7 @@ parsed by `workshop-rs::roundtrip::equivalent`. For reference failures, the
 runner compares stage and first construct, retaining both sides' diagnostic
 provenance without requiring diagnostic wording identity.
 
-This baseline is evidence-producing rather than a production implementation
+This command is evidence-producing rather than a production implementation
 gate: current divergence is expected to remain visible while follow-up Issues
 resolve root capabilities. Malformed manifests, stale oracle evidence, and
 missing producer data remain hard failures.

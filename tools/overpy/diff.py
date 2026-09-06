@@ -627,7 +627,7 @@ def compare_compiler_fixture(
             stage(
                 "compiler-contract",
                 "accepted-gap",
-                reason="compiler parity is outside the declared baseline",
+                reason="compiler parity is outside the declared compiler contract",
                 evidence=expectation["evidence"],
             )
         )

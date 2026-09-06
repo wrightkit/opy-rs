@@ -1,276 +1,32 @@
-# OPY Semantic Compatibility Manifest Specification
+# OPY compatibility manifest — implementation note
 
-Status: accepted specification. An opy-rs-owned semantic contract, ported and
-adapted from the WrightKit evidence base (issue #2), implemented by the
-source implementation workstream (issues #4/#5) and merged on `main` (PRs #9/#13).
-Scope: the opy-rs-owned representation for builtin action/value identities,
-member functions, signatures, parameter enum-domain identities (catalog
-links), and source aliases; reference-validated and consumed by the native
-source implementation. The implementation lives in `crates/opy-rs/src/manifest/`
-(data in `data/manifest.json`, probe evidence in `probes/`); this document is
-the schema and boundary contract for that data.
+The compatibility manifest remains part of the current `opy-rs` implementation, but it is **not** the semantic authority for the OverPy language.
 
-## Purpose and boundary
+Current architecture is defined by [`docs/architecture/language-core.md`](../architecture/language-core.md). For the declared core-language surface, upstream OverPy behavior is the executable specification; inventories, manifests, probes, differential tests, corpus fixtures, and real projects verify completeness and compatibility.
 
-The compatibility inventory (issue #2) concluded that a machine-readable,
-opy-rs-owned manifest is justified: the declared parse surface exceeds the
-initial semantic surface, and residual `unknown-action`/`unknown-value`/
-`unsupported-member` gaps are semantic-coverage gaps, not grammar gaps. The
-manifest replaced the hardcoded `KNOWN_ENUMS` table (removed from
-`crates/opy-rs/src/lower.rs` in the ownership-fixed source implementation, PR #9)
-with data and gives the source implementation a single, reference-validated source for:
+## Current implementation reality
 
-* builtin actions and values (generic and member);
-* member-function metadata (receiver + argument signatures);
-* signatures, argument names/order, and defaults;
-* parameter enum-domain **identities** as catalog links (the domain a
-  parameter requires, e.g. `Invis`, `Status`, `Transform`, `ChaseTimeReeval`),
-  **not** the authoritative member lists of those domains;
-* source aliases (non-contextual rewrites such as `stopChasingVariable`).
+The manifest under `crates/opy-rs/src/manifest/` currently carries a mixture of:
 
-It is **language-compatibility metadata**, distinct from:
+- declarative identities, names, aliases, signatures, catalog links, and provenance;
+- behavioral metadata such as receiver restrictions, argument-binding modes, contextual dispatch, call-context restrictions, defaults with lowering meaning, and special-lowering classification.
 
-* the Workshop emission/localization layer (en-US spellings, emitter
-  output), owned by `workshop-rs`; the manifest links to it by canonical id
-  (`catalogId`) rather than duplicating spellings;
-* authoritative Workshop enum member lists, hero/map/mode/settings content,
-  locale spellings, and canonical member/domain existence. These are
-  Workshop-owned catalog content that the source implementation **never approximates**:
-  member accesses on a declared domain identity resolve as opaque identities,
-  and member/domain/catalog validation stays `lowering-dependent` (#8); and
-* a runtime content registry (heroes/maps/abilities content data, extension
-  boundaries, independent version identities), deferred. This inventory
-  found no architecture trigger that requires opening one.
+The source implementation consumes those fields for semantic resolution and lowering today. This document does not change that behavior.
 
-## Data model (schema v1)
+Under the current architecture contract, that mixture is an audit target rather than a pattern to extend. Purely declarative inventories may remain data-driven. Observable source-language behavior and invariants should normally be expressed in typed Rust close to the owning semantic feature instead of growing a generic metadata-interpreted semantic language.
 
-```jsonc
-{
-  "schemaVersion": 1,
-  "reference": {
-    "name": "overpy",
-    "version": "9.7.10",
-    "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
-    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw=="
-  },
-  "functions": [
-    {
-      "id": "chaseOverTime",          // manifest id; opy-rs-owned spelling
-      "kind": "action",               // action | value | memberAction | memberValue
-      "receiver": "Player",           // members only: Player | Variable | String | Any
-      "params": [
-        { "name": "variable", "variable": true },
-        { "name": "destination" },
-        { "name": "duration" },
-        { "name": "reevaluation", "domain": "ChaseTimeReeval",
-          "default": "DESTINATION_AND_DURATION" }
-      ],
-      "catalogId": "chaseOverTime",   // link to the Workshop emission catalog id
-      "catalogLink": "canonical",      // canonical | special-lowering | legacy-alias | catalog-gap
-      "evidence": ["chase-over-time"] // oracle probes validating this entry
-    },
-    {
-      "id": "chase",                  // the reference's keyword special form
-      "kind": "action",
-      "params": [
-        { "name": "variable", "positionalOnly": true, "variable": true },
-        { "name": "destination", "positionalOnly": true },
-        { "name": "rate", "keywordOnly": true, "alternateNames": ["duration"] },
-        { "name": "reevaluation", "domain": "ChaseReeval" }
-      ],
-      "contextualDomain": {
-        "domain": "ChaseReeval",      // resolves only in this signature's context
-        "by": "rate",                 // the keyword spelling selects the option
-        "options": {
-          "rate":     { "domain": "ChaseRateReeval", "target": "chaseAtRate" },
-          "duration": { "domain": "ChaseTimeReeval", "target": "chaseOverTime" }
-        }
-      },
-      "evidence": ["chase-keywords", "chase-reeval-context"]
-    }
-  ],
-  "aliases": [
-    { "source": "stopChasingVariable", "target": "stopChasing",
-      "kind": "functionAlias", "evidence": ["aliases"] }
-  ],
-  "provenance": {
-    "generator": "opy-rs semantic compatibility manifest v1 (opy-rs-authored; probe-validated against the pinned OverPy 9.7.10 oracle)",
-    "reviewed": true,
-    "license": "AGPL-3.0-or-later"
-  }
-}
-```
+In particular, adding another manifest field that makes generic code decide receiver/member semantics, keyword/positional binding, contextual dispatch, compile-time behavior, coercion, or special lowering requires an explicit architecture justification; existing fields are not sufficient precedent.
 
-There is **no `enumDomains` table**: the manifest records enum *domain
-identities* as parameter metadata (`"domain": "ChaseTimeReeval"`) and as the
-contextual `chase` dispatch record, but it does not carry authoritative
-Workshop member lists. A member access on a declared domain identity resolves
-as an opaque `enum` node; canonical member-existence and domain validation is
-Workshop-owned catalog content and stays `lowering-dependent` (#8).
+## Workshop boundary
 
-Entry semantics:
+Manifest catalog links may refer to canonical Workshop identities, but `opy-rs` does not own Workshop catalog membership, enum member lists, localization, settings content, WIR, validation, or emission. Those remain `workshop-rs` responsibilities.
 
-* `kind`: `action`/`value` are generic builtins; `memberAction`/`memberValue`
-  are receiver methods whose `params` are the **explicit** arguments (the
-  receiver is separate). The source implementation enforces action/value position
-  (`value-in-action-position`, `action-in-value-position`).
-* `receiver`: the declared receiver category. `Player` is metadata for
-  player-oriented members (the pinned reference does not type-check those
-  receivers, so the source implementation accepts any receiver); `Variable` and `String`
-  are enforced where the reference semantics are clear (`.append` requires an
-  assignable receiver, `.format` a string literal).
-* `params`: ordered arguments. Arity is `(first defaulted/optional param
-  index, params.len())`; `"optional": true` marks an omittable argument
-  without an emitted expansion, `"default"` an expansion value. Only
-  enum-member defaults are expanded at lowering (e.g. `chaseOverTime(g, 10,
-  3)` fills `DESTINATION_AND_DURATION`, matching the reference emission).
-  `"unbounded": true` (`.format` placeholders) accepts any argument count.
-  Named/keyword argument binding consumes these parameter names directly.
-  They are the reference's declared parameter names (e.g. `wait` binds
-  `time`/`waitBehavior`, `print` binds `text`, `len` binds `array`):
-  * `"keywordOnly": true`: the argument must be passed as `name = expr`
-    (the reference `chase` form requires its 3rd argument to be
-    `rate = ...` or `duration = ...`);
-  * `"positionalOnly": true`: keyword binding is rejected for this
-    parameter (the `chase` form's leading arguments);
-  * `"alternateNames": [...]`: additional accepted keyword spellings
-    (`chase` accepts both `rate` and `duration` for its 3rd parameter);
-  * `"variable": true`: the argument must be a variable reference (a
-    `globalvar` or a `playervar`); the chase family requires a variable
-    first argument to select the global/player emission form.
-* `keywordArgs`: whether the entry accepts keyword arguments at all;
-  defaults to `true` (the pinned reference's generic binder applies to
-  every workshop function). Entries the reference routes around that
-  mechanism declare `"keywordArgs": false` (`range`, `random.*`,
-  `.format`).
-* `contextualDomain`: the `chase` dispatch record, a merged enum domain
-  (`ChaseReeval`) that has no standalone member list and resolves **only**
-  within this entry's signature context, selected by the keyword spelling
-  bound to the `by` parameter. Each option maps a keyword spelling to the
-  concrete enum domain and the function the call lowers to (`rate` →
-  `ChaseRateReeval` / `chaseAtRate`; `duration` → `ChaseTimeReeval` /
-  `chaseOverTime`). The contextual domain is deliberately *not* a declared
-  enum domain: a bare `ChaseReeval.MEMBER` outside the `chase` signature is
-  rejected like the reference rejects it.
-* `context`: a call-context restriction; `"forIterable"` (`range`) is only
-  valid as a `for ... in` iterable.
-* `catalogId`: the canonical Workshop emission catalog id. A direct catalog
-  entry uses `catalogLink: "canonical"` (the default); a missing `catalogId`
-  must carry an explicit `catalogLink` reason: `special-lowering` for a
-  source implementation form with custom lowering (`debug`, `print`, `chase`, `range`, or
-  `append`), `legacy-alias` for a source identity whose compatibility is
-  represented by an alias path (`stopChasing`), or `catalog-gap` for a
-  probe-evidenced source member without a current canonical catalog entry
-  (`getHero`, `hasStatus`). Catalog linkage is a `workshop-rs` integration
-  concern; opy-rs must not guess an id for a non-canonical entry.
-* `evidence`: every entry must reference at least one probe recording
-  oracle acceptance (deterministic `check` failure otherwise).
+OverPy-specific names, aliases, special forms, contextual behavior, and compiler policy remain `opy-rs` responsibilities even when they eventually lower to a canonical Workshop identity.
 
-Entries carry the minimal semantic data the source implementation needs to resolve names,
-check arity, resolve enum domains, and lower; they deliberately omit upstream
-description/localization text.
+See [`docs/architecture/workshop-boundary.md`](../architecture/workshop-boundary.md).
 
-## Data provenance and licensing rule
+## Evidence and provenance
 
-The manifest is **opy-rs-authored data validated against observed oracle
-behavior**. It must not be produced by mechanically converting OverPy's
-GPL-3.0 TypeScript data files (`src/data/*.ts`) into the manifest: the
-clean-room policy in
-[`docs/compatibility/upstream-references.md`](../compatibility/upstream-references.md)
-forbids importing OverPy implementation details into the core, and observed
-behavior through documented compatibility tests is the permitted input. Every
-entry records the reference probe that validates it (`probes/probes.json`
-carries the probe source hash, expected oracle status, normalized emission
-hash, and, for rejections, the diagnostic category fragment).
+Pinned upstream identity and licensing/provenance rules remain documented in [`docs/compatibility/upstream-references.md`](../compatibility/upstream-references.md). Manifest probes and differential tests remain useful compatibility evidence; they do not re-authorize or redefine established core features.
 
-## Validation rules
-
-* `Manifest::load` (`crates/opy-rs/src/manifest`): schema validation,
-  duplicate/colliding ids, colliding or missing aliases, declared parameter
-  domain identities (tracked for the source implementation's opaque member resolution),
-  enum-member defaults requiring a declared domain, keyword-binding data
-  sanity (`keywordOnly`/`positionalOnly` are mutually exclusive, alternate
-  spellings do not collide with other parameters), contextual-domain
-  integrity (the contextual domain is not a standalone declared identity, the
-  selector parameter exists and its keyword spellings cover the options,
-  every option domain is declared), and entries lacking oracle evidence all
-  fail deterministically. A function with `catalogId` must use
-  `catalogLink: "canonical"`; a function without one must state a non-canonical
-  reason. A canonical-rewrite test pins the data file to its
-  byte-canonical form, and a cross-check test pins every `catalogId` (and
-  contextual option target) to the Workshop emission catalog once the
-  `workshop-rs` catalog contract exists.
-* `probes/validate.py` performs reference validation. Every probe runs
-  against the pinned oracle and must match its recorded accept/reject, normalized
-  emission hash, and diagnostic category. The probe set and validator are
-  source implementation-workstream-owned; the validator requires the pinned oracle (Node +
-  pnpm) and runs standalone like `tools/overpy/run_oracle.py`, so it is not
-  part of the oracle-less harness suite. The probe names are recorded as
-  evidence references in the canonical language-support inventories, and the native
-  differential suite (`crates/opy-rs/tests/differential.rs`, merged in
-  PR #13) covers the same surface end-to-end in `cargo test`.
-* The source implementation consumes the manifest in `lower.rs`: unknown names, wrong
-  action/value position, invalid arity, invalid receiver category, and
-  named/keyword argument binding (`unknown-keyword`, `duplicate-argument`,
-  `missing-argument`, `positional-after-keyword`, `keyword-required`,
-  `keyword-unsupported`, `invalid-argument`) produce structured,
-  source-located source implementation diagnostics before Workshop emission. Workshop
-  enum member/domain mismatch checks were removed from the core in PR #9
-  (they require canonical Workshop catalog knowledge) and are
-  `lowering-dependent` (#8); custom user-declared enum member validation is
-  OPY-level source semantics and stays source implementation-owned.
-
-## Consumers
-
-* the opy-rs source implementation (`crates/opy-rs`): name/member/enum resolution,
-  arity and signature checks, early resolution of unknown-action/value
-  errors;
-* `workshop-rs`: canonical-id linkage to the emission catalog and
-  member/domain/catalog validation (validated by the cross-check test at
-  integration time, issue #8);
-* differential and systematic reference tests (the native differential suite
-  and the oracle-required probe validator);
-* documentation, agents, and future release metadata can consume the same
-  declared boundary.
-
-## Integration cross-check contract (#30, consumed by #8)
-
-The manifest is the source implementation-owned side of the integration contract. The
-consumer receives the resolved Opy HIR plus this validated manifest; it does
-not need to import OverPy data or add a parser/source implementation dependency. HIR
-`call`/`receiverCall` names are resolved against the manifest before lowering,
-so source spans and OPY diagnostics remain owned by `opy-rs`.
-
-The adapter pins the `workshop-rs` `CatalogIdentity` (implementation version,
-catalog version, content digest, target, and locale coverage) in its own
-integration evidence. For every manifest function entry with `catalogId`, the
-adapter must verify all of the following against that canonical catalog:
-
-1. the id exists;
-2. `action`/`memberAction` map to Workshop `Action`, while
-   `value`/`memberValue` map to Workshop `Value`;
-3. a member entry's receiver category is compatible with the canonical
-   signature; and
-4. each `Param.domain` is checked at its explicit-argument index (the member
-   receiver is not counted as a parameter) against the catalog's expected
-   domain.
-
-The adapter performs the same canonical-id check for alias targets and
-contextual-domain option targets. A contextual merged domain such as
-`ChaseReeval` is not passed to `Catalog::enum_domain`; its concrete option
-domains are. A `domain` is only an identity link in this manifest: the
-canonical member list, domain membership, localized spelling, settings keys,
-and content values are validated by `workshop-rs` at lowering. Entries without
-`catalogId` follow their explicit `catalogLink` reason and must not be assigned
-guessed ids. A failed cross-check is a structured integration error, never a
-silent success. This keeps Workshop catalog/member/enum/settings/locale data
-in its owning repository.
-
-## Non-goals
-
-* A runtime-downloadable or hot-updating content registry.
-* Workshop content data (heroes/abilities/maps) as manifest entries.
-* Contextual aliases beyond the manifest's declared data, raw-Workshop enum
-  resolution beyond the declared contextual domains, and further
-  named-argument shapes without reference/corpus evidence.
-* Preserving upstream implementation structure for its own sake.
+The prior detailed manifest schema and field-by-field rationale are preserved in Git history. They describe how the current implementation evolved, not the current language architecture contract.

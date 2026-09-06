@@ -44,9 +44,10 @@ it directly with the native lowered WIR through
 input digests; the public compile report and `opy-cli compile` have no oracle
 input or compatibility-evidence field.
 
-The compatibility runner uses the separate
+The compatibility runner uses the separate reviewed compiler expectation
+contract in
 [`tools/overpy/compiler-expectations.json`](../../tools/overpy/compiler-expectations.json)
-baseline for compiler outcomes. The source/frontend expectation contract is
+for compiler outcomes. The source/frontend expectation contract is
 kept in `differential-expectations.json`; it is not reused as compiler parity
 evidence. Compiler gaps must carry durable evidence and an owner, while
 expectation mismatches remain blocking.
