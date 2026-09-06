@@ -87,28 +87,16 @@ The Rust library surface, including the bounded Workshop compiler, lives in
 Compatibility targets observable OverPy semantics for the declared support
 surface, not byte-identical output, optimizer choices, formatting, temporary
 variables, or upstream internal architecture. Support claims are backed by the
-compatibility corpus and pinned OverPy reference evidence.
+canonical [language-support contract](docs/language-support.md), its linked
+inventories, and pinned OverPy reference evidence.
 
 > [!IMPORTANT]
 > `opy-rs` follows the OverPy language. It does not introduce a WrightKit-only
 > OPY dialect.
 
-| Capability | Status | Notes |
-| --- | --- | --- |
-| Core syntax & control flow | ✅ Supported | Workshop-independent parsing and semantic representation |
-| Declarations | ✅ Supported | `globalvar`/`playervar`, `subroutine`, `def`, `enum`, `macro` |
-| Preprocessing & macros | ✅ Supported | `#!include`, `#!define`, `#!undef`, bounded JavaScript macros |
-| Rules & directives | ✅ Supported | Rules, events, conditions, team/slot context in the declared surface |
-| Builtin actions & values | 🟡 Partial | Declared semantic subset works; full catalog-backed breadth is still being closed |
-| Receiver/member functions | 🟡 Partial | Declared members work; full member breadth is not yet complete |
-| Enums & constants | 🟡 Partial | Declared domains resolve; full domain breadth is not yet complete |
-| Advanced directives, translations & optimizer controls | 🟡 Partial | Source state exists; Workshop-dependent effects remain incomplete |
-| OPY → Workshop compilation | 🟡 Partial | The versioned library/CLI compile contract and bounded lowering surface are supported; remaining corpus gaps stay explicit |
-| Workshop → OPY reconstruction | ⏳ Not yet | Will consume canonical `workshop-rs` semantics and remain owned by `opy-rs` |
-
-The exhaustive per-feature evidence and pinned denominator are maintained in
-the [canonical human-readable support contract](docs/language-support.md) and
-its linked inventories.
+The exhaustive per-feature evidence, pinned denominator, and current status are
+maintained in the [canonical human-readable support contract](docs/language-support.md)
+and its linked inventories.
 
 ## Relationship with Wright
 

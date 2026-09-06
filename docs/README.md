@@ -41,9 +41,7 @@ compatibility pointers rather than separate architecture authorities.
 
 - [OverPy support contract](language-support.md): current evidenced feature
   coverage.
-- [Compatibility baseline](opy/compatibility-baseline.md): planning/reference
-  inventory for remaining evidence work.
-- [Offline conformance baseline](opy/conformance-baseline.md): oracle and
+- [Offline conformance evidence](opy/conformance-baseline.md): oracle and
   comparison methodology.
 - [Upstream references](compatibility/upstream-references.md): pinned upstream
   identity, provenance, licensing, and reference boundaries.

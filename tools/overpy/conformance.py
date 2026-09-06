@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the independent, stage-aware offline OverPy conformance baseline."""
+"""Run the independent, stage-aware offline OverPy conformance evidence."""
 
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ TOOLING_CONTRACTS = {
 
 
 class ConformanceError(RuntimeError):
-    """A malformed baseline, fixture, or producer response."""
+    """A malformed evidence inventory, fixture, or producer response."""
 
 
 def load_json(path: Path) -> dict[str, Any]:
