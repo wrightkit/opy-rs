@@ -12,7 +12,7 @@ or LPP, while `opy-rs` must remain independently usable as a library and CLI.
 
 `opy-rs` owns:
 
-- OverPy syntax, lexer, parser, CST/source model, preprocessing, macros,
+- OverPy syntax, lexer, parser, source model, preprocessing, macros,
   semantic resolution, diagnostics, provenance, and OPY HIR;
 - OverPy-specific compiler/lowering semantics and backend-affecting behavior;
 - standalone OPY tooling APIs and CLI surfaces;
@@ -44,19 +44,56 @@ Do not invent WrightKit-only OPY syntax. Compatibility is observable semantics,
 not output-text identity, optimizer implementation, formatting, temporary
 variables, or upstream internal architecture.
 
-See [`docs/opy/implementation-role.md`](docs/opy/implementation-role.md) for the
-repository/product relationship and [`docs/opy/architecture.md`](docs/opy/architecture.md)
-for implementation details.
+## Architecture routing
+
+For substantive implementation work, resolve the relevant current contract from
+[`docs/architecture/README.md`](docs/architecture/README.md) before editing.
+Older documents under `docs/opy/` may describe implementation mechanisms or
+historical design, but they do not override the current architecture merely
+because code still follows them.
+
+The current contracts are:
+
+- [`language-core.md`](docs/architecture/language-core.md) for OverPy scope,
+  semantic ownership, typed implementation, and feature locality;
+- [`workshop-boundary.md`](docs/architecture/workshop-boundary.md) for canonical
+  Workshop dependency/lowering/reconstruction boundaries.
+
+If the Issue, current contract, and source/tests disagree materially, stop and
+surface the mismatch rather than selecting a design by implementation
+convenience.
 
 ## Upstream reference and provenance
 
-OverPy is the pinned compatibility oracle (see
-`docs/compatibility/upstream-references.md`). It is GPL-3.0; this repository is
-AGPL-3.0-or-later. OverPy implementation or data (compiler sources,
-`src/data/*` tables, internal AST/types, generated artifacts) is never imported
-into, linked to, or bundled with the `opy-rs` core or release artifacts.
-Reviewed upstream example/test fixtures may be retained only as isolated oracle
-evidence with explicit provenance and licensing records.
+For the declared OverPy core-language surface, the established upstream OverPy
+implementation is the executable specification. Core behavior is presumptively
+in scope unless explicitly excluded as editor/browser/integration functionality
+or demonstrated to be a non-contractual implementation artifact.
+
+Inspect upstream implementation, docs, and tests to understand behavior; then
+implement the behavior directly in clear Rust and verify it through
+compatibility evidence. Do not mechanically translate, import, link, or bundle
+upstream implementation/data into the `opy-rs` core or release artifacts.
+
+OverPy is GPL-3.0; this repository is AGPL-3.0-or-later. Pinned identity,
+fixture/probe provenance, and licensing boundaries are documented in
+[`docs/compatibility/upstream-references.md`](docs/compatibility/upstream-references.md).
+
+Inventories, manifests, probes, differential tests, corpus fixtures, and real
+projects verify completeness and compatibility; they do not decide whether an
+established core feature belongs in scope.
+
+## Semantic implementation
+
+Prefer typed Rust for observable OverPy behavior and invariants: receiver/member
+semantics, argument binding, contextual dispatch, macro/directive behavior,
+coercion/evaluation rules, and special lowering.
+
+Declarative data may carry large mechanical inventories, names, provenance, and
+facts that do not themselves program language behavior. Do not extend an
+existing manifest/registry with new semantic control fields merely because the
+current implementation already contains similar metadata; existing
+metadata-driven semantics are an audit target, not architecture precedent.
 
 ## Development priority
 
@@ -72,8 +109,9 @@ project exposes a blocker:
    when one coherent change can be reviewed and validated safely.
 
 Internal module layout and helper abstractions are revisable implementation
-details unless they affect a public/versioned contract, repository ownership,
-source provenance, or compatibility correctness.
+details. If the smallest diff would deepen an already mixed semantic
+responsibility, the smallest bounded extraction needed to keep the changed
+feature cohesive is in scope; unrelated cleanup remains out of scope.
 
 ## Validation
 
