@@ -3,9 +3,9 @@
 This is the canonical, human-readable compatibility contract for `opy-rs`.
 The detailed inventories linked here are part of the same contract. The
 machine-readable leaf inventory is
-[`compatibility/feature-contracts.json`](../compatibility/feature-contracts.json).
-Its completeness is checked against the independent pinned-source catalog in
-[`compatibility/pinned-overpy-audit.json`](../compatibility/pinned-overpy-audit.json).
+[`feature-contracts.json`](language-support/feature-contracts.json). Its
+completeness is checked against the independent pinned-source catalog in
+[`pinned-overpy-audit.json`](language-support/pinned-overpy-audit.json).
 
 ## Reference and audit boundary
 
@@ -23,7 +23,7 @@ The inventory was audited from the pinned upstream tree, from outside the
 surfaces; `src/data/opy/` keyword, annotation, builtin, member, module, macro
 and preprocessing registries; `src/data/` Workshop domains; upstream compile,
 decompile, CLI and QuickJS tests; and the pinned executable oracle. Existing
-`opy-rs` fixtures, HIR names, support matrix entries and issue lists were used
+`opy-rs` fixtures, HIR names, historical issue lists, and implementation notes were used
 only to determine the second column, never to construct the audited set.
 
 ## Status vocabulary
@@ -56,12 +56,6 @@ larger than the currently evidenced `opy-rs` surface. Detailed rows make gaps
 explicit instead of hiding them in a category-level green row.
 
 ## Contract maintenance
-
-`compatibility/support-matrix.json` is retained as **internal engineering
-metadata** for fixture relationships, provenance and implementation tracking.
-It is not a public inventory and its internal states are not public support
-states. `docs/opy/support-matrix.md` is retained as historical context and
-must not introduce another public status vocabulary.
 
 The feature-contract validator expands every registry key into a leaf, checks
 the inventory pin against the conformance manifest, and can compare registry

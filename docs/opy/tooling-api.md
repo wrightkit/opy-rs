@@ -45,7 +45,7 @@ input digests; the public compile report and `opy-cli compile` have no oracle
 input or compatibility-evidence field.
 
 The compatibility runner uses the separate
-[`compatibility/compiler-expectations.json`](../../compatibility/compiler-expectations.json)
+[`tools/overpy/compiler-expectations.json`](../../tools/overpy/compiler-expectations.json)
 baseline for compiler outcomes. The source/frontend expectation contract is
 kept in `differential-expectations.json`; it is not reused as compiler parity
 evidence. Compiler gaps must carry durable evidence and an owner, while
@@ -145,25 +145,6 @@ semantic-resolution diagnostics follow the compile contract and report the
 first error. `check` and `compile` agree on the verdict; only the parse-stage
 reporting depth differs.
 
-## Support-matrix accessor (`opy_rs::support`)
-
-`compatibility/support-matrix.json` is the repository's machine-readable
-support state source (merged with the evidence base, PR #10) and is consumed
-read-only. It is embedded at build time via `include_str!` (the
-crate rebuilds when the file changes), parsed once, and exposed as
-`SupportMatrix`:
-
-* `SupportMatrix::builtin() -> Result<&'static SupportMatrix, …>`
-* `feature(id)` / `feature_state(id)`: feature lookup by id
-* `features_by_category(category)` / `features_by_state(state)`: filtered
-  slices
-* `categories()`, `declared_states()`, `summary()`: declared surface
-
-The five declared states (`planned`, `source-supported`,
-`semantic-supported`, `lowering-dependent`, `end-to-end-supported`) are
-documented in the matrix itself. Workshop-dependent items stay
-`lowering-dependent`; nothing here approximates them.
-
 ## CLI (`opy-cli`)
 
 ```
@@ -173,7 +154,6 @@ opy-cli compile <main.opy>                        # Workshop text → stdout
 opy-cli compile --format json <main.opy>           # versioned compile report → stdout
 opy-cli compile --language zh-CN <main.opy>        # catalog-declared locale
 opy-cli inspect <main.opy>                        # resolved model as JSON on stdout
-opy-cli support [--json] [<category|feature-id>]  # embedded matrix (or slice) as JSON
 opy-cli completion bash|zsh|fish|powershell       # static completion from the command model
 opy-cli version                                   # crate + source implementation protocol identity
 ```
@@ -221,6 +201,6 @@ stdout.
   declarations are queryable through `SemanticModel::enums`, not the HIR
   declaration list.
 * Broader Workshop emission, decompilation, and unsupported source constructs
-  remain explicit in the support matrix and the native corpus report. The
+  remain explicit in the canonical language-support inventories and native corpus report. The
   compile contract never counts an inconclusive normalized-output comparison
   as successful parity.

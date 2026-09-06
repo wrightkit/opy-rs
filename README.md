@@ -62,7 +62,6 @@ opy-cli check main.opy
 opy-cli compile main.opy
 opy-cli compile --format json main.opy
 opy-cli inspect main.opy
-opy-cli support --json
 opy-cli completion bash
 opy-cli version
 ```
@@ -107,10 +106,9 @@ compatibility corpus and pinned OverPy reference evidence.
 | OPY → Workshop compilation | 🟡 Partial | The versioned library/CLI compile contract and bounded lowering surface are supported; remaining corpus gaps stay explicit |
 | Workshop → OPY reconstruction | ⏳ Not yet | Will consume canonical `workshop-rs` semantics and remain owned by `opy-rs` |
 
-Exact per-feature evidence remains available in the
-[canonical human-readable support contract](docs/language-support.md). Internal
-fixture and implementation metadata remains in
-[compatibility/support-matrix.json](compatibility/support-matrix.json).
+The exhaustive per-feature evidence and pinned denominator are maintained in
+the [canonical human-readable support contract](docs/language-support.md) and
+its linked inventories.
 
 ## Relationship with Wright
 
@@ -127,7 +125,7 @@ capability that `opy-rs` itself should own.
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-targets --all-features
-python3 -m unittest discover -s compatibility/tests
+python3 -m unittest discover -s tools/overpy/tests
 ```
 
 CI additionally exercises the JavaScript macro runtime on macOS and Windows.

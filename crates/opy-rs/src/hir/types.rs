@@ -24,7 +24,7 @@ pub const PROTOCOL_VERSION: &str = "2.0.0";
 /// appear — including as a `for ... in range(...)` loop binder — and as player
 /// variables, without declarations, assigning each namespace its fixed slot.
 /// Names outside the table (lowercase, mixed case, longer spellings) stay
-/// ordinary unresolved identifiers (see `docs/opy/support-matrix.md`).
+/// ordinary unresolved identifiers (see `docs/language-support.md`).
 const DEFAULT_VAR_SLOTS: u32 = 128;
 
 /// The fixed Workshop slot for an OverPy default variable name (`A`–`Z`,

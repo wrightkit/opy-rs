@@ -8,7 +8,7 @@ use workshop_rs::roundtrip::equivalent;
 
 fn fixture_dir(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../compatibility/fixtures/synthetic")
+        .join("tests/fixtures/corpus/synthetic")
         .join(name)
 }
 
@@ -24,7 +24,7 @@ fn compile_fixture(name: &str) -> crate::CompilationArtifact {
 
 fn compile_real_world(name: &str, source_name: &str) -> crate::CompilationArtifact {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../compatibility/fixtures/real-world")
+        .join("tests/fixtures/corpus/real-world")
         .join(name);
     let source = std::fs::read_to_string(dir.join(source_name)).expect("source must be readable");
     let hir = crate::compile(&source, source_name, &dir).expect("real-world source must resolve");

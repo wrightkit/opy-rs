@@ -2,8 +2,8 @@
 
 Issue #158 establishes the conformance boundary used before further OPY
 compatibility implementation. The durable machine-readable inventory is
-[`compatibility/conformance-manifest.json`](../../compatibility/conformance-manifest.json);
-the executable runner is [`compatibility/conformance.py`](../../compatibility/conformance.py).
+[`docs/language-support/conformance-manifest.json`](../../docs/language-support/conformance-manifest.json);
+the executable runner is [`tools/overpy/conformance.py`](../../tools/overpy/conformance.py).
 
 ## Independent inventory
 

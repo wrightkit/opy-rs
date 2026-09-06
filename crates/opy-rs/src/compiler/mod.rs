@@ -6889,7 +6889,7 @@ mod tests {
     fn compile_report_preserves_frontend_warnings_on_integration_failure() {
         let compiler = Compiler::new().unwrap();
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../compatibility/fixtures/synthetic/preprocessing");
+            .join("tests/fixtures/corpus/synthetic/preprocessing");
         let report = compiler.compile_source_report_with_locale(
             concat!(
                 "#!include \"shared.opy\"\n",
@@ -7421,7 +7421,7 @@ rule "allocation":
     fn compiler_structure_matches_the_pinned_oracle() {
         let compiler = Compiler::new().unwrap();
         let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../compatibility/fixtures/synthetic/compiler-structure");
+            .join("tests/fixtures/corpus/synthetic/compiler-structure");
         let source = std::fs::read_to_string(fixture.join("source.opy")).unwrap();
         let hir = crate::compile(&source, "source.opy", &fixture).unwrap();
         let artifact = compiler.compile_hir(&hir).unwrap();
@@ -7743,8 +7743,8 @@ rule "main":
     #[test]
     fn settings_lower_through_workshop_owned_emission() {
         let compiler = Compiler::new().unwrap();
-        let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../compatibility/fixtures/synthetic/settings");
+        let fixture =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/corpus/synthetic/settings");
         let source = std::fs::read_to_string(fixture.join("source.opy")).unwrap();
         let hir = crate::compile(&source, "source.opy", &fixture).unwrap();
         let artifact = compiler.compile_hir(&hir).unwrap();

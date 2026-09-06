@@ -7,7 +7,7 @@ use workshop_rs::catalog::Locale;
 
 fn fixture_dir(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../compatibility/fixtures")
+        .join("tests/fixtures/corpus")
         .join(name)
 }
 

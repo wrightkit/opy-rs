@@ -2,9 +2,8 @@
 
 This directory is the opy-rs compatibility corpus: OPY sources with their
 pinned-oracle snapshots (`oracle.json`), ported from the WrightKit project's
-evidence base (wright `compatibility/fixtures/`) and re-verified against the
-pinned OverPy 9.7.10 oracle (see
-[`docs/compatibility/upstream-references.md`](../../docs/compatibility/upstream-references.md)
+evidence base and re-verified against the pinned OverPy 9.7.10 oracle (see
+[`docs/compatibility/upstream-references.md`](../../../../../docs/compatibility/upstream-references.md)
 for the dated verification record).
 
 Corpus policy: every fixture records provenance in its `fixture.json`
@@ -12,14 +11,14 @@ Corpus policy: every fixture records provenance in its `fixture.json`
 fixtures — `sourceCommit`, `sourceUrl`, `licenseUrl`, `modifications`).
 No fixture is committed without a clear provenance record. The pinned
 reference identity and the clean-room policy are in
-[`docs/compatibility/upstream-references.md`](../../docs/compatibility/upstream-references.md).
+[`docs/compatibility/upstream-references.md`](../../../../../docs/compatibility/upstream-references.md).
 These files are oracle evidence, not core inputs: the core never imports
 them, and they are never bundled into core builds or release artifacts.
 
 ## Layout
 
 ```text
-fixtures/<category>/<name>/
+corpus/<category>/<name>/
   fixture.json   # metadata and expected compile status
   source.opy     # input (or the source path named by fixture.json; multi-file
                  # fixtures name their main file via fixture.json "source")

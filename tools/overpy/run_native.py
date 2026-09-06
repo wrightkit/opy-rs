@@ -14,9 +14,9 @@ import diff
 import input_identity
 
 
-ROOT = Path(__file__).resolve().parents[1]
-FIXTURES = ROOT / "compatibility" / "fixtures"
-COMPILER_EXPECTATIONS = ROOT / "compatibility" / "compiler-expectations.json"
+ROOT = Path(__file__).resolve().parents[2]
+FIXTURES = ROOT / "crates/opy-rs/tests/fixtures/corpus"
+COMPILER_EXPECTATIONS = ROOT / "tools/overpy/compiler-expectations.json"
 DEFAULT_RESULTS = ROOT / "target" / "opy-rs-compiler-results"
 DEFAULT_REPORT = ROOT / "target" / "opy-rs-compiler-report.json"
 

@@ -25,7 +25,7 @@ fn conditional_calls(artifact: &CompilationArtifact) -> Vec<Vec<workshop_rs::wir
 #[test]
 fn chained_conditional_lowers_to_right_associative_canonical_values() {
     let source = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join(
-        "../../compatibility/fixtures/real-world/overpy-client-to-server/regressions/chained-ternary.opy",
+        "tests/fixtures/corpus/real-world/overpy-client-to-server/regressions/chained-ternary.opy",
     ))
     .expect("the minimized regression must be readable");
     let artifact = Compiler::new()

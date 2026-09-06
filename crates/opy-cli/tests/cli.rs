@@ -17,11 +17,11 @@ const MULTI_MAIN: &str = concat!(
 );
 const BASIC_RULE: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../compatibility/fixtures/synthetic/basic-rule/source.opy"
+    "/../opy-rs/tests/fixtures/corpus/synthetic/basic-rule/source.opy"
 );
 const LITERAL_DICT_LOOKUP_FIXTURE: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../compatibility/fixtures/synthetic/dictionary-lookup/source.opy"
+    "/../opy-rs/tests/fixtures/corpus/synthetic/dictionary-lookup/source.opy"
 );
 fn run(args: &[&str]) -> std::process::Output {
     run_with_env(args, &[])
@@ -248,42 +248,6 @@ fn inspect_reports_diagnostics_and_exits_one() {
 }
 
 #[test]
-fn support_prints_the_embedded_matrix_as_json() {
-    let output = run(&["support", "--json"]);
-    assert_eq!(output.status.code(), Some(0));
-    let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("matrix JSON");
-    assert_eq!(json["schemaVersion"], 1);
-    assert_eq!(json["reference"]["name"], "overpy");
-    assert!(json["features"].as_array().expect("features").len() >= 30);
-}
-
-#[test]
-fn support_filters_by_feature_id_and_category() {
-    let by_id = run(&["support", "compilation/workshop-lowering"]);
-    assert_eq!(by_id.status.code(), Some(0));
-    let feature: serde_json::Value = serde_json::from_slice(&by_id.stdout).expect("feature JSON");
-    assert_eq!(feature["state"], "lowering-dependent");
-
-    let by_category = run(&["support", "syntax"]);
-    assert_eq!(by_category.status.code(), Some(0));
-    let slice: serde_json::Value =
-        serde_json::from_slice(&by_category.stdout).expect("category JSON");
-    assert_eq!(slice["category"], "syntax");
-    let features = slice["features"].as_array().expect("filtered features");
-    assert_eq!(slice["count"], features.len());
-    assert!(!features.is_empty());
-    assert!(
-        features
-            .iter()
-            .all(|feature| feature["category"] == "syntax")
-    );
-
-    let unknown = run(&["support", "nope/nothing"]);
-    assert_eq!(unknown.status.code(), Some(2));
-    assert!(String::from_utf8_lossy(&unknown.stderr).contains("unknown feature id or category"));
-}
-
-#[test]
 fn version_prints_crate_and_protocol_identity() {
     let output = run(&["version"]);
     assert_eq!(output.status.code(), Some(0));
@@ -304,6 +268,13 @@ fn unknown_command_is_a_usage_error() {
 }
 
 #[test]
+fn retired_support_command_is_a_usage_error() {
+    let output = run(&["support"]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("unknown command"));
+}
+
+#[test]
 fn help_and_parse_are_driven_by_the_structured_command_model() {
     let help = run(&["--help"]);
     assert_eq!(help.status.code(), Some(0));
@@ -313,7 +284,6 @@ fn help_and_parse_are_driven_by_the_structured_command_model() {
         "check",
         "compile",
         "inspect",
-        "support",
         "completion",
         "--renderer",
         "--color",

@@ -15,11 +15,11 @@ import diff
 import input_identity
 
 
-ROOT = Path(__file__).resolve().parents[1]
-FIXTURES = ROOT / "compatibility" / "fixtures"
-MANIFEST = ROOT / "compatibility" / "conformance-manifest.json"
-INVENTORY = ROOT / "compatibility" / "feature-contracts.json"
-PINNED_AUDIT = ROOT / "compatibility" / "pinned-overpy-audit.json"
+ROOT = Path(__file__).resolve().parents[2]
+FIXTURES = ROOT / "crates/opy-rs/tests/fixtures/corpus"
+MANIFEST = ROOT / "docs/language-support/conformance-manifest.json"
+INVENTORY = ROOT / "docs/language-support/feature-contracts.json"
+PINNED_AUDIT = ROOT / "docs/language-support/pinned-overpy-audit.json"
 DEFAULT_REPORT = ROOT / "target" / "opy-rs-conformance-report.json"
 FRONTEND_CODES = {
     "lex-error": "lex",
@@ -780,7 +780,7 @@ def run(args: argparse.Namespace) -> int:
     report = {
         "schemaVersion": 1,
         "artifact": "opy-rs offline OverPy conformance report",
-        "generatedBy": "compatibility/conformance.py",
+        "generatedBy": "tools/overpy/conformance.py",
         "contract": manifest["contract"],
         "reference": manifest["reference"],
         "featureInventory": {

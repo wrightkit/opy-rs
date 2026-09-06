@@ -923,7 +923,8 @@ impl Parser<'_> {
         };
         if !params.is_empty() {
             self.error_at_current(
-                "subroutine parameters are outside the declared support matrix".to_string(),
+                "subroutine parameters are outside the declared language support surface"
+                    .to_string(),
             );
             return false;
         }

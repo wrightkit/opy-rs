@@ -204,9 +204,9 @@ hash, and, for rejections, the diagnostic category fragment).
   against the pinned oracle and must match its recorded accept/reject, normalized
   emission hash, and diagnostic category. The probe set and validator are
   source implementation-workstream-owned; the validator requires the pinned oracle (Node +
-  pnpm) and runs standalone like `compatibility/run_oracle.py`, so it is not
+  pnpm) and runs standalone like `tools/overpy/run_oracle.py`, so it is not
   part of the oracle-less harness suite. The probe names are recorded as
-  evidence references in `compatibility/support-matrix.json`, and the native
+  evidence references in the canonical language-support inventories, and the native
   differential suite (`crates/opy-rs/tests/differential.rs`, merged in
   PR #13) covers the same surface end-to-end in `cargo test`.
 * The source implementation consumes the manifest in `lower.rs`: unknown names, wrong

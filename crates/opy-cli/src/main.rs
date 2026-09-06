@@ -15,13 +15,12 @@ use std::process::ExitCode;
 
 use clap::{CommandFactory, Parser, error::ErrorKind};
 use clap_complete::{generate, shells};
-use opy_rs::support::{self, SupportMatrixError};
 use opy_rs::tooling::{CheckOutcome, Diagnostic as OpyDiagnostic, check};
 use opy_rs::{CompileDiagnostic, CompileStatus, Compiler};
 use opy_rs::{LANGUAGE_NAME, LANGUAGE_VERSION};
 use serde::Serialize;
 
-use crate::cli::{CheckArgs, Cli, Command, CompileArgs, FileArgs, OutputFormatArg, SupportArgs};
+use crate::cli::{CheckArgs, Cli, Command, CompileArgs, FileArgs, OutputFormatArg};
 use crate::present::{
     CheckView, DiagnosticSeverity, DiagnosticView, PositionView, Presentation, SpanView,
 };
@@ -56,7 +55,6 @@ fn main() -> ExitCode {
         Some(Command::Check(args)) => cmd_check(&args, presentation),
         Some(Command::Compile(args)) => cmd_compile(&args, presentation),
         Some(Command::Inspect(args)) => cmd_inspect(&args, presentation),
-        Some(Command::Support(args)) => cmd_support(&args),
         Some(Command::Completion(args)) => cmd_completion(args.shell),
         Some(Command::Help) => {
             print!("{}", Cli::command().render_help());
@@ -186,43 +184,6 @@ fn cmd_inspect(args: &FileArgs, presentation: Presentation) -> ExitCode {
     }
 }
 
-fn cmd_support(args: &SupportArgs) -> ExitCode {
-    let _json_flag_is_accepted_for_compatibility = args.json;
-    let matrix = match support::SupportMatrix::builtin() {
-        Ok(matrix) => matrix,
-        Err(error) => return matrix_error_exit(error),
-    };
-    let value = match args.filter.as_deref() {
-        None => serde_json::to_value(matrix).expect("the matrix is serializable"),
-        Some(filter) => {
-            if let Some(feature) = matrix.feature(filter) {
-                serde_json::to_value(feature).expect("a feature is serializable")
-            } else if matrix
-                .categories()
-                .iter()
-                .any(|category| category == filter)
-            {
-                let features = matrix.features_by_category(filter);
-                serde_json::json!({
-                    "category": filter,
-                    "count": features.len(),
-                    "features": features,
-                })
-            } else {
-                eprintln!(
-                    "opy-cli: unknown feature id or category '{filter}' \
-                     (see `opy-cli support` for the declared matrix)"
-                );
-                return ExitCode::from(2);
-            }
-        }
-    };
-    match print_json(&value) {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(code) => code,
-    }
-}
-
 fn cmd_completion(shell: cli::ShellArg) -> ExitCode {
     let mut command = Cli::command();
     let mut stdout = std::io::stdout();
@@ -337,9 +298,4 @@ fn print_json<T: Serialize>(value: &T) -> Result<(), ExitCode> {
             Err(ExitCode::from(2))
         }
     }
-}
-
-fn matrix_error_exit(error: SupportMatrixError) -> ExitCode {
-    eprintln!("opy-cli: the embedded support matrix is invalid: {error}");
-    ExitCode::from(2)
 }

@@ -17,11 +17,11 @@ from typing import Any
 import input_identity
 
 
-ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_FIXTURES = ROOT / "compatibility" / "fixtures"
-DEFAULT_REPORT = ROOT / "compatibility" / "report.json"
-DEFAULT_EXPECTATIONS = ROOT / "compatibility" / "differential-expectations.json"
-DEFAULT_COMPILER_EXPECTATIONS = ROOT / "compatibility" / "compiler-expectations.json"
+ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_FIXTURES = ROOT / "crates/opy-rs/tests/fixtures/corpus"
+DEFAULT_REPORT = ROOT / "target" / "opy-rs-differential-report.json"
+DEFAULT_EXPECTATIONS = ROOT / "crates/opy-rs/tests/differential-expectations.json"
+DEFAULT_COMPILER_EXPECTATIONS = ROOT / "tools/overpy/compiler-expectations.json"
 
 EXPECTED_NATIVE_STATUSES = {"success", "failure"}
 EXPECTED_CLASSIFICATIONS = {"match", "known-gap", "unsupported"}
@@ -202,7 +202,7 @@ def load_compiler_expectations(
                     f"{fixture}: non-match expectations require concrete evidence: "
                     + ", ".join(missing_evidence)
                 )
-            fixtures_root = path.parent / "fixtures"
+            fixtures_root = DEFAULT_FIXTURES
             oracle_path = fixtures_root / fixture / "oracle.json"
             provenance_path = fixtures_root / fixture / "fixture.json"
             oracle = load_json(oracle_path)
@@ -386,10 +386,7 @@ def compare_fixture(
     metadata_path = fixtures_root / fixture_id / "fixture.json"
     oracle_path = fixtures_root / fixture_id / "oracle.json"
     metadata = load_json(metadata_path)
-    expectations_path = fixtures_root.parent / "differential-expectations.json"
-    expectations = load_expectations(
-        expectations_path if expectations_path.is_file() else DEFAULT_EXPECTATIONS
-    )
+    expectations = load_expectations(DEFAULT_EXPECTATIONS)
     expectation = expectations.get(fixture_id)
     if expectation is None:
         raise DiffError(f"missing differential expectation: {fixture_id}")
@@ -732,10 +729,7 @@ def run(
     allow_inconclusive: bool,
 ) -> int:
     all_ids = fixture_ids(fixtures_root)
-    expectations_path = fixtures_root.parent / "differential-expectations.json"
-    expectations = load_expectations(
-        expectations_path if expectations_path.is_file() else DEFAULT_EXPECTATIONS
-    )
+    expectations = load_expectations(DEFAULT_EXPECTATIONS)
     missing = sorted(set(all_ids) - set(expectations))
     extra = sorted(set(expectations) - set(all_ids))
     if missing or extra:

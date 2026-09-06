@@ -16,15 +16,15 @@ const CLEAN_MULTI_FILE_MAIN: &str = concat!(
 );
 const BASIC_RULE: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../compatibility/fixtures/synthetic/basic-rule/source.opy"
+    "/../opy-rs/tests/fixtures/corpus/synthetic/basic-rule/source.opy"
 );
 const UNSUPPORTED: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../compatibility/fixtures/synthetic/switch-break-unsupported/source.opy"
+    "/../opy-rs/tests/fixtures/corpus/synthetic/switch-break-unsupported/source.opy"
 );
 const DIAGNOSTICS: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../compatibility/fixtures/synthetic/diagnostics/source.opy"
+    "/../opy-rs/tests/fixtures/corpus/synthetic/diagnostics/source.opy"
 );
 
 struct Session {

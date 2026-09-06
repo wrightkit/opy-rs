@@ -42,7 +42,6 @@ pub mod manifest;
 pub mod parser;
 pub mod preprocess;
 pub mod settings;
-pub mod support;
 pub mod tooling;
 
 use std::path::Path;

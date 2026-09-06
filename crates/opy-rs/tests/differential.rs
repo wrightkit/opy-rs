@@ -1,9 +1,9 @@
 //! Native-vs-reference differential suite.
 //!
 //! Runs the declared compatibility corpus
-//! (`compatibility/fixtures/**/fixture.json`) through the native frontend and
+//! (`crates/opy-rs/tests/fixtures/corpus/**/fixture.json`) through the native frontend and
 //! compares the outcome against the recorded reference evidence
-//! (`oracle.json`, produced by `compatibility/run_oracle.py` against the
+//! (`oracle.json`, produced by `tools/overpy/run_oracle.py` against the
 //! pinned OverPy 9.7.10 oracle).
 //!
 //! # What is compared
@@ -29,7 +29,8 @@
 //!   in the native HIR are compared against `rule ("…")` entries in the
 //!   oracle Workshop text, after normalizing away reference-synthesized
 //!   `Initialize …`/`Subroutine …` rules (their synthesis is
-//!   lowering-dependent in opy-rs; see the support matrix). Mismatches are
+//!   lowering-dependent in opy-rs; see the canonical language-support contract).
+//!   Mismatches are
 //!   recorded in the report as explicit gap entries; they do not fail the
 //!   suite because text-shape differences at the emission boundary are not
 //!   the compatibility contract.
@@ -61,8 +62,7 @@
 //! `target/opy-differential-report.json` listing per-fixture native status and
 //! relationship classification (`match` / `known-gap` /
 //! `unexpected-divergence` / `inconclusive`), the native diagnostic code, the
-//! reference status, rule-name comparison, and the support-matrix feature ids
-//! the fixture evidences. A reference-success/native-failure case is never
+//! reference status, and rule-name comparison. A reference-success/native-failure case is never
 //! classified as a match.
 //!
 //! # Current corpus state
@@ -88,13 +88,13 @@ fn workspace_root() -> PathBuf {
 }
 
 fn fixtures_root() -> PathBuf {
-    workspace_root().join("compatibility").join("fixtures")
+    workspace_root().join("crates/opy-rs/tests/fixtures/corpus")
 }
 
 fn differential_expectations() -> Value {
     serde_json::from_str(
         &std::fs::read_to_string(
-            workspace_root().join("compatibility/differential-expectations.json"),
+            workspace_root().join("crates/opy-rs/tests/differential-expectations.json"),
         )
         .expect("differential-expectations.json must be readable"),
     )
@@ -139,7 +139,7 @@ fn case(expect: Expect, rule_names: bool, note: &'static str) -> Case {
 }
 
 /// The declared corpus expectation table. Every fixture in
-/// `compatibility/fixtures` must appear here; unknown fixtures fail the suite
+/// `crates/opy-rs/tests/fixtures/corpus` must appear here; unknown fixtures fail the suite
 /// so new corpus entries are deliberate.
 fn declared_corpus() -> BTreeMap<&'static str, Case> {
     let mut cases = BTreeMap::new();
@@ -619,27 +619,6 @@ fn strip_spans(value: &mut Value) {
     }
 }
 
-/// The support-matrix feature ids whose evidence cites `fixtures:<id>`.
-fn support_matrix_linkage(matrix: &Value, id: &str) -> Vec<String> {
-    let fixtures_key = format!("fixtures:{id}");
-    matrix["features"]
-        .as_array()
-        .map(|features| {
-            features
-                .iter()
-                .filter_map(|feature| {
-                    let evidences = feature["evidence"].as_array();
-                    let cited = evidences.is_some_and(|list| {
-                        list.iter()
-                            .any(|entry| entry.as_str() == Some(&fixtures_key))
-                    });
-                    cited.then(|| feature["id"].as_str().unwrap().to_string())
-                })
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
 /// Run one fixture through the native frontend plus the structural
 /// self-checks, and emit its normalized native HIR JSON dump.
 fn run_native(
@@ -685,11 +664,7 @@ fn run_native(
 fn native_and_reference_agree_on_the_declared_corpus() {
     let corpus = declared_corpus();
     let expectations = differential_expectations();
-    let matrix: Value = serde_json::from_str(
-        &std::fs::read_to_string(workspace_root().join("compatibility/support-matrix.json"))
-            .unwrap(),
-    )
-    .expect("support-matrix.json must parse");
+    let mut reference_identity = Value::Null;
 
     let mut fixtures = BTreeMap::<String, Value>::new();
     let mut divergences: Vec<Value> = Vec::new();
@@ -765,6 +740,9 @@ fn native_and_reference_agree_on_the_declared_corpus() {
             let oracle: Value =
                 serde_json::from_str(&std::fs::read_to_string(&snapshot_path).unwrap())
                     .expect("oracle.json must parse");
+            if reference_identity.is_null() {
+                reference_identity = oracle["oracle"].clone();
+            }
             oracle["compile"]["status"].as_str().map(str::to_string)
         } else {
             None
@@ -883,7 +861,6 @@ fn native_and_reference_agree_on_the_declared_corpus() {
             "native": native_entry,
             "reference": reference_entry,
             "ruleNames": rule_names_entry,
-            "supportMatrix": support_matrix_linkage(&matrix, &id),
             "detail": detail,
             "referenceGap": reference_gap,
             "skip": skipped,
@@ -967,7 +944,7 @@ fn native_and_reference_agree_on_the_declared_corpus() {
         .collect();
     assert!(
         missing.is_empty(),
-        "declared corpus entries missing from compatibility/fixtures: {missing:?}"
+        "declared corpus entries missing from crates/opy-rs/tests/fixtures/corpus: {missing:?}"
     );
     let extra_expectations: Vec<&str> = expectations["cases"]
         .as_array()
@@ -986,7 +963,7 @@ fn native_and_reference_agree_on_the_declared_corpus() {
         "artifact": "opy-rs native-vs-reference differential report (issue #25)",
         "generatedBy": "crates/opy-rs/tests/differential.rs",
         "frontend": { "name": LANGUAGE_NAME, "version": LANGUAGE_VERSION },
-        "reference": matrix["reference"],
+        "reference": reference_identity,
         "summary": {
             "total": counts["total"],
             "resolve": counts["resolve"],

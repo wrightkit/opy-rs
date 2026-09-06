@@ -17,9 +17,9 @@ from typing import Any
 import input_identity
 
 
-ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_FIXTURES = ROOT / "compatibility" / "fixtures"
-DEFAULT_ORACLE = ROOT / "compatibility" / "oracle"
+ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_FIXTURES = ROOT / "crates/opy-rs/tests/fixtures/corpus"
+DEFAULT_ORACLE = ROOT / "tools/overpy/oracle"
 SNAPSHOT_NAME = "oracle.json"
 
 
@@ -203,7 +203,7 @@ def run_fixture(
         except FileNotFoundError as error:
             raise RunnerError(
                 "pnpm is unavailable; install the pinned oracle dependencies with "
-                "pnpm install --dir compatibility/oracle"
+                "pnpm install --dir tools/overpy/oracle"
             ) from error
 
         # Recorded diagnostics must be checkout-path-independent: replace the

@@ -12,7 +12,7 @@ updates:
   # implementation and changes only through an explicit compatibility
   # decision, so it is excluded from automated updates.
   - package-ecosystem: npm
-    directory: /compatibility/oracle
+    directory: /tools/overpy/oracle
     schedule:
       interval: monthly
     ignore:
