@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "contract": "pinned-overpy-source-audit",
+  "reference": {
+    "name": "overpy",
+    "version": "9.7.10",
+    "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw=="
+  },
+  "registries": [
+    {"id": "registry/keywords", "source": {"path": "src/data/opy/keywords.ts", "objectPath": "opyKeywords"}},
+    {"id": "registry/directives", "source": {"path": "src/data/opy/preprocessing.ts", "objectPath": "preprocessingDirectives"}},
+    {"id": "registry/annotations", "source": {"path": "src/data/opy/annotations.ts", "objectPath": "opyAnnotations"}},
+    {"id": "registry/random-module", "source": {"path": "src/data/opy/modules.ts", "objectPath": "opyModules.random"}},
+    {"id": "registry/macros", "source": {"path": "src/data/opy/macros.ts", "objectPath": "opyMacros"}},
+    {"id": "registry/functions", "source": {"path": "src/data/opy/functions.ts", "objectPath": "opyFuncs"}},
+    {"id": "registry/member-functions", "source": {"path": "src/data/opy/memberFunctions.ts", "objectPath": "opyMemberFuncs"}},
+    {"id": "registry/vector-constants", "source": {"path": "src/data/opy/constants.ts", "objectPath": "opyConstants.Vector"}},
+    {"id": "registry/math-constants", "source": {"path": "src/data/opy/constants.ts", "objectPath": "opyConstants.Math"}},
+    {"id": "registry/textures", "source": {"path": "src/data/opy/textures.ts", "objectPath": "opyTextures"}},
+    {"id": "registry/string-entities", "source": {"path": "src/data/opy/stringEntities.ts", "objectPath": "opyStringEntities"}}
+  ],
+  "branches": [
+    {"id": "branch/lexer-token-boundaries", "source": "src/compiler/tokenizer.ts"},
+    {"id": "branch/parser-expressions", "source": "src/compiler/parser.ts"},
+    {"id": "branch/parser-declarations", "source": "src/compiler/astParser.ts"},
+    {"id": "branch/parser-control-flow", "source": "src/compiler/parser.ts"},
+    {"id": "branch/parser-contextual-lambda", "source": "src/compiler/parser.ts"},
+    {"id": "branch/parser-goto-and-dynamic-targets", "source": "src/compiler/parser.ts"},
+    {"id": "branch/compiler-project-closure", "source": "src/compiler/compiler.ts"},
+    {"id": "branch/compiler-macro-expansion", "source": "src/compiler/tokenizer.ts"},
+    {"id": "branch/compiler-directive-state", "source": "src/compiler/compiler.ts"},
+    {"id": "branch/compiler-translations", "source": "src/compiler/translations.ts"},
+    {"id": "branch/compiler-settings", "source": "src/compiler/parser.ts"},
+    {"id": "branch/semantic-dispatch", "source": "src/data/opy/functions.ts"},
+    {"id": "branch/semantic-diagnostic-frontiers", "source": "src/compiler/compiler.ts"},
+    {"id": "branch/lowering-canonical-wir", "source": "src/compiler/astToWorkshop.ts"},
+    {"id": "branch/lowering-unsupported-boundary", "source": "src/compiler/astToWorkshop.ts"},
+    {"id": "branch/project-real-world", "source": "examples"},
+    {"id": "branch/workshop-catalog-boundary", "source": "src/data/actions.ts"},
+    {"id": "branch/workshop-value-boundary", "source": "src/data/values.ts"},
+    {"id": "branch/cli-compile-contract", "source": "src/cli.ts"},
+    {"id": "branch/cli-decompile-contract", "source": "src/decompiler/decompiler.ts"},
+    {"id": "branch/compile-metadata", "source": "src/compiler/compiler.ts"},
+    {"id": "branch/javascript-macro-runtime", "source": "src/compiler/tokenizer.ts"},
+    {"id": "branch/post-compile-hook", "source": "src/compiler/compiler.ts"},
+    {"id": "branch/quickjs-failure-abi", "source": "src/quickjs.ts"},
+    {"id": "branch/cli-project-input", "source": "src/cli.ts"}
+  ]
+}

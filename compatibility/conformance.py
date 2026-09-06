@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "compatibility" / "fixtures"
 MANIFEST = ROOT / "compatibility" / "conformance-manifest.json"
 INVENTORY = ROOT / "compatibility" / "feature-contracts.json"
+PINNED_AUDIT = ROOT / "compatibility" / "pinned-overpy-audit.json"
 DEFAULT_REPORT = ROOT / "target" / "opy-rs-conformance-report.json"
 FRONTEND_CODES = {
     "lex-error": "lex",
@@ -114,6 +115,40 @@ def load_inventory(path: Path = INVENTORY) -> dict[str, Any]:
         ):
             raise ConformanceError(f"feature contract inventory needs distinct {key}")
     return inventory
+
+
+def load_pinned_audit(path: Path = PINNED_AUDIT) -> dict[str, Any]:
+    audit = load_json(path)
+    if audit.get("schemaVersion") != 1:
+        raise ConformanceError("pinned OverPy audit schemaVersion must be 1")
+    if audit.get("contract") != "pinned-overpy-source-audit":
+        raise ConformanceError("unsupported pinned OverPy audit")
+    if not isinstance(audit.get("reference"), dict):
+        raise ConformanceError("pinned OverPy audit has no reference")
+    for key in ("registries", "branches"):
+        values = audit.get(key)
+        if (
+            not isinstance(values, list)
+            or not values
+            or any(not isinstance(value, dict) for value in values)
+            or any(not isinstance(value.get("id"), str) or not value["id"] for value in values)
+            or len({value["id"] for value in values}) != len(values)
+        ):
+            raise ConformanceError(f"pinned OverPy audit needs distinct {key}")
+    for registry in audit["registries"]:
+        source = registry.get("source")
+        if (
+            not isinstance(source, dict)
+            or not isinstance(source.get("path"), str)
+            or not source["path"]
+            or not isinstance(source.get("objectPath"), str)
+            or not source["objectPath"]
+        ):
+            raise ConformanceError(f"{registry['id']}: pinned audit source is incomplete")
+    for branch in audit["branches"]:
+        if not isinstance(branch.get("source"), str) or not branch["source"]:
+            raise ConformanceError(f"{branch['id']}: pinned audit source is incomplete")
+    return audit
 
 
 def _validate_evidence(
@@ -247,9 +282,13 @@ def validate_inventory(
     manifest: dict[str, Any],
     fixtures_root: Path = FIXTURES,
     upstream_root: Path | None = None,
+    audit: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
+    audit = load_pinned_audit() if audit is None else audit
     if inventory["reference"] != manifest["reference"]:
         raise ConformanceError("feature contract inventory reference pin disagrees with conformance manifest")
+    if audit["reference"] != manifest["reference"]:
+        raise ConformanceError("pinned OverPy audit reference pin disagrees with conformance manifest")
     fixture_set = fixture_ids(fixtures_root)
     category_contracts = {
         f"{category['id']}/{contract['id']}"
@@ -269,6 +308,13 @@ def validate_inventory(
             f"missing={sorted(required_surfaces - set(surface_ids))}, "
             f"extra={sorted(set(surface_ids) - required_surfaces)}"
         )
+    audit_surfaces = {surface["id"]: surface for surface in audit["registries"]}
+    if required_surfaces != set(audit_surfaces):
+        raise ConformanceError(
+            "feature contract registry catalog differs from pinned audit: "
+            f"missing={sorted(set(audit_surfaces) - required_surfaces)}, "
+            f"extra={sorted(required_surfaces - set(audit_surfaces))}"
+        )
     if any(not isinstance(branch, dict) for branch in inventory["branches"]):
         raise ConformanceError("feature contract branches must be objects")
     leaves = inventory_leaves(inventory)
@@ -282,6 +328,13 @@ def validate_inventory(
             "feature contract branch catalog differs from required branches: "
             f"missing={sorted(required_branches - set(branch_ids))}, "
             f"extra={sorted(set(branch_ids) - required_branches)}"
+        )
+    audit_branches = {branch["id"]: branch for branch in audit["branches"]}
+    if required_branches != set(audit_branches):
+        raise ConformanceError(
+            "feature contract branch catalog differs from pinned audit: "
+            f"missing={sorted(set(audit_branches) - required_branches)}, "
+            f"extra={sorted(required_branches - set(audit_branches))}"
         )
     for branch in inventory["branches"]:
         if (
@@ -305,6 +358,8 @@ def validate_inventory(
             or not registry["source"].get("objectPath")
         ):
             raise ConformanceError(f"{registry_id}: source path and object path are required")
+        if registry["source"] != audit_surfaces[registry_id]["source"]:
+            raise ConformanceError(f"{registry_id}: source differs from pinned audit")
         keys = registry.get("keys")
         if not isinstance(keys, list) or not keys or len(keys) != len(set(keys)) or any(not isinstance(key, str) or not key for key in keys):
             raise ConformanceError(f"{registry_id}: registry keys must be distinct non-empty strings")
@@ -321,6 +376,11 @@ def validate_inventory(
                 missing = sorted(actual - set(keys))
                 extra = sorted(set(keys) - actual)
                 raise ConformanceError(f"{registry_id}: upstream key set differs (missing={missing}, extra={extra})")
+    if upstream_root is not None:
+        for branch in audit["branches"]:
+            source = upstream_root / branch["source"]
+            if not source.exists():
+                raise ConformanceError(f"{branch['id']}: pinned audit source does not exist: {source}")
     for leaf in leaves:
         leaf_id = leaf["id"]
         status = leaf.get("status")
@@ -654,7 +714,8 @@ def run(args: argparse.Namespace) -> int:
     manifest = load_manifest(args.manifest)
     validate_manifest(manifest, args.fixtures)
     inventory = load_inventory(args.inventory)
-    leaves = validate_inventory(inventory, manifest, args.fixtures, args.upstream_root)
+    audit = load_pinned_audit()
+    leaves = validate_inventory(inventory, manifest, args.fixtures, args.upstream_root, audit)
     frontiers = manifest["referenceFrontiers"]
     selected = set(args.fixture)
     discovered = fixture_ids(args.fixtures)

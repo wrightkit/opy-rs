@@ -29,7 +29,10 @@ The oracle is not bundled into opy-rs and is not imported by the Rust core.
 leaf inventory for the pinned OverPy source surface. It records the exact
 registry keys, materially distinct compiler/parser/tooling branches, status
 and coverage limits, production ownership, and executable or upstream
-evidence. Its reference pin must match `conformance-manifest.json`.
+evidence. [`pinned-overpy-audit.json`](pinned-overpy-audit.json) is the
+independent pinned-source audit catalog used to detect omitted registry
+families or compiler branches. Both reference pins must match
+`conformance-manifest.json`.
 
 The normal conformance run validates the inventory without requiring the
 upstream checkout. To additionally detect registry drift against a local

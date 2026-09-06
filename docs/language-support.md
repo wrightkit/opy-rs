@@ -4,6 +4,8 @@ This is the canonical, human-readable compatibility contract for `opy-rs`.
 The detailed inventories linked here are part of the same contract. The
 machine-readable leaf inventory is
 [`compatibility/feature-contracts.json`](../compatibility/feature-contracts.json).
+Its completeness is checked against the independent pinned-source catalog in
+[`compatibility/pinned-overpy-audit.json`](../compatibility/pinned-overpy-audit.json).
 
 ## Reference and audit boundary
 

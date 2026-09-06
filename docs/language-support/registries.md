@@ -10,6 +10,13 @@ dispatch rule. The user-facing status is reconciled against current
 
 Reference: `889d9749d1def17f146548cbddb94ea1ab015847`.
 
+## String entities (`src/data/opy/stringEntities.ts`)
+
+The `opyStringEntities` registry defines the user-visible `\\&name;` escape
+family. Its exact 67 keys and current status/coverage are maintained in the
+machine inventory; string parsing and escaping behavior remains a separate
+contract.
+
 ## Keywords (`src/data/opy/keywords.ts`)
 
 | Upstream key | Status |
