@@ -1,6 +1,6 @@
 //! OPY-to-Workshop integration, kept behind the `opy-rs` library boundary.
 //!
-//! This module pins the released `workshop-rs` v0.1.18 contract, checks the OPY
+//! This module pins the released `workshop-rs` v0.1.19 contract, checks the OPY
 //! manifest links against the canonical catalog, and lowers the supported OPY
 //! program structure into canonical WIR before validation and deterministic
 //! Workshop emission.
@@ -20,7 +20,7 @@ pub mod reconstruct;
 mod integration_tests;
 
 /// The exact released dependency contract consumed by this crate.
-pub const WORKSHOP_RS_VERSION: &str = "0.1.18";
+pub const WORKSHOP_RS_VERSION: &str = "0.1.19";
 
 const TRANSLATION_HELPER_NAME: &str = "__overpyTranslationHelper__";
 
@@ -6950,7 +6950,7 @@ mod tests {
         assert_eq!(rule.span.unwrap().file.index(), 0);
         assert_eq!(rule.name_span.unwrap().start.line, 2);
         assert!(artifact.emitted.contains("Disable Inspector Recording;"));
-        assert_eq!(artifact.catalog_identity.implementation_version, "0.1.18");
+        assert_eq!(artifact.catalog_identity.implementation_version, "0.1.19");
     }
 
     #[test]
