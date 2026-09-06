@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.20](https://github.com/wrightkit/opy-rs/compare/v0.1.19...v0.1.20) - 2026-09-06
+
+### Other
+
+- *(opy)* retire top-level compatibility subsystem ([#196](https://github.com/wrightkit/opy-rs/pull/196))
+- *(opy)* normalize test ownership around features ([#194](https://github.com/wrightkit/opy-rs/pull/194))
+
 ## [0.1.19](https://github.com/wrightkit/opy-rs/compare/v0.1.18...v0.1.19) - 2026-09-05
 
 ### Fixed
