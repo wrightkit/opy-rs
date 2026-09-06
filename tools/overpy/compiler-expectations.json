@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "contract": "compiler",
-  "description": "Independent compiler outcome expectations for the #38 OPY-to-Workshop compatibility baseline. Source/frontend expectations remain in differential-expectations.json.",
+  "description": "Reviewed compiler outcome expectations for the #38 OPY-to-Workshop evidence contract. Source/frontend expectations remain in differential-expectations.json.",
   "evidencePolicy": {
     "native": "The compiler result is compared with this separately reviewed baseline; it never creates its own expectation.",
     "classification": "match requires normalized output, direct canonical-WIR equivalence, or a stable diagnostic contract. known-gap and unsupported require pinned oracle and fixture provenance evidence plus a concrete follow-up owner.",
@@ -412,7 +412,7 @@
       "evidence": [
         "oracle:census/workshop-feature-census/oracle.json",
         "provenance:census/workshop-feature-census/fixture.json",
-        "support-matrix:compilation/end-to-end"
+        "contract:lowering.canonical-wir/vertical-slice"
       ],
       "owner": "opy-rs#38",
       "note": "The bounded feature census matches the pinned oracle through the normalized compiler output contract."

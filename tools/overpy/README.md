@@ -188,9 +188,9 @@ Artifacts under `target/`:
 * `target/opy-differential/<fixture-id>.native.json`: normalized native HIR
   wire payload (span endpoints removed) per fixture;
 * `target/opy-differential-report.json`: machine-readable per-fixture status
-  (`resolve` / `expected-diagnostic` / `divergence`), native diagnostic code,
-  reference status, rule-name comparison, and the support-matrix feature ids
-  the fixture evidences.
+  (`resolve` / `expected-diagnostic` / `divergence`), classification, native
+  diagnostic details, reference status, `referenceGap`, rule-name comparison,
+  and expectation evidence.
 
 Fixtures without an `oracle.json` are marked `skip` (reference comparison
 degraded gracefully); the structural self-check and the expected-outcome
@@ -241,12 +241,13 @@ Use `--allow-inconclusive` only for local contract checks.
 
 ## Offline conformance baseline (issue #158)
 
-`../../docs/language-support/conformance-manifest.json` is the independent inventory for the pinned
-OverPy source-language baseline. Its categories cite the pinned upstream
-registries or an accepted canonical-WIR contract. Each category declares
-structural contracts with a claim, probe kinds (`positive`, `negative`,
-`contextual`, or `composition`), and executable fixture probes; validation
-rejects empty or unknown mappings. It contains no native expected outcomes.
+`../../docs/language-support/conformance-manifest.json` is the linked
+executable-evidence inventory for the canonical pinned OverPy source-language
+contract. Its categories cite the pinned upstream registries or an accepted
+canonical-WIR contract. Each category declares structural contracts with a
+claim, probe kinds (`positive`, `negative`, `contextual`, or `composition`),
+and executable fixture probes; validation rejects empty or unknown mappings.
+It contains no native expected outcomes or alternate support status.
 Reference failures carry an audited stage and first-construct frontier tied to
 text in their pinned oracle snapshot.
 

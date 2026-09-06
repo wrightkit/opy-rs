@@ -81,7 +81,7 @@ source provenance, or compatibility correctness.
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-targets --all-features
-python3 -m unittest discover -s compatibility/tests
+python3 -m unittest discover -s tools/overpy/tests
 ```
 
 Oracle-required compatibility probes run separately against the pinned

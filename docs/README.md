@@ -12,7 +12,7 @@ architecture, compatibility evidence, APIs, and internal contracts live here.
 - [Architecture](opy/architecture.md): source parsing, semantic HIR,
   compiler/reconstruction boundaries, and dependency direction.
 - [Tooling API](opy/tooling-api.md): Rust library and CLI contracts for checking,
-  inspection, overlays, diagnostics, and support queries.
+  inspection, overlays, and diagnostics.
 - [LPP provider](opy/provider.md): first-party provider capabilities, entry-based
   project loading, artifact boundary, and release archive contract.
 - [Source-edit policy](opy/trivia-retention-policy.md): provenance and trivia
@@ -22,10 +22,8 @@ architecture, compatibility evidence, APIs, and internal contracts live here.
 
 - [OverPy support contract](language-support.md): audited, human-readable OverPy
   feature coverage.
-- [Compatibility baseline](opy/compatibility-baseline.md): planning/reference
-  inventory for remaining OverPy surface and compatibility priorities.
-- [Offline conformance baseline](opy/conformance-baseline.md): independent
-  oracle, failure-frontier, and canonical-WIR comparison contract.
+- [Offline conformance evidence](opy/conformance-baseline.md): oracle,
+  failure-frontier, and canonical-WIR comparison contract.
 - [Upstream references](compatibility/upstream-references.md): pinned reference
   identity, provenance, licensing notes, and oracle boundaries.
 - [OverPy evidence harness](../tools/overpy/README.md): oracle tooling,

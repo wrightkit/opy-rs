@@ -5,14 +5,15 @@ compatibility implementation. The durable machine-readable inventory is
 [`docs/language-support/conformance-manifest.json`](../../docs/language-support/conformance-manifest.json);
 the executable runner is [`tools/overpy/conformance.py`](../../tools/overpy/conformance.py).
 
-## Independent inventory
+## Canonical inventory relationship
 
 The inventory categories are derived from the pinned OverPy 9.7.10 source
 registries and public project/test evidence recorded in
 [`upstream-references.md`](../compatibility/upstream-references.md) and
 [`language-support/registries.md`](../language-support/registries.md). The
-manifest declares structural contracts for each category. Every contract has
-a reviewable claim, one or more probe kinds (`positive`, `negative`,
+manifest is a linked executable-evidence inventory within the canonical
+language-support contract, not a second support-status source. Every contract
+has a reviewable claim, one or more probe kinds (`positive`, `negative`,
 `contextual`, or `composition`), and one or more executable fixture probes;
 the validator rejects missing, unknown, or empty mappings. It does not derive
 its declared surface, reference outcome, or expected behavior from the current
@@ -33,8 +34,8 @@ The categories are:
 | `ownership.workshop-feature-census` | opaque consumer evidence for the workshop-rs-owned census |
 
 The existing `docs/language-support/registries.md` remains the leaf inventory
-of upstream names. This baseline adds the executable structural probes and
-does not duplicate upstream catalog data in `opy-rs`.
+of upstream names. This evidence manifest adds executable structural probes and
+does not duplicate upstream catalog data or support status in `opy-rs`.
 
 ## Comparison contract
 

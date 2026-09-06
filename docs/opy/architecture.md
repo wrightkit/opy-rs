@@ -78,7 +78,7 @@ request through the compiler backend.
 - Opy HIR and OverPy-specific semantic identities;
 - OverPy-specific compiler/lowering behavior;
 - supported backend-affecting directives and post-compile-hook behavior;
-- standalone `check`, `inspect`, support, compiler, and future reconstruction
+- standalone `check`, `inspect`, compiler, and future reconstruction
   APIs/CLI surfaces;
 - OPY compatibility evidence and Workshop→OPY reconstruction.
 
@@ -158,16 +158,16 @@ reconstruction.
 - **Observable semantic compatibility, not output identity.** Formatting,
   temporary variables, optimizer internals, and text shape are evidence only
   unless they affect a declared observable contract.
-- **Corpus-defined support.** Current support is derived from fixtures,
-  real-project evidence, pinned reference observations, and the canonical
-  language-support inventories.
+- **Canonical support contract.** Current support is defined by the canonical
+  language-support contract and its linked inventories; fixtures, real-project
+  evidence, and pinned reference observations provide the evidence.
 - **No WrightKit-only OPY dialect.** `opy-rs` follows the OverPy language rather
   than inventing source syntax for Wright convenience.
 - **Source-aware edits by default.** Tooling uses semantic identities,
   provenance, and authored source spans; whole-file regeneration is not the
   default mutation model.
 - **Explicit unsupported behavior.** Incomplete lowering or evidence gaps remain
-  diagnostics/support states rather than guessed semantics.
+  diagnostics or explicit evidence states rather than guessed semantics.
 
 ## Provider integration
 
@@ -181,7 +181,7 @@ of `opy-rs`, and standalone library/CLI users do not need Wright.
 The Workshop-independent semantic/tooling foundation and bounded OPY→Workshop
 compiler surface are implemented and corpus-backed. The reconstruction module
 is owned here, while broader Workshop→OPY coverage remains explicit in the
-compatibility corpus report.
+compatibility evidence reports.
 
 Do not infer a stronger claim from this document; use the canonical
 language-support contract and current executable evidence.

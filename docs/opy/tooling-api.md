@@ -161,8 +161,7 @@ opy-cli version                                   # crate + source implementatio
 Exit codes: `0` clean/success, `1` diagnostics found, `2` usage or I/O
 errors. `check`/`inspect` resolve includes against the main file's parent
 directory. The CLI runs anywhere the binary runs: no Node, no Workshop
-backend, no runtime data files (the matrix and the semantic manifest are
-embedded).
+backend, and no runtime data files; the semantic manifest is embedded.
 
 ### Presentation candidate for Issue #43
 
@@ -179,7 +178,7 @@ unchanged:
   GitHub Actions never receives ANSI even when `always` is requested.
 * `--format json` is currently available on `check`. It writes only `{ok,
   diagnostics}` JSON to stdout and returns the same 0/1 result code. `inspect`
-  and `support` remain JSON by default and bypass presentation entirely.
+  remains JSON by default and bypasses presentation entirely.
   Compile format json writes the versioned compile report described above;
   compiler failures return 1. If the required input path is missing, or the path cannot be read, the CLI
   cannot produce a machine result: it returns exit `2`, writes the human I/O

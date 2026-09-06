@@ -66,9 +66,9 @@ it serves as:
 * the reference for S (syntax), D (diagnostic), and N (normalized-output)
   evidence in the compatibility corpus (`crates/opy-rs/tests/fixtures/corpus/**`,
   `tools/overpy/oracle/`);
-* the source of systematic probe validation for the proactive compatibility
-  baseline (see [`docs/opy/compatibility-baseline.md`](../opy/compatibility-baseline.md)
-  and [`docs/opy/compat-manifest-spec.md`](../opy/compat-manifest-spec.md));
+* the source of systematic probe validation for the pinned language-support
+  inventories (see [`docs/language-support.md`](../language-support.md) and
+  [`docs/opy/compat-manifest-spec.md`](../opy/compat-manifest-spec.md));
 * the reference for differential parity at the Opy HIR v2 boundary
   ([`docs/hir/opy-hir-v2.md`](../hir/opy-hir-v2.md)): the native differential
   suite (`crates/opy-rs/tests/differential.rs`, merged in PR #13) runs
@@ -262,7 +262,6 @@ when the oracle is absent.
 ## Related documents
 
 * [`docs/language-support.md`](../language-support.md): audited public support contract and current states
-* [`docs/opy/compatibility-baseline.md`](../opy/compatibility-baseline.md): tiered planning baseline
 * [`docs/opy/compat-manifest-spec.md`](../opy/compat-manifest-spec.md): machine-readable semantic manifest specification
 * [`docs/opy/tooling-notes.md`](../opy/tooling-notes.md): harness usage
 * [`tools/overpy/README.md`](../../tools/overpy/README.md): oracle and fixture layout
