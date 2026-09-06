@@ -155,8 +155,7 @@ wrong, or normalized output/diagnostics differ.
 
 The harness tests (`tools/overpy/tests/`) run without the oracle installed:
 `test_runner.py` (normalization + corpus metadata/snapshot validity),
-`test_diff.py` (differential result contract), and `test_support_matrix.py`
-(the machine-readable support matrix structure and evidence paths).
+and `test_diff.py` (differential result contract).
 The wright-side npm-packaging tests are not ported (they test wright's release
 tooling). The manifest probe validator
 (`crates/opy-rs/src/manifest/probes/validate.py`) is source implementation-owned and

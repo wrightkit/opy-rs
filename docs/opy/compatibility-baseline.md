@@ -6,9 +6,9 @@ Scope: forward-looking, tiered inventory of the OPY language surface against
 the pinned OverPy 9.7.10 reference, classifying every category by
 implementation tier and by support dimension
 
-This document is the planning counterpart to
-[`support-matrix.md`](support-matrix.md): the support matrix records the
-corpus-evidenced surface the opy-rs source implementation targets, while this baseline
+This document is the planning counterpart to the
+[canonical language-support contract](../language-support.md): that contract
+records the corpus-evidenced surface the opy-rs source implementation targets, while this baseline
 records how the remaining surface is **tiered and sequenced**. A construct is
 not called supported merely because it parses; each row states parse,
 semantic, compilation, tooling/analysis, and reference coverage separately.
@@ -20,9 +20,9 @@ for provenance. Evidence claims in this document were verified against the
 pinned oracle (the declared corpus now contains 42 provenance-linked
 snapshots). The opy-rs source implementation foundation and #7 readiness work are
 implemented on `main` (issues #3–#7, #28–#30, and #33); the category table is the
-**tier assignment contract** for the remaining surface. The state column of
-`crates/opy-rs/support-matrix.json` tracks actual implementation progress
-against it, and rows marked `baseline-supported` in this document are
+**tier assignment contract** for the remaining surface. The status and
+coverage fields in the linked feature inventory track actual implementation
+progress against it, and rows marked `baseline-supported` in this document are
 implemented unless the table says otherwise.
 
 ## Tier taxonomy
@@ -84,10 +84,9 @@ rejected/documented-absent dimension, `—` an inapplicable dimension, and
 | 12a | `settings "file"`, richer settings expressions, hero/map/ability content beyond the pin | `legacy-quirk/demand-driven` / `reference-limited` | ❌/partial | ❌ | ❌ | ❌ | partial (data newer than pin unavailable per the pinning policy) |
 | 13 | **Source identity & diagnostics**: structured, source-located source implementation errors, `wright-result/v1` | `baseline-supported` | ✅ | ✅ | — | ✅ | ✅ S/D |
 
-## Current `planned` entries
+## Current planning notes
 
-There are no remaining `planned` entries in
-`crates/opy-rs/support-matrix.json`. The pinned OPY source implementation surface from
+The pinned OPY source implementation surface from
 #28/#29/#30/#33 is represented as source implementation- or semantic-supported; Workshop
 catalog, emission, and runtime effects remain explicitly
 `lowering-dependent`. Their tiers above
@@ -124,7 +123,7 @@ and remaining gaps stay classified rather than being filed per-symbol.
 * **No per-symbol issues.** These evidence items are grouped into semantic
   categories; none justifies a one-symbol implementation issue.
 * **No temporary Workshop IR.** Workshop-dependent features are classified
-  `lowering-dependent` in the support matrix and inventory-only until the
+  `lowering-dependent` in the language-support inventory and inventory-only until the
   `workshop-rs` integration stage (#8). Nothing here starts `workshop-rs`
   work or duplicates catalog/WIR/emitter data.
 * **Runtime content registry stays deferred.** This baseline is
@@ -140,7 +139,6 @@ and remaining gaps stay classified rather than being filed per-symbol.
 ## Related documents
 
 * [`docs/compatibility/upstream-references.md`](../compatibility/upstream-references.md): pinned reference identity and provenance
-* [`support-matrix.md`](support-matrix.md): corpus-evidenced declared surface
 * [`compat-manifest-spec.md`](compat-manifest-spec.md): machine-readable semantic manifest specification (data in `crates/opy-rs/src/manifest/`)
-* [`crates/opy-rs/support-matrix.json`](../../crates/opy-rs/support-matrix.json): machine-readable state tracking
+* [`../language-support.md`](../language-support.md): canonical feature status and coverage
 * [`tools/overpy/README.md`](../../tools/overpy/README.md): corpus and harness layout

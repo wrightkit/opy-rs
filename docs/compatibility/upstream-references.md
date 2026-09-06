@@ -257,7 +257,7 @@ when the oracle is absent.
 * **Round-trip boundary.** Emitted `settings` sections are deliberately not
   reparseable by the Workshop source implementation; a `.ws` decompiler is a non-goal for
   `opy-rs` (Workshop → OPY decompilation is deferred to the `workshop-rs`
-  integration stage; see `support-matrix.md`).
+  integration stage; see `../language-support.md`).
 
 ## Related documents
 

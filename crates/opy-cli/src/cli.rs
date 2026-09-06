@@ -44,8 +44,6 @@ pub(crate) enum Command {
     Compile(CompileArgs),
     /// Print the resolved program model as JSON.
     Inspect(FileArgs),
-    /// Print the compatibility support matrix or a filtered slice as JSON.
-    Support(SupportArgs),
     /// Generate static shell completion from this command model.
     Completion(CompletionArgs),
     /// Show the top-level help.
@@ -83,17 +81,6 @@ pub(crate) struct FileArgs {
     /// Main OPY source file.
     #[arg(value_name = "MAIN.OPY")]
     pub(crate) main: PathBuf,
-}
-
-#[derive(Debug, Args)]
-pub(crate) struct SupportArgs {
-    /// Explicitly request the existing JSON output (output is JSON by default).
-    #[arg(long)]
-    pub(crate) json: bool,
-
-    /// Filter by category or feature id.
-    #[arg(value_name = "CATEGORY|FEATURE-ID")]
-    pub(crate) filter: Option<String>,
 }
 
 #[derive(Debug, Args)]

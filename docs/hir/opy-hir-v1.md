@@ -495,7 +495,7 @@ reason to extend the schema silently.
   [`upstream-references.md`](../compatibility/upstream-references.md)).
 * Changes to the node grammar require a review of this document, the source implementation
   producer, the Rust consumer, and the corpus fixtures together (see
-  [`docs/opy/support-matrix.md`](../opy/support-matrix.md) and
+  [`docs/language-support.md`](../language-support.md) and
   [`docs/compatibility/upstream-references.md`](../compatibility/upstream-references.md)).
 
 ## 13. Version history

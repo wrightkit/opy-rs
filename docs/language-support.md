@@ -23,7 +23,7 @@ The inventory was audited from the pinned upstream tree, from outside the
 surfaces; `src/data/opy/` keyword, annotation, builtin, member, module, macro
 and preprocessing registries; `src/data/` Workshop domains; upstream compile,
 decompile, CLI and QuickJS tests; and the pinned executable oracle. Existing
-`opy-rs` fixtures, HIR names, support matrix entries and issue lists were used
+`opy-rs` fixtures, HIR names, historical issue lists, and implementation notes were used
 only to determine the second column, never to construct the audited set.
 
 ## Status vocabulary
@@ -56,11 +56,6 @@ larger than the currently evidenced `opy-rs` surface. Detailed rows make gaps
 explicit instead of hiding them in a category-level green row.
 
 ## Contract maintenance
-
-The embedded `crates/opy-rs/support-matrix.json` is an operational CLI
-projection for fixture relationships and implementation tracking. It is not a
-second public inventory or status vocabulary; the exhaustive public contract
-is this document and the linked leaf inventories.
 
 The feature-contract validator expands every registry key into a leaf, checks
 the inventory pin against the conformance manifest, and can compare registry

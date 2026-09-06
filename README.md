@@ -62,7 +62,6 @@ opy-cli check main.opy
 opy-cli compile main.opy
 opy-cli compile --format json main.opy
 opy-cli inspect main.opy
-opy-cli support --json
 opy-cli completion bash
 opy-cli version
 ```
@@ -109,8 +108,7 @@ compatibility corpus and pinned OverPy reference evidence.
 
 The exhaustive per-feature evidence and pinned denominator are maintained in
 the [canonical human-readable support contract](docs/language-support.md) and
-its linked inventories. The CLI's machine-readable support query is an
-embedded operational projection of that contract.
+its linked inventories.
 
 ## Relationship with Wright
 

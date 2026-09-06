@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
-description = "Standalone OPY CLI: check, compile, inspect, support-matrix, version."
+description = "Standalone OPY CLI: check, compile, inspect, and version."
 
 [features]
 compatibility = ["dep:workshop-rs"]

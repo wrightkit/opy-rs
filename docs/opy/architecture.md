@@ -6,8 +6,8 @@ Status: accepted living architecture.
 document describes its internal stages and its boundary with the canonical raw
 Workshop implementation in `workshop-rs`. See
 [`implementation-role.md`](implementation-role.md) for repository/product
-terminology and [`support-matrix.md`](support-matrix.md) for current executable
-coverage.
+terminology and [`../language-support.md`](../language-support.md) for current
+executable coverage.
 
 ## Pipeline
 
@@ -48,7 +48,7 @@ OPY source
 
 The source path is implemented for the documented bounded compiler surface;
 the reconstruction module remains an owner-facing advanced surface while
-broader decompilation support stays explicit in the support matrix. The tests
+broader decompilation support stays explicit in the language-support contract. The tests
 and real-project evidence are the authority for current support rather than
 the intended pipeline alone.
 
@@ -159,8 +159,8 @@ reconstruction.
   temporary variables, optimizer internals, and text shape are evidence only
   unless they affect a declared observable contract.
 - **Corpus-defined support.** Current support is derived from fixtures,
-  real-project evidence, pinned reference observations, and machine-readable
-  support state.
+  real-project evidence, pinned reference observations, and the canonical
+  language-support inventories.
 - **No WrightKit-only OPY dialect.** `opy-rs` follows the OverPy language rather
   than inventing source syntax for Wright convenience.
 - **Source-aware edits by default.** Tooling uses semantic identities,
@@ -183,8 +183,8 @@ compiler surface are implemented and corpus-backed. The reconstruction module
 is owned here, while broader Workshop→OPY coverage remains explicit in the
 compatibility corpus report.
 
-Do not infer a stronger claim from this document; use the support matrix and
-current executable evidence.
+Do not infer a stronger claim from this document; use the canonical
+language-support contract and current executable evidence.
 
 ## Validation
 
@@ -203,9 +203,9 @@ addition to focused tests.
 
 - [`implementation-role.md`](implementation-role.md) — repository identity and
   relationship to Wright/workshop-rs.
-- [`support-matrix.md`](support-matrix.md) — human-readable current support.
-- [`../../crates/opy-rs/support-matrix.json`](../../crates/opy-rs/support-matrix.json)
-  — machine-readable support state.
+- [`../language-support.md`](../language-support.md) — canonical current support.
+- [`../language-support/feature-contracts.json`](../language-support/feature-contracts.json)
+  — exhaustive machine-readable feature inventory.
 - [`compat-manifest-spec.md`](compat-manifest-spec.md) — OPY semantic manifest.
 - [`../hir/opy-hir-v2.md`](../hir/opy-hir-v2.md) — current Opy HIR contract.
 - [`tooling-api.md`](tooling-api.md) — standalone semantic/tooling API.
