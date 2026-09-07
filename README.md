@@ -1,22 +1,17 @@
 # opy-rs
 
-`opy-rs` is WrightKit's standalone Rust implementation of the OverPy `.opy`
-language. It is intended to be useful on its own as a library and CLI for
-parsing, preprocessing, checking, inspecting, compiling, and eventually
-reconstructing supported OverPy projects.
+`opy-rs` is a standalone Rust compiler and library for the OverPy (`.opy`)
+language. It parses, checks, compiles, and inspects OverPy projects independently
+of external Node.js runtimes.
 
-Wright is a downstream consumer that integrates `opy-rs` with broader tooling
-such as linting, analysis, source editing, agent workflows, CI, and language
-services. An LPP **provider** in this repository is an
-integration role that `opy-rs` may expose to Wright and other tooling clients,
-not the reason this repository exists.
+Downstream tools such as Wright integrate with `opy-rs` through native Rust APIs
+or as a Language Provider Protocol (LPP) process for extended linting, analysis,
+and editor support.
 
-Canonical raw Workshop semantics are shared instead of reimplemented here.
 `opy-rs` owns OverPy syntax, preprocessing, macros, semantic resolution,
-OverPy-specific lowering, compiler behavior, diagnostics, provenance, and
-Workshop-to-OPY reconstruction. `workshop-rs` owns canonical Workshop catalog
-identities, WIR, validation, settings/localization data, raw Workshop parsing,
-and emission.
+compiler lowering, diagnostics, provenance, and source reconstruction. Shared
+Workshop semantics, catalog identities, and emission remain delegated to
+`workshop-rs`.
 
 ```text
 OPY source
@@ -32,25 +27,24 @@ workshop-rs canonical WIR / validation / emission
 Workshop text
 ```
 
-The reverse path starts from Workshop text parsed by `workshop-rs`, then uses
-`opy-rs`-owned reconstruction logic to produce useful OverPy source. This
-architecture lets `opy-rs` remain a complete OverPy implementation without
-maintaining a second raw Workshop implementation.
+The reverse path reconstructs OverPy source from canonical Workshop structures.
+This keeps `opy-rs` focused on OverPy language behavior while reusing the shared
+Workshop semantic model.
 
-## Features
+## Key features
 
-- **OverPy source analysis:** lexer, preprocessing, parser, semantic resolution,
-  source-located diagnostics, and provenance across includes and macros.
-- **Preprocessing and macros:** `#!include`, object- and function-like
-  `#!define`, `#!undef`, settings blocks, and recorded `#!postCompileHook`.
-- **JavaScript macros:** OverPy-compatible `__script__("...")` macros run in a
-  bounded embedded QuickJS-NG runtime without Node.js.
-- **Tooling APIs:** `check`, semantic inspection, source-aware queries, and
-  validated source-edit foundations.
-- **Compiler integration:** OPY semantic lowering into canonical
-  `workshop-rs` WIR, with unsupported behavior kept explicit.
-- **Compatibility evidence:** corpus fixtures, pinned oracle snapshots,
-  semantic probes, and native differential tests.
+- Source analysis: lexer, preprocessor, parser, and semantic HIR with precise
+  source-spanned diagnostics across includes.
+- Macros and preprocessing: full support for object and function macros
+  (`#!define`, `#!undef`), file inclusions (`#!include`), and settings directives.
+- Embedded JavaScript macros: executes `__script__("...")` blocks inside an
+  embedded QuickJS-NG runtime without requiring Node.js.
+- Semantic tooling: symbol inspection, reference queries, and AST-aware source
+  checks.
+- Workshop code generation: direct lowering to canonical `workshop-rs` WIR with
+  explicit error reporting for unsupported syntax.
+- Verified compatibility: validated against corpus fixtures, reference snapshots,
+  and differential tests.
 
 ## CLI and library
 
