@@ -17,6 +17,7 @@ use workshop_rs::wir::{self, Action, Event, PlayerEventKind, Program, Value, Val
 pub mod reconstruct;
 
 mod backend;
+mod hooks;
 mod integration;
 mod lowering;
 mod settings;
