@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.22](https://github.com/wrightkit/opy-rs/compare/v0.1.21...v0.1.22) - 2026-09-07
+
+### Other
+
+- *(compiler)* split feature-local ownership modules ([#214](https://github.com/wrightkit/opy-rs/pull/214))
+- *(preprocess)* split OPY ownership modules ([#213](https://github.com/wrightkit/opy-rs/pull/213))
+
 ## [0.1.21](https://github.com/wrightkit/opy-rs/compare/v0.1.20...v0.1.21) - 2026-09-07
 
 ### Other
