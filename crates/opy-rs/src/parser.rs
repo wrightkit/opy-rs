@@ -286,6 +286,22 @@ impl Parser<'_> {
         }
     }
 
+    /// The indentation of the next non-empty line, which must exceed
+    /// `line_indent` (an indented block follows the colon).
+    fn block_indent(&mut self, line_indent: u32) -> Option<u32> {
+        self.skip_newlines();
+        if self.peek_kind() == TokenKind::Eof {
+            self.error_at_current("expected an indented block".to_string());
+            return None;
+        }
+        let indent = self.peek().span.start.col;
+        if indent <= line_indent {
+            self.error_at_current("expected an indented block after ':'".to_string());
+            return None;
+        }
+        Some(indent)
+    }
+
     fn expect_statement_end(&mut self, what: &str) -> Result<(), ()> {
         let continued_line = self
             .tokens
