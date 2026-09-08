@@ -2729,6 +2729,22 @@ impl<'a> Lowering<'a> {
         })
     }
 
+    fn canonical_vector_member(
+        &self,
+        x: wir::ValueId,
+        y: wir::ValueId,
+        z: wir::ValueId,
+    ) -> Option<&'static str> {
+        let number = |id| match self.wir.values.get(id)?.value {
+            Value::Number { value, .. } => Some(value),
+            _ => None,
+        };
+        match (number(x), number(y), number(z)) {
+            (Some(0.0), Some(1.0), Some(0.0)) => Some("UP"),
+            _ => None,
+        }
+    }
+
     fn fold_numeric_binary(
         &self,
         op: &str,
@@ -3672,14 +3688,22 @@ impl<'a> Lowering<'a> {
                     .collect::<Result<Vec<_>, _>>()?;
                 return self.lower_array(elements, span);
             }
-            Expr::Vector { x, y, z, .. } => Value::Call {
-                name: "vector".to_string(),
-                args: vec![
-                    self.lower_value(x)?,
-                    self.lower_value(y)?,
-                    self.lower_value(z)?,
-                ],
-            },
+            Expr::Vector { x, y, z, .. } => {
+                let x = self.lower_value(x)?;
+                let y = self.lower_value(y)?;
+                let z = self.lower_value(z)?;
+                if let Some(member) = self.canonical_vector_member(x, y, z) {
+                    Value::Enum {
+                        value_type: "Vector".to_string(),
+                        value: member.to_string(),
+                    }
+                } else {
+                    Value::Call {
+                        name: "vector".to_string(),
+                        args: vec![x, y, z],
+                    }
+                }
+            }
             Expr::Constant { name, .. } => {
                 let const_expr = *self
                     .constants
@@ -3930,10 +3954,16 @@ impl<'a> Lowering<'a> {
                     return Ok(combined);
                 }
                 if name == "vect" && args.len() == 3 {
-                    Value::Vector {
-                        x: self.lower_value(&args[0])?,
-                        y: self.lower_value(&args[1])?,
-                        z: self.lower_value(&args[2])?,
+                    let x = self.lower_value(&args[0])?;
+                    let y = self.lower_value(&args[1])?;
+                    let z = self.lower_value(&args[2])?;
+                    if let Some(member) = self.canonical_vector_member(x, y, z) {
+                        Value::Enum {
+                            value_type: "Vector".to_string(),
+                            value: member.to_string(),
+                        }
+                    } else {
+                        Value::Vector { x, y, z }
                     }
                 } else if matches!(
                     name.as_str(),
@@ -5120,11 +5150,7 @@ fn canonical_number_text(value: f64, text: &str) -> String {
 }
 
 fn computed_number_text(value: f64) -> String {
-    if value.fract() == 0.0 {
-        format!("{value:.0}")
-    } else {
-        value.to_string()
-    }
+    workshop_rs::format::format_number(value)
 }
 
 fn canonical_format_text(text: &str) -> String {
