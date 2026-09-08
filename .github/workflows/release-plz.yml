@@ -251,3 +251,26 @@ jobs:
             cmp --silent "${source_dir}/${checksum}" "$verify_dir/$checksum"
             (cd "$verify_dir" && sha256sum --check "$checksum")
           done
+
+      - name: Advance latest provider version
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          RELEASE_TAG: ${{ needs.release-context.outputs.opy_release_tag }}
+          R2_BUCKET: wrightkit-release
+          R2_ENDPOINT: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          R2_PUBLIC_BASE_URL: https://releases.wrightkit.dev
+        run: |
+          set -euo pipefail
+          VERSION="${RELEASE_TAG#v}"
+          printf '%s\n' "$VERSION" > latest-version
+          aws s3api put-object \
+            --bucket "$R2_BUCKET" \
+            --key 'opy-rs/latest/version' \
+            --body latest-version \
+            --cache-control 'no-store' \
+            --content-type 'text/plain; charset=utf-8' \
+            --endpoint-url "$R2_ENDPOINT" >/dev/null
+          test "$(curl --fail --silent --show-error --location \
+            "$R2_PUBLIC_BASE_URL/opy-rs/latest/version" | tr -d '[:space:]')" = "$VERSION"
