@@ -133,3 +133,91 @@ jobs:
             dist/*/opy-provider-*.tar.gz \
             dist/*/opy-provider-*.tar.gz.sha256 \
             --clobber
+
+      - name: Publish provider artifacts to Cloudflare R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          RELEASE_TAG: ${{ needs.release-context.outputs.opy_release_tag }}
+          R2_BUCKET: wrightkit-release
+          R2_ENDPOINT: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          R2_PUBLIC_BASE_URL: https://releases.wrightkit.dev
+        run: |
+          set -euo pipefail
+          aws --version
+          VERSION="${RELEASE_TAG#v}"
+          release_dir="$GITHUB_WORKSPACE/r2-release"
+          mkdir -p "$release_dir"
+
+          for target in \
+            x86_64-unknown-linux-gnu \
+            x86_64-apple-darwin \
+            aarch64-apple-darwin \
+            x86_64-pc-windows-msvc; do
+            archive="opy-provider-${VERSION}-${target}.tar.gz"
+            checksum="${archive}.sha256"
+            source_dir="dist/opy-provider-${target}"
+            test -f "${source_dir}/${archive}"
+            test -f "${source_dir}/${checksum}"
+            cp "${source_dir}/${archive}" "${release_dir}/${archive}"
+            cp "${source_dir}/${checksum}" "${release_dir}/${checksum}"
+            expected_hash="$(awk 'NR == 1 { print $1 }' "${release_dir}/${checksum}")"
+            actual_hash="$(sha256sum "${release_dir}/${archive}" | awk 'NR == 1 { print $1 }')"
+            test "$actual_hash" = "$expected_hash"
+          done
+
+          put_immutable() {
+            local source="$1" key="$2" cache_control="$3" content_type="$4"
+            if aws s3api head-object \
+              --bucket "$R2_BUCKET" \
+              --key "$key" \
+              --endpoint-url "$R2_ENDPOINT" >/dev/null 2>&1; then
+              local existing
+              existing="$release_dir/existing-$(basename "$key")"
+              aws s3api get-object \
+                --bucket "$R2_BUCKET" \
+                --key "$key" \
+                --endpoint-url "$R2_ENDPOINT" \
+                "$existing" >/dev/null
+              cmp --silent "$source" "$existing" || {
+                echo "immutable R2 object differs from release artifact: $key" >&2
+                exit 1
+              }
+              return
+            fi
+            aws s3api put-object \
+              --bucket "$R2_BUCKET" \
+              --key "$key" \
+              --body "$source" \
+              --if-none-match '*' \
+              --cache-control "$cache_control" \
+              --content-type "$content_type" \
+              --endpoint-url "$R2_ENDPOINT" >/dev/null
+          }
+
+          verify_public() {
+            local key="$1" source="$2" downloaded
+            downloaded="$release_dir/downloaded-$(basename "$key")"
+            curl --fail --silent --show-error --location \
+              --output "$downloaded" "$R2_PUBLIC_BASE_URL/$key"
+            cmp --silent "$source" "$downloaded"
+            rm -f "$downloaded"
+          }
+
+          for archive in "$release_dir"/opy-provider-*.tar.gz; do
+            checksum="${archive}.sha256"
+            name="$(basename "$archive")"
+            key="opy-rs/releases/${VERSION}/${name}"
+            put_immutable "$archive" "$key" 'public, max-age=31536000, immutable' 'application/octet-stream'
+            put_immutable "$checksum" "${key}.sha256" 'public, max-age=31536000, immutable' 'text/plain; charset=utf-8'
+            verify_public "$key" "$archive"
+            verify_public "${key}.sha256" "$checksum"
+            downloaded="$release_dir/downloaded-${name}"
+            curl --fail --silent --show-error --location \
+              --output "$downloaded" "$R2_PUBLIC_BASE_URL/$key"
+            expected_hash="$(awk 'NR == 1 { print $1 }' "$checksum")"
+            actual_hash="$(sha256sum "$downloaded" | awk 'NR == 1 { print $1 }')"
+            test "$actual_hash" = "$expected_hash"
+            rm -f "$downloaded"
+          done
