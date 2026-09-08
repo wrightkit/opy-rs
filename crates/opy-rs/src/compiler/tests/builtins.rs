@@ -260,6 +260,38 @@ fn builtin_surface_rejects_invalid_arity_and_keyword_with_source_diagnostics() {
 }
 
 #[test]
+fn get_all_players_value_uses_the_all_team_domain() {
+    let source = "globalvar g\nrule \"r\":\n    @Event global\n    g = getAllPlayers()\n";
+    let hir = crate::compile(source, "source.opy", Path::new(".")).expect("source must resolve");
+    let artifact = Compiler::new()
+        .expect("released Workshop contract must load")
+        .compile_hir(&hir)
+        .expect("getAllPlayers must lower in a value position");
+    let rule = artifact
+        .wir
+        .rules
+        .get(workshop_rs::wir::RuleId::from_index(0))
+        .expect("rule must be present");
+    let workshop_rs::wir::Action::SetGlobalVariable { value, .. } = artifact
+        .wir
+        .actions
+        .get(rule.actions[0])
+        .expect("global assignment must be present")
+    else {
+        panic!("expected a global assignment");
+    };
+    let Value::Call { name, args } = &artifact.wir.values.get(*value).unwrap().value else {
+        panic!("expected a canonical allPlayers value call");
+    };
+    assert_eq!(name, "allPlayers");
+    assert_eq!(args.len(), 1);
+    assert!(matches!(
+        &artifact.wir.values.get(args[0]).unwrap().value,
+        Value::Enum { value_type, value } if value_type == "Team" && value == "ALL"
+    ));
+}
+
+#[test]
 fn create_dummy_uses_the_reference_facing_default() {
     let source =
         "rule \"r\":\n    @Event global\n    createDummy(Hero.ANA, Team.ALL, -1, vect(0, 0, 0))\n";

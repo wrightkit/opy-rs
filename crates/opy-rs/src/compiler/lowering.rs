@@ -3456,14 +3456,18 @@ impl<'a> Lowering<'a> {
     fn lower_hud_visible_to(&mut self, expr: &Expr) -> Result<wir::ValueId, IntegrationError> {
         if let Expr::Call { name, args, .. } = expr {
             if name == "getAllPlayers" && args.is_empty() {
-                let all_teams = self.push_value(Value::Enum {
-                    value_type: "Team".to_string(),
-                    value: "ALL".to_string(),
-                });
-                return Ok(self.push_call("allPlayers", vec![all_teams]));
+                return Ok(self.lower_all_players());
             }
         }
         self.lower_value(expr)
+    }
+
+    fn lower_all_players(&mut self) -> wir::ValueId {
+        let all_teams = self.push_value(Value::Enum {
+            value_type: "Team".to_string(),
+            value: "ALL".to_string(),
+        });
+        self.push_call("allPlayers", vec![all_teams])
     }
 
     fn lower_receiver_action_call(
@@ -4067,6 +4071,9 @@ impl<'a> Lowering<'a> {
                             span,
                         )
                     })?;
+                    if function.id == "getAllPlayers" {
+                        return Ok(self.lower_all_players());
+                    }
                     Value::Call {
                         name: catalog_id.clone(),
                         args: args
