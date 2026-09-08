@@ -6,14 +6,18 @@ Current architecture is defined by [`docs/architecture/language-core.md`](../arc
 
 ## Current implementation reality
 
-The manifest under `crates/opy-rs/src/manifest/` currently carries a mixture of:
+The manifest under `crates/opy-rs/src/manifest/` carries declarative compatibility data:
 
-- declarative identities, names, aliases, signatures, catalog links, and provenance;
-- behavioral metadata such as receiver restrictions, argument-binding modes, contextual dispatch, call-context restrictions, defaults with lowering meaning, and special-lowering classification.
+- identities, names, aliases, signatures (including parameter defaults, optionality,
+  binding spellings, and enum-domain links), catalog links, and provenance.
 
-The source implementation consumes those fields for semantic resolution and lowering today. This document does not change that behavior.
+Typed feature-local lowering policy owns behavioral contextual dispatch and call-context
+restrictions: currently `chase` selector dispatch and `range`'s for-iterable-only rule
+live in `crates/opy-rs/src/lower/policy.rs`.
 
-Under the current architecture contract, that mixture is an audit target rather than a pattern to extend. Purely declarative inventories may remain data-driven. Observable source-language behavior and invariants should normally be expressed in typed Rust close to the owning semantic feature instead of growing a generic metadata-interpreted semantic language.
+Declarative inventories remain data-driven. Observable source-language behavior and
+invariants belong in typed Rust close to the owning semantic feature rather than a
+generic metadata-interpreted semantic language.
 
 In particular, adding another manifest field that makes generic code decide receiver/member semantics, keyword/positional binding, contextual dispatch, compile-time behavior, coercion, or special lowering requires an explicit architecture justification; existing fields are not sufficient precedent.
 

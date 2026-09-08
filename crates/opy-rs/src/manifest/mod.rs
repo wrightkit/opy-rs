@@ -187,44 +187,6 @@ pub struct Param {
     pub variable: bool,
 }
 
-/// A call-context restriction on a function entry.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum FunctionContext {
-    /// Only valid as a `for ... in` iterable (`range`; the pinned reference
-    /// rejects standalone `range` calls).
-    ForIterable,
-}
-
-/// One contextual enum-domain selection: the `chase` dispatch (issue #110).
-///
-/// The reference `chase` form binds its 4th argument as a member of a
-/// merged `ChaseReeval` domain that does not exist as a standalone enum:
-/// the keyword name used for the `by` parameter selects the concrete domain
-/// and the function the call lowers to (`rate` → `ChaseRateReeval` /
-/// `chaseAtRate`, `duration` → `ChaseTimeReeval` / `chaseOverTime`).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ContextualDomain {
-    /// The contextual (merged) domain name; never resolvable outside the
-    /// declaring function's signature context.
-    pub domain: String,
-    /// The parameter whose bound keyword name selects the option.
-    pub by: String,
-    /// The options keyed by the accepted keyword spellings of the `by`
-    /// parameter.
-    pub options: std::collections::BTreeMap<String, ContextualDomainOption>,
-}
-
-/// One contextual-domain option: the concrete enum domain and the function
-/// name the call lowers to.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ContextualDomainOption {
-    pub domain: String,
-    pub target: String,
-}
-
 /// One builtin function entry (generic action/value or member function).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -246,12 +208,6 @@ pub struct Function {
     /// (issue #110).
     #[serde(default = "default_keyword_args")]
     pub keyword_args: bool,
-    /// The contextual enum-domain dispatch (the `chase` form), when this
-    /// entry has one.
-    #[serde(default)]
-    pub contextual_domain: Option<ContextualDomain>,
-    #[serde(default)]
-    pub context: Option<FunctionContext>,
     /// The canonical Workshop catalog id this entry emits through; absent
     /// when emission is special-cased or not yet catalog-covered.
     #[serde(default)]
@@ -451,10 +407,7 @@ impl Manifest {
                     // domain (`chase`'s `ChaseReeval`): it resolves only in
                     // this signature's context and is not a standalone
                     // identity.
-                    let is_contextual = function
-                        .contextual_domain
-                        .as_ref()
-                        .is_some_and(|contextual| &contextual.domain == domain);
+                    let is_contextual = crate::lower::policy::is_contextual_domain(domain);
                     if !is_contextual {
                         self.domain_identities.insert(domain.clone());
                     }
@@ -511,44 +464,10 @@ impl Manifest {
                     )));
                 }
             }
-            if let Some(contextual) = &function.contextual_domain {
-                let by_param = function
-                    .params
-                    .iter()
-                    .find(|param| param.name == contextual.by)
-                    .ok_or_else(|| {
-                        ManifestError(format!(
-                            "function '{}' contextual domain '{}' references unknown \
-                             selector parameter '{}'",
-                            function.id, contextual.domain, contextual.by
-                        ))
-                    })?;
-                let contextual_param = function
-                    .params
-                    .iter()
-                    .find(|param| param.domain.as_deref() == Some(contextual.domain.as_str()))
-                    .ok_or_else(|| {
-                        ManifestError(format!(
-                            "function '{}' contextual domain '{}' has no parameter \
-                             declaring that domain",
-                            function.id, contextual.domain
-                        ))
-                    })?;
-                let _ = contextual_param;
-                let mut spellings = vec![by_param.name.clone()];
-                spellings.extend(by_param.alternate_names.iter().cloned());
-                for (keyword, option) in &contextual.options {
-                    if !spellings.contains(keyword) {
-                        return Err(ManifestError(format!(
-                            "function '{}' contextual option '{keyword}' is not a \
-                             keyword spelling of selector parameter '{}'",
-                            function.id, by_param.name
-                        )));
-                    }
-                    // The option's concrete domain is a catalog identity link
-                    // (the domain the selected member/emission belongs to);
-                    // member lists are not carried here.
-                    self.domain_identities.insert(option.domain.clone());
+            crate::lower::policy::validate(function).map_err(ManifestError)?;
+            if let Some(contextual) = crate::lower::policy::contextual_domain(&function.id) {
+                for option in contextual.options {
+                    self.domain_identities.insert(option.domain.to_string());
                 }
             }
             self.check_evidence(&function.id, &function.evidence, &probes)?;
@@ -763,6 +682,12 @@ mod tests {
     }
 
     #[test]
+    fn manifest_omits_contextual_lowering_policy() {
+        assert!(!MANIFEST_DATA.contains("\"contextualDomain\""));
+        assert!(!MANIFEST_DATA.contains("\"context\": \"forIterable\""));
+    }
+
+    #[test]
     fn validation_rejects_duplicates_and_missing_evidence() {
         fn mutate(mutate: impl FnOnce(&mut ManifestFile)) -> Result<Manifest, ManifestError> {
             let mut file: ManifestFile = serde_json::from_str(MANIFEST_DATA).unwrap();
@@ -812,7 +737,10 @@ mod tests {
         assert_eq!(format.arity_bounds(), (0, None));
         let range = manifest.function("range").expect("entry");
         assert_eq!(range.arity_bounds(), (1, Some(3)));
-        assert_eq!(range.context, Some(FunctionContext::ForIterable));
+        assert_eq!(
+            crate::lower::policy::function_context(&range.id),
+            Some(crate::lower::policy::FunctionContext::ForIterable)
+        );
     }
 
     #[test]

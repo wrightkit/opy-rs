@@ -42,11 +42,7 @@ pub(crate) fn cross_check_manifest(
             let Some(domain) = &parameter.domain else {
                 continue;
             };
-            let contextual = function
-                .contextual_domain
-                .as_ref()
-                .is_some_and(|context| context.domain == *domain);
-            if contextual {
+            if crate::lower::policy::is_contextual_domain(domain) {
                 continue;
             }
             domains_checked += 1;
@@ -62,10 +58,10 @@ pub(crate) fn cross_check_manifest(
             }
         }
 
-        if let Some(contextual) = &function.contextual_domain {
-            for option in contextual.options.values() {
+        if let Some(contextual) = crate::lower::policy::contextual_domain(&function.id) {
+            for option in contextual.options {
                 domains_checked += 1;
-                if catalog.enum_domain(&option.domain).is_none() {
+                if catalog.enum_domain(option.domain).is_none() {
                     return Err(IntegrationError::new(
                         "domain-link-missing",
                         format!(
