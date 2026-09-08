@@ -120,6 +120,27 @@ fn append_receiver_uses_the_canonical_modify_operation() {
 }
 
 #[test]
+fn computed_numbers_and_cardinal_vectors_use_canonical_workshop_spellings() {
+    let source = r#"globalvar value
+
+rule "canonical values":
+    @Event global
+    value = vect(0, 1, 0)
+    value = 1.5 / sqrt(2) + 0.75
+"#;
+    let hir = crate::compile(source, "canonical-values.opy", Path::new("."))
+        .expect("source must resolve");
+    let artifact = Compiler::new()
+        .expect("released workshop contract must load")
+        .compile_hir(&hir)
+        .expect("source must lower");
+
+    assert!(artifact.emitted.contains("Set Global Variable(value, Up);"));
+    assert!(artifact.emitted.contains("1.810660171779821"));
+    assert!(!artifact.emitted.contains("1.8106601717798212"));
+}
+
+#[test]
 fn real_world_cake_exercises_catalog_lowering_end_to_end() {
     let first = compile_real_world("overpy-cake", "source.opy");
     let second = compile_real_world("overpy-cake", "source.opy");
