@@ -37,9 +37,7 @@ use crate::hir::types::{
 
 use crate::cst::{self, CallArg, Decl, Expr, RuleEntry as CstRuleEntry, Stmt, TopLevel};
 use crate::diag::{OpyError, OpyResult, Span};
-use crate::manifest::{
-    Function, FunctionContext, FunctionKind, Manifest, Param, ParamDefault, ReceiverCategory,
-};
+use crate::manifest::{Function, FunctionKind, Manifest, Param, ParamDefault, ReceiverCategory};
 use workshop_rs::catalog::{Catalog, Locale};
 
 /// The protocol envelope this frontend produces.
@@ -84,6 +82,7 @@ struct Lowerer {
 
 mod declarations;
 mod expressions;
+pub(crate) mod policy;
 mod special_forms;
 mod statements;
 

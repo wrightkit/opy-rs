@@ -360,7 +360,7 @@ impl Lowerer {
                 "AsyncBehavior" => "StartRuleBehavior",
                 _ => name.as_str(),
             };
-            if self.manifest.domain_identity(name)
+            if (!policy::is_contextual_domain(name) && self.manifest.domain_identity(name))
                 || self.catalog.enum_domain(name).is_some()
                 || self.catalog.enum_domain(catalog_domain).is_some()
                 || (name == "Clip" && self.manifest.domain_identity(catalog_domain))
@@ -746,7 +746,7 @@ impl Lowerer {
         let mut selector = None;
         let mut has_keyword = false;
         let mut binding_error = false;
-        let contextual = entry.contextual_domain.as_ref();
+        let contextual = policy::contextual_domain(&entry.id);
 
         // Keyword spellings resolve through the declared parameter names
         // (alternate spellings included) — generic binding, no per-spelling
@@ -829,7 +829,7 @@ impl Lowerer {
                     // (the contextual-domain entries, e.g. `chase`) bind the
                     // trailing positionals by slot and skip the ordering
                     // rule.
-                    if has_keyword && entry.contextual_domain.is_none() {
+                    if has_keyword && contextual.is_none() {
                         binding_error = true;
                         self.error_at(
                             "positional-after-keyword",
@@ -974,7 +974,7 @@ impl Lowerer {
         arg: &cst::CallArg,
         macro_params: &[String],
     ) -> HirExpr {
-        if let Some(contextual) = &entry.contextual_domain {
+        if let Some(contextual) = policy::contextual_domain(&entry.id) {
             let is_contextual = entry.params[param_index]
                 .domain
                 .as_deref()
@@ -988,9 +988,9 @@ impl Lowerer {
                 } = &arg.value
                 {
                     if let Expr::Name { name, .. } = receiver.as_ref() {
-                        if name == &contextual.domain {
+                        if name == contextual.domain {
                             return HirExpr::Enum {
-                                value_type: contextual.domain.clone(),
+                                value_type: contextual.domain.to_string(),
                                 value: member.clone(),
                                 span: Some((*span).into()),
                             };
@@ -1017,13 +1017,13 @@ impl Lowerer {
         mut bound: Vec<HirExpr>,
         selector: Option<&str>,
     ) -> (String, Vec<HirExpr>) {
-        let Some(contextual) = &entry.contextual_domain else {
+        let Some(contextual) = policy::contextual_domain(&entry.id) else {
             return (entry.id.clone(), bound);
         };
         let Some(contextual_param) = entry
             .params
             .iter()
-            .position(|param| param.domain.as_deref() == Some(contextual.domain.as_str()))
+            .position(|param| param.domain.as_deref() == Some(contextual.domain))
         else {
             return (entry.id.clone(), bound);
         };
@@ -1038,21 +1038,25 @@ impl Lowerer {
         else {
             return (entry.id.clone(), bound);
         };
-        if value_type != &contextual.domain {
+        if value_type != contextual.domain {
             return (entry.id.clone(), bound);
         }
         let Some(keyword) = selector else {
             return (entry.id.clone(), bound);
         };
-        let Some(option) = contextual.options.get(keyword) else {
+        let Some(option) = contextual
+            .options
+            .iter()
+            .find(|option| option.keyword == keyword)
+        else {
             return (entry.id.clone(), bound);
         };
         bound[contextual_param] = HirExpr::Enum {
-            value_type: option.domain.clone(),
+            value_type: option.domain.to_string(),
             value: value.clone(),
             span: *value_span,
         };
-        (option.target.clone(), bound)
+        (option.target.to_string(), bound)
     }
 
     pub(super) fn lower_receiver_call(
@@ -1181,7 +1185,8 @@ impl Lowerer {
     ) {
         match position {
             CallPosition::Statement => {
-                if entry.context == Some(FunctionContext::ForIterable) {
+                if policy::function_context(&entry.id) == Some(policy::FunctionContext::ForIterable)
+                {
                     self.error_at(
                         "invalid-call-context",
                         format!("'{name}' is only valid as a for-loop iterable"),
@@ -1202,7 +1207,9 @@ impl Lowerer {
                         format!("action function '{name}' cannot be used as a value"),
                         span,
                     );
-                } else if entry.context == Some(FunctionContext::ForIterable) {
+                } else if policy::function_context(&entry.id)
+                    == Some(policy::FunctionContext::ForIterable)
+                {
                     self.error_at(
                         "invalid-call-context",
                         format!("'{name}' is only valid as a for-loop iterable"),
@@ -1211,7 +1218,8 @@ impl Lowerer {
                 }
             }
             CallPosition::ForIterable => {
-                if entry.context != Some(FunctionContext::ForIterable) {
+                if policy::function_context(&entry.id) != Some(policy::FunctionContext::ForIterable)
+                {
                     self.error_at(
                         "invalid-iterable",
                         format!("for-loop iterable '{name}' must be a range(...) call"),
@@ -1226,7 +1234,9 @@ impl Lowerer {
                         format!("action function '{name}' cannot be used as a value"),
                         span,
                     );
-                } else if entry.context == Some(FunctionContext::ForIterable) {
+                } else if policy::function_context(&entry.id)
+                    == Some(policy::FunctionContext::ForIterable)
+                {
                     self.error_at(
                         "invalid-call-context",
                         format!("'{name}' is only valid as a for-loop iterable"),

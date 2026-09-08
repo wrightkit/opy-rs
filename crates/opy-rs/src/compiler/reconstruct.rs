@@ -1685,7 +1685,7 @@ impl<'a> Emitter<'a> {
             );
             return;
         }
-        if entry.context.is_some() {
+        if crate::lower::policy::function_context(&entry.id).is_some() {
             self.issue(
                 "unsupported-value-call",
                 format!(

@@ -1640,20 +1640,6 @@
     },
     {
       "catalogLink": "special-lowering",
-      "contextualDomain": {
-        "by": "rate",
-        "domain": "ChaseReeval",
-        "options": {
-          "duration": {
-            "domain": "ChaseTimeReeval",
-            "target": "chaseOverTime"
-          },
-          "rate": {
-            "domain": "ChaseRateReeval",
-            "target": "chaseAtRate"
-          }
-        }
-      },
       "evidence": [
         "chase-keywords",
         "chase-reeval-context"
@@ -2101,7 +2087,6 @@
     },
     {
       "catalogLink": "special-lowering",
-      "context": "forIterable",
       "evidence": [
         "range-for-header"
       ],
