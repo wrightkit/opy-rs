@@ -122,19 +122,7 @@ jobs:
         with:
           path: dist
 
-      - name: Upload provider artifacts to the GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ needs.release-context.outputs.opy_release_tag }}
-        run: |
-          set -euo pipefail
-          gh release upload "$RELEASE_TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            dist/*/opy-provider-*.tar.gz \
-            dist/*/opy-provider-*.tar.gz.sha256 \
-            --clobber
-
-      - name: Publish provider artifacts to Cloudflare R2
+      - name: Prepare provider artifacts and preflight R2
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -142,7 +130,6 @@ jobs:
           RELEASE_TAG: ${{ needs.release-context.outputs.opy_release_tag }}
           R2_BUCKET: wrightkit-release
           R2_ENDPOINT: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
-          R2_PUBLIC_BASE_URL: https://releases.wrightkit.dev
         run: |
           set -euo pipefail
           aws --version
@@ -167,13 +154,99 @@ jobs:
             test "$actual_hash" = "$expected_hash"
           done
 
-          put_immutable() {
-            local source="$1" key="$2" cache_control="$3" content_type="$4"
-            if aws s3api head-object \
+          verify_r2_or_absent() {
+            local source="$1" key="$2" head_output existing
+            if head_output="$(aws s3api head-object \
               --bucket "$R2_BUCKET" \
               --key "$key" \
-              --endpoint-url "$R2_ENDPOINT" >/dev/null 2>&1; then
-              local existing
+              --endpoint-url "$R2_ENDPOINT" 2>&1)"; then
+              existing="$release_dir/preflight-$(basename "$key")"
+              aws s3api get-object \
+                --bucket "$R2_BUCKET" \
+                --key "$key" \
+                --endpoint-url "$R2_ENDPOINT" \
+                "$existing" >/dev/null
+              cmp --silent "$source" "$existing" || {
+                echo "immutable R2 object differs from release artifact: $key" >&2
+                exit 1
+              }
+            elif grep --quiet --extended-regexp '(^|[^0-9])404([^0-9]|$)|NotFound|NoSuchKey' <<<"$head_output"; then
+              return
+            else
+              echo "$head_output" >&2
+              exit 1
+            fi
+          }
+
+          for archive in "$release_dir"/opy-provider-*.tar.gz; do
+            checksum="${archive}.sha256"
+            name="$(basename "$archive")"
+            verify_r2_or_absent "$archive" "$key"
+            key="opy-rs/releases/${VERSION}/${name}"
+            verify_r2_or_absent "$checksum" "${key}.sha256"
+          done
+
+      - name: Upload provider artifacts to the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.release-context.outputs.opy_release_tag }}
+        run: |
+          set -euo pipefail
+          release_dir="$GITHUB_WORKSPACE/r2-release"
+          release_json="$release_dir/github-release.json"
+          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" > "$release_json"
+
+          github_asset_url() {
+            local name="$1"
+            jq -r --arg name "$name" \
+              '.assets[] | select(.name == $name) | .url // empty' "$release_json"
+          }
+
+          uploads=()
+          for file in "$release_dir"/opy-provider-*; do
+            name="$(basename "$file")"
+            asset_url="$(github_asset_url "$name")"
+            if [[ -n "$asset_url" ]]; then
+              existing="$release_dir/github-$name"
+              gh api \
+                --header 'Accept: application/octet-stream' \
+                "$asset_url" > "$existing"
+              cmp --silent "$file" "$existing" || {
+                echo "GitHub Release asset differs from rebuilt artifact: $name" >&2
+                exit 1
+              }
+            else
+              uploads+=("$file")
+            fi
+          done
+
+          if ((${#uploads[@]} > 0)); then
+            gh release upload "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              "${uploads[@]}"
+          fi
+
+      - name: Publish provider artifacts to Cloudflare R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          RELEASE_TAG: ${{ needs.release-context.outputs.opy_release_tag }}
+          R2_BUCKET: wrightkit-release
+          R2_ENDPOINT: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+          R2_PUBLIC_BASE_URL: https://releases.wrightkit.dev
+        run: |
+          set -euo pipefail
+          aws --version
+          VERSION="${RELEASE_TAG#v}"
+          release_dir="$GITHUB_WORKSPACE/r2-release"
+
+          put_immutable() {
+            local source="$1" key="$2" cache_control="$3" content_type="$4" head_output existing
+            if head_output="$(aws s3api head-object \
+              --bucket "$R2_BUCKET" \
+              --key "$key" \
+              --endpoint-url "$R2_ENDPOINT" 2>&1)"; then
               existing="$release_dir/existing-$(basename "$key")"
               aws s3api get-object \
                 --bucket "$R2_BUCKET" \
@@ -185,6 +258,9 @@ jobs:
                 exit 1
               }
               return
+            elif ! grep --quiet --extended-regexp '(^|[^0-9])404([^0-9]|$)|NotFound|NoSuchKey' <<<"$head_output"; then
+              echo "$head_output" >&2
+              exit 1
             fi
             aws s3api put-object \
               --bucket "$R2_BUCKET" \

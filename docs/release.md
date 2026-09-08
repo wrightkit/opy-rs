@@ -58,7 +58,10 @@ create, and an existing object is accepted only when its bytes exactly match
 the release artifact; version-pinned objects are therefore immutable. The
 publication job downloads every public object and verifies both byte identity
 and the archive SHA-256 before it succeeds. The URLs use long-lived immutable
-cache semantics and do not provide a moving `latest` alias.
+cache semantics and do not provide a moving `latest` alias. On a rerun, the
+existing GitHub Release assets and R2 objects are verified before any upload;
+a rebuilt artifact with a different identity fails without replacing either
+published copy.
 
 The R2 publication requires repository Actions secrets
 `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, and `CLOUDFLARE_ACCOUNT_ID`. These
