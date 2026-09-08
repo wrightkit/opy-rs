@@ -28,6 +28,20 @@ dbg_macro = "deny"
 todo = "deny"
 unimplemented = "deny"
 
+# Reduce dependency artifact volume while retaining line-table diagnostics for
+# WrightKit code. See wrightkit/.github docs/rust-build-artifacts.md.
+[profile.dev]
+debug = 1
+
+[profile.dev.package."*"]
+debug = false
+
+[profile.test]
+debug = 1
+
+[profile.test.package."*"]
+debug = false
+
 [profile.release]
 lto = "thin"
 strip = "debuginfo"
