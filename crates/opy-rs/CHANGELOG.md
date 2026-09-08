@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.23](https://github.com/wrightkit/opy-rs/compare/v0.1.22...v0.1.23) - 2026-09-08
+
+### Fixed
+
+- *(opy)* map getAllPlayers to all teams ([#217](https://github.com/wrightkit/opy-rs/pull/217))
+
 ## [0.1.22](https://github.com/wrightkit/opy-rs/compare/v0.1.21...v0.1.22) - 2026-09-07
 
 ### Other
