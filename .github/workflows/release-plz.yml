@@ -106,8 +106,8 @@ jobs:
             opy-provider-*.tar.gz
             opy-provider-*.tar.gz.sha256
 
-  publish-provider:
-    name: Publish provider release artifacts
+  publish-provider-github:
+    name: Publish provider artifacts to GitHub Release
     if: needs.release-context.outputs.opy_release_created == 'true'
     needs:
       - release-context
@@ -122,21 +122,12 @@ jobs:
         with:
           path: dist
 
-      - name: Prepare provider artifacts and preflight R2
+      - name: Verify provider artifacts and checksums
         env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: auto
           RELEASE_TAG: ${{ needs.release-context.outputs.opy_release_tag }}
-          R2_BUCKET: wrightkit-release
-          R2_ENDPOINT: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
         run: |
           set -euo pipefail
-          aws --version
           VERSION="${RELEASE_TAG#v}"
-          release_dir="$GITHUB_WORKSPACE/r2-release"
-          mkdir -p "$release_dir"
-
           for target in \
             x86_64-unknown-linux-gnu \
             x86_64-apple-darwin \
@@ -147,43 +138,7 @@ jobs:
             source_dir="dist/opy-provider-${target}"
             test -f "${source_dir}/${archive}"
             test -f "${source_dir}/${checksum}"
-            cp "${source_dir}/${archive}" "${release_dir}/${archive}"
-            cp "${source_dir}/${checksum}" "${release_dir}/${checksum}"
-            expected_hash="$(awk 'NR == 1 { print $1 }' "${release_dir}/${checksum}")"
-            actual_hash="$(sha256sum "${release_dir}/${archive}" | awk 'NR == 1 { print $1 }')"
-            test "$actual_hash" = "$expected_hash"
-          done
-
-          verify_r2_or_absent() {
-            local source="$1" key="$2" head_output existing
-            if head_output="$(aws s3api head-object \
-              --bucket "$R2_BUCKET" \
-              --key "$key" \
-              --endpoint-url "$R2_ENDPOINT" 2>&1)"; then
-              existing="$release_dir/preflight-$(basename "$key")"
-              aws s3api get-object \
-                --bucket "$R2_BUCKET" \
-                --key "$key" \
-                --endpoint-url "$R2_ENDPOINT" \
-                "$existing" >/dev/null
-              cmp --silent "$source" "$existing" || {
-                echo "immutable R2 object differs from release artifact: $key" >&2
-                exit 1
-              }
-            elif grep --quiet --extended-regexp '(^|[^0-9])404([^0-9]|$)|NotFound|NoSuchKey' <<<"$head_output"; then
-              return
-            else
-              echo "$head_output" >&2
-              exit 1
-            fi
-          }
-
-          for archive in "$release_dir"/opy-provider-*.tar.gz; do
-            checksum="${archive}.sha256"
-            name="$(basename "$archive")"
-            key="opy-rs/releases/${VERSION}/${name}"
-            verify_r2_or_absent "$archive" "$key"
-            verify_r2_or_absent "$checksum" "${key}.sha256"
+            (cd "$source_dir" && sha256sum --check "$checksum")
           done
 
       - name: Upload provider artifacts to the GitHub Release
@@ -192,41 +147,46 @@ jobs:
           RELEASE_TAG: ${{ needs.release-context.outputs.opy_release_tag }}
         run: |
           set -euo pipefail
-          release_dir="$GITHUB_WORKSPACE/r2-release"
-          release_json="$release_dir/github-release.json"
-          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${RELEASE_TAG}" > "$release_json"
+          gh release upload "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            dist/*/opy-provider-*.tar.gz \
+            dist/*/opy-provider-*.tar.gz.sha256
 
-          github_asset_url() {
-            local name="$1"
-            jq -r --arg name "$name" \
-              '.assets[] | select(.name == $name) | .url // empty' "$release_json"
-          }
+  publish-provider-r2:
+    name: Publish provider artifacts to Cloudflare R2
+    if: needs.release-context.outputs.opy_release_created == 'true'
+    needs:
+      - release-context
+      - provider
+      - publish-provider-github
+    runs-on: ubuntu-latest
 
-          uploads=()
-          for file in "$release_dir"/opy-provider-*; do
-            name="$(basename "$file")"
-            asset_url="$(github_asset_url "$name")"
-            if [[ -n "$asset_url" ]]; then
-              existing="$release_dir/github-$name"
-              gh api \
-                --header 'Accept: application/octet-stream' \
-                "$asset_url" > "$existing"
-              cmp --silent "$file" "$existing" || {
-                echo "GitHub Release asset differs from rebuilt artifact: $name" >&2
-                exit 1
-              }
-            else
-              uploads+=("$file")
-            fi
+    steps:
+      - name: Download all target artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: dist
+
+      - name: Verify provider artifacts and checksums
+        env:
+          RELEASE_TAG: ${{ needs.release-context.outputs.opy_release_tag }}
+        run: |
+          set -euo pipefail
+          VERSION="${RELEASE_TAG#v}"
+          for target in \
+            x86_64-unknown-linux-gnu \
+            x86_64-apple-darwin \
+            aarch64-apple-darwin \
+            x86_64-pc-windows-msvc; do
+            archive="opy-provider-${VERSION}-${target}.tar.gz"
+            checksum="${archive}.sha256"
+            source_dir="dist/opy-provider-${target}"
+            test -f "${source_dir}/${archive}"
+            test -f "${source_dir}/${checksum}"
+            (cd "$source_dir" && sha256sum --check "$checksum")
           done
 
-          if ((${#uploads[@]} > 0)); then
-            gh release upload "$RELEASE_TAG" \
-              --repo "$GITHUB_REPOSITORY" \
-              "${uploads[@]}"
-          fi
-
-      - name: Publish provider artifacts to Cloudflare R2
+      - name: Upload immutable provider artifacts to R2
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -234,66 +194,60 @@ jobs:
           RELEASE_TAG: ${{ needs.release-context.outputs.opy_release_tag }}
           R2_BUCKET: wrightkit-release
           R2_ENDPOINT: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
-          R2_PUBLIC_BASE_URL: https://releases.wrightkit.dev
         run: |
           set -euo pipefail
           aws --version
           VERSION="${RELEASE_TAG#v}"
-          release_dir="$GITHUB_WORKSPACE/r2-release"
-
-          put_immutable() {
-            local source="$1" key="$2" cache_control="$3" content_type="$4" head_output existing
-            if head_output="$(aws s3api head-object \
-              --bucket "$R2_BUCKET" \
-              --key "$key" \
-              --endpoint-url "$R2_ENDPOINT" 2>&1)"; then
-              existing="$release_dir/existing-$(basename "$key")"
-              aws s3api get-object \
-                --bucket "$R2_BUCKET" \
-                --key "$key" \
-                --endpoint-url "$R2_ENDPOINT" \
-                "$existing" >/dev/null
-              cmp --silent "$source" "$existing" || {
-                echo "immutable R2 object differs from release artifact: $key" >&2
-                exit 1
-              }
-              return
-            elif ! grep --quiet --extended-regexp '(^|[^0-9])404([^0-9]|$)|NotFound|NoSuchKey' <<<"$head_output"; then
-              echo "$head_output" >&2
-              exit 1
-            fi
+          for target in \
+            x86_64-unknown-linux-gnu \
+            x86_64-apple-darwin \
+            aarch64-apple-darwin \
+            x86_64-pc-windows-msvc; do
+            archive="opy-provider-${VERSION}-${target}.tar.gz"
+            checksum="${archive}.sha256"
+            source_dir="dist/opy-provider-${target}"
+            key="opy-rs/releases/${VERSION}/${archive}"
             aws s3api put-object \
               --bucket "$R2_BUCKET" \
               --key "$key" \
-              --body "$source" \
+              --body "${source_dir}/${archive}" \
               --if-none-match '*' \
-              --cache-control "$cache_control" \
-              --content-type "$content_type" \
+              --cache-control 'public, max-age=31536000, immutable' \
+              --content-type 'application/octet-stream' \
               --endpoint-url "$R2_ENDPOINT" >/dev/null
-          }
+            aws s3api put-object \
+              --bucket "$R2_BUCKET" \
+              --key "${key}.sha256" \
+              --body "${source_dir}/${checksum}" \
+              --if-none-match '*' \
+              --cache-control 'public, max-age=31536000, immutable' \
+              --content-type 'text/plain; charset=utf-8' \
+              --endpoint-url "$R2_ENDPOINT" >/dev/null
+          done
 
-          verify_public() {
-            local key="$1" source="$2" downloaded
-            downloaded="$release_dir/downloaded-$(basename "$key")"
-            curl --fail --silent --show-error --location \
-              --output "$downloaded" "$R2_PUBLIC_BASE_URL/$key"
-            cmp --silent "$source" "$downloaded"
-            rm -f "$downloaded"
-          }
-
-          for archive in "$release_dir"/opy-provider-*.tar.gz; do
+      - name: Verify public R2 artifacts and checksums
+        env:
+          RELEASE_TAG: ${{ needs.release-context.outputs.opy_release_tag }}
+          R2_PUBLIC_BASE_URL: https://releases.wrightkit.dev
+        run: |
+          set -euo pipefail
+          VERSION="${RELEASE_TAG#v}"
+          verify_dir="$GITHUB_WORKSPACE/r2-verify"
+          mkdir -p "$verify_dir"
+          for target in \
+            x86_64-unknown-linux-gnu \
+            x86_64-apple-darwin \
+            aarch64-apple-darwin \
+            x86_64-pc-windows-msvc; do
+            archive="opy-provider-${VERSION}-${target}.tar.gz"
             checksum="${archive}.sha256"
-            name="$(basename "$archive")"
-            key="opy-rs/releases/${VERSION}/${name}"
-            put_immutable "$archive" "$key" 'public, max-age=31536000, immutable' 'application/octet-stream'
-            put_immutable "$checksum" "${key}.sha256" 'public, max-age=31536000, immutable' 'text/plain; charset=utf-8'
-            verify_public "$key" "$archive"
-            verify_public "${key}.sha256" "$checksum"
-            downloaded="$release_dir/downloaded-${name}"
+            source_dir="dist/opy-provider-${target}"
+            key="opy-rs/releases/${VERSION}/${archive}"
             curl --fail --silent --show-error --location \
-              --output "$downloaded" "$R2_PUBLIC_BASE_URL/$key"
-            expected_hash="$(awk 'NR == 1 { print $1 }' "$checksum")"
-            actual_hash="$(sha256sum "$downloaded" | awk 'NR == 1 { print $1 }')"
-            test "$actual_hash" = "$expected_hash"
-            rm -f "$downloaded"
+              --output "$verify_dir/$archive" "$R2_PUBLIC_BASE_URL/$key"
+            curl --fail --silent --show-error --location \
+              --output "$verify_dir/$checksum" "$R2_PUBLIC_BASE_URL/${key}.sha256"
+            cmp --silent "${source_dir}/${archive}" "$verify_dir/$archive"
+            cmp --silent "${source_dir}/${checksum}" "$verify_dir/$checksum"
+            (cd "$verify_dir" && sha256sum --check "$checksum")
           done
