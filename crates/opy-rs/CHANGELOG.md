@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.26](https://github.com/wrightkit/opy-rs/compare/v0.1.24...v0.1.26) - 2026-09-08
+
+### Other
+
+- release v0.1.25 ([#220](https://github.com/wrightkit/opy-rs/pull/220))
+- localize contextual lowering policy ([#222](https://github.com/wrightkit/opy-rs/pull/222))
+
 ## [0.1.25](https://github.com/wrightkit/opy-rs/compare/v0.1.24...v0.1.25) - 2026-09-08
 
 ### Other
