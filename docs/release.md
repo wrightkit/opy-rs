@@ -58,11 +58,24 @@ create, and an existing object is accepted only when its bytes exactly match
 the release artifact; version-pinned objects are therefore immutable. The
 publication job downloads every public object and verifies both byte identity
 and the archive SHA-256 before it succeeds. The URLs use long-lived immutable
-cache semantics and do not provide a moving `latest` alias. Publication does
-not reconcile an existing version: GitHub asset upload refuses duplicate names
-without clobbering, and R2 uses a native conditional create that refuses an
-existing object. A rerun therefore fails without overwriting either published
-copy and requires explicit maintainer recovery for any partial release.
+cache semantics. Publication does not reconcile an existing version: GitHub
+asset upload refuses duplicate names without clobbering, and R2 uses a native
+conditional create that refuses an existing object. A rerun therefore fails
+without overwriting either published copy and requires explicit maintainer
+recovery for any partial release.
+
+After the complete versioned provider artifact set passes public R2
+verification, the release job writes the released semantic version as plain
+text to:
+
+```text
+https://releases.wrightkit.dev/opy-rs/latest/version
+```
+
+This pointer uses `Cache-Control: no-store` and is the only moving provider
+object. Provider archives and checksums are not duplicated under `latest/`;
+consumers resolve the pointer and then download exclusively from the immutable
+`/opy-rs/releases/<version>/...` paths.
 
 The R2 publication requires repository Actions secrets
 `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, and `CLOUDFLARE_ACCOUNT_ID`. These
