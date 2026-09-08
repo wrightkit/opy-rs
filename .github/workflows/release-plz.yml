@@ -181,8 +181,8 @@ jobs:
           for archive in "$release_dir"/opy-provider-*.tar.gz; do
             checksum="${archive}.sha256"
             name="$(basename "$archive")"
-            verify_r2_or_absent "$archive" "$key"
             key="opy-rs/releases/${VERSION}/${name}"
+            verify_r2_or_absent "$archive" "$key"
             verify_r2_or_absent "$checksum" "${key}.sha256"
           done
 
