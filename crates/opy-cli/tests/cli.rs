@@ -115,9 +115,10 @@ fn compile_json_reports_success_identity_and_normalized_output() {
             + "\n"
     );
     assert_eq!(json["compiler"]["name"], "opy-rs");
-    assert_eq!(
-        json["catalog"]["implementation-version"],
-        opy_rs::WORKSHOP_RS_VERSION
+    assert!(
+        json["catalog"]["implementation-version"]
+            .as_str()
+            .is_some_and(|version| !version.is_empty())
     );
     assert!(json.get("compatibility").is_none());
 }

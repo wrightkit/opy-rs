@@ -50,7 +50,7 @@ pub use compiler::reconstruct;
 pub use compiler::{
     COMPILE_SCHEMA_VERSION, CompilationArtifact, CompileDiagnostic, CompileFailureClass,
     CompileOutput, CompileReport, CompileResult, CompileStatus, Compiler, CompilerIdentity,
-    IntegrationDiagnostic, IntegrationError, LinkReport, ScriptDiagnostic, WORKSHOP_RS_VERSION,
+    IntegrationDiagnostic, IntegrationError, LinkReport, ScriptDiagnostic,
 };
 use diag::Span;
 pub use diag::{OpyError, OpyResult};

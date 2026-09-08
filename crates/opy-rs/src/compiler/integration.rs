@@ -88,16 +88,5 @@ pub(crate) fn load_compiler_contract()
     let manifest = Manifest::builtin()
         .map_err(|error| IntegrationError::new("manifest-load", error.to_string(), None))?;
     let links = cross_check_manifest(manifest, &catalog)?;
-    let identity = catalog.identity();
-    if identity.implementation_version != WORKSHOP_RS_VERSION {
-        return Err(IntegrationError::new(
-            "workshop-contract-version",
-            format!(
-                "expected workshop-rs {}, loaded {}",
-                WORKSHOP_RS_VERSION, identity.implementation_version
-            ),
-            None,
-        ));
-    }
     Ok((catalog, manifest, links))
 }

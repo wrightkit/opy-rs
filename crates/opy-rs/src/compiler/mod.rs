@@ -1,6 +1,6 @@
 //! OPY-to-Workshop integration, kept behind the `opy-rs` library boundary.
 //!
-//! This module pins the released `workshop-rs` v0.3.2 contract, checks the OPY
+//! This module consumes the `workshop-rs` 0.3 contract, checks the OPY
 //! manifest links against the canonical catalog, and lowers the supported OPY
 //! program structure into canonical WIR before validation and deterministic
 //! Workshop emission.
@@ -30,9 +30,6 @@ pub(super) use lowering::Lowering;
 
 #[cfg(test)]
 mod integration_tests;
-
-/// The exact released dependency contract consumed by this crate.
-pub const WORKSHOP_RS_VERSION: &str = "0.3.2";
 
 const TRANSLATION_HELPER_NAME: &str = "__overpyTranslationHelper__";
 
@@ -573,18 +570,16 @@ fn workshop_error_span(error: &workshop_rs::WorkshopError) -> Option<WorkshopSpa
 #[cfg(test)]
 mod tests {
     use super::integration::cross_check_manifest;
-    use super::{
-        COMPILE_SCHEMA_VERSION, CompileFailureClass, CompileStatus, Compiler, WORKSHOP_RS_VERSION,
-    };
+    use super::{COMPILE_SCHEMA_VERSION, CompileFailureClass, CompileStatus, Compiler};
     use crate::manifest::Manifest;
     use std::path::Path;
     use workshop_rs::catalog::{Catalog, Locale};
 
     #[test]
-    fn public_contract_is_pinned_and_manifest_links_are_checked() {
-        let compiler = Compiler::new().expect("released workshop contract must load");
+    fn catalog_links_are_checked() {
+        let compiler = Compiler::new().expect("Workshop contract must load");
         let identity = compiler.catalog_identity();
-        assert_eq!(identity.implementation_version, WORKSHOP_RS_VERSION);
+        assert!(!identity.implementation_version.is_empty());
         assert!(compiler.link_report().catalog_ids_checked > 0);
         assert!(compiler.link_report().domains_checked > 0);
     }
@@ -600,7 +595,7 @@ mod tests {
         );
         assert_eq!(report.schema_version, COMPILE_SCHEMA_VERSION);
         assert_eq!(report.compiler.name, "opy-rs");
-        assert_eq!(report.catalog.implementation_version, WORKSHOP_RS_VERSION);
+        assert_eq!(report.catalog, compiler.catalog_identity());
         assert_eq!(report.compile.status, CompileStatus::Success);
         assert_eq!(report.compile.exit_code, 0);
         assert!(report.compile.diagnostics.is_empty());
@@ -721,10 +716,7 @@ mod tests {
         assert_eq!(rule.span.unwrap().file.index(), 0);
         assert_eq!(rule.name_span.unwrap().start.line, 2);
         assert!(artifact.emitted.contains("Disable Inspector Recording;"));
-        assert_eq!(
-            artifact.catalog_identity.implementation_version,
-            WORKSHOP_RS_VERSION
-        );
+        assert_eq!(artifact.catalog_identity, compiler.catalog_identity());
     }
 
     #[test]
