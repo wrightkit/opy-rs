@@ -42,3 +42,31 @@ same GitHub Release. Artifact names are
 `opy-provider-<version>-<target>.tar.gz.sha256`. The archive contains only the
 provider executable (`opy-provider` or `opy-provider.exe`); it is independent of
 the crates.io publication path.
+
+After the GitHub Release upload succeeds, the same archives and checksums are
+published to the WrightKit R2 distribution bucket. The public, version-pinned
+URLs are:
+
+```text
+https://releases.wrightkit.dev/opy-rs/releases/<version>/opy-provider-<version>-<target>.tar.gz
+https://releases.wrightkit.dev/opy-rs/releases/<version>/opy-provider-<version>-<target>.tar.gz.sha256
+```
+
+The version is the release version without the `v` tag prefix. R2 publication
+does not rebuild the provider. Each object is written with a conditional
+create, and an existing object is accepted only when its bytes exactly match
+the release artifact; version-pinned objects are therefore immutable. The
+publication job downloads every public object and verifies both byte identity
+and the archive SHA-256 before it succeeds. The URLs use long-lived immutable
+cache semantics and do not provide a moving `latest` alias. Publication does
+not reconcile an existing version: GitHub asset upload refuses duplicate names
+without clobbering, and R2 uses a native conditional create that refuses an
+existing object. A rerun therefore fails without overwriting either published
+copy and requires explicit maintainer recovery for any partial release.
+
+The R2 publication requires repository Actions secrets
+`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, and `CLOUDFLARE_ACCOUNT_ID`. These
+credentials should be limited to the shared `wrightkit-release` bucket. GitHub
+Releases remain the canonical release and provenance record; downstream
+repositories own migration to these URLs and must keep their own consumer
+tests and rollout evidence.
