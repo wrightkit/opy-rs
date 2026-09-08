@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.27](https://github.com/wrightkit/opy-rs/compare/opy-cli-v0.1.26...opy-cli-v0.1.27) - 2026-09-08
+
+### Fixed
+
+- *(compiler)* adopt workshop-rs 0.3 ([#232](https://github.com/wrightkit/opy-rs/pull/232))
+
 ## [0.1.26](https://github.com/wrightkit/opy-rs/compare/opy-cli-v0.1.25...opy-cli-v0.1.26) - 2026-09-08
 
 ### Other
