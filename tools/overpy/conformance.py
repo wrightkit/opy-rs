@@ -594,14 +594,19 @@ def run_compile(binary: Path, directory: Path, metadata: dict[str, Any]) -> dict
     return result
 
 
+def semantic_oracle_path(directory: Path, metadata: dict[str, Any]) -> Path:
+    return directory / metadata.get("semanticOracle", "oracle.json")
+
+
 def run_semantic(
     binary: Path,
     directory: Path,
     metadata: dict[str, Any],
     project: dict[str, Any],
-    reference_sha256: str,
+    semantic_oracle: dict[str, Any],
 ) -> dict[str, Any]:
     source = directory / metadata["source"]
+    oracle = semantic_oracle_path(directory, metadata)
     completed = subprocess.run(
         [
             str(binary),
@@ -610,7 +615,7 @@ def run_semantic(
             "--root",
             ".",
             "--oracle",
-            "oracle.json",
+            oracle.name,
             "--input-sha256",
             project["sha256"],
         ],
@@ -640,7 +645,7 @@ def run_semantic(
         and semantic.get("schemaVersion") == 1
         and semantic.get("algorithm") == "workshop-rs::roundtrip::equivalent"
         and semantic.get("inputSha256") == project["sha256"]
-        and semantic.get("referenceInputSha256") == reference_sha256
+        and semantic.get("referenceInputSha256") == semantic_oracle["input"]["sha256"]
         and isinstance(semantic.get("equivalent"), bool)
     )
     if not valid:
@@ -741,6 +746,7 @@ def run(args: argparse.Namespace) -> int:
             continue
         directory = manifest_path.parent
         oracle = load_json(directory / "oracle.json")
+        semantic_oracle = load_json(semantic_oracle_path(directory, metadata))
         native = run_compile(args.binary, directory, metadata)
         reference_frontier = frontiers.get(fixture_id)
         semantic = None
@@ -754,7 +760,7 @@ def run(args: argparse.Namespace) -> int:
                 directory,
                 metadata,
                 project,
-                oracle["input"]["sha256"],
+                semantic_oracle,
             )
         result = compare_case(
             oracle,
