@@ -1,6 +1,3 @@
-//! The reusable macro/hook runtime: script assembly, invocation, and
-//! result/error mapping.
-
 use std::time::Instant;
 
 use super::engine::quickjs_ng::QuickJsEngine;

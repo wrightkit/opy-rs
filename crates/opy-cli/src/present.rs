@@ -1,9 +1,3 @@
-//! CLI-local presentation policy for human and GitHub Actions output.
-//!
-//! `opy-rs` owns structured diagnostics. This module owns only their
-//! terminal, plain, and GitHub Actions presentation. Machine-readable output
-//! is rendered by the command handlers before this boundary is entered.
-
 use std::io::{IsTerminal, Write};
 
 use crate::cli::{ColorArg, RendererArg};

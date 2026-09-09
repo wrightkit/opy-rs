@@ -1,9 +1,6 @@
-//! Registration and recursive expansion of textual OPY macros.
-
 use super::directives::strip_quoted;
 use super::*;
 
-/// A registered macro: object-like, function-like, or a script macro.
 pub(super) struct MacroDef {
     pub(super) name: String,
     pub(super) params: Vec<String>,
@@ -101,7 +98,6 @@ impl Preprocessor {
             file_id: span.file,
             text: &body_text,
         })?;
-        // Drop the trailing EOF token from the value.
         let body_tokens: Vec<Token> = body_tokens
             .into_iter()
             .filter(|t| t.kind != TokenKind::Eof)
@@ -123,7 +119,6 @@ impl Preprocessor {
         Ok(())
     }
 
-    /// Expand all macros across the token stream, recursively.
     pub(super) fn expand(&self, tokens: Vec<Token>) -> OpyResult<Vec<Token>> {
         let mut out: Vec<Token> = Vec::new();
         let mut index = 0;
@@ -137,7 +132,6 @@ impl Preprocessor {
                 let name = token.text.clone();
                 if let Some(mac) = self.macros.iter().find(|m| m.name == name) {
                     if mac.is_function {
-                        // Expect `(` args `)` immediately after the name.
                         let cursor = index + 1;
                         if cursor < tokens.len() && tokens[cursor].kind == TokenKind::LParen {
                             let (args, after) = self.collect_args(&tokens, cursor)?;
@@ -147,8 +141,6 @@ impl Preprocessor {
                             index = after;
                             continue;
                         }
-                        // A function-like macro used without arguments: leave
-                        // the name as an ordinary identifier.
                         out.push(token.clone());
                         index += 1;
                         continue;
@@ -166,8 +158,6 @@ impl Preprocessor {
         Ok(out)
     }
 
-    /// Collect the argument token lists of a function-like macro call,
-    /// returning `(args, index_after_closing_paren)`.
     fn collect_args(&self, tokens: &[Token], open: usize) -> OpyResult<(Vec<Vec<Token>>, usize)> {
         let mut args: Vec<Vec<Token>> = Vec::new();
         let mut current: Vec<Token> = Vec::new();

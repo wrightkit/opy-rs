@@ -1,5 +1,3 @@
-//! Typed policies for source forms whose lowering is not declarative signature data.
-
 use crate::manifest::Function;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

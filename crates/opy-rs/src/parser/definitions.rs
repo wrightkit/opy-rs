@@ -1,10 +1,6 @@
-//! Rule, annotation, and definition grammar.
-
 use super::*;
 
 impl Parser<'_> {
-    // ---- rules and definitions ----
-
     pub(super) fn parse_rule(
         &mut self,
         rules: &mut Vec<RuleEntry>,

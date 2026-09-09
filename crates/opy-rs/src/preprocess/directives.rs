@@ -1,5 +1,3 @@
-//! Parsing and state transitions for OPY preprocessing directives.
-
 use super::*;
 
 impl Preprocessor {
@@ -497,7 +495,6 @@ fn replacement_family(name: &str) -> Option<&str> {
     })
 }
 
-/// Strips a matched `"…"` or `'…'` pair, returning the inner text.
 pub(super) fn strip_quoted(text: &str) -> Option<&str> {
     text.strip_prefix('"')
         .and_then(|rest| rest.strip_suffix('"'))

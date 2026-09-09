@@ -1,10 +1,6 @@
-//! Statement and control-flow grammar.
-
 use super::*;
 
 impl Parser<'_> {
-    // ---- statements ----
-
     pub(super) fn parse_block(&mut self, block_indent: u32) -> Vec<Stmt> {
         let mut stmts = Vec::new();
         loop {
@@ -16,7 +12,6 @@ impl Parser<'_> {
                 break;
             }
             if self.peek().span.start.col > block_indent {
-                // A deeper indent without an introducer: recover by line.
                 self.error_at_current("unexpected indentation".to_string());
                 self.recover_line();
                 continue;

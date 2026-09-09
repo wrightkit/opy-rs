@@ -1,5 +1,3 @@
-//! Project composition, include loading, overlays, and source provenance.
-
 use super::directives::strip_quoted;
 use super::*;
 

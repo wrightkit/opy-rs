@@ -1,5 +1,3 @@
-//! Expression, builtin, argument, and member resolution.
-
 use super::*;
 
 impl Lowerer {

@@ -1,5 +1,3 @@
-//! Backend preparation shared by source compilation and settings resolution.
-
 use super::*;
 
 pub(crate) fn reject_unlowered_directives(hir: &hir::Program) -> Result<(), IntegrationError> {
