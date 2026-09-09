@@ -223,6 +223,26 @@ class ConformanceTests(unittest.TestCase):
         result = conformance.compare_case(oracle, native, None, None, semantic)
         self.assertEqual(result["status"], "divergence")
 
+    def test_semantic_oracle_metadata_selects_the_canonical_reference(self):
+        fixture = TOOLS_DIR.parents[1] / "crates/opy-rs/tests/fixtures/corpus/synthetic/switch-multiple-break"
+        metadata = conformance.load_json(fixture / "fixture.json")
+        self.assertEqual(
+            conformance.semantic_oracle_path(fixture, metadata),
+            fixture / "semantic-oracle.json",
+        )
+        semantic_oracle = conformance.load_json(
+            conformance.semantic_oracle_path(fixture, metadata)
+        )
+        pinned_oracle = conformance.load_json(fixture / "oracle.json")
+        self.assertNotEqual(
+            semantic_oracle["compile"]["workshop"],
+            pinned_oracle["compile"]["workshop"],
+        )
+        self.assertEqual(
+            semantic_oracle["input"]["sha256"],
+            pinned_oracle["input"]["sha256"],
+        )
+
     def test_reference_failure_frontier_difference_is_divergence(self):
         oracle = {"compile": {"status": "failure", "diagnostics": []}}
         native = {
