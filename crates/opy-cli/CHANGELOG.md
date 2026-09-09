@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.28](https://github.com/wrightkit/opy-rs/compare/opy-cli-v0.1.27...opy-cli-v0.1.28) - 2026-09-09
+
+### Other
+
+- *(opy)* remove redundant Rust prose ([#234](https://github.com/wrightkit/opy-rs/pull/234))
+
 ## [0.1.27](https://github.com/wrightkit/opy-rs/compare/opy-cli-v0.1.26...opy-cli-v0.1.27) - 2026-09-08
 
 ### Fixed
