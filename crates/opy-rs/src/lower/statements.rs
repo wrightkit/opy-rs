@@ -1,5 +1,3 @@
-//! Rule, block, and statement/control-flow lowering.
-
 use super::*;
 
 impl Lowerer {
@@ -56,7 +54,6 @@ impl Lowerer {
         })
     }
 
-    /// Lower a statement block; `macro_params` names resolve to `MacroParam`.
     pub(super) fn lower_block(
         &mut self,
         stmts: &[Stmt],
@@ -113,8 +110,6 @@ impl Lowerer {
                         };
                     }
                 }
-                // Statement-position builtin resolution (action/value
-                // identity, unknown names) happens inside `lower_expr`.
                 HirStmt::Expr {
                     expr: Box::new(self.lower_expr(expr, macro_params, CallPosition::Statement)),
                     span: Some(span.into()),

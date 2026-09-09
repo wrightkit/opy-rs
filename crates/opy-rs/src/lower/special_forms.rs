@@ -1,5 +1,3 @@
-//! OPY-specific special-form lowering.
-
 use super::*;
 
 impl Lowerer {

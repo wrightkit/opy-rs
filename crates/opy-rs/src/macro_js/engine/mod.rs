@@ -1,8 +1,3 @@
-//! Engine seam: the small internal contract the runtime executes against.
-//!
-//! Keeping the engine behind this trait is what makes the concrete embedding
-//! replaceable (issue #6). Only [`quickjs_ng`] implements it today.
-
 pub(crate) mod quickjs_ng;
 
 use std::fmt;

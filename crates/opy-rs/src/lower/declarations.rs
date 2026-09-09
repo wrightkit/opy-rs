@@ -1,5 +1,3 @@
-//! Declaration collection, visibility, and declaration lowering.
-
 use super::*;
 
 impl Lowerer {

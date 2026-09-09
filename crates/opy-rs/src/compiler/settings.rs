@@ -1,5 +1,3 @@
-//! OPY settings expansion and canonical Workshop settings bridging.
-
 use super::*;
 
 pub(super) fn expand_settings_constants(

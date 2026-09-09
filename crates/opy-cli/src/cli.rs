@@ -1,10 +1,7 @@
-//! The authoritative structured command model for `opy-cli`.
-
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
-/// One command model drives argv parsing, generated help, and completion.
 #[derive(Debug, Parser)]
 #[command(
     name = "opy-cli",

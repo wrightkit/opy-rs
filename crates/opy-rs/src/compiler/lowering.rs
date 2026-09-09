@@ -1,5 +1,3 @@
-//! HIR-to-WIR lowering and Workshop control-flow adaptation.
-
 use super::*;
 
 pub(crate) struct Lowering<'a> {
@@ -45,9 +43,6 @@ type SwitchBreak = (usize, HirSpan);
 type LoweredSwitchBody = (Vec<wir::ActionId>, Option<SwitchBreak>);
 type LoweredSwitchArm<'a> = (Option<&'a Expr>, Vec<wir::ActionId>, Option<SwitchBreak>);
 
-/// Return the condition path when a statement consists only of a continue.
-/// An empty path represents an unconditional continue; a non-empty path is
-/// folded into the canonical `skipIf` condition by the loop lowering.
 fn pure_continue_conditions(statement: &Stmt) -> Option<Vec<&Expr>> {
     match statement {
         Stmt::Continue { .. } => Some(Vec::new()),
@@ -64,9 +59,6 @@ fn pure_continue_conditions(statement: &Stmt) -> Option<Vec<&Expr>> {
     }
 }
 
-/// Return the condition path when a statement consists only of a forward
-/// label jump. The path is folded into a canonical `skipIf` action so jumps
-/// out of a nested conditional can still target the surrounding sequence.
 fn pure_goto_conditions(statement: &Stmt) -> Option<(Vec<&Expr>, &str)> {
     match statement {
         Stmt::Goto {
@@ -88,8 +80,6 @@ fn pure_goto_conditions(statement: &Stmt) -> Option<(Vec<&Expr>, &str)> {
     }
 }
 
-/// Detect continues belonging to the current loop. Nested loops own their
-/// continues and are lowered independently by `lower_action`.
 fn contains_loop_continue(statement: &Stmt) -> bool {
     match statement {
         Stmt::Continue { .. } => true,
@@ -387,10 +377,7 @@ impl<'a> Lowering<'a> {
                         ));
                     }
                 }
-                hir::Declaration::Macro { .. } => {
-                    // Macro definitions are retained for source tooling; calls
-                    // are expanded before this WIR lowering pass.
-                }
+                hir::Declaration::Macro { .. } => {}
             }
         }
 
@@ -1424,11 +1411,6 @@ impl<'a> Lowering<'a> {
         }
     }
 
-    /// Lower a loop body while preserving OverPy's continue jump layout.
-    /// Continue skips the remaining canonical actions in the current body;
-    /// when it is the sole action of a conditional branch, the conditional
-    /// jump is lifted to the loop body's action list so its distance reaches
-    /// the loop continuation label.
     fn lower_loop_body(
         &mut self,
         statements: &[Stmt],
@@ -1436,11 +1418,6 @@ impl<'a> Lowering<'a> {
         self.lower_loop_sequence(statements, &[], 0)
     }
 
-    /// Lower one sequence nested inside a loop. `after` contains already
-    /// lowered actions that follow this sequence before the loop continues;
-    /// `structural_after` counts non-action lines that follow this sequence
-    /// before those actions. This lets a continue remain inside its authored
-    /// conditional while still reaching the nearest loop continuation label.
     fn lower_loop_sequence(
         &mut self,
         statements: &[Stmt],
@@ -2050,7 +2027,6 @@ impl<'a> Lowering<'a> {
         Ok((actions, break_at))
     }
 
-    /// Query the Workshop-owned native action layout for a relative jump.
     fn canonical_action_width(
         &self,
         actions: &[wir::ActionId],

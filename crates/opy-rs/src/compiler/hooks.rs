@@ -1,5 +1,3 @@
-//! Post-compile hook orchestration and script-runtime integration.
-
 use super::*;
 
 impl Compiler {

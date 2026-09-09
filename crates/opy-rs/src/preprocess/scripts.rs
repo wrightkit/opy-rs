@@ -1,5 +1,3 @@
-//! Script-backed preprocessing integration.
-
 use crate::macro_js::{Limits, MacroArg, MacroError, MacroRuntime};
 
 use super::*;

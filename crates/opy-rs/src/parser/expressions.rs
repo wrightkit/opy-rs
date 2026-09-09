@@ -1,10 +1,6 @@
-//! Expression and postfix grammar.
-
 use super::*;
 
 impl Parser<'_> {
-    // ---- expressions ----
-
     pub(super) fn parse_expr(&mut self) -> Result<Expr, ()> {
         self.parse_expr_inner(false)
     }
@@ -259,7 +255,6 @@ impl Parser<'_> {
         self.skip_expression_newlines();
         if self.peek_kind() == TokenKind::DoubleStar {
             self.advance();
-            // Right-associative.
             self.skip_expression_newlines();
             let exponent = self.parse_unary()?;
             let span = Span::new(base.span().file, base.span().start, exponent.span().end);

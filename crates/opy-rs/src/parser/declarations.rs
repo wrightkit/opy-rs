@@ -1,12 +1,8 @@
-//! Declaration and signature grammar.
-
 use super::*;
 
 impl Parser<'_> {
-    // ---- declarations ----
-
     pub(super) fn parse_variable(&mut self, declarations: &mut Vec<Decl>, global: bool) -> bool {
-        let start = self.advance(); // `globalvar`/`playervar`
+        let start = self.advance();
         // The name token follows the keyword; its span is the exact declared
         // identifier occurrence (rename targets, not the keyword/statement).
         let name_token = self.peek().clone();
@@ -28,7 +24,6 @@ impl Parser<'_> {
                 Err(()) => return false,
             }
         } else if self.peek_kind() == TokenKind::Number {
-            // `globalvar cakePos 100`: an explicit Workshop variable index.
             let token = self.advance();
             index = token.text.parse::<u32>().ok();
             if index.is_none() {
