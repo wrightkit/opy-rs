@@ -6,6 +6,9 @@ use crate::hir::SettingsNode;
 use crate::{CompileStatus, Compiler};
 use workshop_rs::catalog::{Catalog, Locale};
 use workshop_rs::roundtrip::equivalent;
+use workshop_rs::settings::{
+    Applicability, SettingId, SettingScope, SettingTarget, SettingValue, definitions_by_id,
+};
 
 fn source_with_settings(settings: &str) -> String {
     format!("{settings}\nrule \"settings\":\n    @Event global\n    pass\n")
@@ -158,4 +161,45 @@ fn hero_general_settings_are_emitted_at_team_scope() {
         .expect("hero general settings must lower at team scope");
     assert!(artifact.emitted.contains("Team 1 {"));
     assert!(artifact.emitted.contains("Damage Received: 50%"));
+}
+
+#[test]
+fn compiled_settings_are_queryable_through_the_canonical_consumer_api() {
+    let source = source_with_settings(
+        r#"settings {
+    "gamemodes": {},
+    "lobby": {
+        "spectatorSlots": 2
+    }
+}"#,
+    );
+    let artifact = Compiler::new()
+        .expect("released Workshop contract must load")
+        .compile_source_artifact(&source, "settings.opy", Path::new("."))
+        .expect("OPY settings must compile");
+
+    let definition = definitions_by_id(&SettingId::from("setting.lobby.spectatorSlots"))
+        .next()
+        .expect("canonical lobby setting");
+    assert_eq!(definition.scope(), SettingScope::Lobby);
+    assert_eq!(
+        definition.presentation().localized_name("en-US"),
+        Some("Max Spectators")
+    );
+    assert!(definition.provenance().reviewed);
+    assert_eq!(
+        definition
+            .applicability(&SettingTarget::Global)
+            .expect("global lobby applicability"),
+        Applicability::Applicable
+    );
+
+    let occurrence = definition
+        .read(
+            artifact.wir.settings.as_ref().expect("compiled settings"),
+            &SettingTarget::Global,
+        )
+        .expect("compiled setting must be readable through the typed API");
+    assert_eq!(occurrence.authored, SettingValue::Number(2.0));
+    assert!(artifact.emitted.contains("Max Spectators: 2"));
 }
