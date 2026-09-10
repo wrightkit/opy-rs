@@ -112,6 +112,10 @@ pub(crate) fn evaluate(
 
 fn evaluate_builtin(name: &str, values: &[Value]) -> Option<Value> {
     match name {
+        "len" | "countOf" => match values {
+            [Value::Array(values)] => Some(Value::Number(values.len() as f64)),
+            _ => None,
+        },
         "sqrt" => match values {
             [Value::Number(value)] => Some(Value::Number(value.sqrt())),
             _ => None,
