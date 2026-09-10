@@ -460,15 +460,15 @@
     {
       "fixture": "real-world/overpy-client-to-server",
       "nativeStatus": "success",
-      "classification": "known-gap",
+      "classification": "match",
       "comparison": "semantic-wir",
       "evidence": [
         "oracle:real-world/overpy-client-to-server/oracle.json",
         "provenance:real-world/overpy-client-to-server/fixture.json"
       ],
       "owner": "opy-rs#157",
-      "note": "The full real-world project now compiles through the final #141 grammar and #144 builtin/member/enum residuals; canonical WIR equivalence remains an explicit compiler boundary for the existing real-world lowering differences.",
-      "semanticEquivalent": false
+      "note": "The client-to-server project lowers its print text carrier and negated predicate conditions to the pinned canonical WIR.",
+      "semanticEquivalent": true
     },
     {
       "fixture": "real-world/overpy-cronch",
@@ -486,15 +486,15 @@
     {
       "fixture": "real-world/overpy-crosshair",
       "nativeStatus": "success",
-      "classification": "known-gap",
+      "classification": "match",
       "comparison": "semantic-wir",
       "evidence": [
         "oracle:real-world/overpy-crosshair/oracle.json",
         "provenance:real-world/overpy-crosshair/fixture.json"
       ],
       "owner": "opy-rs#157",
-      "note": "The full real-world project now compiles through the audited HUD builtin surface; canonical WIR equivalence remains an explicit compiler boundary because of variable presentation and string-shape differences.",
-      "semanticEquivalent": false
+      "note": "The crosshair project lowers its negated button conditions and HUD calls to the pinned canonical WIR.",
+      "semanticEquivalent": true
     },
     {
       "fixture": "real-world/overpy-inputhud",
@@ -606,16 +606,16 @@
     {
       "fixture": "synthetic/chase-keywords",
       "nativeStatus": "success",
-      "classification": "unsupported",
+      "classification": "match",
       "comparison": "semantic-wir",
       "evidence": [
         "oracle:synthetic/chase-keywords/oracle.json",
         "provenance:synthetic/chase-keywords/fixture.json",
-        "test:opy-rs::compiler::integration_tests::catalog_lowering::catalog_backed_contextual_chase_calls_match_the_pinned_oracle"
+        "test:opy-rs::compiler::integration_tests::catalog_lowering::chase_keyword_forms_match_the_pinned_oracle"
       ],
       "owner": "opy-rs#157",
-      "note": "The complete chase keyword source now compiles through the audited builtin surface, while canonical WIR equivalence remains an explicit follow-up for the native compiler's variable presentation and constant-folding differences.",
-      "semanticEquivalent": false
+      "note": "Keyword binding, literal count folding, text carriers, and contextual chase lowering match the pinned canonical WIR.",
+      "semanticEquivalent": true
     },
     {
       "fixture": "synthetic/declarations-rules",

@@ -2201,7 +2201,7 @@ impl<'a> Lowering<'a> {
             }};
         }
 
-        let message = self.lower_text_value(expr)?;
+        let message = self.lower_value(expr)?;
         let padding_text = self.push_value(Value::String(" ".repeat(45)));
         let padding = self.push_call("customString", vec![padding_text]);
         let body_text = self.push_value(Value::String(format!("{}{{0}}", " ".repeat(125))));
@@ -2746,6 +2746,14 @@ impl<'a> Lowering<'a> {
     }
 
     fn lower_condition(&mut self, expr: &Expr) -> Result<wir::ValueId, IntegrationError> {
+        if let Expr::Unary { op, operand, .. } = expr
+            && op == "not"
+            && !matches!(operand.as_ref(), Expr::Binary { .. })
+        {
+            let value = self.lower_value(operand)?;
+            let false_value = self.push_value(Value::Bool(false));
+            return Ok(self.push_call("==", vec![value, false_value]));
+        }
         let value = self.lower_value(expr)?;
         let is_comparison = |expr: &Expr| matches!(expr, Expr::Binary { op, .. } if matches!(op.as_str(), "==" | "!=" | "<" | "<=" | ">" | ">="));
         if is_comparison(expr)
@@ -3562,7 +3570,9 @@ impl<'a> Lowering<'a> {
 
     fn lower_value(&mut self, expr: &Expr) -> Result<wir::ValueId, IntegrationError> {
         let span = expr.span().copied();
-        if matches!(expr, Expr::Binary { .. } | Expr::Unary { .. }) {
+        if matches!(expr, Expr::Binary { .. } | Expr::Unary { .. })
+            || matches!(expr, Expr::Call { name, .. } if matches!(name.as_str(), "len" | "countOf"))
+        {
             let bindings = HashMap::new();
             let mut stack = Vec::new();
             if let Some(value) =

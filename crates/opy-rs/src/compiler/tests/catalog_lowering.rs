@@ -80,6 +80,11 @@ fn catalog_backed_contextual_chase_calls_match_the_pinned_oracle() {
 }
 
 #[test]
+fn chase_keyword_forms_match_the_pinned_oracle() {
+    assert_matches_oracle("chase-keywords");
+}
+
+#[test]
 fn catalog_enum_members_lower_and_validate() {
     let artifact = compile_fixture("chase-enums");
     for expected in [
