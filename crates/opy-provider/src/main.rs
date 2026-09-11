@@ -188,9 +188,7 @@ struct ProjectEntry {
 
 #[derive(Debug)]
 struct LoadedProject {
-    source: String,
-    main_path: PathBuf,
-    root: PathBuf,
+    filesystem: opy_rs::FilesystemProject,
     documents: BTreeMap<String, Document>,
     locale: String,
     entry_uri: String,
@@ -401,9 +399,9 @@ impl Server {
         match load_project(params)? {
             LoadedRequest::Entry(project) => {
                 let outcome = opy_rs::tooling::check(
-                    &project.source,
-                    &path_string(&project.main_path),
-                    &project.root,
+                    project.filesystem.source(),
+                    &path_string(project.filesystem.main_path()),
+                    project.filesystem.root(),
                 );
                 ensure_entry_sources_loaded(&project, &outcome)?;
                 Ok(check_result(&project, &outcome))
@@ -440,9 +438,9 @@ impl Server {
             })?);
         }
         let check_outcome = opy_rs::tooling::check(
-            &project.source,
-            &path_string(&project.main_path),
-            &project.root,
+            project.filesystem.source(),
+            &path_string(project.filesystem.main_path()),
+            project.filesystem.root(),
         );
         ensure_entry_sources_loaded(&project, &check_outcome)?;
         let report = self
@@ -450,9 +448,9 @@ impl Server {
             .as_ref()
             .expect("compiler initialized")
             .compile_source_report_with_language(
-                &project.source,
-                &path_string(&project.main_path),
-                &project.root,
+                project.filesystem.source(),
+                &path_string(project.filesystem.main_path()),
+                project.filesystem.root(),
                 &project.locale,
             );
         let paths = check_outcome
@@ -516,30 +514,21 @@ fn load_entry(entry: ProjectEntry, locale: Option<String>) -> Result<LoadedReque
             "project entry must be an absolute file URI",
         )
     })?;
-    let canonical = path.canonicalize().map_err(|_| {
+    let filesystem = opy_rs::FilesystemProject::load(&path).map_err(|error| {
+        let reason = if error.is_entry_not_found() {
+            "entryNotFound"
+        } else {
+            "entryUnreadable"
+        };
         HandlerError::project_load_failed(
             &entry.uri,
-            "entryNotFound",
+            reason,
             Some(&entry.uri),
             "project entry could not be loaded",
         )
     })?;
-    let source = std::fs::read_to_string(&canonical).map_err(|_| {
-        HandlerError::project_load_failed(
-            &entry.uri,
-            "entryUnreadable",
-            Some(&entry.uri),
-            "project entry could not be loaded",
-        )
-    })?;
-    let root = canonical
-        .parent()
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| PathBuf::from("."));
     Ok(LoadedRequest::Entry(LoadedProject {
-        source,
-        main_path: canonical,
-        root,
+        filesystem,
         documents: BTreeMap::new(),
         locale: locale.unwrap_or_else(|| "en-US".to_string()),
         entry_uri: entry.uri,
@@ -889,7 +878,7 @@ impl FileEntry {
 fn file_entries(project: &LoadedProject, paths: &[String]) -> Vec<FileEntry> {
     let mut paths = paths.to_vec();
     if paths.is_empty() {
-        paths.push(path_string(&project.main_path));
+        paths.push(path_string(project.filesystem.main_path()));
     }
     paths.dedup();
     paths
@@ -954,8 +943,8 @@ fn diagnostic_range(project: &LoadedProject, location: Option<&SourceLocation>) 
 }
 
 fn lsp_position(project: &LoadedProject, path: &str, line: u32, col: u32) -> Value {
-    let source = if path == path_string(&project.main_path) {
-        project.source.clone()
+    let source = if path == path_string(project.filesystem.main_path()) {
+        project.filesystem.source().to_owned()
     } else {
         std::fs::read_to_string(resolved_project_path(project, path)).unwrap_or_default()
     };
@@ -984,7 +973,7 @@ fn resolved_project_path(project: &LoadedProject, path: &str) -> PathBuf {
     if path.is_absolute() {
         path.to_path_buf()
     } else {
-        project.root.join(path)
+        project.filesystem.root().join(path)
     }
 }
 
@@ -1167,7 +1156,10 @@ mod tests {
         let LoadedRequest::Entry(project) = load_project(params).expect("project loads") else {
             panic!("expected entry project");
         };
-        assert_eq!(project.source, "rule \"r\":\n    @Event global\n");
+        assert_eq!(
+            project.filesystem.source(),
+            "rule \"r\":\n    @Event global\n"
+        );
         assert!(project.documents.is_empty());
         let _ = fs::remove_dir_all(&dir);
     }

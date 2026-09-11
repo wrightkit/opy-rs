@@ -41,6 +41,7 @@ mod macro_js;
 pub mod manifest;
 pub mod parser;
 pub mod preprocess;
+pub mod project;
 pub mod settings;
 pub mod tooling;
 
@@ -57,6 +58,7 @@ pub use diag::{OpyError, OpyResult};
 pub use lower::lower;
 pub use parser::parse;
 pub use preprocess::{preprocess, preprocess_with_overlay};
+pub use project::{FilesystemProject, FilesystemProjectError};
 
 #[cfg(test)]
 mod tests {
