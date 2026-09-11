@@ -30,7 +30,7 @@ fn compile_source(source: &str) -> crate::CompilationArtifact {
         .expect("source must lower to canonical WIR")
 }
 
-fn oracle_wir(name: &str) -> workshop_rs::wir::Program {
+fn oracle_wir(name: &str) -> workshop_rs::Program {
     let dir = fixture_dir(name);
     let oracle: serde_json::Value = serde_json::from_str(
         &std::fs::read_to_string(dir.join("oracle.json")).expect("oracle must be readable"),
@@ -58,7 +58,7 @@ fn demonstrated_comprehension_lowers_to_canonical_mapped_array() {
     )
     .expect("expected canonical WIR must reparse");
     assert!(
-        equivalent(&artifact.wir, &expected),
+        equivalent(&super::canonical_program(&artifact), &expected),
         "native WIR diverged\n{}",
         artifact.emitted
     );
@@ -68,7 +68,10 @@ fn demonstrated_comprehension_lowers_to_canonical_mapped_array() {
 fn demonstrated_sorted_array_form_matches_the_pinned_oracle() {
     let artifact = compile_fixture("strings-and-lambda");
     assert!(
-        equivalent(&artifact.wir, &oracle_wir("strings-and-lambda")),
+        equivalent(
+            &super::canonical_program(&artifact),
+            &oracle_wir("strings-and-lambda"),
+        ),
         "native WIR diverged for strings-and-lambda\n{}",
         artifact.emitted
     );

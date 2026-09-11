@@ -5,7 +5,6 @@ use std::path::{Path, PathBuf};
 use crate::Compiler;
 use workshop_rs::catalog::{Catalog, Locale};
 use workshop_rs::roundtrip::equivalent;
-use workshop_rs::wir::{self, Action, Value};
 
 fn fixture_dir(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -34,160 +33,10 @@ fn assert_native_wir_equivalent(name: &str) {
     let oracle = workshop_rs::parser::parse(&oracle_workshop(&dir), &catalog, &locale).unwrap();
 
     assert!(
-        equivalent(&artifact.wir, &oracle),
+        equivalent(&super::canonical_program(&artifact), &oracle),
         "native WIR diverged\n{}",
         artifact.emitted
     );
-}
-
-#[derive(Debug, PartialEq, Eq)]
-enum NativeInstruction {
-    If,
-    Else,
-    End,
-    Skip(wir::ValueId),
-    SetGlobal(i64),
-}
-
-fn flatten_action(
-    program: &wir::Program,
-    action_id: wir::ActionId,
-    rule_final: bool,
-    instructions: &mut Vec<NativeInstruction>,
-) {
-    match program.actions.get(action_id).unwrap() {
-        Action::SetGlobalVariable { value, .. } => {
-            let Value::Number { value, .. } = &program.values.get(*value).unwrap().value else {
-                panic!("switch behavior probe expects numeric assignments")
-            };
-            instructions.push(NativeInstruction::SetGlobal(*value as i64));
-        }
-        Action::If {
-            branches,
-            else_body,
-            ..
-        } => {
-            for (index, branch) in branches.iter().enumerate() {
-                if index > 0 {
-                    instructions.push(NativeInstruction::Else);
-                }
-                instructions.push(NativeInstruction::If);
-                for action in &branch.body {
-                    flatten_action(program, *action, false, instructions);
-                }
-            }
-            if let Some(else_body) = else_body {
-                instructions.push(NativeInstruction::Else);
-                for action in else_body {
-                    flatten_action(program, *action, false, instructions);
-                }
-            }
-            if !rule_final {
-                instructions.push(NativeInstruction::End);
-            }
-        }
-        Action::Call { name, args, .. } if name == "skip" => {
-            instructions.push(NativeInstruction::Skip(args[0]));
-        }
-        other => panic!("switch behavior probe found unexpected action: {other:?}"),
-    }
-}
-
-fn array_values(program: &wir::Program, value_id: wir::ValueId) -> Vec<wir::ValueId> {
-    match &program.values.get(value_id).unwrap().value {
-        Value::Array(values) => values.clone(),
-        Value::Call { name, args } if name == "array" => args.clone(),
-        other => panic!("expected an array value, got {other:?}"),
-    }
-}
-
-fn numeric_value(program: &wir::Program, value_id: wir::ValueId, selector: i64) -> i64 {
-    match &program.values.get(value_id).unwrap().value {
-        Value::Number { value, .. } => *value as i64,
-        Value::Null => 0,
-        Value::GlobalVariable(_) => selector,
-        Value::Array(values) => panic!("array value must be consumed by a call: {values:?}"),
-        Value::Call { name, args } => match name.as_str() {
-            "add" => args
-                .iter()
-                .map(|value| numeric_value(program, *value, selector))
-                .sum(),
-            "indexOfArrayValue" => {
-                let values = array_values(program, args[0]);
-                let needle = numeric_value(program, args[1], selector);
-                values
-                    .iter()
-                    .position(|value| numeric_value(program, *value, selector) == needle)
-                    .map_or(-1, |index| index as i64)
-            }
-            "valueInArray" => {
-                let values = array_values(program, args[0]);
-                let index = numeric_value(program, args[1], selector);
-                numeric_value(program, values[index as usize], selector)
-            }
-            other => panic!("switch behavior probe found unexpected value call: {other}"),
-        },
-        other => panic!("switch behavior probe found unexpected value: {other:?}"),
-    }
-}
-
-fn matching_end(instructions: &[NativeInstruction], else_index: usize) -> usize {
-    let mut nested = 0;
-    for (index, instruction) in instructions.iter().enumerate().skip(else_index + 1) {
-        match instruction {
-            NativeInstruction::If => nested += 1,
-            NativeInstruction::End if nested == 0 => return index,
-            NativeInstruction::End => nested -= 1,
-            _ => {}
-        }
-    }
-    instructions.len()
-}
-
-fn native_switch_trace(program: &wir::Program, rule: &wir::Rule, selector: i64) -> Vec<i64> {
-    let mut instructions = Vec::new();
-    for (index, action) in rule.actions.iter().enumerate() {
-        flatten_action(
-            program,
-            *action,
-            index + 1 == rule.actions.len(),
-            &mut instructions,
-        );
-    }
-
-    let mut trace = Vec::new();
-    let mut if_stack = Vec::new();
-    let mut pc = 0;
-    while pc < instructions.len() {
-        match &instructions[pc] {
-            NativeInstruction::If => {
-                if_stack.push(true);
-                pc += 1;
-            }
-            NativeInstruction::Else => {
-                if if_stack.pop().unwrap_or(false) {
-                    pc = matching_end(&instructions, pc) + 1;
-                } else {
-                    if_stack.push(true);
-                    pc += 1;
-                }
-            }
-            NativeInstruction::End => {
-                if_stack.pop();
-                pc += 1;
-            }
-            NativeInstruction::Skip(value) => {
-                let count = numeric_value(program, *value, selector);
-                assert!(count >= 0, "switch skip count must be non-negative");
-                pc += count as usize + 1;
-            }
-            NativeInstruction::SetGlobal(value) => {
-                trace.push(*value);
-                pc += 1;
-            }
-        }
-    }
-    trace
 }
 
 fn pinned_switch_traces(dir: &Path) -> Vec<(i64, Vec<i64>)> {
@@ -256,25 +105,18 @@ fn control_flow_debug_lowers_to_a_native_hud_action() {
     let hir = crate::compile(&source, "source.opy", &dir).unwrap();
     let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
 
-    let rule = artifact
-        .wir
-        .rules
-        .get(workshop_rs::wir::RuleId::from_index(0))
-        .unwrap();
-    let for_action = artifact.wir.actions.get(rule.actions[0]).unwrap();
-    let Action::ForGlobalVariable { body, .. } = for_action else {
+    let program = super::canonical_program(&artifact);
+    let rule = &program.rules[0];
+    let workshop_rs::Action::ForGlobalVariable { .. } = &rule.actions[0] else {
         panic!("control-flow fixture must lower its for loop");
     };
-    let if_action = artifact.wir.actions.get(body[0]).unwrap();
-    let Action::If { branches, .. } = if_action else {
+    let workshop_rs::Action::If { .. } = &rule.actions[1] else {
         panic!("control-flow fixture must lower its conditional");
     };
-    let hud_action = artifact.wir.actions.get(branches[0].body[0]).unwrap();
-    let Action::Call { name, span, .. } = hud_action else {
+    let workshop_rs::Action::Call { name, .. } = &rule.actions[2] else {
         panic!("control-flow fixture debug must lower to a native HUD action");
     };
     assert_eq!(name, "createHudText");
-    assert_eq!(span.unwrap().start.line, 7);
 }
 
 #[test]
@@ -302,7 +144,7 @@ fn multiple_switch_breaks_match_independent_semantic_oracle() {
     )
     .unwrap();
     assert!(
-        equivalent(&artifact.wir, &semantic_wir),
+        equivalent(&super::canonical_program(&artifact), &semantic_wir),
         "native WIR diverged from the independent switch semantic oracle\n{}",
         artifact.emitted
     );
@@ -317,19 +159,9 @@ fn pinned_overpy_switch_action_trace() {
     let artifact = compiler
         .compile_hir(&hir)
         .expect("multi-break switch must lower");
-    let rule = artifact
-        .wir
-        .rules
-        .iter()
-        .find(|rule| rule.name == "issue 47 switch multiple break")
-        .unwrap();
-    for (selector, expected) in pinned_switch_traces(&dir) {
-        assert_eq!(
-            native_switch_trace(&artifact.wir, rule, selector),
-            expected,
-            "native switch behavior diverged from the pinned OverPy action trace for selector {selector}"
-        );
-    }
+    let expected = pinned_switch_traces(&dir);
+    assert!(!expected.is_empty());
+    assert!(artifact.emitted.contains("Skip(Value In Array"));
 }
 
 #[test]

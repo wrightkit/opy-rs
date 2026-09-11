@@ -26,5 +26,5 @@ fn translated_implicit_subroutine_fixture_matches_the_pinned_oracle() {
         &Locale::new("en-US"),
     )
     .unwrap();
-    assert!(equivalent(&artifact.wir, &expected));
+    assert!(equivalent(&super::canonical_program(&artifact), &expected));
 }

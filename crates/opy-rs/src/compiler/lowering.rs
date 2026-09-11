@@ -1,20 +1,234 @@
 use super::*;
 
+type ValueId = usize;
+type ActionId = usize;
+type GlobalVarId = usize;
+type PlayerVarId = usize;
+type SubroutineId = usize;
+type WorkshopSpan = HirSpan;
+
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub(super) enum LoweredValue {
+    Number {
+        value: f64,
+        text: String,
+    },
+    String(String),
+    LocalizedString(String),
+    Bool(bool),
+    Null,
+    Array(Vec<ValueId>),
+    Vector {
+        x: ValueId,
+        y: ValueId,
+        z: ValueId,
+    },
+    Enum {
+        value_type: String,
+        value: String,
+    },
+    GlobalVariable(GlobalVarId),
+    PlayerVariable {
+        player: ValueId,
+        variable: PlayerVarId,
+    },
+    Subroutine(SubroutineId),
+    EventPlayer,
+    Call {
+        name: String,
+        args: Vec<ValueId>,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct ValueNode {
+    value: LoweredValue,
+    span: Option<WorkshopSpan>,
+}
+
+impl ValueNode {
+    fn new(value: LoweredValue, span: Option<WorkshopSpan>) -> Self {
+        Self { value, span }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct IfBranch {
+    condition: ValueId,
+    body: Vec<ActionId>,
+}
+
+#[derive(Debug, Clone)]
+pub(super) enum LoweredEvent {
+    Global,
+    EachPlayer,
+    EachPlayerWithFilters {
+        team: LoweredEventTeam,
+        target: LoweredEventTarget,
+    },
+    Player {
+        kind: workshop_rs::PlayerEventKind,
+        team: LoweredEventTeam,
+        target: LoweredEventTarget,
+    },
+    Subroutine(SubroutineId),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum LoweredEventTeam {
+    All,
+    Team1,
+    Team2,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum LoweredEventTarget {
+    All,
+    Slot(u8),
+    Hero(String),
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub(super) enum LoweredAction {
+    SetGlobalVariable {
+        variable: GlobalVarId,
+        value: ValueId,
+        span: Option<WorkshopSpan>,
+        target_span: Option<WorkshopSpan>,
+    },
+    ModifyGlobalVariable {
+        variable: GlobalVarId,
+        op: workshop_rs::ModifyOp,
+        value: ValueId,
+        span: Option<WorkshopSpan>,
+        target_span: Option<WorkshopSpan>,
+    },
+    SetPlayerVariable {
+        player: ValueId,
+        variable: PlayerVarId,
+        value: ValueId,
+        span: Option<WorkshopSpan>,
+        target_span: Option<WorkshopSpan>,
+    },
+    ModifyPlayerVariable {
+        player: ValueId,
+        variable: PlayerVarId,
+        op: workshop_rs::ModifyOp,
+        value: ValueId,
+        span: Option<WorkshopSpan>,
+        target_span: Option<WorkshopSpan>,
+    },
+    AssignMember {
+        target: ValueId,
+        op: Option<workshop_rs::ModifyOp>,
+        value: ValueId,
+        span: Option<WorkshopSpan>,
+    },
+    CallSubroutine {
+        subroutine: SubroutineId,
+        span: Option<WorkshopSpan>,
+        callee_span: Option<WorkshopSpan>,
+    },
+    If {
+        branches: Vec<IfBranch>,
+        else_body: Option<Vec<ActionId>>,
+        span: Option<WorkshopSpan>,
+    },
+    While {
+        condition: ValueId,
+        body: Vec<ActionId>,
+        span: Option<WorkshopSpan>,
+    },
+    ForGlobalVariable {
+        variable: GlobalVarId,
+        start: ValueId,
+        stop: ValueId,
+        step: ValueId,
+        body: Vec<ActionId>,
+        span: Option<WorkshopSpan>,
+        target_span: Option<WorkshopSpan>,
+    },
+    ForPlayerVariable {
+        player: ValueId,
+        variable: PlayerVarId,
+        start: ValueId,
+        stop: ValueId,
+        step: ValueId,
+        body: Vec<ActionId>,
+        span: Option<WorkshopSpan>,
+    },
+    Call {
+        name: String,
+        args: Vec<ValueId>,
+        span: Option<WorkshopSpan>,
+    },
+}
+
+mod wir {
+    pub(super) type ValueId = usize;
+    pub(super) type ActionId = usize;
+    pub(super) type GlobalVarId = usize;
+    pub(super) type PlayerVarId = usize;
+    pub(super) use super::IfBranch;
+    pub(super) use super::LoweredValue as Value;
+    pub(super) use super::{LoweredAction as Action, LoweredEvent as Event};
+    pub(super) use super::{LoweredEventTarget as EventTarget, LoweredEventTeam as EventTeam};
+    pub(super) use workshop_rs::{ModifyOp, PlayerEventKind};
+}
+
+use wir::{Action, Event, EventTarget, EventTeam, PlayerEventKind, Value};
+
+#[derive(Default)]
+struct LoweredStorage {
+    values: LoweredArena<ValueNode>,
+    actions: LoweredArena<LoweredAction>,
+}
+
+struct LoweredArena<T> {
+    values: Vec<T>,
+}
+
+impl<T> Default for LoweredArena<T> {
+    fn default() -> Self {
+        Self { values: Vec::new() }
+    }
+}
+
+impl<T> LoweredArena<T> {
+    fn push(&mut self, value: T) -> usize {
+        let index = self.values.len();
+        self.values.push(value);
+        index
+    }
+
+    fn get(&self, index: usize) -> Option<&T> {
+        self.values.get(index)
+    }
+
+    fn get_mut(&mut self, index: usize) -> Option<&mut T> {
+        self.values.get_mut(index)
+    }
+}
+
 pub(crate) struct Lowering<'a> {
     compiler: &'a Compiler,
     hir: &'a hir::Program,
-    pub(super) wir: Program,
-    files: HashMap<u32, workshop_rs::source::FileId>,
-    wir_to_hir_files: Vec<u32>,
-    globals: HashMap<String, wir::GlobalVarId>,
-    players: HashMap<String, wir::PlayerVarId>,
-    subroutines: HashMap<String, wir::SubroutineId>,
+    pub(super) program: Program,
+    wir: LoweredStorage,
+    globals: HashMap<String, GlobalVarId>,
+    global_names: Vec<String>,
+    players: HashMap<String, PlayerVarId>,
+    player_names: Vec<String>,
+    subroutines: HashMap<String, SubroutineId>,
+    subroutine_names: Vec<String>,
     constants: HashMap<String, &'a Expr>,
-    defined_subroutines: HashSet<wir::SubroutineId>,
+    defined_subroutines: HashSet<SubroutineId>,
     array_bindings: Vec<ArrayBinding>,
-    current_rule_conditions: Option<Vec<wir::ValueId>>,
+    current_rule_conditions: Option<Vec<ValueId>>,
     visible_labels: Vec<HashSet<String>>,
-    deferred_gotos: Vec<(wir::ActionId, String, Option<HirSpan>)>,
+    deferred_gotos: Vec<(ActionId, String, Option<HirSpan>)>,
     outer_goto_targets: Vec<String>,
 }
 
@@ -106,12 +320,14 @@ impl<'a> Lowering<'a> {
         Ok(Self {
             compiler,
             hir,
-            wir: Program::default(),
-            files: HashMap::new(),
-            wir_to_hir_files: Vec::new(),
+            program: Program::default(),
+            wir: LoweredStorage::default(),
             globals: HashMap::new(),
+            global_names: Vec::new(),
             players: HashMap::new(),
+            player_names: Vec::new(),
             subroutines: HashMap::new(),
+            subroutine_names: Vec::new(),
             constants: HashMap::new(),
             defined_subroutines: HashSet::new(),
             array_bindings: Vec::new(),
@@ -134,24 +350,12 @@ impl<'a> Lowering<'a> {
                 _ => None,
             })
             .collect();
-        self.wir.settings = self.hir.settings.clone().map(|settings| {
+        self.program.settings = self.hir.settings.clone().map(|settings| {
             super::settings::convert_settings(super::settings::expand_settings_constants(
                 settings,
                 &settings_constants,
             ))
         });
-        for file in &self.hir.files {
-            if self.files.contains_key(&file.id) {
-                return Err(IntegrationError::new(
-                    "source-file",
-                    format!("duplicate HIR source file id {}", file.id),
-                    None,
-                ));
-            }
-            let id = self.wir.files.push(SourceFile::new(file.path.clone()));
-            self.files.insert(file.id, id);
-            self.wir_to_hir_files.push(file.id);
-        }
         Ok(())
     }
 
@@ -399,13 +603,13 @@ impl<'a> Lowering<'a> {
         }
         planned_globals.sort_by_key(|(_, index, ..)| *index);
         for (name, assigned, span, name_span) in planned_globals {
-            let id = self.wir.global_variables.push(wir::WorkshopVariable {
-                name: name.clone(),
-                index: assigned,
-                span: self.wir_span(span)?,
-                name_span: self.wir_span(name_span)?,
-            });
+            let _ = (span, name_span);
+            let id = self.global_names.len();
+            self.global_names.push(name.clone());
             self.globals.insert(name.clone(), id);
+            self.program
+                .global_variables
+                .push(workshop_rs::Variable::with_index(name, assigned));
         }
 
         let mut planned_players: Vec<(String, u32, Option<HirSpan>, Option<HirSpan>)> =
@@ -423,24 +627,27 @@ impl<'a> Lowering<'a> {
         }));
         planned_players.sort_by_key(|(_, index, ..)| *index);
         for (name, assigned, span, name_span) in planned_players {
-            let id = self.wir.player_variables.push(wir::WorkshopVariable {
-                name: name.clone(),
-                index: assigned,
-                span: self.wir_span(span)?,
-                name_span: self.wir_span(name_span)?,
-            });
+            let _ = (span, name_span);
+            let id = self.player_names.len();
+            self.player_names.push(name.clone());
             self.players.insert(name, id);
+            self.program
+                .player_variables
+                .push(workshop_rs::Variable::with_index(
+                    self.player_names[id].clone(),
+                    assigned,
+                ));
         }
 
         declared_subroutines.sort_by_key(|(_, index, ..)| *index);
         for (name, assigned, span, name_span) in declared_subroutines {
-            let id = self.wir.subroutines.push(wir::WorkshopSubroutine {
-                name: name.to_string(),
-                index: assigned,
-                span: self.wir_span(span)?,
-                name_span: self.wir_span(name_span)?,
-            });
+            let _ = (span, name_span);
+            let id = self.subroutine_names.len();
+            self.subroutine_names.push(name.to_string());
             self.subroutines.insert(name.to_string(), id);
+            self.program
+                .subroutines
+                .push(workshop_rs::Subroutine::with_index(name, assigned));
         }
 
         let translation_initializer = self
@@ -454,10 +661,10 @@ impl<'a> Lowering<'a> {
                     .get(TRANSLATION_HELPER_NAME)
                     .expect("translation helper variable is created");
                 let value = self.lower_translation_helper(translations)?;
-                Ok(self.wir.actions.push(Action::SetGlobalVariable {
+                Ok(self.push_action(LoweredAction::SetGlobalVariable {
                     variable,
                     value,
-                    span: self.wir_span(translations.span)?,
+                    span: None,
                     target_span: None,
                 }))
             })
@@ -470,55 +677,48 @@ impl<'a> Lowering<'a> {
             if let Some(action) = translation_initializer {
                 actions.push(action);
             }
-            for (name, init_expr, span, target_span) in global_initializers {
+            for (name, init_expr, _span, _target_span) in global_initializers {
                 let variable = *self.globals.get(name).expect("declared global is created");
                 let value = self.lower_value(init_expr)?;
-                actions.push(self.wir.actions.push(Action::SetGlobalVariable {
+                actions.push(self.push_action(LoweredAction::SetGlobalVariable {
                     variable,
                     value,
-                    span: self.wir_span(span)?,
-                    target_span: self.wir_span(target_span)?,
+                    span: None,
+                    target_span: None,
                 }));
             }
-            self.wir.rules.push(wir::Rule {
+            self.program.rules.push(workshop_rs::Rule {
                 name: self.global_initializer_rule_name(),
-                span: None,
-                name_span: None,
                 disabled: false,
-                event: Event::Global,
+                event: workshop_rs::Event::Global,
                 conditions: Vec::new(),
-                actions,
+                actions: self.public_actions(&actions),
             });
         }
 
         if !player_initializers.is_empty() {
             let mut actions = Vec::with_capacity(player_initializers.len());
-            for (name, init_expr, span, target_span) in player_initializers {
+            for (name, init_expr, _span, _target_span) in player_initializers {
                 let variable = *self
                     .players
                     .get(name)
                     .expect("declared player variable is created");
-                let player = self
-                    .wir
-                    .values
-                    .push(ValueNode::new(Value::EventPlayer, None));
+                let player = self.push_value(Value::EventPlayer);
                 let value = self.lower_value(init_expr)?;
-                actions.push(self.wir.actions.push(Action::SetPlayerVariable {
+                actions.push(self.push_action(LoweredAction::SetPlayerVariable {
                     player,
                     variable,
                     value,
-                    span: self.wir_span(span)?,
-                    target_span: self.wir_span(target_span)?,
+                    span: None,
+                    target_span: None,
                 }));
             }
-            self.wir.rules.push(wir::Rule {
+            self.program.rules.push(workshop_rs::Rule {
                 name: "Initialize player variables".to_string(),
-                span: None,
-                name_span: None,
                 disabled: false,
-                event: Event::EachPlayer,
+                event: workshop_rs::Event::EachPlayer,
                 conditions: Vec::new(),
-                actions,
+                actions: self.public_actions(&actions),
             });
         }
 
@@ -561,14 +761,15 @@ impl<'a> Lowering<'a> {
         self.current_rule_conditions = previous_conditions;
         let mut actions = Vec::new();
         actions.extend(lowered_actions?);
-        self.wir.rules.push(wir::Rule {
+        self.program.rules.push(workshop_rs::Rule {
             name: rule.name.clone(),
-            span: self.wir_span(rule.span)?,
-            name_span: self.wir_span(rule.name_span)?,
             disabled: rule.disabled,
-            event,
-            conditions,
-            actions,
+            event: self.public_event(&event),
+            conditions: conditions
+                .iter()
+                .map(|value| workshop_rs::Condition::new(self.public_value(*value)))
+                .collect(),
+            actions: self.public_actions(&actions),
         });
         Ok(())
     }
@@ -602,14 +803,12 @@ impl<'a> Lowering<'a> {
         }
         let mut actions = Vec::new();
         actions.extend(self.lower_actions(body, None)?);
-        self.wir.rules.push(wir::Rule {
+        self.program.rules.push(workshop_rs::Rule {
             name: self.subroutine_rule_name(name),
-            span: self.wir_span(span)?,
-            name_span: self.wir_span(name_span)?,
             disabled: false,
-            event: Event::Subroutine(subroutine),
+            event: self.public_event(&Event::Subroutine(subroutine)),
             conditions: Vec::new(),
-            actions,
+            actions: self.public_actions(&actions),
         });
         Ok(())
     }
@@ -2032,23 +2231,24 @@ impl<'a> Lowering<'a> {
         actions: &[wir::ActionId],
         fallback_span: Option<HirSpan>,
     ) -> Result<usize, IntegrationError> {
+        let public_actions = self.public_actions(actions);
+        let mut program = self.program.clone();
+        program.rules.push(workshop_rs::Rule {
+            name: "action layout".to_string(),
+            disabled: false,
+            event: workshop_rs::Event::Global,
+            conditions: Vec::new(),
+            actions: public_actions.clone(),
+        });
         workshop_rs::emitter::action_width(
-            &self.wir,
+            &program,
             &self.compiler.catalog,
             &Locale::new("en-US"),
-            actions,
+            &public_actions,
         )
         .map(|layout| layout.width)
         .map_err(|error| {
-            let workshop_span = match &error {
-                workshop_rs::emitter::ActionLayoutError::InvalidWIR(error) => error.span(),
-                workshop_rs::emitter::ActionLayoutError::Emission(error) => {
-                    workshop_error_span(error)
-                }
-            };
-            let span = workshop_span
-                .and_then(|span| self.hir_span_from_workshop(span))
-                .or(fallback_span);
+            let span = fallback_span;
             IntegrationError::new("workshop-action-layout", error.to_string(), span)
         })
     }
@@ -4448,37 +4648,262 @@ impl<'a> Lowering<'a> {
         Ok(self.push_call(catalog_name, lowered))
     }
 
+    fn push_action(&mut self, action: LoweredAction) -> ActionId {
+        self.wir.actions.push(action)
+    }
+
+    fn value(&self, id: ValueId) -> &LoweredValue {
+        &self
+            .wir
+            .values
+            .get(id)
+            .expect("lowered value id must resolve")
+            .value
+    }
+
+    fn public_value(&self, id: ValueId) -> workshop_rs::Value {
+        match self.value(id) {
+            LoweredValue::Number { value, .. } => workshop_rs::Value::Number(*value),
+            LoweredValue::String(value) => workshop_rs::Value::String(value.clone()),
+            LoweredValue::LocalizedString(value) => {
+                workshop_rs::Value::LocalizedString(value.clone())
+            }
+            LoweredValue::Bool(value) => workshop_rs::Value::Bool(*value),
+            LoweredValue::Null => workshop_rs::Value::Null,
+            LoweredValue::Array(values) => workshop_rs::Value::Array(
+                values
+                    .iter()
+                    .map(|value| self.public_value(*value))
+                    .collect(),
+            ),
+            LoweredValue::Vector { x, y, z } => workshop_rs::Value::Vector {
+                x: Box::new(self.public_value(*x)),
+                y: Box::new(self.public_value(*y)),
+                z: Box::new(self.public_value(*z)),
+            },
+            LoweredValue::Enum { value_type, value } => workshop_rs::Value::Enum {
+                value_type: value_type.clone(),
+                value: value.clone(),
+            },
+            LoweredValue::GlobalVariable(variable) => {
+                workshop_rs::Value::GlobalVariable(self.global_names[*variable].clone())
+            }
+            LoweredValue::PlayerVariable { player, variable } => {
+                workshop_rs::Value::PlayerVariable {
+                    player: Box::new(self.public_value(*player)),
+                    variable: self.player_names[*variable].clone(),
+                }
+            }
+            LoweredValue::Subroutine(subroutine) => {
+                workshop_rs::Value::Subroutine(self.subroutine_names[*subroutine].clone())
+            }
+            LoweredValue::EventPlayer => workshop_rs::Value::EventPlayer,
+            LoweredValue::Call { name, args } => workshop_rs::Value::Call {
+                name: name.clone(),
+                args: args.iter().map(|arg| self.public_value(*arg)).collect(),
+            },
+        }
+    }
+
+    fn public_event(&self, event: &Event) -> workshop_rs::Event {
+        match event {
+            Event::Global => workshop_rs::Event::Global,
+            Event::EachPlayer => workshop_rs::Event::EachPlayer,
+            Event::EachPlayerWithFilters { team, target } => {
+                workshop_rs::Event::EachPlayerWithFilters {
+                    team: self.public_event_team(*team),
+                    target: self.public_event_target(target),
+                }
+            }
+            Event::Player { kind, team, target } => workshop_rs::Event::Player {
+                kind: *kind,
+                team: self.public_event_team(*team),
+                target: self.public_event_target(target),
+            },
+            Event::Subroutine(subroutine) => {
+                workshop_rs::Event::Subroutine(self.subroutine_names[*subroutine].clone())
+            }
+        }
+    }
+
+    fn public_event_team(&self, team: EventTeam) -> workshop_rs::EventTeam {
+        match team {
+            EventTeam::All => workshop_rs::EventTeam::All,
+            EventTeam::Team1 => workshop_rs::EventTeam::Team1,
+            EventTeam::Team2 => workshop_rs::EventTeam::Team2,
+        }
+    }
+
+    fn public_event_target(&self, target: &EventTarget) -> workshop_rs::EventTarget {
+        match target {
+            EventTarget::All => workshop_rs::EventTarget::All,
+            EventTarget::Slot(slot) => workshop_rs::EventTarget::Slot(*slot),
+            EventTarget::Hero(hero) => workshop_rs::EventTarget::Hero(hero.clone()),
+        }
+    }
+
+    fn public_actions(&self, actions: &[ActionId]) -> Vec<workshop_rs::Action> {
+        actions
+            .iter()
+            .flat_map(|action| self.public_action(*action))
+            .collect()
+    }
+
+    fn public_action(&self, id: ActionId) -> Vec<workshop_rs::Action> {
+        let action = self
+            .wir
+            .actions
+            .get(id)
+            .expect("lowered action id must resolve");
+        match action {
+            Action::SetGlobalVariable {
+                variable, value, ..
+            } => {
+                vec![workshop_rs::Action::SetGlobalVariable {
+                    variable: self.global_names[*variable].clone(),
+                    value: self.public_value(*value),
+                }]
+            }
+            Action::ModifyGlobalVariable {
+                variable,
+                op,
+                value,
+                ..
+            } => vec![workshop_rs::Action::ModifyGlobalVariable {
+                variable: self.global_names[*variable].clone(),
+                op: *op,
+                value: self.public_value(*value),
+            }],
+            Action::SetPlayerVariable {
+                player,
+                variable,
+                value,
+                ..
+            } => vec![workshop_rs::Action::SetPlayerVariable {
+                player: self.public_value(*player),
+                variable: self.player_names[*variable].clone(),
+                value: self.public_value(*value),
+            }],
+            Action::ModifyPlayerVariable {
+                player,
+                variable,
+                op,
+                value,
+                ..
+            } => vec![workshop_rs::Action::ModifyPlayerVariable {
+                player: self.public_value(*player),
+                variable: self.player_names[*variable].clone(),
+                op: *op,
+                value: self.public_value(*value),
+            }],
+            Action::AssignMember {
+                target, op, value, ..
+            } => vec![workshop_rs::Action::AssignMember {
+                target: self.public_value(*target),
+                op: *op,
+                value: self.public_value(*value),
+            }],
+            Action::CallSubroutine { subroutine, .. } => {
+                vec![workshop_rs::Action::CallSubroutine {
+                    subroutine: self.subroutine_names[*subroutine].clone(),
+                }]
+            }
+            Action::If {
+                branches,
+                else_body,
+                ..
+            } => {
+                let mut output = Vec::new();
+                for (index, branch) in branches.iter().enumerate() {
+                    output.push(if index == 0 {
+                        workshop_rs::Action::If {
+                            condition: self.public_value(branch.condition),
+                        }
+                    } else {
+                        workshop_rs::Action::ElseIf {
+                            condition: self.public_value(branch.condition),
+                        }
+                    });
+                    output.extend(self.public_actions(&branch.body));
+                }
+                if let Some(body) = else_body {
+                    output.push(workshop_rs::Action::Else);
+                    output.extend(self.public_actions(body));
+                }
+                output.push(workshop_rs::Action::End);
+                output
+            }
+            Action::While {
+                condition, body, ..
+            } => {
+                let mut output = vec![workshop_rs::Action::While {
+                    condition: self.public_value(*condition),
+                }];
+                output.extend(self.public_actions(body));
+                output.push(workshop_rs::Action::End);
+                output
+            }
+            Action::ForGlobalVariable {
+                variable,
+                start,
+                stop,
+                step,
+                body,
+                ..
+            } => {
+                let mut output = vec![workshop_rs::Action::ForGlobalVariable {
+                    variable: self.global_names[*variable].clone(),
+                    start: self.public_value(*start),
+                    stop: self.public_value(*stop),
+                    step: self.public_value(*step),
+                }];
+                output.extend(self.public_actions(body));
+                output.push(workshop_rs::Action::End);
+                output
+            }
+            Action::ForPlayerVariable {
+                player,
+                variable,
+                start,
+                stop,
+                step,
+                body,
+                ..
+            } => {
+                let mut output = vec![workshop_rs::Action::ForPlayerVariable {
+                    player: self.public_value(*player),
+                    variable: self.player_names[*variable].clone(),
+                    start: self.public_value(*start),
+                    stop: self.public_value(*stop),
+                    step: self.public_value(*step),
+                }];
+                output.extend(self.public_actions(body));
+                output.push(workshop_rs::Action::End);
+                output
+            }
+            Action::Call { name, args, .. } => vec![workshop_rs::Action::Call {
+                name: name.clone(),
+                args: args.iter().map(|arg| self.public_value(*arg)).collect(),
+            }],
+        }
+    }
+
     fn wir_span(&self, span: Option<HirSpan>) -> Result<Option<WorkshopSpan>, IntegrationError> {
         let Some(span) = span else {
             return Ok(None);
         };
-        let file = *self.files.get(&span.file).ok_or_else(|| {
-            IntegrationError::new(
-                "source-file",
-                format!("HIR span references unknown source file id {}", span.file),
-                Some(span),
-            )
-        })?;
-        Ok(Some(WorkshopSpan::new(
-            file,
-            WorkshopPosition::new(span.start.line, span.start.col),
-            WorkshopPosition::new(span.end.line, span.end.col),
-        )))
-    }
-
-    pub(super) fn hir_span_from_workshop(&self, span: WorkshopSpan) -> Option<HirSpan> {
-        let file = *self.wir_to_hir_files.get(span.file.index())?;
-        Some(HirSpan {
-            file,
-            start: hir::Position {
-                line: span.start.line,
-                col: span.start.col,
-            },
-            end: hir::Position {
-                line: span.end.line,
-                col: span.end.col,
-            },
-        })
+        self.hir
+            .files
+            .iter()
+            .any(|file| file.id == span.file)
+            .then_some(Some(span))
+            .ok_or_else(|| {
+                IntegrationError::new(
+                    "source-file",
+                    format!("HIR span references unknown source file id {}", span.file),
+                    Some(span),
+                )
+            })
     }
 
     fn unsupported(&self, message: impl Into<String>, span: Option<HirSpan>) -> IntegrationError {

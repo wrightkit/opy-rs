@@ -5,7 +5,49 @@ use std::path::{Path, PathBuf};
 use crate::hir::Expr;
 use crate::{CompileFailureClass, CompileStatus, Compiler};
 use workshop_rs::catalog::Locale;
-use workshop_rs::wir::Value;
+use workshop_rs::{Action, Value};
+
+fn find_call<'a>(value: &'a Value, name: &str) -> Option<&'a Value> {
+    if let Value::Call {
+        name: value_name,
+        args,
+    } = value
+    {
+        if value_name == name {
+            return Some(value);
+        }
+        return args.iter().find_map(|arg| find_call(arg, name));
+    }
+    None
+}
+
+fn action_values(action: &Action) -> Vec<&Value> {
+    match action {
+        Action::SetGlobalVariable { value, .. }
+        | Action::ModifyGlobalVariable { value, .. }
+        | Action::AssignMember { value, .. }
+        | Action::If { condition: value }
+        | Action::ElseIf { condition: value }
+        | Action::While { condition: value } => vec![value],
+        Action::SetPlayerVariable { player, value, .. }
+        | Action::ModifyPlayerVariable { player, value, .. } => vec![player, value],
+        Action::ForGlobalVariable {
+            start, stop, step, ..
+        } => vec![start, stop, step],
+        Action::ForPlayerVariable {
+            player,
+            start,
+            stop,
+            step,
+            ..
+        } => {
+            vec![player, start, stop, step]
+        }
+        Action::Call { args, .. } => args.iter().collect(),
+        Action::CallSubroutine { .. } | Action::Else | Action::End => Vec::new(),
+        Action::Disabled { action } => action_values(action),
+    }
+}
 
 fn fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -27,33 +69,30 @@ fn minimized_numeric_range_reaches_canonical_setting_value() {
         )
         .expect("numeric range setting must lower");
 
-    let setting = (0..artifact.wir.values.len())
-        .filter_map(|index| {
-            artifact
-                .wir
-                .values
-                .get(workshop_rs::wir::ValueId::from_index(index))
-        })
-        .find(|node| {
-            matches!(&node.value, Value::Call { name, .. } if name == "createWorkshopSettingFloat")
-        })
+    let program = super::canonical_program(&artifact);
+    let setting = program
+        .rules
+        .iter()
+        .flat_map(|rule| rule.actions.iter())
+        .flat_map(action_values)
+        .find_map(|value| find_call(value, "createWorkshopSettingFloat"))
         .expect("global initializer must contain the canonical setting value");
-    let Value::Call { name, args } = &setting.value else {
+    let Value::Call { name, args } = setting else {
         unreachable!("the search above only returns call values");
     };
     assert_eq!(name, "createWorkshopSettingFloat");
     assert_eq!(args.len(), 6);
     assert!(matches!(
-        artifact.wir.values.get(args[0]).map(|node| &node.value),
-        Some(Value::String(value)) if value == "\u{3000}"
+        &args[0],
+        Value::String(value) if value == "\u{3000}"
     ));
     assert!(matches!(
-        artifact.wir.values.get(args[3]).map(|node| &node.value),
-        Some(Value::Number { value, .. }) if *value == 0.5
+        &args[3],
+        Value::Number(value) if *value == 0.5
     ));
     assert!(matches!(
-        artifact.wir.values.get(args[4]).map(|node| &node.value),
-        Some(Value::Number { value, .. }) if *value == 10.0
+        &args[4],
+        Value::Number(value) if *value == 10.0
     ));
 }
 

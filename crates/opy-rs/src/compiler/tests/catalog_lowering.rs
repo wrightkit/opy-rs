@@ -154,18 +154,20 @@ fn real_world_cake_exercises_catalog_lowering_end_to_end() {
         "emission must be deterministic"
     );
 
-    // compile_hir already runs both structural WIR and canonical catalog-id
+    // compile_hir already runs canonical catalog-id
     // validation. The pinned cake Workshop text contains the existing
     // ambiguous `Visible To` spelling, so reparsing it would test a
     // workshop-rs parser limitation rather than this lowering contract.
+    let program = super::canonical_program(&first);
     let mut calls = std::collections::BTreeSet::new();
-    for index in 0..first.wir.rules.len() {
-        let rule = first
-            .wir
-            .rules
-            .get(workshop_rs::wir::RuleId::from_index(index))
-            .unwrap();
-        collect_action_calls(&first.wir, &rule.actions, &mut calls);
+    let mut value_calls = std::collections::BTreeSet::new();
+    for rule in &program.rules {
+        for action in &rule.actions {
+            collect_action_calls(action, &mut calls, &mut value_calls);
+        }
+        for condition in &rule.conditions {
+            collect_value_calls(&condition.value, &mut value_calls);
+        }
     }
     for expected in ["createBeamEffect", "playEffect"] {
         assert!(
@@ -173,18 +175,6 @@ fn real_world_cake_exercises_catalog_lowering_end_to_end() {
             "real-world cake must lower {expected}"
         );
     }
-    let value_calls: std::collections::BTreeSet<_> = (0..first.wir.values.len())
-        .filter_map(|index| {
-            let node = first
-                .wir
-                .values
-                .get(workshop_rs::wir::ValueId::from_index(index))?;
-            let workshop_rs::wir::Value::Call { name, .. } = &node.value else {
-                return None;
-            };
-            Some(name.as_str())
-        })
-        .collect();
     for expected in ["randomReal", "randomValueInArray"] {
         assert!(
             value_calls.contains(expected),
@@ -193,34 +183,77 @@ fn real_world_cake_exercises_catalog_lowering_end_to_end() {
     }
 }
 
-fn collect_action_calls<'a>(
-    program: &'a workshop_rs::wir::Program,
-    actions: &[workshop_rs::wir::ActionId],
-    calls: &mut std::collections::BTreeSet<&'a str>,
+fn collect_action_calls(
+    action: &workshop_rs::Action,
+    calls: &mut std::collections::BTreeSet<String>,
+    value_calls: &mut std::collections::BTreeSet<String>,
 ) {
-    for action_id in actions {
-        match program.actions.get(*action_id).unwrap() {
-            workshop_rs::wir::Action::Call { name, .. } => {
-                calls.insert(name.as_str());
+    match action {
+        workshop_rs::Action::Call { name, args } => {
+            calls.insert(name.clone());
+            for value in args {
+                collect_value_calls(value, value_calls);
             }
-            workshop_rs::wir::Action::If {
-                branches,
-                else_body,
-                ..
-            } => {
-                for branch in branches {
-                    collect_action_calls(program, &branch.body, calls);
-                }
-                if let Some(body) = else_body {
-                    collect_action_calls(program, body, calls);
-                }
-            }
-            workshop_rs::wir::Action::While { body, .. }
-            | workshop_rs::wir::Action::ForGlobalVariable { body, .. }
-            | workshop_rs::wir::Action::ForPlayerVariable { body, .. } => {
-                collect_action_calls(program, body, calls);
-            }
-            _ => {}
         }
+        workshop_rs::Action::SetGlobalVariable { value, .. }
+        | workshop_rs::Action::ModifyGlobalVariable { value, .. }
+        | workshop_rs::Action::AssignMember { value, .. }
+        | workshop_rs::Action::If { condition: value }
+        | workshop_rs::Action::ElseIf { condition: value }
+        | workshop_rs::Action::While { condition: value } => {
+            collect_value_calls(value, value_calls)
+        }
+        workshop_rs::Action::SetPlayerVariable { player, value, .. }
+        | workshop_rs::Action::ModifyPlayerVariable { player, value, .. } => {
+            collect_value_calls(player, value_calls);
+            collect_value_calls(value, value_calls);
+        }
+        workshop_rs::Action::ForGlobalVariable {
+            start, stop, step, ..
+        } => {
+            for value in [start, stop, step] {
+                collect_value_calls(value, value_calls);
+            }
+        }
+        workshop_rs::Action::ForPlayerVariable {
+            player,
+            start,
+            stop,
+            step,
+            ..
+        } => {
+            for value in [player, start, stop, step] {
+                collect_value_calls(value, value_calls);
+            }
+        }
+        workshop_rs::Action::Disabled { action } => {
+            collect_action_calls(action, calls, value_calls)
+        }
+        workshop_rs::Action::CallSubroutine { .. }
+        | workshop_rs::Action::Else
+        | workshop_rs::Action::End => {}
+    }
+}
+
+fn collect_value_calls(value: &workshop_rs::Value, calls: &mut std::collections::BTreeSet<String>) {
+    match value {
+        workshop_rs::Value::Call { name, args } => {
+            calls.insert(name.clone());
+            for arg in args {
+                collect_value_calls(arg, calls);
+            }
+        }
+        workshop_rs::Value::Array(values) => {
+            for value in values {
+                collect_value_calls(value, calls);
+            }
+        }
+        workshop_rs::Value::Vector { x, y, z } => {
+            for value in [x, y, z] {
+                collect_value_calls(value, calls);
+            }
+        }
+        workshop_rs::Value::PlayerVariable { player, .. } => collect_value_calls(player, calls),
+        _ => {}
     }
 }

@@ -1,4 +1,5 @@
 use super::*;
+use workshop_rs::source::{Position as WorkshopPosition, Span as WorkshopSpan};
 
 pub(super) fn expand_settings_constants(
     settings: crate::hir::Settings,
@@ -105,13 +106,45 @@ fn settings_node_from_expr(
 }
 
 pub(super) fn convert_settings(settings: crate::hir::Settings) -> workshop_rs::settings::Settings {
-    workshop_rs::settings::Settings {
+    let mut settings = workshop_rs::settings::Settings {
         span: settings.span.map(convert_settings_span),
         children: settings
             .children
             .into_iter()
             .map(convert_settings_node)
             .collect(),
+    };
+    clear_settings_spans(&mut settings);
+    settings
+}
+
+fn clear_settings_spans(settings: &mut workshop_rs::settings::Settings) {
+    settings.span = None;
+    for node in &mut settings.children {
+        clear_settings_node_spans(node);
+    }
+}
+
+fn clear_settings_node_spans(node: &mut workshop_rs::settings::SettingsNode) {
+    use workshop_rs::settings::SettingsNode;
+    match node {
+        SettingsNode::Workshop { children, span } | SettingsNode::Group { children, span, .. } => {
+            *span = None;
+            for child in children {
+                clear_settings_node_spans(child);
+            }
+        }
+        SettingsNode::Number { span, .. }
+        | SettingsNode::Bool { span, .. }
+        | SettingsNode::Flag { span, .. }
+        | SettingsNode::String { span, .. }
+        | SettingsNode::Raw { span, .. } => *span = None,
+        SettingsNode::List { elements, span, .. } => {
+            *span = None;
+            for element in elements {
+                element.span = None;
+            }
+        }
     }
 }
 

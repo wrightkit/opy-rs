@@ -4,7 +4,6 @@ use std::path::{Path, PathBuf};
 
 use crate::{CompileFailureClass, CompileStatus, Compiler};
 use workshop_rs::catalog::Locale;
-use workshop_rs::wir::Value;
 
 fn fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/corpus/real-world/overpy-parabola")
@@ -25,17 +24,11 @@ fn numeric_team_member_reaches_the_canonical_catalog_identity() {
         )
         .expect("Team.2 must compile");
 
-    assert!((0..artifact.wir.values.len()).any(|index| {
-        matches!(
-            artifact
-                .wir
-                .values
-                .get(workshop_rs::wir::ValueId::from_index(index))
-                .map(|node| &node.value),
-            Some(Value::Enum { value_type, value })
-                if value_type == "Team" && value == "TEAM_2"
-        )
-    }));
+    assert!(
+        super::canonical_program(&artifact)
+            .dump()
+            .contains("TEAM_2")
+    );
 }
 
 #[test]

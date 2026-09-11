@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use crate::Compiler;
 use workshop_rs::catalog::{Catalog, Locale};
 use workshop_rs::roundtrip::equivalent;
-use workshop_rs::wir::{Action, Value};
+use workshop_rs::{Action, Value};
 
 fn fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/corpus/synthetic/hud-subheader")
@@ -36,65 +36,45 @@ fn hud_subheader_matches_the_pinned_canonical_wir() {
     let catalog = Catalog::builtin().expect("catalog must load");
     let oracle = workshop_rs::parser::parse(&oracle_workshop(), &catalog, &Locale::new("en-US"))
         .expect("oracle output must reparse");
+    let program = super::canonical_program(&artifact);
     assert!(
-        equivalent(&artifact.wir, &oracle),
+        equivalent(&program, &oracle),
         "hudSubheader WIR diverged from the pinned oracle\n--- native ---\n{}\n--- oracle ---\n{}",
         artifact.emitted,
         oracle_workshop()
     );
 
-    let rule = artifact
-        .wir
-        .rules
-        .get(workshop_rs::wir::RuleId::from_index(0))
-        .expect("fixture has one rule");
-    let Action::Call { name, args, .. } = artifact
-        .wir
-        .actions
-        .get(rule.actions[0])
-        .expect("fixture has one action")
-    else {
+    let rule = program.rules.first().expect("fixture has one rule");
+    let Action::Call { name, args } = rule.actions.first().expect("fixture has one action") else {
         panic!("hudSubheader must lower to a canonical action call");
     };
     assert_eq!(name, "createHudText");
     assert_eq!(args.len(), 11);
     assert!(matches!(
-        &artifact.wir.values.get(args[0]).unwrap().value,
+        &args[0],
         Value::Call { name, args } if name == "allPlayers" && args.len() == 1
     ));
+    assert!(matches!(args[1], Value::Null));
+    assert!(matches!(args[3], Value::Null));
+    assert!(matches!(args[6], Value::Null));
+    assert!(matches!(args[8], Value::Null));
     assert!(matches!(
-        artifact.wir.values.get(args[1]).unwrap().value,
-        Value::Null
-    ));
-    assert!(matches!(
-        artifact.wir.values.get(args[3]).unwrap().value,
-        Value::Null
-    ));
-    assert!(matches!(
-        artifact.wir.values.get(args[6]).unwrap().value,
-        Value::Null
-    ));
-    assert!(matches!(
-        artifact.wir.values.get(args[8]).unwrap().value,
-        Value::Null
-    ));
-    assert!(matches!(
-        &artifact.wir.values.get(args[4]).unwrap().value,
+        &args[4],
         Value::Enum { value_type, value }
             if value_type == "HudPosition" && value == "TOP"
     ));
     assert!(matches!(
-        &artifact.wir.values.get(args[7]).unwrap().value,
+        &args[7],
         Value::Enum { value_type, value }
             if value_type == "Color" && value == "WHITE"
     ));
     assert!(matches!(
-        &artifact.wir.values.get(args[9]).unwrap().value,
+        &args[9],
         Value::Enum { value_type, value }
             if value_type == "HudReeval" && value == "VISIBILITY"
     ));
     assert!(matches!(
-        &artifact.wir.values.get(args[10]).unwrap().value,
+        &args[10],
         Value::Enum { value_type, value }
             if value_type == "SpecVisibility" && value == "DEFAULT"
     ));
@@ -108,16 +88,12 @@ fn hud_subheader_omitted_spectators_use_default_visibility() {
         .expect("released workshop contract must load")
         .compile_hir(&hir)
         .expect("hudSubheader default visibility must lower");
-    let rule = artifact
-        .wir
-        .rules
-        .get(workshop_rs::wir::RuleId::from_index(0))
-        .expect("rule must exist");
-    let Action::Call { args, .. } = artifact.wir.actions.get(rule.actions[0]).unwrap() else {
+    let program = super::canonical_program(&artifact);
+    let Action::Call { args, .. } = &program.rules[0].actions[0] else {
         panic!("hudSubheader must lower to a canonical action call");
     };
     assert!(matches!(
-        &artifact.wir.values.get(args[10]).unwrap().value,
+        &args[10],
         Value::Enum { value_type, value }
             if value_type == "SpecVisibility" && value == "DEFAULT"
     ));
@@ -135,19 +111,14 @@ fn other_hud_helpers_lower_to_their_canonical_text_slots() {
             .expect("released workshop contract must load")
             .compile_hir(&hir)
             .expect("HUD helper must lower");
-        let rule = artifact
-            .wir
-            .rules
-            .get(workshop_rs::wir::RuleId::from_index(0))
-            .expect("rule must exist");
-        let Action::Call { name, args, .. } = artifact.wir.actions.get(rule.actions[0]).unwrap()
-        else {
+        let program = super::canonical_program(&artifact);
+        let Action::Call { name, args } = &program.rules[0].actions[0] else {
             panic!("HUD helper must lower to a canonical action call");
         };
         assert_eq!(name, "createHudText");
         let text_slot = if helper == "hudHeader" { 1 } else { 3 };
         assert!(matches!(
-            &artifact.wir.values.get(args[text_slot]).unwrap().value,
+            &args[text_slot],
             Value::Call { name, args } if name == "customString" && args.len() == 1
         ));
     }

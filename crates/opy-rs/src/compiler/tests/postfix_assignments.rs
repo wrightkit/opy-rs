@@ -33,7 +33,11 @@ fn postfix_assignments_match_the_pinned_oracle() {
     let locale = Locale::new("en-US");
     let oracle = workshop_rs::parser::parse(&oracle_workshop(&dir), &catalog, &locale).unwrap();
 
-    assert!(equivalent(&artifact.wir, &oracle), "{}", artifact.emitted);
+    assert!(
+        equivalent(&super::canonical_program(&artifact), &oracle),
+        "{}",
+        artifact.emitted
+    );
 }
 
 fn assert_rejected_postfix_fixture(name: &str, line: u32, col: u32) {
