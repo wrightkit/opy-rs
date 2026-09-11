@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.31](https://github.com/wrightkit/opy-rs/compare/v0.1.29...v0.1.31) - 2026-09-11
+
+### Fixed
+
+- *(compiler)* converge canonical WIR residuals ([#240](https://github.com/wrightkit/opy-rs/pull/240))
+
+### Other
+
+- release v0.1.30 ([#241](https://github.com/wrightkit/opy-rs/pull/241))
+- *(settings)* prove canonical consumer queries ([#243](https://github.com/wrightkit/opy-rs/pull/243))
+
 ## [0.1.30](https://github.com/wrightkit/opy-rs/compare/v0.1.29...v0.1.30) - 2026-09-10
 
 ### Fixed
