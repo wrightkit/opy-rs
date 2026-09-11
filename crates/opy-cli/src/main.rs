@@ -10,14 +10,13 @@
 mod cli;
 mod present;
 
-use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::{CommandFactory, Parser, error::ErrorKind};
 use clap_complete::{generate, shells};
 use opy_rs::tooling::{CheckOutcome, Diagnostic as OpyDiagnostic, check};
 use opy_rs::{CompileDiagnostic, CompileStatus, Compiler};
-use opy_rs::{LANGUAGE_NAME, LANGUAGE_VERSION};
+use opy_rs::{FilesystemProject, LANGUAGE_NAME, LANGUAGE_VERSION};
 use serde::Serialize;
 
 use crate::cli::{CheckArgs, Cli, Command, CompileArgs, FileArgs, OutputFormatArg};
@@ -64,29 +63,23 @@ fn main() -> ExitCode {
     }
 }
 
-fn read_main(args: &FileArgs) -> Result<(String, PathBuf, PathBuf), ExitCode> {
-    let main = &args.main;
-    match std::fs::read_to_string(main) {
-        Ok(text) => {
-            let root = main
-                .parent()
-                .filter(|parent| !parent.as_os_str().is_empty())
-                .unwrap_or(Path::new("."));
-            Ok((text, root.to_path_buf(), main.clone()))
-        }
-        Err(error) => {
-            eprintln!("opy-cli: cannot read '{}': {error}", main.display());
-            Err(ExitCode::from(2))
-        }
-    }
+fn read_main(args: &FileArgs) -> Result<FilesystemProject, ExitCode> {
+    FilesystemProject::load(&args.main).map_err(|error| {
+        eprintln!("opy-cli: cannot read '{}': {error}", args.main.display());
+        ExitCode::from(2)
+    })
 }
 
 fn cmd_check(args: &CheckArgs, presentation: Presentation) -> ExitCode {
-    let (text, root, main) = match read_main(&args.file) {
-        Ok(parsed) => parsed,
+    let project = match read_main(&args.file) {
+        Ok(project) => project,
         Err(code) => return code,
     };
-    let outcome = check(&text, &main.to_string_lossy(), &root);
+    let outcome = check(
+        project.source(),
+        &project.main_path().to_string_lossy(),
+        project.root(),
+    );
     if args.format == OutputFormatArg::Json {
         return match print_json(&CheckReport {
             ok: outcome.is_clean(),
@@ -103,8 +96,8 @@ fn cmd_check(args: &CheckArgs, presentation: Presentation) -> ExitCode {
 }
 
 fn cmd_compile(args: &CompileArgs, presentation: Presentation) -> ExitCode {
-    let (text, root, main) = match read_main(&args.file) {
-        Ok(parsed) => parsed,
+    let project = match read_main(&args.file) {
+        Ok(project) => project,
         Err(code) => return code,
     };
     let compiler = match Compiler::new() {
@@ -115,9 +108,9 @@ fn cmd_compile(args: &CompileArgs, presentation: Presentation) -> ExitCode {
         }
     };
     let report = compiler.compile_source_report_with_language(
-        &text,
-        &main.to_string_lossy(),
-        &root,
+        project.source(),
+        &project.main_path().to_string_lossy(),
+        project.root(),
         &args.language,
     );
     if args.format == OutputFormatArg::Json {
@@ -152,11 +145,15 @@ fn cmd_compile(args: &CompileArgs, presentation: Presentation) -> ExitCode {
 }
 
 fn cmd_inspect(args: &FileArgs, presentation: Presentation) -> ExitCode {
-    let (text, root, main) = match read_main(args) {
-        Ok(parsed) => parsed,
+    let project = match read_main(args) {
+        Ok(project) => project,
         Err(code) => return code,
     };
-    let outcome = check(&text, &main.to_string_lossy(), &root);
+    let outcome = check(
+        project.source(),
+        &project.main_path().to_string_lossy(),
+        project.root(),
+    );
     if !outcome.is_clean() {
         let diagnostics = outcome
             .diagnostics
