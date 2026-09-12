@@ -85,7 +85,7 @@ fn entry_includes_continue_from_the_latest_resolved_file_base() {
     let hir = crate::compile(&source, "main.opy", &dir)
         .expect("entry includes must preserve OverPy's resolved-file lookup base");
 
-    assert!(hir.dump().contains("assign A = 2"), "{}", hir.dump());
+    assert!(hir.dump().contains("assign A = (6 + 2)"), "{}", hir.dump());
     assert_eq!(
         hir.files
             .iter()
@@ -97,6 +97,7 @@ fn entry_includes_continue_from_the_latest_resolved_file_base() {
             "locales/en.opy",
             "composition/bootstrap.opy",
             "env/vars.opy",
+            "composition/context.opy",
             "env/game.opy"
         ]
     );

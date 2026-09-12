@@ -2,8 +2,9 @@
 #!include "locales/en.opy"
 #!define ENTRY_VALUE LOBBY_SPECTATOR_SLOTS_MAIN
 #!include "composition/bootstrap.opy"
+#!include "context.opy"
 #!include "../env/game.opy"
 
 rule "legacy entry":
     @Event global
-    A = GAME_VALUE
+    A = CONTEXT_VALUE + GAME_VALUE
