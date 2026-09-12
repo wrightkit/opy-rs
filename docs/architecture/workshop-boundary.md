@@ -36,6 +36,12 @@ The durable Rust dependency direction is `opy-rs → workshop-rs`. `workshop-rs`
 
 `workshop-rs` owns only the resulting canonical Workshop concepts: WIR, catalog identities, raw Workshop validation, settings/localization, and emission.
 
+The ordinary consumer boundary is the public `workshop-rs::Program` model;
+arena-backed WIR/storage and node-ID mechanics are internal to `workshop-rs`,
+as recorded by [workshop-rs ADR-0008](https://github.com/wrightkit/workshop-rs/blob/main/docs/adr/0008-canonical-public-program-boundary.md).
+OPY may use canonical semantic APIs and approved provenance access, but must
+not recreate or depend on that internal storage representation.
+
 Do not move OverPy names, aliases, contextual dispatch records, compiler helper identities, or reconstruction carriers into canonical Workshop merely to simplify compilation.
 
 If OverPy behavior needs a Workshop primitive that is genuinely missing from the canonical Workshop model, establish the Workshop requirement in `workshop-rs` first. If no semantically correct Workshop lowering exists, `opy-rs` reports an explicit unsupported boundary.
