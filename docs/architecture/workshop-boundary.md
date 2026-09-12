@@ -11,7 +11,7 @@ opy-rs source + semantic implementation
    ↓
 opy-rs-specific lowering / compiler behavior
    ↓
-workshop-rs canonical WIR / validation / emission
+workshop-rs public Program / validation / emission
    ↓
 Workshop text
 ```
@@ -21,7 +21,7 @@ For reconstruction:
 ```text
 Workshop text
    ↓
-workshop-rs parser / canonical WIR
+workshop-rs parser / public Program
    ↓
 opy-rs reconstruction
    ↓
@@ -34,7 +34,15 @@ The durable Rust dependency direction is `opy-rs → workshop-rs`. `workshop-rs`
 
 `opy-rs` resolves the complete OverPy meaning of a source construct before crossing the canonical Workshop boundary. This includes source aliases, member calls, directives, contextual semantics, and OverPy-specific lowering choices.
 
-`workshop-rs` owns only the resulting canonical Workshop concepts: WIR, catalog identities, raw Workshop validation, settings/localization, and emission.
+`workshop-rs` owns the resulting canonical Workshop `Program` concepts,
+catalog identities, raw Workshop validation, settings/localization, and
+emission. Its arena-backed WIR/storage is internal support representation.
+
+The ordinary consumer boundary is the public `workshop-rs::Program` model;
+arena-backed WIR/storage and node-ID mechanics are internal to `workshop-rs`,
+as recorded by [workshop-rs ADR-0008](https://github.com/wrightkit/workshop-rs/blob/main/docs/adr/0008-canonical-public-program-boundary.md).
+OPY may use canonical semantic APIs and approved provenance access, but must
+not recreate or depend on that internal storage representation.
 
 Do not move OverPy names, aliases, contextual dispatch records, compiler helper identities, or reconstruction carriers into canonical Workshop merely to simplify compilation.
 

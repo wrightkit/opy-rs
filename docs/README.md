@@ -9,6 +9,7 @@ This directory is the documentation index for `opy-rs`. The root
 architecture/README.md       current architecture routing
   ├─ language-core.md        current OverPy semantic/scope contract
   └─ workshop-boundary.md    current canonical Workshop boundary
+adr/                         historical architecture decisions
 language-support.md          current evidenced support
 compatibility/               pinned reference/provenance
 opy/ + hir/                  public/API/provider and implementation notes
@@ -32,6 +33,8 @@ intent alone.
   canonical WIR, reconstruction, and dependency direction.
 - [Repository agent guidance](../AGENTS.md): implementation preflight,
   provenance, validation, and delivery.
+- [ADR registry](adr/README.md): historical decisions and their rationale;
+  current contracts remain under `docs/architecture/`.
 
 Legacy links to [`opy/architecture.md`](opy/architecture.md) and
 [`opy/implementation-role.md`](opy/implementation-role.md) are retained as
