@@ -21,4 +21,8 @@ Use it for substantive implementation preflight. Architecture intent, implementa
 | Tooling/API contract | [`../opy/tooling-api.md`](../opy/tooling-api.md) |
 | Provider integration | [`../opy/provider.md`](../opy/provider.md) |
 
+Historical rationale for material decisions is recorded in the
+[ADR registry](../adr/README.md). ADRs do not replace these current contracts
+or implementation evidence.
+
 Do not put release versions, feature counts, current Issue progress, or transient compiler gaps in this directory. If an Issue or older design document conflicts with these contracts or current code reality, surface the mismatch before implementation.

@@ -5,6 +5,7 @@
 //! LPP envelope and source-oriented projections live here.
 
 use std::collections::BTreeMap;
+use std::fs;
 use std::io::{self, BufRead, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
@@ -190,13 +191,11 @@ struct ProjectEntry {
     language_id: String,
     version: i64,
     #[serde(default)]
-    kind: ProjectTargetKind,
+    kind: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize, Default)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, Clone, Copy)]
 enum ProjectTargetKind {
-    #[default]
     File,
     Directory,
 }
@@ -414,7 +413,10 @@ impl Server {
                 code: -32602,
                 message: "Invalid params",
             })?;
-        match load_project(params)? {
+        match load_project(
+            params,
+            self.protocol_version.as_deref().expect("initialized"),
+        )? {
             LoadedRequest::Entry(project) => {
                 let outcome = opy_rs::tooling::check(
                     project.filesystem.source(),
@@ -434,7 +436,10 @@ impl Server {
                 code: -32602,
                 message: "Invalid params",
             })?;
-        let loaded = load_project(params)?;
+        let loaded = load_project(
+            params,
+            self.protocol_version.as_deref().expect("initialized"),
+        )?;
         let project = match loaded {
             LoadedRequest::Entry(project) => project,
             LoadedRequest::Documents(request) => {
@@ -498,7 +503,10 @@ fn source_identity(source: &str) -> String {
     format!("{:x}", hasher.finalize())
 }
 
-fn load_project(params: ProjectParams) -> Result<LoadedRequest, HandlerError> {
+fn load_project(
+    params: ProjectParams,
+    protocol_version: &str,
+) -> Result<LoadedRequest, HandlerError> {
     let ProjectParams {
         documents,
         project_root: _project_root,
@@ -510,7 +518,7 @@ fn load_project(params: ProjectParams) -> Result<LoadedRequest, HandlerError> {
             validate_documents(&documents)?;
             Ok(LoadedRequest::Documents(LoadedDocuments { documents }))
         }
-        (None, Some(entry)) => load_entry(entry, locale),
+        (None, Some(entry)) => load_entry(entry, locale, protocol_version),
         _ => Err(HandlerError::Standard {
             code: -32602,
             message: "Invalid params",
@@ -518,8 +526,13 @@ fn load_project(params: ProjectParams) -> Result<LoadedRequest, HandlerError> {
     }
 }
 
-fn load_entry(entry: ProjectEntry, locale: Option<String>) -> Result<LoadedRequest, HandlerError> {
-    let target_name = match entry.kind {
+fn load_entry(
+    entry: ProjectEntry,
+    locale: Option<String>,
+    protocol_version: &str,
+) -> Result<LoadedRequest, HandlerError> {
+    let target_kind = project_target_kind(&entry, protocol_version)?;
+    let target_name = match target_kind {
         ProjectTargetKind::File => "entry",
         ProjectTargetKind::Directory => "target",
     };
@@ -547,11 +560,18 @@ fn load_entry(entry: ProjectEntry, locale: Option<String>) -> Result<LoadedReque
             "project target must be an absolute file URI",
         )
     })?;
+    validate_target_kind(&path, &entry.uri, target_kind)?;
     let filesystem = opy_rs::FilesystemProject::load(&path).map_err(|error| {
         let reason = if error.is_entry_not_found() {
-            "entryNotFound"
+            match target_kind {
+                ProjectTargetKind::File => "entryNotFound",
+                ProjectTargetKind::Directory => "targetNotFound",
+            }
         } else {
-            "entryUnreadable"
+            match target_kind {
+                ProjectTargetKind::File => "entryUnreadable",
+                ProjectTargetKind::Directory => "targetUnreadable",
+            }
         };
         HandlerError::project_load_failed(
             &entry.uri,
@@ -567,6 +587,61 @@ fn load_entry(entry: ProjectEntry, locale: Option<String>) -> Result<LoadedReque
         entry_uri: entry.uri,
         entry_version: entry.version,
     }))
+}
+
+fn project_target_kind(
+    entry: &ProjectEntry,
+    protocol_version: &str,
+) -> Result<ProjectTargetKind, HandlerError> {
+    match entry.kind.as_deref() {
+        None | Some("file") => Ok(ProjectTargetKind::File),
+        Some("directory") if protocol_version == DIRECTORY_TARGET_VERSION => {
+            Ok(ProjectTargetKind::Directory)
+        }
+        Some("directory") => Err(HandlerError::invalid_entry(
+            &entry.uri,
+            "unsupportedKind",
+            "directory project targets require protocol version 1.2",
+        )),
+        Some(_) => Err(HandlerError::invalid_entry(
+            &entry.uri,
+            "unsupportedKind",
+            "project target kind is not supported",
+        )),
+    }
+}
+
+fn validate_target_kind(
+    path: &Path,
+    entry_uri: &str,
+    target_kind: ProjectTargetKind,
+) -> Result<(), HandlerError> {
+    let metadata = fs::metadata(path).map_err(|_| {
+        let (reason, message) = match target_kind {
+            ProjectTargetKind::File => ("entryNotFound", "project entry could not be loaded"),
+            ProjectTargetKind::Directory => {
+                ("targetNotFound", "project target could not be loaded")
+            }
+        };
+        HandlerError::project_load_failed(entry_uri, reason, Some(entry_uri), message)
+    })?;
+    let matches_kind = match target_kind {
+        ProjectTargetKind::File => metadata.is_file(),
+        ProjectTargetKind::Directory => metadata.is_dir(),
+    };
+    if matches_kind {
+        return Ok(());
+    }
+    let (reason, message) = match target_kind {
+        ProjectTargetKind::File => ("entryNotFile", "project entry is not a file"),
+        ProjectTargetKind::Directory => ("targetNotDirectory", "project target is not a directory"),
+    };
+    Err(HandlerError::project_load_failed(
+        entry_uri,
+        reason,
+        Some(entry_uri),
+        message,
+    ))
 }
 
 fn validate_documents(documents: &BTreeMap<String, Document>) -> Result<(), HandlerError> {
@@ -1183,11 +1258,13 @@ mod tests {
                 uri: path_to_file_uri(&entry),
                 language_id: LANGUAGE_ID.to_string(),
                 version: 7,
-                kind: ProjectTargetKind::File,
+                kind: None,
             }),
             locale: None,
         };
-        let LoadedRequest::Entry(project) = load_project(params).expect("project loads") else {
+        let LoadedRequest::Entry(project) =
+            load_project(params, PROJECT_LOADING_VERSION).expect("project loads")
+        else {
             panic!("expected entry project");
         };
         assert_eq!(

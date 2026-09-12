@@ -197,6 +197,106 @@ fn directory_target_uses_the_owner_default_entry_without_client_discovery() {
 }
 
 #[test]
+fn project_target_kind_obeys_protocol_and_filesystem_boundaries() {
+    let mut session = Session::spawn();
+    session.initialize();
+    let rejected = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "lpp/check",
+        "params": {
+            "entry": {
+                "uri": file_uri(PROJECT_PREPROCESSING_ROOT),
+                "languageId": "opy",
+                "version": 9,
+                "kind": "directory"
+            }
+        }
+    }));
+    assert_eq!(rejected["error"]["data"]["lpp"]["kind"], "invalidEntry");
+    assert_eq!(
+        rejected["error"]["data"]["lpp"]["details"]["reason"],
+        "unsupportedKind"
+    );
+    session.shutdown();
+
+    let mut session = Session::spawn();
+    let initialized = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "lpp/initialize",
+        "params": { "protocolVersion": "1.2" },
+    }));
+    assert_eq!(initialized["result"]["protocolVersion"], "1.2");
+
+    let file_as_directory = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "lpp/check",
+        "params": {
+            "entry": {
+                "uri": file_uri(CLEAN_MULTI_FILE_MAIN),
+                "languageId": "opy",
+                "version": 9,
+                "kind": "directory"
+            }
+        }
+    }));
+    assert_eq!(
+        file_as_directory["error"]["data"]["lpp"]["details"]["reason"],
+        "targetNotDirectory"
+    );
+
+    let directory_as_file = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "lpp/check",
+        "params": {
+            "entry": {
+                "uri": file_uri(PROJECT_PREPROCESSING_ROOT),
+                "languageId": "opy",
+                "version": 9,
+                "kind": "file"
+            }
+        }
+    }));
+    assert_eq!(
+        directory_as_file["error"]["data"]["lpp"]["details"]["reason"],
+        "entryNotFile"
+    );
+
+    let unknown_kind = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 4,
+        "method": "lpp/check",
+        "params": {
+            "entry": {
+                "uri": file_uri(CLEAN_MULTI_FILE_MAIN),
+                "languageId": "opy",
+                "version": 9,
+                "kind": "workspace"
+            }
+        }
+    }));
+    assert_eq!(unknown_kind["error"]["data"]["lpp"]["kind"], "invalidEntry");
+
+    let omitted_kind = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 5,
+        "method": "lpp/check",
+        "params": {
+            "entry": {
+                "uri": file_uri(CLEAN_MULTI_FILE_MAIN),
+                "languageId": "opy",
+                "version": 9
+            }
+        }
+    }));
+    assert!(omitted_kind["result"]["documents"].is_array());
+    session.shutdown();
+}
+
+#[test]
 fn compile_returns_canonical_workshop_text_and_no_artifact_on_error() {
     let mut session = Session::spawn();
     session.initialize();
