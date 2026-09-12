@@ -4,6 +4,7 @@
   "description": "Reviewed compiler outcome expectations for the #38 OPY-to-Workshop evidence contract. Source/frontend expectations remain in differential-expectations.json.",
   "evidencePolicy": {
     "native": "The compiler result is compared with this separately reviewed expectation contract; it never creates its own expectation.",
+    "normalizedOutput": "Non-numeric text remains exact; complete Workshop numeric tokens outside quoted strings start with a digit, consume digits and '.', and are equivalent only when their numeric values are equal.",
     "classification": "match requires normalized output, direct canonical-WIR equivalence, or a stable diagnostic contract. known-gap and unsupported require pinned oracle and fixture provenance evidence plus a concrete follow-up owner.",
     "semanticWIR": "The runner compares native WIR directly with the pinned oracle WIR through workshop-rs::roundtrip::equivalent and verifies both complete project input digests. It never reparses native Workshop text as a substitute for native WIR."
   },
