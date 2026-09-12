@@ -102,6 +102,12 @@ or diagnostic contract, evidence, and concrete owner for each fixture. A
 non-match must cite both its pinned oracle snapshot and fixture provenance;
 parent issue #8 is not a durable gap owner.
 
+For a `normalized-output` compiler comparison, non-numeric text remains an
+exact contract. Complete numeric literals outside quoted strings are compared
+by their exact Workshop numeric value, so lexical spellings such as `0` and
+`0.0` are equivalent while a value change such as `0.0` to `0.5` remains a
+regression. Exact-output reporting still exposes presentation differences.
+
 For `semantic-wir`, `run_native.py` invokes the public `opy-cli compile
 --format json` contract first, then invokes the feature-gated internal
 `opy-compat` target with the same source project and oracle snapshot.

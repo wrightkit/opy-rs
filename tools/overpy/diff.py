@@ -11,6 +11,7 @@ import shlex
 import subprocess
 import sys
 import tempfile
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +33,7 @@ EXPECTED_COMPILER_COMPARISONS = {
     "compiler-contract",
 }
 CONCRETE_GAP_OWNER = re.compile(r"(?:opy-rs|workshop-rs)#[1-9][0-9]*")
+NUMBER_TOKEN = re.compile(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?")
 
 
 class DiffError(RuntimeError):
@@ -372,9 +374,62 @@ def compare_stage(oracle: dict[str, Any], producer: dict[str, Any]) -> list[dict
 
 
 def _sha256(value: str) -> str:
-    import hashlib
-
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _number_boundary(value: str, start: int, end: int) -> bool:
+    boundary = "._+-"
+    before = value[start - 1] if start else ""
+    after = value[end] if end < len(value) else ""
+    return (not before or (not before.isalnum() and before not in boundary)) and (
+        not after or (not after.isalnum() and after not in boundary)
+    )
+
+
+def _numeric_parts(value: str) -> list[tuple[str, str | Decimal]]:
+    parts: list[tuple[str, str | Decimal]] = []
+    text: list[str] = []
+    index = 0
+    while index < len(value):
+        if value[index] in "\"'":
+            start = index
+            quote = value[index]
+            index += 1
+            while index < len(value):
+                if value[index] == "\\":
+                    index += 2
+                elif value[index] == quote:
+                    index += 1
+                    break
+                else:
+                    index += 1
+            text.append(value[start:index])
+            continue
+
+        match = NUMBER_TOKEN.match(value, index)
+        if match and _number_boundary(value, index, match.end()):
+            try:
+                number = Decimal(match.group())
+            except InvalidOperation:
+                number = None
+            if number is not None:
+                if text:
+                    parts.append(("text", "".join(text)))
+                    text.clear()
+                parts.append(("number", number))
+                index = match.end()
+                continue
+
+        text.append(value[index])
+        index += 1
+
+    if text:
+        parts.append(("text", "".join(text)))
+    return parts
+
+
+def numeric_output_equivalent(left: str, right: str) -> bool:
+    return _numeric_parts(left) == _numeric_parts(right)
 
 
 def compare_fixture(
@@ -530,15 +585,16 @@ def compare_compiler_fixture(
     elif contract == "normalized-output":
         oracle_output = oracle["compile"]["workshop"]
         producer_output = native_compile["workshop"]
+        outputs_match = numeric_output_equivalent(oracle_output, producer_output)
         stages.append(
             stage(
                 "normalized-output",
-                "match" if oracle_output == producer_output else "regression",
+                "match" if outputs_match else "regression",
                 oracleSha256=_sha256(oracle_output),
                 producerSha256=_sha256(producer_output),
             )
         )
-        status = "match" if oracle_output == producer_output else "regression"
+        status = "match" if outputs_match else "regression"
     elif contract == "semantic-wir":
         compatibility = producer.get("compatibility")
         semantic = compatibility.get("semanticWIR") if isinstance(compatibility, dict) else None

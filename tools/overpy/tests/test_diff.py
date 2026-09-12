@@ -168,6 +168,55 @@ class DiffTests(unittest.TestCase):
         self.assertEqual(report_result["status"], "unexpected-divergence")
         self.assertIn("compile-status", report_result["regressionStages"])
 
+    def test_compiler_normalized_output_accepts_equivalent_numeric_spelling(self):
+        fixture = "synthetic/declarations-numbers"
+        oracle = json.loads(
+            (CORPUS_DIR / fixture / "oracle.json").read_text(encoding="utf-8")
+        )
+        result = copy.deepcopy(oracle)
+        result["compile"]["workshop"] = result["compile"]["workshop"].replace(
+            "0.0", "0", 1
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write_result(root, result)
+            report_result = diff.compare_compiler_fixture(
+                CORPUS_DIR,
+                fixture,
+                root,
+                diff.load_compiler_expectations(),
+            )
+        self.assertEqual(report_result["status"], "match")
+        self.assertEqual(report_result["stages"][1]["outcome"], "match")
+
+    def test_compiler_normalized_output_rejects_numeric_value_change(self):
+        fixture = "synthetic/declarations-numbers"
+        oracle = json.loads(
+            (CORPUS_DIR / fixture / "oracle.json").read_text(encoding="utf-8")
+        )
+        result = copy.deepcopy(oracle)
+        result["compile"]["workshop"] = result["compile"]["workshop"].replace(
+            "0.0", "0.5", 1
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write_result(root, result)
+            report_result = diff.compare_compiler_fixture(
+                CORPUS_DIR,
+                fixture,
+                root,
+                diff.load_compiler_expectations(),
+            )
+        self.assertEqual(report_result["status"], "regression")
+        self.assertEqual(report_result["stages"][1]["outcome"], "regression")
+
+    def test_numeric_output_comparison_preserves_string_content(self):
+        self.assertFalse(
+            diff.numeric_output_equivalent(
+                'Custom String("0.0")', 'Custom String("0")'
+            )
+        )
+
     def test_compiler_input_hash_mismatch_is_rejected(self):
         result = copy.deepcopy(self.oracle)
         result["input"]["sha256"] = "different"
