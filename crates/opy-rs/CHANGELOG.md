@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.33](https://github.com/wrightkit/opy-rs/compare/v0.1.32...v0.1.33) - 2026-09-12
+
+### Added
+
+- *(project)* accept directory provider targets ([#253](https://github.com/wrightkit/opy-rs/pull/253))
+
 ## [0.1.32](https://github.com/wrightkit/opy-rs/compare/v0.1.31...v0.1.32) - 2026-09-12
 
 ### Added
