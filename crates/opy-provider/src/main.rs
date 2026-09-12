@@ -491,13 +491,43 @@ impl Server {
         let result = json!({
             "diagnostics": diagnostics,
             "artifact": artifact,
-            "sourceIdentity": source_identity(project.filesystem.source()),
+            "sourceIdentity": source_identity(&project, &check_outcome)?,
         });
         Ok(result)
     }
 }
 
-fn source_identity(source: &str) -> String {
+fn source_identity(
+    project: &LoadedProject,
+    outcome: &CheckOutcome,
+) -> Result<String, HandlerError> {
+    let source = if outcome
+        .model
+        .as_ref()
+        .is_some_and(|model| model.hir.preprocessing.main_file.is_some())
+    {
+        let file = outcome
+            .files
+            .iter()
+            .find(|file| file.id == 1)
+            .ok_or_else(|| HandlerError::Lpp {
+                kind: "providerFailure",
+                details: json!({ "code": "source-identity-file" }),
+                message: "effective primary source is missing from the file registry".to_string(),
+            })?;
+        let path = resolved_project_path(project, &file.path);
+        fs::read_to_string(&path).map_err(|error| HandlerError::Lpp {
+            kind: "providerFailure",
+            details: json!({ "code": "source-identity-read" }),
+            message: format!("cannot read effective primary source: {error}"),
+        })?
+    } else {
+        project.filesystem.source().to_owned()
+    };
+    Ok(hash_source(&source))
+}
+
+fn hash_source(source: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(source.as_bytes());
     format!("{:x}", hasher.finalize())
