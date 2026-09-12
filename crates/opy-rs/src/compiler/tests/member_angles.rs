@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use crate::Compiler;
 use workshop_rs::catalog::{Catalog, Locale};
 use workshop_rs::roundtrip::equivalent;
-use workshop_rs::wir::{Action, Value};
+use workshop_rs::{Action, Value};
 
 fn fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/corpus/synthetic/member-angle")
@@ -33,52 +33,27 @@ fn horizontal_facing_angle_member_matches_the_pinned_canonical_wir() {
         &Locale::new("en-US"),
     )
     .expect("oracle workshop text parses");
-    assert!(equivalent(&artifact.wir, &oracle_wir));
+    assert!(equivalent(
+        &super::canonical_program(&artifact),
+        &oracle_wir
+    ));
 
-    let rule = artifact
-        .wir
-        .rules
-        .get(workshop_rs::wir::RuleId::from_index(0))
-        .expect("fixture has one rule");
-    let Action::SetGlobalVariable {
-        variable, value, ..
-    } = artifact
-        .wir
+    let program = super::canonical_program(&artifact);
+    let rule = program.rules.first().expect("fixture has one rule");
+    let Action::SetGlobalVariable { variable, value } = rule
         .actions
-        .get(rule.actions[0])
+        .first()
         .expect("rule captures the member value")
     else {
         panic!("expected direct global assignment");
     };
-    assert_eq!(
-        artifact
-            .wir
-            .global_variables
-            .get(*variable)
-            .expect("global variable")
-            .name,
-        "horizontalAngle"
-    );
-    let Value::Call { name, args } = &artifact
-        .wir
-        .values
-        .get(*value)
-        .expect("horizontal facing angle value")
-        .value
-    else {
+    assert_eq!(variable, "horizontalAngle");
+    let Value::Call { name, args } = value else {
         panic!("expected catalog member value call");
     };
     assert_eq!(name, "getHorizontalFacingAngle");
     assert_eq!(args.len(), 1);
-    assert!(matches!(
-        &artifact
-            .wir
-            .values
-            .get(args[0])
-            .expect("receiver value")
-            .value,
-        Value::EventPlayer
-    ));
+    assert!(matches!(&args[0], Value::EventPlayer));
 }
 
 #[test]

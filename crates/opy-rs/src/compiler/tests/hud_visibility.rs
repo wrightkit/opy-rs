@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use crate::Compiler;
 use workshop_rs::catalog::{Catalog, Locale};
 use workshop_rs::roundtrip::equivalent;
-use workshop_rs::wir::{Action, Value};
+use workshop_rs::{Action, Value};
 
 fn fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/corpus/synthetic/hud-visibility")
@@ -37,22 +37,18 @@ fn never_maps_to_visible_never_in_canonical_wir() {
     let oracle = workshop_rs::parser::parse(&oracle_workshop(), &catalog, &Locale::new("en-US"))
         .expect("oracle output must reparse");
     assert!(
-        equivalent(&artifact.wir, &oracle),
+        equivalent(&super::canonical_program(&artifact), &oracle),
         "SpecVisibility.NEVER WIR diverged from the pinned oracle\n--- native ---\n{}\n--- oracle ---\n{}",
         artifact.emitted,
         oracle_workshop()
     );
 
-    let rule = artifact
-        .wir
-        .rules
-        .get(workshop_rs::wir::RuleId::from_index(0))
-        .expect("fixture has one rule");
-    let Action::Call { args, .. } = artifact.wir.actions.get(rule.actions[0]).unwrap() else {
+    let program = super::canonical_program(&artifact);
+    let Action::Call { args, .. } = &program.rules[0].actions[0] else {
         panic!("hudSubheader must lower to a canonical action call");
     };
     assert!(matches!(
-        &artifact.wir.values.get(args[10]).unwrap().value,
+        &args[10],
         Value::Enum { value_type, value }
             if value_type == "SpecVisibility" && value == "VISIBLE_NEVER"
     ));

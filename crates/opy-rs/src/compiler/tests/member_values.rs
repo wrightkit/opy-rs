@@ -3,9 +3,9 @@
 use std::path::{Path, PathBuf};
 
 use crate::Compiler;
+use workshop_rs::Value;
 use workshop_rs::catalog::{Catalog, Locale};
 use workshop_rs::roundtrip::equivalent;
-use workshop_rs::wir::Value;
 
 fn fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/corpus/synthetic/member-values")
@@ -33,18 +33,14 @@ fn is_dummy_member_lowers_to_the_catalog_value_in_canonical_wir() {
         &Locale::new("en-US"),
     )
     .expect("oracle workshop text parses");
-    assert!(equivalent(&artifact.wir, &oracle_wir));
+    assert!(equivalent(
+        &super::canonical_program(&artifact),
+        &oracle_wir
+    ));
 
-    let rule = artifact
-        .wir
-        .rules
-        .get(workshop_rs::wir::RuleId::from_index(0))
-        .expect("fixture has one rule");
-    let condition = artifact
-        .wir
-        .values
-        .get(rule.conditions[0])
-        .expect("rule has one condition");
+    let program = super::canonical_program(&artifact);
+    let rule = program.rules.first().expect("fixture has one rule");
+    let condition = rule.conditions.first().expect("rule has one condition");
     let Value::Call {
         name: comparison,
         args: comparison_args,
@@ -54,33 +50,11 @@ fn is_dummy_member_lowers_to_the_catalog_value_in_canonical_wir() {
     };
     assert_eq!(comparison, "==");
     assert_eq!(comparison_args.len(), 2);
-    assert!(matches!(
-        &artifact
-            .wir
-            .values
-            .get(comparison_args[1])
-            .expect("comparison right-hand side")
-            .value,
-        Value::Bool(true)
-    ));
-    let Value::Call { name, args } = &artifact
-        .wir
-        .values
-        .get(comparison_args[0])
-        .expect("member value")
-        .value
-    else {
+    assert!(matches!(&comparison_args[1], Value::Bool(true)));
+    let Value::Call { name, args } = &comparison_args[0] else {
         panic!("expected catalog member value call");
     };
     assert_eq!(name, "isDummy");
     assert_eq!(args.len(), 1);
-    assert!(matches!(
-        &artifact
-            .wir
-            .values
-            .get(args[0])
-            .expect("receiver value")
-            .value,
-        Value::EventPlayer
-    ));
+    assert!(matches!(&args[0], Value::EventPlayer));
 }

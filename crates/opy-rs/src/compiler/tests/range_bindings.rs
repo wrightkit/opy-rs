@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use crate::Compiler;
 use workshop_rs::catalog::{Catalog, Locale};
 use workshop_rs::roundtrip::equivalent;
-use workshop_rs::wir::{Action, Value};
+use workshop_rs::{Action, Value};
 
 fn fixture_dir(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -58,24 +58,21 @@ fn player_variable_range_binder_matches_the_pinned_oracle() {
             .expect("oracle output must reparse");
 
     assert!(
-        equivalent(&artifact.wir, &oracle),
+        equivalent(&super::canonical_program(&artifact), &oracle),
         "native WIR diverged\n{}",
         artifact.emitted
     );
 
-    let rule = artifact
-        .wir
+    let program = super::canonical_program(&artifact);
+    let rule = program
         .rules
-        .get(workshop_rs::wir::RuleId::from_index(0))
+        .first()
         .expect("fixture must contain one rule");
-    let Action::ForPlayerVariable { player, span, .. } =
-        artifact.wir.actions.get(rule.actions[0]).unwrap()
-    else {
+    let Action::ForPlayerVariable { player, .. } = &rule.actions[0] else {
         panic!("fixture must lower to For Player Variable");
     };
-    assert_eq!(span.unwrap().start.line, 5);
     assert!(matches!(
-        artifact.wir.values.get(*player).unwrap().value,
-        Value::Call { ref name, ref args } if name == "hostPlayer" && args.is_empty()
+        player,
+        Value::Call { name, args } if name == "hostPlayer" && args.is_empty()
     ));
 }

@@ -48,5 +48,5 @@ fn primitive_lowering_matches_the_pinned_oracle() {
     let oracle = workshop_rs::parser::parse(&oracle_workshop(&dir), &catalog, &locale)
         .expect("the pinned oracle Workshop text must reparse");
 
-    assert!(equivalent(&artifact.wir, &oracle));
+    assert!(equivalent(&super::canonical_program(&artifact), &oracle));
 }

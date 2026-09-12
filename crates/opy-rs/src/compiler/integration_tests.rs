@@ -60,3 +60,8 @@ mod string_modifiers;
 mod syntax_lowering;
 #[path = "tests/variable_initializers.rs"]
 mod variable_initializers;
+use super::CompilationArtifact;
+
+fn canonical_program(artifact: &CompilationArtifact) -> workshop_rs::Program {
+    artifact.wir.clone()
+}

@@ -26,7 +26,7 @@ fn nested_indexed_assignments_match_the_pinned_oracle() {
         &Locale::new("en-US"),
     )
     .unwrap();
-    assert!(equivalent(&artifact.wir, &expected));
+    assert!(equivalent(&super::canonical_program(&artifact), &expected));
 }
 
 #[test]

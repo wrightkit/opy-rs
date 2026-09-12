@@ -5,21 +5,95 @@ use std::path::Path;
 use crate::hir::Expr;
 use crate::{CompilationArtifact, Compiler};
 use workshop_rs::catalog::Locale;
-use workshop_rs::wir::Value;
 
-fn conditional_calls(artifact: &CompilationArtifact) -> Vec<Vec<workshop_rs::wir::ValueId>> {
-    (0..artifact.wir.values.len())
-        .filter_map(|index| {
-            let node = artifact
-                .wir
-                .values
-                .get(workshop_rs::wir::ValueId::from_index(index))?;
-            let Value::Call { name, args } = &node.value else {
-                return None;
-            };
-            (name == "ifThenElse").then(|| args.clone())
-        })
-        .collect()
+fn conditional_calls(artifact: &CompilationArtifact) -> Vec<Vec<workshop_rs::Value>> {
+    let program = super::canonical_program(artifact);
+    let mut calls = Vec::new();
+    for rule in &program.rules {
+        for condition in &rule.conditions {
+            collect_value(&condition.value, &mut calls);
+        }
+        for action in &rule.actions {
+            collect_action(action, &mut calls);
+        }
+    }
+    calls
+}
+
+fn collect_action(action: &workshop_rs::Action, calls: &mut Vec<Vec<workshop_rs::Value>>) {
+    use workshop_rs::Action;
+    match action {
+        Action::SetGlobalVariable { value, .. }
+        | Action::ModifyGlobalVariable { value, .. }
+        | Action::AssignMember { value, .. } => collect_value(value, calls),
+        Action::SetPlayerVariable { player, value, .. }
+        | Action::ModifyPlayerVariable { player, value, .. } => {
+            collect_value(player, calls);
+            collect_value(value, calls);
+        }
+        Action::If { condition } | Action::ElseIf { condition } | Action::While { condition } => {
+            collect_value(condition, calls)
+        }
+        Action::ForGlobalVariable {
+            start, stop, step, ..
+        } => {
+            collect_value(start, calls);
+            collect_value(stop, calls);
+            collect_value(step, calls);
+        }
+        Action::ForPlayerVariable {
+            player,
+            start,
+            stop,
+            step,
+            ..
+        } => {
+            collect_value(player, calls);
+            collect_value(start, calls);
+            collect_value(stop, calls);
+            collect_value(step, calls);
+        }
+        Action::Call { args, .. } => {
+            for arg in args {
+                collect_value(arg, calls);
+            }
+        }
+        Action::Disabled { action } => collect_action(action, calls),
+        Action::CallSubroutine { .. } | Action::Else | Action::End => {}
+    }
+}
+
+fn collect_value(value: &workshop_rs::Value, calls: &mut Vec<Vec<workshop_rs::Value>>) {
+    match value {
+        workshop_rs::Value::Call { name, args } => {
+            if name == "ifThenElse" {
+                calls.push(args.clone());
+            }
+            for arg in args {
+                collect_value(arg, calls);
+            }
+        }
+        workshop_rs::Value::Array(values) => {
+            for value in values {
+                collect_value(value, calls);
+            }
+        }
+        workshop_rs::Value::Vector { x, y, z } => {
+            collect_value(x, calls);
+            collect_value(y, calls);
+            collect_value(z, calls);
+        }
+        workshop_rs::Value::PlayerVariable { player, .. } => collect_value(player, calls),
+        workshop_rs::Value::Number(_)
+        | workshop_rs::Value::String(_)
+        | workshop_rs::Value::LocalizedString(_)
+        | workshop_rs::Value::Bool(_)
+        | workshop_rs::Value::Null
+        | workshop_rs::Value::Enum { .. }
+        | workshop_rs::Value::GlobalVariable(_)
+        | workshop_rs::Value::Subroutine(_)
+        | workshop_rs::Value::EventPlayer => {}
+    }
 }
 
 #[test]
@@ -40,29 +114,13 @@ fn chained_conditional_lowers_to_right_associative_canonical_values() {
     );
     assert!(calls.iter().all(|args| args.len() == 3));
     assert!(calls.iter().any(|args| {
-        matches!(
-            artifact.wir.values.get(args[0]).map(|node| &node.value),
-            Some(Value::Bool(true))
-        ) && matches!(
-            artifact.wir.values.get(args[1]).map(|node| &node.value),
-            Some(Value::Number { value, .. }) if *value == 1.0
-        ) && matches!(
-            artifact.wir.values.get(args[2]).map(|node| &node.value),
-            Some(Value::Call { name, args })
+        matches!(args[0], workshop_rs::Value::Bool(true))
+            && matches!(args[1], workshop_rs::Value::Number(1.0))
+            && matches!(&args[2], workshop_rs::Value::Call { name, args }
                 if name == "ifThenElse"
-                    && matches!(
-                        artifact.wir.values.get(args[0]).map(|node| &node.value),
-                        Some(Value::Bool(false))
-                    )
-                    && matches!(
-                        artifact.wir.values.get(args[1]).map(|node| &node.value),
-                        Some(Value::Number { value, .. }) if *value == 2.0
-                    )
-                    && matches!(
-                        artifact.wir.values.get(args[2]).map(|node| &node.value),
-                        Some(Value::Number { value, .. }) if *value == 3.0
-                    )
-        )
+                    && matches!(args[0], workshop_rs::Value::Bool(false))
+                    && matches!(args[1], workshop_rs::Value::Number(2.0))
+                    && matches!(args[2], workshop_rs::Value::Number(3.0)))
     }));
 }
 

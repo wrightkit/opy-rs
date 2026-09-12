@@ -72,7 +72,7 @@ settings {
         &Locale::new("en-US"),
     )
     .unwrap();
-    assert!(equivalent(&artifact.wir, &parsed));
+    assert!(equivalent(&super::canonical_program(&artifact), &parsed));
 }
 
 #[test]

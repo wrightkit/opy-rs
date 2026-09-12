@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 use crate::Compiler;
 use workshop_rs::catalog::Locale;
-use workshop_rs::wir::{Action, RuleId, Value};
+use workshop_rs::{Action, Value};
 
 fn fixture_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/corpus/synthetic/preprocessing")
@@ -18,16 +18,9 @@ fn included_macro_call_reaches_canonical_workshop_output() {
         .unwrap()
         .compile_source_with_locale(&source, "source.opy", &dir, &Locale::new("en-US"))
         .expect("the included macro must lower through the public compile path");
-    let rule = artifact
-        .wir
-        .rules
-        .get(RuleId::from_index(0))
-        .expect("fixture has one rule");
-    let Action::Call { name, args, .. } = artifact
-        .wir
-        .actions
-        .get(rule.actions[0])
-        .expect("fixture has one debug action")
+    let program = super::canonical_program(&artifact);
+    let rule = program.rules.first().expect("fixture has one rule");
+    let Action::Call { name, args } = rule.actions.first().expect("fixture has one debug action")
     else {
         panic!("macro must lower to a native HUD action");
     };
@@ -35,14 +28,14 @@ fn included_macro_call_reaches_canonical_workshop_output() {
     let Value::Call {
         name: text_name,
         args: text_args,
-    } = &artifact.wir.values.get(args[2]).unwrap().value
+    } = &args[2]
     else {
         panic!("debug text must lower to a canonical value call");
     };
     assert_eq!(text_name, "customString");
     assert!(matches!(
-        &artifact.wir.values.get(text_args[1]).unwrap().value,
-        Value::Number { value, .. } if *value == 2.0
+        &text_args[1],
+        Value::Number(value) if *value == 2.0
     ));
 }
 
@@ -53,17 +46,14 @@ fn statement_macro_expands_into_multiple_canonical_actions() {
         .unwrap()
         .compile_source_with_locale(source, "source.opy", Path::new("."), &Locale::new("en-US"))
         .expect("statement macro must expand before WIR lowering");
-    let rule = artifact
-        .wir
-        .rules
-        .get(RuleId::from_index(0))
-        .expect("source has one rule");
+    let program = super::canonical_program(&artifact);
+    let rule = program.rules.first().expect("source has one rule");
     assert_eq!(
         rule.actions
             .iter()
-            .filter(|id| matches!(
-                artifact.wir.actions.get(**id),
-                Some(Action::Call { name, .. }) if name == "createHudText"
+            .filter(|action| matches!(
+                action,
+                Action::Call { name, .. } if name == "createHudText"
             ))
             .count(),
         2

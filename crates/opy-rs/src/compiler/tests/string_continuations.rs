@@ -4,7 +4,7 @@ use std::path::Path;
 
 use crate::Compiler;
 use workshop_rs::catalog::Locale;
-use workshop_rs::wir::{Action, RuleId, Value};
+use workshop_rs::{Action, Value};
 
 #[test]
 fn backslash_continued_string_reaches_the_expected_canonical_value() {
@@ -18,29 +18,22 @@ fn backslash_continued_string_reaches_the_expected_canonical_value() {
         .compile_source_with_locale(source, "source.opy", Path::new("."), &Locale::new("en-US"))
         .expect("backslash-continued string must compile");
 
-    let rule = artifact
-        .wir
-        .rules
-        .get(RuleId::from_index(0))
-        .expect("source has one rule");
-    let Action::Call { args, .. } = artifact
-        .wir
-        .actions
-        .get(rule.actions[0])
-        .expect("source has one debug action")
+    let program = super::canonical_program(&artifact);
+    let rule = program.rules.first().expect("source has one rule");
+    let Action::Call { args, .. } = rule.actions.first().expect("source has one debug action")
     else {
         panic!("debug must lower to a native HUD action");
     };
     let Value::Call {
         name: text_name,
         args: text_args,
-    } = &artifact.wir.values.get(args[2]).unwrap().value
+    } = &args[2]
     else {
         panic!("debug text must lower to a canonical value call");
     };
     assert_eq!(text_name, "customString");
     assert!(matches!(
-        &artifact.wir.values.get(text_args[1]).unwrap().value,
+        &text_args[1],
         Value::String(value) if value == "one\ntwo"
     ));
 }

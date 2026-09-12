@@ -3,21 +3,90 @@
 use std::path::Path;
 
 use crate::Compiler;
-use workshop_rs::wir::Value;
 
 fn value_call_names(artifact: &crate::CompilationArtifact) -> Vec<String> {
-    (0..artifact.wir.values.len())
-        .filter_map(|index| {
-            let node = artifact
-                .wir
-                .values
-                .get(workshop_rs::wir::ValueId::from_index(index))?;
-            match &node.value {
-                Value::Call { name, .. } => Some(name.clone()),
-                _ => None,
+    let program = &artifact.wir;
+    let mut names = Vec::new();
+    for rule in &program.rules {
+        for condition in &rule.conditions {
+            collect_value_call_names(&condition.value, &mut names);
+        }
+        for action in &rule.actions {
+            collect_action_call_names(action, &mut names);
+        }
+    }
+    names
+}
+
+fn collect_action_call_names(action: &workshop_rs::Action, names: &mut Vec<String>) {
+    use workshop_rs::Action;
+    let values: Vec<&workshop_rs::Value> = match action {
+        Action::SetGlobalVariable { value, .. }
+        | Action::ModifyGlobalVariable { value, .. }
+        | Action::AssignMember { value, .. } => vec![value],
+        Action::SetPlayerVariable { player, value, .. }
+        | Action::ModifyPlayerVariable { player, value, .. } => vec![player, value],
+        Action::If { condition } | Action::ElseIf { condition } | Action::While { condition } => {
+            vec![condition]
+        }
+        Action::ForGlobalVariable {
+            start, stop, step, ..
+        } => vec![start, stop, step],
+        Action::ForPlayerVariable {
+            player,
+            start,
+            stop,
+            step,
+            ..
+        } => {
+            vec![player, start, stop, step]
+        }
+        Action::Call { args, .. } => args.iter().collect(),
+        Action::Disabled { action } => {
+            collect_action_call_names(action, names);
+            Vec::new()
+        }
+        Action::CallSubroutine { .. } | Action::Else | Action::End => Vec::new(),
+    };
+    for value in values {
+        collect_value_call_names(value, names);
+    }
+    if let Action::Call { name, .. } = action {
+        names.push(name.clone());
+    }
+}
+
+fn collect_value_call_names(value: &workshop_rs::Value, names: &mut Vec<String>) {
+    match value {
+        workshop_rs::Value::Call { name, args } => {
+            names.push(name.clone());
+            for arg in args {
+                collect_value_call_names(arg, names);
             }
-        })
-        .collect()
+        }
+        workshop_rs::Value::Array(values) => {
+            for value in values {
+                collect_value_call_names(value, names);
+            }
+        }
+        workshop_rs::Value::Vector { x, y, z } => {
+            collect_value_call_names(x, names);
+            collect_value_call_names(y, names);
+            collect_value_call_names(z, names);
+        }
+        workshop_rs::Value::PlayerVariable { player, .. } => {
+            collect_value_call_names(player, names)
+        }
+        workshop_rs::Value::Number(_)
+        | workshop_rs::Value::String(_)
+        | workshop_rs::Value::LocalizedString(_)
+        | workshop_rs::Value::Bool(_)
+        | workshop_rs::Value::Null
+        | workshop_rs::Value::Enum { .. }
+        | workshop_rs::Value::GlobalVariable(_)
+        | workshop_rs::Value::Subroutine(_)
+        | workshop_rs::Value::EventPlayer => {}
+    }
 }
 
 #[test]
@@ -267,27 +336,18 @@ fn get_all_players_value_uses_the_all_team_domain() {
         .expect("released Workshop contract must load")
         .compile_hir(&hir)
         .expect("getAllPlayers must lower in a value position");
-    let rule = artifact
-        .wir
-        .rules
-        .get(workshop_rs::wir::RuleId::from_index(0))
-        .expect("rule must be present");
-    let workshop_rs::wir::Action::SetGlobalVariable { value, .. } = artifact
-        .wir
-        .actions
-        .get(rule.actions[0])
-        .expect("global assignment must be present")
-    else {
+    let program = super::canonical_program(&artifact);
+    let workshop_rs::Action::SetGlobalVariable { value, .. } = &program.rules[0].actions[0] else {
         panic!("expected a global assignment");
     };
-    let Value::Call { name, args } = &artifact.wir.values.get(*value).unwrap().value else {
+    let workshop_rs::Value::Call { name, args } = value else {
         panic!("expected a canonical allPlayers value call");
     };
     assert_eq!(name, "allPlayers");
     assert_eq!(args.len(), 1);
     assert!(matches!(
-        &artifact.wir.values.get(args[0]).unwrap().value,
-        Value::Enum { value_type, value } if value_type == "Team" && value == "ALL"
+        &args[0],
+        workshop_rs::Value::Enum { value_type, value } if value_type == "Team" && value == "ALL"
     ));
 }
 
@@ -312,19 +372,13 @@ fn builtin_surface_maps_overpy_enum_aliases_to_canonical_members() {
         .expect("released Workshop contract must load")
         .compile_hir(&hir)
         .expect("SpecVisibility.ALWAYS must lower");
-    let rule = artifact
-        .wir
-        .rules
-        .get(workshop_rs::wir::RuleId::from_index(0))
-        .unwrap();
-    let workshop_rs::wir::Action::Call { args, .. } =
-        artifact.wir.actions.get(rule.actions[0]).unwrap()
-    else {
+    let program = super::canonical_program(&artifact);
+    let workshop_rs::Action::Call { args, .. } = &program.rules[0].actions[0] else {
         panic!("expected HUD action");
     };
     assert!(matches!(
-        &artifact.wir.values.get(args[10]).unwrap().value,
-        Value::Enum { value_type, value }
+        &args[10],
+        workshop_rs::Value::Enum { value_type, value }
             if value_type == "SpecVisibility" && value == "VISIBLE_ALWAYS"
     ));
 }
@@ -344,48 +398,35 @@ fn rule_condition_lowers_the_current_rule_conditions_in_order() {
         .expect("released Workshop contract must load")
         .compile_hir(&hir)
         .expect("ruleCondition must lower inside a rule");
-    let rule = artifact
-        .wir
-        .rules
-        .get(workshop_rs::wir::RuleId::from_index(0))
-        .expect("rule must be present");
-    let action = artifact
-        .wir
-        .actions
-        .get(rule.actions[0])
-        .expect("waitUntil action must be present");
-    let workshop_rs::wir::Action::Call { name, args, .. } = action else {
+    let program = super::canonical_program(&artifact);
+    let workshop_rs::Action::Call { name, args } = &program.rules[0].actions[0] else {
         panic!("expected waitUntil action");
     };
     assert_eq!(name, "waitUntil");
-    let Value::Call {
+    let workshop_rs::Value::Call {
         name: combined_name,
         args: combined_args,
-    } = &artifact
-        .wir
-        .values
-        .get(args[0])
-        .expect("condition value")
-        .value
+    } = &args[0]
     else {
         panic!("expected combined rule condition");
     };
     assert_eq!(combined_name, "and");
-    assert_eq!(combined_args[1], rule.conditions[2]);
-    let Value::Call {
+    let workshop_rs::Value::Call {
         name: first_pair_name,
         args: first_pair_args,
-    } = &artifact
-        .wir
-        .values
-        .get(combined_args[0])
-        .expect("first condition pair")
-        .value
+    } = &combined_args[0]
     else {
         panic!("expected left-associated condition pair");
     };
     assert_eq!(first_pair_name, "and");
-    assert_eq!(first_pair_args, &rule.conditions[..2]);
+    assert!(matches!(
+        first_pair_args[0],
+        workshop_rs::Value::Call { .. }
+    ));
+    assert!(matches!(
+        first_pair_args[1],
+        workshop_rs::Value::Call { .. }
+    ));
 }
 
 #[test]

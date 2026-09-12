@@ -9,7 +9,7 @@ fn fixture_dir(name: &str) -> PathBuf {
         .join(name)
 }
 
-fn reference_wir(dir: &Path) -> workshop_rs::wir::Program {
+fn reference_wir(dir: &Path) -> workshop_rs::Program {
     let oracle: serde_json::Value = serde_json::from_str(
         &std::fs::read_to_string(dir.join("oracle.json")).expect("oracle is readable"),
     )
@@ -37,7 +37,10 @@ fn compiler_semantic_wir_matches_fixtures() {
         let hir = crate::compile(&source, "source.opy", &dir).expect("fixture resolves");
         let artifact = compiler.compile_hir(&hir).expect("fixture lowers");
         assert!(
-            workshop_rs::roundtrip::equivalent(&artifact.wir, &reference_wir(&dir)),
+            workshop_rs::roundtrip::equivalent(
+                &super::canonical_program(&artifact),
+                &reference_wir(&dir),
+            ),
             "native WIR diverged for {name}"
         );
     }

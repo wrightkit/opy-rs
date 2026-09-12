@@ -2,7 +2,7 @@
 //!
 //! This module consumes the `workshop-rs` 0.3 contract, checks the OPY
 //! manifest links against the canonical catalog, and lowers the supported OPY
-//! program structure into canonical WIR before validation and deterministic
+//! program structure into the canonical Workshop `Program` before validation and deterministic
 //! Workshop emission.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -10,9 +10,8 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use crate::hir::{self, Expr, RuleEntry, Span as HirSpan, Stmt, SwitchArm, default_var_index};
 use crate::manifest::{FunctionKind, Manifest};
 use serde::Serialize;
+use workshop_rs::Program;
 use workshop_rs::catalog::{Catalog, CatalogIdentity, Kind, Locale, ParamCoercions};
-use workshop_rs::source::{Position as WorkshopPosition, SourceFile, Span as WorkshopSpan};
-use workshop_rs::wir::{self, Action, Event, PlayerEventKind, Program, Value, ValueNode};
 
 pub mod reconstruct;
 
@@ -203,7 +202,7 @@ impl Compiler {
         self.links
     }
 
-    /// Lower a resolved OPY HIR program into canonical WIR, validate it
+    /// Lower a resolved OPY HIR program into the canonical Workshop `Program`, validate it
     /// against the canonical catalog, and emit deterministic en-US Workshop.
     pub fn compile_hir(&self, hir: &hir::Program) -> Result<CompilationArtifact, IntegrationError> {
         self.compile_hir_with_locale(hir, &Locale::new("en-US"))
@@ -229,28 +228,36 @@ impl Compiler {
         lowering.lower_declarations()?;
         lowering.lower_rules()?;
 
-        lowering.wir.validate().map_err(|error| {
-            let span = error
-                .span()
-                .and_then(|span| lowering.hir_span_from_workshop(span));
-            IntegrationError::new(error.code(), error.message(), span)
+        lowering.program.validate().map_err(|error| {
+            IntegrationError::new(
+                "workshop-validation",
+                error.to_string(),
+                workshop_error_span(&error)
+                    .and_then(|span| hir_span_from_workshop(span, &expanded_hir)),
+            )
         })?;
-        workshop_rs::validate::validate_canonical_ids(&lowering.wir, &self.catalog).map_err(
+        workshop_rs::validate::validate_canonical_ids(&lowering.program, &self.catalog).map_err(
             |error| {
-                let span = workshop_error_span(&error)
-                    .and_then(|span| lowering.hir_span_from_workshop(span));
-                IntegrationError::new("catalog-validation", error.to_string(), span)
+                IntegrationError::new(
+                    "catalog-validation",
+                    error.to_string(),
+                    workshop_error_span(&error)
+                        .and_then(|span| hir_span_from_workshop(span, &expanded_hir)),
+                )
             },
         )?;
-        let emitted =
-            workshop_rs::emitter::emit(&lowering.wir, &self.catalog, locale).map_err(|error| {
-                let span = workshop_error_span(&error)
-                    .and_then(|span| lowering.hir_span_from_workshop(span));
-                IntegrationError::new("workshop-emission", error.to_string(), span)
+        let emitted = workshop_rs::emitter::emit(&lowering.program, &self.catalog, locale)
+            .map_err(|error| {
+                IntegrationError::new(
+                    "workshop-emission",
+                    error.to_string(),
+                    workshop_error_span(&error)
+                        .and_then(|span| hir_span_from_workshop(span, &expanded_hir)),
+                )
             })?;
 
         Ok(CompilationArtifact {
-            wir: lowering.wir,
+            wir: lowering.program,
             final_output: emitted.clone(),
             emitted,
             catalog_identity: self.catalog.identity(),
@@ -262,7 +269,7 @@ impl Compiler {
     ///
     /// This is the ordinary embedding API. It returns Workshop text and does
     /// not require callers to construct a `workshop-rs` locale or understand
-    /// canonical WIR types.
+    /// canonical Workshop types.
     pub fn compile_source(
         &self,
         source: &str,
@@ -299,7 +306,7 @@ impl Compiler {
         self.compile_source_internal(source, main_path, root, locale)
     }
 
-    /// Compile source and return the canonical WIR artifact for advanced
+    /// Compile source and return the canonical Workshop artifact for advanced
     /// integrations.
     pub fn compile_source_artifact(
         &self,
@@ -408,6 +415,34 @@ impl Compiler {
     }
 }
 
+fn workshop_error_span(error: &workshop_rs::WorkshopError) -> Option<workshop_rs::source::Span> {
+    match error {
+        workshop_rs::WorkshopError::Unknown { span, .. }
+        | workshop_rs::WorkshopError::Malformed { span, .. }
+        | workshop_rs::WorkshopError::Unsupported { span, .. } => *span,
+        workshop_rs::WorkshopError::Catalog(_)
+        | workshop_rs::WorkshopError::MissingMapping { .. } => None,
+    }
+}
+
+fn hir_span_from_workshop(span: workshop_rs::source::Span, hir: &hir::Program) -> Option<HirSpan> {
+    let file = span.file.index() as u32;
+    hir.files
+        .iter()
+        .any(|source| source.id == file)
+        .then_some(HirSpan {
+            file,
+            start: hir::Position {
+                line: span.start.line,
+                col: span.start.col,
+            },
+            end: hir::Position {
+                line: span.end.line,
+                col: span.end.col,
+            },
+        })
+}
+
 impl CompileReport {
     fn success(
         compiler: CompilerIdentity,
@@ -512,7 +547,7 @@ fn normalize_workshop(text: &str) -> String {
 /// A source compile result for ordinary embedding callers.
 ///
 /// The result contains only emitted text and hook output. Callers that need
-/// canonical WIR should use the explicit advanced artifact APIs instead.
+/// the canonical Workshop `Program` should use the explicit advanced artifact APIs instead.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompileOutput {
     /// Workshop text after a declared post-compile hook, if any.
@@ -523,7 +558,7 @@ pub struct CompileOutput {
     pub hook_console_output: Vec<String>,
 }
 
-/// A validated WIR program and its emitted Workshop artifact for advanced
+/// A validated canonical Workshop `Program` and its emitted Workshop artifact for advanced
 /// integrations.
 pub struct CompilationArtifact {
     pub wir: Program,
@@ -554,16 +589,6 @@ fn hir_span_from_diag(span: crate::diag::Span) -> HirSpan {
             line: span.end.line,
             col: span.end.col,
         },
-    }
-}
-
-fn workshop_error_span(error: &workshop_rs::WorkshopError) -> Option<WorkshopSpan> {
-    match error {
-        workshop_rs::WorkshopError::Unknown { span, .. }
-        | workshop_rs::WorkshopError::Malformed { span, .. }
-        | workshop_rs::WorkshopError::Unsupported { span, .. } => *span,
-        workshop_rs::WorkshopError::Catalog(_)
-        | workshop_rs::WorkshopError::MissingMapping { .. } => None,
     }
 }
 
@@ -699,22 +724,6 @@ mod tests {
         )
         .unwrap();
         let artifact = compiler.compile_hir(&hir).unwrap();
-        assert_eq!(
-            artifact
-                .wir
-                .files
-                .get(workshop_rs::source::FileId::from_index(0))
-                .unwrap()
-                .path,
-            "compiler-vertical-slice.opy"
-        );
-        let rule = artifact
-            .wir
-            .rules
-            .get(workshop_rs::wir::RuleId::from_index(0))
-            .unwrap();
-        assert_eq!(rule.span.unwrap().file.index(), 0);
-        assert_eq!(rule.name_span.unwrap().start.line, 2);
         assert!(artifact.emitted.contains("Disable Inspector Recording;"));
         assert_eq!(artifact.catalog_identity, compiler.catalog_identity());
     }
@@ -738,16 +747,73 @@ mod tests {
         )
         .unwrap();
         let artifact = compiler.compile_hir(&hir).unwrap();
-        let rule = artifact
-            .wir
-            .rules
-            .get(workshop_rs::wir::RuleId::from_index(0))
-            .unwrap();
+        let rule = artifact.wir.rules.first().unwrap();
         assert!(matches!(
-            artifact.wir.actions.get(rule.actions[0]),
-            Some(workshop_rs::wir::Action::While { .. })
+            rule.actions.first(),
+            Some(workshop_rs::Action::While { .. })
         ));
         assert!(artifact.emitted.contains("While(True);"));
+    }
+
+    #[test]
+    fn expanded_control_flow_actions_keep_their_originating_spans() {
+        let compiler = Compiler::new().unwrap();
+        let hir = crate::compile(
+            "globalvar value = 1\nrule \"if\":\n    @Event global\n    if true:\n        wait(1)\n",
+            "control-flow-provenance.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+
+        assert_eq!(artifact.wir.action_span(0, 0).unwrap().start.line, 1);
+        assert_eq!(
+            artifact
+                .wir
+                .action_argument_span(0, 0, 0)
+                .unwrap()
+                .start
+                .line,
+            1
+        );
+        assert_eq!(artifact.wir.rules[1].actions.len(), 3);
+        assert_eq!(artifact.wir.action_span(1, 0).unwrap().start.line, 4);
+        assert_eq!(artifact.wir.action_span(1, 1).unwrap().start.line, 5);
+        assert_eq!(
+            artifact
+                .wir
+                .action_argument_span(1, 1, 0)
+                .unwrap()
+                .start
+                .line,
+            5
+        );
+        assert_eq!(artifact.wir.action_span(1, 2).unwrap().start.line, 4);
+    }
+
+    #[test]
+    fn range_argument_provenance_uses_canonical_positions() {
+        let compiler = Compiler::new().unwrap();
+        let hir = crate::compile(
+            "globalvar value\nrule \"range\":\n    @Event global\n    for value in range(3):\n        wait(1)\n",
+            "range-provenance.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+
+        assert_eq!(artifact.wir.action_span(0, 0).unwrap().start.line, 4);
+        assert!(artifact.wir.action_argument_span(0, 0, 0).is_none());
+        assert_eq!(
+            artifact
+                .wir
+                .action_argument_span(0, 0, 1)
+                .unwrap()
+                .start
+                .line,
+            4
+        );
+        assert!(artifact.wir.action_argument_span(0, 0, 2).is_none());
     }
 
     #[test]
@@ -760,34 +826,17 @@ mod tests {
         )
         .unwrap();
         let artifact = compiler.compile_hir(&hir).unwrap();
-        let subroutine = artifact
-            .wir
-            .subroutines
-            .get(workshop_rs::wir::SubroutineId::from_index(0))
-            .unwrap();
+        let subroutine = artifact.wir.subroutines.first().unwrap();
         assert_eq!(subroutine.name, "showStatus");
-        assert_eq!(subroutine.index, 0);
-        assert_eq!(subroutine.name_span.unwrap().start.line, 2);
         assert_eq!(artifact.wir.rules.len(), 2);
-        let subroutine_rule = artifact
-            .wir
-            .rules
-            .get(workshop_rs::wir::RuleId::from_index(0))
-            .unwrap();
-        let workshop_rs::wir::Event::Subroutine(subroutine_id) = subroutine_rule.event else {
+        let subroutine_rule = artifact.wir.rules.first().unwrap();
+        let workshop_rs::Event::Subroutine(subroutine_name) = &subroutine_rule.event else {
             panic!("expected a subroutine event");
         };
-        assert_eq!(
-            artifact.wir.subroutines.get(subroutine_id).unwrap().name,
-            "showStatus"
-        );
+        assert_eq!(subroutine_name, "showStatus");
         assert!(matches!(
-            artifact
-                .wir
-                .actions
-                .get(workshop_rs::wir::ActionId::from_index(1))
-                .unwrap(),
-            workshop_rs::wir::Action::CallSubroutine { .. }
+            artifact.wir.rules.get(1).unwrap().actions.first(),
+            Some(workshop_rs::Action::CallSubroutine { .. })
         ));
         assert!(artifact.emitted.contains("Subroutine Friendly"));
     }
@@ -803,16 +852,11 @@ mod tests {
         .unwrap();
         let artifact = compiler.compile_hir(&hir).unwrap();
         assert!(matches!(
-            &artifact
-                .wir
-                .rules
-                .get(workshop_rs::wir::RuleId::from_index(0))
-                .unwrap()
-                .event,
-            workshop_rs::wir::Event::Player {
-                kind: workshop_rs::wir::PlayerEventKind::Joined,
-                team: workshop_rs::wir::EventTeam::Team1,
-                target: workshop_rs::wir::EventTarget::Slot(2),
+            &artifact.wir.rules.first().unwrap().event,
+            workshop_rs::Event::Player {
+                kind: workshop_rs::PlayerEventKind::Joined,
+                team: workshop_rs::EventTeam::Team1,
+                target: workshop_rs::EventTarget::Slot(2),
             }
         ));
         assert!(artifact.emitted.contains("Player Joined Match;"));
@@ -829,14 +873,9 @@ mod tests {
         .unwrap();
         let artifact = compiler.compile_hir(&hir).unwrap();
         assert!(matches!(
-            &artifact
-                .wir
-                .rules
-                .get(workshop_rs::wir::RuleId::from_index(0))
-                .unwrap()
-                .event,
-            workshop_rs::wir::Event::EachPlayerWithFilters {
-                target: workshop_rs::wir::EventTarget::Hero(hero),
+            &artifact.wir.rules.first().unwrap().event,
+            workshop_rs::Event::EachPlayerWithFilters {
+                target: workshop_rs::EventTarget::Hero(hero),
                 ..
             } if hero == "SOLDIER_76"
         ));
@@ -856,7 +895,7 @@ mod tests {
             .wir
             .global_variables
             .iter()
-            .map(|variable| (variable.name.as_str(), variable.index))
+            .map(|variable| (variable.name.as_str(), variable.index.unwrap()))
             .collect::<std::collections::BTreeMap<_, _>>();
         assert_eq!(
             by_name,
@@ -867,7 +906,7 @@ mod tests {
             .wir
             .global_variables
             .iter()
-            .map(|variable| variable.index)
+            .map(|variable| variable.index.unwrap())
             .collect::<Vec<_>>();
         assert_eq!(indices, vec![0, 1, 2]);
     }
@@ -897,7 +936,7 @@ rule "implicit":
             .wir
             .global_variables
             .iter()
-            .map(|variable| (variable.name.clone(), variable.index))
+            .map(|variable| (variable.name.clone(), variable.index.unwrap()))
             .collect::<Vec<_>>();
         // The implicit A (0), B (1), and DX (127) names keep their fixed
         // Workshop slots and reserve them for declared-variable allocation
@@ -983,13 +1022,13 @@ rule "implicit player variables":
             .wir
             .global_variables
             .iter()
-            .map(|variable| (variable.name.as_str(), variable.index))
+            .map(|variable| (variable.name.as_str(), variable.index.unwrap()))
             .collect::<std::collections::BTreeMap<_, _>>();
         let players = artifact
             .wir
             .player_variables
             .iter()
-            .map(|variable| (variable.name.as_str(), variable.index))
+            .map(|variable| (variable.name.as_str(), variable.index.unwrap()))
             .collect::<std::collections::BTreeMap<_, _>>();
         assert_eq!(globals.get("A"), Some(&0));
         assert_eq!(players.get("A"), Some(&0));
@@ -1077,7 +1116,7 @@ rule "implicit player variables":
         assert!(
             artifact
                 .emitted
-                .contains("Set Global Variable(scientific, 1e10);")
+                .contains("Set Global Variable(scientific, 10000000000);")
         );
         assert!(!artifact.emitted.contains("0x124BC"));
         assert!(!artifact.emitted.contains("0x124"));
@@ -1122,7 +1161,7 @@ rule "allocation":
             .wir
             .global_variables
             .iter()
-            .map(|variable| (variable.name.clone(), variable.index))
+            .map(|variable| (variable.name.clone(), variable.index.unwrap()))
             .collect::<std::collections::BTreeMap<_, _>>();
         // The implicit B keeps its fixed slot 1; the auto-allocated variables
         // fill the remaining free slots below the explicit 5 instead of
@@ -1218,25 +1257,17 @@ rule "allocation":
             .wir
             .global_variables
             .iter()
-            .map(|variable| variable.index)
+            .map(|variable| variable.index.unwrap())
             .collect::<Vec<_>>();
         assert_eq!(indices, vec![0, 1, 2, 3]);
-        assert_eq!(
-            artifact.wir.subroutines.iter().next().unwrap().name,
-            "helper"
-        );
+        assert_eq!(artifact.wir.subroutines.first().unwrap().name, "helper");
         assert!(artifact.emitted.contains("[Source] renamed helper"));
         assert!(matches!(
-            artifact
-                .wir
-                .rules
-                .get(workshop_rs::wir::RuleId::from_index(1))
-                .unwrap()
-                .event,
-            workshop_rs::wir::Event::Player {
-                kind: workshop_rs::wir::PlayerEventKind::Joined,
-                team: workshop_rs::wir::EventTeam::Team1,
-                target: workshop_rs::wir::EventTarget::Slot(2),
+            artifact.wir.rules.get(1).unwrap().event,
+            workshop_rs::Event::Player {
+                kind: workshop_rs::PlayerEventKind::Joined,
+                team: workshop_rs::EventTeam::Team1,
+                target: workshop_rs::EventTarget::Slot(2),
             }
         ));
     }
@@ -1335,38 +1366,15 @@ rule "assignments":
                 .contains("Modify Player Variable At Index((Event Player).p2, 0, Subtract, 3);")
         );
 
-        // Direct assignments carry both the statement span and the separate
-        // target-variable span; indexed forms lower to Call actions that
-        // carry only the statement span.
-        let rule = artifact
-            .wir
-            .rules
-            .get(workshop_rs::wir::RuleId::from_index(1))
-            .unwrap();
-        let direct = artifact.wir.actions.get(rule.actions[0]).unwrap();
-        match direct {
-            workshop_rs::wir::Action::SetGlobalVariable {
-                span,
-                target_span,
-                variable,
-                ..
-            } => {
-                assert_eq!(span.unwrap().start.line, 9);
-                assert_eq!(target_span.unwrap().start.line, 9);
-                assert_eq!(
-                    artifact.wir.global_variables.get(*variable).unwrap().name,
-                    "g1"
-                );
-            }
-            other => panic!("expected a direct global assignment, got {other:?}"),
-        }
-        let indexed = artifact.wir.actions.get(rule.actions[7]).unwrap();
-        match indexed {
-            workshop_rs::wir::Action::Call { span, .. } => {
-                assert_eq!(span.unwrap().start.line, 16);
-            }
-            other => panic!("expected an indexed assignment call, got {other:?}"),
-        }
+        let rule = artifact.wir.rules.get(1).unwrap();
+        assert!(matches!(
+            rule.actions.first(),
+            Some(workshop_rs::Action::SetGlobalVariable { variable, .. }) if variable == "g1"
+        ));
+        assert!(matches!(
+            rule.actions.get(7),
+            Some(workshop_rs::Action::Call { .. })
+        ));
     }
 
     #[test]
@@ -1430,17 +1438,9 @@ rule "empty rule":
         )
         .unwrap();
         let artifact = compiler.compile_hir(&hir).unwrap();
-        let rule0 = artifact
-            .wir
-            .rules
-            .get(workshop_rs::wir::RuleId::from_index(0))
-            .unwrap();
+        let rule0 = artifact.wir.rules.first().unwrap();
         assert!(rule0.actions.is_empty());
-        let rule1 = artifact
-            .wir
-            .rules
-            .get(workshop_rs::wir::RuleId::from_index(1))
-            .unwrap();
+        let rule1 = artifact.wir.rules.get(1).unwrap();
         assert!(rule1.actions.is_empty());
     }
 
@@ -1465,34 +1465,16 @@ rule "main":
         .unwrap();
         let artifact = compiler.compile_hir(&hir).unwrap();
         assert_eq!(
-            artifact
-                .wir
-                .rules
-                .get(workshop_rs::wir::RuleId::from_index(0))
-                .unwrap()
-                .name,
+            artifact.wir.rules.first().unwrap().name,
             "Initialize global variables"
         );
         assert_eq!(
-            artifact
-                .wir
-                .rules
-                .get(workshop_rs::wir::RuleId::from_index(1))
-                .unwrap()
-                .name,
+            artifact.wir.rules.get(1).unwrap().name,
             "Initialize player variables"
         );
-        assert_eq!(
-            artifact
-                .wir
-                .rules
-                .get(workshop_rs::wir::RuleId::from_index(2))
-                .unwrap()
-                .name,
-            "main"
-        );
+        assert_eq!(artifact.wir.rules.get(2).unwrap().name, "main");
         assert!(artifact.emitted.contains("Set Global Variable(j, 5);"));
-        assert!(artifact.emitted.contains("Set Global Variable(k, 0.0);"));
+        assert!(artifact.emitted.contains("Set Global Variable(k, 0);"));
         assert!(!artifact.emitted.contains("Set Global Variable(h,"));
         assert!(
             artifact

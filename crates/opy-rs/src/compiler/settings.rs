@@ -1,4 +1,5 @@
 use super::*;
+use workshop_rs::source::{Position as WorkshopPosition, Span as WorkshopSpan};
 
 pub(super) fn expand_settings_constants(
     settings: crate::hir::Settings,
