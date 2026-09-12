@@ -627,9 +627,9 @@ dependencies = [
 
 [[package]]
 name = "workshop-rs"
-version = "0.3.7"
+version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef9035b434eeb482acb2fe2be4de3036ff66db24fe5df8fa8ff6598a21a7e7cc"
+checksum = "2723aabf1fe79c21781cca9e153a90c9849b14e4df533d3e608e63f9f84fd396"
 dependencies = [
  "serde",
  "serde_json",

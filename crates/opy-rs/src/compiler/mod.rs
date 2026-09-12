@@ -229,7 +229,12 @@ impl Compiler {
         lowering.lower_rules()?;
 
         lowering.program.validate().map_err(|error| {
-            IntegrationError::new("workshop-validation", error.to_string(), None)
+            IntegrationError::new(
+                "workshop-validation",
+                error.to_string(),
+                workshop_error_span(&error)
+                    .and_then(|span| hir_span_from_workshop(span, &expanded_hir)),
+            )
         })?;
         workshop_rs::validate::validate_canonical_ids(&lowering.program, &self.catalog).map_err(
             |error| IntegrationError::new("catalog-validation", error.to_string(), None),
@@ -394,6 +399,34 @@ impl Compiler {
         })?;
         self.compile_hir_with_locale_and_hook(&hir, outcome.post_compile_hook, locale)
     }
+}
+
+fn workshop_error_span(error: &workshop_rs::WorkshopError) -> Option<workshop_rs::source::Span> {
+    match error {
+        workshop_rs::WorkshopError::Unknown { span, .. }
+        | workshop_rs::WorkshopError::Malformed { span, .. }
+        | workshop_rs::WorkshopError::Unsupported { span, .. } => *span,
+        workshop_rs::WorkshopError::Catalog(_)
+        | workshop_rs::WorkshopError::MissingMapping { .. } => None,
+    }
+}
+
+fn hir_span_from_workshop(span: workshop_rs::source::Span, hir: &hir::Program) -> Option<HirSpan> {
+    let file = span.file.index() as u32;
+    hir.files
+        .iter()
+        .any(|source| source.id == file)
+        .then_some(HirSpan {
+            file,
+            start: hir::Position {
+                line: span.start.line,
+                col: span.start.col,
+            },
+            end: hir::Position {
+                line: span.end.line,
+                col: span.end.col,
+            },
+        })
 }
 
 impl CompileReport {
