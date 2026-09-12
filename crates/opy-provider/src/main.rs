@@ -13,8 +13,9 @@ use opy_rs::{CompileDiagnostic, Compiler};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-const PROTOCOL_VERSIONS: [&str; 2] = ["1.0", "1.1"];
+const PROTOCOL_VERSIONS: [&str; 3] = ["1.0", "1.1", "1.2"];
 const PROJECT_LOADING_VERSION: &str = "1.1";
+const DIRECTORY_TARGET_VERSION: &str = "1.2";
 const SERVER_NAME: &str = "opy-provider";
 const LANGUAGE_ID: &str = "opy";
 const LANGUAGE_EXTENSIONS: [&str; 1] = ["opy"];
@@ -57,7 +58,10 @@ impl Capabilities {
             "rename": false,
             "editValidation": false,
         });
-        if protocol_version == PROJECT_LOADING_VERSION {
+        if matches!(
+            protocol_version,
+            PROJECT_LOADING_VERSION | DIRECTORY_TARGET_VERSION
+        ) {
             capabilities["projectLoading"] = json!(self.project_loading);
         }
         capabilities
@@ -184,6 +188,16 @@ struct ProjectEntry {
     uri: String,
     language_id: String,
     version: i64,
+    #[serde(default)]
+    kind: ProjectTargetKind,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+enum ProjectTargetKind {
+    #[default]
+    File,
+    Directory,
 }
 
 #[derive(Debug)]
@@ -359,7 +373,10 @@ impl Server {
         };
         if matches!(method, "lpp/check" | "lpp/compile")
             && params.get("entry").is_some()
-            && self.protocol_version.as_deref() != Some(PROJECT_LOADING_VERSION)
+            && !matches!(
+                self.protocol_version.as_deref(),
+                Some(PROJECT_LOADING_VERSION) | Some(DIRECTORY_TARGET_VERSION)
+            )
         {
             return lpp_error(
                 id,
@@ -490,6 +507,10 @@ fn load_project(params: ProjectParams) -> Result<LoadedRequest, HandlerError> {
 }
 
 fn load_entry(entry: ProjectEntry, locale: Option<String>) -> Result<LoadedRequest, HandlerError> {
+    let target_name = match entry.kind {
+        ProjectTargetKind::File => "entry",
+        ProjectTargetKind::Directory => "target",
+    };
     if entry.language_id != LANGUAGE_ID {
         return Err(HandlerError::invalid_entry(
             &entry.uri,
@@ -511,7 +532,7 @@ fn load_entry(entry: ProjectEntry, locale: Option<String>) -> Result<LoadedReque
         HandlerError::invalid_entry(
             &entry.uri,
             "unsupportedUri",
-            "project entry must be an absolute file URI",
+            "project target must be an absolute file URI",
         )
     })?;
     let filesystem = opy_rs::FilesystemProject::load(&path).map_err(|error| {
@@ -524,7 +545,7 @@ fn load_entry(entry: ProjectEntry, locale: Option<String>) -> Result<LoadedReque
             &entry.uri,
             reason,
             Some(&entry.uri),
-            "project entry could not be loaded",
+            format!("project {target_name} could not be loaded"),
         )
     })?;
     Ok(LoadedRequest::Entry(LoadedProject {
@@ -1150,6 +1171,7 @@ mod tests {
                 uri: path_to_file_uri(&entry),
                 language_id: LANGUAGE_ID.to_string(),
                 version: 7,
+                kind: ProjectTargetKind::File,
             }),
             locale: None,
         };

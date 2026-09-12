@@ -14,6 +14,10 @@ const CLEAN_MULTI_FILE_MAIN: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../opy-rs/tests/fixtures/project-preprocessing/main.opy"
 );
+const PROJECT_PREPROCESSING_ROOT: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../opy-rs/tests/fixtures/project-preprocessing"
+);
 const BASIC_RULE: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../opy-rs/tests/fixtures/corpus/synthetic/basic-rule/source.opy"
@@ -149,6 +153,46 @@ fn entry_check_loads_the_owner_project_closure_without_documents() {
             .iter()
             .all(|document| { document["version"] == 7 && document["diagnostics"] == json!([]) })
     );
+    session.shutdown();
+}
+
+#[test]
+fn directory_target_uses_the_owner_default_entry_without_client_discovery() {
+    let mut session = Session::spawn();
+    let initialized = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "lpp/initialize",
+        "params": { "protocolVersion": "1.2" },
+    }));
+    assert_eq!(initialized["result"]["protocolVersion"], "1.2");
+    assert_eq!(
+        initialized["result"]["capabilities"]["projectLoading"],
+        true
+    );
+
+    let checked = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "lpp/check",
+        "params": {
+            "entry": {
+                "uri": file_uri(PROJECT_PREPROCESSING_ROOT),
+                "languageId": "opy",
+                "version": 9,
+                "kind": "directory"
+            }
+        }
+    }));
+    let documents = checked["result"]["documents"]
+        .as_array()
+        .expect("documents");
+    assert!(documents.iter().any(|document| {
+        document["uri"]
+            .as_str()
+            .is_some_and(|uri| uri.ends_with("/project-preprocessing/main.opy"))
+    }));
+    assert!(documents.iter().all(|document| document["version"] == 9));
     session.shutdown();
 }
 

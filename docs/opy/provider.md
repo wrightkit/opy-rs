@@ -7,14 +7,14 @@ compiler; it does not expose OPY AST/HIR or Workshop WIR.
 ## Protocol and capabilities
 
 The provider serves language id `opy` and the `opy` extension. It supports LPP
-`1.0` for document-supplied requests and LPP `1.1` for the additive
-provider-owned project-loading capability.
+`1.0` for document-supplied requests, LPP `1.1` for file-entry project loading,
+and LPP `1.2` for provider-owned directory targets.
 
 | Capability | Method | Behavior |
 | --- | --- | --- |
 | Check | `lpp/check` | Loads the selected entry's OPY project and returns source diagnostics. |
 | Compile | `lpp/compile` | Uses the same project loading path and returns canonical Workshop text when clean. |
-| Project loading | `lpp/check`, `lpp/compile` | LPP 1.1 only: loads a complete OPY project from a client-selected entry. |
+| Project loading | `lpp/check`, `lpp/compile` | LPP 1.1 loads from a client-selected file entry; LPP 1.2 also lets the provider select the default entry from a directory target. |
 
 All other LPP v1 capabilities are advertised as unavailable until they are
 implemented end to end.
@@ -55,6 +55,12 @@ provider analyzes every supplied document from that request snapshot. A
 document-supplied compile request with more than one document is refused with
 `compile.requiresSingleDocument` because the OPY compiler emits one project
 artifact.
+
+With LPP 1.2, a client may send the same `entry` object with
+`"kind": "directory"`. The provider passes that directory to the OPY owner
+project loader, which selects `main.opy` or `src/main.opy` and resolves the
+remaining source closure. Wright does not enumerate OPY files or interpret
+project directives.
 
 ## Compile artifact
 
