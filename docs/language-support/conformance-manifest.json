@@ -125,7 +125,7 @@
           "id": "include-closure-composition",
           "claim": "Included source files form the expected project closure and preserve source provenance.",
           "probeKinds": ["positive", "composition"],
-          "probes": ["synthetic/preprocessing", "synthetic/project-main-file", "synthetic/project-entry"]
+          "probes": ["synthetic/preprocessing", "synthetic/project-main-file", "synthetic/project-entry", "synthetic/legacy-entry-include"]
         },
         {
           "id": "macro-expansion",
@@ -155,6 +155,7 @@
         "synthetic/directives-scoped",
         "synthetic/translations-invalid",
         "synthetic/project-entry",
+        "synthetic/legacy-entry-include",
         "real-world/6v6-adjustments",
         "real-world/overpy-meipocalypse",
         "real-world/ow1-emulator"

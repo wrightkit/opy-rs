@@ -78,6 +78,32 @@ fn nested_includes_resolve_relative_to_the_including_file() {
 }
 
 #[test]
+fn entry_includes_continue_from_the_latest_resolved_file_base() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/project-preprocessing/latest-entry-base/src");
+    let source = std::fs::read_to_string(dir.join("main.opy")).unwrap();
+    let hir = crate::compile(&source, "main.opy", &dir)
+        .expect("entry includes must preserve OverPy's resolved-file lookup base");
+
+    assert!(hir.dump().contains("assign A = (6 + 2)"), "{}", hir.dump());
+    assert_eq!(
+        hir.files
+            .iter()
+            .map(|file| file.path.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "main.opy",
+            "env/env.opy",
+            "locales/en.opy",
+            "composition/bootstrap.opy",
+            "env/vars.opy",
+            "composition/context.opy",
+            "env/game.opy"
+        ]
+    );
+}
+
+#[test]
 fn included_settings_are_extracted_with_file_provenance() {
     let overlay = BTreeMap::from([(
         "shared.opy".to_string(),

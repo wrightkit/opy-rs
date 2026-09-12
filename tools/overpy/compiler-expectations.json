@@ -77,6 +77,18 @@
       "note": "An included-file mainFile directive is accepted at the file start without changing the declared root entry point."
     },
     {
+      "fixture": "synthetic/legacy-entry-include",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "compiler-contract",
+      "evidence": [
+        "oracle:synthetic/legacy-entry-include/oracle.json",
+        "provenance:synthetic/legacy-entry-include/fixture.json"
+      ],
+      "owner": "opy-rs#258",
+      "note": "The minimized legacy entry topology resolves a parent-relative include from the latest included file base; compiler output parity is outside this preprocessing contract."
+    },
+    {
       "fixture": "synthetic/compiler-vertical-slice",
       "nativeStatus": "success",
       "classification": "match",

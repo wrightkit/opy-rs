@@ -67,7 +67,7 @@
 //!
 //! # Current corpus state
 //!
-//! All declared fixtures run (0 skips, 0 divergences): **28 resolve** and
+//! All declared fixtures run (0 skips, 0 divergences): **29 resolve** and
 //! **16 produce expected diagnostics** with pinned codes; 7 fixtures are
 //! documented reference gaps (the oracle accepts a surface the native
 //! frontend deliberately rejects). Settings key-existence/leaf-kind
@@ -378,6 +378,12 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         "synthetic/project-entry",
         true,
         "included-file mainFile scope and root entry-point preservation; oracle status success.",
+    );
+    resolve(
+        &mut cases,
+        "synthetic/legacy-entry-include",
+        true,
+        "entry include paths continue from the latest resolved file base, matching the pinned OverPy project topology.",
     );
     resolve(
         &mut cases,

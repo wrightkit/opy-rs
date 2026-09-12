@@ -58,7 +58,7 @@ Source: pinned OverPy `9.7.10`, content commit
 | `continue` in loops | 🚧 Coming soon | Upstream keyword exists; end-to-end support is incomplete. |
 | `goto`, labels and dynamic `loc+` targets | 🚧 Coming soon | Audited from keyword registry and `src/tests/gotos.opy`. |
 | `pass` and `return` statements | ✅ Supported | Context restrictions remain conformance work. |
-| `#!include` including-file-relative composition | ✅ Supported | Main-file includes resolve from the project root; nested includes resolve from the including source file. Missing files and cycles have distinct failures. |
+| `#!include` including-file-relative composition | ✅ Supported | Main-file includes resolve from the project root; nested includes resolve from the including source file. OverPy-compatible legacy entries retain the resolved file context after multiline macro expansion in an included settings block. Missing files and cycles have distinct failures. |
 | Nested include closure and main-file selection | ✅ Supported | Project behavior is not inferred from one-file tests. |
 
 ## Settings, strings and translations

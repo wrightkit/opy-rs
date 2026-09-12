@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/legacy-entry-include",
+  "category": "preprocessing",
+  "features": ["preprocessing/include-scope", "preprocessing/file-provenance"],
+  "source": "main.opy",
+  "expectedStatus": "success",
+  "provenance": {
+    "kind": "original",
+    "origin": "WrightKit-authored minimized regression from the OWBastion/Bastion entry include topology",
+    "license": "AGPL-3.0-or-later",
+    "redistributable": true
+  }
+}

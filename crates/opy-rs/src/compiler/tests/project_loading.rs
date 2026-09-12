@@ -40,6 +40,27 @@ fn included_main_file_is_a_scoped_directive_with_source_provenance() {
 }
 
 #[test]
+fn included_main_file_allows_leading_blank_lines() {
+    let hir = compile_with_overlay(
+        "#!include \"child.opy\"\nrule \"root\":\n    @Event global\n    pass\n",
+        "main.opy",
+        Path::new("."),
+        &child_overlay(
+            "\n#!mainFile \"../main.opy\"\nrule \"included\":\n    @Event global\n    pass\n",
+        ),
+    )
+    .expect("included mainFile directives may follow leading blank lines");
+
+    let directive = hir
+        .preprocessing
+        .directives
+        .iter()
+        .find(|directive| directive.name == "mainFile")
+        .expect("the included mainFile directive must remain inspectable");
+    assert_eq!(directive.span.expect("directive provenance").start.line, 2);
+}
+
+#[test]
 fn malformed_included_main_file_is_source_attributed() {
     let outcome = compile_with_overlay_outcome(
         "#!include \"child.opy\"\n",

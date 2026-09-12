@@ -7,6 +7,8 @@ pub(super) struct MacroDef {
     pub(super) body: Vec<Token>,
     /// True when the body came from a `#!define name(args) value` form.
     pub(super) is_function: bool,
+    /// True when the replacement spans multiple source lines.
+    pub(super) is_multiline: bool,
     /// The resolved `__script__` backing, when the replacement is one.
     pub(super) script: Option<ScriptMacro>,
 }
@@ -114,6 +116,7 @@ impl Preprocessor {
             params,
             body: body_tokens,
             is_function,
+            is_multiline: span.end.line > span.start.line,
             script,
         });
         Ok(())
