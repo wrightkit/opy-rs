@@ -1506,14 +1506,25 @@ impl<'a> Lowering<'a> {
                 variable, iterable, ..
             } => {
                 let range_spans = match &**iterable {
-                    Expr::Call { args, .. } => args.iter().map(|arg| arg.span().copied()),
+                    Expr::Call { args, .. } => match args.as_slice() {
+                        [stop] => vec![None, stop.span().copied(), None],
+                        [start, stop] => {
+                            vec![start.span().copied(), stop.span().copied(), None]
+                        }
+                        [start, stop, step] => vec![
+                            start.span().copied(),
+                            stop.span().copied(),
+                            step.span().copied(),
+                        ],
+                        _ => return,
+                    },
                     _ => return,
                 };
                 let spans = match &**variable {
                     Expr::PlayerVar { player, .. } => std::iter::once(player.span().copied())
                         .chain(range_spans)
                         .collect::<Vec<_>>(),
-                    _ => range_spans.collect::<Vec<_>>(),
+                    _ => range_spans,
                 };
                 if let Some(action) = actions.first() {
                     if matches!(

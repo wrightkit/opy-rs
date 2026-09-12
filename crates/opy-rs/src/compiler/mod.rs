@@ -792,6 +792,31 @@ mod tests {
     }
 
     #[test]
+    fn range_argument_provenance_uses_canonical_positions() {
+        let compiler = Compiler::new().unwrap();
+        let hir = crate::compile(
+            "globalvar value\nrule \"range\":\n    @Event global\n    for value in range(3):\n        wait(1)\n",
+            "range-provenance.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+
+        assert_eq!(artifact.wir.action_span(0, 0).unwrap().start.line, 4);
+        assert!(artifact.wir.action_argument_span(0, 0, 0).is_none());
+        assert_eq!(
+            artifact
+                .wir
+                .action_argument_span(0, 0, 1)
+                .unwrap()
+                .start
+                .line,
+            4
+        );
+        assert!(artifact.wir.action_argument_span(0, 0, 2).is_none());
+    }
+
+    #[test]
     fn structural_subroutines_lower_to_canonical_wir() {
         let compiler = Compiler::new().unwrap();
         let hir = crate::compile(
