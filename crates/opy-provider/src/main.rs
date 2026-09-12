@@ -12,6 +12,7 @@ use opy_rs::tooling::{CheckOutcome, Diagnostic as OpyDiagnostic, SourceLocation}
 use opy_rs::{CompileDiagnostic, Compiler};
 use serde::Deserialize;
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 
 const PROTOCOL_VERSIONS: [&str; 3] = ["1.0", "1.1", "1.2"];
 const PROJECT_LOADING_VERSION: &str = "1.1";
@@ -482,8 +483,19 @@ impl Server {
                 "content": report.compile.workshop_exact,
             })
         });
-        Ok(json!({ "diagnostics": diagnostics, "artifact": artifact }))
+        let result = json!({
+            "diagnostics": diagnostics,
+            "artifact": artifact,
+            "sourceIdentity": source_identity(project.filesystem.source()),
+        });
+        Ok(result)
     }
+}
+
+fn source_identity(source: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(source.as_bytes());
+    format!("{:x}", hasher.finalize())
 }
 
 fn load_project(params: ProjectParams) -> Result<LoadedRequest, HandlerError> {

@@ -217,6 +217,13 @@ fn compile_returns_canonical_workshop_text_and_no_artifact_on_error() {
         compiled["result"]["artifact"]["format"],
         "workshop-rs/text-v1"
     );
+    assert_eq!(
+        compiled["result"]["sourceIdentity"]
+            .as_str()
+            .expect("source identity")
+            .len(),
+        64
+    );
     assert!(
         compiled["result"]["artifact"]["content"]
             .as_str()
