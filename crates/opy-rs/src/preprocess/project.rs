@@ -180,14 +180,16 @@ impl Preprocessor {
                 canonical_path
             },
         });
-        self.include_stack.push(identity);
+        self.include_stack.push(identity.clone());
         let saved_prefix = self.preprocessing.rule_prefix.clone();
         let saved_optimization = self.preprocessing.optimization.clone();
+        let mut leaves_macro_file_context = false;
         let result = (|| {
             let settings = match crate::settings::find_blocks(&text, file_id) {
                 Err(error) => return Err(error),
                 Ok(mut blocks) => blocks.pop(),
             };
+            let owns_settings = settings.is_some();
             if let Some(block) = settings {
                 if self.settings.is_some() {
                     return Err(OpyError::at(
@@ -209,22 +211,72 @@ impl Preprocessor {
             })?;
             let allow_leading_main_file = text
                 .lines()
-                .next()
-                .is_some_and(|line| line.trim_end_matches('\r').starts_with("#!mainFile"));
+                .map(str::trim)
+                .find(|line| !line.is_empty())
+                .is_some_and(|line| line.starts_with("#!mainFile"));
             self.process_directives(&mut included, allow_leading_main_file)?;
+            leaves_macro_file_context = owns_settings && self.contains_macro_use(&text, file_id);
             included.retain(|token| token.kind != TokenKind::Eof);
             Ok(included)
         })();
         self.preprocessing.rule_prefix = saved_prefix;
         self.preprocessing.optimization = saved_optimization;
         self.include_stack.pop();
-        out.extend(result?);
+        let included = result?;
+        if leaves_macro_file_context {
+            self.last_macro_include_path = Some(identity);
+        }
+        out.extend(included);
         Ok(())
+    }
+
+    fn contains_macro_use(&self, text: &str, file_id: u32) -> bool {
+        let mut source_without_macro_declarations = String::new();
+        let mut in_macro_declaration = false;
+        for line in text.lines() {
+            let trimmed = line.trim_start();
+            if in_macro_declaration {
+                if trimmed.is_empty() || line.starts_with(char::is_whitespace) {
+                    continue;
+                }
+                in_macro_declaration = false;
+            }
+            if trimmed.starts_with("macro ") {
+                in_macro_declaration = true;
+                continue;
+            }
+            source_without_macro_declarations.push_str(line);
+            source_without_macro_declarations.push('\n');
+        }
+        let Ok(tokens) = lex(LexInput {
+            file_id,
+            text: &source_without_macro_declarations,
+        }) else {
+            return false;
+        };
+        tokens.iter().enumerate().any(|(index, token)| {
+            if token.kind != TokenKind::Ident
+                || tokens.get(index.wrapping_sub(1)).is_some_and(|previous| {
+                    previous.kind == TokenKind::Ident && previous.text == "macro"
+                })
+            {
+                return false;
+            }
+            let Some(mac) = self.macros.iter().find(|mac| mac.name == token.text) else {
+                return false;
+            };
+            mac.is_multiline
+                && (!mac.is_function
+                    || tokens
+                        .get(index + 1)
+                        .is_some_and(|next| next.kind == TokenKind::LParen))
+        })
     }
 
     pub(super) fn include_base(&self) -> PathBuf {
         self.include_stack
             .last()
+            .or(self.last_macro_include_path.as_ref())
             .and_then(|path| path.parent())
             .map(Path::to_path_buf)
             .unwrap_or_else(|| self.root.clone())

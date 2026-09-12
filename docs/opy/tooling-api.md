@@ -160,8 +160,8 @@ opy-cli version                                   # crate + source implementatio
 ```
 
 Exit codes: `0` clean/success, `1` diagnostics found, `2` usage or I/O
-errors. `check`/`inspect` resolve includes against the main file's parent
-directory. The CLI runs anywhere the binary runs: no Node, no Workshop
+errors. `check`/`inspect` resolve includes against the entry's include root and
+the resolved file context required by OverPy-compatible legacy layouts. The CLI runs anywhere the binary runs: no Node, no Workshop
 backend, and no runtime data files; the semantic manifest is embedded.
 
 ### Presentation candidate for Issue #43

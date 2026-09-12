@@ -1,0 +1,61 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "settings\n{\n\tmain\n\t{\n\t\tDescription: \"bootstrap\"\n\t}\n\tmodes\n\t{\n\t\tGeneral\n\t\t{\n\t\t\tRespawn Time Scalar: 2%\n\t\t}\n\t}\n}\n\nvariables {\n    global:\n        0: A\n}\n\nrule (\"legacy entry\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(A, 2);\n    }\n}\n",
+    "workshopExact": "settings\n{\n\tmain\n\t{\n\t\tDescription: \"bootstrap\"\n\t}\n\tmodes\n\t{\n\t\tGeneral\n\t\t{\n\t\t\tRespawn Time Scalar: 2%\n\t\t}\n\t}\n}\n\nvariables {\n    global:\n        0: A\n}\n\nrule (\"legacy entry\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(A, 2);\n    }\n}\n\n",
+    "workshopSha256": "476fd83b1ddb2716da3ed9b924adcc9639599d86a693e204824bf66a9f41fe22"
+  },
+  "fixture": "synthetic/legacy-entry-include",
+  "input": {
+    "files": [
+      {
+        "path": "main.opy",
+        "sha256": "096ab68c24e71cf0f05b730eb4a1063d2cef043e132bf5e4fe0c645b7178998b"
+      },
+      {
+        "path": "src/composition/bootstrap.opy",
+        "sha256": "9f0d9a5b9351e64e6a155ba3142fd5c64b5bb5d1da600fcdcc1a4fa9ffa15477"
+      },
+      {
+        "path": "src/constants/player_constants.opy",
+        "sha256": "732104447323683e7ffb97c8a85dfea3c51d76c48649bfaffbe32960268bc80f"
+      },
+      {
+        "path": "src/env/env.opy",
+        "sha256": "02242d1857fd13ae617d7fd8eb9839c9a3f9abefd577ee859abc9dc15ef92704"
+      },
+      {
+        "path": "src/env/game.opy",
+        "sha256": "3a5a1183dde1905a5912831b5fa9593608e69702dbd659dbac77073b56bdd9fd"
+      },
+      {
+        "path": "src/env/vars.opy",
+        "sha256": "4b61c569657bc14614284def37edab88152df53ba4ce5bb87c426564aadc632c"
+      },
+      {
+        "path": "src/locales/en.opy",
+        "sha256": "c31948d23ec2b89116d6e6855a1885da8b1f21892068a14f464b2bfd70c7d3c5"
+      },
+      {
+        "path": "src/main.opy",
+        "sha256": "e9102ee7dbf510522143aacc915a85cc2fcd71e03f65a3d8435605b16470fe09"
+      }
+    ],
+    "sha256": "53b3208062f36f81fc29a1d357e7d440e1bd702976c6a740c35e9d1d53b9d6d8",
+    "source": "main.opy"
+  },
+  "oracle": {
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

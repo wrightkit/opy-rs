@@ -9,7 +9,7 @@ impl Preprocessor {
         let mut out: Vec<Token> = Vec::with_capacity(tokens.len());
         for token in tokens.drain(..) {
             if token.kind == TokenKind::Directive {
-                let is_leading_main_file = allow_leading_main_file && token.span.start.line == 1;
+                let is_leading_main_file = allow_leading_main_file;
                 self.handle_directive(token, &mut out, is_leading_main_file)?;
             } else if token.kind == TokenKind::Ident
                 && matches!(token.text.as_str(), "rule" | "def")

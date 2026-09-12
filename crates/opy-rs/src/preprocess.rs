@@ -174,6 +174,7 @@ pub fn preprocess_with_overlay_outcome(
         display_root: resolved_root,
         overlay: overlay.clone(),
         include_stack: Vec::new(),
+        last_macro_include_path: None,
         imported_files: BTreeSet::new(),
         macros: Vec::new(),
         defines: Vec::new(),
@@ -417,6 +418,9 @@ struct Preprocessor {
     display_root: PathBuf,
     overlay: BTreeMap<String, String>,
     include_stack: Vec<PathBuf>,
+    // OverPy retains this file context after multiline macro expansion in an
+    // included settings block; established projects rely on that lookup base.
+    last_macro_include_path: Option<PathBuf>,
     imported_files: BTreeSet<PathBuf>,
     macros: Vec<MacroDef>,
     settings: Option<SettingsBlock>,

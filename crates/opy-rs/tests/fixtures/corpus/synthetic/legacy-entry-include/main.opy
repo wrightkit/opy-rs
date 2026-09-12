@@ -1,0 +1,1 @@
+#!mainFile "src/main.opy"
