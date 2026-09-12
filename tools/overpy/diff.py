@@ -33,7 +33,7 @@ EXPECTED_COMPILER_COMPARISONS = {
     "compiler-contract",
 }
 CONCRETE_GAP_OWNER = re.compile(r"(?:opy-rs|workshop-rs)#[1-9][0-9]*")
-NUMBER_TOKEN = re.compile(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?")
+NUMBER_TOKEN = re.compile(r"\d[\d.]*")
 
 
 class DiffError(RuntimeError):
@@ -378,7 +378,7 @@ def _sha256(value: str) -> str:
 
 
 def _number_boundary(value: str, start: int, end: int) -> bool:
-    boundary = "._+-"
+    boundary = "._"
     before = value[start - 1] if start else ""
     after = value[end] if end < len(value) else ""
     return (not before or (not before.isalnum() and before not in boundary)) and (
@@ -391,14 +391,13 @@ def _numeric_parts(value: str) -> list[tuple[str, str | Decimal]]:
     text: list[str] = []
     index = 0
     while index < len(value):
-        if value[index] in "\"'":
+        if value[index] == '"':
             start = index
-            quote = value[index]
             index += 1
             while index < len(value):
                 if value[index] == "\\":
                     index += 2
-                elif value[index] == quote:
+                elif value[index] == '"':
                     index += 1
                     break
                 else:

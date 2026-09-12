@@ -210,12 +210,15 @@ class DiffTests(unittest.TestCase):
         self.assertEqual(report_result["status"], "regression")
         self.assertEqual(report_result["stages"][1]["outcome"], "regression")
 
-    def test_numeric_output_comparison_preserves_string_content(self):
-        self.assertFalse(
-            diff.numeric_output_equivalent(
-                'Custom String("0.0")', 'Custom String("0")'
-            )
-        )
+    def test_numeric_output_comparison_rejects_non_workshop_spellings(self):
+        for left, right in (
+            ('Custom String("0.0")', 'Custom String("0")'),
+            ("Value(1000)", "Value(1e3)"),
+            ("Value(0.5)", "Value(.5)"),
+            ("Value(1)", "Value(+1)"),
+        ):
+            with self.subTest(left=left, right=right):
+                self.assertFalse(diff.numeric_output_equivalent(left, right))
 
     def test_compiler_input_hash_mismatch_is_rejected(self):
         result = copy.deepcopy(self.oracle)
