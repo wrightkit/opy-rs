@@ -14,6 +14,7 @@ pub(crate) struct Lowering<'a> {
     values: Vec<Value>,
     actions: Vec<Action>,
     action_origins: Vec<Option<HirSpan>>,
+    action_argument_origins: Vec<Vec<Option<HirSpan>>>,
     globals: HashMap<String, GlobalVarId>,
     global_names: Vec<String>,
     players: HashMap<String, PlayerVarId>,
@@ -121,6 +122,7 @@ impl<'a> Lowering<'a> {
             values: Vec::new(),
             actions: Vec::new(),
             action_origins: Vec::new(),
+            action_argument_origins: Vec::new(),
             globals: HashMap::new(),
             global_names: Vec::new(),
             players: HashMap::new(),
@@ -491,10 +493,13 @@ impl<'a> Lowering<'a> {
                     .get(TRANSLATION_HELPER_NAME)
                     .expect("translation helper variable is created");
                 let value = self.lower_translation_helper(translations)?;
-                Ok(self.push_action(Action::SetGlobalVariable {
+                let action = self.push_action(Action::SetGlobalVariable {
                     variable: self.global_names[variable].clone(),
                     value: self.value(value).clone(),
-                }))
+                });
+                self.mark_action_origins(std::slice::from_ref(&action), translations.span);
+                self.mark_action_argument_origins(action, [translations.span]);
+                Ok(action)
             })
             .transpose()?;
 
@@ -505,14 +510,18 @@ impl<'a> Lowering<'a> {
             if let Some(action) = translation_initializer {
                 actions.push(action);
             }
-            for (name, init_expr, _span, _target_span) in global_initializers {
+            for (name, init_expr, span, _target_span) in global_initializers {
                 let variable = *self.globals.get(name).expect("declared global is created");
                 let value = self.lower_value(init_expr)?;
-                actions.push(self.push_action(Action::SetGlobalVariable {
+                let action = self.push_action(Action::SetGlobalVariable {
                     variable: self.global_names[variable].clone(),
                     value: self.value(value).clone(),
-                }));
+                });
+                self.mark_action_origins(std::slice::from_ref(&action), span);
+                self.mark_action_argument_origins(action, [init_expr.span().copied()]);
+                actions.push(action);
             }
+            let rule_index = self.program.rules.len();
             self.program.rules.push(workshop_rs::Rule {
                 name: self.global_initializer_rule_name(),
                 disabled: false,
@@ -520,23 +529,29 @@ impl<'a> Lowering<'a> {
                 conditions: Vec::new(),
                 actions: self.public_actions(&actions),
             });
+            let action_provenance = self.action_provenance(&actions);
+            self.set_rule_provenance(rule_index, None, std::iter::empty(), action_provenance)?;
         }
 
         if !player_initializers.is_empty() {
             let mut actions = Vec::with_capacity(player_initializers.len());
-            for (name, init_expr, _span, _target_span) in player_initializers {
+            for (name, init_expr, span, _target_span) in player_initializers {
                 let variable = *self
                     .players
                     .get(name)
                     .expect("declared player variable is created");
                 let player = self.push_value(Value::EventPlayer);
                 let value = self.lower_value(init_expr)?;
-                actions.push(self.push_action(Action::SetPlayerVariable {
+                let action = self.push_action(Action::SetPlayerVariable {
                     player: self.value(player).clone(),
                     variable: self.player_names[variable].clone(),
                     value: self.value(value).clone(),
-                }));
+                });
+                self.mark_action_origins(std::slice::from_ref(&action), span);
+                self.mark_action_argument_origins(action, [None, init_expr.span().copied()]);
+                actions.push(action);
             }
+            let rule_index = self.program.rules.len();
             self.program.rules.push(workshop_rs::Rule {
                 name: "Initialize player variables".to_string(),
                 disabled: false,
@@ -544,6 +559,8 @@ impl<'a> Lowering<'a> {
                 conditions: Vec::new(),
                 actions: self.public_actions(&actions),
             });
+            let action_provenance = self.action_provenance(&actions);
+            self.set_rule_provenance(rule_index, None, std::iter::empty(), action_provenance)?;
         }
 
         Ok(())
@@ -596,15 +613,12 @@ impl<'a> Lowering<'a> {
                 .collect(),
             actions: self.public_actions(&actions),
         });
-        let action_spans = actions
-            .iter()
-            .map(|action| self.action_origins[*action])
-            .collect::<Vec<_>>();
+        let action_provenance = self.action_provenance(&actions);
         self.set_rule_provenance(
             rule_index,
             rule.span,
             rule.conditions.iter().map(|expr| expr.span().copied()),
-            action_spans,
+            action_provenance,
         )?;
         Ok(())
     }
@@ -646,11 +660,8 @@ impl<'a> Lowering<'a> {
             conditions: Vec::new(),
             actions: self.public_actions(&actions),
         });
-        let action_spans = actions
-            .iter()
-            .map(|action| self.action_origins[*action])
-            .collect::<Vec<_>>();
-        self.set_rule_provenance(rule_index, span, std::iter::empty(), action_spans)?;
+        let action_provenance = self.action_provenance(&actions);
+        self.set_rule_provenance(rule_index, span, std::iter::empty(), action_provenance)?;
         Ok(())
     }
 
@@ -1400,8 +1411,148 @@ impl<'a> Lowering<'a> {
         };
         if let Ok(actions) = &result {
             self.mark_action_origins(actions, stmt.span().copied());
+            self.mark_statement_argument_origins(stmt, actions);
         }
         result
+    }
+
+    fn mark_statement_argument_origins(&mut self, statement: &Stmt, actions: &[ActionId]) {
+        match statement {
+            Stmt::Assign { target, value, .. } => {
+                let (target_span, index_span) = match &**target {
+                    Expr::Index { array, index, .. } => {
+                        (array.span().copied(), index.span().copied())
+                    }
+                    _ => (target.span().copied(), None),
+                };
+                let value_span = value.span().copied();
+                let modified_value_span = match &**value {
+                    Expr::Binary { right, .. } => right.span().copied(),
+                    _ => value_span,
+                };
+                for action in actions {
+                    let spans = match self.actions.get(*action) {
+                        Some(Action::SetGlobalVariable { .. }) => vec![value_span],
+                        Some(Action::ModifyGlobalVariable { .. }) => vec![modified_value_span],
+                        Some(Action::SetPlayerVariable { .. }) => {
+                            let player_span = match &**target {
+                                Expr::PlayerVar { player, .. } => player.span().copied(),
+                                _ => None,
+                            };
+                            vec![player_span, value_span]
+                        }
+                        Some(Action::ModifyPlayerVariable { .. }) => {
+                            let player_span = match &**target {
+                                Expr::PlayerVar { player, .. } => player.span().copied(),
+                                _ => None,
+                            };
+                            vec![player_span, modified_value_span]
+                        }
+                        Some(Action::Call { name, .. })
+                            if name == "setGlobalVariableAtIndex"
+                                || name == "setPlayerVariableAtIndex" =>
+                        {
+                            vec![target_span, index_span, value_span]
+                        }
+                        Some(Action::Call { name, .. })
+                            if name == "modifyGlobalVariableAtIndex"
+                                || name == "modifyPlayerVariableAtIndex" =>
+                        {
+                            vec![target_span, index_span, None, modified_value_span]
+                        }
+                        _ => continue,
+                    };
+                    self.mark_action_argument_origins(*action, spans);
+                }
+            }
+            Stmt::If { branches, .. } => {
+                let mut depth = 0usize;
+                let mut branch = 0usize;
+                for action in actions {
+                    match self.actions.get(*action) {
+                        Some(Action::If { .. }) => {
+                            if depth == 0 {
+                                self.mark_action_argument_origins(
+                                    *action,
+                                    [branches
+                                        .first()
+                                        .and_then(|branch| branch.condition.span().copied())],
+                                );
+                            }
+                            depth += 1;
+                        }
+                        Some(Action::ElseIf { .. }) if depth == 1 => {
+                            branch += 1;
+                            self.mark_action_argument_origins(
+                                *action,
+                                [branches
+                                    .get(branch)
+                                    .and_then(|branch| branch.condition.span().copied())],
+                            );
+                        }
+                        Some(Action::End) => depth = depth.saturating_sub(1),
+                        _ => {}
+                    }
+                }
+            }
+            Stmt::While { condition, .. } => {
+                if let Some(action) = actions.first() {
+                    if matches!(self.actions.get(*action), Some(Action::While { .. })) {
+                        self.mark_action_argument_origins(*action, [condition.span().copied()]);
+                    }
+                }
+            }
+            Stmt::For {
+                variable, iterable, ..
+            } => {
+                let range_spans = match &**iterable {
+                    Expr::Call { args, .. } => args.iter().map(|arg| arg.span().copied()),
+                    _ => return,
+                };
+                let spans = match &**variable {
+                    Expr::PlayerVar { player, .. } => std::iter::once(player.span().copied())
+                        .chain(range_spans)
+                        .collect::<Vec<_>>(),
+                    _ => range_spans.collect::<Vec<_>>(),
+                };
+                if let Some(action) = actions.first() {
+                    if matches!(
+                        self.actions.get(*action),
+                        Some(Action::ForGlobalVariable { .. })
+                            | Some(Action::ForPlayerVariable { .. })
+                    ) {
+                        self.mark_action_argument_origins(*action, spans);
+                    }
+                }
+            }
+            Stmt::DoWhile { condition, .. } => {
+                if let Some(action) = actions.last() {
+                    if matches!(
+                        self.actions.get(*action),
+                        Some(Action::Call { name, .. }) if name == "loopIf"
+                    ) {
+                        self.mark_action_argument_origins(*action, [condition.span().copied()]);
+                    }
+                }
+            }
+            Stmt::Delete { target, .. } => {
+                for action in actions {
+                    let spans = match self.actions.get(*action) {
+                        Some(Action::SetGlobalVariable { .. })
+                        | Some(Action::ModifyGlobalVariable { .. }) => {
+                            vec![target.span().copied()]
+                        }
+                        Some(Action::SetPlayerVariable { .. })
+                        | Some(Action::ModifyPlayerVariable { .. }) => {
+                            vec![None, target.span().copied()]
+                        }
+                        _ => continue,
+                    };
+                    self.mark_action_argument_origins(*action, spans);
+                }
+            }
+            _ => {}
+        }
     }
 
     fn lower_loop_body(&mut self, statements: &[Stmt]) -> Result<Vec<ActionId>, IntegrationError> {
@@ -2012,7 +2163,7 @@ impl<'a> Lowering<'a> {
     fn lower_debug(
         &mut self,
         expr: &Expr,
-        span: Option<HirSpan>,
+        _span: Option<HirSpan>,
     ) -> Result<ActionId, IntegrationError> {
         macro_rules! call {
             ($name:literal $(, $arg:expr)* $(,)?) => {{
@@ -2021,6 +2172,7 @@ impl<'a> Lowering<'a> {
             }};
         }
 
+        let argument_span = expr.span().copied();
         let value = self.lower_text_value(expr)?;
         let array_text = if self.debug_value_is_array(value) {
             self.lower_debug_array_text(value)
@@ -2079,14 +2231,29 @@ impl<'a> Lowering<'a> {
                 visibility,
             ],
         );
-        let _ = span;
-        Ok(self.push_call_action("createHudText", &args))
+        Ok(self.push_call_action_with_spans(
+            "createHudText",
+            &args,
+            [
+                None,
+                None,
+                argument_span,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            ],
+        ))
     }
 
     fn lower_print(
         &mut self,
         expr: &Expr,
-        span: Option<HirSpan>,
+        _span: Option<HirSpan>,
     ) -> Result<ActionId, IntegrationError> {
         macro_rules! call {
             ($name:literal $(, $arg:expr)* $(,)?) => {{
@@ -2095,6 +2262,7 @@ impl<'a> Lowering<'a> {
             }};
         }
 
+        let argument_span = expr.span().copied();
         let message = self.lower_value(expr)?;
         let padding_text = self.push_value(Value::String(" ".repeat(45)));
         let padding = self.push_call("customString", vec![padding_text]);
@@ -2141,8 +2309,23 @@ impl<'a> Lowering<'a> {
                 visibility,
             ],
         );
-        let _ = span;
-        Ok(self.push_call_action("createHudText", &args))
+        Ok(self.push_call_action_with_spans(
+            "createHudText",
+            &args,
+            [
+                None,
+                argument_span,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            ],
+        ))
     }
 
     fn lower_debug_array_text(&mut self, value: ValueId) -> ValueId {
@@ -3015,11 +3198,15 @@ impl<'a> Lowering<'a> {
             }
         }
         if name == "chaseAtRate" {
+            let spans = args
+                .iter()
+                .map(|expr| expr.span().copied())
+                .collect::<Vec<_>>();
             let args = args
                 .iter()
                 .map(|expr| self.lower_value(expr))
                 .collect::<Result<Vec<_>, _>>()?;
-            return Ok(self.push_call_action(name, &args));
+            return Ok(self.push_call_action_with_spans(name, &args, spans));
         }
         let function = self
             .compiler
@@ -3050,11 +3237,17 @@ impl<'a> Lowering<'a> {
                     subroutine.span().copied(),
                 )
             })?;
+            let subroutine_span = subroutine.span().copied();
+            let behavior_span = behavior.span().copied();
             let subroutine = self.push_value(Value::Subroutine(
                 self.subroutine_names[subroutine_id].clone(),
             ));
             let behavior = self.lower_value(behavior)?;
-            return Ok(self.push_call_action("startRule", &[subroutine, behavior]));
+            return Ok(self.push_call_action_with_spans(
+                "startRule",
+                &[subroutine, behavior],
+                [subroutine_span, behavior_span],
+            ));
         }
         if matches!(
             function.id.as_str(),
@@ -3069,6 +3262,10 @@ impl<'a> Lowering<'a> {
             return self.lower_hud_text(args, span, text_slot, &function.id);
         }
         if function.id == "createDummy" && args.len() == 4 {
+            let spans = args
+                .iter()
+                .map(|expr| expr.span().copied())
+                .chain(std::iter::once(None));
             let mut lowered = args
                 .iter()
                 .map(|expr| self.lower_value(expr))
@@ -3079,7 +3276,7 @@ impl<'a> Lowering<'a> {
             }
             lowered.push(self.push_call("vector", zero_vector));
             let args = self.normalize_contextual_arguments("createDummyBot", lowered);
-            return Ok(self.push_call_action("createDummyBot", &args));
+            return Ok(self.push_call_action_with_spans("createDummyBot", &args, spans));
         }
         let catalog_id = function.catalog_id.as_ref().ok_or_else(|| {
             self.unsupported(
@@ -3090,12 +3287,16 @@ impl<'a> Lowering<'a> {
                 span,
             )
         })?;
+        let spans = args
+            .iter()
+            .map(|expr| expr.span().copied())
+            .collect::<Vec<_>>();
         let args = args
             .iter()
             .map(|expr| self.lower_value(expr))
             .collect::<Result<Vec<_>, _>>()?;
         let args = self.normalize_catalog_argument_domains(catalog_id, args);
-        Ok(self.push_call_action(catalog_id.clone(), &args))
+        Ok(self.push_call_action_with_spans(catalog_id.clone(), &args, spans))
     }
 
     fn normalize_catalog_argument_domains(
@@ -3161,6 +3362,7 @@ impl<'a> Lowering<'a> {
                 span,
             ));
         };
+        let visible_to_span = visible_to.span().copied();
         let visible_to = self.lower_hud_visible_to(visible_to)?;
         let mut text_slots = [
             self.push_value(Value::Null),
@@ -3189,7 +3391,25 @@ impl<'a> Lowering<'a> {
             self.lower_value(spectators)?,
         ];
         let args = self.normalize_contextual_arguments("createHudText", args);
-        Ok(self.push_call_action("createHudText", &args))
+        let text_span = text.span().copied();
+        let color_span = color.span().copied();
+        Ok(self.push_call_action_with_spans(
+            "createHudText",
+            &args,
+            [
+                visible_to_span,
+                (text_slot == 1).then_some(text_span).flatten(),
+                (text_slot == 2).then_some(text_span).flatten(),
+                (text_slot == 3).then_some(text_span).flatten(),
+                position.span().copied(),
+                sort_order.span().copied(),
+                (text_slot == 1).then_some(color_span).flatten(),
+                (text_slot == 2).then_some(color_span).flatten(),
+                (text_slot == 3).then_some(color_span).flatten(),
+                reevaluation.span().copied(),
+                spectators.span().copied(),
+            ],
+        ))
     }
 
     fn lower_hud_visible_to(&mut self, expr: &Expr) -> Result<ValueId, IntegrationError> {
@@ -3239,6 +3459,7 @@ impl<'a> Lowering<'a> {
             } else {
                 ModifyOp::RemoveFromArray
             };
+            let value_span = value.span().copied();
             let value = self.lower_value(value)?;
             let value = self.normalize_modify_value(op, value);
             return match receiver {
@@ -3249,11 +3470,13 @@ impl<'a> Lowering<'a> {
                     let variable = *self.globals.get(name).ok_or_else(|| {
                         self.unsupported(format!("unknown global variable '{name}'"), *target_span)
                     })?;
-                    Ok(self.push_action(Action::ModifyGlobalVariable {
+                    let action = self.push_action(Action::ModifyGlobalVariable {
                         variable: self.global_names[variable].clone(),
                         op,
                         value: self.value(value).clone(),
-                    }))
+                    });
+                    self.mark_action_argument_origins(action, [value_span]);
+                    Ok(action)
                 }
                 Expr::PlayerVar {
                     player,
@@ -3264,13 +3487,16 @@ impl<'a> Lowering<'a> {
                     let variable = *self.players.get(name).ok_or_else(|| {
                         self.unsupported(format!("unknown player variable '{name}'"), *target_span)
                     })?;
+                    let player_span = player.span().copied();
                     let player = self.lower_value(player)?;
-                    Ok(self.push_action(Action::ModifyPlayerVariable {
+                    let action = self.push_action(Action::ModifyPlayerVariable {
                         player: self.value(player).clone(),
                         variable: self.player_names[variable].clone(),
                         op,
                         value: self.value(value).clone(),
-                    }))
+                    });
+                    self.mark_action_argument_origins(action, [player_span, value_span]);
+                    Ok(action)
                 }
                 _ => Err(self.unsupported(
                     "append requires a global or player variable receiver",
@@ -3288,6 +3514,9 @@ impl<'a> Lowering<'a> {
                 span,
             )
         })?;
+        let argument_spans = std::iter::once(receiver.span().copied())
+            .chain(args.iter().map(|arg| arg.span().copied()))
+            .collect::<Vec<_>>();
         let mut lowered = Vec::with_capacity(args.len() + 1);
         lowered.push(self.lower_value(receiver)?);
         lowered.extend(
@@ -3296,7 +3525,7 @@ impl<'a> Lowering<'a> {
                 .collect::<Result<Vec<_>, _>>()?,
         );
         let args = self.normalize_contextual_arguments(catalog_id, lowered);
-        Ok(self.push_call_action(catalog_id.clone(), &args))
+        Ok(self.push_call_action_with_spans(catalog_id.clone(), &args, argument_spans))
     }
 
     fn lower_value(&mut self, expr: &Expr) -> Result<ValueId, IntegrationError> {
@@ -4172,6 +4401,7 @@ impl<'a> Lowering<'a> {
         let id = self.actions.len();
         self.actions.push(action);
         self.action_origins.push(None);
+        self.action_argument_origins.push(Vec::new());
         id
     }
 
@@ -4185,6 +4415,42 @@ impl<'a> Lowering<'a> {
                 *origin = span;
             }
         }
+    }
+
+    fn mark_action_argument_origins<I>(&mut self, action: ActionId, spans: I)
+    where
+        I: IntoIterator<Item = Option<HirSpan>>,
+    {
+        self.action_argument_origins[action] = spans.into_iter().collect();
+    }
+
+    fn action_provenance(
+        &self,
+        actions: &[ActionId],
+    ) -> Vec<(Option<HirSpan>, Vec<Option<HirSpan>>)> {
+        actions
+            .iter()
+            .map(|action| {
+                (
+                    self.action_origins[*action],
+                    self.action_argument_origins[*action].clone(),
+                )
+            })
+            .collect()
+    }
+
+    fn push_call_action_with_spans<I>(
+        &mut self,
+        name: impl Into<String>,
+        args: &[ValueId],
+        spans: I,
+    ) -> ActionId
+    where
+        I: IntoIterator<Item = Option<HirSpan>>,
+    {
+        let action = self.push_call_action(name, args);
+        self.mark_action_argument_origins(action, spans);
+        action
     }
 
     fn value_args(&self, ids: &[ValueId]) -> Vec<Value> {
@@ -4311,7 +4577,7 @@ impl<'a> Lowering<'a> {
     ) -> Result<(), IntegrationError>
     where
         C: IntoIterator<Item = Option<HirSpan>>,
-        A: IntoIterator<Item = Option<HirSpan>>,
+        A: IntoIterator<Item = (Option<HirSpan>, Vec<Option<HirSpan>>)>,
     {
         self.program
             .set_rule_span(rule, self.workshop_span(span)?)
@@ -4321,10 +4587,25 @@ impl<'a> Lowering<'a> {
                 .set_condition_span(rule, index, self.workshop_span(span)?)
                 .map_err(|error| IntegrationError::new("provenance", error.to_string(), span))?;
         }
-        for (index, span) in actions.into_iter().enumerate() {
+        for (index, (span, argument_spans)) in actions.into_iter().enumerate() {
             self.program
                 .set_action_span(rule, index, self.workshop_span(span)?)
                 .map_err(|error| IntegrationError::new("provenance", error.to_string(), span))?;
+            for (argument, span) in argument_spans.into_iter().enumerate() {
+                let Some(span) = span else {
+                    continue;
+                };
+                self.program
+                    .set_action_argument_span(
+                        rule,
+                        index,
+                        argument,
+                        self.workshop_span(Some(span))?,
+                    )
+                    .map_err(|error| {
+                        IntegrationError::new("provenance", error.to_string(), Some(span))
+                    })?;
+            }
         }
         Ok(())
     }

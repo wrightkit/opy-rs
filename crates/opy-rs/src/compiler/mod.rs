@@ -759,17 +759,36 @@ mod tests {
     fn expanded_control_flow_actions_keep_their_originating_spans() {
         let compiler = Compiler::new().unwrap();
         let hir = crate::compile(
-            "rule \"if\":\n    @Event global\n    if true:\n        disableInspector()\n",
+            "globalvar value = 1\nrule \"if\":\n    @Event global\n    if true:\n        wait(1)\n",
             "control-flow-provenance.opy",
             Path::new("."),
         )
         .unwrap();
         let artifact = compiler.compile_hir(&hir).unwrap();
 
-        assert_eq!(artifact.wir.rules[0].actions.len(), 3);
-        assert_eq!(artifact.wir.action_span(0, 0).unwrap().start.line, 3);
-        assert_eq!(artifact.wir.action_span(0, 1).unwrap().start.line, 4);
-        assert_eq!(artifact.wir.action_span(0, 2).unwrap().start.line, 3);
+        assert_eq!(artifact.wir.action_span(0, 0).unwrap().start.line, 1);
+        assert_eq!(
+            artifact
+                .wir
+                .action_argument_span(0, 0, 0)
+                .unwrap()
+                .start
+                .line,
+            1
+        );
+        assert_eq!(artifact.wir.rules[1].actions.len(), 3);
+        assert_eq!(artifact.wir.action_span(1, 0).unwrap().start.line, 4);
+        assert_eq!(artifact.wir.action_span(1, 1).unwrap().start.line, 5);
+        assert_eq!(
+            artifact
+                .wir
+                .action_argument_span(1, 1, 0)
+                .unwrap()
+                .start
+                .line,
+            5
+        );
+        assert_eq!(artifact.wir.action_span(1, 2).unwrap().start.line, 4);
     }
 
     #[test]
