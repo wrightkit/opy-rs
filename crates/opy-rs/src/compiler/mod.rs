@@ -237,10 +237,24 @@ impl Compiler {
             )
         })?;
         workshop_rs::validate::validate_canonical_ids(&lowering.program, &self.catalog).map_err(
-            |error| IntegrationError::new("catalog-validation", error.to_string(), None),
+            |error| {
+                IntegrationError::new(
+                    "catalog-validation",
+                    error.to_string(),
+                    workshop_error_span(&error)
+                        .and_then(|span| hir_span_from_workshop(span, &expanded_hir)),
+                )
+            },
         )?;
         let emitted = workshop_rs::emitter::emit(&lowering.program, &self.catalog, locale)
-            .map_err(|error| IntegrationError::new("workshop-emission", error.to_string(), None))?;
+            .map_err(|error| {
+                IntegrationError::new(
+                    "workshop-emission",
+                    error.to_string(),
+                    workshop_error_span(&error)
+                        .and_then(|span| hir_span_from_workshop(span, &expanded_hir)),
+                )
+            })?;
 
         Ok(CompilationArtifact {
             wir: lowering.program,
@@ -739,6 +753,23 @@ mod tests {
             Some(workshop_rs::Action::While { .. })
         ));
         assert!(artifact.emitted.contains("While(True);"));
+    }
+
+    #[test]
+    fn expanded_control_flow_actions_keep_their_originating_spans() {
+        let compiler = Compiler::new().unwrap();
+        let hir = crate::compile(
+            "rule \"if\":\n    @Event global\n    if true:\n        disableInspector()\n",
+            "control-flow-provenance.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+
+        assert_eq!(artifact.wir.rules[0].actions.len(), 3);
+        assert_eq!(artifact.wir.action_span(0, 0).unwrap().start.line, 3);
+        assert_eq!(artifact.wir.action_span(0, 1).unwrap().start.line, 4);
+        assert_eq!(artifact.wir.action_span(0, 2).unwrap().start.line, 3);
     }
 
     #[test]

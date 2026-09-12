@@ -13,6 +13,7 @@ pub(crate) struct Lowering<'a> {
     pub(super) program: Program,
     values: Vec<Value>,
     actions: Vec<Action>,
+    action_origins: Vec<Option<HirSpan>>,
     globals: HashMap<String, GlobalVarId>,
     global_names: Vec<String>,
     players: HashMap<String, PlayerVarId>,
@@ -119,6 +120,7 @@ impl<'a> Lowering<'a> {
             program: Program::default(),
             values: Vec::new(),
             actions: Vec::new(),
+            action_origins: Vec::new(),
             globals: HashMap::new(),
             global_names: Vec::new(),
             players: HashMap::new(),
@@ -594,15 +596,15 @@ impl<'a> Lowering<'a> {
                 .collect(),
             actions: self.public_actions(&actions),
         });
+        let action_spans = actions
+            .iter()
+            .map(|action| self.action_origins[*action])
+            .collect::<Vec<_>>();
         self.set_rule_provenance(
             rule_index,
             rule.span,
             rule.conditions.iter().map(|expr| expr.span().copied()),
-            actions.iter().enumerate().map(|(index, _)| {
-                rule.actions
-                    .get(index)
-                    .and_then(|statement| statement.span().copied())
-            }),
+            action_spans,
         )?;
         Ok(())
     }
@@ -644,15 +646,11 @@ impl<'a> Lowering<'a> {
             conditions: Vec::new(),
             actions: self.public_actions(&actions),
         });
-        self.set_rule_provenance(
-            rule_index,
-            span,
-            std::iter::empty(),
-            actions.iter().enumerate().map(|(index, _)| {
-                body.get(index)
-                    .and_then(|statement| statement.span().copied())
-            }),
-        )?;
+        let action_spans = actions
+            .iter()
+            .map(|action| self.action_origins[*action])
+            .collect::<Vec<_>>();
+        self.set_rule_provenance(rule_index, span, std::iter::empty(), action_spans)?;
         Ok(())
     }
 
@@ -1000,7 +998,9 @@ impl<'a> Lowering<'a> {
                             let condition = self.lower_value(&branch.condition)?;
                             let condition = self.push_call("not", vec![condition]);
                             let body = self.lower_actions(&branch.body[1..], break_target)?;
-                            actions.extend(self.push_if_actions(vec![(condition, body)], None));
+                            let lowered = self.push_if_actions(vec![(condition, body)], None);
+                            self.mark_action_origins(&lowered, *span);
+                            actions.extend(lowered);
                             index += 1;
                             continue;
                         }
@@ -1055,14 +1055,18 @@ impl<'a> Lowering<'a> {
                         .map(|body| self.lower_actions(body, break_target))
                         .transpose()?;
                     self.outer_goto_targets.pop();
-                    actions.extend(self.push_if_actions(lowered_branches, else_body));
+                    let lowered = self.push_if_actions(lowered_branches, else_body);
+                    self.mark_action_origins(&lowered, *span);
+                    actions.extend(lowered);
                     let mut condition = self.lower_value(&branches[exit_branch].condition)?;
                     for expression in exit_conditions {
                         let right = self.lower_value(&expression)?;
                         condition = self.push_call("and", vec![condition, right]);
                     }
                     let distance_value = self.push_number(distance as f64, &distance.to_string());
-                    actions.push(self.push_call_action("skipIf", &[condition, distance_value]));
+                    let skip = self.push_call_action("skipIf", &[condition, distance_value]);
+                    self.mark_action_origins(std::slice::from_ref(&skip), *span);
+                    actions.push(skip);
                     actions.extend(middle);
                     index = target + 1;
                     continue;
@@ -1100,14 +1104,19 @@ impl<'a> Lowering<'a> {
                         args.push(condition);
                     }
                     args.push(self.push_number(distance as f64, &distance.to_string()));
-                    actions.push(self.push_call_action(
+                    let skip = self.push_call_action(
                         if conditions.is_empty() {
                             "skip"
                         } else {
                             "skipIf"
                         },
                         &args,
-                    ));
+                    );
+                    self.mark_action_origins(
+                        std::slice::from_ref(&skip),
+                        statement.span().copied(),
+                    );
+                    actions.push(skip);
                     actions.extend(middle);
                     index = target + 1;
                     continue;
@@ -1131,6 +1140,7 @@ impl<'a> Lowering<'a> {
                     }
                     let placeholder = self.push_number(0.0, "0");
                     let action = self.push_call_action("skip", &[placeholder]);
+                    self.mark_action_origins(std::slice::from_ref(&action), *span);
                     let position = actions.len();
                     actions.push(action);
                     gotos.push((
@@ -1223,7 +1233,7 @@ impl<'a> Lowering<'a> {
         stmt: &Stmt,
         break_target: Option<BreakTarget>,
     ) -> Result<Vec<ActionId>, IntegrationError> {
-        match stmt {
+        let result = match stmt {
             Stmt::Pass { .. } => Ok(Vec::new()),
             Stmt::Assign {
                 target,
@@ -1387,7 +1397,11 @@ impl<'a> Lowering<'a> {
                     subroutine: self.subroutine_names[subroutine].clone(),
                 })])
             }
+        };
+        if let Ok(actions) = &result {
+            self.mark_action_origins(actions, stmt.span().copied());
         }
+        result
     }
 
     fn lower_loop_body(&mut self, statements: &[Stmt]) -> Result<Vec<ActionId>, IntegrationError> {
@@ -1422,14 +1436,19 @@ impl<'a> Lowering<'a> {
                     }
                     let distance = self.push_number(distance as f64, &distance.to_string());
                     args.push(distance);
-                    actions.push(self.push_call_action(
+                    let skip = self.push_call_action(
                         if conditions.is_empty() {
                             "skip"
                         } else {
                             "skipIf"
                         },
                         &args,
-                    ));
+                    );
+                    self.mark_action_origins(
+                        std::slice::from_ref(&skip),
+                        statement.span().copied(),
+                    );
+                    actions.push(skip);
                 }
                 actions.extend(tail);
                 return Ok(actions);
@@ -1443,6 +1462,7 @@ impl<'a> Lowering<'a> {
                     &continuation_after,
                     structural_after,
                 )?;
+                self.mark_action_origins(&lowered, statement.span().copied());
                 actions.extend(lowered);
                 actions.extend(tail);
                 return Ok(actions);
@@ -1477,14 +1497,19 @@ impl<'a> Lowering<'a> {
                         args.push(condition);
                     }
                     args.push(self.push_number(distance as f64, &distance.to_string()));
-                    actions.push(self.push_call_action(
+                    let skip = self.push_call_action(
                         if conditions.is_empty() {
                             "skip"
                         } else {
                             "skipIf"
                         },
                         &args,
-                    ));
+                    );
+                    self.mark_action_origins(
+                        std::slice::from_ref(&skip),
+                        statement.span().copied(),
+                    );
+                    actions.push(skip);
                     actions.extend(middle);
                     actions.extend(suffix);
                     return Ok(actions);
@@ -1509,10 +1534,15 @@ impl<'a> Lowering<'a> {
                         });
                     }
                     let break_action = self.push_call_action("break", &[]);
+                    self.mark_action_origins(
+                        std::slice::from_ref(&break_action),
+                        statement.span().copied(),
+                    );
                     if let Some(condition) = condition {
-                        actions.extend(
-                            self.push_if_actions(vec![(condition, vec![break_action])], None),
-                        );
+                        let lowered =
+                            self.push_if_actions(vec![(condition, vec![break_action])], None);
+                        self.mark_action_origins(&lowered, statement.span().copied());
+                        actions.extend(lowered);
                     } else {
                         actions.push(break_action);
                     }
@@ -1600,7 +1630,9 @@ impl<'a> Lowering<'a> {
                 let distance = self.push_number(distance as f64, &distance.to_string());
                 let mut args = args;
                 args.push(distance);
-                actions.push(self.push_call_action(name, &args));
+                let skip = self.push_call_action(name, &args);
+                self.mark_action_origins(std::slice::from_ref(&skip), statement.span().copied());
+                actions.push(skip);
                 actions.extend(tail);
                 return Ok(actions);
             }
@@ -4139,7 +4171,20 @@ impl<'a> Lowering<'a> {
     fn push_action(&mut self, action: Action) -> ActionId {
         let id = self.actions.len();
         self.actions.push(action);
+        self.action_origins.push(None);
         id
+    }
+
+    fn mark_action_origins(&mut self, actions: &[ActionId], span: Option<HirSpan>) {
+        for action in actions {
+            let origin = self
+                .action_origins
+                .get_mut(*action)
+                .expect("lowered action origin must resolve");
+            if origin.is_none() {
+                *origin = span;
+            }
+        }
     }
 
     fn value_args(&self, ids: &[ValueId]) -> Vec<Value> {
