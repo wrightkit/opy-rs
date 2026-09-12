@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.32](https://github.com/wrightkit/opy-rs/compare/v0.1.31...v0.1.32) - 2026-09-12
+
+### Added
+
+- *(compiler)* migrate OPY lowering to Program API
+
+### Fixed
+
+- *(compiler)* align range argument provenance
+- *(compiler)* preserve initializer argument provenance
+- *(compiler)* preserve canonical action provenance
+
+### Other
+
+- Merge pull request #248 from wrightkit/codex/opy-rs-issue-244
+- *(compiler)* consume workshop-rs public provenance API
+
 ## [0.1.31](https://github.com/wrightkit/opy-rs/compare/v0.1.29...v0.1.31) - 2026-09-11
 
 ### Fixed
