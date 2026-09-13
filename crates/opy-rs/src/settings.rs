@@ -979,7 +979,7 @@ impl Jsonc<'_> {
         let mut value = self.parse_string_value()?;
         loop {
             let saved = (self.pos, self.line, self.col);
-            self.skip_inline_whitespace();
+            self.skip_whitespace();
             if self.peek() != Some('"') && self.peek() != Some('\'') {
                 self.pos = saved.0;
                 self.line = saved.1;

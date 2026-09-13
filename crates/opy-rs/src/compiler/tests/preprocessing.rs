@@ -69,6 +69,23 @@ fn multiline_function_define_preserves_statement_boundaries() {
 }
 
 #[test]
+fn multiline_object_define_preserves_statement_boundaries() {
+    let hir = crate::compile(
+        "#!define reset A = null\\\nB = []\nglobalvar A\nglobalvar B\nrule \"multiline object macro\":\n    @Event global\n    reset\n",
+        "main.opy",
+        std::path::Path::new("."),
+    )
+    .expect("multiline object-like defines must preserve statement boundaries");
+
+    let RuleEntry::Rule(rule) = &hir.rules[0] else {
+        panic!("expected a rule");
+    };
+    assert_eq!(rule.actions.len(), 2);
+    assert!(matches!(rule.actions[0], Stmt::Assign { .. }));
+    assert!(matches!(rule.actions[1], Stmt::Assign { .. }));
+}
+
+#[test]
 fn nested_includes_resolve_relative_to_the_including_file() {
     let overlay = BTreeMap::from([
         (

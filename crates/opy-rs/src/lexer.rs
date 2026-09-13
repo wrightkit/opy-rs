@@ -229,9 +229,7 @@ impl Lexer {
             let mut text = String::new();
             while self.pos < self.chars.len() {
                 if self.chars[self.pos] == '\\' && self.skip_line_continuation() {
-                    if function_like_define(&text) {
-                        text.push('\n');
-                    }
+                    text.push('\n');
                     continue;
                 }
                 if self.chars[self.pos] == '\n' {
@@ -537,23 +535,6 @@ impl Lexer {
     }
 }
 
-fn function_like_define(text: &str) -> bool {
-    let rest = text
-        .trim_start()
-        .strip_prefix("defineMember")
-        .or_else(|| text.trim_start().strip_prefix("define"))
-        .map(str::trim_start);
-    let Some(rest) = rest else {
-        return false;
-    };
-    let Some(open) = rest.find('(') else {
-        return false;
-    };
-    rest[..open]
-        .find(char::is_whitespace)
-        .is_none_or(|space| open < space)
-}
-
 fn is_ident_start(c: char) -> bool {
     c.is_ascii_alphabetic() || c == '_'
 }
@@ -611,7 +592,7 @@ mod tests {
             .iter()
             .find(|token| token.kind == TokenKind::Directive)
             .unwrap();
-        assert_eq!(directive.text, "define X first +   second");
+        assert_eq!(directive.text, "define X first + \n  second");
         assert_eq!(directive.span.start, Position::new(1, 1));
         assert_eq!(directive.span.end, Position::new(2, 9));
     }
