@@ -13,6 +13,10 @@ pub(super) struct MacroDef {
     pub(super) script: Option<ScriptMacro>,
 }
 
+pub(super) struct MacroArgument {
+    pub(super) raw: String,
+}
+
 impl Preprocessor {
     pub(super) fn define(&mut self, rest: &str, span: Span, is_member: bool) -> OpyResult<()> {
         let rest = rest.trim();
@@ -168,8 +172,12 @@ impl Preprocessor {
         Ok((expanded, after))
     }
 
-    fn collect_args(&self, tokens: &[Token], open: usize) -> OpyResult<(Vec<Vec<Token>>, usize)> {
-        let mut args: Vec<Vec<Token>> = Vec::new();
+    fn collect_args(
+        &self,
+        tokens: &[Token],
+        open: usize,
+    ) -> OpyResult<(Vec<MacroArgument>, usize)> {
+        let mut args: Vec<MacroArgument> = Vec::new();
         let mut current: Vec<Token> = Vec::new();
         let mut depth = 0usize;
         let mut cursor = open + 1;
@@ -184,7 +192,7 @@ impl Preprocessor {
             } else if kind == TokenKind::RParen {
                 if depth == 0 {
                     if !current.is_empty() || !args.is_empty() {
-                        args.push(std::mem::take(&mut current));
+                        args.push(self.finish_argument(std::mem::take(&mut current)));
                     }
                     return Ok((args, cursor + 1));
                 }
@@ -194,7 +202,7 @@ impl Preprocessor {
                 depth = depth.saturating_sub(1);
                 current.push(tokens[cursor].clone());
             } else if kind == TokenKind::Comma && depth == 0 {
-                args.push(std::mem::take(&mut current));
+                args.push(self.finish_argument(std::mem::take(&mut current)));
             } else {
                 current.push(tokens[cursor].clone());
             }
@@ -206,10 +214,46 @@ impl Preprocessor {
         ))
     }
 
+    fn finish_argument(&self, tokens: Vec<Token>) -> MacroArgument {
+        let raw = self
+            .raw_source_text(&tokens)
+            .unwrap_or_else(|| raw_arg_text(&tokens));
+        MacroArgument {
+            raw: raw.trim().to_string(),
+        }
+    }
+
+    fn raw_source_text(&self, tokens: &[Token]) -> Option<String> {
+        let first = tokens.first()?.span;
+        let last = tokens.last()?.span;
+        if first.file != last.file {
+            return None;
+        }
+        let source = self.source_texts.get(&first.file)?;
+        let start = position_offset(source, first.start)?;
+        let end = position_offset(source, last.end)?;
+        let raw = source.get(start..end)?.to_string();
+        let lexed = lex(LexInput {
+            file_id: first.file,
+            text: &raw,
+        })
+        .ok()?;
+        let lexed: Vec<Token> = lexed
+            .into_iter()
+            .filter(|token| token.kind != TokenKind::Eof)
+            .collect();
+        (lexed.len() == tokens.len()
+            && lexed
+                .iter()
+                .zip(tokens)
+                .all(|(left, right)| left.kind == right.kind && left.text == right.text))
+        .then_some(raw)
+    }
+
     fn expand_macro(
         &self,
         mac: &MacroDef,
-        args: Vec<Vec<Token>>,
+        args: Vec<MacroArgument>,
         use_site: Span,
         line_indent: u32,
     ) -> OpyResult<Vec<Token>> {
@@ -233,7 +277,7 @@ impl Preprocessor {
             for (index, param) in mac.params.iter().enumerate() {
                 let argument = args
                     .get(index)
-                    .map_or_else(String::new, |tokens| render_tokens(tokens));
+                    .map_or_else(String::new, |argument| argument.raw.clone());
                 replacement = replace_identifier(&replacement, param, &argument);
             }
         }
@@ -350,6 +394,40 @@ fn line_indent(tokens: &[Token], index: usize) -> u32 {
         .get(line_start..=index)
         .and_then(|line| line.iter().find(|token| token.kind != TokenKind::Newline))
         .map_or(0, |token| token.span.start.col.saturating_sub(1))
+}
+
+fn position_offset(source: &str, position: crate::diag::Position) -> Option<usize> {
+    let mut line = 1;
+    let mut col = 1;
+    if position.line == line && position.col == col {
+        return Some(0);
+    }
+    for (offset, character) in source.char_indices() {
+        if character == '\n' {
+            line += 1;
+            col = 1;
+        } else {
+            col += 1;
+        }
+        if position.line == line && position.col == col {
+            return Some(offset + character.len_utf8());
+        }
+    }
+    (position.line == line && position.col == col).then_some(source.len())
+}
+
+fn raw_arg_text(tokens: &[Token]) -> String {
+    let mut out = String::new();
+    for token in tokens {
+        match token.kind {
+            TokenKind::String => {
+                out.push_str(&serde_json::to_string(&token.text).expect("string serialization"));
+            }
+            TokenKind::Newline => out.push('\n'),
+            _ => out.push_str(&token.text),
+        }
+    }
+    out
 }
 
 pub(super) fn shift_expansion_spans(tokens: &mut [Token], origin: Span) {

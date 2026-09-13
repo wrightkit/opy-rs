@@ -172,6 +172,7 @@ impl Preprocessor {
         };
         let file_id = self.next_file_id;
         self.next_file_id += 1;
+        self.source_texts.insert(file_id, text.clone());
         self.files.push(FileRecord {
             id: file_id,
             path: if uses_overlay {

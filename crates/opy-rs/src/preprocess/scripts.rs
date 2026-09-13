@@ -57,7 +57,7 @@ impl Preprocessor {
         &self,
         mac: &MacroDef,
         script: &ScriptMacro,
-        args: Vec<Vec<Token>>,
+        args: Vec<MacroArgument>,
         use_site: Span,
         line_indent: u32,
     ) -> OpyResult<Vec<Token>> {
@@ -65,7 +65,7 @@ impl Preprocessor {
             .params
             .iter()
             .zip(args.iter())
-            .map(|(param, tokens)| MacroArg::new(param.clone(), raw_arg_text(tokens)))
+            .map(|(param, argument)| MacroArg::new(param.clone(), argument.raw.clone()))
             .collect();
         // Resource limits mirror the pinned reference constants (1000 ms macro
         // budget, 64 MiB memory, 512 KiB stack; see `crate::macro_js::Limits`).
@@ -85,31 +85,6 @@ impl Preprocessor {
         super::macros::shift_expansion_spans(&mut tokens, use_site);
         Ok(tokens)
     }
-}
-
-/// Reconstructs the raw call-site argument text from its tokens.
-///
-/// The reference injects the raw source substring as `var <name>=<raw>;`; the
-/// token model stores string values unescaped, so string tokens are re-quoted
-/// with JSON escaping. The reconstruction is JavaScript-value-equivalent to
-/// the reference's raw injection: identifiers, numbers, operators, and
-/// punctuation pass through verbatim, and string literals differ only in
-/// quoting style, which is unobservable to the script.
-pub(super) fn raw_arg_text(tokens: &[Token]) -> String {
-    let mut out = String::new();
-    for token in tokens {
-        match token.kind {
-            TokenKind::String => out.push_str(&json_string_literal(&token.text)),
-            TokenKind::Newline => out.push('\n'),
-            _ => out.push_str(&token.text),
-        }
-    }
-    out
-}
-
-/// Encodes `value` as a JSON string literal (double-quoted, escaped).
-fn json_string_literal(value: &str) -> String {
-    serde_json::to_string(value).expect("serializing a string is infallible")
 }
 
 /// Maps a runtime [`MacroError`] to a structured frontend diagnostic with the

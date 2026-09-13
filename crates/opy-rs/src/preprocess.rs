@@ -55,7 +55,7 @@ mod macros;
 mod project;
 mod scripts;
 
-use macros::MacroDef;
+use macros::{MacroArgument, MacroDef};
 use project::{display_path, first_main_file_directive};
 
 /// A recorded preprocessing define (HIR provenance).
@@ -173,6 +173,7 @@ pub fn preprocess_with_overlay_outcome(
         root: resolved_root.clone(),
         display_root: resolved_root,
         overlay: overlay.clone(),
+        source_texts: BTreeMap::from([(0, main_text.to_string())]),
         include_stack: Vec::new(),
         last_macro_include_path: None,
         imported_files: BTreeSet::new(),
@@ -258,8 +259,9 @@ pub fn preprocess_with_overlay_outcome(
         };
         let display_path =
             display_path(&candidate, canonical_path.as_deref(), &new_root, &main_file);
-        owned_main_text = Some(text);
         source_file_id = 1;
+        pre.source_texts.insert(source_file_id, text.clone());
+        owned_main_text = Some(text);
         pre.files.push(FileRecord {
             id: source_file_id,
             path: display_path,
@@ -392,6 +394,7 @@ struct Preprocessor {
     root: PathBuf,
     display_root: PathBuf,
     overlay: BTreeMap<String, String>,
+    source_texts: BTreeMap<u32, String>,
     include_stack: Vec<PathBuf>,
     // OverPy retains this file context after multiline macro expansion in an
     // included settings block; established projects rely on that lookup base.
@@ -584,7 +587,7 @@ mod tests {
     #[test]
     fn function_define_substitutes_inside_string_text() {
         let (pre, _) = preprocess(
-            "#!define wrap(value) \"value\"\nwrap(1)\n",
+            "#!define wrap(value) \"value\"\nwrap(foo + bar)\n",
             "main.opy",
             Path::new("."),
         )
@@ -595,7 +598,7 @@ mod tests {
             .filter(|token| token.kind == TokenKind::String)
             .map(|token| token.text.as_str())
             .collect();
-        assert_eq!(strings, vec!["1"]);
+        assert_eq!(strings, vec!["foo + bar"]);
     }
 
     #[test]
