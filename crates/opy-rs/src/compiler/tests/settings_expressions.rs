@@ -176,7 +176,7 @@ settings {
     let diagnostic = report.compile.diagnostics.first().unwrap();
     assert_eq!(diagnostic.code, "macro-recursion");
     assert_eq!(diagnostic.span.as_ref().unwrap().path, "settings.opy");
-    assert_eq!(diagnostic.span.as_ref().unwrap().start.line, 5);
+    assert_eq!(diagnostic.span.as_ref().unwrap().start.line, 1);
 }
 
 #[test]

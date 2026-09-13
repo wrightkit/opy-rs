@@ -55,7 +55,7 @@ mod macros;
 mod project;
 mod scripts;
 
-use macros::MacroDef;
+use macros::{MacroArgument, MacroDef};
 use project::{display_path, first_main_file_directive};
 
 /// A recorded preprocessing define (HIR provenance).
@@ -173,6 +173,7 @@ pub fn preprocess_with_overlay_outcome(
         root: resolved_root.clone(),
         display_root: resolved_root,
         overlay: overlay.clone(),
+        source_texts: BTreeMap::from([(0, main_text.to_string())]),
         include_stack: Vec::new(),
         last_macro_include_path: None,
         imported_files: BTreeSet::new(),
@@ -258,8 +259,9 @@ pub fn preprocess_with_overlay_outcome(
         };
         let display_path =
             display_path(&candidate, canonical_path.as_deref(), &new_root, &main_file);
-        owned_main_text = Some(text);
         source_file_id = 1;
+        pre.source_texts.insert(source_file_id, text.clone());
+        owned_main_text = Some(text);
         pre.files.push(FileRecord {
             id: source_file_id,
             path: display_path,
@@ -286,7 +288,6 @@ pub fn preprocess_with_overlay_outcome(
             };
         }
     };
-    pre.settings = settings.clone();
     let tokens = match &settings {
         Some(block) => {
             let sanitized = crate::settings::sanitize_for_lex(source_text, block);
@@ -310,52 +311,28 @@ pub fn preprocess_with_overlay_outcome(
             };
         }
     };
-    if let Err(error) = pre.process_directives(&mut tokens, false) {
+    if let Err(error) = pre.process_directives(&mut tokens, false, settings) {
         return PreprocessOutcome {
             result: Err(error),
             files: pre.files,
             warnings: pre.warnings,
         };
     }
-    match pre.expand(tokens) {
-        Ok(tokens) => {
-            let settings = match pre
-                .settings
-                .take()
-                .map(|block| pre.expand_settings(block))
-                .transpose()
-            {
-                Ok(settings) => settings,
-                Err(error) => {
-                    return PreprocessOutcome {
-                        result: Err(error),
-                        files: pre.files,
-                        warnings: pre.warnings,
-                    };
-                }
-            };
-            let result = Ok((
-                Preprocessed {
-                    tokens,
-                    defines: pre.defines,
-                    settings,
-                    warnings: pre.warnings.clone(),
-                    post_compile_hook: pre.post_compile_hook,
-                    preprocessing: pre.preprocessing,
-                },
-                pre.files.clone(),
-            ));
-            PreprocessOutcome {
-                result,
-                files: pre.files,
-                warnings: pre.warnings,
-            }
-        }
-        Err(error) => PreprocessOutcome {
-            result: Err(error),
-            files: pre.files,
-            warnings: pre.warnings,
+    let result = Ok((
+        Preprocessed {
+            tokens,
+            defines: pre.defines,
+            settings: pre.settings,
+            warnings: pre.warnings.clone(),
+            post_compile_hook: pre.post_compile_hook,
+            preprocessing: pre.preprocessing,
         },
+        pre.files.clone(),
+    ));
+    PreprocessOutcome {
+        result,
+        files: pre.files,
+        warnings: pre.warnings,
     }
 }
 
@@ -417,6 +394,7 @@ struct Preprocessor {
     root: PathBuf,
     display_root: PathBuf,
     overlay: BTreeMap<String, String>,
+    source_texts: BTreeMap<u32, String>,
     include_stack: Vec<PathBuf>,
     // OverPy retains this file context after multiline macro expansion in an
     // included settings block; established projects rely on that lookup base.
@@ -435,7 +413,7 @@ impl Preprocessor {
     /// the extracted settings values. Settings are removed before the source
     /// token stream is processed, so this pass is the point where `#!define`
     /// values become visible to the settings parser.
-    fn expand_settings(&self, block: SettingsBlock) -> OpyResult<SettingsBlock> {
+    pub(super) fn expand_settings(&self, block: SettingsBlock) -> OpyResult<SettingsBlock> {
         let tokens = lex(LexInput {
             file_id: block.span.file,
             text: &block.text,
@@ -583,6 +561,89 @@ mod tests {
             Path::new("."),
         )
         .unwrap_err();
+        assert_eq!(error.code, "macro-recursion");
+    }
+
+    #[test]
+    fn defines_are_only_visible_after_their_directive() {
+        let (pre, _) = preprocess(
+            "VALUE\n#!define VALUE 1\nVALUE\n#!allowMacroRedeclaration\n#!define VALUE 2\nVALUE\n",
+            "main.opy",
+            Path::new("."),
+        )
+        .expect("ordered define expansion");
+        let numbers: Vec<&str> = pre
+            .tokens
+            .iter()
+            .filter(|token| token.kind == TokenKind::Number)
+            .map(|token| token.text.as_str())
+            .collect();
+        assert_eq!(numbers, vec!["1", "2"]);
+        assert!(pre.tokens.iter().any(|token| {
+            token.kind == TokenKind::Ident && token.text == "VALUE" && token.span.start.line == 1
+        }));
+    }
+
+    #[test]
+    fn function_define_substitutes_inside_string_text() {
+        let (pre, _) = preprocess(
+            "#!define wrap(value) \"value\"\nwrap(foo + bar)\n",
+            "main.opy",
+            Path::new("."),
+        )
+        .expect("textual define expansion");
+        let strings: Vec<&str> = pre
+            .tokens
+            .iter()
+            .filter(|token| token.kind == TokenKind::String)
+            .map(|token| token.text.as_str())
+            .collect();
+        assert_eq!(strings, vec!["foo + bar"]);
+    }
+
+    #[test]
+    fn multiline_define_preserves_relative_expansion_spans() {
+        let (pre, _) = preprocess(
+            "#!define block() A = 1\\\n    A = 2\nblock()\n",
+            "main.opy",
+            Path::new("."),
+        )
+        .expect("multiline define expansion");
+        let numbers: Vec<Span> = pre
+            .tokens
+            .iter()
+            .filter(|token| token.kind == TokenKind::Number)
+            .map(|token| token.span)
+            .collect();
+        assert_eq!(numbers.len(), 2);
+        assert_eq!(numbers[0].start.line, 3);
+        assert_eq!(numbers[1].start.line, 4);
+        assert_eq!(numbers[1].start.col, 9);
+    }
+
+    #[test]
+    fn function_define_requires_a_call_with_the_expected_arity() {
+        let error = preprocess(
+            "#!define value(argument) argument + 1\nvalue\n",
+            "main.opy",
+            Path::new("."),
+        )
+        .expect_err("a function-like define used without parentheses must fail arity checking");
+        assert_eq!(error.code, "macro-arity");
+    }
+
+    #[test]
+    fn exact_object_define_self_reference_is_rejected_at_definition() {
+        let error = preprocess("#!define VALUE VALUE\n", "main.opy", Path::new("."))
+            .expect_err("an exact object define self-reference must fail at definition");
+        assert_eq!(error.code, "macro-recursion");
+
+        let error = preprocess(
+            "#!define value(argument) value(argument)\n",
+            "main.opy",
+            Path::new("."),
+        )
+        .expect_err("an exact function define self-reference must fail at definition");
         assert_eq!(error.code, "macro-recursion");
     }
 

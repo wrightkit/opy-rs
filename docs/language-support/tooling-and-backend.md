@@ -9,7 +9,7 @@ upstream README, `overpy.d.ts`, `cli.js`, compiler/decompiler sources,
 
 | Feature | Status | Notes |
 | --- | --- | --- |
-| `#!define`/`#!defineMember` object/function macros and `#!undef` | ✅ Supported | Member defines use the same textual expansion contract and preserve definition-site provenance. |
+| `#!define`/`#!defineMember` object/function macros | ✅ Supported | Member defines use the same textual expansion contract and preserve definition-site provenance. |
 | `#!allowMacroRedeclaration` | ✅ Supported | Duplicate-definition policy is represented in preprocessing state. |
 | `#!mainFile`, `#!include`, `#!excludeVariablesInCompilation` | ✅ Supported | Main-file selection, including-file-relative composition, and output filtering have separate effects. |
 | Optimization controls (`#!enableOptimizations`, `#!disableOptimizations`, `#!optimize*`) | ✅ Source-supported | Directive state is recorded; optimizer output remains a backend concern. |

@@ -353,7 +353,7 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         &mut cases,
         "synthetic/preprocessing",
         false,
-        "include + object/function-like defines + undef; oracle status success.",
+        "include + object/function-like defines; oracle status success.",
     );
     resolve(
         &mut cases,

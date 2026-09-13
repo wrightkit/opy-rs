@@ -40,7 +40,7 @@ repository:
 | `declarations-rules` | `globalvar`/`playervar`/`subroutine`/`def`/`enum`, rule headers |
 | `declarations-numbers` | numeric literal forms and variable-index declarations |
 | `expressions-values` | expressions, arrays, strings, vectors, calls, `.format` |
-| `preprocessing` | `#!include` (with `shared.opy`), `#!define` object/function-like, `#!undef` |
+| `preprocessing` | `#!include` (with `shared.opy`), `#!define` object/function-like |
 | `directives-scoped` | Pinned positive probe for rule-prefix templates, include prefix restoration, macro/enum redeclaration, and normalized translations |
 | `translations-invalid` | Pinned negative probe for a translation code outside the oracle's exact set |
 | `include-scope` | Pinned nested-include probe for observable optimization state transitions |
