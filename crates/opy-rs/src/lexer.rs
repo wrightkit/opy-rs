@@ -229,6 +229,7 @@ impl Lexer {
             let mut text = String::new();
             while self.pos < self.chars.len() {
                 if self.chars[self.pos] == '\\' && self.skip_line_continuation() {
+                    text.push('\n');
                     continue;
                 }
                 if self.chars[self.pos] == '\n' {
@@ -591,7 +592,7 @@ mod tests {
             .iter()
             .find(|token| token.kind == TokenKind::Directive)
             .unwrap();
-        assert_eq!(directive.text, "define X first +   second");
+        assert_eq!(directive.text, "define X first + \n  second");
         assert_eq!(directive.span.start, Position::new(1, 1));
         assert_eq!(directive.span.end, Position::new(2, 9));
     }
