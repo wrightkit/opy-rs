@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.36](https://github.com/wrightkit/opy-rs/compare/v0.1.35...v0.1.36) - 2026-09-13
+
+### Fixed
+
+- *(preprocess)* match OverPy macro evaluation order ([#263](https://github.com/wrightkit/opy-rs/pull/263))
+- *(preprocess)* preserve multiline macro compatibility ([#262](https://github.com/wrightkit/opy-rs/pull/262))
+
 ## [0.1.35](https://github.com/wrightkit/opy-rs/compare/v0.1.34...v0.1.35) - 2026-09-13
 
 ### Fixed
