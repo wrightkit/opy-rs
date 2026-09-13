@@ -1,9 +1,10 @@
 //! Settings compile-time expression coverage.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use crate::hir::SettingsNode;
-use crate::{CompileStatus, Compiler};
+use crate::{CompileStatus, Compiler, compile_with_overlay};
 use workshop_rs::catalog::{Catalog, Locale};
 use workshop_rs::roundtrip::equivalent;
 use workshop_rs::settings::{
@@ -12,6 +13,41 @@ use workshop_rs::settings::{
 
 fn source_with_settings(settings: &str) -> String {
     format!("{settings}\nrule \"settings\":\n    @Event global\n    pass\n")
+}
+
+#[test]
+fn multiline_define_string_composition_resolves_in_settings() {
+    let overlay = BTreeMap::from([
+        (
+            "constants.opy".to_string(),
+            r##"#!define DESCRIPTION \
+    "hello" \
+    "world"
+"##
+            .to_string(),
+        ),
+        (
+            "settings.opy".to_string(),
+            r##"settings {
+    "main": {
+        "description": DESCRIPTION
+    },
+    "gamemodes": {}
+}"##
+            .to_string(),
+        ),
+    ]);
+    let source = "#!include \"constants.opy\"\n#!include \"settings.opy\"\nrule \"settings\":\n    @Event global\n    pass\n";
+    let hir = compile_with_overlay(source, "source.opy", Path::new("."), &overlay).unwrap();
+    let settings = hir.settings.as_ref().unwrap();
+    let main = match &settings.children[0] {
+        SettingsNode::Group { children, .. } => children,
+        other => panic!("expected main group, got {other:?}"),
+    };
+    assert!(matches!(
+        &main[0],
+        SettingsNode::String { value, .. } if value == "helloworld"
+    ));
 }
 
 #[test]
