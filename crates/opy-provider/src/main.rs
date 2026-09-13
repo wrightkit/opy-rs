@@ -491,17 +491,14 @@ impl Server {
         let result = json!({
             "diagnostics": diagnostics,
             "artifact": artifact,
-            "sourceIdentity": source_identity(&project, &check_outcome)?,
+            "sourceIdentity": source_identity(&project)?,
         });
         Ok(result)
     }
 }
 
-fn source_identity(
-    project: &LoadedProject,
-    outcome: &CheckOutcome,
-) -> Result<String, HandlerError> {
-    let source = if let Some(path) = effective_primary_source_path(project, outcome)? {
+fn source_identity(project: &LoadedProject) -> Result<String, HandlerError> {
+    let source = if let Some(path) = effective_primary_source_path(project)? {
         fs::read_to_string(&path).map_err(|error| HandlerError::Lpp {
             kind: "providerFailure",
             details: json!({ "code": "source-identity-read" }),
@@ -513,10 +510,7 @@ fn source_identity(
     Ok(hash_source(&source))
 }
 
-fn effective_primary_source_path(
-    project: &LoadedProject,
-    outcome: &CheckOutcome,
-) -> Result<Option<PathBuf>, HandlerError> {
+fn effective_primary_source_path(project: &LoadedProject) -> Result<Option<PathBuf>, HandlerError> {
     let Some(first_line) = project.filesystem.source().lines().next() else {
         return Ok(None);
     };
@@ -537,16 +531,17 @@ fn effective_primary_source_path(
     if main_file.is_empty() {
         return Ok(None);
     }
-    let file = outcome
-        .files
-        .iter()
-        .find(|file| file.id == 1)
-        .ok_or_else(|| HandlerError::Lpp {
+    let path = project
+        .filesystem
+        .root()
+        .join(main_file)
+        .canonicalize()
+        .map_err(|error| HandlerError::Lpp {
             kind: "providerFailure",
-            details: json!({ "code": "source-identity-file" }),
-            message: "effective primary source is missing from the file registry".to_string(),
+            details: json!({ "code": "source-identity-read" }),
+            message: format!("cannot resolve effective primary source: {error}"),
         })?;
-    Ok(Some(resolved_project_path(project, &file.path)))
+    Ok(Some(path))
 }
 
 fn hash_source(source: &str) -> String {

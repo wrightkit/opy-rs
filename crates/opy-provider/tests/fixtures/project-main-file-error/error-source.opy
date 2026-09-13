@@ -1,1 +1,1 @@
-#!mainFile "error-entry.opy"
+#!mainFile "sub/error-entry.opy"
