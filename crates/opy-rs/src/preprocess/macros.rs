@@ -4,7 +4,7 @@ use super::*;
 pub(super) struct MacroDef {
     pub(super) name: String,
     pub(super) params: Vec<String>,
-    pub(super) body: Vec<Token>,
+    pub(super) body_text: String,
     /// True when the body came from a `#!define name(args) value` form.
     pub(super) is_function: bool,
     /// True when the replacement spans multiple source lines.
@@ -20,7 +20,7 @@ impl Preprocessor {
         let first_space = rest.find(char::is_whitespace).unwrap_or(rest.len());
         let is_function_like = first_open < first_space;
 
-        let (name, params, body_text) = if is_function_like {
+        let (name, params, body_text, macro_text) = if is_function_like {
             let name = rest[..first_open].trim();
             let Some(close) = rest[first_open..].find(')') else {
                 return Err(OpyError::at(
@@ -36,11 +36,16 @@ impl Preprocessor {
                 .filter(|p| !p.is_empty())
                 .collect();
             let body = rest[close + 1..].trim();
-            (name.to_string(), params, body.to_string())
+            (
+                name.to_string(),
+                params,
+                body.to_string(),
+                rest[..=close].trim().to_string(),
+            )
         } else {
             let name = rest[..first_space].trim();
             let body = rest[first_space..].trim().to_string();
-            (name.to_string(), Vec::new(), body)
+            (name.to_string(), Vec::new(), body, name.to_string())
         };
         if name.is_empty() {
             return Err(OpyError::at(
@@ -53,6 +58,13 @@ impl Preprocessor {
             return Err(OpyError::at(
                 "define-invalid",
                 format!("malformed `#!define {rest}`: missing replacement"),
+                span,
+            ));
+        }
+        if body_text == macro_text {
+            return Err(OpyError::at(
+                "macro-recursion",
+                format!("macro '{name}' references itself"),
                 span,
             ));
         }
@@ -96,14 +108,6 @@ impl Preprocessor {
         } else {
             None
         };
-        let body_tokens = lex(LexInput {
-            file_id: span.file,
-            text: &body_text,
-        })?;
-        let body_tokens: Vec<Token> = body_tokens
-            .into_iter()
-            .filter(|t| t.kind != TokenKind::Eof)
-            .collect();
         let is_function = is_function_like;
         self.defines.push(DefineRecord {
             name: name.clone(),
@@ -114,9 +118,9 @@ impl Preprocessor {
         self.macros.push(MacroDef {
             name,
             params,
-            body: body_tokens,
+            body_text: body_text.clone(),
             is_function,
-            is_multiline: span.end.line > span.start.line,
+            is_multiline: span.end.line > span.start.line || body_text.contains('\n'),
             script,
         });
         Ok(())
@@ -126,39 +130,42 @@ impl Preprocessor {
         let mut out: Vec<Token> = Vec::new();
         let mut index = 0;
         while index < tokens.len() {
-            let token = &tokens[index];
-            if token.kind == TokenKind::Ident
-                && !out.last().is_some_and(|previous| {
-                    previous.kind == TokenKind::Ident && previous.text == "macro"
-                })
-            {
-                let name = token.text.clone();
-                if let Some(mac) = self.macros.iter().find(|m| m.name == name) {
-                    if mac.is_function {
-                        let cursor = index + 1;
-                        if cursor < tokens.len() && tokens[cursor].kind == TokenKind::LParen {
-                            let (args, after) = self.collect_args(&tokens, cursor)?;
-                            let mut expanded = self.expand_macro(mac, args, token.span)?;
-                            self.expand_into(&mut expanded, &mut Vec::new(), 0)?;
-                            out.append(&mut expanded);
-                            index = after;
-                            continue;
-                        }
-                        out.push(token.clone());
-                        index += 1;
-                        continue;
-                    }
-                    let mut expanded = self.expand_macro(mac, Vec::new(), token.span)?;
-                    self.expand_into(&mut expanded, &mut Vec::new(), 0)?;
-                    out.append(&mut expanded);
-                    index += 1;
-                    continue;
-                }
-            }
-            out.push(token.clone());
-            index += 1;
+            let (expanded, after) = self.expand_one(&tokens, index, &out)?;
+            out.extend(expanded);
+            index = after;
         }
         Ok(out)
+    }
+
+    pub(super) fn expand_one(
+        &self,
+        tokens: &[Token],
+        index: usize,
+        output: &[Token],
+    ) -> OpyResult<(Vec<Token>, usize)> {
+        let token = &tokens[index];
+        if token.kind != TokenKind::Ident
+            || output.last().is_some_and(|previous| {
+                previous.kind == TokenKind::Ident && previous.text == "macro"
+            })
+        {
+            return Ok((vec![token.clone()], index + 1));
+        }
+        let Some(mac) = self.macros.iter().find(|mac| mac.name == token.text) else {
+            return Ok((vec![token.clone()], index + 1));
+        };
+        let (args, after) = if mac.is_function
+            && tokens
+                .get(index + 1)
+                .is_some_and(|next| next.kind == TokenKind::LParen)
+        {
+            self.collect_args(tokens, index + 1)?
+        } else {
+            (Vec::new(), index + 1)
+        };
+        let mut expanded = self.expand_macro(mac, args, token.span, line_indent(tokens, index))?;
+        self.expand_into(&mut expanded, &mut Vec::new(), 0)?;
+        Ok((expanded, after))
     }
 
     fn collect_args(&self, tokens: &[Token], open: usize) -> OpyResult<(Vec<Vec<Token>>, usize)> {
@@ -199,17 +206,12 @@ impl Preprocessor {
         ))
     }
 
-    /// Substitute macro params with the call arguments and stamp every
-    /// expanded token with the use-site span.
-    ///
-    /// Expanded tokens share the use-site span: the differential suite
-    /// normalizes spans away, and stamping the whole expansion with one
-    /// monotonic span keeps downstream span validation trivially valid.
     fn expand_macro(
         &self,
         mac: &MacroDef,
         args: Vec<Vec<Token>>,
         use_site: Span,
+        line_indent: u32,
     ) -> OpyResult<Vec<Token>> {
         if mac.is_function && args.len() != mac.params.len() {
             return Err(OpyError::at(
@@ -224,30 +226,28 @@ impl Preprocessor {
             ));
         }
         if let Some(script) = &mac.script {
-            return self.expand_script(mac, script, args, use_site);
+            return self.expand_script(mac, script, args, use_site, line_indent);
         }
-        let mut out = Vec::new();
-        for token in &mac.body {
-            if mac.is_function
-                && token.kind == TokenKind::Ident
-                && mac.params.iter().any(|p| p == &token.text)
-            {
-                let param_index = mac
-                    .params
-                    .iter()
-                    .position(|p| p == &token.text)
-                    .expect("checked above");
-                let mut replacement = args.get(param_index).cloned().unwrap_or_default();
-                for replacement_token in &mut replacement {
-                    replacement_token.span = use_site;
-                }
-                out.extend(replacement);
-            } else {
-                let mut token = token.clone();
-                token.span = use_site;
-                out.push(token);
+        let mut replacement = mac.body_text.clone();
+        if mac.is_function {
+            for (index, param) in mac.params.iter().enumerate() {
+                let argument = args
+                    .get(index)
+                    .map_or_else(String::new, |tokens| render_tokens(tokens));
+                replacement = replace_identifier(&replacement, param, &argument);
             }
         }
+        replacement = replacement.replace("\\\n", "\n");
+        if replacement.contains('\n') {
+            let indent = " ".repeat(line_indent as usize);
+            replacement = replacement.replace('\n', &format!("\n{indent}"));
+        }
+        let mut out = lex(LexInput {
+            file_id: use_site.file,
+            text: &replacement,
+        })?;
+        out.retain(|token| token.kind != TokenKind::Eof);
+        shift_expansion_spans(&mut out, use_site);
         Ok(out)
     }
 
@@ -297,7 +297,12 @@ impl Preprocessor {
                     if mac.is_function {
                         if index + 1 < tokens.len() && tokens[index + 1].kind == TokenKind::LParen {
                             let (args, after) = self.collect_args(tokens, index + 1)?;
-                            let mut expanded = self.expand_macro(mac, args, token.span)?;
+                            let mut expanded = self.expand_macro(
+                                mac,
+                                args,
+                                token.span,
+                                line_indent(tokens, index),
+                            )?;
                             stack.push(name.clone());
                             self.expand_into(&mut expanded, stack, depth + 1)?;
                             stack.pop();
@@ -305,11 +310,21 @@ impl Preprocessor {
                             index = after;
                             continue;
                         }
-                        out.push(token.clone());
+                        let mut expanded = self.expand_macro(
+                            mac,
+                            Vec::new(),
+                            token.span,
+                            line_indent(tokens, index),
+                        )?;
+                        stack.push(name.clone());
+                        self.expand_into(&mut expanded, stack, depth + 1)?;
+                        stack.pop();
+                        out.append(&mut expanded);
                         index += 1;
                         continue;
                     }
-                    let mut expanded = self.expand_macro(mac, Vec::new(), token.span)?;
+                    let mut expanded =
+                        self.expand_macro(mac, Vec::new(), token.span, line_indent(tokens, index))?;
                     stack.push(name.clone());
                     self.expand_into(&mut expanded, stack, depth + 1)?;
                     stack.pop();
@@ -324,4 +339,71 @@ impl Preprocessor {
         *tokens = out;
         Ok(())
     }
+}
+
+fn line_indent(tokens: &[Token], index: usize) -> u32 {
+    let line_start = tokens[..index]
+        .iter()
+        .rposition(|token| token.kind == TokenKind::Newline)
+        .map_or(0, |position| position + 1);
+    tokens
+        .get(line_start..=index)
+        .and_then(|line| line.iter().find(|token| token.kind != TokenKind::Newline))
+        .map_or(0, |token| token.span.start.col.saturating_sub(1))
+}
+
+pub(super) fn shift_expansion_spans(tokens: &mut [Token], origin: Span) {
+    fn shift(
+        position: crate::diag::Position,
+        origin: crate::diag::Position,
+    ) -> crate::diag::Position {
+        crate::diag::Position::new(
+            origin.line + position.line.saturating_sub(1),
+            if position.line == 1 {
+                origin.col + position.col.saturating_sub(1)
+            } else {
+                position.col
+            },
+        )
+    }
+    for token in tokens {
+        token.span = Span::new(
+            origin.file,
+            shift(token.span.start, origin.start),
+            shift(token.span.end, origin.start),
+        );
+    }
+}
+
+fn replace_identifier(source: &str, identifier: &str, replacement: &str) -> String {
+    fn is_word(character: Option<char>) -> bool {
+        character.is_some_and(|character| character.is_ascii_alphanumeric() || character == '_')
+    }
+
+    let source_chars: Vec<char> = source.chars().collect();
+    let identifier_chars: Vec<char> = identifier.chars().collect();
+    if identifier_chars.is_empty() {
+        return source.to_string();
+    }
+    let mut result = String::with_capacity(source.len());
+    let mut index = 0;
+    while index < source_chars.len() {
+        let end = index + identifier_chars.len();
+        if end <= source_chars.len()
+            && source_chars[index..end] == identifier_chars
+            && !is_word(
+                index
+                    .checked_sub(1)
+                    .and_then(|position| source_chars.get(position).copied()),
+            )
+            && !is_word(source_chars.get(end).copied())
+        {
+            result.push_str(replacement);
+            index = end;
+        } else {
+            result.push(source_chars[index]);
+            index += 1;
+        }
+    }
+    result
 }

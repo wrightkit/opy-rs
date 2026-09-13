@@ -59,6 +59,7 @@ impl Preprocessor {
         script: &ScriptMacro,
         args: Vec<Vec<Token>>,
         use_site: Span,
+        line_indent: u32,
     ) -> OpyResult<Vec<Token>> {
         let macro_args: Vec<MacroArg> = mac
             .params
@@ -74,16 +75,14 @@ impl Preprocessor {
             .map_err(|error| map_macro_error(&error, &script.path, use_site))?;
         // Reference indentation rule (`resolveMacro`): every newline in the
         // replacement is followed by the call line's indentation.
-        let indent = " ".repeat(use_site.start.col.saturating_sub(1) as usize);
+        let indent = " ".repeat(line_indent as usize);
         let indented = result.text.replace('\n', &format!("\n{indent}"));
         let mut tokens = lex(LexInput {
             file_id: use_site.file,
             text: &indented,
         })?;
         tokens.retain(|token| token.kind != TokenKind::Eof);
-        for token in &mut tokens {
-            token.span = use_site;
-        }
+        super::macros::shift_expansion_spans(&mut tokens, use_site);
         Ok(tokens)
     }
 }

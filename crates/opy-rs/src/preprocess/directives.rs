@@ -5,12 +5,26 @@ impl Preprocessor {
         &mut self,
         tokens: &mut Vec<Token>,
         allow_leading_main_file: bool,
+        mut pending_settings: Option<SettingsBlock>,
     ) -> OpyResult<()> {
-        let mut out: Vec<Token> = Vec::with_capacity(tokens.len());
-        for token in tokens.drain(..) {
+        let input = std::mem::take(tokens);
+        let mut out: Vec<Token> = Vec::with_capacity(input.len());
+        let mut index = 0;
+        while index < input.len() {
+            if pending_settings
+                .as_ref()
+                .is_some_and(|block| token_is_at_or_after(&input[index], block))
+            {
+                let block = pending_settings
+                    .take()
+                    .expect("settings block was checked above");
+                self.activate_settings_block(block)?;
+            }
+            let token = &input[index];
             if token.kind == TokenKind::Directive {
                 let is_leading_main_file = allow_leading_main_file;
-                self.handle_directive(token, &mut out, is_leading_main_file)?;
+                self.handle_directive(token.clone(), &mut out, is_leading_main_file)?;
+                index += 1;
             } else if token.kind == TokenKind::Ident
                 && matches!(token.text.as_str(), "rule" | "def")
                 && self.preprocessing.rule_prefix.is_some()
@@ -27,12 +41,30 @@ impl Preprocessor {
                     raw: None,
                     span: token.span,
                 });
-                out.push(token);
+                out.push(token.clone());
+                index += 1;
             } else {
-                out.push(token);
+                let (expanded, after) = self.expand_one(&input, index, &out)?;
+                out.extend(expanded);
+                index = after;
             }
         }
+        if let Some(block) = pending_settings.take() {
+            self.activate_settings_block(block)?;
+        }
         *tokens = out;
+        Ok(())
+    }
+
+    fn activate_settings_block(&mut self, block: SettingsBlock) -> OpyResult<()> {
+        if self.settings.is_some() {
+            return Err(OpyError::at(
+                "settings-placement",
+                "only one settings block is supported in a project".to_string(),
+                block.keyword_span,
+            ));
+        }
+        self.settings = Some(self.expand_settings(block)?);
         Ok(())
     }
 
@@ -65,20 +97,6 @@ impl Preprocessor {
         }
         if matches!(name, "define" | "defineMember") {
             self.define(rest.trim(), span, name == "defineMember")?;
-            return Ok(());
-        }
-        if name == "undef" {
-            let name = rest.trim();
-            if name.is_empty() || name.chars().any(|ch| !is_identifier_char(ch)) {
-                return Err(OpyError::at(
-                    "undef-invalid",
-                    "malformed `#!undef` directive: expected one macro name",
-                    span,
-                ));
-            }
-            self.macros.retain(|m| m.name != name);
-            self.defines.retain(|define| define.name != name);
-            self.record("undef", Some(name), span);
             return Ok(());
         }
         if name == "postCompileHook" {
@@ -315,6 +333,13 @@ impl Preprocessor {
 fn split_directive(text: &str) -> (&str, &str) {
     text.split_once(char::is_whitespace)
         .map_or((text, ""), |(name, rest)| (name, rest))
+}
+
+fn token_is_at_or_after(token: &Token, block: &SettingsBlock) -> bool {
+    token.span.file == block.span.file
+        && (token.span.start.line > block.span.end.line
+            || (token.span.start.line == block.span.end.line
+                && token.span.start.col >= block.span.end.col))
 }
 
 fn require_no_arguments(name: &str, rest: &str, span: Span) -> OpyResult<()> {

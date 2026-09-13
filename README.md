@@ -36,7 +36,7 @@ Workshop semantic model.
 - Source analysis: lexer, preprocessor, parser, and semantic HIR with precise
   source-spanned diagnostics across includes.
 - Macros and preprocessing: full support for object and function macros
-  (`#!define`, `#!undef`), file inclusions (`#!include`), and settings directives.
+  (`#!define`), file inclusions (`#!include`), and settings directives.
 - Embedded JavaScript macros: executes `__script__("...")` blocks inside an
   embedded QuickJS-NG runtime without requiring Node.js.
 - Semantic tooling: symbol inspection, reference queries, and AST-aware source

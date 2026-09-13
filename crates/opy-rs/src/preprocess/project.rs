@@ -190,20 +190,17 @@ impl Preprocessor {
                 Ok(mut blocks) => blocks.pop(),
             };
             let owns_settings = settings.is_some();
-            if let Some(block) = settings {
-                if self.settings.is_some() {
-                    return Err(OpyError::at(
-                        "settings-placement",
-                        "only one settings block is supported in a project".to_string(),
-                        block.keyword_span,
-                    ));
-                }
-                self.settings = Some(block);
+            if let Some(block) = settings.as_ref()
+                && self.settings.is_some()
+            {
+                return Err(OpyError::at(
+                    "settings-placement",
+                    "only one settings block is supported in a project".to_string(),
+                    block.keyword_span,
+                ));
             }
-            let sanitized = self
-                .settings
+            let sanitized = settings
                 .as_ref()
-                .filter(|block| block.span.file == file_id)
                 .map(|block| crate::settings::sanitize_for_lex(&text, block));
             let mut included = lex(LexInput {
                 file_id,
@@ -214,7 +211,7 @@ impl Preprocessor {
                 .map(str::trim)
                 .find(|line| !line.is_empty())
                 .is_some_and(|line| line.starts_with("#!mainFile"));
-            self.process_directives(&mut included, allow_leading_main_file)?;
+            self.process_directives(&mut included, allow_leading_main_file, settings)?;
             leaves_macro_file_context = owns_settings && self.contains_macro_use(&text, file_id);
             included.retain(|token| token.kind != TokenKind::Eof);
             Ok(included)
