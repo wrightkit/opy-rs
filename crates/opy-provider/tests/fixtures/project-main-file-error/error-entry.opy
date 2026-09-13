@@ -1,0 +1,2 @@
+rule "broken"
+    @Event global

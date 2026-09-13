@@ -501,21 +501,7 @@ fn source_identity(
     project: &LoadedProject,
     outcome: &CheckOutcome,
 ) -> Result<String, HandlerError> {
-    let source = if outcome
-        .model
-        .as_ref()
-        .is_some_and(|model| model.hir.preprocessing.main_file.is_some())
-    {
-        let file = outcome
-            .files
-            .iter()
-            .find(|file| file.id == 1)
-            .ok_or_else(|| HandlerError::Lpp {
-                kind: "providerFailure",
-                details: json!({ "code": "source-identity-file" }),
-                message: "effective primary source is missing from the file registry".to_string(),
-            })?;
-        let path = resolved_project_path(project, &file.path);
+    let source = if let Some(path) = effective_primary_source_path(project, outcome)? {
         fs::read_to_string(&path).map_err(|error| HandlerError::Lpp {
             kind: "providerFailure",
             details: json!({ "code": "source-identity-read" }),
@@ -525,6 +511,42 @@ fn source_identity(
         project.filesystem.source().to_owned()
     };
     Ok(hash_source(&source))
+}
+
+fn effective_primary_source_path(
+    project: &LoadedProject,
+    outcome: &CheckOutcome,
+) -> Result<Option<PathBuf>, HandlerError> {
+    let Some(first_line) = project.filesystem.source().lines().next() else {
+        return Ok(None);
+    };
+    let first_line = first_line.trim_end_matches('\r');
+    let Some(rest) = first_line.strip_prefix("#!mainFile").map(str::trim) else {
+        return Ok(None);
+    };
+    let main_file = rest
+        .strip_prefix('"')
+        .and_then(|rest| rest.strip_suffix('"'))
+        .or_else(|| {
+            rest.strip_prefix('\'')
+                .and_then(|rest| rest.strip_suffix('\''))
+        });
+    let Some(main_file) = main_file else {
+        return Ok(None);
+    };
+    if main_file.is_empty() {
+        return Ok(None);
+    }
+    let file = outcome
+        .files
+        .iter()
+        .find(|file| file.id == 1)
+        .ok_or_else(|| HandlerError::Lpp {
+            kind: "providerFailure",
+            details: json!({ "code": "source-identity-file" }),
+            message: "effective primary source is missing from the file registry".to_string(),
+        })?;
+    Ok(Some(resolved_project_path(project, &file.path)))
 }
 
 fn hash_source(source: &str) -> String {
