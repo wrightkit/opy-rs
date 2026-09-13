@@ -13,6 +13,7 @@ use opy_rs::tooling::{CheckOutcome, Diagnostic as OpyDiagnostic, SourceLocation}
 use opy_rs::{CompileDiagnostic, Compiler};
 use serde::Deserialize;
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 
 const PROTOCOL_VERSIONS: [&str; 3] = ["1.0", "1.1", "1.2"];
 const PROJECT_LOADING_VERSION: &str = "1.1";
@@ -487,8 +488,66 @@ impl Server {
                 "content": report.compile.workshop_exact,
             })
         });
-        Ok(json!({ "diagnostics": diagnostics, "artifact": artifact }))
+        let result = json!({
+            "diagnostics": diagnostics,
+            "artifact": artifact,
+            "sourceIdentity": source_identity(&project)?,
+        });
+        Ok(result)
     }
+}
+
+fn source_identity(project: &LoadedProject) -> Result<String, HandlerError> {
+    let source = if let Some(path) = effective_primary_source_path(project)? {
+        fs::read_to_string(&path).map_err(|error| HandlerError::Lpp {
+            kind: "providerFailure",
+            details: json!({ "code": "source-identity-read" }),
+            message: format!("cannot read effective primary source: {error}"),
+        })?
+    } else {
+        project.filesystem.source().to_owned()
+    };
+    Ok(hash_source(&source))
+}
+
+fn effective_primary_source_path(project: &LoadedProject) -> Result<Option<PathBuf>, HandlerError> {
+    let Some(first_line) = project.filesystem.source().lines().next() else {
+        return Ok(None);
+    };
+    let first_line = first_line.trim_end_matches('\r');
+    let Some(rest) = first_line.strip_prefix("#!mainFile").map(str::trim) else {
+        return Ok(None);
+    };
+    let main_file = rest
+        .strip_prefix('"')
+        .and_then(|rest| rest.strip_suffix('"'))
+        .or_else(|| {
+            rest.strip_prefix('\'')
+                .and_then(|rest| rest.strip_suffix('\''))
+        });
+    let Some(main_file) = main_file else {
+        return Ok(None);
+    };
+    if main_file.is_empty() {
+        return Ok(None);
+    }
+    let path = project
+        .filesystem
+        .root()
+        .join(main_file)
+        .canonicalize()
+        .map_err(|error| HandlerError::Lpp {
+            kind: "providerFailure",
+            details: json!({ "code": "source-identity-read" }),
+            message: format!("cannot resolve effective primary source: {error}"),
+        })?;
+    Ok(Some(path))
+}
+
+fn hash_source(source: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(source.as_bytes());
+    format!("{:x}", hasher.finalize())
 }
 
 fn load_project(

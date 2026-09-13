@@ -22,6 +22,14 @@ const BASIC_RULE: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../opy-rs/tests/fixtures/corpus/synthetic/basic-rule/source.opy"
 );
+const MAIN_FILE_ENTRY: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../opy-rs/tests/fixtures/corpus/synthetic/project-main-file/source.opy"
+);
+const MAIN_FILE_ERROR_ENTRY: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/fixtures/project-main-file-error/error-source.opy"
+);
 const UNSUPPORTED: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../opy-rs/tests/fixtures/corpus/synthetic/switch-break-unsupported/source.opy"
@@ -317,6 +325,12 @@ fn compile_returns_canonical_workshop_text_and_no_artifact_on_error() {
         compiled["result"]["artifact"]["format"],
         "workshop-rs/text-v1"
     );
+    assert_eq!(
+        compiled["result"]["sourceIdentity"]
+            .as_str()
+            .expect("source identity"),
+        "3f39a0286864f70ce5b5369cbaf663037b1def9984c4e4a0da3da2bb5553dcc4"
+    );
     assert!(
         compiled["result"]["artifact"]["content"]
             .as_str()
@@ -342,6 +356,67 @@ fn compile_returns_canonical_workshop_text_and_no_artifact_on_error() {
             .as_array()
             .expect("diagnostics")
             .is_empty()
+    );
+    session.shutdown();
+}
+
+#[test]
+fn compile_source_identity_uses_effective_main_file() {
+    let mut session = Session::spawn();
+    session.initialize();
+
+    let compiled = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "lpp/compile",
+        "params": {
+            "entry": {
+                "uri": file_uri(MAIN_FILE_ENTRY),
+                "languageId": "opy",
+                "version": 7,
+            }
+        },
+    }));
+    assert_eq!(
+        compiled["result"]["sourceIdentity"],
+        "339950d8191b54ed0aea8cad0e01d544db92c2113be7af0019b15414325b513c"
+    );
+    session.shutdown();
+}
+
+#[test]
+fn compile_error_source_identity_uses_effective_main_file() {
+    let mut session = Session::spawn();
+    session.initialize();
+
+    let compiled = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "lpp/compile",
+        "params": {
+            "entry": {
+                "uri": file_uri(MAIN_FILE_ERROR_ENTRY),
+                "languageId": "opy",
+                "version": 7,
+            }
+        },
+    }));
+    assert_eq!(
+        compiled["result"]["sourceIdentity"],
+        "643cff51fa14f88a2f18e711820c020a24a859e7f01f3730c95a0709f76f1f33"
+    );
+    assert!(compiled["result"]["artifact"].is_null());
+    assert!(
+        compiled["result"]["diagnostics"]
+            .as_array()
+            .expect("diagnostic documents")
+            .iter()
+            .any(|document| {
+                !document["diagnostics"]
+                    .as_array()
+                    .expect("diagnostics")
+                    .is_empty()
+            })
     );
     session.shutdown();
 }
