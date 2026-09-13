@@ -229,6 +229,9 @@ impl Lexer {
             let mut text = String::new();
             while self.pos < self.chars.len() {
                 if self.chars[self.pos] == '\\' && self.skip_line_continuation() {
+                    if function_like_define(&text) {
+                        text.push('\n');
+                    }
                     continue;
                 }
                 if self.chars[self.pos] == '\n' {
@@ -532,6 +535,23 @@ impl Lexer {
         self.pos += 1;
         self.col += 1;
     }
+}
+
+fn function_like_define(text: &str) -> bool {
+    let rest = text
+        .trim_start()
+        .strip_prefix("defineMember")
+        .or_else(|| text.trim_start().strip_prefix("define"))
+        .map(str::trim_start);
+    let Some(rest) = rest else {
+        return false;
+    };
+    let Some(open) = rest.find('(') else {
+        return false;
+    };
+    rest[..open]
+        .find(char::is_whitespace)
+        .is_none_or(|space| open < space)
 }
 
 fn is_ident_start(c: char) -> bool {
