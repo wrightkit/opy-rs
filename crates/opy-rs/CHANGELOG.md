@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.35](https://github.com/wrightkit/opy-rs/compare/v0.1.34...v0.1.35) - 2026-09-13
+
+### Fixed
+
+- *(lexer)* preserve multiline define statement boundaries ([#261](https://github.com/wrightkit/opy-rs/pull/261))
+
 ## [0.1.34](https://github.com/wrightkit/opy-rs/compare/v0.1.33...v0.1.34) - 2026-09-13
 
 ### Fixed
