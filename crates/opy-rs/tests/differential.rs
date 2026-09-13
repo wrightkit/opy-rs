@@ -286,8 +286,8 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
     resolve(
         &mut cases,
         "synthetic/switch-break-unsupported",
-        false,
-        "Issue #47 negative probe; the frontend preserves the nested conditional switch-break HIR while the compiler rejects it at the canonical WIR integration boundary.",
+        true,
+        "Issue #47 probe; nested conditional switch-break lowering preserves the upstream Else marker, and a top-level switch with no observable actions is elided like OverPy.",
     );
     resolve(
         &mut cases,

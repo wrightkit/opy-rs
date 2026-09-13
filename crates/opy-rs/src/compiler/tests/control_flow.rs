@@ -175,15 +175,13 @@ fn invalid_do_while_placement_is_source_attributed() {
 }
 
 #[test]
-fn nested_switch_break_is_source_attributed_when_not_representable() {
+fn nested_switch_break_matches_upstream_noop_elision() {
     let compiler = Compiler::new().unwrap();
     let dir = fixture_dir("switch-break-unsupported");
     let source = std::fs::read_to_string(dir.join("source.opy")).unwrap();
     let hir = crate::compile(&source, "source.opy", &dir).unwrap();
-    let error = match compiler.compile_hir(&hir) {
-        Ok(_) => panic!("nested switch break unexpectedly lowered"),
-        Err(error) => error,
-    };
-    assert_eq!(error.diagnostic.code, "unsupported-integration-surface");
-    assert_eq!(error.diagnostic.span.unwrap().start.line, 7);
+    let artifact = compiler
+        .compile_hir(&hir)
+        .expect("nested switch break must follow the pinned upstream lowering");
+    assert!(artifact.wir.rules.is_empty());
 }

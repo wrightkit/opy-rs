@@ -174,9 +174,19 @@ impl Lowerer {
                     span: Some(span.into()),
                 }
             }
-            Expr::Call { name, args, span } => {
-                self.lower_call(name, args, *span, macro_params, position)
-            }
+            Expr::Call {
+                name,
+                args,
+                debug_source,
+                span,
+            } => self.lower_call(
+                name,
+                args,
+                debug_source.as_deref(),
+                *span,
+                macro_params,
+                position,
+            ),
             Expr::ReceiverCall {
                 receiver,
                 name,
@@ -246,12 +256,14 @@ impl Lowerer {
             "RULE_CONDITION" | "ruleCondition" => HirExpr::Call {
                 name: "ruleCondition".to_string(),
                 args: Vec::new(),
+                debug_source: None,
                 span: Some(span.into()),
             },
             "eventAbility" | "eventDamage" | "eventHealing" | "eventWasCriticalHit" => {
                 HirExpr::Call {
                     name: name.to_string(),
                     args: Vec::new(),
+                    debug_source: None,
                     span: Some(span.into()),
                 }
             }
@@ -529,6 +541,7 @@ impl Lowerer {
         &mut self,
         name: &str,
         args: &[cst::CallArg],
+        debug_source: Option<&str>,
         span: Span,
         macro_params: &[String],
         position: CallPosition,
@@ -549,6 +562,7 @@ impl Lowerer {
             return HirExpr::Call {
                 name: name.to_string(),
                 args: self.lower_arg_values(args, macro_params),
+                debug_source: None,
                 span: Some(span.into()),
             };
         }
@@ -584,6 +598,7 @@ impl Lowerer {
                 args: self.lower_arg_values_with_lambda(args, macro_params, |index, arg| {
                     index == 1 || arg.keyword.as_ref().is_some_and(|(name, _)| name == "key")
                 }),
+                debug_source: None,
                 span: Some(span.into()),
             },
             "vect" => {
@@ -651,6 +666,7 @@ impl Lowerer {
                                         return HirExpr::Call {
                                             name: subroutine.clone(),
                                             args: Vec::new(),
+                                            debug_source: None,
                                             span: Some((*span).into()),
                                         };
                                     }
@@ -662,6 +678,7 @@ impl Lowerer {
                     return HirExpr::Call {
                         name: name.to_string(),
                         args: lowered,
+                        debug_source: None,
                         span: Some(span.into()),
                     };
                 }
@@ -674,6 +691,9 @@ impl Lowerer {
                             return HirExpr::Call {
                                 name: name.to_string(),
                                 args: self.lower_arg_values(args, macro_params),
+                                debug_source: (name == "debug")
+                                    .then(|| debug_source.map(str::to_string))
+                                    .flatten(),
                                 span: Some(span.into()),
                             };
                         }
@@ -683,12 +703,16 @@ impl Lowerer {
                         HirExpr::Call {
                             name: call_name,
                             args: bound,
+                            debug_source: (name == "debug")
+                                .then(|| debug_source.map(str::to_string))
+                                .flatten(),
                             span: Some(span.into()),
                         }
                     }
                     None => HirExpr::Call {
                         name: name.to_string(),
                         args: self.lower_arg_values(args, macro_params),
+                        debug_source: None,
                         span: Some(span.into()),
                     },
                 }
@@ -891,6 +915,7 @@ impl Lowerer {
                         bound.push(HirExpr::Call {
                             name: call.clone(),
                             args: Vec::new(),
+                            debug_source: None,
                             span: None,
                         });
                     }
@@ -1090,6 +1115,7 @@ impl Lowerer {
                 return self.lower_call(
                     &format!("random.{name}"),
                     args,
+                    None,
                     span,
                     macro_params,
                     position,

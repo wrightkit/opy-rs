@@ -99,8 +99,7 @@ fn catalog_enum_members_lower_and_validate() {
 
 #[test]
 fn aliased_member_lowers_to_the_canonical_catalog_identity() {
-    let source =
-        "rule \"r\":\n    @Event eachPlayer\n    @Condition eventPlayer.getHero() == None\n";
+    let source = "globalvar value\nrule \"r\":\n    @Event eachPlayer\n    @Condition eventPlayer.getHero() == None\n    value = eventPlayer.getHero()\n";
     let hir = crate::compile(source, "source.opy", Path::new(".")).expect("frontend resolves");
     let artifact = Compiler::new()
         .expect("compiler loads")

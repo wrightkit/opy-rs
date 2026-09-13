@@ -274,11 +274,15 @@ impl Parser<'_> {
             self.skip_expression_newlines();
             match self.peek_kind() {
                 TokenKind::LParen => {
+                    let args_start = self.pos + 1;
                     let mut args = Vec::new();
                     self.parse_call_args(&mut args)?;
                     let end = self.tokens[self.pos.saturating_sub(1)].span.end;
                     base = match base {
                         Expr::Name { name, span } => Expr::Call {
+                            debug_source: (name == "debug").then(|| {
+                                display_tokens(&self.tokens[args_start..self.pos.saturating_sub(1)])
+                            }),
                             name,
                             args,
                             span: Span::new(span.file, span.start, end),
@@ -817,4 +821,48 @@ impl Parser<'_> {
         }
         None
     }
+}
+
+fn display_tokens(tokens: &[Token]) -> String {
+    let mut output = String::new();
+    for (index, token) in tokens.iter().enumerate() {
+        let text = if token.kind == TokenKind::String {
+            let raw = token.raw.as_deref().unwrap_or(&token.text);
+            format!("\"{}\"", raw.replace('\\', "\\\\").replace('"', "\\\""))
+        } else {
+            token.text.clone()
+        };
+        let previous = tokens.get(index.wrapping_sub(1));
+        let no_space_before = matches!(
+            token.kind,
+            TokenKind::LParen
+                | TokenKind::LBracket
+                | TokenKind::LBrace
+                | TokenKind::RParen
+                | TokenKind::RBracket
+                | TokenKind::RBrace
+                | TokenKind::Comma
+                | TokenKind::Colon
+                | TokenKind::Dot
+        );
+        let no_space_after = previous.is_some_and(|previous| {
+            matches!(
+                previous.kind,
+                TokenKind::LParen
+                    | TokenKind::LBracket
+                    | TokenKind::LBrace
+                    | TokenKind::Dot
+                    | TokenKind::Comma
+                    | TokenKind::Colon
+            )
+        });
+        if !output.is_empty() && !no_space_before && !no_space_after {
+            output.push(' ');
+        }
+        output.push_str(&text);
+        if matches!(token.kind, TokenKind::Comma | TokenKind::Colon) {
+            output.push(' ');
+        }
+    }
+    output.trim_end().to_string()
 }

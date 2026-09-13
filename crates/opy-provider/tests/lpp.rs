@@ -32,7 +32,7 @@ const MAIN_FILE_ERROR_ENTRY: &str = concat!(
 );
 const UNSUPPORTED: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../opy-rs/tests/fixtures/corpus/synthetic/switch-break-unsupported/source.opy"
+    "/../opy-rs/tests/fixtures/corpus/synthetic/directives/source.opy"
 );
 const DIAGNOSTICS: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),

@@ -631,6 +631,7 @@ fn context_player_expr(name: &str, span: Option<Span>) -> Option<HirExpr> {
         "localPlayer" => Some(HirExpr::Call {
             name: name.to_string(),
             args: Vec::new(),
+            debug_source: None,
             span: span.map(Into::into),
         }),
         "hostPlayer" => Some(HirExpr::HostPlayer {
@@ -639,6 +640,7 @@ fn context_player_expr(name: &str, span: Option<Span>) -> Option<HirExpr> {
         "attacker" | "victim" | "healer" | "healee" => Some(HirExpr::Call {
             name: name.to_string(),
             args: Vec::new(),
+            debug_source: None,
             span: span.map(Into::into),
         }),
         _ => None,

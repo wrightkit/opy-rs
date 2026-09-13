@@ -338,6 +338,7 @@ pub enum Expr {
     Call {
         name: String,
         args: Vec<CallArg>,
+        debug_source: Option<String>,
         span: Span,
     },
     /// A call on a receiver (`x.f(...)`).

@@ -627,7 +627,9 @@ impl SemanticModel {
                 Self::collect_expr(y, sites);
                 Self::collect_expr(z, sites);
             }
-            HirExpr::Call { name, span, args } => {
+            HirExpr::Call {
+                name, span, args, ..
+            } => {
                 // A call may name a declared subroutine (with arguments) or
                 // nothing user-declared (a builtin); unresolved names never
                 // reach the model. Offer both subroutine binding kinds.

@@ -17,7 +17,7 @@ Source: pinned OverPy `9.7.10`, content commit
 | f-string/interpolated strings | ✅ Supported | Supported formatting subset is fixture-covered. |
 | String modifiers `f`, `w`, `l`, `b`, `c`, `t` | ✅ Supported | f/w/b/c have canonical lowering evidence; l/t retain source syntax without duplicating translation content. |
 | Array literals and indexing | ✅ Supported | Includes nested arrays. |
-| Dictionary literals and keyed access | partial | Literal-key lookup folds during canonical lowering; dictionary assignment targets remain outside the bounded compiler surface. |
+| Dictionary literals and keyed access | 🚧 Coming soon | Literal-key lookup folds during canonical lowering; dictionary assignment targets remain outside the bounded compiler surface. |
 | List comprehensions | ✅ Supported | Mapping and filtering are separate behaviors. |
 | `lambda` with element/index binders | ✅ Supported | Valid positions are contextual. |
 | Member access, calls and postfix expressions | ✅ Supported | Receiver and dispatch checks are contract-sensitive. |
