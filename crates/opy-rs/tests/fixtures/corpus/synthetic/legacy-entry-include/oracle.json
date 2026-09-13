@@ -25,7 +25,7 @@
       },
       {
         "path": "src/constants/player_constants.opy",
-        "sha256": "732104447323683e7ffb97c8a85dfea3c51d76c48649bfaffbe32960268bc80f"
+        "sha256": "304bb4909563ca069a9a1a264ed8ef73e04ad59785a98ba6a2b382b3268bb787"
       },
       {
         "path": "src/env/context.opy",
@@ -56,7 +56,7 @@
         "sha256": "802c6d7c64cc81fcb328db9bef737c2f1826c628efd05f5bac5049bf0038335e"
       }
     ],
-    "sha256": "763ce9ae9b8ec8e425c70ee750f80575ec07ca86fdd9b344f1c338e37cc11399",
+    "sha256": "4b6ce5642cd8b6813d4231bb75302f8250ac72d75447dfc77443192f98c7f50f",
     "source": "main.opy"
   },
   "oracle": {
