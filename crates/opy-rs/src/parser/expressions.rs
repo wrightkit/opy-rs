@@ -780,6 +780,22 @@ impl Parser<'_> {
                     return Err(());
                 }
                 '\\' if index + 1 < chars.len() => {
+                    if chars[index + 1] == 'u'
+                        && index + 6 <= chars.len()
+                        && chars[index + 2..index + 6]
+                            .iter()
+                            .all(|character| character.is_ascii_hexdigit())
+                    {
+                        let codepoint = chars[index + 2..index + 6]
+                            .iter()
+                            .filter_map(|character| character.to_digit(16))
+                            .fold(0_u32, |value, digit| value * 16 + digit);
+                        if let Some(decoded) = char::from_u32(codepoint) {
+                            text.push(decoded);
+                            index += 6;
+                            continue;
+                        }
+                    }
                     text.push(decode_string_escape(chars[index + 1]));
                     index += 2;
                 }
