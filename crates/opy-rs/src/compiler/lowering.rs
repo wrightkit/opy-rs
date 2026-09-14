@@ -607,9 +607,6 @@ impl<'a> Lowering<'a> {
     }
 
     fn lower_rule(&mut self, rule: &hir::Rule) -> Result<(), IntegrationError> {
-        if rule.disabled {
-            return Ok(());
-        }
         self.reject_rule_metadata(rule)?;
         let event = self.lower_event(&rule.event, &rule.annotations)?;
         let conditions = rule
@@ -625,7 +622,7 @@ impl<'a> Lowering<'a> {
         let elide_noop_switch = actions.is_empty()
             && rule.actions.len() == 1
             && matches!(rule.actions.first(), Some(Stmt::Switch { .. }));
-        if elide_noop_switch {
+        if elide_noop_switch && !rule.disabled {
             return Ok(());
         }
         let rule_index = self.program.rules.len();
@@ -692,18 +689,6 @@ impl<'a> Lowering<'a> {
     }
 
     fn reject_rule_metadata(&self, rule: &hir::Rule) -> Result<(), IntegrationError> {
-        if rule.delimiter {
-            let span = rule
-                .annotations
-                .iter()
-                .find(|annotation| annotation.name == "Delimiter")
-                .and_then(|annotation| annotation.span)
-                .or(rule.span);
-            return Err(self.unsupported(
-                "rule delimiter metadata is not representable in canonical WIR",
-                span,
-            ));
-        }
         if rule.new_page.is_some() {
             let span = rule
                 .annotations
@@ -718,7 +703,7 @@ impl<'a> Lowering<'a> {
         }
         for annotation in &rule.annotations {
             match annotation.name.as_str() {
-                "Event" | "Condition" | "Team" | "Slot" | "Hero" | "Disabled"
+                "Event" | "Condition" | "Team" | "Slot" | "Hero" | "Disabled" | "Delimiter"
                 | "SuppressWarnings" => {}
                 _ => {
                     return Err(self.unsupported(

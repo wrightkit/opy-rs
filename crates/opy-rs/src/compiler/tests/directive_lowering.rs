@@ -28,3 +28,38 @@ fn translated_implicit_subroutine_fixture_matches_the_pinned_oracle() {
     .unwrap();
     assert!(equivalent(&super::canonical_program(&artifact), &expected));
 }
+
+#[test]
+fn disabled_rule_is_lowered_with_rule_and_action_provenance() {
+    let source =
+        "globalvar value\nrule \"disabled\":\n    @Event global\n    @Disabled\n    value = 1\n";
+    let hir = crate::compile(source, "disabled.opy", Path::new(".")).unwrap();
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+
+    assert_eq!(artifact.wir.rules.len(), 1);
+    let rule = &artifact.wir.rules[0];
+    assert_eq!(rule.name, "disabled");
+    assert!(rule.disabled);
+    assert_eq!(rule.actions.len(), 1);
+    assert_eq!(artifact.wir.rule_span(0).unwrap().start.line, 2);
+    assert_eq!(artifact.wir.action_span(0, 0).unwrap().start.line, 5);
+}
+
+#[test]
+fn delimiter_is_consumed_after_preserving_its_unprefixed_name() {
+    let source = "#!rulePrefix \"Section\"\nrule \"ordinary\":\n    @Event global\n    pass\nrule \"delimiter\":\n    @Event global\n    @Disabled\n    @Delimiter\n    pass\n";
+    let hir = crate::compile(source, "delimiters.opy", Path::new(".")).unwrap();
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+
+    assert_eq!(
+        artifact
+            .wir
+            .rules
+            .iter()
+            .map(|rule| rule.name.as_str())
+            .collect::<Vec<_>>(),
+        ["[Section] ordinary", "delimiter"]
+    );
+    assert!(!artifact.wir.rules[0].disabled);
+    assert!(artifact.wir.rules[1].disabled);
+}
