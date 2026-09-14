@@ -532,7 +532,7 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         &mut cases,
         "real-world/ow1-emulator",
         false,
-        "the pinned oracle snapshot still records the pre-fix parser failure, while the native frontend now resolves the complete include closure; the independent compiler gate reaches the existing canonical WIR multiple-switch-break limitation.",
+        "the pinned oracle snapshot still records the pre-fix parser failure, while the native frontend resolves the complete include closure; the compiler gate now passes the hero_roster indexed append/remove frontier and reaches the next existing unknown Hero filter boundary in heroes/mei/blaster.",
     );
     diagnostic(
         &mut cases,

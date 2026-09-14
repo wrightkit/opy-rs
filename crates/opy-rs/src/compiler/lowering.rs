@@ -3529,8 +3529,87 @@ impl<'a> Lowering<'a> {
                     self.mark_action_argument_origins(action, [player_span, value_span]);
                     Ok(action)
                 }
+                Expr::Index { array, index, .. } => {
+                    let op_name = if function.id == "append" {
+                        "appendToArray"
+                    } else {
+                        "removeFromArray"
+                    };
+                    let op_node = self.push_call(op_name, Vec::new());
+                    let index_span = index.span().copied();
+                    let target_span = array.span().copied();
+                    let index = self.lower_value(index)?;
+                    match array.as_ref() {
+                        Expr::GlobalVar {
+                            name,
+                            span: array_span,
+                        } => {
+                            let variable = *self.globals.get(name).ok_or_else(|| {
+                                self.unsupported(
+                                    format!("unknown global variable '{name}'"),
+                                    *array_span,
+                                )
+                            })?;
+                            let variable = self.push_value(Value::GlobalVariable(
+                                self.global_names[variable].clone(),
+                            ));
+                            let args = self.normalize_contextual_arguments(
+                                "modifyGlobalVariableAtIndex",
+                                vec![variable, index, op_node, value],
+                            );
+                            let action =
+                                self.push_call_action("modifyGlobalVariableAtIndex", &args);
+                            self.mark_action_argument_origins(
+                                action,
+                                [target_span, index_span, None, value_span],
+                            );
+                            return Ok(action);
+                        }
+                        Expr::PlayerVar {
+                            player,
+                            name,
+                            span: array_span,
+                            ..
+                        } => {
+                            let variable = *self.players.get(name).ok_or_else(|| {
+                                self.unsupported(
+                                    format!("unknown player variable '{name}'"),
+                                    *array_span,
+                                )
+                            })?;
+                            let player = self.lower_value(player)?;
+                            let variable = self.push_value(Value::PlayerVariable {
+                                player: Box::new(self.value(player).clone()),
+                                variable: self.player_names[variable].clone(),
+                            });
+                            let args = self.normalize_contextual_arguments(
+                                "modifyPlayerVariableAtIndex",
+                                vec![variable, index, op_node, value],
+                            );
+                            let action =
+                                self.push_call_action("modifyPlayerVariableAtIndex", &args);
+                            self.mark_action_argument_origins(
+                                action,
+                                [target_span, index_span, None, value_span],
+                            );
+                            return Ok(action);
+                        }
+                        _ => {
+                            return Err(self.unsupported(
+                                format!(
+                                    "{} requires a global or player variable receiver",
+                                    function.id
+                                ),
+                                receiver.span().copied().or(span),
+                            ));
+                        }
+                    }
+                }
                 _ => Err(self.unsupported(
-                    "append requires a global or player variable receiver",
+                    format!(
+                        "{} requires a global or player variable receiver",
+                        function.id
+                    ),
                     receiver.span().copied().or(span),
                 )),
             };
