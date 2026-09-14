@@ -5109,11 +5109,10 @@ fn player_event_kind(name: &str) -> Option<PlayerEventKind> {
 }
 
 fn is_zero_initializer(expr: &hir::Expr) -> bool {
-    match expr {
-        hir::Expr::Number { text, value, .. } => text == "0" && *value == 0.0,
-        hir::Expr::Null { .. } => true,
-        _ => false,
-    }
+    matches!(
+        expr,
+        hir::Expr::Number { text, value, .. } if text == "0" && *value == 0.0
+    )
 }
 
 fn literal_key_matches(left: &hir::Expr, right: &hir::Expr) -> bool {
