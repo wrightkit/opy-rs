@@ -1585,6 +1585,47 @@ rule "main":
     }
 
     #[test]
+    fn strict_optimization_cases_are_rejected_at_the_directive_source() {
+        let compiler = Compiler::new().unwrap();
+        let hir = crate::compile(
+            "globalvar A = 0\n\n#!optimizeStrict\nrule \"strict\":\n    @Event global\n    print(A + 0)\n    print(A * 0)\n    print(A * 1)\n",
+            "strict.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let error = match compiler.compile_hir(&hir) {
+            Ok(_) => panic!("strict optimization must not be silently discarded"),
+            Err(error) => error,
+        };
+        assert_eq!(error.diagnostic.code, "backend-directive-unsupported");
+        assert!(error.diagnostic.message.contains("#!optimizeStrict"));
+        assert_eq!(error.diagnostic.span.unwrap().start.line, 3);
+    }
+
+    #[test]
+    fn compression_alphabet_policy_is_rejected_at_the_directive_source() {
+        let compiler = Compiler::new().unwrap();
+        let hir = crate::compile(
+            "globalvar values = compressed([1, 2, 3])\n\n#!useVariableForCompressionAlphabet\nrule \"compression\":\n    @Event global\n    print(values)\n",
+            "compression.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let error = match compiler.compile_hir(&hir) {
+            Ok(_) => panic!("compression alphabet policy must not be silently discarded"),
+            Err(error) => error,
+        };
+        assert_eq!(error.diagnostic.code, "backend-directive-unsupported");
+        assert!(
+            error
+                .diagnostic
+                .message
+                .contains("#!useVariableForCompressionAlphabet")
+        );
+        assert_eq!(error.diagnostic.span.unwrap().start.line, 3);
+    }
+
+    #[test]
     fn replacement_directive_records_are_checked_even_if_final_state_is_restored() {
         let compiler = Compiler::new().unwrap();
         let mut hir = crate::compile(
