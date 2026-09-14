@@ -297,6 +297,7 @@ impl Lexer {
                 return Ok(());
             }
             if ch == '\\' {
+                let escape_start = self.here(1);
                 raw.push(ch);
                 self.advance();
                 if self.pos >= self.chars.len() {
@@ -304,6 +305,38 @@ impl Lexer {
                 }
                 let escaped = self.chars[self.pos];
                 raw.push(escaped);
+                if escaped == 'u' {
+                    self.advance();
+                    let mut codepoint = 0_u32;
+                    for _ in 0..4 {
+                        let Some(digit) = self.chars.get(self.pos).copied() else {
+                            return Err(OpyError::at(
+                                "lex-error",
+                                "Unicode escape requires four hexadecimal digits",
+                                Span::new(self.file_id, escape_start.start, self.here(0).start),
+                            ));
+                        };
+                        let Some(digit_value) = digit.to_digit(16) else {
+                            return Err(OpyError::at(
+                                "lex-error",
+                                "Unicode escape requires four hexadecimal digits",
+                                Span::new(self.file_id, escape_start.start, self.here(1).end),
+                            ));
+                        };
+                        raw.push(digit);
+                        codepoint = codepoint * 16 + digit_value;
+                        self.advance();
+                    }
+                    let Some(decoded) = char::from_u32(codepoint) else {
+                        return Err(OpyError::at(
+                            "lex-error",
+                            "Unicode escape does not name a Unicode scalar value",
+                            Span::new(self.file_id, escape_start.start, self.here(0).start),
+                        ));
+                    };
+                    value.push(decoded);
+                    continue;
+                }
                 value.push(match escaped {
                     'n' => '\n',
                     't' => '\t',
@@ -667,6 +700,46 @@ mod tests {
         .unwrap_err();
         assert_eq!(error.code, "lex-error");
         assert!(error.span.is_some());
+    }
+
+    #[test]
+    fn unicode_escapes_decode_at_the_string_boundary_and_keep_source_span() {
+        // Minimized from OWBastion/Bastion commit
+        // 44e12e08f046ed7fbf865237a29ddf2f272ec3c2,
+        // Bastion/src/utilities/system/savePlayerData.opy.
+        let tokens = lex_ok(r#"rule "pa\ufeffssed":"#);
+        let string = tokens
+            .iter()
+            .find(|token| token.kind == TokenKind::String)
+            .expect("rule name string token");
+        assert_eq!(string.text, "pa\u{feff}ssed");
+        assert_eq!(string.raw.as_deref(), Some(r"pa\ufeffssed"));
+        assert_eq!(string.span.start, Position::new(1, 6));
+        assert_eq!(string.span.end, Position::new(1, 20));
+    }
+
+    #[test]
+    fn existing_string_escapes_keep_their_decoded_values() {
+        let source = concat!("\"", "\\n", "\\t", "\\r", "\\\"", "\\\\", "\"");
+        let string = lex_ok(source)
+            .into_iter()
+            .find(|token| token.kind == TokenKind::String)
+            .expect("string token");
+        assert_eq!(string.text, "\n\t\r\"\\");
+    }
+
+    #[test]
+    fn malformed_unicode_escapes_are_lex_errors() {
+        for source in [r#""\u"#, r#""\u12G4"#, r#""\u{1F600}"#] {
+            let error = lex(LexInput {
+                file_id: 0,
+                text: source,
+            })
+            .expect_err("malformed Unicode escape unexpectedly lexed");
+            assert_eq!(error.code, "lex-error");
+            assert!(error.message.contains("Unicode escape"));
+            assert_eq!(error.span.unwrap().start, Position::new(1, 2));
+        }
     }
 
     #[test]

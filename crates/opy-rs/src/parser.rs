@@ -997,4 +997,52 @@ mod tests {
         assert_eq!(rule.annotations[1].args[0].text, "1");
         assert_eq!(rule.annotations[2].args[0].text, "dmon");
     }
+
+    #[test]
+    fn decodes_unicode_escapes_in_names_and_ordinary_strings() {
+        let program = parse_ok(
+            r#"subroutine helper
+def helper():
+    @Name "helper\ufeffname"
+    pass
+rule "pa\ufeffssed":
+    @Event global
+    debug("pa\ufeffssed")
+    debug(f"pa\ufeffssed {1}")
+"#,
+        );
+        let RuleEntry::SubroutineDef { annotations, .. } = &program.rules[0] else {
+            panic!("expected subroutine");
+        };
+        assert_eq!(annotations[0].args[0].text, "\"helper\u{feff}name\"");
+
+        let RuleEntry::Rule(rule) = &program.rules[1] else {
+            panic!("expected rule");
+        };
+        assert_eq!(rule.name, "pa\u{feff}ssed");
+        assert_eq!(rule.name_span.start.col, 7);
+        assert_eq!(rule.name_span.end.col, 19);
+        let Stmt::Expr { expr, .. } = &rule.actions[0] else {
+            panic!("expected debug expression");
+        };
+        let Expr::Call { args, .. } = expr else {
+            panic!("expected debug call");
+        };
+        assert!(matches!(
+            &args[0].value,
+            Expr::String { value, .. } if value == "pa\u{feff}ssed"
+        ));
+        let Stmt::Expr { expr, .. } = &rule.actions[1] else {
+            panic!("expected formatted debug expression");
+        };
+        let Expr::Call { args, .. } = expr else {
+            panic!("expected formatted debug call");
+        };
+        assert!(matches!(
+            &args[0].value,
+            Expr::StringModifier {
+                format_text: Some(text), ..
+            } if text == "pa\u{feff}ssed {0}"
+        ));
+    }
 }
