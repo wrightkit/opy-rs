@@ -356,12 +356,18 @@ impl MacroExpander {
                 member_span: *member_span,
                 span: *span,
             }),
-            Expr::Call { name, args, span } => Ok(Expr::Call {
+            Expr::Call {
+                name,
+                args,
+                debug_source,
+                span,
+            } => Ok(Expr::Call {
                 name: name.clone(),
                 args: args
                     .iter()
                     .map(|arg| self.expand_expr(arg, bindings))
                     .collect::<Result<Vec<_>, _>>()?,
+                debug_source: debug_source.clone(),
                 span: *span,
             }),
             Expr::ReceiverCall {

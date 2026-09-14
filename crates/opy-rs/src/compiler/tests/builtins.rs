@@ -294,7 +294,7 @@ rule "builtin surface":
 
 #[test]
 fn builtin_alias_preserves_source_identity_and_canonical_target() {
-    let source = "rule \"r\":\n    @Event global\n    @Condition horizontalAngleFromDirection(vect(1, 0, 0)) == 90\n";
+    let source = "globalvar value\nrule \"r\":\n    @Event global\n    @Condition horizontalAngleFromDirection(vect(1, 0, 0)) == 90\n    value = 1\n";
     let hir = crate::compile(source, "source.opy", Path::new(".")).expect("alias must resolve");
     let artifact = Compiler::new()
         .expect("released Workshop contract must load")

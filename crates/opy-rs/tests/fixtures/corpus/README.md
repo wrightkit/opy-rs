@@ -65,7 +65,7 @@ repository:
 | `member-angle` | #130 catalog-backed `eventPlayer.getHorizontalFacingAngle()` member-value lowering |
 | `hud-visibility` | #131 `SpecVisibility.NEVER` to canonical `VISIBLE_NEVER` enum mapping |
 | `control-flow-lowering` | #47 pinned oracle-backed control-flow lowering probe: if/elif/else, while, range-for, do-while expansion, switch fallthrough/default, and direct break |
-| `switch-break-unsupported` | #47 negative probe: a break hidden inside a conditional switch arm is accepted by the source implementation/oracle but rejected by the compiler with a stable source-attributed diagnostic |
+| `switch-break-unsupported` | #47 probe: a break hidden inside a conditional switch arm follows OverPy's `Else` marker lowering, and a top-level no-op switch is elided |
 | `switch-order` | #47 pinned oracle probe for a default arm before later case arms and source-order fallthrough |
 | `switch-structured-target` | #47 pinned oracle probe for nested if/while structure in an earlier arm and later case/default targets |
 | `switch-multiple-break` | #47 pinned oracle probe for multiple direct breaks lowered through canonical nested switch-exit WIR |

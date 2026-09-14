@@ -388,18 +388,17 @@
     },
     {
       "fixture": "synthetic/switch-break-unsupported",
-      "nativeStatus": "failure",
-      "classification": "unsupported",
-      "comparison": "diagnostic-code",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "semantic-wir",
       "evidence": [
         "oracle:synthetic/switch-break-unsupported/oracle.json",
         "provenance:synthetic/switch-break-unsupported/fixture.json",
-        "test:opy-rs::compiler::integration_tests::control_flow::nested_switch_break_is_source_attributed_when_not_representable"
+        "test:opy-rs::compiler::integration_tests::control_flow::nested_switch_break_matches_upstream_noop_elision"
       ],
-      "owner": "workshop-rs#123",
-      "note": "The workshop-rs 0.3 contract provides native Break, Skip, and Skip If calls, but this nested conditional switch-break shape still has no lossless OPY-owned lowering and remains explicitly rejected.",
-      "failureClass": "integration",
-      "diagnosticCode": "unsupported-integration-surface"
+      "owner": "opy-rs#47",
+      "note": "Nested switch breaks are represented by the upstream Else marker; a top-level switch with no observable actions is elided like the pinned oracle.",
+      "semanticEquivalent": true
     },
     {
       "fixture": "synthetic/switch-multiple-break",

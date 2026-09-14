@@ -110,6 +110,26 @@ fn contains_loop_continue(statement: &Stmt) -> bool {
     }
 }
 
+fn switch_body_is_noop(statements: &[Stmt]) -> bool {
+    statements.iter().all(|statement| match statement {
+        Stmt::Pass { .. } | Stmt::Break { .. } => true,
+        Stmt::If {
+            branches, r#else, ..
+        } => {
+            branches
+                .iter()
+                .all(|branch| switch_body_is_noop(&branch.body))
+                && r#else.as_ref().is_none_or(|body| switch_body_is_noop(body))
+        }
+        Stmt::Switch { arms, .. } => arms.iter().all(|arm| match arm {
+            SwitchArm::Case { body, .. } | SwitchArm::Default { body, .. } => {
+                switch_body_is_noop(body)
+            }
+        }),
+        _ => false,
+    })
+}
+
 impl<'a> Lowering<'a> {
     pub(super) fn new(
         compiler: &'a Compiler,
@@ -602,6 +622,12 @@ impl<'a> Lowering<'a> {
         self.current_rule_conditions = previous_conditions;
         let mut actions = Vec::new();
         actions.extend(lowered_actions?);
+        let elide_noop_switch = actions.is_empty()
+            && rule.actions.len() == 1
+            && matches!(rule.actions.first(), Some(Stmt::Switch { .. }));
+        if elide_noop_switch {
+            return Ok(());
+        }
         let rule_index = self.program.rules.len();
         self.program.rules.push(workshop_rs::Rule {
             name: rule.name.clone(),
@@ -1342,7 +1368,7 @@ impl<'a> Lowering<'a> {
                 value,
                 arms,
                 span,
-            } => self.lower_switch(value, arms, *span),
+            } => self.lower_switch(value, arms, *span, break_target),
             Stmt::Delete { target, span } => self.lower_delete(target, *span).map(|action| vec![action]),
             Stmt::Continue { span } => Err(self.unsupported(
                 "continue statements are only lowered while constructing a loop body",
@@ -1362,10 +1388,7 @@ impl<'a> Lowering<'a> {
                     "break inside a do-while must be a direct statement or a single conditional break",
                     *span,
                 )),
-                Some(BreakTarget::Switch) => Err(self.unsupported(
-                    "break inside a nested conditional cannot be normalized into canonical switch control flow",
-                    *span,
-                )),
+                Some(BreakTarget::Switch) => Ok(vec![self.push_action(Action::Else)]),
                 None => Err(self.unsupported(
                     "break has no enclosing canonical loop or switch",
                     *span,
@@ -1376,11 +1399,16 @@ impl<'a> Lowering<'a> {
                 Ok(vec![self.push_call_action("abortIf", &[true_value])])
             }
             Stmt::Expr { expr, span } => match expr.as_ref() {
-                Expr::Call { name, args, .. } => {
+                Expr::Call {
+                    name,
+                    args,
+                    debug_source,
+                    ..
+                } => {
                     if name == "disableInspector" && args.is_empty() {
                         Ok(vec![self.push_call_action("disableInspector", &[])])
                     } else if name == "debug" && args.len() == 1 {
-                        Ok(vec![self.lower_debug(&args[0], *span)?])
+                        Ok(vec![self.lower_debug(&args[0], *span, debug_source.as_deref())?])
                     } else if name == "print" && args.len() == 1 {
                         Ok(vec![self.lower_print(&args[0], *span)?])
                     } else {
@@ -1850,7 +1878,17 @@ impl<'a> Lowering<'a> {
         value: &Expr,
         arms: &[SwitchArm],
         span: Option<HirSpan>,
+        break_target: Option<BreakTarget>,
     ) -> Result<Vec<ActionId>, IntegrationError> {
+        if break_target.is_none()
+            && arms.iter().all(|arm| match arm {
+                SwitchArm::Case { body, .. } | SwitchArm::Default { body, .. } => {
+                    switch_body_is_noop(body)
+                }
+            })
+        {
+            return Ok(Vec::new());
+        }
         let selector = self.lower_value(value)?;
         let mut case_values = Vec::new();
         let mut lowered_arms = Vec::with_capacity(arms.len());
@@ -2175,14 +2213,8 @@ impl<'a> Lowering<'a> {
         &mut self,
         expr: &Expr,
         _span: Option<HirSpan>,
+        debug_source: Option<&str>,
     ) -> Result<ActionId, IntegrationError> {
-        macro_rules! call {
-            ($name:literal $(, $arg:expr)* $(,)?) => {{
-                let args = vec![$($arg),*];
-                self.push_call($name, args)
-            }};
-        }
-
         let argument_span = expr.span().copied();
         let value = self.lower_text_value(expr)?;
         let array_text = if self.debug_value_is_array(value) {
@@ -2190,7 +2222,10 @@ impl<'a> Lowering<'a> {
         } else {
             value
         };
-        let debug_label = canonical_debug_text(&debug_expr_text(expr));
+        let debug_label_text = debug_source
+            .map(str::to_string)
+            .unwrap_or_else(|| debug_expr_text(expr));
+        let debug_label = canonical_debug_text(&debug_label_text);
         let debug_prefix = format!("{debug_label}\u{2028}= {{0}}");
         let inline_padding = 128 - debug_prefix.chars().count() - "{1}".chars().count();
         let padding_text = self.push_value(Value::String(" ".repeat(170 - inline_padding)));
@@ -2200,11 +2235,7 @@ impl<'a> Lowering<'a> {
             " ".repeat(inline_padding)
         )));
         let text = self.push_call("customString", vec![debug_label, array_text, padding]);
-        let all_teams = self.push_value(Value::Enum {
-            value_type: "Team".to_string(),
-            value: "ALL".to_string(),
-        });
-        let all_players = call!("allPlayers", all_teams);
+        let all_players = self.lower_all_players();
         let null_value = self.push_value(Value::Null);
         let null_value_2 = self.push_value(Value::Null);
         let null_value_3 = self.push_value(Value::Null);
@@ -2266,24 +2297,13 @@ impl<'a> Lowering<'a> {
         expr: &Expr,
         _span: Option<HirSpan>,
     ) -> Result<ActionId, IntegrationError> {
-        macro_rules! call {
-            ($name:literal $(, $arg:expr)* $(,)?) => {{
-                let args = vec![$($arg),*];
-                self.push_call($name, args)
-            }};
-        }
-
         let argument_span = expr.span().copied();
         let message = self.lower_value(expr)?;
         let padding_text = self.push_value(Value::String(" ".repeat(45)));
         let padding = self.push_call("customString", vec![padding_text]);
         let body_text = self.push_value(Value::String(format!("{}{{0}}", " ".repeat(125))));
         let body = self.push_call("customString", vec![body_text, padding]);
-        let all_teams = self.push_value(Value::Enum {
-            value_type: "Team".to_string(),
-            value: "ALL".to_string(),
-        });
-        let all_players = call!("allPlayers", all_teams);
+        let all_players = self.lower_all_players();
         let null_value = self.push_value(Value::Null);
         let null_value_2 = self.push_value(Value::Null);
         let null_value_3 = self.push_value(Value::Null);

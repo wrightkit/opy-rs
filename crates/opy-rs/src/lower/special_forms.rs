@@ -171,6 +171,7 @@ impl Lowerer {
         HirExpr::Call {
             name: "createWorkshopSetting".to_string(),
             args: lowered,
+            debug_source: None,
             span: Some(span.into()),
         }
     }

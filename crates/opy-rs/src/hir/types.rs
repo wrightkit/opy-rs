@@ -690,6 +690,8 @@ pub enum Expr {
         name: String,
         #[serde(default)]
         args: Vec<Expr>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        debug_source: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         span: Option<Span>,
     },
