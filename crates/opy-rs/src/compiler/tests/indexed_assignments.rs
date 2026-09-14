@@ -59,3 +59,43 @@ rule "boolean indices":
             .contains("Set Global Variable At Index(nested, 1,")
     );
 }
+
+#[test]
+fn indexed_receiver_mutations_update_only_the_selected_variable_slot() {
+    let source = r#"
+globalvar values
+playervar slots
+
+rule "indexed receiver mutations":
+    @Event eachPlayer
+    values[eventPlayer.getSlot()].append(getCurrentMap())
+    eventPlayer.slots[eventPlayer.getSlot()].remove(eventPlayer.getHero())
+"#;
+    let hir = crate::compile(source, "indexed-receiver-mutations.opy", Path::new(".")).unwrap();
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+
+    assert!(artifact.emitted.contains(
+        "Modify Global Variable At Index(values, Slot Of(Event Player), Append To Array, Current Map);"
+    ));
+    assert!(artifact.emitted.contains(
+        "Modify Player Variable At Index((Event Player).slots, Slot Of(Event Player), Remove From Array, Hero Of(Event Player));"
+    ));
+    assert_eq!(artifact.emitted.matches("Slot Of(Event Player)").count(), 2);
+
+    assert_eq!(artifact.wir.action_span(0, 0).unwrap().start.line, 7);
+    assert_eq!(artifact.wir.action_span(0, 1).unwrap().start.line, 8);
+    for (action, line) in [(0, 7), (1, 8)] {
+        for argument in [0, 1, 3] {
+            assert_eq!(
+                artifact
+                    .wir
+                    .action_argument_span(0, action, argument)
+                    .unwrap()
+                    .start
+                    .line,
+                line
+            );
+        }
+        assert!(artifact.wir.action_argument_span(0, action, 2).is_none());
+    }
+}
