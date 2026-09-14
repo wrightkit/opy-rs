@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.38](https://github.com/wrightkit/opy-rs/compare/v0.1.37...v0.1.38) - 2026-09-14
+
+### Fixed
+
+- lower indexed receiver mutations ([#277](https://github.com/wrightkit/opy-rs/pull/277))
+- lower extension directives into canonical settings (Fixes #270) ([#278](https://github.com/wrightkit/opy-rs/pull/278))
+- *(compiler)* preserve explicit null initializers ([#276](https://github.com/wrightkit/opy-rs/pull/276))
+- *(lexer)* decode evidenced Unicode escapes (Fixes #267) ([#273](https://github.com/wrightkit/opy-rs/pull/273))
+- preserve disabled rules and consume delimiters ([#275](https://github.com/wrightkit/opy-rs/pull/275))
+- reject unsupported backend directives explicitly ([#271](https://github.com/wrightkit/opy-rs/pull/271)) ([#274](https://github.com/wrightkit/opy-rs/pull/274))
+
 ## [0.1.37](https://github.com/wrightkit/opy-rs/compare/v0.1.36...v0.1.37) - 2026-09-14
 
 ### Fixed
