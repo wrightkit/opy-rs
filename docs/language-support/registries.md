@@ -74,7 +74,7 @@ contract.
 | `optimizeForSize` | ✅ Source-supported |
 | `optimizeForSizeAggressive` | ✅ Source-supported |
 | `disableOptimizeForSize` | ✅ Source-supported |
-| `optimizeStrict` | ✅ Source-supported |
+| `optimizeStrict` | 🚧 Coming soon |
 | `disableOptimizeStrict` | ✅ Source-supported |
 | `replace0ByCapturePercentage` | ✅ Source-supported |
 | `replace0ByPayloadProgressPercentage` | ✅ Source-supported |
@@ -85,7 +85,7 @@ contract.
 | `replaceEmptyStringByVariable` | ✅ Source-supported |
 | `translations` | ✅ Source-supported |
 | `translateWithPlayerVar` | ✅ Source-supported |
-| `useVariableForCompressionAlphabet` | ✅ Source-supported |
+| `useVariableForCompressionAlphabet` | 🚧 Coming soon |
 | `extension` | ✅ Source-supported |
 | `globalvarInitRuleName` | ✅ Source-supported |
 | `playervarInitRuleName` | ✅ Source-supported |

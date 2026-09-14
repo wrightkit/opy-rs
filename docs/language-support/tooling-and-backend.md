@@ -12,11 +12,11 @@ upstream README, `overpy.d.ts`, `cli.js`, compiler/decompiler sources,
 | `#!define`/`#!defineMember` object/function macros | ✅ Supported | Member defines use the same textual expansion contract and preserve definition-site provenance. |
 | `#!allowMacroRedeclaration` | ✅ Supported | Duplicate-definition policy is represented in preprocessing state. |
 | `#!mainFile`, `#!include`, `#!excludeVariablesInCompilation` | ✅ Supported | Main-file selection, including-file-relative composition, and output filtering have separate effects. |
-| Optimization controls (`#!enableOptimizations`, `#!disableOptimizations`, `#!optimize*`) | ✅ Source-supported | Directive state is recorded; optimizer output remains a backend concern. |
+| Optimization controls (`#!enableOptimizations`, `#!disableOptimizations`, `#!optimize*`) | 🚧 Coming soon | Directive state is recorded; `#!optimizeStrict` is explicitly rejected until its semantic optimizer contract is implemented. |
 | Replacement directives (`#!replace0By*`, team/string replacements) | ✅ Source-supported | Directive state is recorded; semantic replacement effects remain a backend concern. |
 | `#!rulePrefix` and `#!rulePrefixTemplate` | ✅ Supported | Source preprocessing applies the resulting rule names before compiler lowering. |
 | `#!extension` and extension-point accounting | ✅ Source-supported | The extension name is checked against the canonical Workshop schema and recorded; extension point accounting remains outside opy-rs. |
-| Remaining pinned backend-only directives | ✅ Source-supported | `setupTags`, `setupTx`, translation/inspection/output/compression controls, and init-rule names are validated and recorded without approximating backend effects. |
+| Remaining pinned backend-only directives | 🚧 Coming soon | `setupTags`, `setupTx`, translation/inspection/output controls, and init-rule names are validated and recorded; `#!useVariableForCompressionAlphabet` is explicitly rejected until its helper/cost contract is implemented. |
 | `macro name(params)` function/constant macros | ✅ Supported | Defaults, keywords and member macros differ. |
 | `__script__` JavaScript macros | 🚧 Coming soon | QuickJS return ABI and limits are observable. |
 | `#!postCompileHook` | ✅ Bounded compiler slice | Runs only after final Workshop emission; failures keep directive and script provenance. |

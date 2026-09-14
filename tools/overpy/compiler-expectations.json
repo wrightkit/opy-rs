@@ -757,16 +757,17 @@
     },
     {
       "fixture": "synthetic/include-scope",
-      "nativeStatus": "success",
-      "classification": "known-gap",
-      "comparison": "semantic-wir",
+      "nativeStatus": "failure",
+      "classification": "unsupported",
+      "comparison": "diagnostic-code",
       "evidence": [
         "oracle:synthetic/include-scope/oracle.json",
         "provenance:synthetic/include-scope/fixture.json"
       ],
-      "owner": "opy-rs#157",
-      "note": "Optimizer scope is represented in source state, but optimizer execution is outside the compiler contract.",
-      "semanticEquivalent": false
+      "owner": "opy-rs#271",
+      "note": "The pinned oracle accepts the nested optimizeStrict directive, but opy-rs now rejects unsupported backend directives explicitly with a source-attributed diagnostic instead of silently compiling a no-op.",
+      "failureClass": "integration",
+      "diagnosticCode": "backend-directive-unsupported"
     },
     {
       "fixture": "synthetic/directives-scoped",
