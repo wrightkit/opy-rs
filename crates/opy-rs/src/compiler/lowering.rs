@@ -175,12 +175,12 @@ impl<'a> Lowering<'a> {
                 _ => None,
             })
             .collect();
-        self.program.settings = self.hir.settings.clone().map(|settings| {
-            super::settings::convert_settings(super::settings::expand_settings_constants(
-                settings,
-                &settings_constants,
-            ))
-        });
+        self.program.settings = super::settings::merge_extensions(
+            self.hir.settings.clone().map(|settings| {
+                super::settings::expand_settings_constants(settings, &settings_constants)
+            }),
+            &self.hir.preprocessing.directives,
+        )?;
         Ok(())
     }
 

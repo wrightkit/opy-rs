@@ -1,6 +1,84 @@
 use super::*;
 use workshop_rs::source::{Position as WorkshopPosition, Span as WorkshopSpan};
 
+pub(super) fn merge_extensions(
+    settings: Option<crate::hir::Settings>,
+    directives: &[crate::hir::DirectiveRecord],
+) -> Result<Option<workshop_rs::settings::Settings>, IntegrationError> {
+    let mut extension_nodes: Vec<workshop_rs::settings::SettingsNode> = Vec::new();
+    for directive in directives
+        .iter()
+        .filter(|directive| directive.name == "extension")
+    {
+        let Some(name) = directive.value.as_deref() else {
+            return Err(IntegrationError::new(
+                "directive-invalid",
+                "`#!extension` expects one argument",
+                directive.span,
+            ));
+        };
+        let span = directive.span;
+        if extension_nodes.iter().any(|node| node.name() == name) {
+            continue;
+        }
+        let path = [
+            workshop_rs::settings::table::PathPart::Part("extensions"),
+            workshop_rs::settings::table::PathPart::Part(name),
+        ];
+        let Some(definition) = workshop_rs::settings::definition(&path) else {
+            return Err(IntegrationError::new(
+                "directive-invalid",
+                format!("unknown Workshop extension `{name}`"),
+                span,
+            ));
+        };
+        if !matches!(
+            definition.domain(),
+            workshop_rs::settings::SettingValueDomain::PresenceOnly
+        ) {
+            return Err(IntegrationError::new(
+                "directive-invalid",
+                format!("Workshop extension `{name}` is not a presence-only setting"),
+                span,
+            ));
+        }
+        extension_nodes.push(workshop_rs::settings::SettingsNode::Flag {
+            name: name.to_string(),
+            span: span.map(convert_settings_span),
+        });
+    }
+    if extension_nodes.is_empty() {
+        return Ok(settings.map(convert_settings));
+    }
+
+    let mut settings = settings
+        .map(convert_settings)
+        .unwrap_or(workshop_rs::settings::Settings {
+            span: None,
+            children: Vec::new(),
+        });
+    if let Some(workshop_rs::settings::SettingsNode::Group { children, .. }) = settings
+        .children
+        .iter_mut()
+        .find(|node| node.name() == "extensions")
+    {
+        for extension in extension_nodes {
+            if !children.iter().any(|node| node.name() == extension.name()) {
+                children.push(extension);
+            }
+        }
+    } else {
+        settings
+            .children
+            .push(workshop_rs::settings::SettingsNode::Group {
+                name: "extensions".to_string(),
+                children: extension_nodes,
+                span: None,
+            });
+    }
+    Ok(Some(settings))
+}
+
 pub(super) fn expand_settings_constants(
     settings: crate::hir::Settings,
     constants: &HashMap<String, &Expr>,

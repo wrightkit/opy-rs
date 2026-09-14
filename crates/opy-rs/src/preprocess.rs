@@ -854,6 +854,7 @@ mod tests {
         )
         .unwrap_err();
         assert_eq!(error.code, "directive-invalid");
+        assert_eq!(error.span.expect("directive provenance").start.line, 1);
     }
 
     #[test]
