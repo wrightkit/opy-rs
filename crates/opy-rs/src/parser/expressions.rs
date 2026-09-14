@@ -833,18 +833,22 @@ fn display_tokens(tokens: &[Token]) -> String {
             token.text.clone()
         };
         let previous = tokens.get(index.wrapping_sub(1));
-        let no_space_before = matches!(
-            token.kind,
-            TokenKind::LParen
-                | TokenKind::LBracket
-                | TokenKind::LBrace
-                | TokenKind::RParen
-                | TokenKind::RBracket
-                | TokenKind::RBrace
-                | TokenKind::Comma
-                | TokenKind::Colon
-                | TokenKind::Dot
-        );
+        let unary_sign = is_unary_sign(tokens, index);
+        let previous_is_unary_sign = index > 0 && is_unary_sign(tokens, index - 1);
+        let no_space_before = unary_sign
+            || previous_is_unary_sign
+            || matches!(
+                token.kind,
+                TokenKind::LParen
+                    | TokenKind::LBracket
+                    | TokenKind::LBrace
+                    | TokenKind::RParen
+                    | TokenKind::RBracket
+                    | TokenKind::RBrace
+                    | TokenKind::Comma
+                    | TokenKind::Colon
+                    | TokenKind::Dot
+            );
         let no_space_after = previous.is_some_and(|previous| {
             matches!(
                 previous.kind,
@@ -865,4 +869,70 @@ fn display_tokens(tokens: &[Token]) -> String {
         }
     }
     output.trim_end().to_string()
+}
+
+fn is_unary_sign(tokens: &[Token], index: usize) -> bool {
+    let Some(token) = tokens.get(index) else {
+        return false;
+    };
+    if !matches!(token.kind, TokenKind::Plus | TokenKind::Minus) {
+        return false;
+    }
+    index == 0
+        || tokens.get(index - 1).is_some_and(|previous| {
+            matches!(
+                previous.kind,
+                TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace | TokenKind::Comma
+            ) || matches!(
+                previous.text.as_str(),
+                "else"
+                    | "="
+                    | "+="
+                    | "-="
+                    | "*="
+                    | "/="
+                    | "%="
+                    | "**="
+                    | "min="
+                    | "max="
+                    | "if"
+                    | "or"
+                    | "and"
+                    | "not"
+                    | "in"
+                    | "=="
+                    | "!="
+                    | "<="
+                    | ">="
+                    | ">"
+                    | "<"
+                    | "+"
+                    | "-"
+                    | "*"
+                    | "/"
+                    | "%"
+                    | "**"
+            )
+        })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::lexer::{LexInput, lex};
+
+    #[test]
+    fn display_tokens_keeps_pinned_unary_signs_attached() {
+        // Pinned OverPy 9.7.10 `dispTokens(..., true)` renders these signs
+        // without inserting a space before their operands.
+        for (source, expected) in [("-value", "-value"), ("+value", "+value")] {
+            let mut tokens = lex(LexInput {
+                file_id: 0,
+                text: source,
+            })
+            .unwrap();
+            tokens.retain(|token| token.kind != TokenKind::Eof);
+            assert_eq!(display_tokens(&tokens), expected, "source: {source}");
+        }
+    }
 }
