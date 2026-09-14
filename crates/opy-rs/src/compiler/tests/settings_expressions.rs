@@ -239,3 +239,89 @@ fn compiled_settings_are_queryable_through_the_canonical_consumer_api() {
     assert_eq!(occurrence.authored, SettingValue::Number(2.0));
     assert!(artifact.emitted.contains("Max Spectators: 2"));
 }
+
+#[test]
+fn extension_directives_lower_as_canonical_flags_without_authored_settings() {
+    let source = "#!extension beamEffects\n#!extension projectiles\nrule \"extensions\":\n    @Event global\n    pass\n";
+    let artifact = Compiler::new()
+        .expect("released Workshop contract must load")
+        .compile_source_artifact(source, "extensions.opy", Path::new("."))
+        .expect("extension directives must compile");
+
+    let settings = artifact.wir.settings.as_ref().expect("generated settings");
+    let workshop_rs::settings::SettingsNode::Group { children, .. } = &settings.children[0] else {
+        panic!(
+            "expected extensions group, got {:?}",
+            settings.children[0].name()
+        );
+    };
+    assert_eq!(
+        children
+            .iter()
+            .map(workshop_rs::settings::SettingsNode::name)
+            .collect::<Vec<_>>(),
+        ["beamEffects", "projectiles"]
+    );
+    assert_eq!(
+        children[0].span().expect("first directive span").start.line,
+        1
+    );
+    assert_eq!(
+        children[1]
+            .span()
+            .expect("second directive span")
+            .start
+            .line,
+        2
+    );
+    assert!(artifact.emitted.contains("Beam Effects"));
+    assert!(artifact.emitted.contains("Projectiles"));
+}
+
+#[test]
+fn extension_directives_merge_with_authored_settings_and_preserve_provenance() {
+    let source = "#!extension projectiles\n#!extension beamEffects\n#!extension projectiles\nsettings {\n    \"main\": {\n        \"description\": \"authored\"\n    },\n    \"gamemodes\": {}\n}\nrule \"extensions\":\n    @Event global\n    pass\n";
+    let artifact = Compiler::new()
+        .expect("released Workshop contract must load")
+        .compile_source_artifact(source, "extensions.opy", Path::new("."))
+        .expect("extension directives must compile with authored settings");
+
+    let settings = artifact.wir.settings.as_ref().expect("authored settings");
+    let main = settings
+        .children
+        .iter()
+        .find(|node| node.name() == "main")
+        .expect("authored main settings");
+    assert_eq!(main.span().expect("authored group span").start.line, 5);
+    let workshop_rs::settings::SettingsNode::Group { children, .. } = main else {
+        panic!("expected authored main group");
+    };
+    assert_eq!(
+        children[0]
+            .span()
+            .expect("authored setting span")
+            .start
+            .line,
+        6
+    );
+
+    let extensions = settings
+        .children
+        .iter()
+        .find(|node| node.name() == "extensions")
+        .expect("generated extensions group");
+    let workshop_rs::settings::SettingsNode::Group { children, .. } = extensions else {
+        panic!("expected generated extensions group");
+    };
+    assert_eq!(children.len(), 2);
+    assert_eq!(
+        children
+            .iter()
+            .map(workshop_rs::settings::SettingsNode::name)
+            .collect::<Vec<_>>(),
+        ["projectiles", "beamEffects"]
+    );
+    assert_eq!(children[0].span().expect("directive span").start.line, 1);
+    assert!(artifact.emitted.contains("Description: \"authored\""));
+    assert!(artifact.emitted.contains("Projectiles"));
+}
