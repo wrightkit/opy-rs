@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.37](https://github.com/wrightkit/opy-rs/compare/opy-provider-v0.1.36...opy-provider-v0.1.37) - 2026-09-14
+
+### Fixed
+
+- preserve observable OverPy lowering semantics ([#265](https://github.com/wrightkit/opy-rs/pull/265))
+
 ## [0.1.34](https://github.com/wrightkit/opy-rs/compare/opy-provider-v0.1.33...opy-provider-v0.1.34) - 2026-09-13
 
 ### Added
