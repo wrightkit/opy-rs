@@ -182,8 +182,10 @@ impl Preprocessor {
             },
         });
         self.include_stack.push(identity.clone());
+        // Included tokens are spliced into the parent stream, so optimizer
+        // controls remain active for following sources as in OverPy. Rule
+        // prefixes retain their file-scoped restoration below.
         let saved_prefix = self.preprocessing.rule_prefix.clone();
-        let saved_optimization = self.preprocessing.optimization.clone();
         let mut leaves_macro_file_context = false;
         let result = (|| {
             let settings = match crate::settings::find_blocks(&text, file_id) {
@@ -218,7 +220,6 @@ impl Preprocessor {
             Ok(included)
         })();
         self.preprocessing.rule_prefix = saved_prefix;
-        self.preprocessing.optimization = saved_optimization;
         self.include_stack.pop();
         let included = result?;
         if leaves_macro_file_context {
