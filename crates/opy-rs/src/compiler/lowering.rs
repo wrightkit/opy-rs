@@ -3706,7 +3706,7 @@ impl<'a> Lowering<'a> {
 
     fn lower_value(&mut self, expr: &Expr) -> Result<ValueId, IntegrationError> {
         let span = expr.span().copied();
-        if !self.hir.preprocessing.optimization.strict
+        if !self.strict_optimization_active(expr)
             && (matches!(expr, Expr::Binary { .. } | Expr::Unary { .. })
                 || matches!(expr, Expr::Call { name, .. } if matches!(name.as_str(), "len" | "countOf")))
         {
@@ -4688,6 +4688,38 @@ impl<'a> Lowering<'a> {
             self.push_call("mappedArray", vec![decoded, number])
         };
         Ok(value)
+    }
+
+    fn strict_optimization_active(&self, expr: &Expr) -> bool {
+        let Some(span) = expr.span() else {
+            return self.hir.preprocessing.optimization.strict;
+        };
+        let mut active = None;
+        for directive in &self.hir.preprocessing.directives {
+            let Some(directive_span) = directive.span else {
+                continue;
+            };
+            if directive_span.file != span.file {
+                continue;
+            }
+            if directive_span.start.line < span.start.line
+                || (directive_span.start.line == span.start.line
+                    && directive_span.start.col <= span.start.col)
+            {
+                active = Some(directive.state.optimization.strict);
+            } else {
+                break;
+            }
+        }
+        if let Some(active) = active {
+            return active;
+        }
+        self.hir
+            .preprocessing
+            .source_file_initial_optimization
+            .get(&span.file)
+            .copied()
+            .unwrap_or(self.hir.preprocessing.optimization.strict)
     }
 
     fn lower_array_callback(

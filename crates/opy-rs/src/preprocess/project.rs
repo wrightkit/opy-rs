@@ -172,6 +172,9 @@ impl Preprocessor {
         };
         let file_id = self.next_file_id;
         self.next_file_id += 1;
+        self.preprocessing
+            .source_file_initial_optimization
+            .insert(file_id, self.preprocessing.optimization.strict);
         self.source_texts.insert(file_id, text.clone());
         self.files.push(FileRecord {
             id: file_id,
