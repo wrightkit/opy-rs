@@ -3940,7 +3940,12 @@ impl<'a> Lowering<'a> {
                         {
                             return Ok(self.push_value(Value::Bool(op == "in")));
                         }
-                        if is_literal_key(left.as_ref()) && elements.iter().all(is_literal_key) {
+                        let strict = self.strict_optimization_active(expr);
+                        if is_membership_literal(left.as_ref(), strict)
+                            && elements
+                                .iter()
+                                .all(|elem| is_membership_literal(elem, strict))
+                        {
                             return Ok(self.push_value(Value::Bool(op == "not in")));
                         }
                     }
@@ -5602,6 +5607,10 @@ fn is_literal_key(expr: &hir::Expr) -> bool {
             | hir::Expr::Bool { .. }
             | hir::Expr::Null { .. }
     )
+}
+
+fn is_membership_literal(expr: &hir::Expr, strict: bool) -> bool {
+    is_literal_key(expr) && (!strict || !matches!(expr, hir::Expr::String { .. }))
 }
 
 fn translation_locale(language: &str) -> Option<&'static str> {
