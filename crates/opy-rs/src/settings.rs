@@ -46,12 +46,10 @@ pub struct SettingsBlock {
 /// matching respects `"`/`'` strings, `\` escapes, and nesting; an
 /// unterminated block is `settings-invalid`.
 pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
-    let chars: Vec<char> = text.chars().collect();
-    #[cfg(test)]
-    crate::resource_metrics::record_settings_chars(chars.len());
     let mut scanner = Scanner {
-        chars: &chars,
+        text,
         pos: 0,
+        char_pos: 0,
         line: 1,
         col: 1,
     };
@@ -60,8 +58,7 @@ pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
     let mut string_quote = None;
     let mut escaped = false;
     let mut seen_first_construct = false;
-    while scanner.pos < scanner.chars.len() {
-        let ch = scanner.chars[scanner.pos];
+    while let Some(ch) = scanner.peek(0) {
         if let Some(quote) = string_quote {
             if escaped {
                 escaped = false;
@@ -103,7 +100,7 @@ pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
         // A construct token: the first non-comment token of a logical line.
         if is_ident_start(ch) {
             let keyword_start = scanner.here();
-            let keyword_offset = scanner.pos;
+            let keyword_offset = scanner.char_pos;
             let word = scanner.read_word();
             if word == "settings" && keyword_start.col == 1 {
                 let keyword_span = Span::new(file_id, keyword_start, scanner.here());
@@ -137,7 +134,7 @@ fn match_block(
     keyword_span: Span,
 ) -> OpyResult<SettingsBlock> {
     scanner.skip_whitespace();
-    if scanner.chars.get(scanner.pos) != Some(&'{') {
+    if scanner.peek(0) != Some('{') {
         return Err(OpyError::at(
             "settings-invalid",
             "settings block must be a `settings { ... }` block (the `settings \"file\"` form is not supported)"
@@ -151,7 +148,7 @@ fn match_block(
     let mut text_start_offset = None;
     let mut text_start = None;
     loop {
-        let Some(ch) = scanner.chars.get(scanner.pos).copied() else {
+        let Some(ch) = scanner.peek(0) else {
             return Err(OpyError::at(
                 "settings-invalid",
                 "unterminated settings block (missing closing brace)".to_string(),
@@ -173,7 +170,7 @@ fn match_block(
             '"' | '\'' => string_quote = Some(ch),
             '{' => {
                 if depth == 0 {
-                    text_start_offset = Some(scanner.pos + 1);
+                    text_start_offset = Some(scanner.pos + ch.len_utf8());
                     text_start = Some(scanner.here_after(1));
                 }
                 depth += 1;
@@ -182,16 +179,16 @@ fn match_block(
                 depth -= 1;
                 if depth == 0 {
                     let text = scanner
-                        .chars
+                        .text
                         .get(text_start_offset.expect("text start offset set on '{'")..scanner.pos)
-                        .map(|slice| slice.iter().collect::<String>())
-                        .unwrap_or_default();
+                        .unwrap_or_default()
+                        .to_string();
                     return Ok(SettingsBlock {
                         text,
                         span: Span::new(keyword_span.file, keyword_start, scanner.here_after(1)),
                         keyword_span,
                         start: keyword_offset,
-                        end: scanner.pos + 1,
+                        end: scanner.char_pos + 1,
                         text_start: text_start.expect("text start set on '{'"),
                     });
                 }
@@ -444,15 +441,16 @@ fn display_value(value: &crate::compile_time::Value) -> Result<String, String> {
     }
 }
 struct Scanner<'a> {
-    chars: &'a [char],
+    text: &'a str,
     pos: usize,
+    char_pos: usize,
     line: u32,
     col: u32,
 }
 
 impl Scanner<'_> {
     fn peek(&self, ahead: usize) -> Option<char> {
-        self.chars.get(self.pos + ahead).copied()
+        self.text[self.pos..].chars().nth(ahead)
     }
 
     fn here(&self) -> Position {
@@ -462,8 +460,8 @@ impl Scanner<'_> {
     fn here_after(&self, n: usize) -> Position {
         let mut line = self.line;
         let mut col = self.col;
-        for i in 0..n {
-            if self.chars.get(self.pos + i) == Some(&'\n') {
+        for ch in self.text[self.pos..].chars().take(n) {
+            if ch == '\n' {
                 line += 1;
                 col = 1;
             } else {
@@ -475,35 +473,39 @@ impl Scanner<'_> {
 
     fn advance(&mut self, n: usize) {
         for _ in 0..n {
-            if self.pos >= self.chars.len() {
+            let Some(ch) = self.peek(0) else {
                 return;
-            }
-            if self.chars[self.pos] == '\n' {
+            };
+            if ch == '\n' {
                 self.line += 1;
                 self.col = 1;
             } else {
                 self.col += 1;
             }
-            self.pos += 1;
+            self.pos += ch.len_utf8();
+            self.char_pos += 1;
         }
     }
 
     fn skip_to_eol(&mut self) {
-        while self.pos < self.chars.len() && self.chars[self.pos] != '\n' {
+        while self.peek(0).is_some_and(|ch| ch != '\n') {
             self.advance(1);
         }
     }
 
     fn skip_whitespace(&mut self) {
-        while self.pos < self.chars.len() && matches!(self.chars[self.pos], ' ' | '\t' | '\r') {
+        while matches!(self.peek(0), Some(' ' | '\t' | '\r')) {
             self.advance(1);
         }
     }
 
     fn read_word(&mut self) -> String {
         let mut word = String::new();
-        while self.pos < self.chars.len() && is_ident_continue(self.chars[self.pos]) {
-            word.push(self.chars[self.pos]);
+        while let Some(ch) = self.peek(0) {
+            if !is_ident_continue(ch) {
+                break;
+            }
+            word.push(ch);
             self.advance(1);
         }
         word
@@ -1149,6 +1151,31 @@ mod tests {
         assert_eq!(lines[4], "    pass");
         // The rule keyword is at the same char offset as in the original.
         assert_eq!(sanitized.find("rule"), text.find("rule"));
+    }
+
+    #[test]
+    fn unicode_preserves_offsets_and_sanitization() {
+        let text = "# 前置🙂\nsettings {\n    \"main\": { \"description\": \"内🙂\" },\n    \"gamemodes\": {}\n}\nrule \"后🙂\":\n    pass\n";
+        let found = block(text);
+        let keyword_byte_offset = text.find("settings").unwrap();
+        let closing_byte_offset = text.find("}\nrule").unwrap();
+        assert_eq!(found.start, text[..keyword_byte_offset].chars().count());
+        assert_eq!(
+            found.end,
+            text[..closing_byte_offset + '}'.len_utf8()].chars().count()
+        );
+        assert_eq!(found.keyword_span.start, Position::new(2, 1));
+        assert_eq!(found.text_start, Position::new(2, 11));
+        assert!(found.text.contains("内🙂"));
+
+        let sanitized = sanitize_for_lex(text, &found);
+        assert_eq!(sanitized.chars().count(), text.chars().count());
+        let rule_char_offset = |source: &str| {
+            let byte_offset = source.find("rule").unwrap();
+            source[..byte_offset].chars().count()
+        };
+        assert_eq!(rule_char_offset(&sanitized), rule_char_offset(text));
+        assert!(sanitized.contains("rule \"后🙂\":"));
     }
 
     #[test]

@@ -27,6 +27,7 @@ const WIDE_CALL_COUNT: usize = 32;
 const RULE_COUNT: usize = 128;
 const MACRO_INVOCATIONS: usize = 64;
 const CONTRACT_CONSTRUCTIONS: usize = 64;
+const EXPECTED_CONTRACT_CHECKS: usize = 1;
 const SETTINGS_KEY_COUNT: usize = 1_000;
 const REAL_FIXTURE: &str = "real-world/overpy-parabola";
 
@@ -173,7 +174,7 @@ fn assert_mechanism_measurements(id: &str, metrics: &ResourceMetrics) {
             );
         }
         "compiler-contract-initialization" => assert_eq!(
-            metrics.compiler_contract_checks, CONTRACT_CONSTRUCTIONS,
+            metrics.compiler_contract_checks, EXPECTED_CONTRACT_CHECKS,
             "{id} contract-check counter must match the workload"
         ),
         "macro-runtime" | "macro-runtime-heavy" => {
@@ -183,9 +184,9 @@ fn assert_mechanism_measurements(id: &str, metrics: &ResourceMetrics) {
             );
             assert_macro_phase_measurements(id, metrics);
         }
-        "large-settings-source" => assert!(
-            metrics.settings_chars_materialized > 0,
-            "{id} did not observe settings-source materialization"
+        "large-settings-source" => assert_eq!(
+            metrics.settings_chars_materialized, 0,
+            "{id} still materialized a whole-source character buffer"
         ),
         "real-world-parabola" => {
             assert!(

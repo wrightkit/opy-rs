@@ -1,6 +1,7 @@
 //! Manifest/catalog validation and the released Workshop integration contract.
 
 use super::*;
+use std::sync::OnceLock;
 
 /// Results of the manifest-to-catalog cross-check.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -8,6 +9,14 @@ pub struct LinkReport {
     pub catalog_ids_checked: usize,
     pub domains_checked: usize,
 }
+
+pub(crate) struct CompilerContract {
+    pub(super) catalog: Catalog,
+    pub(super) manifest: &'static Manifest,
+    pub(super) links: LinkReport,
+}
+
+static COMPILER_CONTRACT: OnceLock<Result<CompilerContract, IntegrationError>> = OnceLock::new();
 
 /// Cross-check every OPY manifest `catalogId` and domain identity against the
 /// canonical Workshop catalog. No local catalog copy or spelling allowlist is
@@ -83,12 +92,20 @@ pub(crate) fn cross_check_manifest(
     })
 }
 
-pub(crate) fn load_compiler_contract()
--> Result<(Catalog, &'static Manifest, LinkReport), IntegrationError> {
-    let catalog = Catalog::builtin()
-        .map_err(|error| IntegrationError::new("catalog-load", error.to_string(), None))?;
-    let manifest = Manifest::builtin()
-        .map_err(|error| IntegrationError::new("manifest-load", error.to_string(), None))?;
-    let links = cross_check_manifest(manifest, &catalog)?;
-    Ok((catalog, manifest, links))
+pub(crate) fn load_compiler_contract() -> Result<&'static CompilerContract, IntegrationError> {
+    COMPILER_CONTRACT
+        .get_or_init(|| {
+            let catalog = Catalog::builtin()
+                .map_err(|error| IntegrationError::new("catalog-load", error.to_string(), None))?;
+            let manifest = Manifest::builtin()
+                .map_err(|error| IntegrationError::new("manifest-load", error.to_string(), None))?;
+            let links = cross_check_manifest(manifest, &catalog)?;
+            Ok(CompilerContract {
+                catalog,
+                manifest,
+                links,
+            })
+        })
+        .as_ref()
+        .map_err(Clone::clone)
 }
