@@ -2184,7 +2184,7 @@ impl<'a> Lowering<'a> {
         });
         workshop_rs::emitter::action_width(
             &program,
-            &self.compiler.catalog,
+            self.compiler.catalog,
             &Locale::new("en-US"),
             &public_actions,
         )

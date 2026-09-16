@@ -179,18 +179,18 @@ impl std::error::Error for IntegrationError {}
 /// The compiler-facing integration object. Construction validates the public
 /// manifest/catalog contract once and exposes the pinned catalog identity.
 pub struct Compiler {
-    catalog: Catalog,
+    catalog: &'static Catalog,
     manifest: &'static Manifest,
     links: LinkReport,
 }
 
 impl Compiler {
     pub fn new() -> Result<Self, IntegrationError> {
-        let (catalog, manifest, links) = load_compiler_contract()?;
+        let contract = load_compiler_contract()?;
         Ok(Self {
-            catalog,
-            manifest,
-            links,
+            catalog: &contract.catalog,
+            manifest: contract.manifest,
+            links: contract.links,
         })
     }
 
@@ -236,7 +236,7 @@ impl Compiler {
                     .and_then(|span| hir_span_from_workshop(span, &expanded_hir)),
             )
         })?;
-        workshop_rs::validate::validate_canonical_ids(&lowering.program, &self.catalog).map_err(
+        workshop_rs::validate::validate_canonical_ids(&lowering.program, self.catalog).map_err(
             |error| {
                 IntegrationError::new(
                     "catalog-validation",
@@ -246,15 +246,16 @@ impl Compiler {
                 )
             },
         )?;
-        let emitted = workshop_rs::emitter::emit(&lowering.program, &self.catalog, locale)
-            .map_err(|error| {
+        let emitted = workshop_rs::emitter::emit(&lowering.program, self.catalog, locale).map_err(
+            |error| {
                 IntegrationError::new(
                     "workshop-emission",
                     error.to_string(),
                     workshop_error_span(&error)
                         .and_then(|span| hir_span_from_workshop(span, &expanded_hir)),
                 )
-            })?;
+            },
+        )?;
 
         Ok(CompilationArtifact {
             wir: lowering.program,
@@ -607,6 +608,35 @@ mod tests {
         assert!(!identity.implementation_version.is_empty());
         assert!(compiler.link_report().catalog_ids_checked > 0);
         assert!(compiler.link_report().domains_checked > 0);
+    }
+
+    #[test]
+    fn compiler_instances_share_the_verified_contract_concurrently() {
+        let instances = std::thread::scope(|scope| {
+            let handles = (0..8)
+                .map(|_| {
+                    scope.spawn(|| {
+                        let compiler = Compiler::new().expect("Workshop contract must load");
+                        (
+                            compiler.catalog as *const Catalog as usize,
+                            compiler.manifest as *const Manifest as usize,
+                            compiler.link_report(),
+                        )
+                    })
+                })
+                .collect::<Vec<_>>();
+            handles
+                .into_iter()
+                .map(|handle| handle.join().expect("compiler construction must not panic"))
+                .collect::<Vec<_>>()
+        });
+
+        let (catalog, manifest, links) = instances[0];
+        for (instance_catalog, instance_manifest, instance_links) in instances.into_iter().skip(1) {
+            assert_eq!(instance_catalog, catalog);
+            assert_eq!(instance_manifest, manifest);
+            assert_eq!(instance_links, links);
+        }
     }
 
     #[test]
