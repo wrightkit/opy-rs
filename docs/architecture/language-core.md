@@ -6,7 +6,7 @@
 
 For the declared OverPy core-language surface, the established upstream OverPy implementation is the executable specification. Core behavior is presumptively in scope unless it is explicitly excluded as editor/browser/integration functionality or is demonstrated to be a non-contractual implementation artifact.
 
-Compatibility inventory, probes, differential tests, corpus fixtures, and real projects verify completeness and observable compatibility. They do not decide feature-by-feature whether established core language behavior belongs in `opy-rs`.
+Compatibility inventory, probes, differential tests, corpus fixtures, real projects, and compiler-output comparison verify completeness and compatibility. They do not decide feature-by-feature whether established core language behavior belongs in `opy-rs`.
 
 Upstream implementation structure is not an architecture mandate. `opy-rs` should understand the source behavior and implement it directly in clear Rust rather than mechanically translating upstream internals.
 
@@ -50,8 +50,21 @@ When implementing a feature in an already mixed responsibility, the smallest loc
 
 ## Compatibility target
 
-Target observable semantic compatibility: accepted/rejected source, meaningful diagnostics/provenance, source tooling behavior, lowering semantics, and declared round-trip/reconstruction contracts.
+For the declared OverPy compiler surface, target upstream compiler behavior and compiler-output convergence, not only end-result semantic equivalence.
 
-Compiler-output identity, optimizer shape, temporary names, formatting, or internal upstream IR are not contracts unless independently required for observable behavior.
+Compatibility work should preserve, where the canonical Workshop model can represent it:
+
+- the same Workshop action/value/event/enum identities;
+- equivalent control-flow structure rather than semantically lossy rewrites;
+- upstream lowering choices when an alternative form adds no value;
+- upstream string/value construction shape when divergence only adds Workshop elements;
+- optimizer behavior that materially affects Workshop element cost or emitted structure;
+- stable source-to-output behavior demonstrated by differential or real-project evidence.
+
+A systematic output difference is a compatibility residual by default. It should be explained and classified rather than dismissed merely because the resulting program may appear behaviorally equivalent.
+
+Exact byte-for-byte identity is not a universal completion requirement. Incidental whitespace, formatting, or other representation details may differ when they do not change Workshop structure, element cost, accepted syntax, diagnostics/provenance, or downstream behavior. Likewise, upstream internal architecture, helper names, and IR remain non-contractual.
+
+The practical objective is to make supported `opy-rs` compilation converge as closely as reasonably possible on upstream Workshop output while retaining WrightKit's canonical ownership boundaries. Where equivalent canonical representations exist, prefer the representation demonstrated by upstream unless there is concrete evidence that divergence is necessary.
 
 `opy-rs` does not introduce a WrightKit-only OPY dialect.
