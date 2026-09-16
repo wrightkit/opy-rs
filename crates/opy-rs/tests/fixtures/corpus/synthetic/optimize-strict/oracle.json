@@ -1,0 +1,33 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: A\n        1: B\n}\n\n//Strict optimizations enabled\nrule (\"strict optimizer semantics\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(A, Add(Global.B, 0));\n        Set Global Variable(A, Multiply(Global.B, 0));\n        Set Global Variable(A, Multiply(Global.B, 1));\n        Set Global Variable(A, Divide(Global.B, 1));\n        Set Global Variable(A, Or(Global.B, True));\n        Set Global Variable(A, And(Global.B, False));\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: A\n        1: B\n}\n\n//Strict optimizations enabled\nrule (\"strict optimizer semantics\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(A, Add(Global.B, 0));\n        Set Global Variable(A, Multiply(Global.B, 0));\n        Set Global Variable(A, Multiply(Global.B, 1));\n        Set Global Variable(A, Divide(Global.B, 1));\n        Set Global Variable(A, Or(Global.B, True));\n        Set Global Variable(A, And(Global.B, False));\n    }\n}\n\n",
+    "workshopSha256": "ee2e70dcedf46112801aa52f6c286135e1c7703a2a982feca933a60572023e3d"
+  },
+  "fixture": "synthetic/optimize-strict",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "ee2889f609b04823f30e9b78024bd71dc79c85171cf5e0babd1df2ebff8628b8"
+      }
+    ],
+    "sha256": "7a2503a0bd5b8fdba28840fc8a778f1075742744f6d5260f244d90e287d24559",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

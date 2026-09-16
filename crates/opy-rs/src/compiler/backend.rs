@@ -37,7 +37,12 @@ pub(crate) fn reject_unlowered_directives(hir: &hir::Program) -> Result<(), Inte
         .preprocessing
         .directives
         .iter()
-        .find(|directive| directive.name == "optimizeStrict")
+        .find(|directive| {
+            matches!(
+                directive.name.as_str(),
+                "optimizeStrict" | "useVariableForCompressionAlphabet"
+            )
+        })
     {
         return Err(IntegrationError::new(
             "backend-directive-unsupported",
@@ -46,13 +51,6 @@ pub(crate) fn reject_unlowered_directives(hir: &hir::Program) -> Result<(), Inte
                 directive.name
             ),
             directive.span,
-        ));
-    }
-    if hir.preprocessing.optimization.strict {
-        return Err(IntegrationError::new(
-            "backend-directive-unsupported",
-            "strict optimization policy has no canonical workshop-rs lowering",
-            None,
         ));
     }
     Ok(())

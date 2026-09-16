@@ -105,7 +105,8 @@ pub struct Preprocessed {
     pub warnings: Vec<PreprocessWarning>,
     /// The registered `#!postCompileHook` script, when declared.
     pub post_compile_hook: Option<PostCompileHook>,
-    /// Frontend-visible preprocessing state; backend effects are not run.
+    /// Frontend-visible preprocessing state; strict-sensitive lowering is
+    /// handled by the native compiler while other backend effects are not run.
     pub preprocessing: PreprocessingState,
 }
 

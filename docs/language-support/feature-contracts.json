@@ -696,10 +696,13 @@
       "status": "partial",
       "coverage": "partial",
       "production": [
-        "crates/opy-rs/src/preprocess.rs"
+        "crates/opy-rs/src/preprocess.rs",
+        "crates/opy-rs/src/compiler/backend.rs",
+        "crates/opy-rs/src/compiler/lowering.rs"
       ],
       "evidence": [
-        "fixture:synthetic/directives-scoped"
+        "fixture:synthetic/directives-scoped",
+        "fixture:synthetic/optimize-strict"
       ],
       "limits": "This branch is separate from its broader category; unlisted contexts are not claimed."
     },

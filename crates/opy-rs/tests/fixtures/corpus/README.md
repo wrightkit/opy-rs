@@ -44,6 +44,7 @@ repository:
 | `directives-scoped` | Pinned positive probe for rule-prefix templates, include prefix restoration, macro/enum redeclaration, and normalized translations |
 | `translations-invalid` | Pinned negative probe for a translation code outside the oracle's exact set |
 | `include-scope` | Pinned nested-include probe for observable optimization state transitions |
+| `optimize-strict` | #288 pinned strict-optimizer probe for expressions whose type-conversion semantics must be preserved |
 | `diagnostics` | expected-failure fixture with a syntax diagnostic |
 | `settings` | top-of-file `settings { … }` JSONC block |
 | `receiver-calls` | receiver/member call forms (derived from the real-world overpy-meipocalypse corpus; see its `fixture.json` provenance note) |

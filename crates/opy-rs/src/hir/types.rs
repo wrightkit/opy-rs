@@ -114,8 +114,9 @@ pub struct Program {
     /// The typed custom-game-settings block, when the source had one (#86).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub settings: Option<Settings>,
-    /// Frontend preprocessing state. Workshop execution of optimizer,
-    /// translation, and replacement choices remains lowering-dependent.
+    /// Frontend preprocessing state. Strict optimization is honored by the
+    /// native lowering path; other optimizer, translation, and replacement
+    /// choices remain lowering-dependent.
     #[serde(default)]
     pub preprocessing: PreprocessingState,
 }

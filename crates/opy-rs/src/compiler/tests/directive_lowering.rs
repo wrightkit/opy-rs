@@ -133,3 +133,20 @@ fn public_source_compile_keeps_enabled_and_disabled_rule_identity() {
     assert_eq!(artifact.wir.rule_span(1).unwrap().start.line, 7);
     assert_eq!(artifact.wir.action_span(1, 0).unwrap().start.line, 10);
 }
+
+#[test]
+fn strict_optimizer_fixture_matches_the_pinned_canonical_wir() {
+    let dir = fixture_dir("optimize-strict");
+    let source = std::fs::read_to_string(dir.join("source.opy")).unwrap();
+    let hir = crate::compile(&source, "source.opy", &dir).expect("fixture must resolve");
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+    let oracle: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.join("oracle.json")).unwrap()).unwrap();
+    let expected = workshop_rs::parser::parse(
+        oracle["compile"]["workshop"].as_str().unwrap(),
+        &Catalog::builtin().unwrap(),
+        &Locale::new("en-US"),
+    )
+    .unwrap();
+    assert!(equivalent(&super::canonical_program(&artifact), &expected));
+}
