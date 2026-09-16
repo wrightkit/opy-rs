@@ -72,3 +72,17 @@ fn unicode_escape_in_subroutine_name_reaches_canonical_workshop() {
     assert!(!artifact.emitted.contains("paufeffssed"));
     assert!(artifact.emitted.contains("literal ufeff"));
 }
+
+#[test]
+fn format_folds_constant_arguments_without_nested_string_chunks() {
+    let source = "globalvar g\nrule \"r\":\n    @Event global\n    g = \"Hold {}: {}% {} {} {} {}\".format(Button.RELOAD, 49 - 0, 2, 3, 4, 5)\n";
+    let hir = crate::compile(source, "source.opy", Path::new(".")).unwrap();
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+
+    assert!(
+        artifact
+            .emitted
+            .contains("Set Global Variable(g, Custom String(\"Hold {0}: 49% 2 3 4 5\", Reload));")
+    );
+    assert!(!artifact.emitted.contains("Custom String(\"{0}{1}\""));
+}

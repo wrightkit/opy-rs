@@ -94,7 +94,7 @@
       ],
       "kind": "functionAlias",
       "source": "getLastCreatedText",
-      "target": "lastCreatedEntity"
+      "target": "lastTextId"
     },
     {
       "evidence": [
@@ -1209,7 +1209,7 @@
           "name": "endPosition"
         },
         {
-          "default": "BLOCKED_BY_ALL_BARRIERS",
+          "default": "PASS_THROUGH_BARRIERS",
           "domain": "BarrierLos",
           "name": "barriers"
         }
@@ -1318,6 +1318,15 @@
         "builtin-surface"
       ],
       "id": "lastCreatedEntity",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "lastTextId",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "lastTextId",
       "kind": "value",
       "params": []
     },

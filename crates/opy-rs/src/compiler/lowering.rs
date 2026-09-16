@@ -741,7 +741,10 @@ impl<'a> Lowering<'a> {
             .map(|expr| self.lower_condition(expr))
             .collect::<Result<Vec<_>, _>>()?;
         let previous_conditions = self.current_rule_conditions.replace(conditions.clone());
-        let lowered_actions = self.lower_actions(&rule.actions, None);
+        let optimize_lone_if = self.hir.preprocessing.optimization.enabled
+            && self.hir.preprocessing.optimization.for_size
+            && self.hir.preprocessing.optimization.for_size_aggressive;
+        let lowered_actions = self.lower_actions(&rule.actions, None, optimize_lone_if);
         self.current_rule_conditions = previous_conditions;
         let mut actions = Vec::new();
         actions.extend(lowered_actions?);
@@ -800,7 +803,7 @@ impl<'a> Lowering<'a> {
             ));
         }
         let mut actions = Vec::new();
-        actions.extend(self.lower_actions(body, None)?);
+        actions.extend(self.lower_actions(body, None, false)?);
         let rule_index = self.program.rules.len();
         self.program.rules.push(workshop_rs::Rule {
             name: self.subroutine_rule_name(name),
@@ -1110,6 +1113,7 @@ impl<'a> Lowering<'a> {
         &mut self,
         statements: &[Stmt],
         break_target: Option<BreakTarget>,
+        optimize_lone_if: bool,
     ) -> Result<Vec<ActionId>, IntegrationError> {
         self.visible_labels.push(
             statements
@@ -1145,7 +1149,8 @@ impl<'a> Lowering<'a> {
                         if target.is_some() && conditions.is_empty() {
                             let condition = self.lower_value(&branch.condition)?;
                             let condition = self.push_call("not", vec![condition]);
-                            let body = self.lower_actions(&branch.body[1..], break_target)?;
+                            let body =
+                                self.lower_actions(&branch.body[1..], break_target, false)?;
                             let lowered = self.push_if_actions(vec![(condition, body)], None);
                             self.mark_action_origins(&lowered, *span);
                             actions.extend(lowered);
@@ -1182,7 +1187,7 @@ impl<'a> Lowering<'a> {
                 if let Some((exit_branch, exit_conditions, label, target)) = external_jump {
                     self.outer_goto_targets.push(label.clone());
                     let middle_result =
-                        self.lower_actions(&statements[index + 1..target], break_target);
+                        self.lower_actions(&statements[index + 1..target], break_target, false);
                     let middle = middle_result?;
                     self.resolve_deferred_gotos(&middle, label.as_str(), middle.len())?;
                     let distance = self.canonical_action_width(&middle, *span)?;
@@ -1195,12 +1200,12 @@ impl<'a> Lowering<'a> {
                         };
                         lowered_branches.push((
                             self.lower_value(&branch.condition)?,
-                            self.lower_actions(body, break_target)?,
+                            self.lower_actions(body, break_target, false)?,
                         ));
                     }
                     let else_body = r#else
                         .as_ref()
-                        .map(|body| self.lower_actions(body, break_target))
+                        .map(|body| self.lower_actions(body, break_target, false))
                         .transpose()?;
                     self.outer_goto_targets.pop();
                     let lowered = self.push_if_actions(lowered_branches, else_body);
@@ -1220,6 +1225,48 @@ impl<'a> Lowering<'a> {
                     continue;
                 }
             }
+            if optimize_lone_if
+                && index + 1 == statements.len()
+                && let Stmt::If {
+                    branches,
+                    r#else: None,
+                    span,
+                } = statement
+                && branches.len() == 1
+            {
+                let branch = &branches[0];
+                let is_not_condition = matches!(
+                    &*branch.condition,
+                    Expr::Unary { op, .. } if op == "not"
+                );
+                let is_comparison = matches!(
+                    &*branch.condition,
+                    Expr::Binary { op, .. }
+                        if matches!(op.as_str(), "==" | "!=" | "<" | "<=" | ">" | ">=")
+                );
+                if (is_not_condition || is_comparison) && !branch.body.is_empty() {
+                    let body = self.lower_actions(&branch.body, break_target, false)?;
+                    if !body.is_empty() && (is_not_condition || branch.body.len() == 1) {
+                        let condition = if is_not_condition {
+                            let Expr::Unary { operand, .. } = &*branch.condition else {
+                                unreachable!()
+                            };
+                            self.lower_value(operand)?
+                        } else {
+                            let condition = self.lower_value(&branch.condition)?;
+                            self.push_call("not", vec![condition])
+                        };
+                        let distance = self.canonical_action_width(&body, *span)?;
+                        let distance = self.push_number(distance as f64, &distance.to_string());
+                        let skip = self.push_call_action("skipIf", &[condition, distance]);
+                        self.mark_action_origins(std::slice::from_ref(&skip), *span);
+                        actions.push(skip);
+                        actions.extend(body);
+                        index += 1;
+                        continue;
+                    }
+                }
+            }
             if let Some((conditions, label)) = pure_goto_conditions(statement) {
                 let target = statements[index + 1..]
                     .iter()
@@ -1236,7 +1283,7 @@ impl<'a> Lowering<'a> {
                 if let Some(target) = target {
                     self.outer_goto_targets.push(label.to_string());
                     let middle_result =
-                        self.lower_actions(&statements[index + 1..target], break_target);
+                        self.lower_actions(&statements[index + 1..target], break_target, false);
                     self.outer_goto_targets.pop();
                     let middle = middle_result?;
                     let span = statement.span().copied();
@@ -1396,13 +1443,13 @@ impl<'a> Lowering<'a> {
                     .map(|branch| {
                         Ok((
                             self.lower_value(&branch.condition)?,
-                            self.lower_actions(&branch.body, break_target)?,
+                            self.lower_actions(&branch.body, break_target, false)?,
                         ))
                     })
                     .collect::<Result<Vec<_>, IntegrationError>>()?;
                 let else_body = r#else
                     .as_ref()
-                    .map(|body| self.lower_actions(body, break_target))
+                    .map(|body| self.lower_actions(body, break_target, false))
                     .transpose()?;
                 Ok(self.push_if_actions(branches, else_body))
             }
@@ -2772,6 +2819,25 @@ impl<'a> Lowering<'a> {
         arg_index: usize,
         value_id: ValueId,
     ) -> ValueId {
+        let domain = [Kind::Action, Kind::Value].into_iter().find_map(|kind| {
+            self.compiler
+                .catalog
+                .entry(kind, call_id)
+                .and_then(|entry| entry.param_domain(arg_index))
+        });
+        if domain == Some("BarrierLos") {
+            let value = match self.value(value_id) {
+                Value::Bool(true) => Some("PASS_THROUGH_BARRIERS"),
+                Value::Bool(false) => Some("BLOCKED_BY_ALL_BARRIERS"),
+                _ => None,
+            };
+            if let Some(value) = value {
+                return self.push_value(Value::Enum {
+                    value_type: "BarrierLos".to_string(),
+                    value: value.to_string(),
+                });
+            }
+        }
         let Some(coercions) = self.contextual_coercions(call_id, arg_index) else {
             return value_id;
         };
@@ -2857,6 +2923,69 @@ impl<'a> Lowering<'a> {
         let _ = span;
         let text = self.push_value(Value::String(value));
         Ok(self.push_call("customString", vec![text]))
+    }
+
+    fn fold_format_constants<'b>(
+        &self,
+        text: &str,
+        args: &'b [hir::Expr],
+    ) -> (String, Vec<&'b hir::Expr>) {
+        let values = args
+            .iter()
+            .map(|arg| {
+                let mut stack = Vec::new();
+                crate::compile_time::evaluate(arg, &self.constants, &HashMap::new(), &mut stack)
+                    .and_then(compile_time_value_text)
+            })
+            .collect::<Vec<_>>();
+        let dynamic_indexes = values
+            .iter()
+            .enumerate()
+            .filter_map(|(index, value)| value.is_none().then_some(index))
+            .collect::<Vec<_>>();
+        let dynamic_args = dynamic_indexes
+            .iter()
+            .map(|index| &args[*index])
+            .collect::<Vec<_>>();
+        let dynamic_position = dynamic_indexes
+            .iter()
+            .enumerate()
+            .map(|(position, index)| (*index, position))
+            .collect::<HashMap<_, _>>();
+
+        let canonical = canonical_format_text(text);
+        let mut output = String::with_capacity(canonical.len());
+        let mut cursor = 0;
+        while cursor < canonical.len() {
+            let Some(open_rel) = canonical[cursor..].find('{') else {
+                output.push_str(&canonical[cursor..]);
+                break;
+            };
+            let open = cursor + open_rel;
+            output.push_str(&canonical[cursor..open]);
+            let Some(close_rel) = canonical[open + 1..].find('}') else {
+                output.push_str(&canonical[open..]);
+                break;
+            };
+            let close = open + 1 + close_rel;
+            let marker = &canonical[open + 1..close];
+            let Ok(index) = marker.parse::<usize>() else {
+                output.push_str(&canonical[open..=close]);
+                cursor = close + 1;
+                continue;
+            };
+            if let Some(Some(value)) = values.get(index) {
+                output.push_str(value);
+            } else if let Some(position) = dynamic_position.get(&index) {
+                output.push('{');
+                output.push_str(&position.to_string());
+                output.push('}');
+            } else {
+                output.push_str(&canonical[open..=close]);
+            }
+            cursor = close + 1;
+        }
+        (output, dynamic_args)
     }
 
     fn push_number(&mut self, value: f64, text: &str) -> ValueId {
@@ -3541,7 +3670,14 @@ impl<'a> Lowering<'a> {
             self.push_value(Value::Null),
         ];
         let text_value = self.lower_text_value(text)?;
-        text_slots[text_slot - 1] = self.push_call("customString", vec![text_value]);
+        text_slots[text_slot - 1] = if matches!(
+            self.value(text_value),
+            Value::Call { name, .. } if name == "customString"
+        ) {
+            text_value
+        } else {
+            self.push_call("customString", vec![text_value])
+        };
         let mut colors = [
             self.push_value(Value::Null),
             self.push_value(Value::Null),
@@ -3938,14 +4074,15 @@ impl<'a> Lowering<'a> {
                 }
             }
             Expr::Format { text, args, .. } => {
-                if let Some(value) = fold_literal_format(text, args) {
+                let (format_text, dynamic_args) = self.fold_format_constants(text, args);
+                if dynamic_args.is_empty() {
+                    let value = format_text;
                     return self.lower_custom_string(value, span);
                 }
-                let format_text = canonical_format_text(text);
-                if args.len() <= 3 {
+                if dynamic_args.len() <= 3 {
                     let text_node = self.push_value(Value::String(format_text));
                     let mut call_args = vec![text_node];
-                    for arg in args {
+                    for arg in dynamic_args {
                         let arg = self.lower_value(arg)?;
                         call_args.push(arg);
                     }
@@ -3954,13 +4091,13 @@ impl<'a> Lowering<'a> {
                         args: call_args,
                     }
                 } else {
-                    let chunks = split_format_chunks(&format_text, args.len()).ok_or_else(|| {
+                    let chunks = split_format_chunks(&format_text, dynamic_args.len()).ok_or_else(|| {
                         self.unsupported(
                             "format strings with more than three replacements require sequential placeholders",
                             span,
                         )
                     })?;
-                    let lowered_args = args
+                    let lowered_args = dynamic_args
                         .iter()
                         .map(|arg| self.lower_value(arg))
                         .collect::<Result<Vec<_>, _>>()?;
@@ -5922,14 +6059,6 @@ fn case_sensitive(value: &str) -> String {
         .collect()
 }
 
-fn canonical_number_text(value: f64, text: &str) -> String {
-    if text.starts_with("0x") || text.starts_with("0X") {
-        value.to_string()
-    } else {
-        text.to_string()
-    }
-}
-
 fn computed_number_text(value: f64) -> String {
     workshop_rs::format::format_number(value)
 }
@@ -6005,22 +6134,14 @@ fn split_format_chunks(text: &str, arg_count: usize) -> Option<Vec<(String, Vec<
     Some(chunks)
 }
 
-fn fold_literal_format(text: &str, args: &[hir::Expr]) -> Option<String> {
-    let values = args
-        .iter()
-        .map(|arg| match arg {
-            hir::Expr::Number { text, value, .. } => Some(canonical_number_text(*value, text)),
-            hir::Expr::String { value, .. } => Some(value.clone()),
-            hir::Expr::Bool { value, .. } => Some(value.to_string()),
-            hir::Expr::Null { .. } => Some("null".to_string()),
-            _ => None,
-        })
-        .collect::<Option<Vec<_>>>()?;
-    let mut output = canonical_format_text(text);
-    for (index, value) in values.iter().enumerate() {
-        output = output.replace(&format!("{{{index}}}"), value);
+fn compile_time_value_text(value: crate::compile_time::Value) -> Option<String> {
+    match value {
+        crate::compile_time::Value::Number(value) if value.is_finite() => Some(value.to_string()),
+        crate::compile_time::Value::Number(_) => None,
+        crate::compile_time::Value::String(value) => Some(value),
+        crate::compile_time::Value::Bool(value) => Some(value.to_string()),
+        crate::compile_time::Value::Array(_) | crate::compile_time::Value::Object(_) => None,
     }
-    Some(output)
 }
 
 fn debug_expr_text(expr: &Expr) -> String {

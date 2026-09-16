@@ -120,6 +120,20 @@ fn control_flow_debug_lowers_to_a_native_hud_action() {
 }
 
 #[test]
+fn aggressive_size_optimization_lowers_a_tail_comparison_to_skip_if() {
+    let source = "#!optimizeForSize\n#!optimizeForSizeAggressive\nglobalvar g\nrule \"r\":\n    @Event global\n    if g == 1:\n        g = 2\n";
+    let hir = crate::compile(source, "source.opy", Path::new(".")).unwrap();
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+
+    assert!(
+        artifact
+            .emitted
+            .contains("Skip If(Not(Compare(Global.g, ==, 1)), 1);")
+    );
+    assert!(!artifact.emitted.contains("If(Compare(Global.g, ==, 1));"));
+}
+
+#[test]
 fn do_while_break_shapes_match_the_pinned_oracle() {
     assert_native_wir_equivalent("do-while-break");
 }

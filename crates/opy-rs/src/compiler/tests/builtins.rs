@@ -133,6 +133,9 @@ rule "builtin surface":
     eventPlayer.addToScore(1)
     g = max(1, 2)
     g = getLastCreatedEntity()
+    g = getLastCreatedText()
+    g = isInLoS(eventPlayer, eventPlayer)
+    g = isInLoS(eventPlayer, eventPlayer, true)
     g = worldVector(Vector.LEFT, eventPlayer, Transform.ROTATION)
     g = worldVector(Vector.LEFT, eventPlayer, Transform.ROTATION).x
     g = worldVector(Vector.LEFT, eventPlayer, Transform.ROTATION).y
@@ -223,6 +226,8 @@ rule "builtin surface":
         "getUltCharge",
         "max",
         "lastCreatedEntity",
+        "lastTextId",
+        "isInLoS",
         "charAt",
         "__xComponentOf__",
         "__yComponentOf__",
@@ -286,6 +291,13 @@ rule "builtin surface":
     assert!(artifact.emitted.contains("Wrecking Ball"));
     assert!(artifact.emitted.contains("Declare Team Victory"));
     assert!(artifact.emitted.contains("Stop Chasing Global Variable"));
+    assert!(
+        artifact
+            .emitted
+            .matches("Barriers Do Not Block LOS")
+            .count()
+            >= 2
+    );
     assert!(artifact.emitted.contains("Big Message"));
     assert!(artifact.emitted.contains("Small Message"));
     assert!(artifact.emitted.contains("Wait Until"));
