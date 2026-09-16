@@ -10,3 +10,4 @@ rule "strict optimizer semantics":
     A = B / 1
     A = B or true
     A = B and false
+    A = "am" == "**"

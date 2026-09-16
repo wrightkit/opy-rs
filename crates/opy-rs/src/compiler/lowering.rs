@@ -3706,8 +3706,9 @@ impl<'a> Lowering<'a> {
 
     fn lower_value(&mut self, expr: &Expr) -> Result<ValueId, IntegrationError> {
         let span = expr.span().copied();
-        if matches!(expr, Expr::Binary { .. } | Expr::Unary { .. })
-            || matches!(expr, Expr::Call { name, .. } if matches!(name.as_str(), "len" | "countOf"))
+        if !self.hir.preprocessing.optimization.strict
+            && (matches!(expr, Expr::Binary { .. } | Expr::Unary { .. })
+                || matches!(expr, Expr::Call { name, .. } if matches!(name.as_str(), "len" | "countOf")))
         {
             let bindings = HashMap::new();
             let mut stack = Vec::new();

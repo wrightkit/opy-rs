@@ -1588,7 +1588,7 @@ rule "main":
     fn strict_optimization_cases_are_preserved_by_native_lowering() {
         let compiler = Compiler::new().unwrap();
         let hir = crate::compile(
-            "globalvar A = 0\n\n#!optimizeStrict\nrule \"strict\":\n    @Event global\n    print(A + 0)\n    print(A * 0)\n    print(A * 1)\n",
+            "globalvar A = 0\n\n#!optimizeStrict\nrule \"strict\":\n    @Event global\n    print(A + 0)\n    print(A * 0)\n    print(A * 1)\n    print(\"am\" == \"**\")\n",
             "strict.opy",
             Path::new("."),
         )
@@ -1597,6 +1597,11 @@ rule "main":
         assert!(artifact.emitted.contains("Add(Global.A, 0)"));
         assert!(artifact.emitted.contains("Multiply(Global.A, 0)"));
         assert!(artifact.emitted.contains("Multiply(Global.A, 1)"));
+        assert!(
+            artifact
+                .emitted
+                .contains("Compare(Custom String(\"am\"), ==, Custom String(\"**\"))")
+        );
     }
 
     #[test]
