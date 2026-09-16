@@ -32,6 +32,8 @@ pub(crate) struct QuickJsEngine {
 
 impl JsEngine for QuickJsEngine {
     fn new(limits: &Limits) -> Result<Self, EngineError> {
+        #[cfg(test)]
+        crate::resource_metrics::record_macro_engine_creation();
         unsafe {
             let runtime = q::JS_NewRuntime();
             if runtime.is_null() {

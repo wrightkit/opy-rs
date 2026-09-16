@@ -2616,6 +2616,8 @@ impl<'a> Lowering<'a> {
     fn push_value(&mut self, value: Value) -> ValueId {
         let id = self.values.len();
         self.values.push(value);
+        #[cfg(test)]
+        crate::resource_metrics::record_lowering_values(self.values.len());
         id
     }
 
@@ -4887,7 +4889,14 @@ impl<'a> Lowering<'a> {
     }
 
     fn value_args(&self, ids: &[ValueId]) -> Vec<Value> {
-        ids.iter().map(|id| self.value(*id).clone()).collect()
+        ids.iter()
+            .map(|id| {
+                let value = self.value(*id);
+                #[cfg(test)]
+                crate::resource_metrics::record_value_clone(value);
+                value.clone()
+            })
+            .collect()
     }
 
     fn push_call_action(&mut self, name: impl Into<String>, args: &[ValueId]) -> ActionId {
@@ -4998,7 +5007,15 @@ impl<'a> Lowering<'a> {
     }
 
     fn public_actions(&self, actions: &[ActionId]) -> Vec<Action> {
-        actions.iter().map(|id| self.actions[*id].clone()).collect()
+        actions
+            .iter()
+            .map(|id| {
+                let action = &self.actions[*id];
+                #[cfg(test)]
+                crate::resource_metrics::record_action_clone(action);
+                action.clone()
+            })
+            .collect()
     }
 
     fn set_rule_provenance<C, A>(

@@ -1,0 +1,588 @@
+{
+  "baselineRevision": "5e65d504529f8790ae4dcf4b76bbe1b2b94d70a6",
+  "candidateRevision": null,
+  "compilerPackage": "0.1.41",
+  "environment": {
+    "arch": "aarch64",
+    "os": "macos",
+    "peakRss": "getrusage(RUSAGE_SELF) per workload child process",
+    "repetitions": 5,
+    "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)"
+  },
+  "schemaVersion": 1,
+  "workloads": [
+    {
+      "description": "nested arithmetic expression lowered into canonical Workshop values",
+      "input": {
+        "bytes": 334,
+        "kind": "synthetic",
+        "parameters": {
+          "depth": 24
+        },
+        "provenance": {
+          "kind": "original",
+          "license": "AGPL-3.0-or-later",
+          "origin": "WrightKit opy-rs resource audit workload",
+          "relatedIssue": "wrightkit/opy-rs#296"
+        },
+        "sha256": "c151cce99c15bd4843dea7f1724140d0cbec07ac50b6c652633306e4cdfa37a5",
+        "source": "compiler/tests/resource_baseline.rs::nested-expression-lowering"
+      },
+      "samples": [
+        {
+          "elapsed_ns": 80749708,
+          "metrics": {
+            "compiler_contract_checks": 1,
+            "lowering_action_clone_events": 1,
+            "lowering_value_clone_nodes": 1151,
+            "lowering_values_peak": 93,
+            "macro_engine_creations": 0,
+            "settings_chars_materialized": 334
+          },
+          "peak_rss_bytes": 16891904
+        },
+        {
+          "elapsed_ns": 80648292,
+          "metrics": {
+            "compiler_contract_checks": 1,
+            "lowering_action_clone_events": 1,
+            "lowering_value_clone_nodes": 1151,
+            "lowering_values_peak": 93,
+            "macro_engine_creations": 0,
+            "settings_chars_materialized": 334
+          },
+          "peak_rss_bytes": 14270464
+        },
+        {
+          "elapsed_ns": 81664792,
+          "metrics": {
+            "compiler_contract_checks": 1,
+            "lowering_action_clone_events": 1,
+            "lowering_value_clone_nodes": 1151,
+            "lowering_values_peak": 93,
+            "macro_engine_creations": 0,
+            "settings_chars_materialized": 334
+          },
+          "peak_rss_bytes": 16908288
+        },
+        {
+          "elapsed_ns": 79825708,
+          "metrics": {
+            "compiler_contract_checks": 1,
+            "lowering_action_clone_events": 1,
+            "lowering_value_clone_nodes": 1151,
+            "lowering_values_peak": 93,
+            "macro_engine_creations": 0,
+            "settings_chars_materialized": 334
+          },
+          "peak_rss_bytes": 14663680
+        },
+        {
+          "elapsed_ns": 80483667,
+          "metrics": {
+            "compiler_contract_checks": 1,
+            "lowering_action_clone_events": 1,
+            "lowering_value_clone_nodes": 1151,
+            "lowering_values_peak": 93,
+            "macro_engine_creations": 0,
+            "settings_chars_materialized": 334
+          },
+          "peak_rss_bytes": 15073280
+        }
+      ],
+      "workload": "nested-expression-lowering"
+    },
+    {
+      "description": "one wide value call with repeated nested vector arguments",
+      "input": {
+        "bytes": 608,
+        "kind": "synthetic",
+        "parameters": {
+          "vectorCount": 32
+        },
+        "provenance": {
+          "kind": "original",
+          "license": "AGPL-3.0-or-later",
+          "origin": "WrightKit opy-rs resource audit workload",
+          "relatedIssue": "wrightkit/opy-rs#296"
+        },
+        "sha256": "4ddd7102dd79b01552359852b2d62a07c5231b3bed93b7daefa7180c72829abb",
+        "source": "compiler/tests/resource_baseline.rs::wide-call-value-construction"
+      },
+      "samples": [
+        {
+          "elapsed_ns": 81115542,
+          "metrics": {
+            "compiler_contract_checks": 1,
+            "lowering_action_clone_events": 1,
+            "lowering_value_clone_nodes": 449,
+            "lowering_values_peak": 225,
+            "macro_engine_creations": 0,
+            "settings_chars_materialized": 608
+          },
+          "peak_rss_bytes": 16203776
+        },
+        {
+          "elapsed_ns": 80701458,
+          "metrics": {
+            "compiler_contract_checks": 1,
+            "lowering_action_clone_events": 1,
+            "lowering_value_clone_nodes": 449,
+            "lowering_values_peak": 225,
+            "macro_engine_creations": 0,
+            "settings_chars_materialized": 608
+          },
+          "peak_rss_bytes": 15220736
+        },
+        {
+          "elapsed_ns": 80692458,
+          "metrics": {
+            "compiler_contract_checks": 1,
+            "lowering_action_clone_events": 1,
+            "lowering_value_clone_nodes": 449,
+            "lowering_values_peak": 225,
+            "macro_engine_creations": 0,
+            "settings_chars_materialized": 608
+          },
+          "peak_rss_bytes": 15810560
+        },
+        {
+          "elapsed_ns": 80703625,
+          "metrics": {
+            "compiler_contract_checks": 1,
+            "lowering_action_clone_events": 1,
+            "lowering_value_clone_nodes": 449,
+            "lowering_values_peak": 225,
+            "macro_engine_creations": 0,
+            "settings_chars_materialized": 608
+          },
+          "peak_rss_bytes": 15532032
+        },
+        {
+          "elapsed_ns": 81530833,
+          "metrics": {
+            "compiler_contract_checks": 1,
+            "lowering_action_clone_events": 1,
+            "lowering_value_clone_nodes": 449,
+            "lowering_values_peak": 225,
+            "macro_engine_creations": 0,
+            "settings_chars_materialized": 608
+          },
+          "peak_rss_bytes": 15466496
+        }
+      ],
+      "workload": "wide-call-value-construction"
+    },
+    {
+      "description": "many independent rules compiled through the public compiler API",
+      "input": {
+        "bytes": 6324,
+        "kind": "synthetic",
+        "parameters": {
+          "ruleCount": 128
+        },
+        "provenance": {
+          "kind": "original",
+          "license": "AGPL-3.0-or-later",
+          "origin": "WrightKit opy-rs resource audit workload",
+          "relatedIssue": "wrightkit/opy-rs#296"
+        },
+        "sha256": "f5476fee32b01db0c7b41107b2bc1a16d2e0674204b7ceb76d53fefd93e1e135",
+        "source": "compiler/tests/resource_baseline.rs::many-rule-compilation"
+      },
+      "samples": [
+        {
+          "elapsed_ns": 88761125,
+          "metrics": {
+            "compiler_contract_checks": 1,
+            "lowering_action_clone_events": 128,
+            "lowering_value_clone_nodes": 128,
+            "lowering_values_peak": 128,
+            "macro_engine_creations": 0,
+            "settings_chars_materialized": 6324
+          },
+          "peak_rss_bytes": 16138240
+        },
+        {
+          "elapsed_ns": 88228458,
+          "metrics": {
+            "compiler_contract_checks": 1,
+            "lowering_action_clone_events": 128,
+            "lowering_value_clone_nodes": 128,
+            "lowering_values_peak": 128,
+            "macro_engine_creations": 0,
+            "settings_chars_materialized": 6324
+          },
+          "peak_rss_bytes": 17350656
+        },
+        {
+          "elapsed_ns": 87845666,
+          "metrics": {
+            "compiler_contract_checks": 1,
+            "lowering_action_clone_events": 128,
+            "lowering_value_clone_nodes": 128,
+            "lowering_values_peak": 128,
+            "macro_engine_creations": 0,
+            "settings_chars_materialized": 6324
+          },
+          "peak_rss_bytes": 16777216
+        },
+        {
+          "elapsed_ns": 88537708,
+          "metrics": {
+            "compiler_contract_checks": 1,
+            "lowering_action_clone_events": 128,
+            "lowering_value_clone_nodes": 128,
+            "lowering_values_peak": 128,
+            "macro_engine_creations": 0,
+            "settings_chars_materialized": 6324
+          },
+          "peak_rss_bytes": 16416768
+        },
+        {
+          "elapsed_ns": 87209250,
+          "metrics": {
+            "compiler_contract_checks": 1,
+            "lowering_action_clone_events": 128,
+            "lowering_value_clone_nodes": 128,
+            "lowering_values_peak": 128,
+            "macro_engine_creations": 0,
+            "settings_chars_materialized": 6324
+          },
+          "peak_rss_bytes": 17743872
+        }
+      ],
+      "workload": "many-rule-compilation"
+    },
+    {
+      "description": "repeated manifest/catalog contract initialization",
+      "input": {
+        "bytes": 15,
+        "kind": "synthetic",
+        "parameters": {
+          "constructions": 64
+        },
+        "provenance": {
+          "kind": "original",
+          "license": "AGPL-3.0-or-later",
+          "origin": "WrightKit opy-rs resource audit workload",
+          "relatedIssue": "wrightkit/opy-rs#296"
+        },
+        "sha256": "c4a16e51c4db88ef5bfac3178c4e465bb15632672c1fb1ed582b6dd5a794a7d5",
+        "source": "compiler/tests/resource_baseline.rs::compiler-contract-initialization"
+      },
+      "samples": [
+        {
+          "elapsed_ns": 2455993375,
+          "metrics": {
+            "compiler_contract_checks": 64,
+            "lowering_action_clone_events": 0,
+            "lowering_value_clone_nodes": 0,
+            "lowering_values_peak": 0,
+            "macro_engine_creations": 0,
+            "settings_chars_materialized": 0
+          },
+          "peak_rss_bytes": 27197440
+        },
+        {
+          "elapsed_ns": 2498396667,
+          "metrics": {
+            "compiler_contract_checks": 64,
+            "lowering_action_clone_events": 0,
+            "lowering_value_clone_nodes": 0,
+            "lowering_values_peak": 0,
+            "macro_engine_creations": 0,
+            "settings_chars_materialized": 0
+          },
+          "peak_rss_bytes": 28917760
+        },
+        {
+          "elapsed_ns": 2508997250,
+          "metrics": {
+            "compiler_contract_checks": 64,
+            "lowering_action_clone_events": 0,
+            "lowering_value_clone_nodes": 0,
+            "lowering_values_peak": 0,
+            "macro_engine_creations": 0,
+            "settings_chars_materialized": 0
+          },
+          "peak_rss_bytes": 28426240
+        },
+        {
+          "elapsed_ns": 2506687000,
+          "metrics": {
+            "compiler_contract_checks": 64,
+            "lowering_action_clone_events": 0,
+            "lowering_value_clone_nodes": 0,
+            "lowering_values_peak": 0,
+            "macro_engine_creations": 0,
+            "settings_chars_materialized": 0
+          },
+          "peak_rss_bytes": 29376512
+        },
+        {
+          "elapsed_ns": 2468756125,
+          "metrics": {
+            "compiler_contract_checks": 64,
+            "lowering_action_clone_events": 0,
+            "lowering_value_clone_nodes": 0,
+            "lowering_values_peak": 0,
+            "macro_engine_creations": 0,
+            "settings_chars_materialized": 0
+          },
+          "peak_rss_bytes": 28409856
+        }
+      ],
+      "workload": "compiler-contract-initialization"
+    },
+    {
+      "description": "repeated JavaScript macro execution in one MacroRuntime workload",
+      "input": {
+        "bytes": 19,
+        "kind": "synthetic",
+        "parameters": {
+          "invocations": 64
+        },
+        "provenance": {
+          "kind": "original",
+          "license": "AGPL-3.0-or-later",
+          "origin": "WrightKit opy-rs resource audit workload",
+          "relatedIssue": "wrightkit/opy-rs#296"
+        },
+        "sha256": "7921c88e65cfeaed090dfde7305b3e16e93e97e2d4fa191247c623a5bf221c5c",
+        "source": "compiler/tests/resource_baseline.rs::macro-runtime"
+      },
+      "samples": [
+        {
+          "elapsed_ns": 23763791,
+          "metrics": {
+            "compiler_contract_checks": 0,
+            "lowering_action_clone_events": 0,
+            "lowering_value_clone_nodes": 0,
+            "lowering_values_peak": 0,
+            "macro_engine_creations": 64,
+            "settings_chars_materialized": 0
+          },
+          "peak_rss_bytes": 5881856
+        },
+        {
+          "elapsed_ns": 24048625,
+          "metrics": {
+            "compiler_contract_checks": 0,
+            "lowering_action_clone_events": 0,
+            "lowering_value_clone_nodes": 0,
+            "lowering_values_peak": 0,
+            "macro_engine_creations": 64,
+            "settings_chars_materialized": 0
+          },
+          "peak_rss_bytes": 5865472
+        },
+        {
+          "elapsed_ns": 24072750,
+          "metrics": {
+            "compiler_contract_checks": 0,
+            "lowering_action_clone_events": 0,
+            "lowering_value_clone_nodes": 0,
+            "lowering_values_peak": 0,
+            "macro_engine_creations": 64,
+            "settings_chars_materialized": 0
+          },
+          "peak_rss_bytes": 5816320
+        },
+        {
+          "elapsed_ns": 23649583,
+          "metrics": {
+            "compiler_contract_checks": 0,
+            "lowering_action_clone_events": 0,
+            "lowering_value_clone_nodes": 0,
+            "lowering_values_peak": 0,
+            "macro_engine_creations": 64,
+            "settings_chars_materialized": 0
+          },
+          "peak_rss_bytes": 5636096
+        },
+        {
+          "elapsed_ns": 24035709,
+          "metrics": {
+            "compiler_contract_checks": 0,
+            "lowering_action_clone_events": 0,
+            "lowering_value_clone_nodes": 0,
+            "lowering_values_peak": 0,
+            "macro_engine_creations": 64,
+            "settings_chars_materialized": 0
+          },
+          "peak_rss_bytes": 5849088
+        }
+      ],
+      "workload": "macro-runtime"
+    },
+    {
+      "description": "large settings-containing source scanned through the frontend",
+      "input": {
+        "bytes": 27858,
+        "kind": "synthetic",
+        "parameters": {
+          "settingsKeyCount": 1000
+        },
+        "provenance": {
+          "kind": "original",
+          "license": "AGPL-3.0-or-later",
+          "origin": "WrightKit opy-rs resource audit workload",
+          "relatedIssue": "wrightkit/opy-rs#296"
+        },
+        "sha256": "b074206dbb6a61dff0185815116ca867e5877ac6f8d3d4e1b439cbee8e7b5d84",
+        "source": "compiler/tests/resource_baseline.rs::large-settings-source"
+      },
+      "samples": [
+        {
+          "elapsed_ns": 52102083,
+          "metrics": {
+            "compiler_contract_checks": 0,
+            "lowering_action_clone_events": 0,
+            "lowering_value_clone_nodes": 0,
+            "lowering_values_peak": 0,
+            "macro_engine_creations": 0,
+            "settings_chars_materialized": 27858
+          },
+          "peak_rss_bytes": 13123584
+        },
+        {
+          "elapsed_ns": 51202417,
+          "metrics": {
+            "compiler_contract_checks": 0,
+            "lowering_action_clone_events": 0,
+            "lowering_value_clone_nodes": 0,
+            "lowering_values_peak": 0,
+            "macro_engine_creations": 0,
+            "settings_chars_materialized": 27858
+          },
+          "peak_rss_bytes": 13910016
+        },
+        {
+          "elapsed_ns": 51625750,
+          "metrics": {
+            "compiler_contract_checks": 0,
+            "lowering_action_clone_events": 0,
+            "lowering_value_clone_nodes": 0,
+            "lowering_values_peak": 0,
+            "macro_engine_creations": 0,
+            "settings_chars_materialized": 27858
+          },
+          "peak_rss_bytes": 13959168
+        },
+        {
+          "elapsed_ns": 51805541,
+          "metrics": {
+            "compiler_contract_checks": 0,
+            "lowering_action_clone_events": 0,
+            "lowering_value_clone_nodes": 0,
+            "lowering_values_peak": 0,
+            "macro_engine_creations": 0,
+            "settings_chars_materialized": 27858
+          },
+          "peak_rss_bytes": 13565952
+        },
+        {
+          "elapsed_ns": 51301333,
+          "metrics": {
+            "compiler_contract_checks": 0,
+            "lowering_action_clone_events": 0,
+            "lowering_value_clone_nodes": 0,
+            "lowering_values_peak": 0,
+            "macro_engine_creations": 0,
+            "settings_chars_materialized": 27858
+          },
+          "peak_rss_bytes": 12877824
+        }
+      ],
+      "workload": "large-settings-source"
+    },
+    {
+      "description": "provenance-linked OverPy parabola example compiled end to end",
+      "input": {
+        "bytes": 3035,
+        "kind": "provenance-linked-corpus",
+        "parameters": {
+          "entry": "parabola.opy",
+          "fixture": "real-world/overpy-parabola",
+          "fixtureMetadata": "crates/opy-rs/tests/fixtures/corpus/real-world/overpy-parabola/fixture.json"
+        },
+        "provenance": {
+          "kind": "imported-example",
+          "license": "GPL-3.0-only",
+          "licenseUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/LICENSE",
+          "modifications": "none",
+          "origin": "Zezombye/overpy examples/parabola.opy",
+          "redistributable": true,
+          "sourceCommit": "eea67adbcf6926c4004e35e25ab4be072624a44e",
+          "sourceUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/examples/parabola.opy"
+        },
+        "sha256": "2dce50c374a00e3d3e664f4753f736f788cfb2d0df3a2149b139e6f8cb484940",
+        "source": "real-world/overpy-parabola/parabola.opy"
+      },
+      "samples": [
+        {
+          "elapsed_ns": 84681584,
+          "metrics": {
+            "compiler_contract_checks": 1,
+            "lowering_action_clone_events": 25,
+            "lowering_value_clone_nodes": 2512,
+            "lowering_values_peak": 432,
+            "macro_engine_creations": 0,
+            "settings_chars_materialized": 3035
+          },
+          "peak_rss_bytes": 17661952
+        },
+        {
+          "elapsed_ns": 85290916,
+          "metrics": {
+            "compiler_contract_checks": 1,
+            "lowering_action_clone_events": 25,
+            "lowering_value_clone_nodes": 2512,
+            "lowering_values_peak": 432,
+            "macro_engine_creations": 0,
+            "settings_chars_materialized": 3035
+          },
+          "peak_rss_bytes": 17743872
+        },
+        {
+          "elapsed_ns": 84584000,
+          "metrics": {
+            "compiler_contract_checks": 1,
+            "lowering_action_clone_events": 25,
+            "lowering_value_clone_nodes": 2512,
+            "lowering_values_peak": 432,
+            "macro_engine_creations": 0,
+            "settings_chars_materialized": 3035
+          },
+          "peak_rss_bytes": 16547840
+        },
+        {
+          "elapsed_ns": 83924125,
+          "metrics": {
+            "compiler_contract_checks": 1,
+            "lowering_action_clone_events": 25,
+            "lowering_value_clone_nodes": 2512,
+            "lowering_values_peak": 432,
+            "macro_engine_creations": 0,
+            "settings_chars_materialized": 3035
+          },
+          "peak_rss_bytes": 17072128
+        },
+        {
+          "elapsed_ns": 84878959,
+          "metrics": {
+            "compiler_contract_checks": 1,
+            "lowering_action_clone_events": 25,
+            "lowering_value_clone_nodes": 2512,
+            "lowering_values_peak": 432,
+            "macro_engine_creations": 0,
+            "settings_chars_materialized": 3035
+          },
+          "peak_rss_bytes": 17104896
+        }
+      ],
+      "workload": "real-world-parabola"
+    }
+  ]
+}

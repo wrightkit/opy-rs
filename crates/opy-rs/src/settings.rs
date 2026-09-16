@@ -47,6 +47,8 @@ pub struct SettingsBlock {
 /// unterminated block is `settings-invalid`.
 pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
     let chars: Vec<char> = text.chars().collect();
+    #[cfg(test)]
+    crate::resource_metrics::record_settings_chars(chars.len());
     let mut scanner = Scanner {
         chars: &chars,
         pos: 0,

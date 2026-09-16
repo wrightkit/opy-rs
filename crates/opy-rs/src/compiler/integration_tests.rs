@@ -48,6 +48,8 @@ mod project_loading;
 mod project_preprocessing;
 #[path = "tests/range_bindings.rs"]
 mod range_bindings;
+#[path = "tests/resource_baseline.rs"]
+mod resource_baseline;
 #[path = "tests/semantic_diagnostics.rs"]
 mod semantic_diagnostics;
 #[path = "tests/settings_expressions.rs"]
