@@ -3930,6 +3930,26 @@ impl<'a> Lowering<'a> {
             Expr::Binary {
                 op, left, right, ..
             } => {
+                if self.hir.preprocessing.optimization.enabled
+                    && matches!(op.as_str(), "in" | "not in")
+                {
+                    if let Expr::Array { elements, .. } = right.as_ref() {
+                        if elements
+                            .iter()
+                            .any(|elem| literal_key_matches(elem, left.as_ref()))
+                        {
+                            return Ok(self.push_value(Value::Bool(op == "in")));
+                        }
+                        let strict = self.strict_optimization_active(expr);
+                        if is_membership_literal(left.as_ref(), strict)
+                            && elements
+                                .iter()
+                                .all(|elem| is_membership_literal(elem, strict))
+                        {
+                            return Ok(self.push_value(Value::Bool(op == "not in")));
+                        }
+                    }
+                }
                 let left = self.lower_value(left)?;
                 let right = self.lower_value(right)?;
                 if let Some(value) = self.fold_numeric_binary(op, left, right) {
@@ -5587,6 +5607,10 @@ fn is_literal_key(expr: &hir::Expr) -> bool {
             | hir::Expr::Bool { .. }
             | hir::Expr::Null { .. }
     )
+}
+
+fn is_membership_literal(expr: &hir::Expr, strict: bool) -> bool {
+    is_literal_key(expr) && (!strict || !matches!(expr, hir::Expr::String { .. }))
 }
 
 fn translation_locale(language: &str) -> Option<&'static str> {

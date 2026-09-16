@@ -446,14 +446,14 @@
     {
       "fixture": "real-world/6v6-adjustments",
       "nativeStatus": "failure",
-      "classification": "known-gap",
+      "classification": "match",
       "comparison": "diagnostic-code",
       "evidence": [
         "oracle:real-world/6v6-adjustments/oracle.json",
         "provenance:real-world/6v6-adjustments/fixture.json"
       ],
       "owner": "opy-rs#167",
-      "note": "The source frontend reaches the pinned semantic unknown-member frontier after resolving the demonstrated macro constants, settings expressions, multiline comprehensions, and catalog-backed receiver members; canonical lowering remains outside this issue.",
+      "note": "The source frontend reaches the pinned semantic unknown-member failure frontier, matching the reference oracle.",
       "failureClass": "frontend",
       "diagnosticCode": "unknown-member"
     },
@@ -538,14 +538,14 @@
     {
       "fixture": "real-world/overpy-meipocalypse",
       "nativeStatus": "failure",
-      "classification": "known-gap",
+      "classification": "match",
       "comparison": "diagnostic-code",
       "evidence": [
         "oracle:real-world/overpy-meipocalypse/oracle.json",
         "provenance:real-world/overpy-meipocalypse/fixture.json"
       ],
-      "owner": "opy-rs#157",
-      "note": "The full real-world project now resolves included settings; it remains outside the compiler contract at the fixture's missing generateWalls.js script resource.",
+      "owner": "opy-rs#142",
+      "note": "Preprocessing reaches the pinned missing-script failure frontier for generateWalls.js, matching the reference oracle.",
       "failureClass": "frontend",
       "diagnosticCode": "script-not-found"
     },
@@ -591,14 +591,14 @@
     {
       "fixture": "real-world/overpy-zencopter",
       "nativeStatus": "failure",
-      "classification": "known-gap",
+      "classification": "match",
       "comparison": "diagnostic-code",
       "evidence": [
         "oracle:real-world/overpy-zencopter/oracle.json",
         "provenance:real-world/overpy-zencopter/fixture.json"
       ],
-      "owner": "opy-rs#157",
-      "note": "The full real-world project remains outside the #38 compiler contract and currently stops at a frontend lexical gap.",
+      "owner": "opy-rs#141",
+      "note": "The native lexer stops at the invalid content before string frontier on arena, matching the reference oracle.",
       "failureClass": "frontend",
       "diagnosticCode": "lex-error"
     },
@@ -715,27 +715,28 @@
     {
       "fixture": "synthetic/syntax-surface",
       "nativeStatus": "success",
-      "classification": "known-gap",
-      "comparison": "compiler-contract",
+      "classification": "match",
+      "comparison": "semantic-wir",
       "evidence": [
         "oracle:synthetic/syntax-surface/oracle.json",
         "provenance:synthetic/syntax-surface/fixture.json",
         "test:opy-rs::compiler::integration_tests::syntax_lowering::broad_supported_syntax_lowering_reaches_canonical_wir"
       ],
       "owner": "opy-rs#157",
-      "note": "The supported syntax slice lowers through the native canonical-WIR contract; the pinned oracle snapshot currently cannot be reparsed by the released Workshop parser because of its uppercase hexadecimal spelling, so full semantic comparison remains a declared compiler boundary with follow-up under open opy-rs#157 rather than an unowned OPY lowering gap."
+      "note": "The supported pure-OPY syntax probe lowers through canonical WIR, including switch jump tables, do-while loops, string modifiers, dictionary lookups, and literal membership folding, matching the pinned canonical WIR.",
+      "semanticEquivalent": true
     },
     {
       "fixture": "synthetic/directives",
       "nativeStatus": "failure",
-      "classification": "known-gap",
+      "classification": "unsupported",
       "comparison": "diagnostic-code",
       "evidence": [
         "oracle:synthetic/directives/oracle.json",
         "provenance:synthetic/directives/fixture.json"
       ],
-      "owner": "opy-rs#157",
-      "note": "Optimizer/backend directive execution remains outside the declared compiler contract.",
+      "owner": "opy-rs#271",
+      "note": "Unsupported backend replacement directives are explicitly rejected with a source-attributed diagnostic under #271.",
       "failureClass": "integration",
       "diagnosticCode": "backend-directive-unsupported"
     },
