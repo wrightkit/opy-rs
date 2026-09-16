@@ -138,18 +138,40 @@ impl MacroRuntime {
 
         let mut engine =
             QuickJsEngine::new(&self.limits).map_err(|e| MacroError::Internal(e.to_string()))?;
+        #[cfg(test)]
+        let started = Instant::now();
         engine
             .install_console()
             .map_err(|e| MacroError::Internal(format!("failed to install console: {e}")))?;
+        #[cfg(test)]
+        crate::resource_metrics::record_macro_phase(
+            crate::resource_metrics::MacroPhase::HostRegistration,
+            started.elapsed().as_nanos(),
+        );
+
+        #[cfg(test)]
+        let started = Instant::now();
         engine
             .evaluate(&builtins_source(&self.helpers), BUILTINS_FILENAME)
             .map_err(|e| {
                 MacroError::Internal(format!("failed to evaluate builtin helpers: {e}"))
             })?;
+        #[cfg(test)]
+        crate::resource_metrics::record_macro_phase(
+            crate::resource_metrics::MacroPhase::BuiltinEvaluation,
+            started.elapsed().as_nanos(),
+        );
         engine.set_interrupt_deadline(Some(Instant::now() + time_budget));
+        #[cfg(test)]
+        let started = Instant::now();
         let completion = engine
             .evaluate(&script_text, script_name)
             .map_err(|e| map_engine_error(e, script_name, line_adjust))?;
+        #[cfg(test)]
+        crate::resource_metrics::record_macro_phase(
+            crate::resource_metrics::MacroPhase::ScriptEvaluation,
+            started.elapsed().as_nanos(),
+        );
         let text = match completion {
             Completion::String(text) => text,
             Completion::NonString(type_name) => {
