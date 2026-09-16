@@ -33,26 +33,6 @@ pub(crate) fn reject_unlowered_directives(hir: &hir::Program) -> Result<(), Inte
             replacement.span,
         ));
     }
-    if let Some(directive) = hir
-        .preprocessing
-        .directives
-        .iter()
-        .find(|directive| {
-            matches!(
-                directive.name.as_str(),
-                "optimizeStrict" | "useVariableForCompressionAlphabet"
-            )
-        })
-    {
-        return Err(IntegrationError::new(
-            "backend-directive-unsupported",
-            format!(
-                "backend directive `#!{}` has no canonical workshop-rs lowering",
-                directive.name
-            ),
-            directive.span,
-        ));
-    }
     Ok(())
 }
 
