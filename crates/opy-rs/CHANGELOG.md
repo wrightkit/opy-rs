@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.40](https://github.com/wrightkit/opy-rs/compare/v0.1.39...v0.1.40) - 2026-09-16
+
+### Fixed
+
+- support observable optimizeStrict semantics ([#291](https://github.com/wrightkit/opy-rs/pull/291))
+- support useVariableForCompressionAlphabet ([#292](https://github.com/wrightkit/opy-rs/pull/292))
+- preserve optimized default wait semantics ([#287](https://github.com/wrightkit/opy-rs/pull/287))
+- *(compiler)* preserve Unicode names through emission ([#286](https://github.com/wrightkit/opy-rs/pull/286))
+
+### Other
+
+- cover disabled OPY rule emission ([#285](https://github.com/wrightkit/opy-rs/pull/285))
+
 ## [0.1.39](https://github.com/wrightkit/opy-rs/compare/v0.1.38...v0.1.39) - 2026-09-15
 
 ### Other
