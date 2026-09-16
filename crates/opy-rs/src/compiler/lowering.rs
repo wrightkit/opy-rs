@@ -7,6 +7,8 @@ type PlayerVarId = usize;
 type SubroutineId = usize;
 use workshop_rs::{Action, Event, EventTarget, EventTeam, ModifyOp, PlayerEventKind, Value};
 
+const COMPRESSION_ALPHABET_NAME: &str = "__compressionAlphabet__";
+
 pub(crate) struct Lowering<'a> {
     compiler: &'a Compiler,
     hir: &'a hir::Program,
@@ -186,23 +188,11 @@ impl<'a> Lowering<'a> {
 
     fn translation_helper_index(
         &self,
-        implicit_reserved: &HashSet<u32>,
+        reserved: &HashSet<u32>,
     ) -> Result<Option<u32>, IntegrationError> {
         if self.hir.preprocessing.translations.is_none() {
             return Ok(None);
         }
-        let mut reserved = implicit_reserved.clone();
-        reserved.extend(
-            self.hir
-                .declarations
-                .iter()
-                .filter_map(|declaration| match declaration {
-                    hir::Declaration::GlobalVariable {
-                        index: Some(index), ..
-                    } => Some(*index),
-                    _ => None,
-                }),
-        );
         (0..=127)
             .rev()
             .find(|index| !reserved.contains(index))
@@ -216,6 +206,31 @@ impl<'a> Lowering<'a> {
                         .translations
                         .as_ref()
                         .and_then(|value| value.span),
+                )
+            })
+    }
+
+    fn compression_alphabet_index(
+        &self,
+        reserved: &HashSet<u32>,
+    ) -> Result<Option<u32>, IntegrationError> {
+        if !has_directive(self.hir, "useVariableForCompressionAlphabet") {
+            return Ok(None);
+        }
+        (0..=127)
+            .rev()
+            .find(|index| !reserved.contains(index))
+            .map(Some)
+            .ok_or_else(|| {
+                IntegrationError::new(
+                    "index-exhausted",
+                    "no available global variable index remains for the compression alphabet",
+                    self.hir
+                        .preprocessing
+                        .directives
+                        .iter()
+                        .find(|directive| directive.name == "useVariableForCompressionAlphabet")
+                        .and_then(|directive| directive.span),
                 )
             })
     }
@@ -298,9 +313,23 @@ impl<'a> Lowering<'a> {
             .keys()
             .map(|name| default_var_index(name).expect("implicit default player names resolve"))
             .collect::<HashSet<_>>();
-        let translation_helper_index = self.translation_helper_index(&implicit_reserved)?;
+        let mut helper_reserved = implicit_reserved.clone();
+        helper_reserved.extend(self.hir.declarations.iter().filter_map(|declaration| {
+            match declaration {
+                hir::Declaration::GlobalVariable {
+                    index: Some(index), ..
+                } => Some(*index),
+                _ => None,
+            }
+        }));
+        let translation_helper_index = self.translation_helper_index(&helper_reserved)?;
         let mut global_reserved = implicit_reserved.clone();
         if let Some(index) = translation_helper_index {
+            helper_reserved.insert(index);
+            global_reserved.insert(index);
+        }
+        let compression_alphabet_index = self.compression_alphabet_index(&helper_reserved)?;
+        if let Some(index) = compression_alphabet_index {
             global_reserved.insert(index);
         }
         let empty = HashSet::new();
@@ -426,6 +455,9 @@ impl<'a> Lowering<'a> {
         if let Some(index) = translation_helper_index {
             planned_globals.push((TRANSLATION_HELPER_NAME.to_string(), index, None, None));
         }
+        if let Some(index) = compression_alphabet_index {
+            planned_globals.push((COMPRESSION_ALPHABET_NAME.to_string(), index, None, None));
+        }
         planned_globals.sort_by_key(|(_, index, ..)| *index);
         for (name, assigned, span, name_span) in planned_globals {
             let _ = (span, name_span);
@@ -523,11 +555,34 @@ impl<'a> Lowering<'a> {
             })
             .transpose()?;
 
-        if translation_initializer.is_some() || !global_initializers.is_empty() {
+        let compression_alphabet_initializer = compression_alphabet_index
+            .map(|_| {
+                let variable = *self
+                    .globals
+                    .get(COMPRESSION_ALPHABET_NAME)
+                    .expect("compression alphabet variable is created");
+                let value = self.lower_custom_string(compression_alphabet(), None)?;
+                let action = self.push_action(Action::SetGlobalVariable {
+                    variable: self.global_names[variable].clone(),
+                    value: self.value(value).clone(),
+                });
+                Ok(action)
+            })
+            .transpose()?;
+
+        if translation_initializer.is_some()
+            || compression_alphabet_initializer.is_some()
+            || !global_initializers.is_empty()
+        {
             let mut actions = Vec::with_capacity(
-                global_initializers.len() + usize::from(translation_initializer.is_some()),
+                global_initializers.len()
+                    + usize::from(translation_initializer.is_some())
+                    + usize::from(compression_alphabet_initializer.is_some()),
             );
             if let Some(action) = translation_initializer {
+                actions.push(action);
+            }
+            if let Some(action) = compression_alphabet_initializer {
                 actions.push(action);
             }
             for (name, init_expr, span, _target_span) in global_initializers {
@@ -3994,6 +4049,9 @@ impl<'a> Lowering<'a> {
                 if name == "createWorkshopSetting" {
                     return self.lower_workshop_setting(args, span);
                 }
+                if name == "compressed" {
+                    return self.lower_compressed(args, span);
+                }
                 if matches!(name.as_str(), "attacker" | "victim") && args.is_empty() {
                     return Ok(self.push_call(name, Vec::new()));
                 }
@@ -4428,6 +4486,207 @@ impl<'a> Lowering<'a> {
             *target_args = args;
         }
         Ok(value_id)
+    }
+
+    fn lower_compressed(
+        &mut self,
+        args: &[Expr],
+        span: Option<HirSpan>,
+    ) -> Result<ValueId, IntegrationError> {
+        let [Expr::Array { elements, .. }] = args else {
+            return Err(self.unsupported(
+                "compressed requires one literal array of numbers or vectors",
+                span,
+            ));
+        };
+        if elements.is_empty() {
+            return Err(self.unsupported("cannot compress an empty array", span));
+        }
+
+        let Some(numbers) = elements
+            .iter()
+            .map(|element| match element {
+                Expr::Null { .. } => Some(vec![0.0]),
+                Expr::Number { value, .. } => Some(vec![*value]),
+                Expr::Unary { op, operand, .. } if matches!(op.as_str(), "+" | "-") => {
+                    literal_number(operand)
+                        .map(|value| vec![if op == "-" { -value } else { value }])
+                }
+                Expr::Vector { x, y, z, .. } => Some(vec![
+                    literal_number(x)?,
+                    literal_number(y)?,
+                    literal_number(z)?,
+                ]),
+                _ => None,
+            })
+            .collect::<Option<Vec<_>>>()
+        else {
+            return Err(self.unsupported("compressed requires literal numbers or vectors", span));
+        };
+        let is_vector = numbers.first().is_some_and(|value| value.len() == 3);
+        if numbers.iter().any(|value| (value.len() == 3) != is_vector) {
+            return Err(self.unsupported("compressed cannot mix numbers and vectors", span));
+        }
+        let flattened = numbers.iter().flatten().copied().collect::<Vec<_>>();
+        let limit = if is_vector { 4999.0 } else { 49999.0 };
+        if flattened.iter().any(|value| value.abs() >= limit) {
+            return Err(self.unsupported("compressed values exceed the supported magnitude", span));
+        }
+
+        let max_decimals = if is_vector { 2 } else { 3 };
+        let compression_offset = flattened.iter().copied().fold(0.0_f64, f64::min).min(0.0);
+        let adjusted = flattened
+            .iter()
+            .map(|value| value - compression_offset)
+            .collect::<Vec<_>>();
+        let mut strings = adjusted
+            .iter()
+            .map(|value| {
+                format!("{value:.precision$}", precision = max_decimals)
+                    .replace('.', "")
+                    .chars()
+                    .rev()
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>();
+        let mut min_decimal_place = -(max_decimals as i32);
+        while strings.iter().all(|value| value.starts_with('0')) {
+            for value in &mut strings {
+                value.remove(0);
+            }
+            min_decimal_place += 1;
+        }
+        let max_decimal_place =
+            min_decimal_place + strings.iter().map(String::len).max().unwrap_or_default() as i32;
+        for value in &mut strings {
+            let trimmed = value.trim_end_matches('0');
+            *value = if trimmed.is_empty() {
+                "0".to_string()
+            } else {
+                trimmed.to_string()
+            };
+        }
+
+        let alphabet = compression_alphabet_chars();
+        let encode = |value: &str| -> Option<String> {
+            let mut encoded = String::new();
+            let chars = value.as_bytes();
+            for pair in chars.chunks(2) {
+                let number = if pair.len() == 1 {
+                    u16::from(pair[0] - b'0')
+                } else {
+                    u16::from(pair[1] - b'0') * 10 + u16::from(pair[0] - b'0')
+                };
+                encoded.push(*alphabet.get(number as usize)?);
+            }
+            Some(encoded)
+        };
+        let compressed = if is_vector {
+            let width = (((max_decimal_place - min_decimal_place + 1) / 2) * 2) as usize;
+            strings
+                .chunks(3)
+                .map(|values| {
+                    let mut grouped = String::new();
+                    for index in [0, 2, 1] {
+                        let mut value = values[index].clone();
+                        if index != 1 {
+                            value.push_str(&"0".repeat(width.saturating_sub(value.len())));
+                        } else {
+                            value = value.trim_end_matches('0').to_string();
+                            if value.is_empty() {
+                                value.push('0');
+                            }
+                        }
+                        grouped.push_str(&value);
+                    }
+                    encode(&grouped)
+                })
+                .collect::<Option<Vec<_>>>()
+                .ok_or_else(|| self.unsupported("compressed value cannot be encoded", span))?
+                .join("0")
+        } else {
+            strings
+                .iter()
+                .map(|value| encode(value))
+                .collect::<Option<Vec<_>>>()
+                .ok_or_else(|| self.unsupported("compressed value cannot be encoded", span))?
+                .join("0")
+        };
+        let compressed_string = self.lower_custom_string(compressed, span)?;
+        let null = self.push_value(Value::Null);
+        let separator = self.push_call("firstOf", vec![null]);
+        let split = self.push_call("stringSplit", vec![compressed_string, separator]);
+        let alphabet_value = if has_directive(self.hir, "useVariableForCompressionAlphabet") {
+            let variable = *self
+                .globals
+                .get(COMPRESSION_ALPHABET_NAME)
+                .expect("compression alphabet variable is created");
+            self.push_value(Value::GlobalVariable(self.global_names[variable].clone()))
+        } else {
+            self.lower_custom_string(compression_alphabet(), span)?
+        };
+        let decoded = if has_directive(self.hir, "useVariableForCompressionAlphabet") {
+            split
+        } else {
+            let current = self.push_call("currentArrayElement", Vec::new());
+            let alphabet = self.push_call("appendToArray", vec![current, alphabet_value]);
+            self.push_call("mappedArray", vec![split, alphabet])
+        };
+        let width = ((max_decimal_place - min_decimal_place + 1) / 2) as usize;
+        let component = |this: &mut Self, component_offset: usize| {
+            let current = this.push_call("currentArrayElement", Vec::new());
+            let mut terms = Vec::with_capacity(width);
+            for index in 0..width {
+                let position = this.push_number((index + component_offset) as f64, "");
+                let character = this.push_call("charAt", vec![current, position]);
+                let formula_alphabet =
+                    if has_directive(this.hir, "useVariableForCompressionAlphabet") {
+                        alphabet_value
+                    } else {
+                        this.push_call("lastOf", vec![current])
+                    };
+                let digit = this.push_call("strIndex", vec![formula_alphabet, character]);
+                let power = 100_f64.powf(index as f64 + f64::from(min_decimal_place) / 2.0);
+                let weighted = if power == 1.0 {
+                    digit
+                } else {
+                    let power = this.push_number(power, "");
+                    this.push_call("multiply", vec![power, digit])
+                };
+                terms.push(weighted);
+            }
+            let mut value = terms
+                .first()
+                .copied()
+                .unwrap_or_else(|| this.push_number(0.0, ""));
+            for term in terms.into_iter().skip(1) {
+                value = this.push_call("add", vec![value, term]);
+            }
+            if is_vector || compression_offset == 0.0 {
+                value
+            } else {
+                let offset = this.push_number(compression_offset, "");
+                this.push_call("add", vec![value, offset])
+            }
+        };
+        let value = if is_vector {
+            let x = component(self, 0);
+            let y = component(self, width * 2);
+            let z = component(self, width);
+            let vector = self.push_call("vector", vec![x, y, z]);
+            let value = if compression_offset == 0.0 {
+                vector
+            } else {
+                let offset = self.push_number(-compression_offset, "");
+                let offset = self.push_call("vector", vec![offset, offset, offset]);
+                self.push_call("subtract", vec![vector, offset])
+            };
+            self.push_call("mappedArray", vec![decoded, value])
+        } else {
+            let number = component(self, 0);
+            self.push_call("mappedArray", vec![decoded, number])
+        };
+        Ok(value)
     }
 
     fn lower_array_callback(
@@ -5218,6 +5477,43 @@ fn is_zero_initializer(expr: &hir::Expr) -> bool {
         expr,
         hir::Expr::Number { text, value, .. } if text == "0" && *value == 0.0
     )
+}
+
+fn has_directive(hir: &hir::Program, name: &str) -> bool {
+    hir.preprocessing
+        .directives
+        .iter()
+        .any(|directive| directive.name == name)
+}
+
+fn literal_number(expr: &hir::Expr) -> Option<f64> {
+    match expr {
+        hir::Expr::Null { .. } => Some(0.0),
+        hir::Expr::Number { value, .. } => Some(*value),
+        hir::Expr::Unary { op, operand, .. } if op == "+" => literal_number(operand),
+        hir::Expr::Unary { op, operand, .. } if op == "-" => {
+            literal_number(operand).map(|value| -value)
+        }
+        _ => None,
+    }
+}
+
+fn compression_alphabet_chars() -> Vec<char> {
+    (1..=47)
+        .chain(std::iter::once(50))
+        .chain(58..=64)
+        .chain(std::iter::once(81))
+        .chain(91..=96)
+        .chain(std::iter::once(113))
+        .chain(124..=127)
+        .chain(128..=159)
+        .chain(std::iter::once(161))
+        .map(|value| char::from_u32(value).expect("compression alphabet is valid Unicode"))
+        .collect()
+}
+
+fn compression_alphabet() -> String {
+    compression_alphabet_chars().into_iter().collect()
 }
 
 fn literal_key_matches(left: &hir::Expr, right: &hir::Expr) -> bool {
