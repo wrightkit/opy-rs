@@ -1,6 +1,6 @@
 # QuickJS macro-runtime evidence
 
-This record addresses [opy-rs#300](https://github.com/wrightkit/opy-rs/issues/300). It was produced on 2026-09-16 from candidate revision `816f3deb7fef29e1b6060b7ef53e2315a44605ab`, using the pinned baseline revision `5e65d504529f8790ae4dcf4b76bbe1b2b94d70a6`, macOS arm64, Rust 1.97.1, the test profile, and five child-process samples per workload.
+This record addresses [opy-rs#300](https://github.com/wrightkit/opy-rs/issues/300). It was produced on 2026-09-16 from candidate revision `fd83da6`, using the pinned baseline revision `5e65d504529f8790ae4dcf4b76bbe1b2b94d70a6`, macOS arm64, Rust 1.97.1, the test profile, and five child-process samples per workload.
 
 The command and workload identities are defined in [`compiler-resources.md`](compiler-resources.md) and [`resource_baseline.rs`](../../crates/opy-rs/src/compiler/tests/resource_baseline.rs). The original `macro-runtime` input is the #296 workload `(x + 2).toString();` with `x = 40`, repeated 64 times. `macro-runtime-heavy` uses the same invocation count and evaluates a 64-element `Array.from`/`vect`/`map`/`join` script. Both are synthetic AGPL-3.0-or-later audit inputs; the emitted candidate record includes their SHA-256 identities.
 
