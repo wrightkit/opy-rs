@@ -5,6 +5,7 @@ use workshop_rs::Value;
 
 static LOWERING_VALUES_PEAK: AtomicUsize = AtomicUsize::new(0);
 static LOWERING_VALUE_CLONE_NODES: AtomicUsize = AtomicUsize::new(0);
+static LOWERING_VALUE_MATERIALIZATION_NODES: AtomicUsize = AtomicUsize::new(0);
 static LOWERING_ACTION_CLONE_EVENTS: AtomicUsize = AtomicUsize::new(0);
 static COMPILER_CONTRACT_CHECKS: AtomicUsize = AtomicUsize::new(0);
 static SETTINGS_CHARS_MATERIALIZED: AtomicUsize = AtomicUsize::new(0);
@@ -19,6 +20,7 @@ static MACRO_RUNTIME_TEARDOWN_NS: AtomicUsize = AtomicUsize::new(0);
 pub(crate) struct ResourceMetrics {
     pub(crate) lowering_values_peak: usize,
     pub(crate) lowering_value_clone_nodes: usize,
+    pub(crate) lowering_value_materialization_nodes: usize,
     pub(crate) lowering_action_clone_events: usize,
     pub(crate) compiler_contract_checks: usize,
     pub(crate) settings_chars_materialized: usize,
@@ -34,6 +36,7 @@ pub(crate) fn reset() {
     for counter in [
         &LOWERING_VALUES_PEAK,
         &LOWERING_VALUE_CLONE_NODES,
+        &LOWERING_VALUE_MATERIALIZATION_NODES,
         &LOWERING_ACTION_CLONE_EVENTS,
         &COMPILER_CONTRACT_CHECKS,
         &SETTINGS_CHARS_MATERIALIZED,
@@ -52,6 +55,8 @@ pub(crate) fn snapshot() -> ResourceMetrics {
     ResourceMetrics {
         lowering_values_peak: LOWERING_VALUES_PEAK.load(Ordering::Relaxed),
         lowering_value_clone_nodes: LOWERING_VALUE_CLONE_NODES.load(Ordering::Relaxed),
+        lowering_value_materialization_nodes: LOWERING_VALUE_MATERIALIZATION_NODES
+            .load(Ordering::Relaxed),
         lowering_action_clone_events: LOWERING_ACTION_CLONE_EVENTS.load(Ordering::Relaxed),
         compiler_contract_checks: COMPILER_CONTRACT_CHECKS.load(Ordering::Relaxed),
         settings_chars_materialized: SETTINGS_CHARS_MATERIALIZED.load(Ordering::Relaxed),
@@ -68,8 +73,8 @@ pub(crate) fn record_lowering_values(len: usize) {
     LOWERING_VALUES_PEAK.fetch_max(len, Ordering::Relaxed);
 }
 
-pub(crate) fn record_value_clone(value: &Value) {
-    LOWERING_VALUE_CLONE_NODES.fetch_add(value_node_count(value), Ordering::Relaxed);
+pub(crate) fn record_value_materialization(value: &Value) {
+    LOWERING_VALUE_MATERIALIZATION_NODES.fetch_add(value_node_count(value), Ordering::Relaxed);
 }
 
 pub(crate) fn record_contract_check() {

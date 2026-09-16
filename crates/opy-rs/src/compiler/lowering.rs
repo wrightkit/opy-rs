@@ -5039,7 +5039,7 @@ impl<'a> Lowering<'a> {
     fn materialize_value(&self, id: ValueId) -> workshop_rs::Value {
         let value = self.materialize_value_inner(id);
         #[cfg(test)]
-        crate::resource_metrics::record_value_clone(&value);
+        crate::resource_metrics::record_value_materialization(&value);
         value
     }
 
