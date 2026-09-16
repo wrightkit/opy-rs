@@ -4,6 +4,8 @@ mod builtins;
 mod catalog_lowering;
 #[path = "tests/compiler_semantics.rs"]
 mod compiler_semantics;
+#[path = "tests/compression.rs"]
+mod compression;
 #[path = "tests/conditionals.rs"]
 mod conditionals;
 #[path = "tests/control_flow.rs"]

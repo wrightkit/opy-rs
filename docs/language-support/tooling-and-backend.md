@@ -16,7 +16,7 @@ upstream README, `overpy.d.ts`, `cli.js`, compiler/decompiler sources,
 | Replacement directives (`#!replace0By*`, team/string replacements) | ✅ Source-supported | Directive state is recorded; semantic replacement effects remain a backend concern. |
 | `#!rulePrefix` and `#!rulePrefixTemplate` | ✅ Supported | Source preprocessing applies the resulting rule names before compiler lowering. |
 | `#!extension` and extension-point accounting | ✅ Source-supported | The extension name is checked against the canonical Workshop schema and recorded; extension point accounting remains outside opy-rs. |
-| Remaining pinned backend-only directives | 🚧 Coming soon | `setupTags`, `setupTx`, translation/inspection/output controls, and init-rule names are validated and recorded; `#!useVariableForCompressionAlphabet` is explicitly rejected until its helper/cost contract is implemented. |
+| Remaining pinned backend-only directives | 🚧 Coming soon | `setupTags`, `setupTx`, translation/inspection/output controls, and init-rule names are validated and recorded; `#!useVariableForCompressionAlphabet` is supported for literal `compressed()` arrays with the shared alphabet helper and canonical lowering. |
 | `macro name(params)` function/constant macros | ✅ Supported | Defaults, keywords and member macros differ. |
 | `__script__` JavaScript macros | 🚧 Coming soon | QuickJS return ABI and limits are observable. |
 | `#!postCompileHook` | ✅ Bounded compiler slice | Runs only after final Workshop emission; failures keep directive and script provenance. |

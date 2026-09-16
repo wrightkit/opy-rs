@@ -1603,7 +1603,7 @@ rule "main":
     }
 
     #[test]
-    fn compression_alphabet_policy_is_rejected_at_the_directive_source() {
+    fn compression_alphabet_policy_uses_a_shared_global() {
         let compiler = Compiler::new().unwrap();
         let hir = crate::compile(
             "globalvar values = compressed([1, 2, 3])\n\n#!useVariableForCompressionAlphabet\nrule \"compression\":\n    @Event global\n    print(values)\n",
@@ -1611,18 +1611,9 @@ rule "main":
             Path::new("."),
         )
         .unwrap();
-        let error = match compiler.compile_hir(&hir) {
-            Ok(_) => panic!("compression alphabet policy must not be silently discarded"),
-            Err(error) => error,
-        };
-        assert_eq!(error.diagnostic.code, "backend-directive-unsupported");
-        assert!(
-            error
-                .diagnostic
-                .message
-                .contains("#!useVariableForCompressionAlphabet")
-        );
-        assert_eq!(error.diagnostic.span.unwrap().start.line, 3);
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        assert!(artifact.emitted.contains("127: __compressionAlphabet__"));
+        assert!(artifact.emitted.contains("Global.__compressionAlphabet__"));
     }
 
     #[test]

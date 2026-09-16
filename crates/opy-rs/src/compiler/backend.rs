@@ -33,12 +33,12 @@ pub(crate) fn reject_unlowered_directives(hir: &hir::Program) -> Result<(), Inte
             replacement.span,
         ));
     }
-    if let Some(directive) = hir.preprocessing.directives.iter().find(|directive| {
-        matches!(
-            directive.name.as_str(),
-            "optimizeStrict" | "useVariableForCompressionAlphabet"
-        )
-    }) {
+    if let Some(directive) = hir
+        .preprocessing
+        .directives
+        .iter()
+        .find(|directive| directive.name == "optimizeStrict")
+    {
         return Err(IntegrationError::new(
             "backend-directive-unsupported",
             format!(

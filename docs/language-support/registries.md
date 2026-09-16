@@ -159,7 +159,7 @@ beginning with `.` are receiver dispatch entries. The separate
 | `chaseAtRate` | ✅ Supported |
 | `chaseOverTime` | ✅ Supported |
 | `compress` | 🚧 Coming soon |
-| `compressed` | 🚧 Coming soon |
+| `compressed` | ✅ Supported |
 | `decompressNumbers` | 🚧 Coming soon |
 | `decompressVectors` | 🚧 Coming soon |
 | `createCasedProgressBarIwt` | 🚧 Coming soon |

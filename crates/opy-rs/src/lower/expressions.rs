@@ -549,8 +549,13 @@ impl Lowerer {
         if name == "createWorkshopSetting" {
             return self.lower_workshop_setting(args, span, macro_params);
         }
-        if name == "compressed" && args.len() == 1 {
-            return self.lower_expr(&args[0].value, macro_params, CallPosition::Value);
+        if name == "compressed" {
+            return HirExpr::Call {
+                name: name.to_string(),
+                args: self.lower_arg_values(args, macro_params),
+                debug_source: None,
+                span: Some(span.into()),
+            };
         }
         if matches!(
             name,
