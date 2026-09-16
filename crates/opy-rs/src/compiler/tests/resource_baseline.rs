@@ -176,10 +176,13 @@ fn assert_mechanism_measurements(id: &str, metrics: &ResourceMetrics) {
             metrics.compiler_contract_checks, CONTRACT_CONSTRUCTIONS,
             "{id} contract-check counter must match the workload"
         ),
-        "macro-runtime" => assert_eq!(
-            metrics.macro_engine_creations, MACRO_INVOCATIONS,
-            "{id} engine-creation counter must match the workload"
-        ),
+        "macro-runtime" | "macro-runtime-heavy" => {
+            assert_eq!(
+                metrics.macro_engine_creations, MACRO_INVOCATIONS,
+                "{id} engine-creation counter must match the workload"
+            );
+            assert_macro_phase_measurements(id, metrics);
+        }
         "large-settings-source" => assert!(
             metrics.settings_chars_materialized > 0,
             "{id} did not observe settings-source materialization"
@@ -195,6 +198,18 @@ fn assert_mechanism_measurements(id: &str, metrics: &ResourceMetrics) {
             );
         }
         _ => panic!("unknown resource workload {id}"),
+    }
+}
+
+fn assert_macro_phase_measurements(id: &str, metrics: &ResourceMetrics) {
+    for (phase, elapsed_ns) in [
+        ("runtime creation", metrics.macro_runtime_creation_ns),
+        ("host registration", metrics.macro_host_registration_ns),
+        ("builtin evaluation", metrics.macro_builtin_evaluation_ns),
+        ("script evaluation", metrics.macro_script_evaluation_ns),
+        ("runtime teardown", metrics.macro_runtime_teardown_ns),
+    ] {
+        assert!(elapsed_ns > 0, "{id} recorded no {phase} time");
     }
 }
 
@@ -224,13 +239,14 @@ fn run_resource_workload() {
     );
 }
 
-fn workload_ids() -> [&'static str; 7] {
+fn workload_ids() -> [&'static str; 8] {
     [
         "nested-expression-lowering",
         "wide-call-value-construction",
         "many-rule-compilation",
         "compiler-contract-initialization",
         "macro-runtime",
+        "macro-runtime-heavy",
         "large-settings-source",
         "real-world-parabola",
     ]
@@ -287,6 +303,16 @@ fn workload(id: &str) -> Option<Workload> {
                 serde_json::json!({"invocations": MACRO_INVOCATIONS}),
             ),
             run: run_macro_runtime,
+        },
+        "macro-runtime-heavy" => Workload {
+            id: "macro-runtime-heavy",
+            description: "repeated helper- and collection-heavy JavaScript macro execution",
+            input: synthetic_identity(
+                "macro-runtime-heavy",
+                MACRO_HEAVY_SOURCE.to_string(),
+                serde_json::json!({"invocations": MACRO_INVOCATIONS}),
+            ),
+            run: run_macro_runtime_heavy,
         },
         "large-settings-source" => Workload {
             id: "large-settings-source",
@@ -382,6 +408,16 @@ fn run_macro_runtime() -> Result<(), String> {
     Ok(())
 }
 
+fn run_macro_runtime_heavy() -> Result<(), String> {
+    let runtime = MacroRuntime::new(Limits::default());
+    for _ in 0..MACRO_INVOCATIONS {
+        runtime
+            .run_macro(MACRO_HEAVY_SOURCE, &[], "resource-heavy.js")
+            .map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
 fn run_large_settings() -> Result<(), String> {
     let source = large_settings_source();
     let outcome = compile_with_overlay_outcome(
@@ -446,6 +482,10 @@ fn many_rule_source() -> String {
 }
 
 const MACRO_SOURCE: &str = "(x + 2).toString();";
+
+const MACRO_HEAVY_SOURCE: &str = r#"Array.from({length: 64}, (_, i) => vect(i, i + 1, i + 2))
+    .map((value) => value.toString())
+    .join(",");"#;
 
 fn large_settings_source() -> String {
     let mut source = String::from("settings {\n    \"gamemodes\": {},\n");

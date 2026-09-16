@@ -34,6 +34,8 @@ impl JsEngine for QuickJsEngine {
     fn new(limits: &Limits) -> Result<Self, EngineError> {
         #[cfg(test)]
         crate::resource_metrics::record_macro_engine_creation();
+        #[cfg(test)]
+        let started = Instant::now();
         unsafe {
             let runtime = q::JS_NewRuntime();
             if runtime.is_null() {
@@ -46,12 +48,18 @@ impl JsEngine for QuickJsEngine {
                 q::JS_FreeRuntime(runtime);
                 return Err(EngineError::Internal("JS_NewContext failed".into()));
             }
-            Ok(Self {
+            let engine = Self {
                 runtime,
                 context,
                 interrupt_deadline: None,
                 console_lines: Vec::new(),
-            })
+            };
+            #[cfg(test)]
+            crate::resource_metrics::record_macro_phase(
+                crate::resource_metrics::MacroPhase::RuntimeCreation,
+                started.elapsed().as_nanos(),
+            );
+            Ok(engine)
         }
     }
 
@@ -261,11 +269,18 @@ impl QuickJsEngine {
 
 impl Drop for QuickJsEngine {
     fn drop(&mut self) {
+        #[cfg(test)]
+        let started = Instant::now();
         unsafe {
             q::JS_SetInterruptHandler(self.runtime, None, ptr::null_mut());
             q::JS_FreeContext(self.context);
             q::JS_FreeRuntime(self.runtime);
         }
+        #[cfg(test)]
+        crate::resource_metrics::record_macro_phase(
+            crate::resource_metrics::MacroPhase::RuntimeTeardown,
+            started.elapsed().as_nanos(),
+        );
     }
 }
 

@@ -9,6 +9,11 @@ static LOWERING_ACTION_CLONE_EVENTS: AtomicUsize = AtomicUsize::new(0);
 static COMPILER_CONTRACT_CHECKS: AtomicUsize = AtomicUsize::new(0);
 static SETTINGS_CHARS_MATERIALIZED: AtomicUsize = AtomicUsize::new(0);
 static MACRO_ENGINE_CREATIONS: AtomicUsize = AtomicUsize::new(0);
+static MACRO_RUNTIME_CREATION_NS: AtomicUsize = AtomicUsize::new(0);
+static MACRO_HOST_REGISTRATION_NS: AtomicUsize = AtomicUsize::new(0);
+static MACRO_BUILTIN_EVALUATION_NS: AtomicUsize = AtomicUsize::new(0);
+static MACRO_SCRIPT_EVALUATION_NS: AtomicUsize = AtomicUsize::new(0);
+static MACRO_RUNTIME_TEARDOWN_NS: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(Debug, Default, Serialize, serde::Deserialize)]
 pub(crate) struct ResourceMetrics {
@@ -18,6 +23,11 @@ pub(crate) struct ResourceMetrics {
     pub(crate) compiler_contract_checks: usize,
     pub(crate) settings_chars_materialized: usize,
     pub(crate) macro_engine_creations: usize,
+    pub(crate) macro_runtime_creation_ns: usize,
+    pub(crate) macro_host_registration_ns: usize,
+    pub(crate) macro_builtin_evaluation_ns: usize,
+    pub(crate) macro_script_evaluation_ns: usize,
+    pub(crate) macro_runtime_teardown_ns: usize,
 }
 
 pub(crate) fn reset() {
@@ -28,6 +38,11 @@ pub(crate) fn reset() {
         &COMPILER_CONTRACT_CHECKS,
         &SETTINGS_CHARS_MATERIALIZED,
         &MACRO_ENGINE_CREATIONS,
+        &MACRO_RUNTIME_CREATION_NS,
+        &MACRO_HOST_REGISTRATION_NS,
+        &MACRO_BUILTIN_EVALUATION_NS,
+        &MACRO_SCRIPT_EVALUATION_NS,
+        &MACRO_RUNTIME_TEARDOWN_NS,
     ] {
         counter.store(0, Ordering::Relaxed);
     }
@@ -41,6 +56,11 @@ pub(crate) fn snapshot() -> ResourceMetrics {
         compiler_contract_checks: COMPILER_CONTRACT_CHECKS.load(Ordering::Relaxed),
         settings_chars_materialized: SETTINGS_CHARS_MATERIALIZED.load(Ordering::Relaxed),
         macro_engine_creations: MACRO_ENGINE_CREATIONS.load(Ordering::Relaxed),
+        macro_runtime_creation_ns: MACRO_RUNTIME_CREATION_NS.load(Ordering::Relaxed),
+        macro_host_registration_ns: MACRO_HOST_REGISTRATION_NS.load(Ordering::Relaxed),
+        macro_builtin_evaluation_ns: MACRO_BUILTIN_EVALUATION_NS.load(Ordering::Relaxed),
+        macro_script_evaluation_ns: MACRO_SCRIPT_EVALUATION_NS.load(Ordering::Relaxed),
+        macro_runtime_teardown_ns: MACRO_RUNTIME_TEARDOWN_NS.load(Ordering::Relaxed),
     }
 }
 
@@ -69,6 +89,27 @@ pub(crate) fn record_settings_chars(len: usize) {
 
 pub(crate) fn record_macro_engine_creation() {
     MACRO_ENGINE_CREATIONS.fetch_add(1, Ordering::Relaxed);
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum MacroPhase {
+    RuntimeCreation,
+    HostRegistration,
+    BuiltinEvaluation,
+    ScriptEvaluation,
+    RuntimeTeardown,
+}
+
+pub(crate) fn record_macro_phase(phase: MacroPhase, elapsed_ns: u128) {
+    let elapsed_ns = usize::try_from(elapsed_ns).unwrap_or(usize::MAX);
+    let counter = match phase {
+        MacroPhase::RuntimeCreation => &MACRO_RUNTIME_CREATION_NS,
+        MacroPhase::HostRegistration => &MACRO_HOST_REGISTRATION_NS,
+        MacroPhase::BuiltinEvaluation => &MACRO_BUILTIN_EVALUATION_NS,
+        MacroPhase::ScriptEvaluation => &MACRO_SCRIPT_EVALUATION_NS,
+        MacroPhase::RuntimeTeardown => &MACRO_RUNTIME_TEARDOWN_NS,
+    };
+    counter.fetch_add(elapsed_ns, Ordering::Relaxed);
 }
 
 fn value_node_count(value: &Value) -> usize {
