@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.42](https://github.com/wrightkit/opy-rs/compare/v0.1.41...v0.1.42) - 2026-09-16
+
+### Added
+
+- establish compiler resource baseline ([#305](https://github.com/wrightkit/opy-rs/pull/305))
+
 ## [0.1.41](https://github.com/wrightkit/opy-rs/compare/v0.1.40...v0.1.41) - 2026-09-16
 
 ### Fixed
