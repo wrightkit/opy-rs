@@ -159,8 +159,7 @@ pub struct TranslationState {
     pub span: Option<Span>,
 }
 
-/// Frontend-visible optimization controls. The optimizer itself is outside
-/// this repository and remains lowering-dependent.
+/// Frontend-visible optimization controls consumed by lowering-dependent rules.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct OptimizationState {
     pub enabled: bool,

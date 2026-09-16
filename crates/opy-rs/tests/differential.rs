@@ -223,6 +223,12 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         false,
         "Issue #60 nested indexed assignment probe; global targets resolve and are constrained by the pinned canonical-WIR oracle.",
     );
+    resolve(
+        &mut cases,
+        "synthetic/wait-optimization",
+        false,
+        "Issue #282 minimized wait probe; optimizeForSize lowers omitted and sub-default durations to the pinned OverPy boolean forms while preserving explicit duration and reevaluation behavior.",
+    );
     diagnostic(
         &mut cases,
         "synthetic/indexed-assignment-4d-invalid",

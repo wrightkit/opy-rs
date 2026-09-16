@@ -3311,8 +3311,34 @@ impl<'a> Lowering<'a> {
             .iter()
             .map(|expr| self.lower_value(expr))
             .collect::<Result<Vec<_>, _>>()?;
-        let args = self.normalize_catalog_argument_domains(catalog_id, args);
+        let mut args = self.normalize_catalog_argument_domains(catalog_id, args);
+        self.optimize_wait_duration(catalog_id, &mut args);
         Ok(self.push_call_action_with_spans(catalog_id.clone(), &args, spans))
+    }
+
+    fn optimize_wait_duration(&mut self, catalog_id: &str, args: &mut [ValueId]) {
+        const DEFAULT_WAIT_SECONDS: f64 = 0.016;
+
+        if catalog_id != "wait"
+            || !self.hir.preprocessing.optimization.enabled
+            || !self.hir.preprocessing.optimization.for_size
+        {
+            return;
+        }
+        let Some(duration) = args.first().copied() else {
+            return;
+        };
+        match self.value(duration) {
+            Value::Number(value) if *value <= DEFAULT_WAIT_SECONDS => {
+                let value = self.push_value(Value::Bool(false));
+                args[0] = self.normalize_contextual_argument(catalog_id, 0, value);
+            }
+            Value::Number(value) if *value == 1.0 => {
+                let value = self.push_value(Value::Bool(true));
+                args[0] = self.normalize_contextual_argument(catalog_id, 0, value);
+            }
+            _ => {}
+        }
     }
 
     fn normalize_catalog_argument_domains(
