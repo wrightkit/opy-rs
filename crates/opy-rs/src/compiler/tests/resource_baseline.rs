@@ -181,9 +181,9 @@ fn assert_mechanism_measurements(id: &str, metrics: &ResourceMetrics) {
             metrics.macro_engine_creations, MACRO_INVOCATIONS,
             "{id} engine-creation counter must match the workload"
         ),
-        "large-settings-source" => assert!(
-            metrics.settings_chars_materialized > 0,
-            "{id} did not observe settings-source materialization"
+        "large-settings-source" => assert_eq!(
+            metrics.settings_chars_materialized, 0,
+            "{id} still materialized a whole-source character buffer"
         ),
         "real-world-parabola" => {
             assert!(

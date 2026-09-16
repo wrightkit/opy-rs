@@ -63,10 +63,6 @@ pub(crate) fn record_contract_check() {
     COMPILER_CONTRACT_CHECKS.fetch_add(1, Ordering::Relaxed);
 }
 
-pub(crate) fn record_settings_chars(len: usize) {
-    SETTINGS_CHARS_MATERIALIZED.fetch_add(len, Ordering::Relaxed);
-}
-
 pub(crate) fn record_macro_engine_creation() {
     MACRO_ENGINE_CREATIONS.fetch_add(1, Ordering::Relaxed);
 }
