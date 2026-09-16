@@ -5,9 +5,80 @@ type ActionId = usize;
 type GlobalVarId = usize;
 type PlayerVarId = usize;
 type SubroutineId = usize;
-use workshop_rs::{Action, Event, EventTarget, EventTeam, ModifyOp, PlayerEventKind, Value};
+use workshop_rs::{Event, EventTarget, EventTeam, ModifyOp, PlayerEventKind};
 
 const COMPRESSION_ALPHABET_NAME: &str = "__compressionAlphabet__";
+
+#[derive(Debug, Clone)]
+enum Value {
+    Number(f64),
+    String(String),
+    Bool(bool),
+    Null,
+    Array(Vec<ValueId>),
+    Vector { x: ValueId, y: ValueId, z: ValueId },
+    Enum { value_type: String, value: String },
+    GlobalVariable(String),
+    PlayerVariable { player: ValueId, variable: String },
+    Subroutine(String),
+    EventPlayer,
+    Call { name: String, args: Vec<ValueId> },
+}
+
+#[derive(Debug, Clone)]
+enum Action {
+    SetGlobalVariable {
+        variable: String,
+        value: ValueId,
+    },
+    ModifyGlobalVariable {
+        variable: String,
+        op: ModifyOp,
+        value: ValueId,
+    },
+    SetPlayerVariable {
+        player: ValueId,
+        variable: String,
+        value: ValueId,
+    },
+    ModifyPlayerVariable {
+        player: ValueId,
+        variable: String,
+        op: ModifyOp,
+        value: ValueId,
+    },
+    CallSubroutine {
+        subroutine: String,
+    },
+    If {
+        condition: ValueId,
+    },
+    ElseIf {
+        condition: ValueId,
+    },
+    Else,
+    While {
+        condition: ValueId,
+    },
+    ForGlobalVariable {
+        variable: String,
+        start: ValueId,
+        stop: ValueId,
+        step: ValueId,
+    },
+    ForPlayerVariable {
+        player: ValueId,
+        variable: String,
+        start: ValueId,
+        stop: ValueId,
+        step: ValueId,
+    },
+    End,
+    Call {
+        name: String,
+        args: Vec<ValueId>,
+    },
+}
 
 pub(crate) struct Lowering<'a> {
     compiler: &'a Compiler,
@@ -547,7 +618,7 @@ impl<'a> Lowering<'a> {
                 let value = self.lower_translation_helper(translations)?;
                 let action = self.push_action(Action::SetGlobalVariable {
                     variable: self.global_names[variable].clone(),
-                    value: self.value(value).clone(),
+                    value,
                 });
                 self.mark_action_origins(std::slice::from_ref(&action), translations.span);
                 self.mark_action_argument_origins(action, [translations.span]);
@@ -564,7 +635,7 @@ impl<'a> Lowering<'a> {
                 let value = self.lower_custom_string(compression_alphabet(), None)?;
                 let action = self.push_action(Action::SetGlobalVariable {
                     variable: self.global_names[variable].clone(),
-                    value: self.value(value).clone(),
+                    value,
                 });
                 Ok(action)
             })
@@ -590,7 +661,7 @@ impl<'a> Lowering<'a> {
                 let value = self.lower_value(init_expr)?;
                 let action = self.push_action(Action::SetGlobalVariable {
                     variable: self.global_names[variable].clone(),
-                    value: self.value(value).clone(),
+                    value,
                 });
                 self.mark_action_origins(std::slice::from_ref(&action), span);
                 self.mark_action_argument_origins(action, [init_expr.span().copied()]);
@@ -618,9 +689,9 @@ impl<'a> Lowering<'a> {
                 let player = self.push_value(Value::EventPlayer);
                 let value = self.lower_value(init_expr)?;
                 let action = self.push_action(Action::SetPlayerVariable {
-                    player: self.value(player).clone(),
+                    player,
                     variable: self.player_names[variable].clone(),
-                    value: self.value(value).clone(),
+                    value,
                 });
                 self.mark_action_origins(std::slice::from_ref(&action), span);
                 self.mark_action_argument_origins(action, [None, init_expr.span().copied()]);
@@ -687,7 +758,7 @@ impl<'a> Lowering<'a> {
             event,
             conditions: conditions
                 .iter()
-                .map(|value| workshop_rs::Condition::new(self.value(*value).clone()))
+                .map(|value| workshop_rs::Condition::new(self.materialize_value(*value)))
                 .collect(),
             actions: self.public_actions(&actions),
         });
@@ -1257,7 +1328,6 @@ impl<'a> Lowering<'a> {
                 let width = self.canonical_action_width(&actions[position + 1..target], span)?;
                 self.push_number(width as f64, &width.to_string())
             };
-            let distance = self.value(distance).clone();
             let Some(Action::Call { args, .. }) = self.actions.get_mut(action) else {
                 unreachable!("goto placeholder must be a call action")
             };
@@ -1295,7 +1365,6 @@ impl<'a> Lowering<'a> {
             }
             let width = self.canonical_action_width(&actions[position + 1..target], span)?;
             let distance = self.push_number(width as f64, &width.to_string());
-            let distance = self.value(distance).clone();
             let Some(Action::Call { args, .. }) = self.actions.get_mut(action) else {
                 unreachable!("deferred goto placeholder must be a call action")
             };
@@ -2042,14 +2111,16 @@ impl<'a> Lowering<'a> {
         };
         *node = offset_value;
 
-        let offset_value = self.value(offsets).clone();
         let Some(Action::Call { args, .. }) = self.actions.get_mut(skip) else {
             unreachable!("switch selector must be a call action")
         };
-        let Some(Value::Call { args, .. }) = args.first_mut() else {
+        let Some(selector_id) = args.first().copied() else {
             unreachable!("switch selector condition must be a value call")
         };
-        args[0] = offset_value;
+        let Some(Value::Call { args, .. }) = self.values.get_mut(selector_id) else {
+            unreachable!("switch selector condition must be a value call")
+        };
+        args[0] = offsets;
 
         Ok(switch)
     }
@@ -2576,7 +2647,7 @@ impl<'a> Lowering<'a> {
             return Ok(value);
         };
         if name == "customString" && args.len() == 1 {
-            Ok(self.push_value(args[0].clone()))
+            Ok(args[0])
         } else {
             Ok(value)
         }
@@ -2625,17 +2696,12 @@ impl<'a> Lowering<'a> {
         let args = self.normalize_contextual_arguments(name, args);
         self.push_value(Value::Call {
             name: name.to_string(),
-            args: self.value_args(&args),
+            args,
         })
     }
 
-    fn normalize_contextual_values(&mut self, call_id: &str, values: Vec<Value>) -> Vec<Value> {
-        let ids = values
-            .into_iter()
-            .map(|value| self.push_value(value))
-            .collect();
-        let ids = self.normalize_contextual_arguments(call_id, ids);
-        self.value_args(&ids)
+    fn normalize_contextual_values(&mut self, call_id: &str, values: Vec<ValueId>) -> Vec<ValueId> {
+        self.normalize_contextual_arguments(call_id, values)
     }
 
     fn contextual_coercions(&self, call_id: &str, arg_index: usize) -> Option<ParamCoercions> {
@@ -2662,9 +2728,9 @@ impl<'a> Lowering<'a> {
             Value::Number(value) if coercions.zero_as_null && *value == 0.0 => Some(Value::Null),
             Value::Vector { x, y, z }
                 if coercions.null_vector_as_null
-                    && matches!(x.as_ref(), Value::Number(value) if *value == 0.0)
-                    && matches!(y.as_ref(), Value::Number(value) if *value == 0.0)
-                    && matches!(z.as_ref(), Value::Number(value) if *value == 0.0) =>
+                    && self.value_is_number(*x, 0.0)
+                    && self.value_is_number(*y, 0.0)
+                    && self.value_is_number(*z, 0.0) =>
             {
                 Some(Value::Null)
             }
@@ -2672,9 +2738,7 @@ impl<'a> Lowering<'a> {
                 if coercions.null_vector_as_null
                     && name == "vector"
                     && args.len() == 3
-                    && args
-                        .iter()
-                        .all(|value| matches!(value, Value::Number(number) if *number == 0.0)) =>
+                    && args.iter().all(|value| self.value_is_number(*value, 0.0)) =>
             {
                 Some(Value::Null)
             }
@@ -2687,7 +2751,7 @@ impl<'a> Lowering<'a> {
                 if coercions.empty_array_as_string
                     && name == "customString"
                     && args.len() == 1
-                    && matches!(args.first(), Some(Value::String(value)) if value.is_empty()) =>
+                    && self.value_is_empty_string(args[0]) =>
             {
                 Some(Value::String(String::new()))
             }
@@ -2830,6 +2894,14 @@ impl<'a> Lowering<'a> {
         value.is_finite().then_some(value)
     }
 
+    fn value_is_number(&self, id: ValueId, expected: f64) -> bool {
+        matches!(self.values.get(id), Some(Value::Number(value)) if *value == expected)
+    }
+
+    fn value_is_empty_string(&self, id: ValueId) -> bool {
+        matches!(self.values.get(id), Some(Value::String(value)) if value.is_empty())
+    }
+
     fn lower_condition(&mut self, expr: &Expr) -> Result<ValueId, IntegrationError> {
         if let Expr::Unary { op, operand, .. } = expr
             && op == "not"
@@ -2884,7 +2956,7 @@ impl<'a> Lowering<'a> {
                 })?;
                 let player = self.lower_value(player)?;
                 let value = self.push_value(Value::PlayerVariable {
-                    player: Box::new(self.value(player).clone()),
+                    player,
                     variable: self.player_names[variable].clone(),
                 });
                 (value, DeleteAssignment::Player { player, variable })
@@ -2908,13 +2980,13 @@ impl<'a> Lowering<'a> {
         Ok(match assignment {
             DeleteAssignment::Global(variable) => self.push_action(Action::SetGlobalVariable {
                 variable: self.global_names[variable].clone(),
-                value: self.value(value).clone(),
+                value,
             }),
             DeleteAssignment::Player { player, variable } => {
                 self.push_action(Action::SetPlayerVariable {
-                    player: self.value(player).clone(),
+                    player,
                     variable: self.player_names[variable].clone(),
-                    value: self.value(value).clone(),
+                    value,
                 })
             }
         })
@@ -2959,7 +3031,7 @@ impl<'a> Lowering<'a> {
                                 return Ok(self.push_action(Action::ModifyGlobalVariable {
                                     variable: self.global_names[variable].clone(),
                                     op: modify_op,
-                                    value: self.value(val).clone(),
+                                    value: val,
                                 }));
                             }
                         }
@@ -2968,7 +3040,7 @@ impl<'a> Lowering<'a> {
                 let val = self.lower_value(value)?;
                 Ok(self.push_action(Action::SetGlobalVariable {
                     variable: self.global_names[variable].clone(),
-                    value: self.value(val).clone(),
+                    value: val,
                 }))
             }
             Expr::PlayerVar {
@@ -2995,21 +3067,21 @@ impl<'a> Lowering<'a> {
                             if let Some(modify_op) = modify_op_from_str(op) {
                                 let right = self.lower_value(right)?;
                                 let val = self.normalize_modify_value(modify_op, right);
-                                return Ok(self.push_action(Action::ModifyPlayerVariable {
-                                    player: self.value(player_val).clone(),
-                                    variable: self.player_names[variable].clone(),
-                                    op: modify_op,
-                                    value: self.value(val).clone(),
-                                }));
+                                    return Ok(self.push_action(Action::ModifyPlayerVariable {
+                                        player: player_val,
+                                        variable: self.player_names[variable].clone(),
+                                        op: modify_op,
+                                        value: val,
+                                    }));
                             }
                         }
                     }
                 }
                 let val = self.lower_value(value)?;
                 Ok(self.push_action(Action::SetPlayerVariable {
-                    player: self.value(player_val).clone(),
+                    player: player_val,
                     variable: self.player_names[variable].clone(),
-                    value: self.value(val).clone(),
+                    value: val,
                 }))
             }
             Expr::Index {
@@ -3077,7 +3149,7 @@ impl<'a> Lowering<'a> {
                         self.unsupported(format!("unknown player variable '{name}'"), *arr_span)
                     })?;
                     let var_node = self.push_value(Value::PlayerVariable {
-                        player: Box::new(self.value(player_val).clone()),
+                        player: player_val,
                         variable: self.player_names[variable].clone(),
                     });
                     let index_val = self.lower_value(index)?;
@@ -3169,7 +3241,7 @@ impl<'a> Lowering<'a> {
                     self.unsupported(format!("unknown player variable '{name}'"), *target_span)
                 })?;
                 let root_value = self.push_value(Value::PlayerVariable {
-                    player: Box::new(self.value(player_value).clone()),
+                    player: player_value,
                     variable: self.player_names[variable].clone(),
                 });
                 ("setPlayerVariableAtIndex", root_value)
@@ -3572,7 +3644,7 @@ impl<'a> Lowering<'a> {
                     let action = self.push_action(Action::ModifyGlobalVariable {
                         variable: self.global_names[variable].clone(),
                         op,
-                        value: self.value(value).clone(),
+                        value,
                     });
                     self.mark_action_argument_origins(action, [value_span]);
                     Ok(action)
@@ -3589,10 +3661,10 @@ impl<'a> Lowering<'a> {
                     let player_span = player.span().copied();
                     let player = self.lower_value(player)?;
                     let action = self.push_action(Action::ModifyPlayerVariable {
-                        player: self.value(player).clone(),
+                        player,
                         variable: self.player_names[variable].clone(),
                         op,
-                        value: self.value(value).clone(),
+                        value,
                     });
                     self.mark_action_argument_origins(action, [player_span, value_span]);
                     Ok(action)
@@ -3647,7 +3719,7 @@ impl<'a> Lowering<'a> {
                             })?;
                             let player = self.lower_value(player)?;
                             let variable = self.push_value(Value::PlayerVariable {
-                                player: Box::new(self.value(player).clone()),
+                                player,
                                 variable: self.player_names[variable].clone(),
                             });
                             let args = self.normalize_contextual_arguments(
@@ -3775,7 +3847,7 @@ impl<'a> Lowering<'a> {
                     self.unsupported(format!("unknown player variable '{name}'"), span)
                 })?;
                 Value::PlayerVariable {
-                    player: Box::new(self.value(player).clone()),
+                    player,
                     variable: self.player_names[id].clone(),
                 }
             }
@@ -3872,10 +3944,10 @@ impl<'a> Lowering<'a> {
                 let format_text = canonical_format_text(text);
                 if args.len() <= 3 {
                     let text_node = self.push_value(Value::String(format_text));
-                    let mut call_args = vec![self.value(text_node).clone()];
+                    let mut call_args = vec![text_node];
                     for arg in args {
                         let arg = self.lower_value(arg)?;
-                        call_args.push(self.value(arg).clone());
+                        call_args.push(arg);
                     }
                     Value::Call {
                         name: "customString".to_string(),
@@ -3895,12 +3967,8 @@ impl<'a> Lowering<'a> {
                     let mut parts = Vec::with_capacity(chunks.len());
                     for (chunk, indices) in chunks {
                         let text = self.push_value(Value::String(chunk));
-                        let mut call_args = vec![self.value(text).clone()];
-                        call_args.extend(
-                            indices
-                                .into_iter()
-                                .map(|index| self.value(lowered_args[index]).clone()),
-                        );
+                        let mut call_args = vec![text];
+                        call_args.extend(indices.into_iter().map(|index| lowered_args[index]));
                         let call_args = self.normalize_contextual_values("customString", call_args);
                         parts.push(self.push_value(Value::Call {
                             name: "customString".to_string(),
@@ -4109,11 +4177,7 @@ impl<'a> Lowering<'a> {
                             value: member.to_string(),
                         }
                     } else {
-                        Value::Vector {
-                            x: Box::new(self.value(x).clone()),
-                            y: Box::new(self.value(y).clone()),
-                            z: Box::new(self.value(z).clone()),
-                        }
+                        Value::Vector { x, y, z }
                     }
                 } else if matches!(
                     name.as_str(),
@@ -4888,21 +4952,14 @@ impl<'a> Lowering<'a> {
         action
     }
 
-    fn value_args(&self, ids: &[ValueId]) -> Vec<Value> {
-        ids.iter()
-            .map(|id| {
-                let value = self.value(*id);
-                #[cfg(test)]
-                crate::resource_metrics::record_value_clone(value);
-                value.clone()
-            })
-            .collect()
+    fn value_args(&self, ids: &[ValueId]) -> Vec<ValueId> {
+        ids.to_vec()
     }
 
     fn push_call_action(&mut self, name: impl Into<String>, args: &[ValueId]) -> ActionId {
         self.push_action(Action::Call {
             name: name.into(),
-            args: self.value_args(args),
+            args: args.to_vec(),
         })
     }
 
@@ -4914,13 +4971,9 @@ impl<'a> Lowering<'a> {
         let mut result = Vec::new();
         for (index, (condition, body)) in branches.into_iter().enumerate() {
             result.push(self.push_action(if index == 0 {
-                Action::If {
-                    condition: self.value(condition).clone(),
-                }
+                Action::If { condition }
             } else {
-                Action::ElseIf {
-                    condition: self.value(condition).clone(),
-                }
+                Action::ElseIf { condition }
             }));
             result.extend(body);
         }
@@ -4933,9 +4986,7 @@ impl<'a> Lowering<'a> {
     }
 
     fn push_while_actions(&mut self, condition: ValueId, body: Vec<ActionId>) -> Vec<ActionId> {
-        let mut result = vec![self.push_action(Action::While {
-            condition: self.value(condition).clone(),
-        })];
+        let mut result = vec![self.push_action(Action::While { condition })];
         result.extend(body);
         result.push(self.push_action(Action::End));
         result
@@ -4951,9 +5002,9 @@ impl<'a> Lowering<'a> {
     ) -> Vec<ActionId> {
         let mut result = vec![self.push_action(Action::ForGlobalVariable {
             variable: self.global_names[variable].clone(),
-            start: self.value(start).clone(),
-            stop: self.value(stop).clone(),
-            step: self.value(step).clone(),
+            start,
+            stop,
+            step,
         })];
         result.extend(body);
         result.push(self.push_action(Action::End));
@@ -4970,11 +5021,11 @@ impl<'a> Lowering<'a> {
         body: Vec<ActionId>,
     ) -> Vec<ActionId> {
         let mut result = vec![self.push_action(Action::ForPlayerVariable {
-            player: self.value(player).clone(),
+            player,
             variable: self.player_names[variable].clone(),
-            start: self.value(start).clone(),
-            stop: self.value(stop).clone(),
-            step: self.value(step).clone(),
+            start,
+            stop,
+            step,
         })];
         result.extend(body);
         result.push(self.push_action(Action::End));
@@ -4983,6 +5034,51 @@ impl<'a> Lowering<'a> {
 
     fn value(&self, id: ValueId) -> &Value {
         self.values.get(id).expect("lowered value id must resolve")
+    }
+
+    fn materialize_value(&self, id: ValueId) -> workshop_rs::Value {
+        let value = self.materialize_value_inner(id);
+        #[cfg(test)]
+        crate::resource_metrics::record_value_clone(&value);
+        value
+    }
+
+    fn materialize_value_inner(&self, id: ValueId) -> workshop_rs::Value {
+        match self.value(id) {
+            Value::Number(value) => workshop_rs::Value::Number(*value),
+            Value::String(value) => workshop_rs::Value::String(value.clone()),
+            Value::Bool(value) => workshop_rs::Value::Bool(*value),
+            Value::Null => workshop_rs::Value::Null,
+            Value::Array(elements) => workshop_rs::Value::Array(
+                elements
+                    .iter()
+                    .map(|element| self.materialize_value_inner(*element))
+                    .collect(),
+            ),
+            Value::Vector { x, y, z } => workshop_rs::Value::Vector {
+                x: Box::new(self.materialize_value_inner(*x)),
+                y: Box::new(self.materialize_value_inner(*y)),
+                z: Box::new(self.materialize_value_inner(*z)),
+            },
+            Value::Enum { value_type, value } => workshop_rs::Value::Enum {
+                value_type: value_type.clone(),
+                value: value.clone(),
+            },
+            Value::GlobalVariable(value) => workshop_rs::Value::GlobalVariable(value.clone()),
+            Value::PlayerVariable { player, variable } => workshop_rs::Value::PlayerVariable {
+                player: Box::new(self.materialize_value_inner(*player)),
+                variable: variable.clone(),
+            },
+            Value::Subroutine(value) => workshop_rs::Value::Subroutine(value.clone()),
+            Value::EventPlayer => workshop_rs::Value::EventPlayer,
+            Value::Call { name, args } => workshop_rs::Value::Call {
+                name: name.clone(),
+                args: args
+                    .iter()
+                    .map(|arg| self.materialize_value_inner(*arg))
+                    .collect(),
+            },
+        }
     }
 
     pub(super) fn workshop_span(
@@ -5006,16 +5102,96 @@ impl<'a> Lowering<'a> {
         )))
     }
 
-    fn public_actions(&self, actions: &[ActionId]) -> Vec<Action> {
+    fn public_actions(&self, actions: &[ActionId]) -> Vec<workshop_rs::Action> {
         actions
             .iter()
-            .map(|id| {
-                let action = &self.actions[*id];
-                #[cfg(test)]
-                crate::resource_metrics::record_action_clone(action);
-                action.clone()
-            })
+            .map(|id| self.materialize_action(&self.actions[*id]))
             .collect()
+    }
+
+    fn materialize_action(&self, action: &Action) -> workshop_rs::Action {
+        match action {
+            Action::SetGlobalVariable { variable, value } => {
+                workshop_rs::Action::SetGlobalVariable {
+                    variable: variable.clone(),
+                    value: self.materialize_value(*value),
+                }
+            }
+            Action::ModifyGlobalVariable {
+                variable,
+                op,
+                value,
+            } => workshop_rs::Action::ModifyGlobalVariable {
+                variable: variable.clone(),
+                op: *op,
+                value: self.materialize_value(*value),
+            },
+            Action::SetPlayerVariable {
+                player,
+                variable,
+                value,
+            } => workshop_rs::Action::SetPlayerVariable {
+                player: self.materialize_value(*player),
+                variable: variable.clone(),
+                value: self.materialize_value(*value),
+            },
+            Action::ModifyPlayerVariable {
+                player,
+                variable,
+                op,
+                value,
+            } => workshop_rs::Action::ModifyPlayerVariable {
+                player: self.materialize_value(*player),
+                variable: variable.clone(),
+                op: *op,
+                value: self.materialize_value(*value),
+            },
+            Action::CallSubroutine { subroutine } => workshop_rs::Action::CallSubroutine {
+                subroutine: subroutine.clone(),
+            },
+            Action::If { condition } => workshop_rs::Action::If {
+                condition: self.materialize_value(*condition),
+            },
+            Action::ElseIf { condition } => workshop_rs::Action::ElseIf {
+                condition: self.materialize_value(*condition),
+            },
+            Action::Else => workshop_rs::Action::Else,
+            Action::While { condition } => workshop_rs::Action::While {
+                condition: self.materialize_value(*condition),
+            },
+            Action::ForGlobalVariable {
+                variable,
+                start,
+                stop,
+                step,
+            } => workshop_rs::Action::ForGlobalVariable {
+                variable: variable.clone(),
+                start: self.materialize_value(*start),
+                stop: self.materialize_value(*stop),
+                step: self.materialize_value(*step),
+            },
+            Action::ForPlayerVariable {
+                player,
+                variable,
+                start,
+                stop,
+                step,
+            } => workshop_rs::Action::ForPlayerVariable {
+                player: self.materialize_value(*player),
+                variable: variable.clone(),
+                start: self.materialize_value(*start),
+                stop: self.materialize_value(*stop),
+                step: self.materialize_value(*step),
+            },
+            Action::End => workshop_rs::Action::End,
+            Action::Call { name, args } => workshop_rs::Action::Call {
+                name: name.clone(),
+                args: args
+                    .iter()
+                    .map(|arg| self.materialize_value(*arg))
+                    .collect(),
+            },
+        }
     }
 
     fn set_rule_provenance<C, A>(

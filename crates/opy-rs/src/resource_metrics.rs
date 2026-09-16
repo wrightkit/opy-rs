@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use serde::Serialize;
-use workshop_rs::{Action, Value};
+use workshop_rs::Value;
 
 static LOWERING_VALUES_PEAK: AtomicUsize = AtomicUsize::new(0);
 static LOWERING_VALUE_CLONE_NODES: AtomicUsize = AtomicUsize::new(0);
@@ -72,13 +72,6 @@ pub(crate) fn record_value_clone(value: &Value) {
     LOWERING_VALUE_CLONE_NODES.fetch_add(value_node_count(value), Ordering::Relaxed);
 }
 
-pub(crate) fn record_action_clone(action: &Action) {
-    LOWERING_ACTION_CLONE_EVENTS.fetch_add(1, Ordering::Relaxed);
-    for value in action_values(action) {
-        record_value_clone(value);
-    }
-}
-
 pub(crate) fn record_contract_check() {
     COMPILER_CONTRACT_CHECKS.fetch_add(1, Ordering::Relaxed);
 }
@@ -124,31 +117,5 @@ fn value_node_count(value: &Value) -> usize {
         | Value::GlobalVariable(_)
         | Value::Subroutine(_)
         | Value::EventPlayer => 0,
-    }
-}
-
-fn action_values(action: &Action) -> Vec<&Value> {
-    match action {
-        Action::SetGlobalVariable { value, .. }
-        | Action::ModifyGlobalVariable { value, .. }
-        | Action::AssignMember { value, .. }
-        | Action::If { condition: value }
-        | Action::ElseIf { condition: value }
-        | Action::While { condition: value } => vec![value],
-        Action::SetPlayerVariable { player, value, .. }
-        | Action::ModifyPlayerVariable { player, value, .. } => vec![player, value],
-        Action::ForGlobalVariable {
-            start, stop, step, ..
-        } => vec![start, stop, step],
-        Action::ForPlayerVariable {
-            player,
-            start,
-            stop,
-            step,
-            ..
-        } => vec![player, start, stop, step],
-        Action::Call { args, .. } => args.iter().collect(),
-        Action::Disabled { action } => action_values(action),
-        Action::CallSubroutine { .. } | Action::Else | Action::End => Vec::new(),
     }
 }

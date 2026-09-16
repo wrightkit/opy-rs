@@ -167,9 +167,9 @@ fn assert_mechanism_measurements(id: &str, metrics: &ResourceMetrics) {
                 "{id} retained-value counter did not cover all rules: {}",
                 metrics.lowering_values_peak
             );
-            assert!(
-                metrics.lowering_action_clone_events >= RULE_COUNT,
-                "{id} action-copy counter did not cover all rules: {}",
+            assert_eq!(
+                metrics.lowering_action_clone_events, 0,
+                "{id} should not clone completed actions: {}",
                 metrics.lowering_action_clone_events
             );
         }
