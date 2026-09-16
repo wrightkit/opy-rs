@@ -157,8 +157,13 @@ fn assert_mechanism_measurements(id: &str, metrics: &ResourceMetrics) {
                 "{id} did not retain any lowering values"
             );
             assert!(
-                metrics.lowering_value_clone_nodes > 0,
-                "{id} did not observe a lowering value-tree copy"
+                metrics.lowering_value_materialization_nodes > 0,
+                "{id} did not observe canonical value materialization"
+            );
+            assert_eq!(
+                metrics.lowering_value_clone_nodes, 0,
+                "{id} retained the removed lowering value-tree copy path: {}",
+                metrics.lowering_value_clone_nodes
             );
         }
         "many-rule-compilation" => {
@@ -167,10 +172,19 @@ fn assert_mechanism_measurements(id: &str, metrics: &ResourceMetrics) {
                 "{id} retained-value counter did not cover all rules: {}",
                 metrics.lowering_values_peak
             );
-            assert!(
-                metrics.lowering_action_clone_events >= RULE_COUNT,
-                "{id} action-copy counter did not cover all rules: {}",
+            assert_eq!(
+                metrics.lowering_action_clone_events, 0,
+                "{id} should not clone completed actions: {}",
                 metrics.lowering_action_clone_events
+            );
+            assert!(
+                metrics.lowering_value_materialization_nodes > 0,
+                "{id} did not observe canonical value materialization"
+            );
+            assert_eq!(
+                metrics.lowering_value_clone_nodes, 0,
+                "{id} retained the removed lowering value-tree copy path: {}",
+                metrics.lowering_value_clone_nodes
             );
         }
         "compiler-contract-initialization" => assert_eq!(
@@ -194,8 +208,13 @@ fn assert_mechanism_measurements(id: &str, metrics: &ResourceMetrics) {
                 "{id} did not retain any lowering values"
             );
             assert!(
-                metrics.lowering_value_clone_nodes > 0,
-                "{id} did not observe a lowering value-tree copy"
+                metrics.lowering_value_materialization_nodes > 0,
+                "{id} did not observe canonical value materialization"
+            );
+            assert_eq!(
+                metrics.lowering_value_clone_nodes, 0,
+                "{id} retained the removed lowering value-tree copy path: {}",
+                metrics.lowering_value_clone_nodes
             );
         }
         _ => panic!("unknown resource workload {id}"),
