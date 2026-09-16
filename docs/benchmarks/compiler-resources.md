@@ -21,14 +21,14 @@ The test-only counters report retained lowering values, copied value-tree nodes,
 Run from the `opy-rs` repository at the revision being measured:
 
 ```sh
-BASELINE_REVISION="$(git rev-parse origin/main)"
+BASELINE_REVISION="$(python3 -c 'import json, pathlib; print(json.loads(pathlib.Path("docs/benchmarks/compiler-resources-baseline.json").read_text())["baselineRevision"])')"
 CANDIDATE_REVISION="$(git rev-parse HEAD)"
 OPY_RESOURCE_BASELINE_REVISION="$BASELINE_REVISION" \
 OPY_RESOURCE_CANDIDATE_REVISION="$CANDIDATE_REVISION" \
 cargo test -p opy-rs --lib resource_baseline -- --ignored --nocapture
 ```
 
-The command must be run after `git fetch origin main`. On the default branch, `BASELINE_REVISION` and `CANDIDATE_REVISION` are normally equal; on an optimization branch, rerun the same command after checking out or rebuilding the candidate. The JSON printed at the end is a candidate comparison record; the checked-in `compiler-resources-baseline.json` remains the pinned before record for this audit.
+The command must be run from the `opy-rs` repository root. It reads the immutable `baselineRevision` from the checked-in `compiler-resources-baseline.json`; it must not recompute the baseline from moving `origin/main`. Set `CANDIDATE_REVISION` to the revision being measured. The JSON printed at the end is a candidate comparison record; the checked-in record remains the pinned before record for this audit.
 
 To intentionally refresh the pinned record, run the command at the audited default-branch revision with `OPY_RESOURCE_BASELINE_REVISION` set to that revision and without `OPY_RESOURCE_CANDIDATE_REVISION`, then review the workload identities and environment before replacing the JSON file.
 
