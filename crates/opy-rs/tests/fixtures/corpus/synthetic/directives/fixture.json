@@ -10,5 +10,44 @@
     "origin": "opy-rs Issue #29 minimized pinned-oracle directive and annotation probe",
     "license": "AGPL-3.0-or-later",
     "redistributable": true
-  }
+  },
+  "regressions": [
+    {
+      "id": "synthetic/directives/disabled-bastion",
+      "source": "regressions/disabled-bastion.opy",
+      "derivedFrom": "OWBastion/Bastion#214 disabled-rule differential",
+      "expectedReferenceStatus": "success",
+      "kind": "minimized-regression",
+      "provenance": {
+        "evidenceUrl": "https://github.com/OWBastion/Bastion/pull/214#issuecomment-5690854871",
+        "sourceRepository": "https://github.com/OWBastion/Bastion",
+        "sourceRevision": "f95d3159effed8aef0747a9fac5495e0651895b6",
+        "entrypoints": ["src/main.opy", "src/externalMain.opy"],
+        "sourcePaths": [
+          "src/composition/bootstrap.opy",
+          "src/effects/player.opy",
+          "src/events/effects/buff/gale_blessing.opy",
+          "src/events/effects/buff/phase_surge.opy",
+          "src/heroes/juno.opy",
+          "src/heroes/symmetra.opy",
+          "src/heroes/zenyatta.opy",
+          "src/utilities/dev_support/devTool.opy"
+        ],
+        "overlay": {
+          "appliedTo": "every .opy file in the entrypoint include closure",
+          "replacements": [
+            {
+              "directive": "#!optimizeStrict",
+              "replacement": "comment"
+            },
+            {
+              "directive": "#!useVariableForCompressionAlphabet",
+              "replacement": "comment"
+            }
+          ],
+          "reason": "Known opy-rs backend-directive-unsupported gap (#271); unrelated to disabled-rule lowering"
+        }
+      }
+    }
+  ]
 }

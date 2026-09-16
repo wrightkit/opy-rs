@@ -94,10 +94,11 @@ fn delimiter_is_consumed_after_preserving_its_unprefixed_name() {
 
 #[test]
 fn public_source_compile_keeps_enabled_and_disabled_rule_identity() {
-    let source = "globalvar value\nrule \"enabled\":\n    @Event global\n    value = 1\nrule \"disabled\":\n    @Event global\n    @Disabled\n    value = 2\n";
+    let fixture = fixture_dir("directives").join("regressions/disabled-bastion.opy");
+    let source = std::fs::read_to_string(&fixture).unwrap();
     let artifact = Compiler::new()
         .unwrap()
-        .compile_source_artifact(source, "rules.opy", Path::new("."))
+        .compile_source_artifact(&source, "disabled-bastion.opy", fixture.parent().unwrap())
         .unwrap();
 
     assert_eq!(
@@ -107,7 +108,11 @@ fn public_source_compile_keeps_enabled_and_disabled_rule_identity() {
             .iter()
             .map(|rule| (rule.name.as_str(), rule.disabled))
             .collect::<Vec<_>>(),
-        [("enabled", false), ("disabled", true)]
+        [
+            ("enabled", false),
+            ("disabled", true),
+            ("disabled delimiter", true),
+        ]
     );
     assert!(artifact.final_output.contains("rule (\"enabled\")"));
     assert!(
@@ -115,6 +120,16 @@ fn public_source_compile_keeps_enabled_and_disabled_rule_identity() {
             .final_output
             .contains("disabled rule (\"disabled\")")
     );
-    assert_eq!(artifact.wir.rule_span(1).unwrap().start.line, 5);
-    assert_eq!(artifact.wir.action_span(1, 0).unwrap().start.line, 8);
+    assert!(
+        artifact
+            .final_output
+            .contains("disabled rule (\"disabled delimiter\")")
+    );
+    assert!(
+        !artifact
+            .final_output
+            .contains("disabled rule (\"enabled\")")
+    );
+    assert_eq!(artifact.wir.rule_span(1).unwrap().start.line, 7);
+    assert_eq!(artifact.wir.action_span(1, 0).unwrap().start.line, 10);
 }
