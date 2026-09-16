@@ -4629,7 +4629,10 @@ impl<'a> Lowering<'a> {
                 };
                 terms.push(weighted);
             }
-            let mut value = terms[0];
+            let mut value = terms
+                .first()
+                .copied()
+                .unwrap_or_else(|| this.push_number(0.0, ""));
             for term in terms.into_iter().skip(1) {
                 value = this.push_call("add", vec![value, term]);
             }
@@ -4637,7 +4640,7 @@ impl<'a> Lowering<'a> {
                 value
             } else {
                 let offset = this.push_number(compression_offset, "");
-                this.push_call("subtract", vec![value, offset])
+                this.push_call("add", vec![value, offset])
             }
         };
         let value = if is_vector {

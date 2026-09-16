@@ -60,3 +60,26 @@ fn compressed_requires_a_literal_array() {
     assert_eq!(error.diagnostic.code, "unsupported-integration-surface");
     assert!(error.diagnostic.message.contains("literal array"));
 }
+
+#[test]
+fn compressed_zero_and_negative_scalars_match_the_oracle_shape() {
+    let compiler = Compiler::new().expect("compiler initializes");
+    let hir = crate::compile(
+        "globalvar zero = compressed([0])\nglobalvar negative = compressed([-2, 1])\nrule \"compression\":\n    @Event global\n    print(zero)\n    print(negative)\n",
+        "compression.opy",
+        Path::new("."),
+    )
+    .expect("scalar compression resolves");
+    let artifact = compiler
+        .compile_hir(&hir)
+        .expect("zero and negative scalars lower without panicking");
+
+    assert!(
+        artifact
+            .emitted
+            .contains("Set Global Variable(zero, Mapped Array(")
+    );
+    assert!(artifact.emitted.contains(")), 0));"));
+    assert!(artifact.emitted.contains("Add(Index Of String Char"));
+    assert!(artifact.emitted.contains(", -2)));"));
+}
