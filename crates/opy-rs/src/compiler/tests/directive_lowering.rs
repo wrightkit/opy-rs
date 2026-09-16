@@ -43,11 +43,29 @@ fn disabled_rule_is_lowered_with_rule_and_action_provenance() {
     assert_eq!(rule.actions.len(), 1);
     assert_eq!(artifact.wir.rule_span(0).unwrap().start.line, 2);
     assert_eq!(artifact.wir.action_span(0, 0).unwrap().start.line, 5);
+    assert!(
+        artifact
+            .final_output
+            .contains("disabled rule (\"disabled\")")
+    );
+    assert!(
+        !artifact
+            .final_output
+            .contains("disabled rule (\"enabled\")")
+    );
+    let emitted = workshop_rs::parser::parse(
+        &artifact.final_output,
+        &Catalog::builtin().unwrap(),
+        &Locale::new("en-US"),
+    )
+    .unwrap();
+    assert_eq!(emitted.rules.len(), 1);
+    assert!(emitted.rules[0].disabled);
 }
 
 #[test]
 fn delimiter_is_consumed_after_preserving_its_unprefixed_name() {
-    let source = "#!rulePrefix \"Section\"\nrule \"ordinary\":\n    @Event global\n    pass\nrule \"delimiter\":\n    @Event global\n    @Disabled\n    @Delimiter\n    pass\n";
+    let source = "#!rulePrefix \"Section\"\nrule \"ordinary\":\n    @Event global\n    pass\nrule \"delimiter\":\n    @Event global\n    @Disabled\n    @Delimiter\n";
     let hir = crate::compile(source, "delimiters.opy", Path::new(".")).unwrap();
     let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
 
@@ -62,4 +80,56 @@ fn delimiter_is_consumed_after_preserving_its_unprefixed_name() {
     );
     assert!(!artifact.wir.rules[0].disabled);
     assert!(artifact.wir.rules[1].disabled);
+    assert!(
+        artifact
+            .final_output
+            .contains("rule (\"[Section] ordinary\")")
+    );
+    assert!(
+        artifact
+            .final_output
+            .contains("disabled rule (\"delimiter\")")
+    );
+}
+
+#[test]
+fn public_source_compile_keeps_enabled_and_disabled_rule_identity() {
+    let fixture = fixture_dir("directives").join("regressions/disabled-bastion.opy");
+    let source = std::fs::read_to_string(&fixture).unwrap();
+    let artifact = Compiler::new()
+        .unwrap()
+        .compile_source_artifact(&source, "disabled-bastion.opy", fixture.parent().unwrap())
+        .unwrap();
+
+    assert_eq!(
+        artifact
+            .wir
+            .rules
+            .iter()
+            .map(|rule| (rule.name.as_str(), rule.disabled))
+            .collect::<Vec<_>>(),
+        [
+            ("enabled", false),
+            ("disabled", true),
+            ("disabled delimiter", true),
+        ]
+    );
+    assert!(artifact.final_output.contains("rule (\"enabled\")"));
+    assert!(
+        artifact
+            .final_output
+            .contains("disabled rule (\"disabled\")")
+    );
+    assert!(
+        artifact
+            .final_output
+            .contains("disabled rule (\"disabled delimiter\")")
+    );
+    assert!(
+        !artifact
+            .final_output
+            .contains("disabled rule (\"enabled\")")
+    );
+    assert_eq!(artifact.wir.rule_span(1).unwrap().start.line, 7);
+    assert_eq!(artifact.wir.action_span(1, 0).unwrap().start.line, 10);
 }
