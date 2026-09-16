@@ -42,3 +42,33 @@ fn minimized_regression_reaches_canonical_debug_string() {
         Value::String(value) if value == "onetwo"
     ));
 }
+
+#[test]
+fn unicode_escape_in_subroutine_name_reaches_canonical_workshop() {
+    // Minimized from OWBastion/Bastion commit
+    // f95d3159effed8aef0747a9fac5495e0651895b6,
+    // Bastion/src/utilities/system/savePlayerData.opy:9.
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/regressions/bastion-unicode-name.opy");
+    let source = std::fs::read_to_string(&fixture).expect("Unicode regression must be readable");
+    let artifact = Compiler::new()
+        .expect("released workshop contract must load")
+        .compile_source_with_locale(
+            &source,
+            "bastion-unicode-name.opy",
+            fixture.parent().expect("fixture has a parent"),
+            &Locale::new("en-US"),
+        )
+        .expect("Unicode source name must compile");
+
+    let program = super::canonical_program(&artifact);
+    assert_eq!(program.rules.len(), 2);
+    assert_eq!(
+        program.rules[0].name,
+        "Subroutine save player data if the player has pa\u{feff}ssed round 2"
+    );
+    assert_eq!(program.rules[1].name, "Subroutine literal ufeff");
+    assert!(artifact.emitted.contains("pa\u{feff}ssed"));
+    assert!(!artifact.emitted.contains("paufeffssed"));
+    assert!(artifact.emitted.contains("literal ufeff"));
+}
