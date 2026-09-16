@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.43](https://github.com/wrightkit/opy-rs/compare/v0.1.42...v0.1.43) - 2026-09-16
+
+### Fixed
+
+- *(settings)* remove whole-source char buffering ([#309](https://github.com/wrightkit/opy-rs/pull/309))
+
+### Other
+
+- *(lowering)* reduce recursive Value cloning ([#312](https://github.com/wrightkit/opy-rs/pull/312))
+- *(macro)* measure QuickJS lifecycle and preserve isolation ([#311](https://github.com/wrightkit/opy-rs/pull/311))
+- *(compiler)* cache immutable contract linking ([#308](https://github.com/wrightkit/opy-rs/pull/308))
+
 ## [0.1.42](https://github.com/wrightkit/opy-rs/compare/v0.1.41...v0.1.42) - 2026-09-16
 
 ### Added
