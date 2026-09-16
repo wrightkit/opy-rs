@@ -60,6 +60,8 @@ mod string_modifiers;
 mod syntax_lowering;
 #[path = "tests/variable_initializers.rs"]
 mod variable_initializers;
+#[path = "tests/wait_lowering.rs"]
+mod wait_lowering;
 use super::CompilationArtifact;
 
 fn canonical_program(artifact: &CompilationArtifact) -> workshop_rs::Program {

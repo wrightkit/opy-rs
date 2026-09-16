@@ -164,6 +164,20 @@
       "semanticEquivalent": true
     },
     {
+      "fixture": "synthetic/wait-optimization",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "semantic-wir",
+      "evidence": [
+        "oracle:synthetic/wait-optimization/oracle.json",
+        "provenance:synthetic/wait-optimization/fixture.json",
+        "test:opy-rs::compiler::integration_tests::wait_lowering::optimized_wait_forms_match_the_pinned_oracle"
+      ],
+      "owner": "opy-rs#282",
+      "note": "The native wait lowering preserves pinned OverPy optimizeForSize semantics for omitted, sub-default, and one-second durations while retaining the wait behavior argument.",
+      "semanticEquivalent": true
+    },
+    {
       "fixture": "synthetic/control-flow-lowering",
       "nativeStatus": "success",
       "classification": "match",

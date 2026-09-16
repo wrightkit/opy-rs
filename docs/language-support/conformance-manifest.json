@@ -304,6 +304,12 @@
           "probes": ["synthetic/settings"]
         },
         {
+          "id": "wait-scheduling-optimization",
+          "claim": "Wait default and size-optimization forms preserve pinned OverPy scheduling semantics in canonical WIR.",
+          "probeKinds": ["positive", "contextual"],
+          "probes": ["synthetic/wait-optimization"]
+        },
+        {
           "id": "unsupported-lowering-boundary",
           "claim": "Known unsupported integration surfaces remain explicit negative probes rather than expected native passes.",
           "probeKinds": ["negative"],
@@ -338,6 +344,7 @@
         "synthetic/chase-enums",
         "synthetic/chase-keywords",
         "synthetic/settings",
+        "synthetic/wait-optimization",
         "census/workshop-feature-census"
       ]
     },

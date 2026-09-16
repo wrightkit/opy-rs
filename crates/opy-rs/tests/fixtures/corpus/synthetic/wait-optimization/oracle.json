@@ -1,0 +1,33 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: marker\n}\n\n//Optimize for size enabled\nrule (\"wait optimization\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(marker, 1);\n        Wait(False, Ignore Condition);\n        Wait(False, Ignore Condition);\n        Wait(True, Ignore Condition);\n        Wait(True, Abort When False);\n        Set Global Variable(marker, 2);\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: marker\n}\n\n//Optimize for size enabled\nrule (\"wait optimization\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(marker, 1);\n        Wait(False, Ignore Condition);\n        Wait(False, Ignore Condition);\n        Wait(True, Ignore Condition);\n        Wait(True, Abort When False);\n        Set Global Variable(marker, 2);\n    }\n}\n\n",
+    "workshopSha256": "3665b704ca14a37a703da3d12b67f6c1e18549142c47628b22c9081d73ff2614"
+  },
+  "fixture": "synthetic/wait-optimization",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "eae8b5ac5b9884e7649d8f55cdc1a85f65eea2603c910a5dd2fcedc266ab04a5"
+      }
+    ],
+    "sha256": "1fa5c9f27aff5c5eb75a4e04aa1f44cd4c3341daf7e6dc6cfb4627312c388a45",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}
