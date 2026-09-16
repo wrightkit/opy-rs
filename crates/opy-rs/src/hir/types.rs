@@ -6,6 +6,8 @@
 //! the same major version does not break the consumer; unknown node *kinds*
 //! are rejected during validation (see [`super::validate`]).
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 /// The `wright/opy-hir` protocol name.
@@ -114,8 +116,9 @@ pub struct Program {
     /// The typed custom-game-settings block, when the source had one (#86).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub settings: Option<Settings>,
-    /// Frontend preprocessing state. Workshop execution of optimizer,
-    /// translation, and replacement choices remains lowering-dependent.
+    /// Frontend preprocessing state. Strict optimization is honored by the
+    /// native lowering path; other optimizer, translation, and replacement
+    /// choices remain lowering-dependent.
     #[serde(default)]
     pub preprocessing: PreprocessingState,
 }
@@ -140,6 +143,11 @@ pub struct PreprocessingState {
     pub suppressed_warnings: Vec<String>,
     #[serde(default)]
     pub directives: Vec<DirectiveRecord>,
+    /// Initial optimization state for each source file before its local
+    /// directives are processed. This is compiler-internal provenance and is
+    /// not part of the serialized HIR protocol.
+    #[serde(skip)]
+    pub(crate) source_file_initial_optimization: BTreeMap<u32, bool>,
 }
 
 /// A directive value plus its source provenance.

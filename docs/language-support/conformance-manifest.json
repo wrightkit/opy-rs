@@ -137,7 +137,7 @@
           "id": "directive-state",
           "claim": "Preprocessing directives have scoped state and invalid language input has a distinct frontier.",
           "probeKinds": ["contextual", "composition", "negative"],
-          "probes": ["synthetic/directives", "synthetic/include-scope", "synthetic/translations-invalid"]
+          "probes": ["synthetic/directives", "synthetic/include-scope", "synthetic/optimize-strict", "synthetic/translations-invalid"]
         },
         {
           "id": "project-level-preprocessing-failures",
@@ -152,6 +152,7 @@
         "synthetic/duplicate-rule-diagnostic",
         "synthetic/project-main-file",
         "synthetic/include-scope",
+        "synthetic/optimize-strict",
         "synthetic/directives-scoped",
         "synthetic/translations-invalid",
         "synthetic/project-entry",
@@ -310,6 +311,12 @@
           "probes": ["synthetic/wait-optimization"]
         },
         {
+          "id": "strict-optimization",
+          "claim": "Strict-sensitive expressions retain their canonical Workshop semantics when `#!optimizeStrict` is enabled.",
+          "probeKinds": ["positive", "contextual"],
+          "probes": ["synthetic/optimize-strict"]
+        },
+        {
           "id": "unsupported-lowering-boundary",
           "claim": "Known unsupported integration surfaces remain explicit negative probes rather than expected native passes.",
           "probeKinds": ["negative"],
@@ -345,6 +352,7 @@
         "synthetic/chase-keywords",
         "synthetic/settings",
         "synthetic/wait-optimization",
+        "synthetic/optimize-strict",
         "census/workshop-feature-census"
       ]
     },

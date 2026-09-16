@@ -771,17 +771,29 @@
     },
     {
       "fixture": "synthetic/include-scope",
-      "nativeStatus": "failure",
-      "classification": "unsupported",
-      "comparison": "diagnostic-code",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "compiler-contract",
       "evidence": [
         "oracle:synthetic/include-scope/oracle.json",
         "provenance:synthetic/include-scope/fixture.json"
       ],
-      "owner": "opy-rs#271",
-      "note": "The pinned oracle accepts the nested optimizeStrict directive, but opy-rs now rejects unsupported backend directives explicitly with a source-attributed diagnostic instead of silently compiling a no-op.",
-      "failureClass": "integration",
-      "diagnosticCode": "backend-directive-unsupported"
+      "owner": "opy-rs#288",
+      "note": "Strict optimization is accepted in the nested include state probe; its pass-only output remains outside the compiler parity contract."
+    },
+    {
+      "fixture": "synthetic/optimize-strict",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "semantic-wir",
+      "evidence": [
+        "oracle:synthetic/optimize-strict/oracle.json",
+        "provenance:synthetic/optimize-strict/fixture.json",
+        "test:opy-rs::compiler::integration_tests::directive_lowering::strict_optimizer_fixture_matches_the_pinned_canonical_wir"
+      ],
+      "owner": "opy-rs#288",
+      "note": "The pinned strict optimizer probe retains Add, Multiply, Divide, Or, and And expressions that non-strict OverPy optimization would rewrite.",
+      "semanticEquivalent": true
     },
     {
       "fixture": "synthetic/directives-scoped",

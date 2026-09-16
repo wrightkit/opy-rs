@@ -105,7 +105,8 @@ pub struct Preprocessed {
     pub warnings: Vec<PreprocessWarning>,
     /// The registered `#!postCompileHook` script, when declared.
     pub post_compile_hook: Option<PostCompileHook>,
-    /// Frontend-visible preprocessing state; backend effects are not run.
+    /// Frontend-visible preprocessing state; strict-sensitive lowering is
+    /// handled by the native compiler while other backend effects are not run.
     pub preprocessing: PreprocessingState,
 }
 
@@ -184,6 +185,9 @@ pub fn preprocess_with_overlay_outcome(
         warnings: Vec::new(),
         preprocessing: PreprocessingState::default(),
     };
+    pre.preprocessing
+        .source_file_initial_optimization
+        .insert(0, false);
     let mut owned_main_text = None;
     let mut source_file_id = 0;
     let first_line = main_text.lines().next().unwrap_or_default();
@@ -267,6 +271,9 @@ pub fn preprocess_with_overlay_outcome(
             path: display_path,
         });
         pre.next_file_id = 2;
+        pre.preprocessing
+            .source_file_initial_optimization
+            .insert(source_file_id, pre.preprocessing.optimization.strict);
         pre.root = new_root.clone();
         pre.display_root = new_root;
         pre.preprocessing.main_file = Some(DirectiveValue {

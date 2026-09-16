@@ -407,7 +407,13 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         &mut cases,
         "synthetic/include-scope",
         false,
-        "nested include optimization directives are retained as observable scoped state; optimizer execution remains outside opy-rs.",
+        "nested include optimization directives are retained as observable scoped state; strict-sensitive lowering is covered by the compiler compatibility contract.",
+    );
+    resolve(
+        &mut cases,
+        "synthetic/optimize-strict",
+        true,
+        "pinned strict optimizer probe retains expressions whose type-conversion semantics must not be rewritten.",
     );
     resolve(
         &mut cases,

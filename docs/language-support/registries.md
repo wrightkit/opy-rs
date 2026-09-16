@@ -74,7 +74,7 @@ contract.
 | `optimizeForSize` | ✅ Source-supported |
 | `optimizeForSizeAggressive` | ✅ Source-supported |
 | `disableOptimizeForSize` | ✅ Source-supported |
-| `optimizeStrict` | 🚧 Coming soon |
+| `optimizeStrict` | ✅ Compiler-supported |
 | `disableOptimizeStrict` | ✅ Source-supported |
 | `replace0ByCapturePercentage` | ✅ Source-supported |
 | `replace0ByPayloadProgressPercentage` | ✅ Source-supported |
