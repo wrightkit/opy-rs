@@ -150,3 +150,18 @@ fn strict_optimizer_fixture_matches_the_pinned_canonical_wir() {
     .unwrap();
     assert!(equivalent(&super::canonical_program(&artifact), &expected));
 }
+
+#[test]
+fn directory_include_inherits_strict_state_before_local_directives() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/project-preprocessing/strict-directory/src");
+    let source = std::fs::read_to_string(dir.join("main.opy")).unwrap();
+    let hir = crate::compile(&source, "main.opy", &dir).expect("fixture must resolve");
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+
+    assert!(
+        artifact
+            .emitted
+            .contains("Compare(Custom String(\"am\"), ==, Custom String(\"**\"))")
+    );
+}
