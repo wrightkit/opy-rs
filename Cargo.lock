@@ -390,9 +390,11 @@ dependencies = [
 name = "opy-rs"
 version = "0.1.41"
 dependencies = [
+ "libc",
  "libquickjs-ng-sys",
  "serde",
  "serde_json",
+ "sha2",
  "workshop-rs",
 ]
 

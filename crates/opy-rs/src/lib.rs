@@ -42,6 +42,8 @@ pub mod manifest;
 pub mod parser;
 pub mod preprocess;
 pub mod project;
+#[cfg(test)]
+pub(crate) mod resource_metrics;
 pub mod settings;
 pub mod tooling;
 

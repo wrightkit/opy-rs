@@ -16,6 +16,8 @@ pub(crate) fn cross_check_manifest(
     manifest: &Manifest,
     catalog: &Catalog,
 ) -> Result<LinkReport, IntegrationError> {
+    #[cfg(test)]
+    crate::resource_metrics::record_contract_check();
     let mut catalog_ids_checked = 0;
     let mut domains_checked = 0;
 
