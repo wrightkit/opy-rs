@@ -187,7 +187,7 @@ pub fn preprocess_with_overlay_outcome(
     };
     pre.preprocessing
         .source_file_initial_optimization
-        .insert(0, false);
+        .insert(0, pre.preprocessing.optimization.clone());
     let mut owned_main_text = None;
     let mut source_file_id = 0;
     let first_line = main_text.lines().next().unwrap_or_default();
@@ -273,7 +273,7 @@ pub fn preprocess_with_overlay_outcome(
         pre.next_file_id = 2;
         pre.preprocessing
             .source_file_initial_optimization
-            .insert(source_file_id, pre.preprocessing.optimization.strict);
+            .insert(source_file_id, pre.preprocessing.optimization.clone());
         pre.root = new_root.clone();
         pre.display_root = new_root;
         pre.preprocessing.main_file = Some(DirectiveValue {

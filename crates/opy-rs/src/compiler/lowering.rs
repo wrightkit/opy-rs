@@ -1,4 +1,5 @@
 use super::*;
+use crate::hir::OptimizationState;
 
 type ValueId = usize;
 type ActionId = usize;
@@ -741,10 +742,7 @@ impl<'a> Lowering<'a> {
             .map(|expr| self.lower_condition(expr))
             .collect::<Result<Vec<_>, _>>()?;
         let previous_conditions = self.current_rule_conditions.replace(conditions.clone());
-        let optimize_lone_if = self.hir.preprocessing.optimization.enabled
-            && self.hir.preprocessing.optimization.for_size
-            && self.hir.preprocessing.optimization.for_size_aggressive;
-        let lowered_actions = self.lower_actions(&rule.actions, None, optimize_lone_if);
+        let lowered_actions = self.lower_actions(&rule.actions, None);
         self.current_rule_conditions = previous_conditions;
         let mut actions = Vec::new();
         actions.extend(lowered_actions?);
@@ -803,7 +801,7 @@ impl<'a> Lowering<'a> {
             ));
         }
         let mut actions = Vec::new();
-        actions.extend(self.lower_actions(body, None, false)?);
+        actions.extend(self.lower_actions(body, None)?);
         let rule_index = self.program.rules.len();
         self.program.rules.push(workshop_rs::Rule {
             name: self.subroutine_rule_name(name),
@@ -1113,7 +1111,6 @@ impl<'a> Lowering<'a> {
         &mut self,
         statements: &[Stmt],
         break_target: Option<BreakTarget>,
-        optimize_lone_if: bool,
     ) -> Result<Vec<ActionId>, IntegrationError> {
         self.visible_labels.push(
             statements
@@ -1149,8 +1146,7 @@ impl<'a> Lowering<'a> {
                         if target.is_some() && conditions.is_empty() {
                             let condition = self.lower_value(&branch.condition)?;
                             let condition = self.push_call("not", vec![condition]);
-                            let body =
-                                self.lower_actions(&branch.body[1..], break_target, false)?;
+                            let body = self.lower_actions(&branch.body[1..], break_target)?;
                             let lowered = self.push_if_actions(vec![(condition, body)], None);
                             self.mark_action_origins(&lowered, *span);
                             actions.extend(lowered);
@@ -1187,7 +1183,7 @@ impl<'a> Lowering<'a> {
                 if let Some((exit_branch, exit_conditions, label, target)) = external_jump {
                     self.outer_goto_targets.push(label.clone());
                     let middle_result =
-                        self.lower_actions(&statements[index + 1..target], break_target, false);
+                        self.lower_actions(&statements[index + 1..target], break_target);
                     let middle = middle_result?;
                     self.resolve_deferred_gotos(&middle, label.as_str(), middle.len())?;
                     let distance = self.canonical_action_width(&middle, *span)?;
@@ -1200,12 +1196,12 @@ impl<'a> Lowering<'a> {
                         };
                         lowered_branches.push((
                             self.lower_value(&branch.condition)?,
-                            self.lower_actions(body, break_target, false)?,
+                            self.lower_actions(body, break_target)?,
                         ));
                     }
                     let else_body = r#else
                         .as_ref()
-                        .map(|body| self.lower_actions(body, break_target, false))
+                        .map(|body| self.lower_actions(body, break_target))
                         .transpose()?;
                     self.outer_goto_targets.pop();
                     let lowered = self.push_if_actions(lowered_branches, else_body);
@@ -1225,7 +1221,10 @@ impl<'a> Lowering<'a> {
                     continue;
                 }
             }
-            if optimize_lone_if
+            let optimization = self.optimization_state_at(statement.span());
+            if optimization.enabled
+                && optimization.for_size
+                && optimization.for_size_aggressive
                 && index + 1 == statements.len()
                 && let Stmt::If {
                     branches,
@@ -1245,7 +1244,7 @@ impl<'a> Lowering<'a> {
                         if matches!(op.as_str(), "==" | "!=" | "<" | "<=" | ">" | ">=")
                 );
                 if (is_not_condition || is_comparison) && !branch.body.is_empty() {
-                    let body = self.lower_actions(&branch.body, break_target, false)?;
+                    let body = self.lower_actions(&branch.body, break_target)?;
                     if !body.is_empty() && (is_not_condition || branch.body.len() == 1) {
                         let condition = if is_not_condition {
                             let Expr::Unary { operand, .. } = &*branch.condition else {
@@ -1283,7 +1282,7 @@ impl<'a> Lowering<'a> {
                 if let Some(target) = target {
                     self.outer_goto_targets.push(label.to_string());
                     let middle_result =
-                        self.lower_actions(&statements[index + 1..target], break_target, false);
+                        self.lower_actions(&statements[index + 1..target], break_target);
                     self.outer_goto_targets.pop();
                     let middle = middle_result?;
                     let span = statement.span().copied();
@@ -1443,13 +1442,13 @@ impl<'a> Lowering<'a> {
                     .map(|branch| {
                         Ok((
                             self.lower_value(&branch.condition)?,
-                            self.lower_actions(&branch.body, break_target, false)?,
+                            self.lower_actions(&branch.body, break_target)?,
                         ))
                     })
                     .collect::<Result<Vec<_>, IntegrationError>>()?;
                 let else_body = r#else
                     .as_ref()
-                    .map(|body| self.lower_actions(body, break_target, false))
+                    .map(|body| self.lower_actions(body, break_target))
                     .transpose()?;
                 Ok(self.push_if_actions(branches, else_body))
             }
@@ -4914,8 +4913,12 @@ impl<'a> Lowering<'a> {
     }
 
     fn strict_optimization_active(&self, expr: &Expr) -> bool {
-        let Some(span) = expr.span() else {
-            return self.hir.preprocessing.optimization.strict;
+        self.optimization_state_at(expr.span()).strict
+    }
+
+    fn optimization_state_at(&self, span: Option<&HirSpan>) -> OptimizationState {
+        let Some(span) = span else {
+            return self.hir.preprocessing.optimization.clone();
         };
         let mut active = None;
         for directive in &self.hir.preprocessing.directives {
@@ -4929,20 +4932,20 @@ impl<'a> Lowering<'a> {
                 || (directive_span.start.line == span.start.line
                     && directive_span.start.col <= span.start.col)
             {
-                active = Some(directive.state.optimization.strict);
+                active = Some(directive.state.optimization.clone());
             } else {
                 break;
             }
         }
-        if let Some(active) = active {
-            return active;
-        }
-        self.hir
-            .preprocessing
-            .source_file_initial_optimization
-            .get(&span.file)
-            .copied()
-            .unwrap_or(self.hir.preprocessing.optimization.strict)
+        active
+            .or_else(|| {
+                self.hir
+                    .preprocessing
+                    .source_file_initial_optimization
+                    .get(&span.file)
+                    .cloned()
+            })
+            .unwrap_or_else(|| self.hir.preprocessing.optimization.clone())
     }
 
     fn lower_array_callback(

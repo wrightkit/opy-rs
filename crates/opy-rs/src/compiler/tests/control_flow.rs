@@ -134,6 +134,22 @@ fn aggressive_size_optimization_lowers_a_tail_comparison_to_skip_if() {
 }
 
 #[test]
+fn aggressive_size_optimization_respects_directive_boundaries() {
+    let source = "globalvar g\nrule \"before\":\n    @Event global\n    if g == 1:\n        g = 2\n#!optimizeForSize\n#!optimizeForSizeAggressive\nrule \"after\":\n    @Event global\n    if g == 1:\n        g = 2\n#!disableOptimizations\nrule \"disabled\":\n    @Event global\n    if g == 1:\n        g = 2\n";
+    let hir = crate::compile(source, "source.opy", Path::new(".")).unwrap();
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+
+    assert_eq!(artifact.emitted.matches("Skip If(").count(), 1);
+    assert_eq!(
+        artifact
+            .emitted
+            .matches("If(Compare(Global.g, ==, 1));")
+            .count(),
+        2
+    );
+}
+
+#[test]
 fn do_while_break_shapes_match_the_pinned_oracle() {
     assert_native_wir_equivalent("do-while-break");
 }
