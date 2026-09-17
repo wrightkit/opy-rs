@@ -3551,15 +3551,6 @@ impl<'a> Lowering<'a> {
             let args = self.normalize_contextual_arguments("createDummyBot", lowered);
             return Ok(self.push_call_action_with_spans("createDummyBot", &args, spans));
         }
-        let catalog_id = function.catalog_id.as_ref().ok_or_else(|| {
-            self.unsupported(
-                format!(
-                    "action '{}' requires a special lowering not in #46",
-                    function.id
-                ),
-                span,
-            )
-        })?;
         let spans = args
             .iter()
             .map(|expr| expr.span().copied())
@@ -3568,9 +3559,31 @@ impl<'a> Lowering<'a> {
             .iter()
             .map(|expr| self.lower_value(expr))
             .collect::<Result<Vec<_>, _>>()?;
+        let catalog_id = if function.id == "stopChasingVariable" {
+            match args.first().map(|value| self.value(*value)) {
+                Some(Value::GlobalVariable(_)) => "stopChasingGlobalVariable",
+                Some(Value::PlayerVariable { .. }) => "stopChasingPlayerVariable",
+                _ => {
+                    return Err(self.unsupported(
+                        "stopChasingVariable requires a global or player variable",
+                        span,
+                    ));
+                }
+            }
+        } else {
+            function.catalog_id.as_deref().ok_or_else(|| {
+                self.unsupported(
+                    format!(
+                        "action '{}' requires a special lowering not in #46",
+                        function.id
+                    ),
+                    span,
+                )
+            })?
+        };
         let mut args = self.normalize_catalog_argument_domains(catalog_id, args);
         self.optimize_wait_duration(catalog_id, &mut args);
-        Ok(self.push_call_action_with_spans(catalog_id.clone(), &args, spans))
+        Ok(self.push_call_action_with_spans(catalog_id, &args, spans))
     }
 
     fn optimize_wait_duration(&mut self, catalog_id: &str, args: &mut [ValueId]) {

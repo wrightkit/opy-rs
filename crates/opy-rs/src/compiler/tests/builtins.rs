@@ -305,6 +305,16 @@ rule "builtin surface":
 }
 
 #[test]
+fn stop_chasing_variable_dispatches_by_variable_kind() {
+    let source = "globalvar g\nplayervar p\nrule \"r\":\n    @Event eachPlayer\n    stopChasingVariable(g)\n    stopChasingVariable(eventPlayer.p)\n";
+    let hir = crate::compile(source, "stop-chasing.opy", Path::new(".")).unwrap();
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+
+    assert!(artifact.emitted.contains("Stop Chasing Global Variable"));
+    assert!(artifact.emitted.contains("Stop Chasing Player Variable"));
+}
+
+#[test]
 fn builtin_alias_preserves_source_identity_and_canonical_target() {
     let source = "globalvar value\nrule \"r\":\n    @Event global\n    @Condition horizontalAngleFromDirection(vect(1, 0, 0)) == 90\n    value = 1\n";
     let hir = crate::compile(source, "source.opy", Path::new(".")).expect("alias must resolve");
