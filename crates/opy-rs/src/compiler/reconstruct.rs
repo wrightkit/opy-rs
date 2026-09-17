@@ -1097,7 +1097,7 @@ impl<'a> Emitter<'a> {
                 self.emit_value(value);
                 self.out.push_str(")\n");
             }
-            ModifyOp::RemoveFromArray => {
+            ModifyOp::RemoveFromArrayByValue => {
                 self.issue(
                     "unsupported-modify-op",
                     "Modify ... Remove From Array is outside the reconstruction surface \
