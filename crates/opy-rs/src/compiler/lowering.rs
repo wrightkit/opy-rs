@@ -2855,7 +2855,7 @@ impl<'a> Lowering<'a> {
                 true_as_number: true,
                 ..Default::default()
             },
-            ModifyOp::AppendToArray | ModifyOp::RemoveFromArray => ParamCoercions {
+            ModifyOp::AppendToArray | ModifyOp::RemoveFromArrayByValue => ParamCoercions {
                 zero_as_null: true,
                 ..Default::default()
             },
@@ -2883,7 +2883,7 @@ impl<'a> Lowering<'a> {
             "max" => Some(ModifyOp::Max),
             "raiseToPower" => Some(ModifyOp::RaiseToPower),
             "appendToArray" => Some(ModifyOp::AppendToArray),
-            "removeFromArray" | "removeFromArrayByValue" => Some(ModifyOp::RemoveFromArray),
+            "removeFromArray" | "removeFromArrayByValue" => Some(ModifyOp::RemoveFromArrayByValue),
             "removeFromArrayByIndex" => Some(ModifyOp::RemoveFromArrayByIndex),
             _ => None,
         }
@@ -3776,7 +3776,7 @@ impl<'a> Lowering<'a> {
             let op = if function.id == "append" {
                 ModifyOp::AppendToArray
             } else {
-                ModifyOp::RemoveFromArray
+                ModifyOp::RemoveFromArrayByValue
             };
             let value_span = value.span().copied();
             let value = self.lower_value(value)?;
