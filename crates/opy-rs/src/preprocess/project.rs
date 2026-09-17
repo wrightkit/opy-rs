@@ -174,7 +174,7 @@ impl Preprocessor {
         self.next_file_id += 1;
         self.preprocessing
             .source_file_initial_optimization
-            .insert(file_id, self.preprocessing.optimization.strict);
+            .insert(file_id, self.preprocessing.optimization.clone());
         self.source_texts.insert(file_id, text.clone());
         self.files.push(FileRecord {
             id: file_id,

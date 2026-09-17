@@ -133,6 +133,9 @@ rule "builtin surface":
     eventPlayer.addToScore(1)
     g = max(1, 2)
     g = getLastCreatedEntity()
+    g = getLastCreatedText()
+    g = isInLoS(eventPlayer, eventPlayer)
+    g = isInLoS(eventPlayer, eventPlayer, true)
     g = worldVector(Vector.LEFT, eventPlayer, Transform.ROTATION)
     g = worldVector(Vector.LEFT, eventPlayer, Transform.ROTATION).x
     g = worldVector(Vector.LEFT, eventPlayer, Transform.ROTATION).y
@@ -223,6 +226,8 @@ rule "builtin surface":
         "getUltCharge",
         "max",
         "lastCreatedEntity",
+        "lastTextId",
+        "isInLoS",
         "charAt",
         "__xComponentOf__",
         "__yComponentOf__",
@@ -286,10 +291,27 @@ rule "builtin surface":
     assert!(artifact.emitted.contains("Wrecking Ball"));
     assert!(artifact.emitted.contains("Declare Team Victory"));
     assert!(artifact.emitted.contains("Stop Chasing Global Variable"));
+    assert!(
+        artifact
+            .emitted
+            .matches("Barriers Do Not Block LOS")
+            .count()
+            >= 2
+    );
     assert!(artifact.emitted.contains("Big Message"));
     assert!(artifact.emitted.contains("Small Message"));
     assert!(artifact.emitted.contains("Wait Until"));
     assert_eq!(artifact.emitted.matches("Create HUD Text").count(), 6);
+}
+
+#[test]
+fn stop_chasing_variable_dispatches_by_variable_kind() {
+    let source = "globalvar g\nplayervar p\nrule \"r\":\n    @Event eachPlayer\n    stopChasingVariable(g)\n    stopChasingVariable(eventPlayer.p)\n";
+    let hir = crate::compile(source, "stop-chasing.opy", Path::new(".")).unwrap();
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+
+    assert!(artifact.emitted.contains("Stop Chasing Global Variable"));
+    assert!(artifact.emitted.contains("Stop Chasing Player Variable"));
 }
 
 #[test]

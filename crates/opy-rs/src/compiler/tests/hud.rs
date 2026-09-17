@@ -123,3 +123,17 @@ fn other_hud_helpers_lower_to_their_canonical_text_slots() {
         ));
     }
 }
+
+#[test]
+fn hud_helpers_keep_existing_formatted_text_calls_flat() {
+    let source = "rule \"r\":\n    @Event global\n    hudHeader(getAllPlayers(), \"value: {}\".format(1), HudPosition.TOP, 0, Color.WHITE, HudReeval.VISIBILITY, SpecVisibility.DEFAULT)\n";
+    let hir = crate::compile(source, "source.opy", Path::new(".")).unwrap();
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+
+    assert!(
+        artifact
+            .emitted
+            .contains("Custom String(\"value: 1\"), Null, Null, Top")
+    );
+    assert!(!artifact.emitted.contains("Custom String(Custom String("));
+}

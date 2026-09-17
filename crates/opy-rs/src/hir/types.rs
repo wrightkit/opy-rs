@@ -147,7 +147,7 @@ pub struct PreprocessingState {
     /// directives are processed. This is compiler-internal provenance and is
     /// not part of the serialized HIR protocol.
     #[serde(skip)]
-    pub(crate) source_file_initial_optimization: BTreeMap<u32, bool>,
+    pub(crate) source_file_initial_optimization: BTreeMap<u32, OptimizationState>,
 }
 
 /// A directive value plus its source provenance.
