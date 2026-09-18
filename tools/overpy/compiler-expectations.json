@@ -191,6 +191,20 @@
       "semanticEquivalent": true
     },
     {
+      "fixture": "synthetic/conditional-forward-gotos",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "semantic-wir",
+      "evidence": [
+        "oracle:synthetic/conditional-forward-gotos/oracle.json",
+        "provenance:synthetic/conditional-forward-gotos/fixture.json",
+        "test:opy-rs::compiler::integration_tests::control_flow::conditional_forward_gotos_match_the_pinned_oracle"
+      ],
+      "owner": "opy-rs#319",
+      "note": "Conditional forward gotos preserve pinned OverPy branch structure, full structured-action distances, and single condition evaluation.",
+      "semanticEquivalent": true
+    },
+    {
       "fixture": "synthetic/switch-order",
       "nativeStatus": "success",
       "classification": "match",

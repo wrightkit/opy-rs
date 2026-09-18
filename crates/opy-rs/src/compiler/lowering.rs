@@ -100,8 +100,7 @@ pub(crate) struct Lowering<'a> {
     array_bindings: Vec<ArrayBinding>,
     current_rule_conditions: Option<Vec<ValueId>>,
     visible_labels: Vec<HashSet<String>>,
-    deferred_gotos: Vec<(ActionId, String, Option<HirSpan>)>,
-    outer_goto_targets: Vec<String>,
+    deferred_gotos: Vec<(ActionId, String, Option<HirSpan>, usize)>,
 }
 
 #[derive(Debug, Clone)]
@@ -164,6 +163,32 @@ fn pure_goto_conditions(statement: &Stmt) -> Option<(Vec<&Expr>, &str)> {
         }
         _ => None,
     }
+}
+
+fn direct_conditional_goto(statement: &Stmt) -> Option<(&Expr, &str, Option<HirSpan>)> {
+    let Stmt::If {
+        branches,
+        r#else: None,
+        span,
+    } = statement
+    else {
+        return None;
+    };
+    let [branch] = branches.as_slice() else {
+        return None;
+    };
+    let [
+        Stmt::Goto {
+            label: Some(label),
+            offset: None,
+            rule_start: false,
+            ..
+        },
+    ] = branch.body.as_slice()
+    else {
+        return None;
+    };
+    Some((&branch.condition, label.as_str(), *span))
 }
 
 fn contains_loop_continue(statement: &Stmt) -> bool {
@@ -229,7 +254,6 @@ impl<'a> Lowering<'a> {
             current_rule_conditions: None,
             visible_labels: Vec::new(),
             deferred_gotos: Vec::new(),
-            outer_goto_targets: Vec::new(),
         })
     }
 
@@ -1127,100 +1151,6 @@ impl<'a> Lowering<'a> {
         let mut index = 0;
         while index < statements.len() {
             let statement = &statements[index];
-            if let Stmt::If {
-                branches,
-                r#else,
-                span,
-            } = statement
-            {
-                if branches.len() == 1 && r#else.is_none() {
-                    let branch = &branches[0];
-                    if let Some((conditions, label)) =
-                        branch.body.first().and_then(pure_goto_conditions)
-                    {
-                        let target = statements[index + 1..]
-                            .iter()
-                            .position(|candidate| {
-                                matches!(candidate, Stmt::Label { name, .. } if name == label)
-                            });
-                        if target.is_some() && conditions.is_empty() {
-                            let condition = self.lower_value(&branch.condition)?;
-                            let condition = self.push_call("not", vec![condition]);
-                            let body = self.lower_actions(&branch.body[1..], break_target)?;
-                            let lowered = self.push_if_actions(vec![(condition, body)], None);
-                            self.mark_action_origins(&lowered, *span);
-                            actions.extend(lowered);
-                            index += 1;
-                            continue;
-                        }
-                    }
-                }
-                let external_jump =
-                    branches
-                        .iter()
-                        .enumerate()
-                        .find_map(|(branch_index, branch)| {
-                            let (conditions, label) = pure_goto_conditions(branch.body.last()?)?;
-                            let target = statements[index + 1..]
-                                .iter()
-                                .position(|candidate| {
-                                    matches!(candidate, Stmt::Label { name, .. } if name == label)
-                                })
-                                .map(|offset| index + 1 + offset)
-                                .or_else(|| {
-                                    self.outer_goto_targets
-                                        .last()
-                                        .is_some_and(|target| target == label)
-                                        .then_some(statements.len())
-                                })?;
-                            Some((
-                                branch_index,
-                                conditions.into_iter().cloned().collect::<Vec<_>>(),
-                                label.to_string(),
-                                target,
-                            ))
-                        });
-                if let Some((exit_branch, exit_conditions, label, target)) = external_jump {
-                    self.outer_goto_targets.push(label.clone());
-                    let middle_result =
-                        self.lower_actions(&statements[index + 1..target], break_target);
-                    let middle = middle_result?;
-                    self.resolve_deferred_gotos(&middle, label.as_str(), middle.len())?;
-                    let distance = self.canonical_action_width(&middle, *span)?;
-                    let mut lowered_branches = Vec::with_capacity(branches.len());
-                    for (branch_index, branch) in branches.iter().enumerate() {
-                        let body = if branch_index == exit_branch {
-                            &branch.body[..branch.body.len() - 1]
-                        } else {
-                            &branch.body[..]
-                        };
-                        lowered_branches.push((
-                            self.lower_value(&branch.condition)?,
-                            self.lower_actions(body, break_target)?,
-                        ));
-                    }
-                    let else_body = r#else
-                        .as_ref()
-                        .map(|body| self.lower_actions(body, break_target))
-                        .transpose()?;
-                    self.outer_goto_targets.pop();
-                    let lowered = self.push_if_actions(lowered_branches, else_body);
-                    self.mark_action_origins(&lowered, *span);
-                    actions.extend(lowered);
-                    let mut condition = self.lower_value(&branches[exit_branch].condition)?;
-                    for expression in exit_conditions {
-                        let right = self.lower_value(&expression)?;
-                        condition = self.push_call("and", vec![condition, right]);
-                    }
-                    let distance_value = self.push_number(distance as f64, &distance.to_string());
-                    let skip = self.push_call_action("skipIf", &[condition, distance_value]);
-                    self.mark_action_origins(std::slice::from_ref(&skip), *span);
-                    actions.push(skip);
-                    actions.extend(middle);
-                    index = target + 1;
-                    continue;
-                }
-            }
             let optimization = self.optimization_state_at(statement.span());
             if optimization.enabled
                 && optimization.for_size
@@ -1266,58 +1196,24 @@ impl<'a> Lowering<'a> {
                     }
                 }
             }
-            if let Some((conditions, label)) = pure_goto_conditions(statement) {
-                let target = statements[index + 1..]
+            if let Some((condition, label, span)) = direct_conditional_goto(statement)
+                && self
+                    .visible_labels
                     .iter()
-                    .position(
-                        |candidate| matches!(candidate, Stmt::Label { name, .. } if name == label),
-                    )
-                    .map(|offset| index + 1 + offset)
-                    .or_else(|| {
-                        self.outer_goto_targets
-                            .last()
-                            .is_some_and(|target| target == label)
-                            .then_some(statements.len())
-                    });
-                if let Some(target) = target {
-                    self.outer_goto_targets.push(label.to_string());
-                    let middle_result =
-                        self.lower_actions(&statements[index + 1..target], break_target);
-                    self.outer_goto_targets.pop();
-                    let middle = middle_result?;
-                    let span = statement.span().copied();
-                    self.resolve_deferred_gotos(&middle, label, middle.len())?;
-                    let distance = self.canonical_action_width(&middle, span)?;
-                    let mut args = Vec::with_capacity(conditions.len() + 1);
-                    if let Some((first, rest)) = conditions.split_first() {
-                        let mut condition = self.lower_value(first)?;
-                        for expression in rest {
-                            let right = self.lower_value(expression)?;
-                            condition = self.push_call("and", vec![condition, right]);
-                        }
-                        args.push(condition);
-                    }
-                    args.push(self.push_number(distance as f64, &distance.to_string()));
-                    let skip = self.push_call_action(
-                        if conditions.is_empty() {
-                            "skip"
-                        } else {
-                            "skipIf"
-                        },
-                        &args,
-                    );
-                    self.mark_action_origins(
-                        std::slice::from_ref(&skip),
-                        statement.span().copied(),
-                    );
-                    actions.push(skip);
-                    actions.extend(middle);
-                    index = target + 1;
-                    continue;
-                }
+                    .any(|labels| labels.iter().any(|candidate| candidate == label))
+            {
+                let condition = self.lower_value(condition)?;
+                let placeholder = self.push_number(0.0, "0");
+                let skip = self.push_call_action("skipIf", &[condition, placeholder]);
+                self.mark_action_origins(std::slice::from_ref(&skip), span);
+                actions.push(skip);
+                self.deferred_gotos.push((skip, label.to_string(), span, 1));
+                index += 1;
+                continue;
             }
             match statement {
                 Stmt::Label { name, .. } => {
+                    self.resolve_deferred_gotos(&actions, name, actions.len())?;
                     labels.insert(name.clone(), actions.len());
                 }
                 Stmt::Goto {
@@ -1362,7 +1258,7 @@ impl<'a> Lowering<'a> {
                         .iter()
                         .any(|labels| labels.contains(&label))
                     {
-                        self.deferred_gotos.push((action, label, span));
+                        self.deferred_gotos.push((action, label, span, 0));
                         continue;
                     }
                     return Err(self.unsupported(format!("unknown goto label '{label}'"), span));
@@ -1380,7 +1276,7 @@ impl<'a> Lowering<'a> {
             args[0] = distance;
         }
         if self.visible_labels.len() == 1 && !self.deferred_gotos.is_empty() {
-            let (_, label, span) = self.deferred_gotos.remove(0);
+            let (_, label, span, _) = self.deferred_gotos.remove(0);
             return Err(self.unsupported(format!("unknown goto label '{label}'"), span));
         }
         self.visible_labels.pop();
@@ -1395,13 +1291,13 @@ impl<'a> Lowering<'a> {
     ) -> Result<(), IntegrationError> {
         let deferred = std::mem::take(&mut self.deferred_gotos);
         let mut remaining = Vec::new();
-        for (action, deferred_label, span) in deferred {
+        for (action, deferred_label, span, argument) in deferred {
             if deferred_label != label {
-                remaining.push((action, deferred_label, span));
+                remaining.push((action, deferred_label, span, argument));
                 continue;
             }
             let Some(position) = actions.iter().position(|candidate| *candidate == action) else {
-                remaining.push((action, deferred_label, span));
+                remaining.push((action, deferred_label, span, argument));
                 continue;
             };
             if target < position {
@@ -1409,12 +1305,16 @@ impl<'a> Lowering<'a> {
                     self.unsupported("backward goto is not representable in canonical WIR", span)
                 );
             }
-            let width = self.canonical_action_width(&actions[position + 1..target], span)?;
+            // A deferred goto may sit inside a structured action, so this
+            // slice is not necessarily a standalone valid action sequence.
+            // The flat lowering stream has one action id per native action,
+            // including the structural markers that the jump must cross.
+            let width = actions[position + 1..target].len();
             let distance = self.push_number(width as f64, &width.to_string());
             let Some(Action::Call { args, .. }) = self.actions.get_mut(action) else {
                 unreachable!("deferred goto placeholder must be a call action")
             };
-            args[0] = distance;
+            args[argument] = distance;
         }
         self.deferred_gotos = remaining;
         Ok(())

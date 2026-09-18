@@ -150,6 +150,81 @@ fn aggressive_size_optimization_respects_directive_boundaries() {
 }
 
 #[test]
+fn conditional_forward_gotos_lower_to_single_evaluation_skips() {
+    let source = r#"
+globalvar state
+
+rule "conditional goto":
+    @Event global
+    if state == 1:
+        goto done
+    state = 2
+    done:
+    state = 3
+
+rule "nested conditional goto":
+    @Event global
+    if state == 1:
+        if state == 2:
+            goto nested_done
+    state = 4
+    nested_done:
+    state = 5
+
+rule "conditional goto with else":
+    @Event global
+    if state == 1:
+        goto else_done
+    else:
+        state = 6
+    state = 7
+    else_done:
+    state = 8
+
+rule "conditional goto after mutation":
+    @Event global
+    if state == 1:
+        state = 2
+        goto mutated_done
+    state = 3
+    mutated_done:
+    state = 4
+
+rule "leading goto with tail":
+    @Event global
+    if state == 1:
+        goto leading_done
+        state = 9
+    leading_done:
+    state = 10
+"#;
+    let hir = crate::compile(source, "source.opy", Path::new(".")).unwrap();
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+
+    assert!(artifact.emitted.contains(
+        "Skip If(Compare(Global.state, ==, 1), 1);\n        Set Global Variable(state, 2);\n        Set Global Variable(state, 3);"
+    ));
+    assert!(artifact.emitted.contains(
+        "If(Compare(Global.state, ==, 1));\n            Skip If(Compare(Global.state, ==, 2), 2);\n        End;\n        Set Global Variable(state, 4);\n        Set Global Variable(state, 5);"
+    ));
+    assert!(artifact.emitted.contains(
+        "If(Compare(Global.state, ==, 1));\n            Skip(4);\n        Else;\n            Set Global Variable(state, 6);\n        End;\n        Set Global Variable(state, 7);\n        Set Global Variable(state, 8);"
+    ));
+    assert!(artifact.emitted.contains(
+        "If(Compare(Global.state, ==, 1));\n            Set Global Variable(state, 2);\n            Skip(2);\n        End;\n        Set Global Variable(state, 3);\n        Set Global Variable(state, 4);"
+    ));
+    assert!(artifact.emitted.contains(
+        "If(Compare(Global.state, ==, 1));\n            Skip(2);\n            Set Global Variable(state, 9);\n        End;\n        Set Global Variable(state, 10);"
+    ));
+    assert_eq!(artifact.emitted.matches("Skip If(").count(), 2);
+}
+
+#[test]
+fn conditional_forward_gotos_match_the_pinned_oracle() {
+    assert_native_wir_equivalent("conditional-forward-gotos");
+}
+
+#[test]
 fn do_while_break_shapes_match_the_pinned_oracle() {
     assert_native_wir_equivalent("do-while-break");
 }

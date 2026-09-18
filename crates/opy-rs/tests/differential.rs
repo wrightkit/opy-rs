@@ -291,6 +291,12 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
     );
     resolve(
         &mut cases,
+        "synthetic/conditional-forward-gotos",
+        true,
+        "Issue #319 oracle-backed forward-goto probe; branch structure, action distances, and condition evaluation remain aligned with the pinned oracle.",
+    );
+    resolve(
+        &mut cases,
         "synthetic/switch-break-unsupported",
         true,
         "Issue #47 probe; nested conditional switch-break lowering preserves the upstream Else marker, and a top-level switch with no observable actions is elided like OverPy.",
