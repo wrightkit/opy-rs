@@ -181,6 +181,15 @@ rule "conditional goto with else":
     else_done:
     state = 8
 
+rule "conditional goto after mutation":
+    @Event global
+    if state == 1:
+        state = 2
+        goto mutated_done
+    state = 3
+    mutated_done:
+    state = 4
+
 rule "leading goto with tail":
     @Event global
     if state == 1:
@@ -196,15 +205,23 @@ rule "leading goto with tail":
         "Skip If(Compare(Global.state, ==, 1), 1);\n        Set Global Variable(state, 2);\n        Set Global Variable(state, 3);"
     ));
     assert!(artifact.emitted.contains(
-        "Skip If(And(Compare(Global.state, ==, 1), Compare(Global.state, ==, 2)), 1);\n        Set Global Variable(state, 4);\n        Set Global Variable(state, 5);"
+        "If(Compare(Global.state, ==, 1));\n            Skip If(Compare(Global.state, ==, 2), 2);\n        End;\n        Set Global Variable(state, 4);\n        Set Global Variable(state, 5);"
     ));
     assert!(artifact.emitted.contains(
-        "If(Compare(Global.state, ==, 1));\n            Skip(1);\n        Else;\n            Set Global Variable(state, 6);\n        End;\n        Set Global Variable(state, 7);\n        Set Global Variable(state, 8);"
+        "If(Compare(Global.state, ==, 1));\n            Skip(4);\n        Else;\n            Set Global Variable(state, 6);\n        End;\n        Set Global Variable(state, 7);\n        Set Global Variable(state, 8);"
     ));
     assert!(artifact.emitted.contains(
-        "Skip If(Compare(Global.state, ==, 1), 1);\n        Set Global Variable(state, 9);\n        Set Global Variable(state, 10);"
+        "If(Compare(Global.state, ==, 1));\n            Set Global Variable(state, 2);\n            Skip(2);\n        End;\n        Set Global Variable(state, 3);\n        Set Global Variable(state, 4);"
     ));
-    assert_eq!(artifact.emitted.matches("Skip If(").count(), 3);
+    assert!(artifact.emitted.contains(
+        "If(Compare(Global.state, ==, 1));\n            Skip(2);\n            Set Global Variable(state, 9);\n        End;\n        Set Global Variable(state, 10);"
+    ));
+    assert_eq!(artifact.emitted.matches("Skip If(").count(), 2);
+}
+
+#[test]
+fn conditional_forward_gotos_match_the_pinned_oracle() {
+    assert_native_wir_equivalent("conditional-forward-gotos");
 }
 
 #[test]

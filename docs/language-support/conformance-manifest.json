@@ -76,7 +76,7 @@
           "id": "branches-loops-and-switches",
           "claim": "Branches, loops, switch ordering, and break shapes are parsed distinctly.",
           "probeKinds": ["positive", "contextual", "negative"],
-          "probes": ["synthetic/control-flow", "synthetic/control-flow-lowering", "synthetic/do-while-invalid", "synthetic/do-while-break", "synthetic/switch-order", "synthetic/switch-structured-target", "synthetic/switch-break", "synthetic/for-range-agentlab"]
+          "probes": ["synthetic/control-flow", "synthetic/control-flow-lowering", "synthetic/conditional-forward-gotos", "synthetic/do-while-invalid", "synthetic/do-while-break", "synthetic/switch-order", "synthetic/switch-structured-target", "synthetic/switch-break", "synthetic/for-range-agentlab"]
         },
         {
           "id": "lambda-and-postfix-context",
@@ -98,6 +98,7 @@
         "synthetic/lambda-invalid",
         "synthetic/switch-break",
         "synthetic/control-flow-lowering",
+        "synthetic/conditional-forward-gotos",
         "synthetic/do-while-invalid",
         "synthetic/do-while-break",
         "synthetic/switch-order",
@@ -284,7 +285,7 @@
           "id": "control-flow-lowering",
           "claim": "Control-flow lowering preserves loop and switch structure in canonical WIR.",
           "probeKinds": ["positive", "contextual"],
-          "probes": ["synthetic/control-flow-lowering", "synthetic/do-while-break", "synthetic/switch-order", "synthetic/switch-structured-target"]
+          "probes": ["synthetic/control-flow-lowering", "synthetic/conditional-forward-gotos", "synthetic/do-while-break", "synthetic/switch-order", "synthetic/switch-structured-target"]
         },
         {
           "id": "catalog-backed-calls",
@@ -336,6 +337,7 @@
         "synthetic/primitive-lowering",
         "synthetic/dictionary-lookup",
         "synthetic/control-flow-lowering",
+        "synthetic/conditional-forward-gotos",
         "synthetic/do-while-break",
         "synthetic/switch-order",
         "synthetic/switch-structured-target",
