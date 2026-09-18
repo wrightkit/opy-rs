@@ -1135,22 +1135,38 @@ impl<'a> Lowering<'a> {
             {
                 if branches.len() == 1 && r#else.is_none() {
                     let branch = &branches[0];
-                    if let Some((conditions, label)) =
+                    if let Some((goto_conditions, label)) =
                         branch.body.first().and_then(pure_goto_conditions)
                     {
                         let target = statements[index + 1..]
                             .iter()
                             .position(|candidate| {
                                 matches!(candidate, Stmt::Label { name, .. } if name == label)
-                            });
-                        if target.is_some() && conditions.is_empty() {
-                            let condition = self.lower_value(&branch.condition)?;
-                            let condition = self.push_call("not", vec![condition]);
-                            let body = self.lower_actions(&branch.body[1..], break_target)?;
-                            let lowered = self.push_if_actions(vec![(condition, body)], None);
-                            self.mark_action_origins(&lowered, *span);
-                            actions.extend(lowered);
-                            index += 1;
+                            })
+                            .map(|offset| index + 1 + offset);
+                        if let Some(target) = target {
+                            let branch_tail =
+                                self.lower_actions(&branch.body[1..], break_target)?;
+                            self.outer_goto_targets.push(label.to_string());
+                            let middle_result =
+                                self.lower_actions(&statements[index + 1..target], break_target);
+                            self.outer_goto_targets.pop();
+                            let middle = middle_result?;
+                            self.resolve_deferred_gotos(&middle, label, middle.len())?;
+                            let distance = self.canonical_action_width(&branch_tail, *span)?
+                                + self.canonical_action_width(&middle, *span)?;
+                            let mut condition = self.lower_value(&branch.condition)?;
+                            for expression in goto_conditions {
+                                let right = self.lower_value(expression)?;
+                                condition = self.push_call("and", vec![condition, right]);
+                            }
+                            let distance = self.push_number(distance as f64, &distance.to_string());
+                            let skip = self.push_call_action("skipIf", &[condition, distance]);
+                            self.mark_action_origins(std::slice::from_ref(&skip), *span);
+                            actions.push(skip);
+                            actions.extend(branch_tail);
+                            actions.extend(middle);
+                            index = target + 1;
                             continue;
                         }
                     }
@@ -1160,6 +1176,9 @@ impl<'a> Lowering<'a> {
                         .iter()
                         .enumerate()
                         .find_map(|(branch_index, branch)| {
+                            if r#else.is_none() && branches.len() == 1 && branch.body.len() == 1 {
+                                return None;
+                            }
                             let (conditions, label) = pure_goto_conditions(branch.body.last()?)?;
                             let target = statements[index + 1..]
                                 .iter()
@@ -1187,6 +1206,7 @@ impl<'a> Lowering<'a> {
                     let middle = middle_result?;
                     self.resolve_deferred_gotos(&middle, label.as_str(), middle.len())?;
                     let distance = self.canonical_action_width(&middle, *span)?;
+                    let inline_jump = branches[exit_branch].body.len() == 1;
                     let mut lowered_branches = Vec::with_capacity(branches.len());
                     for (branch_index, branch) in branches.iter().enumerate() {
                         let body = if branch_index == exit_branch {
@@ -1194,10 +1214,33 @@ impl<'a> Lowering<'a> {
                         } else {
                             &branch.body[..]
                         };
-                        lowered_branches.push((
-                            self.lower_value(&branch.condition)?,
-                            self.lower_actions(body, break_target)?,
-                        ));
+                        let mut lowered_body = self.lower_actions(body, break_target)?;
+                        if inline_jump && branch_index == exit_branch {
+                            let mut args = Vec::with_capacity(exit_conditions.len() + 1);
+                            if let Some((first, rest)) = exit_conditions.split_first() {
+                                let mut condition = self.lower_value(first)?;
+                                for expression in rest {
+                                    let right = self.lower_value(expression)?;
+                                    condition = self.push_call("and", vec![condition, right]);
+                                }
+                                args.push(condition);
+                            }
+                            args.push(self.push_number(distance as f64, &distance.to_string()));
+                            let skip = self.push_call_action(
+                                if exit_conditions.is_empty() {
+                                    "skip"
+                                } else {
+                                    "skipIf"
+                                },
+                                &args,
+                            );
+                            self.mark_action_origins(
+                                std::slice::from_ref(&skip),
+                                span.map(Into::into),
+                            );
+                            lowered_body.push(skip);
+                        }
+                        lowered_branches.push((self.lower_value(&branch.condition)?, lowered_body));
                     }
                     let else_body = r#else
                         .as_ref()
@@ -1207,15 +1250,18 @@ impl<'a> Lowering<'a> {
                     let lowered = self.push_if_actions(lowered_branches, else_body);
                     self.mark_action_origins(&lowered, *span);
                     actions.extend(lowered);
-                    let mut condition = self.lower_value(&branches[exit_branch].condition)?;
-                    for expression in exit_conditions {
-                        let right = self.lower_value(&expression)?;
-                        condition = self.push_call("and", vec![condition, right]);
+                    if !inline_jump {
+                        let mut condition = self.lower_value(&branches[exit_branch].condition)?;
+                        for expression in exit_conditions {
+                            let right = self.lower_value(&expression)?;
+                            condition = self.push_call("and", vec![condition, right]);
+                        }
+                        let distance_value =
+                            self.push_number(distance as f64, &distance.to_string());
+                        let skip = self.push_call_action("skipIf", &[condition, distance_value]);
+                        self.mark_action_origins(std::slice::from_ref(&skip), *span);
+                        actions.push(skip);
                     }
-                    let distance_value = self.push_number(distance as f64, &distance.to_string());
-                    let skip = self.push_call_action("skipIf", &[condition, distance_value]);
-                    self.mark_action_origins(std::slice::from_ref(&skip), *span);
-                    actions.push(skip);
                     actions.extend(middle);
                     index = target + 1;
                     continue;
@@ -1318,6 +1364,7 @@ impl<'a> Lowering<'a> {
             }
             match statement {
                 Stmt::Label { name, .. } => {
+                    self.resolve_deferred_gotos(&actions, name, actions.len())?;
                     labels.insert(name.clone(), actions.len());
                 }
                 Stmt::Goto {
