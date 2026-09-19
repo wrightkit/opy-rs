@@ -438,7 +438,11 @@
       "source": "src/compiler/tokenizer.ts",
       "fingerprint": {
         "algorithm": "sha256",
-        "value": "c041bf8a5bb012cf003b3aab3e0eebb301bbaad6bff56977f602186705d72f81"
+        "value": "8c1bf66c74b0302b3d2d1381c7c97fd8c24b0fddd40f9693abfe4cac405baa93"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^OverPyCompiler\\.prototype\\.tokenize = function\\(content: string\\): LogicalLine\\[\\] \\{$"
       }
     },
     {
@@ -446,7 +450,11 @@
       "source": "src/compiler/parser.ts",
       "fingerprint": {
         "algorithm": "sha256",
-        "value": "056a10a76d036cf4c8b060cf6a60e3966addbc6e65924610f4e2e5e1f4874c22"
+        "value": "68a19772289d547abffd7ea15e5ee6d70955bb15cb72c515d2dbb1d43578e510"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^OverPyCompiler\\.prototype\\.parse = function\\(content: Token\\[\\], kwargs: Record<string, any> = \\{\\}\\): Ast \\{$"
       }
     },
     {
@@ -454,7 +462,11 @@
       "source": "src/compiler/astParser.ts",
       "fingerprint": {
         "algorithm": "sha256",
-        "value": "4d3ae05a9e06025f16e783521902cce10b9ddf0dc180a94086a05923eb77481a"
+        "value": "96cc2c6b2d15cc4e70a3bc209438b6b80b657325eede98c4e72d09e550d85066"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^OverPyCompiler\\.prototype\\.parseAstRules = function\\(rules: Ast\\[\\]\\) \\{$"
       }
     },
     {
@@ -462,7 +474,11 @@
       "source": "src/compiler/parser.ts",
       "fingerprint": {
         "algorithm": "sha256",
-        "value": "056a10a76d036cf4c8b060cf6a60e3966addbc6e65924610f4e2e5e1f4874c22"
+        "value": "5c02a4cd7df4f3a904a8fc0342aec3e0e6f94ec2a4640847468b7114e7b71bb7"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^\\s*} else if \\(\\[\"rule\", \"enum\", \"if\", \"elif\", \"else\", \"do\", \"for\", \"def\", \"while\", \"switch\", \"case\", \"default\", \"macro\"\\]\\.includes"
       }
     },
     {
@@ -470,7 +486,11 @@
       "source": "src/compiler/parser.ts",
       "fingerprint": {
         "algorithm": "sha256",
-        "value": "056a10a76d036cf4c8b060cf6a60e3966addbc6e65924610f4e2e5e1f4874c22"
+        "value": "4aa878c77d83a9e488f8821aa898a1aabe5ae57f618dcf9adc91ca3c3d262675"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^\\s*//Lazy & dirty way of properly parsing \"sorted\\(x, lambda a,b: z\\)\""
       }
     },
     {
@@ -478,7 +498,11 @@
       "source": "src/compiler/parser.ts",
       "fingerprint": {
         "algorithm": "sha256",
-        "value": "056a10a76d036cf4c8b060cf6a60e3966addbc6e65924610f4e2e5e1f4874c22"
+        "value": "357b79ea8056c5f396db31f9347b3dc75f2591837c59f3797dfa65e66c8d4f50"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^\\s*//Parse the \"goto\" directive\\.$"
       }
     },
     {
@@ -486,7 +510,11 @@
       "source": "src/compiler/compiler.ts",
       "fingerprint": {
         "algorithm": "sha256",
-        "value": "c900b2c38af4f703b4f3bc9b3488929ad1a04dd3b38df0247d177544467a4e43"
+        "value": "aadd54c901a77ebeac8b978e7c2ef58f15a04edcb791525fae3cdec7e52fed70"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^\\s*let mainFilePath = compiler\\.getFilePaths"
       }
     },
     {
@@ -494,7 +522,11 @@
       "source": "src/compiler/tokenizer.ts",
       "fingerprint": {
         "algorithm": "sha256",
-        "value": "c041bf8a5bb012cf003b3aab3e0eebb301bbaad6bff56977f602186705d72f81"
+        "value": "c54f24bf508a8d01b62ea413c443707affeb1ee58ac2ee15b6ada59ca9712834"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^\\s*const parsePreprocessingDirective = \\(content: string\\) => \\{$"
       }
     },
     {
@@ -502,7 +534,11 @@
       "source": "src/compiler/compiler.ts",
       "fingerprint": {
         "algorithm": "sha256",
-        "value": "c900b2c38af4f703b4f3bc9b3488929ad1a04dd3b38df0247d177544467a4e43"
+        "value": "44b601d8f76e2cd6dc970d64b0b4b4f3af9c1506ee5256c1f3cbb5914377b83c"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^OverPyCompiler\\.prototype\\.getInitDirectivesRules = function\\(\\) \\{$"
       }
     },
     {
@@ -510,7 +546,11 @@
       "source": "src/compiler/translations.ts",
       "fingerprint": {
         "algorithm": "sha256",
-        "value": "9421494410aaae7cbb3545109185ee0625dc9c54ad1ee6610008fb17e807785f"
+        "value": "01ccd859f59ab23eed21a78023dcc443717fad986b33a449654bb0c9684b2b30"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^OverPyCompiler\\.prototype\\.getTranslatedString = function\\(str: string, context: string \\| null, fileStack: BaseNormalFileStackMember\\[\\]\\): Ast \\{$"
       }
     },
     {
@@ -518,7 +558,11 @@
       "source": "src/compiler/parser.ts",
       "fingerprint": {
         "algorithm": "sha256",
-        "value": "056a10a76d036cf4c8b060cf6a60e3966addbc6e65924610f4e2e5e1f4874c22"
+        "value": "cff3b2564b4be1d5d40d05089fbda268c7b3c09501e37a939328c3a48b4426b8"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^\\s*// Handle custom game settings$"
       }
     },
     {
@@ -526,7 +570,11 @@
       "source": "src/data/opy/functions.ts",
       "fingerprint": {
         "algorithm": "sha256",
-        "value": "cb85fb56a696a74665f441ebe6cd8ffee63788b26c97e030cc3bd82fc61e6ef3"
+        "value": "40bcaa0a450418f227cb6f07f6f27c488ac30cf6b9f7873a41a2f819efe367cc"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^export const opyFuncs: Record<$"
       }
     },
     {
@@ -534,7 +582,11 @@
       "source": "src/compiler/compiler.ts",
       "fingerprint": {
         "algorithm": "sha256",
-        "value": "c900b2c38af4f703b4f3bc9b3488929ad1a04dd3b38df0247d177544467a4e43"
+        "value": "174c1262c14e698c3f572623e17957f451343fbd43919e1a6adfa7aee563af16"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^\\s*let uniqueEncounteredWarnings = compiler\\.encounteredWarnings\\.filter"
       }
     },
     {
@@ -542,7 +594,11 @@
       "source": "src/compiler/astToWorkshop.ts",
       "fingerprint": {
         "algorithm": "sha256",
-        "value": "52f77583f366885d7d7057035d57d320b2b4ce6fefeaeca9f044f73adf5571a5"
+        "value": "fe62cb63038119ff04a0a729af7217e850f4ed3fd2542a095340c53c923de2b3"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^OverPyCompiler\\.prototype\\.astRulesToWs = function\\(rules: Ast\\[\\]\\) \\{$"
       }
     },
     {
@@ -550,7 +606,11 @@
       "source": "src/compiler/astToWorkshop.ts",
       "fingerprint": {
         "algorithm": "sha256",
-        "value": "52f77583f366885d7d7057035d57d320b2b4ce6fefeaeca9f044f73adf5571a5"
+        "value": "0d0678db88b12ebe7963761ffc56455cddc9f0aab3e59d8fd358992e8e4418a4"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^\\s*if \\(rule\\.name === \"pass\"\\) \\{$"
       }
     },
     {
@@ -558,7 +618,11 @@
       "source": "examples",
       "fingerprint": {
         "algorithm": "sha256",
-        "value": "eca6da5bc6def5d96591ada3a6527f30275dd41964a09a35efdec62ba72496e3"
+        "value": "d190c518ada3f532f4f1a99f517319e1dac2753140e1a40024b772d9316baba3"
+      },
+      "selector": {
+        "kind": "glob",
+        "value": "**/*.opy"
       }
     },
     {
@@ -566,7 +630,11 @@
       "source": "src/data/actions.ts",
       "fingerprint": {
         "algorithm": "sha256",
-        "value": "ea1d0d25967df58f1d298f37a8662a94be5dbf6de3522d4313ae9fa516e192ca"
+        "value": "5606203a69c7318f3b709c6a82917756e8c0c61430c6d948fffcbc5be1904d9d"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^export const actionKw: Record<string, Action> ="
       }
     },
     {
@@ -574,7 +642,11 @@
       "source": "src/data/values.ts",
       "fingerprint": {
         "algorithm": "sha256",
-        "value": "77867f8747aade926c2324913b71f64459164fb2214b6e8c4fe41df48af68dc5"
+        "value": "0f58b203d5c810d8eab896903f3c326b449afb4b1642103c037d5142b86aad96"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^export const valueFuncKw: Record<string, Value> ="
       }
     },
     {
@@ -582,7 +654,11 @@
       "source": "src/cli.ts",
       "fingerprint": {
         "algorithm": "sha256",
-        "value": "4f5f2401f0822f5a2f053591c80990283ffe736245052b3b9c744335e997bc55"
+        "value": "13e1b1f350ccefb7e07a1965a39a1261f3623e958bc5891966378726168b68d3"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^\\s*if \\(parsed\\.command === \"compile\"\\) \\{$"
       }
     },
     {
@@ -590,7 +666,11 @@
       "source": "src/decompiler/decompiler.ts",
       "fingerprint": {
         "algorithm": "sha256",
-        "value": "cc2a670cda148d436241e7afe94819b4613120800ea2d11fde60965e600b4abb"
+        "value": "9a6bdd709557ebc9b1359c7eaacb6865cbb8cc97f3520ccc1fb9e8e6e7b4d57b"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^export function decompileAllRules\\(content: string, language: OWLanguage = \"en-US\", options: \\{$"
       }
     },
     {
@@ -598,7 +678,11 @@
       "source": "src/compiler/compiler.ts",
       "fingerprint": {
         "algorithm": "sha256",
-        "value": "c900b2c38af4f703b4f3bc9b3488929ad1a04dd3b38df0247d177544467a4e43"
+        "value": "19de252254bfa46c7a9fc0ca0a6ca6d3e4803bac92ccc932d812c7958c2109b7"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^\\s*translationLanguages: compiler\\.translationLanguages,$"
       }
     },
     {
@@ -606,7 +690,11 @@
       "source": "src/compiler/tokenizer.ts",
       "fingerprint": {
         "algorithm": "sha256",
-        "value": "c041bf8a5bb012cf003b3aab3e0eebb301bbaad6bff56977f602186705d72f81"
+        "value": "8262377e9be2a739fe22e2a4e6ae009fb4ec0cce99f03f94ec4c1c452ae99264"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^\\s*result = executeQuickJSScript\\(scriptContent, \\{$"
       }
     },
     {
@@ -614,7 +702,11 @@
       "source": "src/compiler/compiler.ts",
       "fingerprint": {
         "algorithm": "sha256",
-        "value": "c900b2c38af4f703b4f3bc9b3488929ad1a04dd3b38df0247d177544467a4e43"
+        "value": "dadbf80148ad811d448c1687f336f4578e3384de353fd60231605becc9074097"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^\\s*if \\(compiler\\.postCompileHook\\) \\{$"
       }
     },
     {
@@ -622,7 +714,11 @@
       "source": "src/quickjs.ts",
       "fingerprint": {
         "algorithm": "sha256",
-        "value": "a38338757823e4f33eb9309e89795726f38c52c6122700813bd618fad6bd2240"
+        "value": "9763302ce0205e53089d995202ad78bbbdaae05bba9a8240e509fd814433e656"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^export function executeQuickJSScript\\(script: string, options: ScriptExecutionOptions = \\{\\}\\): string \\{$"
       }
     },
     {
@@ -630,7 +726,11 @@
       "source": "src/cli.ts",
       "fingerprint": {
         "algorithm": "sha256",
-        "value": "4f5f2401f0822f5a2f053591c80990283ffe736245052b3b9c744335e997bc55"
+        "value": "362865f3da356f35074b257b8b50e4e4f162758c3f2bb3988401f133dbc5a812"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^\\s*const input = await loadInput\\(parsed\\.inputPath\\);$"
       }
     }
   ]

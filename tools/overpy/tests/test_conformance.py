@@ -85,10 +85,12 @@ class ConformanceTests(unittest.TestCase):
     def test_feature_contract_inventory_requires_every_audited_branch(self):
         inventory = conformance.load_inventory()
         broken = copy.deepcopy(inventory)
+        audit = copy.deepcopy(self.audit)
         broken["branches"].pop()
         broken["requiredBranches"].pop()
+        audit["branches"].pop()
         with self.assertRaises(conformance.ConformanceError):
-            conformance.validate_inventory(broken, self.manifest, audit=self.audit)
+            conformance.validate_inventory(broken, self.manifest, audit=audit)
 
     def test_feature_contract_inventory_requires_every_audited_registry(self):
         inventory = conformance.load_inventory()
@@ -116,6 +118,16 @@ class ConformanceTests(unittest.TestCase):
             if leaf["key"] == "lambda"
         )
         lambda_leaf["contract"] = "syntax.parser-and-control-flow/statement-and-declaration-boundaries"
+        with self.assertRaises(conformance.ConformanceError):
+            conformance.validate_inventory(broken, self.manifest, audit=self.audit)
+
+    def test_feature_contract_inventory_requires_fixture_contract_match_for_branch(self):
+        inventory = conformance.load_inventory()
+        broken = copy.deepcopy(inventory)
+        branch = next(
+            branch for branch in broken["branches"] if branch["id"] == "branch/lexer-token-boundaries"
+        )
+        branch["contract"] = "syntax.lexing/strings-and-modifiers"
         with self.assertRaises(conformance.ConformanceError):
             conformance.validate_inventory(broken, self.manifest, audit=self.audit)
 
@@ -171,7 +183,13 @@ class ConformanceTests(unittest.TestCase):
                     "keys": ["and", "or"],
                 }
             ],
-            "branches": [{"id": "branch/test", "source": "src/compiler/parser.ts"}],
+            "branches": [
+                {
+                    "id": "branch/test",
+                    "source": "src/compiler/parser.ts",
+                    "selector": {"kind": "regex", "value": "// pinned branch source"},
+                }
+            ],
         }
         with tempfile.TemporaryDirectory(dir=TOOLS_DIR) as directory:
             source = Path(directory) / "src/data/opy/keywords.ts"
@@ -182,13 +200,22 @@ class ConformanceTests(unittest.TestCase):
             branch_source.write_text("// pinned branch source\n", encoding="utf-8")
             audit["branches"][0]["fingerprint"] = {
                 "algorithm": "sha256",
-                "value": conformance._source_fingerprint(branch_source),
+                "value": conformance._selector_fingerprint(
+                    branch_source, audit["branches"][0]["selector"]
+                ),
             }
             conformance.validate_inventory(
                 inventory,
                 self.manifest,
                 upstream_root=Path(directory),
                 audit=audit,
+                branch_selectors={
+                    "branch/test": {
+                        "source": "src/compiler/parser.ts",
+                        "selector": "// pinned branch source",
+                        "kind": "regex",
+                    }
+                },
             )
             branch_source.write_text("// changed pinned branch source\n", encoding="utf-8")
             with self.assertRaises(conformance.ConformanceError):
@@ -197,6 +224,13 @@ class ConformanceTests(unittest.TestCase):
                     self.manifest,
                     upstream_root=Path(directory),
                     audit=audit,
+                    branch_selectors={
+                        "branch/test": {
+                            "source": "src/compiler/parser.ts",
+                            "selector": "// pinned branch source",
+                            "kind": "regex",
+                        }
+                    },
                 )
             branch_source.write_text("// pinned branch source\n", encoding="utf-8")
             source.write_text(
@@ -209,6 +243,13 @@ class ConformanceTests(unittest.TestCase):
                     self.manifest,
                     upstream_root=Path(directory),
                     audit=audit,
+                    branch_selectors={
+                        "branch/test": {
+                            "source": "src/compiler/parser.ts",
+                            "selector": "// pinned branch source",
+                            "kind": "regex",
+                        }
+                    },
                 )
 
     def test_native_frontier_uses_failure_class_without_hiding_stage(self):

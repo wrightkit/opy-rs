@@ -47,6 +47,135 @@ TOOLING_CONTRACTS = {
     "tooling.metadata",
     "tooling.post-compile-hook",
 }
+# This catalog is intentionally independent of pinned-overpy-audit.json: removing
+# a branch from both data files must still fail before source validation runs.
+PINNED_BRANCH_SELECTORS: dict[str, dict[str, str]] = {
+    "branch/lexer-token-boundaries": {
+        "source": "src/compiler/tokenizer.ts",
+        "selector": r"^OverPyCompiler\.prototype\.tokenize = function\(content: string\): LogicalLine\[\] \{$",
+        "kind": "regex",
+    },
+    "branch/parser-expressions": {
+        "source": "src/compiler/parser.ts",
+        "selector": r"^OverPyCompiler\.prototype\.parse = function\(content: Token\[\], kwargs: Record<string, any> = \{\}\): Ast \{$",
+        "kind": "regex",
+    },
+    "branch/parser-declarations": {
+        "source": "src/compiler/astParser.ts",
+        "selector": r"^OverPyCompiler\.prototype\.parseAstRules = function\(rules: Ast\[\]\) \{$",
+        "kind": "regex",
+    },
+    "branch/parser-control-flow": {
+        "source": "src/compiler/parser.ts",
+        "selector": r'^\s*} else if \(\["rule", "enum", "if", "elif", "else", "do", "for", "def", "while", "switch", "case", "default", "macro"\]\.includes',
+        "kind": "regex",
+    },
+    "branch/parser-contextual-lambda": {
+        "source": "src/compiler/parser.ts",
+        "selector": r'^\s*//Lazy & dirty way of properly parsing "sorted\(x, lambda a,b: z\)"',
+        "kind": "regex",
+    },
+    "branch/parser-goto-and-dynamic-targets": {
+        "source": "src/compiler/parser.ts",
+        "selector": r'^\s*//Parse the "goto" directive\.$',
+        "kind": "regex",
+    },
+    "branch/compiler-project-closure": {
+        "source": "src/compiler/compiler.ts",
+        "selector": r'^\s*let mainFilePath = compiler\.getFilePaths',
+        "kind": "regex",
+    },
+    "branch/compiler-macro-expansion": {
+        "source": "src/compiler/tokenizer.ts",
+        "selector": r'^\s*const parsePreprocessingDirective = \(content: string\) => \{$',
+        "kind": "regex",
+    },
+    "branch/compiler-directive-state": {
+        "source": "src/compiler/compiler.ts",
+        "selector": r'^OverPyCompiler\.prototype\.getInitDirectivesRules = function\(\) \{$',
+        "kind": "regex",
+    },
+    "branch/compiler-translations": {
+        "source": "src/compiler/translations.ts",
+        "selector": r'^OverPyCompiler\.prototype\.getTranslatedString = function\(str: string, context: string \| null, fileStack: BaseNormalFileStackMember\[\]\): Ast \{$',
+        "kind": "regex",
+    },
+    "branch/compiler-settings": {
+        "source": "src/compiler/parser.ts",
+        "selector": r'^\s*// Handle custom game settings$',
+        "kind": "regex",
+    },
+    "branch/semantic-dispatch": {
+        "source": "src/data/opy/functions.ts",
+        "selector": r"^export const opyFuncs: Record<$",
+        "kind": "regex",
+    },
+    "branch/semantic-diagnostic-frontiers": {
+        "source": "src/compiler/compiler.ts",
+        "selector": r'^\s*let uniqueEncounteredWarnings = compiler\.encounteredWarnings\.filter',
+        "kind": "regex",
+    },
+    "branch/lowering-canonical-wir": {
+        "source": "src/compiler/astToWorkshop.ts",
+        "selector": r'^OverPyCompiler\.prototype\.astRulesToWs = function\(rules: Ast\[\]\) \{$',
+        "kind": "regex",
+    },
+    "branch/lowering-unsupported-boundary": {
+        "source": "src/compiler/astToWorkshop.ts",
+        "selector": r'^\s*if \(rule\.name === "pass"\) \{$',
+        "kind": "regex",
+    },
+    "branch/project-real-world": {
+        "source": "examples",
+        "selector": "**/*.opy",
+        "kind": "glob",
+    },
+    "branch/workshop-catalog-boundary": {
+        "source": "src/data/actions.ts",
+        "selector": r"^export const actionKw: Record<string, Action> =",
+        "kind": "regex",
+    },
+    "branch/workshop-value-boundary": {
+        "source": "src/data/values.ts",
+        "selector": r"^export const valueFuncKw: Record<string, Value> =",
+        "kind": "regex",
+    },
+    "branch/cli-compile-contract": {
+        "source": "src/cli.ts",
+        "selector": r'^\s*if \(parsed\.command === "compile"\) \{$',
+        "kind": "regex",
+    },
+    "branch/cli-decompile-contract": {
+        "source": "src/decompiler/decompiler.ts",
+        "selector": r'^export function decompileAllRules\(content: string, language: OWLanguage = "en-US", options: \{$',
+        "kind": "regex",
+    },
+    "branch/compile-metadata": {
+        "source": "src/compiler/compiler.ts",
+        "selector": r'^\s*translationLanguages: compiler\.translationLanguages,$',
+        "kind": "regex",
+    },
+    "branch/javascript-macro-runtime": {
+        "source": "src/compiler/tokenizer.ts",
+        "selector": r'^\s*result = executeQuickJSScript\(scriptContent, \{$',
+        "kind": "regex",
+    },
+    "branch/post-compile-hook": {
+        "source": "src/compiler/compiler.ts",
+        "selector": r'^\s*if \(compiler\.postCompileHook\) \{$',
+        "kind": "regex",
+    },
+    "branch/quickjs-failure-abi": {
+        "source": "src/quickjs.ts",
+        "selector": r'^export function executeQuickJSScript\(script: string, options: ScriptExecutionOptions = \{\}\): string \{$',
+        "kind": "regex",
+    },
+    "branch/cli-project-input": {
+        "source": "src/cli.ts",
+        "selector": r'^\s*const input = await loadInput\(parsed\.inputPath\);$',
+        "kind": "regex",
+    },
+}
 
 
 class ConformanceError(RuntimeError):
@@ -157,6 +286,14 @@ def load_pinned_audit(path: Path = PINNED_AUDIT) -> dict[str, Any]:
     for branch in audit["branches"]:
         if not isinstance(branch.get("source"), str) or not branch["source"]:
             raise ConformanceError(f"{branch['id']}: pinned audit source is incomplete")
+        selector = branch.get("selector")
+        if (
+            not isinstance(selector, dict)
+            or selector.get("kind") not in {"regex", "glob"}
+            or not isinstance(selector.get("value"), str)
+            or not selector["value"]
+        ):
+            raise ConformanceError(f"{branch['id']}: pinned audit selector is incomplete")
         fingerprint = branch.get("fingerprint")
         if (
             not isinstance(fingerprint, dict)
@@ -208,20 +345,34 @@ def _validate_production(production: Any, leaf_id: str) -> None:
             raise ConformanceError(f"{leaf_id}: production path does not exist: {item}")
 
 
-def _source_fingerprint(source: Path) -> str:
+def _selector_fingerprint(source: Path, selector: dict[str, str]) -> str:
+    kind = selector["kind"]
+    value = selector["value"]
     digest = hashlib.sha256()
-    if source.is_file():
-        digest.update(source.read_bytes())
+    if kind == "regex":
+        if not source.is_file():
+            raise ConformanceError(f"regex selector requires a file source: {source}")
+        matches = list(re.finditer(value, source.read_text(encoding="utf-8"), re.MULTILINE))
+        if len(matches) != 1:
+            raise ConformanceError(
+                f"source selector must match exactly one fragment: {source} / {value!r} (matches={len(matches)})"
+            )
+        digest.update(matches[0].group(0).encode("utf-8"))
         return digest.hexdigest()
-    if not source.is_dir():
-        raise ConformanceError(f"cannot fingerprint missing source: {source}")
-    for path in sorted(path for path in source.rglob("*") if path.is_file()):
-        relative = path.relative_to(source).as_posix().encode("utf-8")
-        digest.update(relative)
-        digest.update(b"\0")
-        digest.update(hashlib.sha256(path.read_bytes()).digest())
-        digest.update(b"\n")
-    return digest.hexdigest()
+    if kind == "glob":
+        if not source.is_dir():
+            raise ConformanceError(f"glob selector requires a directory source: {source}")
+        paths = sorted(path for path in source.glob(value) if path.is_file())
+        if not paths:
+            raise ConformanceError(f"source selector matched no files: {source} / {value!r}")
+        for path in paths:
+            relative = path.relative_to(source).as_posix().encode("utf-8")
+            digest.update(relative)
+            digest.update(b"\0")
+            digest.update(hashlib.sha256(path.read_bytes()).digest())
+            digest.update(b"\n")
+        return digest.hexdigest()
+    raise ConformanceError(f"unsupported source selector kind: {kind}")
 
 
 def inventory_leaves(inventory: dict[str, Any]) -> list[dict[str, Any]]:
@@ -329,6 +480,7 @@ def validate_inventory(
     fixtures_root: Path = FIXTURES,
     upstream_root: Path | None = None,
     audit: dict[str, Any] | None = None,
+    branch_selectors: dict[str, dict[str, str]] | None = None,
 ) -> list[dict[str, Any]]:
     audit = load_pinned_audit() if audit is None else audit
     if inventory["reference"] != manifest["reference"]:
@@ -382,6 +534,25 @@ def validate_inventory(
             f"extra={sorted(set(branch_ids) - required_branches)}"
         )
     audit_branches = {branch["id"]: branch for branch in audit["branches"]}
+    expected_branch_selectors = PINNED_BRANCH_SELECTORS if branch_selectors is None else branch_selectors
+    if set(audit_branches) != set(expected_branch_selectors):
+        raise ConformanceError(
+            "pinned audit branch catalog differs from independent source selectors: "
+            f"missing={sorted(set(expected_branch_selectors) - set(audit_branches))}, "
+            f"extra={sorted(set(audit_branches) - set(expected_branch_selectors))}"
+        )
+    for branch_id, expected in expected_branch_selectors.items():
+        branch = audit_branches[branch_id]
+        selector = branch.get("selector")
+        actual_selector = {
+            "kind": selector.get("kind") if isinstance(selector, dict) else None,
+            "value": selector.get("value") if isinstance(selector, dict) else None,
+        }
+        if branch.get("source") != expected["source"] or actual_selector != {
+            "kind": expected["kind"],
+            "value": expected["selector"],
+        }:
+            raise ConformanceError(f"{branch_id}: pinned audit selector differs from independent source selector")
     if required_branches != set(audit_branches):
         raise ConformanceError(
             "feature contract branch catalog differs from pinned audit: "
@@ -444,7 +615,7 @@ def validate_inventory(
             source = upstream_root / branch["source"]
             if not source.exists():
                 raise ConformanceError(f"{branch['id']}: pinned audit source does not exist: {source}")
-            actual = _source_fingerprint(source)
+            actual = _selector_fingerprint(source, branch["selector"])
             expected = branch["fingerprint"]["value"]
             if actual != expected:
                 raise ConformanceError(
@@ -481,7 +652,7 @@ def validate_inventory(
             leaf_id,
             fixture_contracts,
             leaf["contract"]
-            if "registry" in leaf and status == "implemented" and coverage == "covered"
+            if status == "implemented" and coverage == "covered"
             else None,
         )
     return leaves

@@ -4417,7 +4417,7 @@
         "crates/opy-rs/src/lexer.rs"
       ],
       "evidence": [
-        "fixture:synthetic/syntax-surface"
+        "fixture:synthetic/expressions-values"
       ]
     },
     {
@@ -4594,7 +4594,7 @@
         "crates/opy-rs/src/diag.rs"
       ],
       "evidence": [
-        "fixture:synthetic/diagnostics"
+        "fixture:real-world/6v6-adjustments"
       ]
     },
     {
@@ -4683,7 +4683,7 @@
         "crates/opy-cli/src/main.rs"
       ],
       "evidence": [
-        "fixture:synthetic/basic-rule"
+        "fixture:real-world/6v6-adjustments"
       ]
     },
     {
@@ -4765,7 +4765,7 @@
       "id": "branch/cli-project-input",
       "kind": "compiler-branch",
       "authority": "OverPy@9.7.10:src/cli.ts",
-      "contract": "projects.real-world/complete-example-projects",
+      "contract": "preprocessing.project-composition/include-closure-composition",
       "status": "implemented",
       "coverage": "covered",
       "production": [
