@@ -95,8 +95,12 @@ public compiler API remains oracle-free.
 
 `run_native.py` drives the built public compiler contract for every fixture,
 writes ephemeral producer results under `target/`, and delegates compiler
-expectation loading, full project-input validation, stage comparison, and
-blocking classification to `diff.py`. Only the durable, evidence-backed
+expectation loading, full project-input validation, stage comparison, failure
+frontier comparison, and blocking classification to `diff.py`. For reference
+failures, `diff.py` derives the stage and construct from the pinned oracle
+diagnostics and compares that frontier with the native structured diagnostic;
+different known-gap frontiers remain reported as gaps rather than matches.
+Only the durable, evidence-backed
 entries in `compiler-expectations.json` can produce `known-gap` or
 `unsupported` in this report.
 Expectation mismatches are reported as `unexpected-divergence` or `regression`.

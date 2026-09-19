@@ -35,6 +35,39 @@ EXPECTED_COMPILER_COMPARISONS = {
 CONCRETE_GAP_OWNER = re.compile(r"(?:opy-rs|workshop-rs)#[1-9][0-9]*")
 NUMBER_TOKEN = re.compile(r"\d[\d.]*")
 
+# These are evidence rules for the pinned oracle's recorded diagnostics, not a
+# support inventory. The native side uses structured diagnostic codes below;
+# the reference side intentionally derives its frontier from oracle text.
+REFERENCE_FRONTIER_RULES = (
+    ("Invalid content before string", "lex", "lex-error"),
+    ("ENOENT:", "preprocess", "script-not-found"),
+    ("Invalid language", "preprocess", "translations-invalid"),
+    ("Do/While loops can only be at the beginning", "semantic", "do-while-placement"),
+    ("Rule name was already declared", "semantic", "duplicate-rule-name"),
+    ("Cannot assign to 4d array", "semantic", "four-dimensional-assignment"),
+    ("Expected variable for 1st argument", "semantic", "invalid-range-binder"),
+    ("Unknown member", "semantic", "unknown-member"),
+    ("Expected a ':'", "parse", "parse-error"),
+    ("Content is empty", "parse", "parse-error"),
+    ("Expected an action", "parse", "parse-error"),
+    ("Cannot modify or assign to operator '='", "parse", "parse-error"),
+    ("Expected '(' after 'lambda'", "parse", "parse-error"),
+    ("Found 'if', but no 'else'", "parse", "parse-error"),
+)
+NATIVE_FRONTIER_STAGES = {
+    "lex-error": "lex",
+    "parse-error": "parse",
+    "lambda-context": "parse",
+    "translations-invalid": "preprocess",
+    "script-not-found": "preprocess",
+    "do-while-placement": "semantic",
+    "invalid-range-binder": "semantic",
+    "four-dimensional-assignment": "semantic",
+    "duplicate-rule-name": "semantic",
+    "unknown-member": "semantic",
+}
+NATIVE_FRONTIER_CONSTRUCTS = {"lambda-context": "parse-error"}
+
 
 class DiffError(RuntimeError):
     """A malformed result or differential-runner configuration error."""
@@ -250,6 +283,58 @@ def require_result_shape(result: dict[str, Any], label: str) -> None:
         raise DiffError(f"{label}: compile.workshop must be a string")
     if "semanticWIR" in compile_result:
         raise DiffError(f"{label}: compatibility evidence must not be part of compile result")
+
+
+def _diagnostic_texts(compile_result: dict[str, Any]) -> list[str]:
+    return [
+        item.get("text", "")
+        for item in compile_result.get("diagnostics", [])
+        if isinstance(item, dict) and isinstance(item.get("text"), str)
+    ]
+
+
+def reference_failure_frontier(result: dict[str, Any]) -> dict[str, str] | None:
+    """Derive the pinned oracle's first meaningful failure frontier."""
+
+    compile_result = result.get("compile", {})
+    if compile_result.get("status") != "failure":
+        return None
+    texts = _diagnostic_texts(compile_result)
+    for marker, stage_name, construct in REFERENCE_FRONTIER_RULES:
+        if any(marker in text for text in texts):
+            return {"stage": stage_name, "construct": construct}
+    return None
+
+
+def native_failure_frontier(result: dict[str, Any]) -> dict[str, str] | None:
+    """Derive the native failure frontier from its structured diagnostic."""
+
+    compile_result = result.get("compile", {})
+    if compile_result.get("status") != "failure":
+        return None
+    diagnostics = compile_result.get("diagnostics", [])
+    first = next(
+        (
+            item
+            for item in diagnostics
+            if isinstance(item, dict) and item.get("severity") == "error"
+        ),
+        diagnostics[0] if diagnostics and isinstance(diagnostics[0], dict) else {},
+    )
+    code = first.get("code")
+    if not isinstance(code, str) or not code:
+        return None
+    stage_name = NATIVE_FRONTIER_STAGES.get(code)
+    if stage_name is None:
+        stage_name = (
+            "lowering"
+            if compile_result.get("failureClass") == "integration"
+            else "semantic"
+        )
+    return {
+        "stage": stage_name,
+        "construct": NATIVE_FRONTIER_CONSTRUCTS.get(code, code),
+    }
 
 
 def result_path(results_root: Path, fixture_id: str) -> Path:
@@ -578,6 +663,30 @@ def compare_compiler_fixture(
             producer=native_status,
         )
     ]
+    if oracle["compile"]["status"] == "failure" and native_status == "failure":
+        reference_frontier = reference_failure_frontier(oracle)
+        native_frontier = native_failure_frontier(producer)
+        if reference_frontier is None or native_frontier is None:
+            stages.append(
+                stage(
+                    "failure-frontier",
+                    "inconclusive",
+                    reference=reference_frontier,
+                    producer=native_frontier,
+                    reason="reference or native failure frontier is unavailable",
+                )
+            )
+        else:
+            stages.append(
+                stage(
+                    "failure-frontier",
+                    "match"
+                    if reference_frontier == native_frontier
+                    else "difference",
+                    reference=reference_frontier,
+                    producer=native_frontier,
+                )
+            )
     contract = expectation["comparison"]
     if native_status != expected_status:
         status = "unexpected-divergence"
@@ -690,6 +799,19 @@ def compare_compiler_fixture(
 
     if expectation["classification"] != "match" and status == "match":
         status = expectation["classification"]
+    frontier_stage = next(
+        (item for item in stages if item["name"] == "failure-frontier"),
+        None,
+    )
+    if frontier_stage is not None:
+        if frontier_stage["outcome"] == "inconclusive":
+            status = "inconclusive"
+        elif frontier_stage["outcome"] == "difference":
+            status = (
+                expectation["classification"]
+                if expectation["classification"] != "match"
+                else "regression"
+            )
     inconclusive_reason = next(
         (
             item.get("reason") or item.get("referenceError")
@@ -767,6 +889,7 @@ def build_compiler_report(results: list[dict[str, Any]]) -> dict[str, Any]:
         results,
         [
             "compile-status",
+            "failure-frontier",
             "normalized-output",
             "semantic-wir",
             "diagnostic-code",
