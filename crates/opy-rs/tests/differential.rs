@@ -225,6 +225,30 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
     );
     resolve(
         &mut cases,
+        "synthetic/collection-mutation-328",
+        true,
+        "Issue #328 pinned collection-deletion probe; one- through four-index global and player-variable targets resolve through canonical indexed mutation lowering.",
+    );
+    diagnostic(
+        &mut cases,
+        "synthetic/collection-mutation-328-invalid",
+        Some("four-dimensional-delete"),
+        "Issue #328 pinned five-index deletion rejection; the native semantic boundary matches the pinned OverPy rejection frontier.",
+    );
+    resolve(
+        &mut cases,
+        "synthetic/collection-mutation-328-random-invalid",
+        false,
+        "Issue #328 pins the compiler-level rejection of a random outer index in a three-index delete; the source HIR remains structurally resolvable and the compiler expectation records the lowering boundary.",
+    );
+    resolve(
+        &mut cases,
+        "synthetic/collection-mutation-328-random-player-invalid",
+        false,
+        "Issue #328 pins the compiler-level rejection of a random player receiver in a three-index delete; the source HIR remains structurally resolvable and the compiler expectation records the lowering boundary.",
+    );
+    resolve(
+        &mut cases,
         "synthetic/wait-optimization",
         false,
         "Issue #282 minimized wait probe; optimizeForSize lowers omitted and sub-default durations to the pinned OverPy boolean forms while preserving explicit duration and reevaluation behavior.",
@@ -300,6 +324,12 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         "synthetic/conditional-forward-gotos",
         true,
         "Issue #319 oracle-backed forward-goto probe; branch structure, action distances, and condition evaluation remain aligned with the pinned oracle.",
+    );
+    resolve(
+        &mut cases,
+        "synthetic/control-flow-328",
+        true,
+        "Issue #328 pinned continue, do-while, dynamic loc+, and RULE_START probe; accepted control-flow forms resolve through canonical WIR lowering.",
     );
     resolve(
         &mut cases,

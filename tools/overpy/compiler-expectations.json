@@ -219,6 +219,20 @@
       "semanticEquivalent": true
     },
     {
+      "fixture": "synthetic/control-flow-328",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "semantic-wir",
+      "evidence": [
+        "oracle:synthetic/control-flow-328/oracle.json",
+        "provenance:synthetic/control-flow-328/fixture.json",
+        "test:opy-rs::compiler::integration_tests::control_flow::issue_328_control_flow_matches_the_pinned_oracle"
+      ],
+      "owner": "opy-rs#328",
+      "note": "Issue #328 continue, do-while, dynamic loc+, and RULE_START forms lower to the pinned canonical WIR.",
+      "semanticEquivalent": true
+    },
+    {
       "fixture": "synthetic/switch-order",
       "nativeStatus": "success",
       "classification": "match",
@@ -851,6 +865,65 @@
       "owner": "opy-rs#145",
       "note": "Nested indexed assignments, including compound modification and three-level replacement, lower through canonical array slices and match the pinned canonical WIR.",
       "semanticEquivalent": true
+    },
+    {
+      "fixture": "synthetic/collection-mutation-328",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "semantic-wir",
+      "evidence": [
+        "oracle:synthetic/collection-mutation-328/oracle.json",
+        "provenance:synthetic/collection-mutation-328/fixture.json",
+        "test:opy-rs::compiler::integration_tests::indexed_assignments::collection_deletion_matches_the_pinned_oracle"
+      ],
+      "owner": "opy-rs#328",
+      "note": "Issue #328 collection deletion covers one- through four-index global targets through canonical indexed mutation lowering.",
+      "semanticEquivalent": true
+    },
+    {
+      "fixture": "synthetic/collection-mutation-328-invalid",
+      "nativeStatus": "failure",
+      "classification": "match",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "oracle:synthetic/collection-mutation-328-invalid/oracle.json",
+        "provenance:synthetic/collection-mutation-328-invalid/fixture.json",
+        "test:opy-rs::compiler::integration_tests::semantic_diagnostics::semantic_boundary_errors_are_reported_before_lowering"
+      ],
+      "owner": "opy-rs#328",
+      "note": "OverPy 9.7.10 accepts four source indexes but rejects the fifth; native preserves the five-index frontend boundary.",
+      "failureClass": "frontend",
+      "diagnosticCode": "four-dimensional-delete"
+    },
+    {
+      "fixture": "synthetic/collection-mutation-328-random-invalid",
+      "nativeStatus": "failure",
+      "classification": "match",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "oracle:synthetic/collection-mutation-328-random-invalid/oracle.json",
+        "provenance:synthetic/collection-mutation-328-random-invalid/fixture.json",
+        "test:opy-rs::compiler::integration_tests::indexed_assignments::nested_random_delete_reaches_the_pinned_boundary"
+      ],
+      "owner": "opy-rs#328",
+      "note": "OverPy 9.7.10 rejects a random outer index in a three-index delete; native preserves the same lowering boundary.",
+      "failureClass": "integration",
+      "diagnosticCode": "unsupported-integration-surface"
+    },
+    {
+      "fixture": "synthetic/collection-mutation-328-random-player-invalid",
+      "nativeStatus": "failure",
+      "classification": "match",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "oracle:synthetic/collection-mutation-328-random-player-invalid/oracle.json",
+        "provenance:synthetic/collection-mutation-328-random-player-invalid/fixture.json",
+        "test:opy-rs::compiler::integration_tests::indexed_assignments::nested_random_player_receiver_delete_reaches_the_pinned_boundary"
+      ],
+      "owner": "opy-rs#328",
+      "note": "OverPy 9.7.10 rejects a random player-variable receiver in a three-index delete; native preserves the same lowering boundary.",
+      "failureClass": "integration",
+      "diagnosticCode": "unsupported-integration-surface"
     },
     {
       "fixture": "synthetic/indexed-assignment-4d-invalid",

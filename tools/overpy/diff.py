@@ -45,6 +45,12 @@ REFERENCE_FRONTIER_RULES = (
     ("Do/While loops can only be at the beginning", "semantic", "do-while-placement"),
     ("Rule name was already declared", "semantic", "duplicate-rule-name"),
     ("Cannot assign to 4d array", "semantic", "four-dimensional-assignment"),
+    ("Cannot delete index of 4d array", "semantic", "four-dimensional-delete"),
+    (
+        "Cannot delete from 2d array with a random index",
+        "lowering",
+        "unsupported-integration-surface",
+    ),
     ("Expected variable for 1st argument", "semantic", "invalid-range-binder"),
     ("Unknown member", "semantic", "unknown-member"),
     ("Expected a ':'", "parse", "parse-error"),
@@ -63,6 +69,7 @@ NATIVE_FRONTIER_STAGES = {
     "do-while-placement": "semantic",
     "invalid-range-binder": "semantic",
     "four-dimensional-assignment": "semantic",
+    "four-dimensional-delete": "semantic",
     "duplicate-rule-name": "semantic",
     "unknown-member": "semantic",
 }

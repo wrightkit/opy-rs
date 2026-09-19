@@ -225,6 +225,31 @@ fn conditional_forward_gotos_match_the_pinned_oracle() {
 }
 
 #[test]
+fn issue_328_control_flow_matches_the_pinned_oracle() {
+    assert_native_wir_equivalent("control-flow-328");
+}
+
+#[test]
+fn conditional_dynamic_goto_lowers_to_a_single_skip_if() {
+    let source = r#"
+globalvar a
+rule "conditional dynamic goto":
+    @Event global
+    if a == 1:
+        goto loc+a
+    a = 3
+"#;
+    let hir = crate::compile(source, "conditional-dynamic-goto.opy", Path::new(".")).unwrap();
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+    assert!(
+        artifact
+            .emitted
+            .contains("Skip If(Compare(Global.a, ==, 1), Global.a);")
+    );
+    assert!(!artifact.emitted.contains("If(Compare(Global.a, ==, 1));"));
+}
+
+#[test]
 fn do_while_break_shapes_match_the_pinned_oracle() {
     assert_native_wir_equivalent("do-while-break");
 }

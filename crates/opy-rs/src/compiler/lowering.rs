@@ -116,14 +116,6 @@ enum BreakTarget {
     Switch,
 }
 
-enum DeleteAssignment {
-    Global(GlobalVarId),
-    Player {
-        player: ValueId,
-        variable: PlayerVarId,
-    },
-}
-
 type SwitchBreak = (usize, HirSpan);
 type LoweredSwitchBody = (Vec<ActionId>, Option<SwitchBreak>);
 type LoweredSwitchArm<'a> = (Option<&'a Expr>, Vec<ActionId>, Option<SwitchBreak>);
@@ -191,6 +183,32 @@ fn direct_conditional_goto(statement: &Stmt) -> Option<(&Expr, &str, Option<HirS
     Some((&branch.condition, label.as_str(), *span))
 }
 
+fn direct_conditional_dynamic_goto(statement: &Stmt) -> Option<(&Expr, &Expr, Option<HirSpan>)> {
+    let Stmt::If {
+        branches,
+        r#else: None,
+        span,
+    } = statement
+    else {
+        return None;
+    };
+    let [branch] = branches.as_slice() else {
+        return None;
+    };
+    let [
+        Stmt::Goto {
+            label: None,
+            offset: Some(offset),
+            rule_start: false,
+            ..
+        },
+    ] = branch.body.as_slice()
+    else {
+        return None;
+    };
+    Some((&branch.condition, offset, *span))
+}
+
 fn contains_loop_continue(statement: &Stmt) -> bool {
     match statement {
         Stmt::Continue { .. } => true,
@@ -205,6 +223,11 @@ fn contains_loop_continue(statement: &Stmt) -> bool {
                     .is_some_and(|body| body.iter().any(contains_loop_continue))
         }
         Stmt::For { .. } | Stmt::While { .. } | Stmt::DoWhile { .. } => false,
+        Stmt::Switch { arms, .. } => arms.iter().any(|arm| match arm {
+            SwitchArm::Case { body, .. } | SwitchArm::Default { body, .. } => {
+                body.iter().any(contains_loop_continue)
+            }
+        }),
         _ => false,
     }
 }
@@ -1211,6 +1234,19 @@ impl<'a> Lowering<'a> {
                 index += 1;
                 continue;
             }
+            if let Some((condition, offset, span)) = direct_conditional_dynamic_goto(statement) {
+                let condition = self.lower_value(condition)?;
+                let offset = self.lower_value(offset)?;
+                let skip = self.push_call_action("skipIf", &[condition, offset]);
+                self.mark_action_origins(std::slice::from_ref(&skip), span);
+                actions.push(skip);
+                let goto = self.push_call_action("skip", &[offset]);
+                self.mark_action_origins(std::slice::from_ref(&goto), span);
+                actions.push(goto);
+                actions.push(self.push_call_action("abort", &[]));
+                index += 1;
+                continue;
+            }
             match statement {
                 Stmt::Label { name, .. } => {
                     self.resolve_deferred_gotos(&actions, name, actions.len())?;
@@ -1223,10 +1259,11 @@ impl<'a> Lowering<'a> {
                     span,
                 } => {
                     if *rule_start {
-                        return Err(self.unsupported(
-                            "goto RULE_START is not representable in canonical WIR",
-                            *span,
-                        ));
+                        let loop_action = self.push_call_action("loop", &[]);
+                        self.mark_action_origins(std::slice::from_ref(&loop_action), *span);
+                        actions.push(loop_action);
+                        index += 1;
+                        continue;
                     }
                     let placeholder = self.push_number(0.0, "0");
                     let action = self.push_call_action("skip", &[placeholder]);
@@ -1423,16 +1460,33 @@ impl<'a> Lowering<'a> {
                 value,
                 arms,
                 span,
-            } => self.lower_switch(value, arms, *span, break_target),
+            } => self.lower_switch(value, arms, *span, break_target, None, false),
             Stmt::Delete { target, span } => self.lower_delete(target, *span).map(|action| vec![action]),
             Stmt::Continue { span } => Err(self.unsupported(
                 "continue statements are only lowered while constructing a loop body",
                 *span,
             )),
-            Stmt::Goto { span, .. } => Err(self.unsupported(
-                "goto statements are not representable in canonical WIR",
-                *span,
-            )),
+            Stmt::Goto {
+                label,
+                offset,
+                rule_start,
+                span,
+            } => {
+                if *rule_start {
+                    Ok(vec![self.push_call_action("loop", &[])])
+                } else if label.is_none() {
+                    let offset = offset.as_ref().ok_or_else(|| {
+                        self.unsupported("goto is missing a label or offset", *span)
+                    })?;
+                    let offset = self.lower_value(offset)?;
+                    Ok(vec![self.push_call_action("skip", &[offset])])
+                } else {
+                    Err(self.unsupported(
+                        "goto statements are not representable in canonical WIR",
+                        *span,
+                    ))
+                }
+            }
             Stmt::Label { span, .. } => Err(self.unsupported(
                 "labels are not representable in canonical WIR",
                 *span,
@@ -1630,6 +1684,9 @@ impl<'a> Lowering<'a> {
                 }
             }
             Stmt::Delete { target, .. } => {
+                let mut indices = Vec::new();
+                let _ = indexed_target_parts(target, &mut indices);
+                indices.reverse();
                 for action in actions {
                     let spans = match self.actions.get(*action) {
                         Some(Action::SetGlobalVariable { .. })
@@ -1639,6 +1696,27 @@ impl<'a> Lowering<'a> {
                         Some(Action::SetPlayerVariable { .. })
                         | Some(Action::ModifyPlayerVariable { .. }) => {
                             vec![None, target.span().copied()]
+                        }
+                        Some(Action::Call { name, .. })
+                            if name == "setGlobalVariableAtIndex"
+                                || name == "setPlayerVariableAtIndex" =>
+                        {
+                            vec![
+                                target.span().copied(),
+                                indices.first().and_then(|index| index.span().copied()),
+                                target.span().copied(),
+                            ]
+                        }
+                        Some(Action::Call { name, .. })
+                            if name == "modifyGlobalVariableAtIndex"
+                                || name == "modifyPlayerVariableAtIndex" =>
+                        {
+                            vec![
+                                target.span().copied(),
+                                indices.first().and_then(|index| index.span().copied()),
+                                None,
+                                indices.last().and_then(|index| index.span().copied()),
+                            ]
                         }
                         _ => continue,
                     };
@@ -1659,13 +1737,33 @@ impl<'a> Lowering<'a> {
         after: &[ActionId],
         structural_after: usize,
     ) -> Result<Vec<ActionId>, IntegrationError> {
+        self.lower_loop_sequence_with_break_target(
+            statements,
+            after,
+            structural_after,
+            BreakTarget::Loop,
+        )
+    }
+
+    fn lower_loop_sequence_with_break_target(
+        &mut self,
+        statements: &[Stmt],
+        after: &[ActionId],
+        structural_after: usize,
+        break_target: BreakTarget,
+    ) -> Result<Vec<ActionId>, IntegrationError> {
         let mut actions = Vec::new();
         let mut index = 0;
         while index < statements.len() {
             let statement = &statements[index];
             let tail = &statements[index + 1..];
             if let Some(conditions) = pure_continue_conditions(statement) {
-                let tail = self.lower_loop_sequence(tail, after, structural_after)?;
+                let tail = self.lower_loop_sequence_with_break_target(
+                    tail,
+                    after,
+                    structural_after,
+                    break_target,
+                )?;
                 let distance = self.canonical_action_width(&tail, statement.span().copied())?
                     + structural_after
                     + self.canonical_action_width(after, statement.span().copied())?;
@@ -1699,14 +1797,31 @@ impl<'a> Lowering<'a> {
                 return Ok(actions);
             }
             if contains_loop_continue(statement) {
-                let tail = self.lower_loop_sequence(tail, after, structural_after)?;
+                let tail = self.lower_loop_sequence_with_break_target(
+                    tail,
+                    after,
+                    structural_after,
+                    break_target,
+                )?;
                 let mut continuation_after = tail.clone();
                 continuation_after.extend_from_slice(after);
-                let lowered = self.lower_if_with_loop_continue(
-                    statement,
-                    &continuation_after,
-                    structural_after,
-                )?;
+                let lowered = if let Stmt::Switch { value, arms, span } = statement {
+                    self.lower_switch(
+                        value,
+                        arms,
+                        *span,
+                        Some(break_target),
+                        Some((&continuation_after, structural_after)),
+                        false,
+                    )?
+                } else {
+                    self.lower_if_with_loop_continue(
+                        statement,
+                        &continuation_after,
+                        structural_after,
+                        break_target,
+                    )?
+                };
                 self.mark_action_origins(&lowered, statement.span().copied());
                 actions.extend(lowered);
                 actions.extend(tail);
@@ -1720,15 +1835,17 @@ impl<'a> Lowering<'a> {
                     )
                     .map(|offset| index + 1 + offset)
                 {
-                    let middle = self.lower_loop_sequence(
+                    let middle = self.lower_loop_sequence_with_break_target(
                         &statements[index + 1..target],
                         after,
                         structural_after,
+                        break_target,
                     )?;
-                    let suffix = self.lower_loop_sequence(
+                    let suffix = self.lower_loop_sequence_with_break_target(
                         &statements[target + 1..],
                         after,
                         structural_after,
+                        break_target,
                     )?;
                     let distance =
                         self.canonical_action_width(&middle, statement.span().copied())?;
@@ -1795,7 +1912,11 @@ impl<'a> Lowering<'a> {
                     continue;
                 }
             }
-            actions.extend(self.lower_action(statement, Some(BreakTarget::Loop))?);
+            if matches!(statement, Stmt::Label { .. }) {
+                index += 1;
+                continue;
+            }
+            actions.extend(self.lower_action(statement, Some(break_target))?);
             index += 1;
         }
         Ok(actions)
@@ -1806,6 +1927,7 @@ impl<'a> Lowering<'a> {
         statement: &Stmt,
         after: &[ActionId],
         structural_after: usize,
+        break_target: BreakTarget,
     ) -> Result<Vec<ActionId>, IntegrationError> {
         let Stmt::If {
             branches,
@@ -1820,14 +1942,23 @@ impl<'a> Lowering<'a> {
         let mut suffix_structural = structural_after + 1;
         let mut lowered_else = None;
         if let Some(body) = r#else {
-            let body = self.lower_loop_sequence(body, after, suffix_structural)?;
+            let body = self.lower_loop_sequence_with_break_target(
+                body,
+                after,
+                suffix_structural,
+                break_target,
+            )?;
             suffix.splice(0..0, body.iter().copied());
             suffix_structural += 1;
             lowered_else = Some(body);
         }
         for index in (0..branches.len()).rev() {
-            let body =
-                self.lower_loop_sequence(&branches[index].body, &suffix, suffix_structural)?;
+            let body = self.lower_loop_sequence_with_break_target(
+                &branches[index].body,
+                &suffix,
+                suffix_structural,
+                break_target,
+            )?;
             suffix_structural += 1;
             suffix.splice(0..0, body.iter().copied());
             lowered_branches.push(body);
@@ -1846,6 +1977,64 @@ impl<'a> Lowering<'a> {
     ) -> Result<Vec<ActionId>, IntegrationError> {
         let mut actions = Vec::new();
         for (index, statement) in statements.iter().enumerate() {
+            if let Some(conditions) = pure_continue_conditions(statement) {
+                let tail = self.lower_do_while_body(&statements[index + 1..])?;
+                let mut condition = None;
+                for expression in conditions {
+                    let value = self.lower_value(expression)?;
+                    condition = Some(match condition {
+                        Some(left) => self.push_call("and", vec![left, value]),
+                        None => value,
+                    });
+                }
+                let action = if let Some(condition) = condition {
+                    self.push_call_action("loopIf", &[condition])
+                } else {
+                    self.push_call_action("loop", &[])
+                };
+                self.mark_action_origins(std::slice::from_ref(&action), statement.span().copied());
+                actions.push(action);
+                actions.extend(tail);
+                return Ok(actions);
+            }
+            if contains_loop_continue(statement) {
+                if let Stmt::Switch { value, arms, span } = statement {
+                    let lowered = self.lower_switch(
+                        value,
+                        arms,
+                        *span,
+                        Some(BreakTarget::DoWhile),
+                        None,
+                        true,
+                    )?;
+                    self.mark_action_origins(&lowered, statement.span().copied());
+                    actions.extend(lowered);
+                    continue;
+                }
+                let Stmt::If {
+                    branches, r#else, ..
+                } = statement
+                else {
+                    unreachable!("continue-containing do-while statement must be an if")
+                };
+                let branches = branches
+                    .iter()
+                    .map(|branch| {
+                        Ok((
+                            self.lower_value(&branch.condition)?,
+                            self.lower_do_while_body(&branch.body)?,
+                        ))
+                    })
+                    .collect::<Result<Vec<_>, IntegrationError>>()?;
+                let else_body = r#else
+                    .as_ref()
+                    .map(|body| self.lower_do_while_body(body))
+                    .transpose()?;
+                let lowered = self.push_if_actions(branches, else_body);
+                self.mark_action_origins(&lowered, statement.span().copied());
+                actions.extend(lowered);
+                continue;
+            }
             let direct_break = matches!(statement, Stmt::Break { .. });
             let conditional_break = match statement {
                 Stmt::If {
@@ -1934,6 +2123,8 @@ impl<'a> Lowering<'a> {
         arms: &[SwitchArm],
         span: Option<HirSpan>,
         break_target: Option<BreakTarget>,
+        loop_continue: Option<(&[ActionId], usize)>,
+        do_while_continue: bool,
     ) -> Result<Vec<ActionId>, IntegrationError> {
         if break_target.is_none()
             && arms.iter().all(|arm| match arm {
@@ -1952,11 +2143,40 @@ impl<'a> Lowering<'a> {
         let mut legacy_offset = 0;
         let mut legacy_default_offset = None;
 
-        for arm in arms {
+        let mut reverse_bodies = (loop_continue.is_some() && !do_while_continue).then(|| {
+            (0..arms.len())
+                .map(|_| None)
+                .collect::<Vec<Option<LoweredSwitchBody>>>()
+        });
+        if let Some((outer_after, structural_after)) = loop_continue {
+            let mut future = Vec::new();
+            for index in (0..arms.len()).rev() {
+                let body = match &arms[index] {
+                    SwitchArm::Case { body, .. } | SwitchArm::Default { body, .. } => body,
+                };
+                let mut after = future.clone();
+                after.extend_from_slice(outer_after);
+                let lowered = self.lower_switch_body(
+                    body,
+                    Some((&after, structural_after)),
+                    do_while_continue,
+                )?;
+                let mut next_future = lowered.0.clone();
+                next_future.extend_from_slice(&future);
+                future = next_future;
+                reverse_bodies.as_mut().unwrap()[index] = Some(lowered);
+            }
+        }
+        for (index, arm) in arms.iter().enumerate() {
             let (value, (body, break_at)) = match arm {
                 SwitchArm::Case { value, body, .. } => {
                     case_values.push(self.lower_value(value)?);
-                    (Some(value), self.lower_switch_body(body)?)
+                    let lowered = if let Some(bodies) = reverse_bodies.as_mut() {
+                        bodies[index].take().unwrap()
+                    } else {
+                        self.lower_switch_body(body, loop_continue, do_while_continue)?
+                    };
+                    (Some(value), lowered)
                 }
                 SwitchArm::Default { body, span } => {
                     if has_default {
@@ -1966,7 +2186,12 @@ impl<'a> Lowering<'a> {
                     }
                     has_default = true;
                     legacy_default_offset = Some(legacy_offset);
-                    (None, self.lower_switch_body(body)?)
+                    let lowered = if let Some(bodies) = reverse_bodies.as_mut() {
+                        bodies[index].take().unwrap()
+                    } else {
+                        self.lower_switch_body(body, loop_continue, do_while_continue)?
+                    };
+                    (None, lowered)
                 }
             };
             if value.is_some() {
@@ -2160,26 +2385,51 @@ impl<'a> Lowering<'a> {
     fn lower_switch_body(
         &mut self,
         statements: &[Stmt],
+        loop_continue: Option<(&[ActionId], usize)>,
+        do_while_continue: bool,
     ) -> Result<LoweredSwitchBody, IntegrationError> {
         let mut actions = Vec::new();
-        let mut break_at = None;
-        for statement in statements {
-            if let Stmt::Break { span } = statement {
-                if break_at.is_some() {
-                    return Err(self.unsupported(
-                        "multiple switch breaks in one arm require canonical switch targets",
-                        *span,
-                    ));
-                }
-                break_at = Some((
-                    actions.len(),
-                    span.ok_or_else(|| {
-                        self.unsupported("switch break is missing source provenance", None)
-                    })?,
-                ));
-                continue;
+        let break_index = statements
+            .iter()
+            .position(|statement| matches!(statement, Stmt::Break { .. }));
+        let body_end = break_index.unwrap_or(statements.len());
+        if do_while_continue {
+            actions.extend(self.lower_do_while_body(&statements[..body_end])?);
+        } else if let Some((after, structural_after)) = loop_continue {
+            actions.extend(self.lower_loop_sequence_with_break_target(
+                &statements[..body_end],
+                after,
+                structural_after + 1,
+                BreakTarget::Switch,
+            )?);
+        } else {
+            for statement in &statements[..body_end] {
+                actions.extend(self.lower_action(statement, Some(BreakTarget::Switch))?);
             }
-            actions.extend(self.lower_action(statement, Some(BreakTarget::Switch))?);
+        }
+        let mut break_at = None;
+        if let Some(index) = break_index {
+            let Stmt::Break { span } = &statements[index] else {
+                unreachable!("switch break index must point to a break")
+            };
+            if statements[index + 1..]
+                .iter()
+                .any(|statement| matches!(statement, Stmt::Break { .. }))
+            {
+                return Err(self.unsupported(
+                    "multiple switch breaks in one arm require canonical switch targets",
+                    *span,
+                ));
+            }
+            break_at = Some((
+                actions.len(),
+                span.ok_or_else(|| {
+                    self.unsupported("switch break is missing source provenance", None)
+                })?,
+            ));
+            for statement in statements[index + 1..].iter() {
+                actions.extend(self.lower_action(statement, Some(BreakTarget::Switch))?);
+            }
         }
         Ok((actions, break_at))
     }
@@ -2955,13 +3205,29 @@ impl<'a> Lowering<'a> {
         target: &Expr,
         span: Option<HirSpan>,
     ) -> Result<ActionId, IntegrationError> {
-        let Expr::Index { array, index, .. } = target else {
+        let mut indices = Vec::new();
+        let Some(root) = indexed_target_parts(target, &mut indices) else {
             return Err(self.unsupported(
                 "delete statements require an indexed global or player variable",
                 span,
             ));
         };
-        let (root, assignment) = match array.as_ref() {
+        if indices.len() > 4 {
+            return Err(self.unsupported("Cannot delete index of 4d array", span));
+        }
+        indices.reverse();
+        if indices.len() >= 3
+            && (expr_contains_random(root)
+                || indices[..indices.len() - 1]
+                    .iter()
+                    .any(|index| expr_contains_random(index)))
+        {
+            return Err(self.unsupported(
+                "Cannot delete from nested array with a random outer or middle index",
+                span,
+            ));
+        }
+        let (root_value, action_name) = match root {
             Expr::GlobalVar {
                 name,
                 span: target_span,
@@ -2969,9 +3235,9 @@ impl<'a> Lowering<'a> {
                 let variable = *self.globals.get(name).ok_or_else(|| {
                     self.unsupported(format!("unknown global variable '{name}'"), *target_span)
                 })?;
-                let value =
+                let root_value =
                     self.push_value(Value::GlobalVariable(self.global_names[variable].clone()));
-                (value, DeleteAssignment::Global(variable))
+                (root_value, "modifyGlobalVariableAtIndex")
             }
             Expr::PlayerVar {
                 player,
@@ -2987,7 +3253,7 @@ impl<'a> Lowering<'a> {
                     player,
                     variable: self.player_names[variable].clone(),
                 });
-                (value, DeleteAssignment::Player { player, variable })
+                (value, "modifyPlayerVariableAtIndex")
             }
             _ => {
                 return Err(self.unsupported(
@@ -2996,28 +3262,86 @@ impl<'a> Lowering<'a> {
                 ));
             }
         };
-        let index = self.lower_value(index)?;
-        let zero = self.push_number(0.0, "0");
-        let one = self.push_number(1.0, "1");
-        let end = self.push_call("add", vec![index, one]);
-        let maximum = self.push_number(999_999_999_999.0, "999999999999");
-        let prefix = self.push_call("slice", vec![root, zero, index]);
-        let suffix = self.push_call("slice", vec![root, end, maximum]);
-        let value = self.push_call("appendToArray", vec![prefix, suffix]);
-        let _ = span;
-        Ok(match assignment {
-            DeleteAssignment::Global(variable) => self.push_action(Action::SetGlobalVariable {
-                variable: self.global_names[variable].clone(),
-                value,
-            }),
-            DeleteAssignment::Player { player, variable } => {
-                self.push_action(Action::SetPlayerVariable {
-                    player,
-                    variable: self.player_names[variable].clone(),
-                    value,
+        let index = self.lower_value(indices[0])?;
+        if indices.len() == 1 {
+            let op = ModifyOp::RemoveFromArrayByIndex;
+            let index = self.normalize_modify_value(op, index);
+            return Ok(if action_name == "modifyGlobalVariableAtIndex" {
+                let variable = match self.values.get(root_value) {
+                    Some(Value::GlobalVariable(variable)) => variable.clone(),
+                    _ => unreachable!("global delete root must be a global variable value"),
+                };
+                self.push_action(Action::ModifyGlobalVariable {
+                    variable,
+                    op,
+                    value: index,
                 })
+            } else {
+                let (player, variable) = match self.values.get(root_value) {
+                    Some(Value::PlayerVariable { player, variable }) => (*player, variable.clone()),
+                    _ => unreachable!("player delete root must be a player variable value"),
+                };
+                self.push_action(Action::ModifyPlayerVariable {
+                    player,
+                    variable,
+                    op,
+                    value: index,
+                })
+            });
+        }
+
+        let op = self.push_call("removeFromArrayByIndex", Vec::new());
+        if indices.len() == 2 {
+            let inner_index = self.lower_value(indices[1])?;
+            let args = self.normalize_contextual_arguments(
+                action_name,
+                vec![root_value, index, op, inner_index],
+            );
+            return Ok(self.push_call_action(action_name, &args));
+        }
+
+        let outer_array = self.lower_indexed_read(root_value, indices[0], index)?;
+        if indices.len() == 4 {
+            let replacement = self.rebuild_deleted_array(outer_array, &indices[1..], span)?;
+            let action_name = if action_name == "modifyGlobalVariableAtIndex" {
+                "setGlobalVariableAtIndex"
+            } else {
+                "setPlayerVariableAtIndex"
+            };
+            let args = self
+                .normalize_contextual_arguments(action_name, vec![root_value, index, replacement]);
+            return Ok(self.push_call_action(action_name, &args));
+        }
+        let inner_index = self.lower_value(indices[1])?;
+        let row = self.lower_indexed_read(outer_array, indices[1], inner_index)?;
+        let leaf_index = self.lower_value(indices[2])?;
+        let current_index = self.push_call("currentArrayIndex", Vec::new());
+        let condition = self.push_call("!=", vec![current_index, leaf_index]);
+        let filtered = self.push_call("filteredArray", vec![row, condition]);
+        let replacement = if let Some(number) = literal_number(indices[1]) {
+            let middle = self.lower_array(vec![filtered], span)?;
+            let maximum = self.push_number(999_999_999_999.0, "999999999999");
+            let suffix_start = self.push_number(number + 1.0, &(number + 1.0).to_string());
+            let suffix = self.push_call("slice", vec![outer_array, suffix_start, maximum]);
+            if number == 0.0 {
+                self.push_call("appendToArray", vec![middle, suffix])
+            } else {
+                let zero = self.push_number(0.0, "0");
+                let prefix = self.push_call("slice", vec![outer_array, zero, inner_index]);
+                let with_replacement = self.push_call("appendToArray", vec![prefix, middle]);
+                self.push_call("appendToArray", vec![with_replacement, suffix])
             }
-        })
+        } else {
+            self.replace_array_element(outer_array, inner_index, filtered, span)?
+        };
+        let action_name = if action_name == "modifyGlobalVariableAtIndex" {
+            "setGlobalVariableAtIndex"
+        } else {
+            "setPlayerVariableAtIndex"
+        };
+        let args =
+            self.normalize_contextual_arguments(action_name, vec![root_value, index, replacement]);
+        Ok(self.push_call_action(action_name, &args))
     }
 
     fn lower_assign(
@@ -3355,6 +3679,47 @@ impl<'a> Lowering<'a> {
         let suffix = self.push_call("slice", vec![array, end, maximum]);
         let with_replacement = self.push_call("appendToArray", vec![prefix, middle]);
         Ok(self.push_call("appendToArray", vec![with_replacement, suffix]))
+    }
+
+    fn rebuild_deleted_array(
+        &mut self,
+        array: ValueId,
+        indices: &[&Expr],
+        span: Option<HirSpan>,
+    ) -> Result<ValueId, IntegrationError> {
+        let index = self.lower_value(indices[0])?;
+        if indices.len() == 1 {
+            let current_index = self.push_call("currentArrayIndex", Vec::new());
+            let condition = self.push_call("!=", vec![current_index, index]);
+            return Ok(self.push_call("filteredArray", vec![array, condition]));
+        }
+        let child = self.lower_indexed_read(array, indices[0], index)?;
+        let replacement = self.rebuild_deleted_array(child, &indices[1..], span)?;
+        self.replace_array_element_for_delete(array, indices[0], index, replacement, span)
+    }
+
+    fn replace_array_element_for_delete(
+        &mut self,
+        array: ValueId,
+        index_expr: &Expr,
+        index: ValueId,
+        replacement: ValueId,
+        span: Option<HirSpan>,
+    ) -> Result<ValueId, IntegrationError> {
+        if let Some(number) = literal_number(index_expr) {
+            let middle = self.lower_array(vec![replacement], span)?;
+            let maximum = self.push_number(999_999_999_999.0, "999999999999");
+            let suffix_start = self.push_number(number + 1.0, &(number + 1.0).to_string());
+            let suffix = self.push_call("slice", vec![array, suffix_start, maximum]);
+            if number == 0.0 {
+                return Ok(self.push_call("appendToArray", vec![middle, suffix]));
+            }
+            let zero = self.push_number(0.0, "0");
+            let prefix = self.push_call("slice", vec![array, zero, index]);
+            let with_replacement = self.push_call("appendToArray", vec![prefix, middle]);
+            return Ok(self.push_call("appendToArray", vec![with_replacement, suffix]));
+        }
+        self.replace_array_element(array, index, replacement, span)
     }
 
     fn lower_action_call(
@@ -5806,6 +6171,72 @@ fn literal_number(expr: &hir::Expr) -> Option<f64> {
             literal_number(operand).map(|value| -value)
         }
         _ => None,
+    }
+}
+
+fn expr_contains_random(expr: &hir::Expr) -> bool {
+    match expr {
+        hir::Expr::Call { name, args, .. } | hir::Expr::MacroCall { name, args, .. } => {
+            name.starts_with("random.") || args.iter().any(expr_contains_random)
+        }
+        hir::Expr::Array { elements, .. } => elements.iter().any(expr_contains_random),
+        hir::Expr::Dict { entries, .. } => entries
+            .iter()
+            .any(|entry| expr_contains_random(&entry.key) || expr_contains_random(&entry.value)),
+        hir::Expr::Comprehension {
+            element,
+            iterable,
+            condition,
+            ..
+        } => {
+            expr_contains_random(element)
+                || expr_contains_random(iterable)
+                || condition.as_deref().is_some_and(expr_contains_random)
+        }
+        hir::Expr::Lambda { body, .. } | hir::Expr::Unary { operand: body, .. } => {
+            expr_contains_random(body)
+        }
+        hir::Expr::Vector { x, y, z, .. } => {
+            expr_contains_random(x) || expr_contains_random(y) || expr_contains_random(z)
+        }
+        hir::Expr::PlayerVar { player, .. }
+        | hir::Expr::Member {
+            receiver: player, ..
+        } => expr_contains_random(player),
+        hir::Expr::ReceiverCall { receiver, args, .. } => {
+            expr_contains_random(receiver) || args.iter().any(expr_contains_random)
+        }
+        hir::Expr::Type { args, .. } | hir::Expr::Format { args, .. } => {
+            args.iter().any(expr_contains_random)
+        }
+        hir::Expr::Binary { left, right, .. } => {
+            expr_contains_random(left) || expr_contains_random(right)
+        }
+        hir::Expr::Conditional {
+            then_value,
+            condition,
+            else_value,
+            ..
+        } => {
+            expr_contains_random(then_value)
+                || expr_contains_random(condition)
+                || expr_contains_random(else_value)
+        }
+        hir::Expr::Index { array, index, .. } => {
+            expr_contains_random(array) || expr_contains_random(index)
+        }
+        hir::Expr::Number { .. }
+        | hir::Expr::String { .. }
+        | hir::Expr::Bool { .. }
+        | hir::Expr::Null { .. }
+        | hir::Expr::StringModifier { .. }
+        | hir::Expr::Local { .. }
+        | hir::Expr::Enum { .. }
+        | hir::Expr::GlobalVar { .. }
+        | hir::Expr::HostPlayer { .. }
+        | hir::Expr::EventPlayer { .. }
+        | hir::Expr::Constant { .. }
+        | hir::Expr::MacroParam { .. } => false,
     }
 }
 

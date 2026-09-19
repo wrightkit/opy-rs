@@ -1,0 +1,33 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: a\n        1: i\n    player:\n        0: p\n}\n\nrule (\"global 1d\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Modify Global Variable(a, Remove From Array By Index, 0);\n    }\n}\n\nrule (\"player 1d\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Modify Player Variable(Event Player, p, Remove From Array By Index, 0);\n    }\n}\n\nrule (\"global 2d\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Modify Global Variable At Index(a, Global.i, Remove From Array By Index, 0);\n    }\n}\n\nrule (\"global 3d\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable At Index(a, Global.i, Append To Array(Array(Filtered Array(First Of(Value In Array(Global.a, Global.i)), Compare(Current Array Index, !=, 0))), Array Slice(Value In Array(Global.a, Global.i), 1, 999999999999)));\n    }\n}\n\nrule (\"literal 3d\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable At Index(a, 0, Append To Array(Append To Array(Array Slice(First Of(Global.a), 0, 1), Array(Filtered Array(Value In Array(First Of(Global.a), 1), Compare(Current Array Index, !=, 2)))), Array Slice(First Of(Global.a), 2, 999999999999)));\n    }\n}\n\nrule (\"global 4d\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable At Index(a, 0, Append To Array(Append To Array(Array Slice(First Of(Global.a), 0, 1), Array(Append To Array(Append To Array(Array Slice(Value In Array(First Of(Global.a), 1), 0, 2), Array(Filtered Array(Value In Array(Value In Array(First Of(Global.a), 1), 2), Compare(Current Array Index, !=, 3)))), Array Slice(Value In Array(First Of(Global.a), 1), 3, 999999999999)))), Array Slice(First Of(Global.a), 2, 999999999999)));\n    }\n}\n\nrule (\"random leaf 3d\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable At Index(a, 0, Append To Array(Array(Filtered Array(First Of(First Of(Global.a)), Compare(Current Array Index, !=, Random Integer(0, 1)))), Array Slice(First Of(Global.a), 1, 999999999999)));\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: a\n        1: i\n    player:\n        0: p\n}\n\nrule (\"global 1d\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Modify Global Variable(a, Remove From Array By Index, 0);\n    }\n}\n\nrule (\"player 1d\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Modify Player Variable(Event Player, p, Remove From Array By Index, 0);\n    }\n}\n\nrule (\"global 2d\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Modify Global Variable At Index(a, Global.i, Remove From Array By Index, 0);\n    }\n}\n\nrule (\"global 3d\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable At Index(a, Global.i, Append To Array(Array(Filtered Array(First Of(Value In Array(Global.a, Global.i)), Compare(Current Array Index, !=, 0))), Array Slice(Value In Array(Global.a, Global.i), 1, 999999999999)));\n    }\n}\n\nrule (\"literal 3d\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable At Index(a, 0, Append To Array(Append To Array(Array Slice(First Of(Global.a), 0, 1), Array(Filtered Array(Value In Array(First Of(Global.a), 1), Compare(Current Array Index, !=, 2)))), Array Slice(First Of(Global.a), 2, 999999999999)));\n    }\n}\n\nrule (\"global 4d\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable At Index(a, 0, Append To Array(Append To Array(Array Slice(First Of(Global.a), 0, 1), Array(Append To Array(Append To Array(Array Slice(Value In Array(First Of(Global.a), 1), 0, 2), Array(Filtered Array(Value In Array(Value In Array(First Of(Global.a), 1), 2), Compare(Current Array Index, !=, 3)))), Array Slice(Value In Array(First Of(Global.a), 1), 3, 999999999999)))), Array Slice(First Of(Global.a), 2, 999999999999)));\n    }\n}\n\nrule (\"random leaf 3d\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable At Index(a, 0, Append To Array(Array(Filtered Array(First Of(First Of(Global.a)), Compare(Current Array Index, !=, Random Integer(0, 1)))), Array Slice(First Of(Global.a), 1, 999999999999)));\n    }\n}\n\n",
+    "workshopSha256": "f513ec6bce4896933d22a3cb3dc95e83a6bff0815a64c20e63d6b3dd5ad685b5"
+  },
+  "fixture": "synthetic/collection-mutation-328",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "71aa49add8b492233a0b99df631dda1d5acdd9b2bbb09cea55196497c5b9ca18"
+      }
+    ],
+    "sha256": "a89cc10c7accbd1b8777301435e9a3ab9d893222fd58b1d60a63584754f5b98e",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}
