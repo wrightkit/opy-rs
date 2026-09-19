@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "synthetic/control-flow-328",
   "category": "compilation",
-  "features": ["continue", "do-while", "goto", "loc-plus", "rule-start"],
+  "features": ["continue", "do-while", "goto", "loc-plus", "rule-start", "switch-in-loop"],
   "source": "source.opy",
   "expectedStatus": "success",
   "provenance": {

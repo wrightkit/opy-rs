@@ -26,7 +26,7 @@ fn semantic_boundary_errors_are_reported_before_lowering() {
         ),
         (
             "four-dimensional-delete.opy",
-            "globalvar nested\n\nrule \"four-dimensional delete\":\n    @Event global\n    del nested[0][0][0][0]\n",
+            "globalvar nested\n\nrule \"four-dimensional delete\":\n    @Event global\n    del nested[0][0][0][0][0]\n",
             "four-dimensional-delete",
             "Cannot delete index of 4d array",
             5,

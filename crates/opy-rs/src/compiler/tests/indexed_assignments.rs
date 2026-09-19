@@ -47,6 +47,20 @@ fn collection_deletion_matches_the_pinned_oracle() {
 }
 
 #[test]
+fn nested_random_delete_reaches_the_pinned_boundary() {
+    let dir = fixture_dir("collection-mutation-328-random-invalid");
+    let source = std::fs::read_to_string(dir.join("source.opy")).unwrap();
+    let report = Compiler::new()
+        .unwrap()
+        .compile_source_report(&source, "source.opy", &dir);
+    assert_eq!(report.compile.status, crate::CompileStatus::Failure);
+    assert_eq!(
+        report.compile.diagnostics[0].code,
+        "unsupported-integration-surface"
+    );
+}
+
+#[test]
 fn nested_player_collection_deletion_uses_the_canonical_indexed_action() {
     let source = r#"
 playervar values

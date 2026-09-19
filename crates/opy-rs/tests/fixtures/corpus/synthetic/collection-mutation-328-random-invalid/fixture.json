@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/collection-mutation-328-random-invalid",
+  "category": "compilation",
+  "features": ["del", "nested-arrays", "random-index", "semantic-boundary"],
+  "source": "source.opy",
+  "expectedStatus": "failure",
+  "provenance": {
+    "kind": "original",
+    "origin": "opy-rs Issue #328 pinned OverPy 9.7.10 nested deletion random-index rejection probe",
+    "license": "AGPL-3.0-or-later",
+    "redistributable": true
+  }
+}

@@ -21,3 +21,11 @@ rule "global 3d":
 rule "literal 3d":
     @Event global
     del a[0][1][2]
+
+rule "global 4d":
+    @Event global
+    del a[0][1][2][3]
+
+rule "random leaf 3d":
+    @Event global
+    del a[0][0][random.randint(0, 1)]

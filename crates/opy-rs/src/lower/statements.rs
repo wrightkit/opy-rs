@@ -228,7 +228,7 @@ impl Lowerer {
                 span: Some(span.into()),
             },
             Stmt::Delete { target, span } => {
-                if indexed_expr_depth(target) >= 4 {
+                if indexed_expr_depth(target) >= 5 {
                     self.error_at(
                         "four-dimensional-delete",
                         "Cannot delete index of 4d array".to_string(),

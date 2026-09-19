@@ -227,7 +227,19 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         &mut cases,
         "synthetic/collection-mutation-328",
         true,
-        "Issue #328 pinned collection-deletion probe; one-, two-, and three-dimensional global and player-variable targets resolve through canonical indexed mutation lowering.",
+        "Issue #328 pinned collection-deletion probe; one- through four-index global and player-variable targets resolve through canonical indexed mutation lowering.",
+    );
+    diagnostic(
+        &mut cases,
+        "synthetic/collection-mutation-328-invalid",
+        Some("four-dimensional-delete"),
+        "Issue #328 pinned five-index deletion rejection; the native semantic boundary matches the pinned OverPy rejection frontier.",
+    );
+    resolve(
+        &mut cases,
+        "synthetic/collection-mutation-328-random-invalid",
+        false,
+        "Issue #328 pins the compiler-level rejection of a random outer index in a three-index delete; the source HIR remains structurally resolvable and the compiler expectation records the lowering boundary.",
     );
     resolve(
         &mut cases,

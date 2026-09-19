@@ -14,7 +14,7 @@
 | Dictionary mutation through a computed assignment target | ❌ Unsupported | Canonical Workshop has no equivalent mutable dictionary target in this boundary. |
 | `lambda` element/index binders | ✅ Supported | Binders are accepted in the callable contexts that define them. |
 | Member access, calls and postfix expressions | ✅ Supported | Receiver and argument errors retain source locations. |
-| `del array[index]` | ✅ Supported | Global and player-variable targets are lowered through three dimensions; arbitrary expressions and four-dimensional deletion are rejected. |
+| `del array[index]` | ✅ Supported | Global and player-variable targets are lowered through four source indexes; five-index deletion and nested random outer/middle indexes are rejected at the pinned OverPy boundary. |
 | Conditional values: `a if condition else b` | ✅ Supported | Chained forms are right-associative. |
 | `in`, `not in`, arithmetic, comparison, boolean and unary operators | ✅ Supported | String membership uses the canonical Workshop operation. |
 | `++` and `--` postfix assignment modifiers | ✅ Supported | Statement-level global, player and single-level indexed forms are supported; prefix/embedded forms are rejected. |
