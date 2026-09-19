@@ -7,7 +7,7 @@
 | `#` line comments and `/* ... */` block comments | ✅ Supported | Comments are retained for source attribution where the API exposes it. |
 | Identifiers, indentation, `rule` blocks and `def` subroutines | ✅ Supported | Subroutine declarations follow the OverPy no-parameter/no-return form. |
 | Boolean, integer, float and `null` literals | ✅ Supported | Numeric values are normalized at the canonical Workshop boundary. |
-| Strings, escaped strings, adjacent strings and f-strings | ✅ Supported | Supported string modifiers are listed below. |
+| Strings, escaped strings, named entities, adjacent strings and f-strings | ✅ Supported | Named `\&entity;` escapes use the pinned OverPy entity table and reject unknown or malformed entities with source diagnostics. Supported string modifiers are listed below. |
 | String modifiers `f`, `w`, `l`, `b`, `c`, `t` | ✅ Supported | Translation output remains subject to the translation limits below. |
 | Array literals, indexing and comprehensions | ✅ Supported | Supported comprehensions lower through canonical array operations. |
 | Dictionary literals and literal-key lookup | ✅ Supported | Literal keys fold to the selected value. |

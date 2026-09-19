@@ -86,3 +86,15 @@ fn format_folds_constant_arguments_without_nested_string_chunks() {
     );
     assert!(!artifact.emitted.contains("Custom String(\"{0}{1}\""));
 }
+
+#[test]
+fn named_string_entities_reach_canonical_custom_strings() {
+    let source = r#"rule "entities":
+    @Event global
+    print("a\&black_square;b\&fullwidth_space;c")
+"#;
+    let hir = crate::compile(source, "entities.opy", Path::new(".")).unwrap();
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+
+    assert!(artifact.emitted.contains("Custom String(\"a■b　c\")"));
+}

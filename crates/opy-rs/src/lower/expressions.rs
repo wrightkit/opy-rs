@@ -345,6 +345,25 @@ impl Lowerer {
                     }
                 };
             }
+            if name == "Texture" {
+                if let Some(tag) = super::textures::tag(member) {
+                    self.texture_used = true;
+                    return HirExpr::Format {
+                        text: tag.replacen('<', "{0}", 1),
+                        args: vec![HirExpr::GlobalVar {
+                            name: "__holygrail__".to_string(),
+                            span: Some(span.into()),
+                        }],
+                        span: Some(span.into()),
+                    };
+                }
+                self.error_at(
+                    "unknown-texture-member",
+                    format!("unknown texture member '{member}'"),
+                    span,
+                );
+                return HirExpr::Null { span: None };
+            }
             if name == "Math" {
                 match member {
                     "FUCKTON_OF_SPACES" | "LOTS_OF_SPACES" => {

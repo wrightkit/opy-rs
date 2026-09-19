@@ -305,6 +305,43 @@ impl Lexer {
                 }
                 let escaped = self.chars[self.pos];
                 raw.push(escaped);
+                if escaped == '&' {
+                    self.advance();
+                    let mut entity_name = String::new();
+                    while let Some(character) = self.chars.get(self.pos).copied() {
+                        if character == ';' {
+                            break;
+                        }
+                        if !(character.is_ascii_alphanumeric() || character == '_') {
+                            return Err(OpyError::at(
+                                "invalid-string-entity",
+                                format!("invalid character '{character}' in string entity"),
+                                Span::new(self.file_id, escape_start.start, self.here(1).end),
+                            ));
+                        }
+                        entity_name.push(character);
+                        raw.push(character);
+                        self.advance();
+                    }
+                    if self.chars.get(self.pos) != Some(&';') {
+                        return Err(OpyError::at(
+                            "invalid-string-entity",
+                            "expected ';' to terminate string entity",
+                            Span::new(self.file_id, escape_start.start, self.here(0).start),
+                        ));
+                    }
+                    raw.push(';');
+                    self.advance();
+                    let Some(codepoint) = crate::string_entities::codepoint(&entity_name) else {
+                        return Err(OpyError::at(
+                            "unknown-string-entity",
+                            format!("unknown string entity '{entity_name}'"),
+                            Span::new(self.file_id, escape_start.start, self.here(0).start),
+                        ));
+                    };
+                    value.push(codepoint);
+                    continue;
+                }
                 if escaped == 'u' {
                     self.advance();
                     let mut codepoint = 0_u32;
@@ -726,6 +763,36 @@ mod tests {
             .find(|token| token.kind == TokenKind::String)
             .expect("string token");
         assert_eq!(string.text, "\n\t\r\"\\");
+    }
+
+    #[test]
+    fn named_string_entities_decode_with_raw_provenance() {
+        let string = lex_ok(r#""a\&black_square;b\&fullwidth_space;c""#)
+            .into_iter()
+            .find(|token| token.kind == TokenKind::String)
+            .expect("string token");
+        assert_eq!(string.text, "a■b　c");
+        assert_eq!(
+            string.raw.as_deref(),
+            Some(r"a\&black_square;b\&fullwidth_space;c")
+        );
+    }
+
+    #[test]
+    fn invalid_string_entities_are_structured_lex_errors() {
+        for (source, code) in [
+            (r#""\&missing;""#, "unknown-string-entity"),
+            (r#""\&black-square;""#, "invalid-string-entity"),
+            (r#""\&black_square""#, "invalid-string-entity"),
+        ] {
+            let error = lex(LexInput {
+                file_id: 0,
+                text: source,
+            })
+            .expect_err("invalid string entity unexpectedly lexed");
+            assert_eq!(error.code, code);
+            assert_eq!(error.span.unwrap().start, Position::new(1, 2));
+        }
     }
 
     #[test]
