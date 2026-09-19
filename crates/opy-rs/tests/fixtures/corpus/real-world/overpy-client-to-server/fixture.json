@@ -1,7 +1,5 @@
 {
-  "acquisitionMethod": "scripts/acquire-corpus.py: GitHub archive of the pinned commit (codeload.tar.gz), include-closure resolution matching the pinned oracle, SHA-256 verification",
   "category": "real-world",
-  "expectedStatus": "success",
   "features": [
     "declarations",
     "expressions",
@@ -13,7 +11,20 @@
     "clientToServer.opy": "3ef442054f57c1a9f9905f11da4d5e27726564c5bab44c74ebfab56825b94781"
   },
   "id": "real-world/overpy-client-to-server",
-  "provenance": {
+  "schemaVersion": 1,
+  "source": "clientToServer.opy",
+  "regressions": [
+    {
+      "source": "regressions/chained-ternary.opy"
+    },
+    {
+      "source": "regressions/is-dummy.opy"
+    },
+    {
+      "source": "regressions/get-horizontal-facing-angle.opy"
+    }
+  ],
+  "attribution": {
     "kind": "imported-example",
     "license": "GPL-3.0-only",
     "licenseUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/LICENSE",
@@ -23,33 +34,17 @@
     "sourceCommit": "eea67adbcf6926c4004e35e25ab4be072624a44e",
     "sourceUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/examples/clientToServer.opy"
   },
-  "runtimeSeconds": 6.4,
-  "schemaVersion": 1,
-  "source": "clientToServer.opy",
-  "regressions": [
-    {
-      "id": "real-world/overpy-client-to-server/chained-ternary",
-      "source": "regressions/chained-ternary.opy",
-      "derivedFrom": "clientToServer.opy",
-      "expectedReferenceStatus": "success",
-      "kind": "minimized-regression",
-      "provenance": "oracle:real-world/overpy-client-to-server/oracle.json; source path 55"
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "known-gap",
+      "ruleNames": false
     },
-    {
-      "id": "real-world/overpy-client-to-server/is-dummy",
-      "source": "regressions/is-dummy.opy",
-      "derivedFrom": "clientToServer.opy",
-      "expectedReferenceStatus": "success",
-      "kind": "minimized-regression",
-      "provenance": "oracle:real-world/overpy-client-to-server/oracle.json; source path 42"
-    },
-    {
-      "id": "real-world/overpy-client-to-server/get-horizontal-facing-angle",
-      "source": "regressions/get-horizontal-facing-angle.opy",
-      "derivedFrom": "clientToServer.opy",
-      "expectedReferenceStatus": "success",
-      "kind": "minimized-regression",
-      "provenance": "oracle:real-world/overpy-client-to-server/oracle.json; source paths 46, 58, 60, 62, 64"
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": true
     }
-  ]
+  }
 }

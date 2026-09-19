@@ -36,20 +36,19 @@ supported subset and limitation are stated in user terms.
 | OPY → Workshop compilation | 🚧 Partial | [Tooling and backend](language-support/tooling-and-backend.md) |
 | Workshop → OPY reconstruction | ❌ Unsupported | [Tooling and backend](language-support/tooling-and-backend.md) |
 
-## Evidence and ownership
+## Tests and ownership
 
-Support claims are grounded in executable evidence rather than a parallel
-support database:
+Support claims are grounded in executable tests and reference comparisons:
 
-- the corpus under `crates/opy-rs/tests/fixtures/corpus/` preserves
-  provenance-linked projects and minimized regressions;
-- `tools/overpy/oracle/` and each fixture's `oracle.json` record pinned upstream
-  behavior;
+- the corpus under `crates/opy-rs/tests/fixtures/corpus/` contains source,
+  compiler, regression, and real-project test inputs;
+- `tools/overpy/oracle/` and each fixture's `oracle.json` provide pinned
+  upstream reference results;
 - `tools/overpy/run_native.py` and `tools/overpy/diff.py` compare native output,
-  diagnostics, normalized Workshop output, and canonical-WIR evidence;
+  diagnostics, normalized Workshop output, and canonical-WIR comparisons;
 - Rust integration tests exercise source semantics and canonical lowering;
 - `cargo test -p opy-rs --test differential` checks the native source pipeline
-  against the corpus expectations.
+  against the fixture manifests and pinned snapshots.
 
 `opy-rs` owns OverPy syntax, preprocessing, source semantics, diagnostics and
 OverPy-specific lowering. `workshop-rs` owns canonical Workshop identities,

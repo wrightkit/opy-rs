@@ -1,4 +1,4 @@
-# Trivia and Source-Provenance Retention Policy
+# Trivia and Source-Mapping Retention Policy
 
 Status: accepted policy. Issue #3 acceptance.
 Scope: what the OPY source implementation retains from authored source and what it
@@ -12,8 +12,8 @@ intentionally discards, for the Workshop-independent source implementation surfa
 | Line comments (`# …`) and block comments (`/* … */`) | **No** | The lexer discards comments before tokenization (they never enter the token stream) |
 | Whitespace and indentation | No (reconstructed deterministically) | The CST stores statements/blocks, not original indentation |
 | Source spans | Yes | 1-based line/column spans per token and CST node; `OpyError` diagnostics carry spans; the file registry maps span file ids to paths |
-| File provenance | Yes | Preprocess `FileRecord` per file (id + path); HIR `SourceFile` entries; spans are attributed across include boundaries |
-| Macro/define expansion provenance | Yes | `#!define` expansions carry the define's span; diagnostics attribute to authored and expansion sites |
+| File mapping | Yes | Preprocess `FileRecord` per file (id + path); HIR `SourceFile` entries; spans are attributed across include boundaries |
+| Macro/define expansion mapping | Yes | `#!define` expansions carry the define's span; diagnostics attribute to authored and expansion sites |
 | Settings blocks | No (consumed pre-lexing) | Parsed into the typed settings payload; source layout not retained |
 
 ## Rationale

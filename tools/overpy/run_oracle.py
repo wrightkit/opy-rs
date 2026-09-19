@@ -94,27 +94,25 @@ def _inside(path: Path, directory: Path) -> bool:
 
 def validate_fixture(path: Path) -> tuple[Path, dict[str, Any]]:
     metadata = load_json(path)
-    required = ("schemaVersion", "id", "category", "source", "expectedStatus", "provenance")
+    required = ("schemaVersion", "id", "category", "source", "attribution")
     missing = [key for key in required if key not in metadata]
     if missing:
         raise RunnerError(f"{path}: missing fields: {', '.join(missing)}")
     if metadata["schemaVersion"] != 1:
         raise RunnerError(f"{path}: unsupported schemaVersion {metadata['schemaVersion']!r}")
-    if metadata["expectedStatus"] not in ("success", "failure"):
-        raise RunnerError(f"{path}: expectedStatus must be success or failure")
     if not isinstance(metadata["id"], str) or not metadata["id"]:
         raise RunnerError(f"{path}: id must be a non-empty string")
     if not isinstance(metadata["category"], str) or not metadata["category"]:
         raise RunnerError(f"{path}: category must be a non-empty string")
 
-    provenance = metadata["provenance"]
-    if not isinstance(provenance, dict):
-        raise RunnerError(f"{path}: provenance must be an object")
+    attribution = metadata["attribution"]
+    if not isinstance(attribution, dict):
+        raise RunnerError(f"{path}: attribution must be an object")
     for key in ("kind", "origin", "license", "redistributable"):
-        if key not in provenance:
-            raise RunnerError(f"{path}: provenance missing {key}")
-    if not isinstance(provenance["redistributable"], bool):
-        raise RunnerError(f"{path}: provenance.redistributable must be boolean")
+        if key not in attribution:
+            raise RunnerError(f"{path}: attribution missing {key}")
+    if not isinstance(attribution["redistributable"], bool):
+        raise RunnerError(f"{path}: attribution.redistributable must be boolean")
 
     fixture_dir = path.parent.resolve()
     source_value = metadata["source"]
@@ -268,12 +266,7 @@ def run(
             continue
         try:
             actual = run_fixture(fixture_path, fixture, oracle_dir, oracle)
-            expected_status = fixture["expectedStatus"]
             actual_status = actual["compile"]["status"]
-            if actual_status != expected_status:
-                raise RunnerError(
-                    f"expected {expected_status}, oracle returned {actual_status}"
-                )
 
             snapshot_path = fixture_path.parent / SNAPSHOT_NAME
             if update:

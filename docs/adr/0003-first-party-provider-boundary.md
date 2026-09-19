@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-09-12 (backfilled)
-- Historical evidence: [Issue #170](https://github.com/wrightkit/opy-rs/issues/170), [PR #171](https://github.com/wrightkit/opy-rs/pull/171), [LPP entry-loading contract](https://github.com/wrightkit/language-provider-protocol/issues/16)
+- Related history: [Issue #170](https://github.com/wrightkit/opy-rs/issues/170), [PR #171](https://github.com/wrightkit/opy-rs/pull/171), [LPP entry-loading contract](https://github.com/wrightkit/language-provider-protocol/issues/16)
 
 ## Context
 

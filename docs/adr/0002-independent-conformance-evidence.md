@@ -1,8 +1,11 @@
 # ADR-0002: Independent offline OverPy conformance evidence
 
-- Status: Accepted
+- Status: Superseded by [ADR-0006](0006-tests-first-compatibility.md)
 - Date: 2026-09-12 (backfilled)
-- Historical evidence: [Issue #158](https://github.com/wrightkit/opy-rs/issues/158), [PR #159](https://github.com/wrightkit/opy-rs/pull/159)
+- Related history: [Issue #158](https://github.com/wrightkit/opy-rs/issues/158), [PR #159](https://github.com/wrightkit/opy-rs/pull/159)
+
+This record preserves the historical decision. The current compatibility
+contract is defined by [ADR-0006](0006-tests-first-compatibility.md).
 
 ## Context
 

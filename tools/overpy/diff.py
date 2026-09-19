@@ -21,8 +21,6 @@ import input_identity
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_FIXTURES = ROOT / "crates/opy-rs/tests/fixtures/corpus"
 DEFAULT_REPORT = ROOT / "target" / "opy-rs-differential-report.json"
-DEFAULT_EXPECTATIONS = ROOT / "crates/opy-rs/tests/differential-expectations.json"
-DEFAULT_COMPILER_EXPECTATIONS = ROOT / "tools/overpy/compiler-expectations.json"
 
 EXPECTED_NATIVE_STATUSES = {"success", "failure"}
 EXPECTED_CLASSIFICATIONS = {"match", "known-gap", "unsupported"}
@@ -32,10 +30,9 @@ EXPECTED_COMPILER_COMPARISONS = {
     "diagnostic-code",
     "compiler-contract",
 }
-CONCRETE_GAP_OWNER = re.compile(r"(?:opy-rs|workshop-rs)#[1-9][0-9]*")
 NUMBER_TOKEN = re.compile(r"\d[\d.]*")
 
-# These are evidence rules for the pinned oracle's recorded diagnostics, not a
+# These rules classify the pinned oracle's recorded diagnostics, not a
 # support inventory. The native side uses structured diagnostic codes below;
 # the reference side intentionally derives its frontier from oracle text.
 REFERENCE_FRONTIER_RULES = (
@@ -122,153 +119,71 @@ def fixture_ids(fixtures_root: Path) -> list[str]:
     return ids
 
 
-def load_expectations(path: Path = DEFAULT_EXPECTATIONS) -> dict[str, dict[str, Any]]:
-    data = load_json(path)
-    if data.get("schemaVersion") != 1:
-        raise DiffError(f"unsupported differential expectation schema: {path}")
-    cases = data.get("cases")
-    if not isinstance(cases, list) or not cases:
-        raise DiffError(f"differential expectations must contain cases: {path}")
-
+def _load_test_expectations(
+    fixtures_root: Path,
+    test_name: str,
+) -> dict[str, dict[str, Any]]:
     by_fixture: dict[str, dict[str, Any]] = {}
-    for case in cases:
-        if not isinstance(case, dict):
-            raise DiffError(f"differential expectation must be an object: {path}")
-        fixture = case.get("fixture")
+    for metadata_path in sorted(fixtures_root.glob("**/fixture.json")):
+        metadata = load_json(metadata_path)
+        fixture = metadata.get("id")
         if not isinstance(fixture, str) or not fixture:
-            raise DiffError(f"differential expectation fixture is invalid: {path}")
-        if fixture in by_fixture:
-            raise DiffError(f"duplicate differential expectation: {fixture}")
-        native_status = case.get("nativeStatus")
-        if native_status not in EXPECTED_NATIVE_STATUSES:
-            raise DiffError(f"{fixture}: nativeStatus must be success or failure")
-        classification = case.get("classification")
-        if classification not in EXPECTED_CLASSIFICATIONS:
-            raise DiffError(
-                f"{fixture}: classification must be match, known-gap, or unsupported"
-            )
-        evidence = case.get("evidence")
-        if not isinstance(evidence, list) or not evidence or not all(
-            isinstance(item, str) and item for item in evidence
-        ):
-            raise DiffError(f"{fixture}: evidence must be a non-empty string array")
-        note = case.get("note")
-        if not isinstance(note, str) or not note:
-            raise DiffError(f"{fixture}: note must be a non-empty string")
-        if not isinstance(case.get("ruleNames"), bool):
-            raise DiffError(f"{fixture}: ruleNames must be boolean")
+            raise DiffError(f"fixture id is invalid: {metadata_path}")
+        tests = metadata.get("tests")
+        expectation = tests.get(test_name) if isinstance(tests, dict) else None
+        if not isinstance(expectation, dict):
+            raise DiffError(f"{fixture}: tests.{test_name} must be an object")
+        case = dict(expectation)
+        case["fixture"] = fixture
         by_fixture[fixture] = case
+    if not by_fixture:
+        raise DiffError(f"no {test_name} expectations found under {fixtures_root}")
     return by_fixture
 
 
-def load_compiler_expectations(
-    path: Path = DEFAULT_COMPILER_EXPECTATIONS,
+def load_expectations(
+    fixtures_root: Path = DEFAULT_FIXTURES,
 ) -> dict[str, dict[str, Any]]:
-    data = load_json(path)
-    if data.get("schemaVersion") != 1 or data.get("contract") != "compiler":
-        raise DiffError(f"unsupported compiler expectation schema: {path}")
-    cases = data.get("cases")
-    if not isinstance(cases, list) or not cases:
-        raise DiffError(f"compiler expectations must contain cases: {path}")
+    expectations = _load_test_expectations(fixtures_root, "source")
+    for fixture, case in expectations.items():
+        if case.get("nativeStatus") not in EXPECTED_NATIVE_STATUSES:
+            raise DiffError(f"{fixture}: source nativeStatus must be success or failure")
+        if case.get("relationship") not in EXPECTED_CLASSIFICATIONS:
+            raise DiffError(f"{fixture}: source relationship is invalid")
+        if not isinstance(case.get("ruleNames"), bool):
+            raise DiffError(f"{fixture}: source ruleNames must be boolean")
+    return expectations
 
-    by_fixture: dict[str, dict[str, Any]] = {}
-    for case in cases:
-        if not isinstance(case, dict):
-            raise DiffError(f"compiler expectation must be an object: {path}")
-        fixture = case.get("fixture")
-        if not isinstance(fixture, str) or not fixture:
-            raise DiffError(f"compiler expectation fixture is invalid: {path}")
-        if fixture in by_fixture:
-            raise DiffError(f"duplicate compiler expectation: {fixture}")
+
+def load_compiler_expectations(
+    fixtures_root: Path = DEFAULT_FIXTURES,
+) -> dict[str, dict[str, Any]]:
+    expectations = _load_test_expectations(fixtures_root, "compiler")
+    for fixture, case in expectations.items():
         native_status = case.get("nativeStatus")
         if native_status not in EXPECTED_NATIVE_STATUSES:
-            raise DiffError(f"{fixture}: nativeStatus must be success or failure")
-        classification = case.get("classification")
-        if classification not in EXPECTED_CLASSIFICATIONS:
-            raise DiffError(
-                f"{fixture}: classification must be match, known-gap, or unsupported"
-            )
+            raise DiffError(f"{fixture}: compiler nativeStatus must be success or failure")
+        if case.get("relationship") not in EXPECTED_CLASSIFICATIONS:
+            raise DiffError(f"{fixture}: compiler relationship is invalid")
         comparison = case.get("comparison")
         if comparison not in EXPECTED_COMPILER_COMPARISONS:
-            raise DiffError(
-                f"{fixture}: comparison must be normalized-output, semantic-wir, "
-                "diagnostic-code, or compiler-contract"
-            )
-        evidence = case.get("evidence")
-        if not isinstance(evidence, list) or not evidence or not all(
-            isinstance(item, str) and item for item in evidence
-        ):
-            raise DiffError(f"{fixture}: evidence must be a non-empty string array")
-        owner = case.get("owner")
-        if not isinstance(owner, str) or not CONCRETE_GAP_OWNER.fullmatch(owner):
-            raise DiffError(
-                f"{fixture}: owner must be a concrete opy-rs or workshop-rs issue"
-            )
-        note = case.get("note")
-        if not isinstance(note, str) or not note:
-            raise DiffError(f"{fixture}: note must be a non-empty string")
+            raise DiffError(f"{fixture}: compiler comparison is invalid")
         if comparison in {"normalized-output", "semantic-wir"} and native_status != "success":
             raise DiffError(f"{fixture}: output comparisons require nativeStatus success")
         if comparison == "semantic-wir":
             semantic_equivalent = case.get("semanticEquivalent")
             if not isinstance(semantic_equivalent, bool):
-                raise DiffError(
-                    f"{fixture}: semantic-wir requires boolean semanticEquivalent"
-                )
-            required_evidence = {
-                f"oracle:{fixture}/oracle.json",
-                f"provenance:{fixture}/fixture.json",
-            }
-            missing_evidence = sorted(required_evidence - set(evidence))
-            if missing_evidence:
-                raise DiffError(
-                    f"{fixture}: semantic-wir expectations require concrete evidence: "
-                    + ", ".join(missing_evidence)
-                )
-            if classification == "match" and not semantic_equivalent:
-                raise DiffError(
-                    f"{fixture}: a semantic-wir match requires semanticEquivalent=true"
-                )
-            if classification == "known-gap" and semantic_equivalent:
-                raise DiffError(
-                    f"{fixture}: a semantic-wir known-gap requires semanticEquivalent=false"
-                )
-        if classification != "match":
-            required_evidence = {
-                f"oracle:{fixture}/oracle.json",
-                f"provenance:{fixture}/fixture.json",
-            }
-            missing_evidence = sorted(required_evidence - set(evidence))
-            if missing_evidence:
-                raise DiffError(
-                    f"{fixture}: non-match expectations require concrete evidence: "
-                    + ", ".join(missing_evidence)
-                )
-            fixtures_root = DEFAULT_FIXTURES
-            oracle_path = fixtures_root / fixture / "oracle.json"
-            provenance_path = fixtures_root / fixture / "fixture.json"
-            oracle = load_json(oracle_path)
-            provenance = load_json(provenance_path)
-            if oracle.get("fixture") != fixture:
-                raise DiffError(f"{fixture}: oracle evidence fixture does not match")
-            if provenance.get("id") != fixture:
-                raise DiffError(f"{fixture}: provenance evidence fixture does not match")
-            try:
-                expected_input = input_identity.project_input(
-                    fixtures_root / fixture,
-                    provenance,
-                )
-            except input_identity.InputIdentityError as error:
-                raise DiffError(f"{fixture}: invalid provenance source graph: {error}") from error
-            if oracle.get("input") != expected_input:
-                raise DiffError(f"{fixture}: oracle evidence input graph is stale")
+                raise DiffError(f"{fixture}: semantic-wir requires semanticEquivalent")
+            if case["relationship"] == "match" and not semantic_equivalent:
+                raise DiffError(f"{fixture}: semantic-wir match requires equivalence")
+            if case["relationship"] == "known-gap" and semantic_equivalent:
+                raise DiffError(f"{fixture}: semantic-wir known-gap requires non-equivalence")
         if comparison == "diagnostic-code":
             if not isinstance(case.get("diagnosticCode"), str) or not case["diagnosticCode"]:
                 raise DiffError(f"{fixture}: diagnostic-code requires diagnosticCode")
             if not isinstance(case.get("failureClass"), str) or not case["failureClass"]:
                 raise DiffError(f"{fixture}: diagnostic-code requires failureClass")
-        by_fixture[fixture] = case
-    return by_fixture
+    return expectations
 
 
 def require_result_shape(result: dict[str, Any], label: str) -> None:
@@ -289,7 +204,7 @@ def require_result_shape(result: dict[str, Any], label: str) -> None:
     if not isinstance(compile_result["workshop"], str):
         raise DiffError(f"{label}: compile.workshop must be a string")
     if "semanticWIR" in compile_result:
-        raise DiffError(f"{label}: compatibility evidence must not be part of compile result")
+        raise DiffError(f"{label}: semantic-WIR comparison must not be part of compile result")
 
 
 def _diagnostic_texts(compile_result: dict[str, Any]) -> list[str]:
@@ -532,7 +447,7 @@ def compare_fixture(
     metadata_path = fixtures_root / fixture_id / "fixture.json"
     oracle_path = fixtures_root / fixture_id / "oracle.json"
     metadata = load_json(metadata_path)
-    expectations = load_expectations(DEFAULT_EXPECTATIONS)
+    expectations = load_expectations(fixtures_root)
     expectation = expectations.get(fixture_id)
     if expectation is None:
         raise DiffError(f"missing differential expectation: {fixture_id}")
@@ -588,12 +503,12 @@ def compare_fixture(
     declared_reference_gap = oracle_status != expectation["nativeStatus"]
     if native_status_mismatch:
         status = "unexpected-divergence"
-    elif expectation["classification"] in {"known-gap", "unsupported"}:
+    elif expectation["relationship"] in {"known-gap", "unsupported"}:
         if not declared_reference_gap:
             raise DiffError(
-                f"{fixture_id}: {expectation['classification']} must differ from oracle status"
+                f"{fixture_id}: {expectation['relationship']} must differ from oracle status"
             )
-        status = expectation["classification"]
+        status = expectation["relationship"]
     elif oracle_status != native_status:
         status = "unexpected-divergence"
     elif regression_stages:
@@ -606,13 +521,11 @@ def compare_fixture(
         "fixture": fixture_id,
         "category": metadata.get("category", "unknown"),
         "status": status,
-        "expectedClassification": expectation["classification"],
+        "expectedRelationship": expectation["relationship"],
         "expectedNativeStatus": expectation["nativeStatus"],
         "referenceStatus": oracle_status,
         "referenceGap": reference_gap,
         "declaredReferenceGap": declared_reference_gap,
-        "evidence": expectation["evidence"],
-        "note": expectation["note"],
         "regressionStages": regression_stages,
         "differenceStages": differences,
         "inconclusiveStages": inconclusive,
@@ -643,10 +556,8 @@ def compare_compiler_fixture(
             "fixture": fixture_id,
             "category": metadata.get("category", "unknown"),
             "status": "inconclusive",
-            "expectedClassification": expectation["classification"],
+            "expectedRelationship": expectation["relationship"],
             "expectedNativeStatus": expectation["nativeStatus"],
-            "evidence": expectation["evidence"],
-            "owner": expectation["owner"],
             "reason": f"missing producer result: {path}",
             "stages": [],
         }
@@ -720,7 +631,7 @@ def compare_compiler_fixture(
                 stage(
                     "semantic-wir",
                     "inconclusive",
-                    reason="producer did not emit executable canonical-WIR evidence",
+                    reason="producer did not emit an executable canonical-WIR comparison",
                 )
             )
             status = "inconclusive"
@@ -737,7 +648,7 @@ def compare_compiler_fixture(
             equivalent = semantic.get("equivalent") is True
             reference_error = semantic.get("referenceError")
             reference_parsed = reference_error is None
-            evidence_matches = (
+            comparison_matches = (
                 reference_parsed
                 and input_matches
                 and reference_matches
@@ -747,9 +658,9 @@ def compare_compiler_fixture(
             expected_equivalent = expectation["semanticEquivalent"]
             if not reference_parsed:
                 semantic_status = "inconclusive"
-            elif evidence_matches and expected_equivalent:
+            elif comparison_matches and expected_equivalent:
                 semantic_status = "match"
-            elif evidence_matches:
+            elif comparison_matches:
                 semantic_status = "accepted-gap"
             else:
                 semantic_status = "regression"
@@ -769,9 +680,9 @@ def compare_compiler_fixture(
                 "inconclusive"
                 if not reference_parsed
                 else "match"
-                if evidence_matches and expectation["classification"] == "match"
-                else expectation["classification"]
-                if evidence_matches
+                if comparison_matches and expectation["relationship"] == "match"
+                else expectation["relationship"]
+                if comparison_matches
                 else "regression"
             )
     elif contract == "diagnostic-code":
@@ -799,13 +710,12 @@ def compare_compiler_fixture(
                 "compiler-contract",
                 "accepted-gap",
                 reason="compiler parity is outside the declared compiler contract",
-                evidence=expectation["evidence"],
             )
         )
-        status = expectation["classification"]
+        status = expectation["relationship"]
 
-    if expectation["classification"] != "match" and status == "match":
-        status = expectation["classification"]
+    if expectation["relationship"] != "match" and status == "match":
+        status = expectation["relationship"]
     frontier_stage = next(
         (item for item in stages if item["name"] == "failure-frontier"),
         None,
@@ -815,8 +725,8 @@ def compare_compiler_fixture(
             status = "inconclusive"
         elif frontier_stage["outcome"] == "difference":
             status = (
-                expectation["classification"]
-                if expectation["classification"] != "match"
+                expectation["relationship"]
+                if expectation["relationship"] != "match"
                 else "regression"
             )
     inconclusive_reason = next(
@@ -831,14 +741,11 @@ def compare_compiler_fixture(
         "fixture": fixture_id,
         "category": metadata.get("category", "unknown"),
         "status": status,
-        "expectedClassification": expectation["classification"],
+        "expectedRelationship": expectation["relationship"],
         "expectedNativeStatus": expected_status,
         "referenceStatus": oracle["compile"]["status"],
         "referenceGap": oracle["compile"]["status"] != native_status,
-        "evidence": expectation["evidence"],
-        "owner": expectation["owner"],
         "comparison": contract,
-        "note": expectation["note"],
         "reason": inconclusive_reason,
         "regressionStages": [
             item["name"] for item in stages if item["outcome"] == "regression"
@@ -914,7 +821,7 @@ def run(
     allow_inconclusive: bool,
 ) -> int:
     all_ids = fixture_ids(fixtures_root)
-    expectations = load_expectations(DEFAULT_EXPECTATIONS)
+    expectations = load_expectations(fixtures_root)
     missing = sorted(set(all_ids) - set(expectations))
     extra = sorted(set(expectations) - set(all_ids))
     if missing or extra:
@@ -960,12 +867,11 @@ def run_compiler(
     fixtures_root: Path,
     report_path: Path,
     results_root: Path,
-    expectations_path: Path = DEFAULT_COMPILER_EXPECTATIONS,
     selected_ids: set[str] | None = None,
     allow_inconclusive: bool = False,
 ) -> int:
     all_ids = fixture_ids(fixtures_root)
-    expectations = load_compiler_expectations(expectations_path)
+    expectations = load_compiler_expectations(fixtures_root)
     missing = sorted(set(all_ids) - set(expectations))
     extra = sorted(set(expectations) - set(all_ids))
     if missing or extra:

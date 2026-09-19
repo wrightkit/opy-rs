@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-09-12 (backfilled)
-- Historical evidence: [Issue #111](https://github.com/wrightkit/opy-rs/issues/111), [PR #112](https://github.com/wrightkit/opy-rs/pull/112)
+- Related history: [Issue #111](https://github.com/wrightkit/opy-rs/issues/111), [PR #112](https://github.com/wrightkit/opy-rs/pull/112)
 
 ## Context
 

@@ -7,12 +7,23 @@
     "compilation/array-unique"
   ],
   "source": "source.opy",
-  "expectedStatus": "success",
-  "provenance": {
+  "attribution": {
     "kind": "original",
-    "origin": "Minimized from OWBastion/Bastion commit 07b03b1ec587b5cde753939808344359c689082e, src/events/allocation/buildCandidatePool.opy:76, for opy-rs Issue #322",
+    "origin": "Minimized from OWBastion/Bastion commit 07b03b1ec587b5cde753939808344359c689082e, src/events/allocation/buildCandidatePool.opy:76, for OPY compatibility regression",
     "license": "AGPL-3.0-or-later",
     "redistributable": true
   },
-  "provenanceNote": "The literal-array rule pins duplicate removal and first-occurrence order; the player-variable rule preserves the exact Bastion eventTempIndex.unique() receiver shape."
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": true
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": true
+    }
+  }
 }

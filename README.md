@@ -9,7 +9,7 @@ or as a Language Provider Protocol (LPP) process for extended linting, analysis,
 and editor support.
 
 `opy-rs` owns OverPy syntax, preprocessing, macros, semantic resolution,
-compiler lowering, diagnostics, provenance, and source reconstruction. Shared
+compiler lowering, diagnostics, source mapping, and source reconstruction. Shared
 Workshop semantics, catalog identities, and emission remain delegated to
 `workshop-rs`.
 
@@ -84,7 +84,7 @@ or upstream internal architecture. Optimizer behavior that materially changes
 Workshop structure or element cost remains in scope; only incidental optimizer
 shape is outside the target. Support claims are backed by the
 canonical [language-support contract](docs/language-support.md), the corpus,
-and pinned OverPy reference evidence.
+and pinned OverPy reference results.
 
 > [!IMPORTANT]
 > `opy-rs` follows the OverPy language. It does not introduce a WrightKit-only
@@ -118,7 +118,7 @@ Python test suites.
 
 ## Documentation
 
-Current architecture, compatibility evidence, APIs, HIR, provenance, and
+Current architecture, compatibility tests, APIs, HIR, source mapping, and
 maintainer references are indexed in [`docs/README.md`](docs/README.md).
 
 ## Contributing

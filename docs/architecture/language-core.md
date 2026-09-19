@@ -18,7 +18,7 @@ Upstream implementation structure is not an architecture mandate. `opy-rs` shoul
 - preprocessing, includes, defines, macros, and source directives;
 - source-language name/member/signature resolution;
 - OverPy type and contextual semantics;
-- source diagnostics and provenance;
+- source diagnostics and source mapping;
 - OPY HIR and source-aware tooling semantics;
 - OverPy-specific lowering/compiler behavior;
 - Workshop→OPY reconstruction.
@@ -36,7 +36,7 @@ Implement program behavior and semantic invariants in typed Rust. Examples inclu
 - special lowering decisions;
 - compile-time evaluation and control flow.
 
-Validated/generated data is appropriate for large declarative inventories such as names, aliases that are purely identities, mechanical signatures, provenance links, and completeness inventories when those records do not themselves become a language for programming semantics.
+Validated/generated data is appropriate for large declarative inventories such as names, aliases that are purely identities, mechanical signatures, source attribution links, and completeness inventories when those records do not themselves become a language for programming semantics.
 
 A manifest field that causes generic Rust to choose source-language behavior is not justified merely because an existing manifest already contains similar fields. When metadata drives receiver restrictions, argument semantics, contextual dispatch, special lowering, or other observable behavior, treat the placement as architecture debt to audit and prefer direct typed implementation unless a concrete domain reason justifies a declarative representation.
 
@@ -59,11 +59,11 @@ Compatibility work should preserve, where the canonical Workshop model can repre
 - upstream lowering choices when an alternative form adds no value;
 - upstream string/value construction shape when divergence only adds Workshop elements;
 - optimizer behavior that materially affects Workshop element cost or emitted structure;
-- stable source-to-output behavior demonstrated by differential or real-project evidence.
+- stable source-to-output behavior demonstrated by differential or real-project tests.
 
 A systematic output difference is a compatibility residual by default. It should be explained and classified rather than dismissed merely because the resulting program may appear behaviorally equivalent.
 
-Exact byte-for-byte identity is not a universal completion requirement. Incidental whitespace, formatting, or other representation details may differ when they do not change Workshop structure, element cost, accepted syntax, diagnostics/provenance, or downstream behavior. Likewise, upstream internal architecture, helper names, and IR remain non-contractual.
+Exact byte-for-byte identity is not a universal completion requirement. Incidental whitespace, formatting, or other representation details may differ when they do not change Workshop structure, element cost, accepted syntax, source mapping, or downstream behavior. Likewise, upstream internal architecture, helper names, and IR remain non-contractual.
 
 The practical objective is to make supported `opy-rs` compilation converge as closely as reasonably possible on upstream Workshop output while retaining WrightKit's canonical ownership boundaries. Where equivalent canonical representations exist, prefer the representation demonstrated by upstream unless there is concrete evidence that divergence is necessary.
 

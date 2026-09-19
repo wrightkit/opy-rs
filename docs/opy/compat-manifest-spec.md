@@ -9,7 +9,7 @@ Current architecture is defined by [`docs/architecture/language-core.md`](../arc
 The manifest under `crates/opy-rs/src/manifest/` carries declarative compatibility data:
 
 - identities, names, aliases, signatures (including parameter defaults, optionality,
-  binding spellings, and enum-domain links), catalog links, and provenance.
+  binding spellings, and enum-domain links), catalog links, and source attribution.
 
 Typed feature-local lowering policy owns behavioral contextual dispatch and call-context
 restrictions: currently `chase` selector dispatch and `range`'s for-iterable-only rule
@@ -29,8 +29,11 @@ OverPy-specific names, aliases, special forms, contextual behavior, and compiler
 
 See [`docs/architecture/workshop-boundary.md`](../architecture/workshop-boundary.md).
 
-## Evidence and provenance
+## Reference tests and attribution
 
-Pinned upstream identity and licensing/provenance rules remain documented in [`docs/compatibility/upstream-references.md`](../compatibility/upstream-references.md). Manifest probes and differential tests remain useful compatibility evidence; they do not re-authorize or redefine established core features.
+Pinned upstream identity, source attribution, and licensing rules remain
+documented in [`docs/compatibility/upstream-references.md`](../compatibility/upstream-references.md).
+Manifest probes and differential tests are ordinary compatibility tests; they
+do not re-authorize or redefine established core features.
 
 The prior detailed manifest schema and field-by-field rationale are preserved in Git history. They describe how the current implementation evolved, not the current language architecture contract.

@@ -61,7 +61,7 @@ struct InputIdentity {
     sha256: String,
     source: String,
     parameters: JsonValue,
-    provenance: JsonValue,
+    attribution: JsonValue,
 }
 
 #[derive(Debug)]
@@ -356,7 +356,7 @@ fn synthetic_identity(id: &str, source: String, parameters: JsonValue) -> InputI
         sha256: sha256(&source),
         source: format!("compiler/tests/resource_baseline.rs::{id}"),
         parameters,
-        provenance: serde_json::json!({
+        attribution: serde_json::json!({
             "kind": "original",
             "origin": "WrightKit opy-rs resource audit workload",
             "license": "AGPL-3.0-or-later",
@@ -376,9 +376,9 @@ fn real_world_workload() -> Workload {
     .expect("parabola metadata is valid JSON");
     Workload {
         id: "real-world-parabola",
-        description: "provenance-linked OverPy parabola example compiled end to end",
+        description: "attributed OverPy parabola example compiled end to end",
         input: InputIdentity {
-            kind: "provenance-linked-corpus".to_string(),
+            kind: "attributed-corpus".to_string(),
             bytes: source.len(),
             sha256: sha256(&source),
             source: format!("{REAL_FIXTURE}/parabola.opy"),
@@ -389,7 +389,7 @@ fn real_world_workload() -> Workload {
                 ),
                 "entry": "parabola.opy"
             }),
-            provenance: metadata["provenance"].clone(),
+            attribution: metadata["attribution"].clone(),
         },
         run: run_real_world,
     }

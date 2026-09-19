@@ -1,6 +1,5 @@
 {
   "category": "synthetic",
-  "expectedStatus": "success",
   "features": [
     "semantics/receiver-playervar"
   ],
@@ -8,13 +7,25 @@
     "source.opy": "c8040ee474759c5b27541b2b9a514d350f605f471bc23246d1baeadc37a5eadc"
   },
   "id": "synthetic/receiver-playervar",
-  "provenance": {
+  "schemaVersion": 1,
+  "source": "source.opy",
+  "attribution": {
     "kind": "original",
     "license": "AGPL-3.0-or-later",
     "origin": "Wright compatibility corpus; minimized source-language regression for the pinned OverPy receiver-member behavior.",
     "redistributable": true
   },
-  "provenanceNote": "Synthetic-original fixture authored from the pinned oracle observation that a bare variable member expression is accepted. It does not reproduce Workshop catalog data; member existence remains an integration concern.",
-  "schemaVersion": 1,
-  "source": "source.opy"
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": true
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": true
+    }
+  }
 }

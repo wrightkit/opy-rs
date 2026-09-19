@@ -2,14 +2,31 @@
   "schemaVersion": 1,
   "id": "synthetic/switch-multiple-break",
   "category": "compilation",
-  "features": ["switch", "case", "default", "break"],
+  "features": [
+    "switch",
+    "case",
+    "default",
+    "break"
+  ],
   "source": "source.opy",
   "semanticOracle": "semantic-oracle.json",
-  "expectedStatus": "success",
-  "provenance": {
+  "attribution": {
     "kind": "original",
-    "origin": "opy-rs Issue #47 pinned multi-break lowering probe",
+    "origin": "OPY compatibility regression pinned multi-break lowering probe",
     "license": "AGPL-3.0-or-later",
     "redistributable": true
+  },
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": true
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": true
+    }
   }
 }

@@ -13,11 +13,11 @@ or LPP, while `opy-rs` must remain independently usable as a library and CLI.
 `opy-rs` owns:
 
 - OverPy syntax, lexer, parser, source model, preprocessing, macros,
-  semantic resolution, diagnostics, provenance, and OPY HIR;
+  semantic resolution, diagnostics, source mapping, and OPY HIR;
 - OverPy-specific compiler/lowering semantics and backend-affecting behavior;
 - standalone OPY tooling APIs and CLI surfaces;
 - Workshop → OPY reconstruction when implemented;
-- OPY compatibility evidence and support claims.
+- OPY compatibility tests and support claims.
 
 `workshop-rs` owns:
 
@@ -38,7 +38,7 @@ into this repository. Never add a dependency from `workshop-rs` back to
 The standalone source-analysis path must remain usable without requiring
 Workshop emission. Compilation may depend on `workshop-rs`; `check`, semantic
 inspection, source queries, and other Workshop-independent operations should
-not be forced through the compiler pipeline without an evidence-backed need.
+not be forced through the compiler pipeline without a concrete requirement.
 
 Do not invent WrightKit-only OPY syntax. Compatibility is observable semantics,
 not output-text identity, optimizer implementation, formatting, temporary
@@ -63,7 +63,7 @@ If the Issue, current contract, and source/tests disagree materially, stop and
 surface the mismatch rather than selecting a design by implementation
 convenience.
 
-## Upstream reference and provenance
+## Upstream reference and source attribution
 
 For the declared OverPy core-language surface, the established upstream OverPy
 implementation is the executable specification. Core behavior is presumptively
@@ -72,11 +72,11 @@ or demonstrated to be a non-contractual implementation artifact.
 
 Inspect upstream implementation, docs, and tests to understand behavior; then
 implement the behavior directly in clear Rust and verify it through
-compatibility evidence. Do not mechanically translate, import, link, or bundle
+compatibility tests and reference comparisons. Do not mechanically translate, import, link, or bundle
 upstream implementation/data into the `opy-rs` core or release artifacts.
 
 OverPy is GPL-3.0; this repository is AGPL-3.0-or-later. Pinned identity,
-fixture/probe provenance, and licensing boundaries are documented in
+fixture/probe attribution, and licensing boundaries are documented in
 [`docs/compatibility/upstream-references.md`](docs/compatibility/upstream-references.md).
 
 Inventories, manifests, probes, differential tests, corpus fixtures, and real
@@ -89,7 +89,7 @@ Prefer typed Rust for observable OverPy behavior and invariants: receiver/member
 semantics, argument binding, contextual dispatch, macro/directive behavior,
 coercion/evaluation rules, and special lowering.
 
-Declarative data may carry large mechanical inventories, names, provenance, and
+Declarative data may carry large mechanical inventories, names, source attribution, and
 facts that do not themselves program language behavior. Do not extend an
 existing manifest/registry with new semantic control fields merely because the
 current implementation already contains similar metadata; existing
@@ -104,7 +104,7 @@ project exposes a blocker:
 2. fix it here if the missing behavior is OverPy-owned;
 3. route missing canonical Workshop behavior to `workshop-rs`;
 4. preserve a minimized regression where practical while keeping the full
-   project evidence;
+   project test coverage;
 5. do not split implementation work into smaller issues solely for bookkeeping
    when one coherent change can be reviewed and validated safely.
 
@@ -122,8 +122,8 @@ cargo test --workspace --all-targets --all-features
 python3 -m unittest discover -s tools/overpy/tests
 ```
 
-Oracle-required compatibility probes run separately against the pinned
-reference. A local test count is not sufficient evidence when a change claims
+Oracle-required compatibility tests run separately against the pinned
+reference. A local test count is not sufficient when a change claims
 real-project compatibility; rerun the affected full-project workflow.
 
 ## Delivery
@@ -132,6 +132,6 @@ real-project compatibility; rerun the affected full-project workflow.
   through PRs.
 - Keep commits focused and issue-linked where an issue exists.
 - Keep compatibility/support claims synchronized with actual implementation and
-  evidence.
+  tests.
 - Never commit credentials, private runtime data, or unreviewed third-party
   material.

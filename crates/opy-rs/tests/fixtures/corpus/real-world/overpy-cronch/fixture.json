@@ -1,7 +1,5 @@
 {
-  "acquisitionMethod": "scripts/acquire-corpus.py: GitHub archive of the pinned commit (codeload.tar.gz), include-closure resolution matching the pinned oracle, SHA-256 verification",
   "category": "real-world",
-  "expectedStatus": "success",
   "features": [
     "declarations",
     "macros",
@@ -13,7 +11,14 @@
     "cronch.opy": "413d3d598ae08f3682acf925b7294316a68aba7c9a959e95d66b461485ba9169"
   },
   "id": "real-world/overpy-cronch",
-  "provenance": {
+  "schemaVersion": 1,
+  "source": "cronch.opy",
+  "regressions": [
+    {
+      "source": "regressions/postfix-increment.opy"
+    }
+  ],
+  "attribution": {
     "kind": "imported-example",
     "license": "GPL-3.0-only",
     "licenseUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/LICENSE",
@@ -23,17 +28,17 @@
     "sourceCommit": "eea67adbcf6926c4004e35e25ab4be072624a44e",
     "sourceUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/examples/cronch.opy"
   },
-  "runtimeSeconds": 6.1,
-  "schemaVersion": 1,
-  "source": "cronch.opy",
-  "regressions": [
-    {
-      "id": "real-world/overpy-cronch/postfix-increment",
-      "source": "regressions/postfix-increment.opy",
-      "derivedFrom": "cronch.opy",
-      "expectedReferenceStatus": "success",
-      "kind": "minimized-regression",
-      "provenance": "oracle:real-world/overpy-cronch/oracle.json; source path 31-34"
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "known-gap",
+      "ruleNames": false
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "known-gap",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": false
     }
-  ]
+  }
 }

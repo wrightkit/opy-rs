@@ -1,6 +1,6 @@
 # opy-rs Compatibility Tooling Notes
 
-Small operational notes for the OverPy evidence harness; the full layout
+Small operational notes for the OverPy compatibility harness; the full layout
 contract is in [`tools/overpy/README.md`](../../tools/overpy/README.md).
 
 ## Prerequisites
@@ -25,7 +25,7 @@ python3 tools/overpy/run_oracle.py --update
 # Verify snapshots still match the pinned oracle (fails on any mismatch)
 python3 tools/overpy/run_oracle.py
 
-# Compiler compatibility gate (public CLI plus internal evidence target)
+# Compiler compatibility gate (public CLI plus internal comparison target)
 cargo build --locked -p opy-cli --bin opy-cli
 cargo build --locked -p opy-cli --features compatibility --bin opy-compat
 python3 -B tools/overpy/run_native.py \
@@ -46,6 +46,6 @@ python3 tools/overpy/diff.py --producer-command '<cmd template>' --report target
 A pin change is an explicit, reviewed change: update
 `tools/overpy/oracle/package.json` + `pnpm-lock.yaml` +
 `oracle-metadata.json`, re-run `run_oracle.py --update`, review every snapshot
-diff and fixture provenance note, and update the reference identity records in
+diff and fixture attribution note, and update the reference identity records in
 `docs/compatibility/upstream-references.md` (policy: changed only on
 demonstrated behavioral need, never on release recency).

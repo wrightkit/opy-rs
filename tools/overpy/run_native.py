@@ -16,7 +16,6 @@ import input_identity
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURES = ROOT / "crates/opy-rs/tests/fixtures/corpus"
-COMPILER_EXPECTATIONS = ROOT / "tools/overpy/compiler-expectations.json"
 DEFAULT_RESULTS = ROOT / "target" / "opy-rs-compiler-results"
 DEFAULT_REPORT = ROOT / "target" / "opy-rs-compiler-report.json"
 
@@ -48,7 +47,7 @@ def fixtures() -> list[tuple[Path, dict[str, Any]]]:
     return found
 
 
-def run_semantic_evidence(
+def run_semantic_comparison(
     binary: Path,
     directory: Path,
     metadata: dict[str, Any],
@@ -76,20 +75,20 @@ def run_semantic_evidence(
     )
     if completed.returncode != 0:
         raise NativeError(
-            f"{metadata['id']}: compatibility evidence failed "
+            f"{metadata['id']}: compatibility comparison failed "
             f"(exit {completed.returncode}): {completed.stderr.strip()}"
         )
     try:
         result = json.loads(completed.stdout)
     except json.JSONDecodeError as error:
         raise NativeError(
-            f"{metadata['id']}: compatibility evidence did not produce JSON: "
+            f"{metadata['id']}: compatibility comparison did not produce JSON: "
             f"{completed.stderr.strip()}"
         ) from error
     if not isinstance(result, dict) or result.get("schemaVersion") != 1:
-        raise NativeError(f"{metadata['id']}: invalid compatibility evidence schema")
+        raise NativeError(f"{metadata['id']}: invalid compatibility comparison schema")
     if not isinstance(result.get("semanticWIR"), dict):
-        raise NativeError(f"{metadata['id']}: semantic-WIR evidence is missing")
+        raise NativeError(f"{metadata['id']}: semantic-WIR comparison is missing")
     return result
 
 
@@ -141,7 +140,7 @@ def run_fixture(
         expectation["comparison"] == "semantic-wir"
         and result["compile"]["status"] == "success"
     ):
-        result["compatibility"] = run_semantic_evidence(
+        result["compatibility"] = run_semantic_comparison(
             semantic_binary,
             directory,
             metadata,
@@ -161,7 +160,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--semantic-binary",
         type=Path,
-        help="path to the internal compatibility evidence binary",
+        help="path to the internal compatibility comparison binary",
     )
     parser.add_argument("--results", type=Path, default=DEFAULT_RESULTS)
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
@@ -180,12 +179,12 @@ def main(argv: list[str] | None = None) -> int:
         else binary.with_name("opy-compat")
     )
     if not semantic_binary.is_file():
-        raise NativeError(f"compatibility evidence binary does not exist: {semantic_binary}")
+        raise NativeError(f"compatibility comparison binary does not exist: {semantic_binary}")
     results_root = args.results.resolve()
     report_path = args.report.resolve()
     results_root.mkdir(parents=True, exist_ok=True)
     try:
-        expectations = diff.load_compiler_expectations(COMPILER_EXPECTATIONS)
+        expectations = diff.load_compiler_expectations(FIXTURES)
     except diff.DiffError as error:
         raise NativeError(str(error)) from error
 
@@ -206,7 +205,6 @@ def main(argv: list[str] | None = None) -> int:
             FIXTURES,
             report_path,
             results_root,
-            COMPILER_EXPECTATIONS,
             allow_inconclusive=args.allow_inconclusive,
         )
     except diff.DiffError as error:

@@ -19,7 +19,7 @@
         "parameters": {
           "depth": 24
         },
-        "provenance": {
+        "attribution": {
           "kind": "original",
           "license": "AGPL-3.0-or-later",
           "origin": "WrightKit opy-rs resource audit workload",
@@ -100,7 +100,7 @@
         "parameters": {
           "vectorCount": 32
         },
-        "provenance": {
+        "attribution": {
           "kind": "original",
           "license": "AGPL-3.0-or-later",
           "origin": "WrightKit opy-rs resource audit workload",
@@ -181,7 +181,7 @@
         "parameters": {
           "ruleCount": 128
         },
-        "provenance": {
+        "attribution": {
           "kind": "original",
           "license": "AGPL-3.0-or-later",
           "origin": "WrightKit opy-rs resource audit workload",
@@ -262,7 +262,7 @@
         "parameters": {
           "constructions": 64
         },
-        "provenance": {
+        "attribution": {
           "kind": "original",
           "license": "AGPL-3.0-or-later",
           "origin": "WrightKit opy-rs resource audit workload",
@@ -343,7 +343,7 @@
         "parameters": {
           "invocations": 64
         },
-        "provenance": {
+        "attribution": {
           "kind": "original",
           "license": "AGPL-3.0-or-later",
           "origin": "WrightKit opy-rs resource audit workload",
@@ -424,7 +424,7 @@
         "parameters": {
           "settingsKeyCount": 1000
         },
-        "provenance": {
+        "attribution": {
           "kind": "original",
           "license": "AGPL-3.0-or-later",
           "origin": "WrightKit opy-rs resource audit workload",
@@ -498,16 +498,16 @@
       "workload": "large-settings-source"
     },
     {
-      "description": "provenance-linked OverPy parabola example compiled end to end",
+      "description": "attributed OverPy parabola example compiled end to end",
       "input": {
         "bytes": 3035,
-        "kind": "provenance-linked-corpus",
+        "kind": "attributed-corpus",
         "parameters": {
           "entry": "parabola.opy",
           "fixture": "real-world/overpy-parabola",
           "fixtureMetadata": "crates/opy-rs/tests/fixtures/corpus/real-world/overpy-parabola/fixture.json"
         },
-        "provenance": {
+        "attribution": {
           "kind": "imported-example",
           "license": "GPL-3.0-only",
           "licenseUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/LICENSE",

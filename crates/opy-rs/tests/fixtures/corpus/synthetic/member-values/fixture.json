@@ -7,11 +7,23 @@
     "compilation/catalog-backed-member-values"
   ],
   "source": "source.opy",
-  "expectedStatus": "success",
-  "provenance": {
+  "attribution": {
     "kind": "original",
-    "origin": "opy-rs Issue #113 minimized eventPlayer.isDummy() lowering probe",
+    "origin": "OPY compatibility regression minimized eventPlayer.isDummy() lowering probe",
     "license": "AGPL-3.0-or-later",
     "redistributable": true
+  },
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": true
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": true
+    }
   }
 }

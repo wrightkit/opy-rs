@@ -1,7 +1,5 @@
 {
-  "acquisitionMethod": "scripts/acquire-corpus.py: GitHub archive of the pinned commit (codeload.tar.gz), include-closure resolution matching the pinned oracle, SHA-256 verification",
   "category": "real-world",
-  "expectedStatus": "failure",
   "features": [
     "declarations",
     "preprocessing/includes",
@@ -24,7 +22,9 @@
     "zones.opy": "a4f3d898c31cdcdb427ab02d986d786fa312acd1a00e2cc8dcc2c2f6aac0aba7"
   },
   "id": "real-world/overpy-meipocalypse",
-  "provenance": {
+  "schemaVersion": 1,
+  "source": "meipocalypse.opy",
+  "attribution": {
     "kind": "imported-example",
     "license": "GPL-3.0-only",
     "licenseUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/LICENSE",
@@ -34,8 +34,19 @@
     "sourceCommit": "eea67adbcf6926c4004e35e25ab4be072624a44e",
     "sourceUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/examples/meipocalypse/meipocalypse.opy"
   },
-  "provenanceNote": "upstream examples/meipocalypse/ also contains non-.opy generator helpers (generateWalls.js, generateZoneVariables.js, settings.opy.json, *.md) that are intentionally not committed as fixture sources under the compatibility fixture policy (non-.opy sources are not fixture inputs); the .opy sources reference the JS generation steps via __script__ (meipocalypse.opy:57-58, barricades.opy:51), so the pinned oracle fails with ENOENT, recorded as reference evidence in oracle.json and adapter/test/adapter.test.js",
-  "runtimeSeconds": 4.6,
-  "schemaVersion": 1,
-  "source": "meipocalypse.opy"
+  "tests": {
+    "source": {
+      "nativeStatus": "failure",
+      "relationship": "match",
+      "ruleNames": false,
+      "diagnosticCode": "lex-error"
+    },
+    "compiler": {
+      "nativeStatus": "failure",
+      "relationship": "match",
+      "comparison": "diagnostic-code",
+      "diagnosticCode": "script-not-found",
+      "failureClass": "frontend"
+    }
+  }
 }

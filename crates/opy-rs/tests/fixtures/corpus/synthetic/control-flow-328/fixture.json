@@ -2,13 +2,32 @@
   "schemaVersion": 1,
   "id": "synthetic/control-flow-328",
   "category": "compilation",
-  "features": ["continue", "do-while", "goto", "loc-plus", "rule-start", "switch-in-loop"],
+  "features": [
+    "continue",
+    "do-while",
+    "goto",
+    "loc-plus",
+    "rule-start",
+    "switch-in-loop"
+  ],
   "source": "source.opy",
-  "expectedStatus": "success",
-  "provenance": {
+  "attribution": {
     "kind": "original",
-    "origin": "opy-rs Issue #328 minimized pinned OverPy 9.7.10 control-flow probe",
+    "origin": "OPY compatibility regression minimized pinned OverPy 9.7.10 control-flow probe",
     "license": "AGPL-3.0-or-later",
     "redistributable": true
+  },
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": true
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": true
+    }
   }
 }

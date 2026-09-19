@@ -77,19 +77,33 @@ class RunnerTests(unittest.TestCase):
         ]
         self.assertGreaterEqual(len(real_world), 6)
         for fixture in real_world:
-            self.assertTrue(fixture["provenance"]["redistributable"])
-            self.assertEqual(fixture["provenance"]["modifications"], "none")
+            self.assertTrue(fixture["attribution"]["redistributable"])
+            self.assertEqual(fixture["attribution"]["modifications"], "none")
             self.assertEqual(
-                len(fixture["provenance"]["sourceCommit"]), 40,
+                len(fixture["attribution"]["sourceCommit"]), 40,
                 fixture["id"],
             )
 
         overpy_cake = next(
             fixture for _, fixture in fixtures if fixture["id"] == "real-world/overpy-cake"
         )
-        self.assertEqual(overpy_cake["provenance"]["kind"], "imported-example")
+        self.assertEqual(overpy_cake["attribution"]["kind"], "imported-example")
 
-    def test_real_world_gaps_have_minimized_provenance_linked_regressions(self):
+    def test_fixture_manifest_owns_concrete_test_declarations(self):
+        for fixture_path, fixture in run_oracle.discover_fixtures(CORPUS_DIR):
+            with self.subTest(fixture=fixture["id"]):
+                self.assertEqual(set(fixture["tests"]), {"source", "compiler"})
+                self.assertNotIn("expectedStatus", fixture)
+                self.assertNotIn("provenance", fixture)
+                self.assertNotIn("provenanceNote", fixture)
+                self.assertNotIn("runtimeSeconds", fixture)
+                self.assertNotIn("acquisitionMethod", fixture)
+                self.assertNotIn("evidencePolicy", fixture)
+                self.assertNotIn("evidence", fixture)
+                self.assertNotIn("note", fixture)
+                self.assertNotIn("owner", fixture)
+
+    def test_real_world_gaps_have_minimized_regressions(self):
         fixtures = run_oracle.discover_fixtures(CORPUS_DIR)
         gaps = [
             fixture
@@ -112,11 +126,8 @@ class RunnerTests(unittest.TestCase):
             self.assertGreaterEqual(len(regressions), 1, fixture["id"])
             for regression in regressions:
                 source = (CORPUS_DIR / fixture["id"] / regression["source"]).resolve()
-                self.assertTrue(source.is_file(), regression["id"])
-                self.assertEqual(regression["derivedFrom"], fixture["source"])
-                self.assertEqual(regression["expectedReferenceStatus"], fixture["expectedStatus"])
-                self.assertEqual(regression["kind"], "minimized-regression")
-                self.assertIn("oracle:", regression["provenance"])
+                self.assertTrue(source.is_file(), regression["source"])
+                self.assertEqual(set(regression), {"source"})
 
     def test_census_uses_opaque_workshop_owned_feature_ids(self):
         _, census = next(
@@ -125,7 +136,6 @@ class RunnerTests(unittest.TestCase):
             if fixture[1]["id"] == "census/workshop-feature-census"
         )
         self.assertEqual(census["censusContract"]["owner"], "workshop-rs")
-        self.assertEqual(census["censusContract"]["status"], "pending")
         self.assertTrue(census["workshopFeatureIds"])
         self.assertTrue(all(isinstance(item, str) for item in census["workshopFeatureIds"]))
 
