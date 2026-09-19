@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.47](https://github.com/wrightkit/opy-rs/compare/v0.1.46...v0.1.47) - 2026-09-19
+
+### Added
+
+- *(opy)* support Array.unique() member semantics ([#323](https://github.com/wrightkit/opy-rs/pull/323))
+
 ## [0.1.46](https://github.com/wrightkit/opy-rs/compare/v0.1.45...v0.1.46) - 2026-09-18
 
 ### Fixed
