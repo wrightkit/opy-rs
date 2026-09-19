@@ -227,10 +227,19 @@ impl Lowerer {
                     .collect(),
                 span: Some(span.into()),
             },
-            Stmt::Delete { target, span } => HirStmt::Delete {
-                target: Box::new(self.lower_expr(target, macro_params, CallPosition::Value)),
-                span: Some(span.into()),
-            },
+            Stmt::Delete { target, span } => {
+                if indexed_expr_depth(target) >= 4 {
+                    self.error_at(
+                        "four-dimensional-delete",
+                        "Cannot delete index of 4d array".to_string(),
+                        target.span(),
+                    );
+                }
+                HirStmt::Delete {
+                    target: Box::new(self.lower_expr(target, macro_params, CallPosition::Value)),
+                    span: Some(span.into()),
+                }
+            }
             Stmt::Break { span } => {
                 if !breakable {
                     self.error_at(

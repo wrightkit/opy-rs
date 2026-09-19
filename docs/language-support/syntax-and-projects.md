@@ -14,7 +14,7 @@
 | Dictionary mutation through a computed assignment target | ❌ Unsupported | Canonical Workshop has no equivalent mutable dictionary target in this boundary. |
 | `lambda` element/index binders | ✅ Supported | Binders are accepted in the callable contexts that define them. |
 | Member access, calls and postfix expressions | ✅ Supported | Receiver and argument errors retain source locations. |
-| `del array[index]` | 🚧 Partial | Global and player-variable array targets are lowered; arbitrary expressions are rejected. |
+| `del array[index]` | ✅ Supported | Global and player-variable targets are lowered through three dimensions; arbitrary expressions and four-dimensional deletion are rejected. |
 | Conditional values: `a if condition else b` | ✅ Supported | Chained forms are right-associative. |
 | `in`, `not in`, arithmetic, comparison, boolean and unary operators | ✅ Supported | String membership uses the canonical Workshop operation. |
 | `++` and `--` postfix assignment modifiers | ✅ Supported | Statement-level global, player and single-level indexed forms are supported; prefix/embedded forms are rejected. |
@@ -39,8 +39,8 @@
 | `if` / `elif` / `else`, `while`, `do ... while` | ✅ Supported | Entry and reevaluation behavior are preserved. |
 | `for ... in range(...)` | ✅ Supported | Global and player-variable range binders are supported; arbitrary iterables are not. |
 | `switch` / `case` / `default`, `break` | ✅ Supported | Supported fall-through and break forms lower to canonical actions. |
-| `continue` in loops | 🚧 Partial | Loop-body forms that can be represented by canonical skips are supported; unsupported nesting is rejected. |
-| `goto`, labels and `loc+` targets | 🚧 Partial | Conditional forward label jumps are supported; unrestricted dynamic and backward jumps are not representable in canonical WIR. |
+| `continue` in loops | ✅ Supported | The pinned `for`, `while` and `do ... while` forms, including accepted nested control-flow positions, lower through canonical skip/loop actions. |
+| `goto`, labels and `loc+` targets | 🚧 Partial | Forward labels, `loc+` offsets, conditional dynamic jumps and `RULE_START` lower natively; backward and otherwise unrestricted jumps remain unsupported. |
 | `pass` and `return` | ✅ Supported | Context restrictions remain source diagnostics. |
 | `#!include` and nested include closure | ✅ Supported | Main-file and including-file-relative resolution are preserved, including include cycles and missing-file diagnostics. |
 | `#!mainFile` and directory project input | ✅ Supported | The selected entry source remains part of the project identity. |

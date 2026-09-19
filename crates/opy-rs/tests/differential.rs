@@ -225,6 +225,12 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
     );
     resolve(
         &mut cases,
+        "synthetic/collection-mutation-328",
+        true,
+        "Issue #328 pinned collection-deletion probe; one-, two-, and three-dimensional global and player-variable targets resolve through canonical indexed mutation lowering.",
+    );
+    resolve(
+        &mut cases,
         "synthetic/wait-optimization",
         false,
         "Issue #282 minimized wait probe; optimizeForSize lowers omitted and sub-default durations to the pinned OverPy boolean forms while preserving explicit duration and reevaluation behavior.",
@@ -300,6 +306,12 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
         "synthetic/conditional-forward-gotos",
         true,
         "Issue #319 oracle-backed forward-goto probe; branch structure, action distances, and condition evaluation remain aligned with the pinned oracle.",
+    );
+    resolve(
+        &mut cases,
+        "synthetic/control-flow-328",
+        true,
+        "Issue #328 pinned continue, do-while, dynamic loc+, and RULE_START probe; accepted control-flow forms resolve through canonical WIR lowering.",
     );
     resolve(
         &mut cases,

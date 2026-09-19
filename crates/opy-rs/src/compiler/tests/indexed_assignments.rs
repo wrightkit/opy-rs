@@ -30,6 +30,39 @@ fn nested_indexed_assignments_match_the_pinned_oracle() {
 }
 
 #[test]
+fn collection_deletion_matches_the_pinned_oracle() {
+    let dir = fixture_dir("collection-mutation-328");
+    let source = std::fs::read_to_string(dir.join("source.opy")).unwrap();
+    let hir = crate::compile(&source, "source.opy", &dir).expect("fixture must resolve");
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+    let oracle: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.join("oracle.json")).unwrap()).unwrap();
+    let expected = workshop_rs::parser::parse(
+        oracle["compile"]["workshop"].as_str().unwrap(),
+        &Catalog::builtin().unwrap(),
+        &Locale::new("en-US"),
+    )
+    .unwrap();
+    assert!(equivalent(&super::canonical_program(&artifact), &expected));
+}
+
+#[test]
+fn nested_player_collection_deletion_uses_the_canonical_indexed_action() {
+    let source = r#"
+playervar values
+globalvar index
+rule "delete nested player value":
+    @Event eachPlayer
+    del eventPlayer.values[index][0]
+"#;
+    let hir = crate::compile(source, "nested-player-delete.opy", Path::new(".")).unwrap();
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+    assert!(artifact.emitted.contains(
+        "Modify Player Variable At Index((Event Player).values, index, Remove From Array By Index, 0);"
+    ));
+}
+
+#[test]
 fn indexed_assignment_indices_use_catalog_numeric_coercions() {
     let source = r#"
 globalvar values = [0]

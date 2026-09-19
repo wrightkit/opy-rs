@@ -24,6 +24,14 @@ fn semantic_boundary_errors_are_reported_before_lowering() {
             5,
             5,
         ),
+        (
+            "four-dimensional-delete.opy",
+            "globalvar nested\n\nrule \"four-dimensional delete\":\n    @Event global\n    del nested[0][0][0][0]\n",
+            "four-dimensional-delete",
+            "Cannot delete index of 4d array",
+            5,
+            9,
+        ),
     ];
     let compiler = Compiler::new().expect("released Workshop contract must load");
 

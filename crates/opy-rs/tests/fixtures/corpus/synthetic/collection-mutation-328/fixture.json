@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/collection-mutation-328",
+  "category": "compilation",
+  "features": ["del", "indexed-mutation", "nested-arrays", "player-variables"],
+  "source": "source.opy",
+  "expectedStatus": "success",
+  "provenance": {
+    "kind": "original",
+    "origin": "opy-rs Issue #328 minimized pinned OverPy 9.7.10 collection-deletion probe",
+    "license": "AGPL-3.0-or-later",
+    "redistributable": true
+  }
+}
