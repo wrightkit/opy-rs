@@ -2383,6 +2383,16 @@
       "receiver": "Any"
     },
     {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "array-unique"
+      ],
+      "id": "unique",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Any"
+    },
+    {
       "catalogId": "indexOfArrayValue",
       "evidence": [
         "builtin-surface"

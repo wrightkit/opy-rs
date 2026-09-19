@@ -1,3 +1,5 @@
+#[path = "tests/array_unique.rs"]
+mod array_unique;
 #[path = "tests/builtins.rs"]
 mod builtins;
 #[path = "tests/catalog_lowering.rs"]

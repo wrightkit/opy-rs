@@ -261,6 +261,12 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
     );
     resolve(
         &mut cases,
+        "synthetic/array-unique",
+        true,
+        "Issue #322 Array.unique() resolves as an OPY member; canonical filtered-array lowering is constrained by the dedicated compiler test.",
+    );
+    resolve(
+        &mut cases,
         "synthetic/member-values",
         true,
         "Issue #113 catalog-backed eventPlayer.isDummy() member predicate; canonical WIR lowering is constrained by the dedicated compiler test.",

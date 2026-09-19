@@ -226,7 +226,7 @@
           "id": "receiver-dispatch",
           "claim": "Receiver members dispatch through the documented player and value domains.",
           "probeKinds": ["positive", "contextual"],
-          "probes": ["synthetic/receiver-calls", "synthetic/receiver-playervar", "synthetic/member-values", "synthetic/member-angle"]
+          "probes": ["synthetic/receiver-calls", "synthetic/receiver-playervar", "synthetic/member-values", "synthetic/member-angle", "synthetic/array-unique"]
         },
         {
           "id": "enum-domain-context",
@@ -257,7 +257,8 @@
         "synthetic/indexed-assignment-4d-invalid",
         "synthetic/range-player-variable",
         "synthetic/receiver-calls",
-        "synthetic/receiver-playervar"
+        "synthetic/receiver-playervar",
+        "synthetic/array-unique"
       ]
     },
     {
@@ -291,7 +292,7 @@
           "id": "catalog-backed-calls",
           "claim": "Catalog-backed members and enum visibility lower to semantically equivalent WIR.",
           "probeKinds": ["positive"],
-          "probes": ["synthetic/member-values", "synthetic/hud-subheader", "synthetic/member-angle", "synthetic/hud-visibility"]
+          "probes": ["synthetic/member-values", "synthetic/hud-subheader", "synthetic/member-angle", "synthetic/hud-visibility", "synthetic/array-unique"]
         },
         {
           "id": "semantic-to-wir-boundary",
@@ -350,6 +351,7 @@
         "synthetic/hud-subheader",
         "synthetic/member-angle",
         "synthetic/hud-visibility",
+        "synthetic/array-unique",
         "synthetic/chase-enums",
         "synthetic/chase-keywords",
         "synthetic/settings",
