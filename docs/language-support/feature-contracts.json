@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "contract": "pinned-overpy-feature-contract-inventory",
   "reference": {
     "name": "overpy",
@@ -69,43 +69,368 @@
         "objectPath": "opyKeywords"
       },
       "contract": "syntax.parser-and-control-flow/statement-and-declaration-boundaries",
-      "keys": [
-        "and",
-        "bool",
-        "case",
-        "def",
-        "default",
-        "del",
-        "elif",
-        "else",
-        "enum",
-        "float",
-        "for",
-        "if",
-        "in",
-        "int",
-        "globalvar",
-        "goto",
-        "lambda",
-        "loc",
-        "macro",
-        "not",
-        "or",
-        "playervar",
-        "rule",
-        "self",
-        "settings",
-        "signed",
-        "switch",
-        "subroutine",
-        "unsigned",
-        "while"
-      ],
-      "defaults": {
-        "status": "unclear",
-        "coverage": "uncovered",
-        "limits": "Keyword leaves are individually inventoried; contexts and lowering remain separate."
-      }
+      "leaves": [
+        {
+          "key": "and",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/chase-condition-agentlab"
+          ],
+          "limits": "Leaf-level classification for 'and'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "bool",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/6v6-adjustments"
+          ],
+          "limits": "Leaf-level classification for 'bool'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "case",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/control-flow-lowering"
+          ],
+          "limits": "Leaf-level classification for 'case'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "def",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/compiler-structure"
+          ],
+          "limits": "Leaf-level classification for 'def'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "default",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/control-flow-lowering"
+          ],
+          "limits": "Leaf-level classification for 'default'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "del",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/ow1-emulator"
+          ],
+          "limits": "Leaf-level classification for 'del'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "elif",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/control-flow"
+          ],
+          "limits": "Leaf-level classification for 'elif'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "else",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/conditional-forward-gotos"
+          ],
+          "limits": "Leaf-level classification for 'else'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "enum",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/directives-scoped"
+          ],
+          "limits": "Leaf-level classification for 'enum'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "float",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/6v6-adjustments"
+          ],
+          "limits": "Leaf-level classification for 'float'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "for",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/control-flow"
+          ],
+          "limits": "Leaf-level classification for 'for'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "if",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/conditional-forward-gotos"
+          ],
+          "limits": "Leaf-level classification for 'if'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "in",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/control-flow"
+          ],
+          "limits": "Leaf-level classification for 'in'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "int",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/6v6-adjustments"
+          ],
+          "limits": "Leaf-level classification for 'int'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "globalvar",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/chase-condition-agentlab"
+          ],
+          "limits": "Leaf-level classification for 'globalvar'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "goto",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/conditional-forward-gotos"
+          ],
+          "limits": "Leaf-level classification for 'goto'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "lambda",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/lambda-invalid"
+          ],
+          "limits": "Leaf-level classification for 'lambda'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "loc",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/keywords.ts#loc"
+          ],
+          "limits": "Leaf-level classification for 'loc'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "macro",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/directives-scoped"
+          ],
+          "limits": "Leaf-level classification for 'macro'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "not",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/legacy-entry-include"
+          ],
+          "limits": "Leaf-level classification for 'not'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "or",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/optimize-strict"
+          ],
+          "limits": "Leaf-level classification for 'or'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "playervar",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/chase-keywords"
+          ],
+          "limits": "Leaf-level classification for 'playervar'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "rule",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/basic-rule"
+          ],
+          "limits": "Leaf-level classification for 'rule'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "self",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/6v6-adjustments"
+          ],
+          "limits": "Leaf-level classification for 'self'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "settings",
+          "status": "partial",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/legacy-entry-include"
+          ],
+          "limits": "Leaf-level classification for 'settings'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "signed",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/keywords.ts#signed"
+          ],
+          "limits": "Leaf-level classification for 'signed'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "switch",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/control-flow-lowering"
+          ],
+          "limits": "Leaf-level classification for 'switch'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "subroutine",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/compiler-structure"
+          ],
+          "limits": "Leaf-level classification for 'subroutine'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "unsigned",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/keywords.ts#unsigned"
+          ],
+          "limits": "Leaf-level classification for 'unsigned'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "while",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/control-flow"
+          ],
+          "limits": "Leaf-level classification for 'while'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        }
+      ]
     },
     {
       "id": "registry/directives",
@@ -116,48 +441,428 @@
         "objectPath": "preprocessingDirectives"
       },
       "contract": "preprocessing.project-composition/directive-state",
-      "keys": [
-        "allowMacroRedeclaration",
-        "define",
-        "debugElementCount",
-        "disableInspector",
-        "suppressWarnings",
-        "mainFile",
-        "include",
-        "excludeVariablesInCompilation",
-        "setupTags",
-        "disableOptimizations",
-        "enableOptimizations",
-        "optimizeForSize",
-        "optimizeForSizeAggressive",
-        "disableOptimizeForSize",
-        "optimizeStrict",
-        "disableOptimizeStrict",
-        "replace0ByCapturePercentage",
-        "replace0ByPayloadProgressPercentage",
-        "replace0ByIsMatchComplete",
-        "replace1ByMatchRound",
-        "replaceTeam1ByControlScoringTeam",
-        "replaceEmptyStringByEmptyArray",
-        "replaceEmptyStringByVariable",
-        "translations",
-        "translateWithPlayerVar",
-        "useVariableForCompressionAlphabet",
-        "extension",
-        "globalvarInitRuleName",
-        "playervarInitRuleName",
-        "keepUnusedTranslations",
-        "disableTranslationSourceLines",
-        "writeToOutputFile",
-        "postCompileHook",
-        "rulePrefix",
-        "rulePrefixTemplate"
-      ],
-      "defaults": {
-        "status": "unclear",
-        "coverage": "uncovered",
-        "limits": "Directive recognition, scoped state, and backend effects are separate contracts."
-      }
+      "leaves": [
+        {
+          "key": "allowMacroRedeclaration",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/directives"
+          ],
+          "limits": "Leaf-level classification for 'allowMacroRedeclaration'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "define",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/directives"
+          ],
+          "limits": "Leaf-level classification for 'define'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "debugElementCount",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/preprocessing.ts#debugElementCount"
+          ],
+          "limits": "Leaf-level classification for 'debugElementCount'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "disableInspector",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/basic-rule"
+          ],
+          "limits": "Leaf-level classification for 'disableInspector'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "suppressWarnings",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/preprocessing.ts#suppressWarnings"
+          ],
+          "limits": "Leaf-level classification for 'suppressWarnings'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "mainFile",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/legacy-entry-include"
+          ],
+          "limits": "Leaf-level classification for 'mainFile'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "include",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/directives-scoped"
+          ],
+          "limits": "Leaf-level classification for 'include'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "excludeVariablesInCompilation",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/preprocessing.ts#excludeVariablesInCompilation"
+          ],
+          "limits": "Leaf-level classification for 'excludeVariablesInCompilation'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "setupTags",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/preprocessing.ts#setupTags"
+          ],
+          "limits": "Leaf-level classification for 'setupTags'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "disableOptimizations",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/directives"
+          ],
+          "limits": "Leaf-level classification for 'disableOptimizations'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "enableOptimizations",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/directives"
+          ],
+          "limits": "Leaf-level classification for 'enableOptimizations'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "optimizeForSize",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/directives"
+          ],
+          "limits": "Leaf-level classification for 'optimizeForSize'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "optimizeForSizeAggressive",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/directives"
+          ],
+          "limits": "Leaf-level classification for 'optimizeForSizeAggressive'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "disableOptimizeForSize",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/directives"
+          ],
+          "limits": "Leaf-level classification for 'disableOptimizeForSize'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "optimizeStrict",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/directives"
+          ],
+          "limits": "Leaf-level classification for 'optimizeStrict'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "disableOptimizeStrict",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/directives"
+          ],
+          "limits": "Leaf-level classification for 'disableOptimizeStrict'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "replace0ByCapturePercentage",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/directives"
+          ],
+          "limits": "Leaf-level classification for 'replace0ByCapturePercentage'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "replace0ByPayloadProgressPercentage",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/preprocessing.ts#replace0ByPayloadProgressPercentage"
+          ],
+          "limits": "Leaf-level classification for 'replace0ByPayloadProgressPercentage'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "replace0ByIsMatchComplete",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/preprocessing.ts#replace0ByIsMatchComplete"
+          ],
+          "limits": "Leaf-level classification for 'replace0ByIsMatchComplete'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "replace1ByMatchRound",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/directives"
+          ],
+          "limits": "Leaf-level classification for 'replace1ByMatchRound'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "replaceTeam1ByControlScoringTeam",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/directives"
+          ],
+          "limits": "Leaf-level classification for 'replaceTeam1ByControlScoringTeam'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "replaceEmptyStringByEmptyArray",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/directives"
+          ],
+          "limits": "Leaf-level classification for 'replaceEmptyStringByEmptyArray'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "replaceEmptyStringByVariable",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/preprocessing.ts#replaceEmptyStringByVariable"
+          ],
+          "limits": "Leaf-level classification for 'replaceEmptyStringByVariable'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "translations",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/directives"
+          ],
+          "limits": "Leaf-level classification for 'translations'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "translateWithPlayerVar",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/preprocessing.ts#translateWithPlayerVar"
+          ],
+          "limits": "Leaf-level classification for 'translateWithPlayerVar'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "useVariableForCompressionAlphabet",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/preprocessing.ts#useVariableForCompressionAlphabet"
+          ],
+          "limits": "Leaf-level classification for 'useVariableForCompressionAlphabet'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "extension",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/preprocessing.ts#extension"
+          ],
+          "limits": "Leaf-level classification for 'extension'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "globalvarInitRuleName",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/preprocessing.ts#globalvarInitRuleName"
+          ],
+          "limits": "Leaf-level classification for 'globalvarInitRuleName'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "playervarInitRuleName",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/preprocessing.ts#playervarInitRuleName"
+          ],
+          "limits": "Leaf-level classification for 'playervarInitRuleName'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "keepUnusedTranslations",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/preprocessing.ts#keepUnusedTranslations"
+          ],
+          "limits": "Leaf-level classification for 'keepUnusedTranslations'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "disableTranslationSourceLines",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/preprocessing.ts#disableTranslationSourceLines"
+          ],
+          "limits": "Leaf-level classification for 'disableTranslationSourceLines'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "writeToOutputFile",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/preprocessing.ts#writeToOutputFile"
+          ],
+          "limits": "Leaf-level classification for 'writeToOutputFile'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "postCompileHook",
+          "status": "partial",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/preprocessing.ts#postCompileHook"
+          ],
+          "limits": "Leaf-level classification for 'postCompileHook'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "rulePrefix",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/directives"
+          ],
+          "limits": "Leaf-level classification for 'rulePrefix'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "rulePrefixTemplate",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/preprocess.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/compiler-structure"
+          ],
+          "limits": "Leaf-level classification for 'rulePrefixTemplate'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        }
+      ]
     },
     {
       "id": "registry/annotations",
@@ -168,23 +873,128 @@
         "objectPath": "opyAnnotations"
       },
       "contract": "semantics.declarations-and-settings/variable-and-rule-declarations",
-      "keys": [
-        "@Name",
-        "@Event",
-        "@Team",
-        "@Slot",
-        "@Hero",
-        "@Condition",
-        "@SuppressWarnings",
-        "@Disabled",
-        "@Delimiter",
-        "@NewPage"
-      ],
-      "defaults": {
-        "status": "unclear",
-        "coverage": "uncovered",
-        "limits": "Annotation arguments and rule lifecycle have distinct behavior."
-      }
+      "leaves": [
+        {
+          "key": "@Name",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/compiler-structure"
+          ],
+          "limits": "Leaf-level classification for '@Name'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "@Event",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/basic-rule"
+          ],
+          "limits": "Leaf-level classification for '@Event'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "@Team",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/compiler-structure"
+          ],
+          "limits": "Leaf-level classification for '@Team'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "@Slot",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/compiler-structure"
+          ],
+          "limits": "Leaf-level classification for '@Slot'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "@Hero",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/directives"
+          ],
+          "limits": "Leaf-level classification for '@Hero'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "@Condition",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/chase-condition-agentlab"
+          ],
+          "limits": "Leaf-level classification for '@Condition'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "@SuppressWarnings",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/compiler-structure"
+          ],
+          "limits": "Leaf-level classification for '@SuppressWarnings'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "@Disabled",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/directives"
+          ],
+          "limits": "Leaf-level classification for '@Disabled'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "@Delimiter",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/directives"
+          ],
+          "limits": "Leaf-level classification for '@Delimiter'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "@NewPage",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/parser.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/directives"
+          ],
+          "limits": "Leaf-level classification for '@NewPage'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        }
+      ]
     },
     {
       "id": "registry/random-module",
@@ -195,17 +1005,56 @@
         "objectPath": "opyModules.random"
       },
       "contract": "semantics.builtins-members-and-enums/callable-signatures",
-      "keys": [
-        "randint",
-        "uniform",
-        "choice",
-        "shuffle"
-      ],
-      "defaults": {
-        "status": "unclear",
-        "coverage": "uncovered",
-        "limits": "The module namespace is not a callable leaf."
-      }
+      "leaves": [
+        {
+          "key": "randint",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/overpy-broken-weapons"
+          ],
+          "limits": "Leaf-level classification for 'randint'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "uniform",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/overpy-cake"
+          ],
+          "limits": "Leaf-level classification for 'uniform'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "choice",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/overpy-cake"
+          ],
+          "limits": "Leaf-level classification for 'choice'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "shuffle",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/ow1-emulator"
+          ],
+          "limits": "Leaf-level classification for 'shuffle'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        }
+      ]
     },
     {
       "id": "registry/macros",
@@ -216,35 +1065,272 @@
         "objectPath": "opyMacros"
       },
       "contract": "preprocessing.project-composition/macro-expansion",
-      "keys": [
-        "buttonToString",
-        ".getEffectiveHero",
-        ".getOppositeTeam",
-        "getRealClosestPlayer",
-        "getRealClosestPlayers",
-        "getRealFarthestPlayer",
-        "getRealFarthestPlayers",
-        ".getRealPlayerClosestToReticle",
-        ".getRealPlayersClosestToReticle",
-        "getRealPlayersInRadius",
-        ".getRealPlayersInViewAngle",
-        "getSign",
-        "getAllPlayers",
-        "hudHeader",
-        "hudSubheader",
-        "hudSubtext",
-        "lerp",
-        "lineIntersectsSphere",
-        "print",
-        ".reverse",
-        "timeToString",
-        ".unique"
-      ],
-      "defaults": {
-        "status": "unclear",
-        "coverage": "uncovered",
-        "limits": "Expansion, receiver context, and runtime behavior differ."
-      }
+      "leaves": [
+        {
+          "key": "buttonToString",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/macros.ts#buttonToString"
+          ],
+          "limits": "Leaf-level classification for 'buttonToString'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": ".getEffectiveHero",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/macros.ts#.getEffectiveHero"
+          ],
+          "limits": "Leaf-level classification for '.getEffectiveHero'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": ".getOppositeTeam",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/macros.ts#.getOppositeTeam"
+          ],
+          "limits": "Leaf-level classification for '.getOppositeTeam'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "getRealClosestPlayer",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/macros.ts#getRealClosestPlayer"
+          ],
+          "limits": "Leaf-level classification for 'getRealClosestPlayer'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "getRealClosestPlayers",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/macros.ts#getRealClosestPlayers"
+          ],
+          "limits": "Leaf-level classification for 'getRealClosestPlayers'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "getRealFarthestPlayer",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/macros.ts#getRealFarthestPlayer"
+          ],
+          "limits": "Leaf-level classification for 'getRealFarthestPlayer'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "getRealFarthestPlayers",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/macros.ts#getRealFarthestPlayers"
+          ],
+          "limits": "Leaf-level classification for 'getRealFarthestPlayers'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": ".getRealPlayerClosestToReticle",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/macros.ts#.getRealPlayerClosestToReticle"
+          ],
+          "limits": "Leaf-level classification for '.getRealPlayerClosestToReticle'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": ".getRealPlayersClosestToReticle",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/macros.ts#.getRealPlayersClosestToReticle"
+          ],
+          "limits": "Leaf-level classification for '.getRealPlayersClosestToReticle'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "getRealPlayersInRadius",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/ow1-emulator"
+          ],
+          "limits": "Leaf-level classification for 'getRealPlayersInRadius'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": ".getRealPlayersInViewAngle",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/macros.ts#.getRealPlayersInViewAngle"
+          ],
+          "limits": "Leaf-level classification for '.getRealPlayersInViewAngle'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "getSign",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/macros.ts#getSign"
+          ],
+          "limits": "Leaf-level classification for 'getSign'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "getAllPlayers",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/hud-subheader"
+          ],
+          "limits": "Leaf-level classification for 'getAllPlayers'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "hudHeader",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/overpy-cronch"
+          ],
+          "limits": "Leaf-level classification for 'hudHeader'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "hudSubheader",
+          "status": "partial",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/hud-subheader"
+          ],
+          "limits": "Leaf-level classification for 'hudSubheader'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "hudSubtext",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/overpy-crosshair"
+          ],
+          "limits": "Leaf-level classification for 'hudSubtext'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "lerp",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/macros.ts#lerp"
+          ],
+          "limits": "Leaf-level classification for 'lerp'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "lineIntersectsSphere",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/macros.ts#lineIntersectsSphere"
+          ],
+          "limits": "Leaf-level classification for 'lineIntersectsSphere'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "print",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/chase-keywords"
+          ],
+          "limits": "Leaf-level classification for 'print'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": ".reverse",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/macros.ts#.reverse"
+          ],
+          "limits": "Leaf-level classification for '.reverse'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "timeToString",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/macros.ts#timeToString"
+          ],
+          "limits": "Leaf-level classification for 'timeToString'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": ".unique",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/macros.ts#.unique"
+          ],
+          "limits": "Leaf-level classification for '.unique'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        }
+      ]
     },
     {
       "id": "registry/functions",
@@ -255,55 +1341,512 @@
         "objectPath": "opyFuncs"
       },
       "contract": "semantics.builtins-members-and-enums/callable-signatures",
-      "keys": [
-        "_",
-        "__",
-        "___",
-        "all",
-        "any",
-        ".append",
-        ".all",
-        ".any",
-        ".filter",
-        ".map",
-        "arrayToString",
-        "ceil",
-        "chaseAtRate",
-        "chaseOverTime",
-        "compress",
-        "compressed",
-        "decompressNumbers",
-        "decompressVectors",
-        "createCasedProgressBarIwt",
-        "debug",
-        "floor",
-        ".format",
-        "getCurrentMap",
-        ".getNormal",
-        ".getPlayerHit",
-        ".getHitPosition",
-        "hsl",
-        "log",
-        "pass",
-        "range",
-        "raycast",
-        ".remove",
-        "round",
-        "ruleCondition",
-        "sorted",
-        "spacesForString",
-        "spacesForLength",
-        "splitDictArray",
-        "stopChasing",
-        "strVisualLength",
-        "tabular",
-        ".toArray"
-      ],
-      "defaults": {
-        "status": "unclear",
-        "coverage": "uncovered",
-        "limits": "A function name does not imply signature, context, or lowering coverage."
-      }
+      "leaves": [
+        {
+          "key": "_",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/overpy-inputhud"
+          ],
+          "limits": "Leaf-level classification for '_'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "__",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/functions.ts#__"
+          ],
+          "limits": "Leaf-level classification for '__'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "___",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/functions.ts#___"
+          ],
+          "limits": "Leaf-level classification for '___'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "all",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/overpy-cronch"
+          ],
+          "limits": "Leaf-level classification for 'all'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "any",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/6v6-adjustments"
+          ],
+          "limits": "Leaf-level classification for 'any'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": ".append",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/overpy-meipocalypse"
+          ],
+          "limits": "Leaf-level classification for '.append'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": ".all",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/functions.ts#.all"
+          ],
+          "limits": "Leaf-level classification for '.all'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": ".any",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/functions.ts#.any"
+          ],
+          "limits": "Leaf-level classification for '.any'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": ".filter",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/functions.ts#.filter"
+          ],
+          "limits": "Leaf-level classification for '.filter'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": ".map",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/functions.ts#.map"
+          ],
+          "limits": "Leaf-level classification for '.map'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "arrayToString",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/functions.ts#arrayToString"
+          ],
+          "limits": "Leaf-level classification for 'arrayToString'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "ceil",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/6v6-adjustments"
+          ],
+          "limits": "Leaf-level classification for 'ceil'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "chaseAtRate",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/functions.ts#chaseAtRate"
+          ],
+          "limits": "Leaf-level classification for 'chaseAtRate'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "chaseOverTime",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/chase-condition-agentlab"
+          ],
+          "limits": "Leaf-level classification for 'chaseOverTime'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "compress",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/functions.ts#compress"
+          ],
+          "limits": "Leaf-level classification for 'compress'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "compressed",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/functions.ts#compressed"
+          ],
+          "limits": "Leaf-level classification for 'compressed'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "decompressNumbers",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/functions.ts#decompressNumbers"
+          ],
+          "limits": "Leaf-level classification for 'decompressNumbers'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "decompressVectors",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/functions.ts#decompressVectors"
+          ],
+          "limits": "Leaf-level classification for 'decompressVectors'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "createCasedProgressBarIwt",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/functions.ts#createCasedProgressBarIwt"
+          ],
+          "limits": "Leaf-level classification for 'createCasedProgressBarIwt'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "debug",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/control-flow"
+          ],
+          "limits": "Leaf-level classification for 'debug'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "floor",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/6v6-adjustments"
+          ],
+          "limits": "Leaf-level classification for 'floor'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": ".format",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/declarations-rules"
+          ],
+          "limits": "Leaf-level classification for '.format'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "getCurrentMap",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/functions.ts#getCurrentMap"
+          ],
+          "limits": "Leaf-level classification for 'getCurrentMap'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": ".getNormal",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/ow1-emulator"
+          ],
+          "limits": "Leaf-level classification for '.getNormal'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": ".getPlayerHit",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/functions.ts#.getPlayerHit"
+          ],
+          "limits": "Leaf-level classification for '.getPlayerHit'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": ".getHitPosition",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/overpy-meipocalypse"
+          ],
+          "limits": "Leaf-level classification for '.getHitPosition'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "hsl",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/functions.ts#hsl"
+          ],
+          "limits": "Leaf-level classification for 'hsl'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "log",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/functions.ts#log"
+          ],
+          "limits": "Leaf-level classification for 'log'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "pass",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/directives-scoped"
+          ],
+          "limits": "Leaf-level classification for 'pass'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "range",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/control-flow"
+          ],
+          "limits": "Leaf-level classification for 'range'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "raycast",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/overpy-meipocalypse"
+          ],
+          "limits": "Leaf-level classification for 'raycast'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": ".remove",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/functions.ts#.remove"
+          ],
+          "limits": "Leaf-level classification for '.remove'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "round",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/6v6-adjustments"
+          ],
+          "limits": "Leaf-level classification for 'round'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "ruleCondition",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/ow1-emulator"
+          ],
+          "limits": "Leaf-level classification for 'ruleCondition'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "sorted",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/strings-and-lambda"
+          ],
+          "limits": "Leaf-level classification for 'sorted'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "spacesForString",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/functions.ts#spacesForString"
+          ],
+          "limits": "Leaf-level classification for 'spacesForString'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "spacesForLength",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/functions.ts#spacesForLength"
+          ],
+          "limits": "Leaf-level classification for 'spacesForLength'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "splitDictArray",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/functions.ts#splitDictArray"
+          ],
+          "limits": "Leaf-level classification for 'splitDictArray'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "stopChasing",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/functions.ts#stopChasing"
+          ],
+          "limits": "Leaf-level classification for 'stopChasing'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "strVisualLength",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/functions.ts#strVisualLength"
+          ],
+          "limits": "Leaf-level classification for 'strVisualLength'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "tabular",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/functions.ts#tabular"
+          ],
+          "limits": "Leaf-level classification for 'tabular'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": ".toArray",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/functions.ts#.toArray"
+          ],
+          "limits": "Leaf-level classification for '.toArray'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        }
+      ]
     },
     {
       "id": "registry/member-functions",
@@ -314,16 +1857,44 @@
         "objectPath": "opyMemberFuncs"
       },
       "contract": "semantics.builtins-members-and-enums/receiver-dispatch",
-      "keys": [
-        "x",
-        "y",
-        "z"
-      ],
-      "defaults": {
-        "status": "unclear",
-        "coverage": "uncovered",
-        "limits": "Property receiver dispatch is separate from callable members."
-      }
+      "leaves": [
+        {
+          "key": "x",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/chase-keywords"
+          ],
+          "limits": "Leaf-level classification for 'x'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "y",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/chase-keywords"
+          ],
+          "limits": "Leaf-level classification for 'y'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "z",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/chase-keywords"
+          ],
+          "limits": "Leaf-level classification for 'z'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        }
+      ]
     },
     {
       "id": "registry/vector-constants",
@@ -334,19 +1905,80 @@
         "objectPath": "opyConstants.Vector"
       },
       "contract": "semantics.builtins-members-and-enums/enum-domain-context",
-      "keys": [
-        "UP",
-        "DOWN",
-        "LEFT",
-        "RIGHT",
-        "FORWARD",
-        "BACKWARD"
-      ],
-      "defaults": {
-        "status": "unclear",
-        "coverage": "uncovered",
-        "limits": "Source identities are tracked without copying Workshop data."
-      }
+      "leaves": [
+        {
+          "key": "UP",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/overpy-meipocalypse"
+          ],
+          "limits": "Leaf-level classification for 'UP'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "DOWN",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/overpy-santa"
+          ],
+          "limits": "Leaf-level classification for 'DOWN'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "LEFT",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/6v6-adjustments"
+          ],
+          "limits": "Leaf-level classification for 'LEFT'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "RIGHT",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/overpy-meipocalypse"
+          ],
+          "limits": "Leaf-level classification for 'RIGHT'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "FORWARD",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/6v6-adjustments"
+          ],
+          "limits": "Leaf-level classification for 'FORWARD'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "BACKWARD",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/overpy-meipocalypse"
+          ],
+          "limits": "Leaf-level classification for 'BACKWARD'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        }
+      ]
     },
     {
       "id": "registry/math-constants",
@@ -357,25 +1989,152 @@
         "objectPath": "opyConstants.Math"
       },
       "contract": "semantics.builtins-members-and-enums/enum-domain-context",
-      "keys": [
-        "PI",
-        "E",
-        "FUCKTON_OF_SPACES",
-        "FUCKTON_OF_NEWLINES",
-        "LOTS_OF_SPACES",
-        "INFINITY",
-        "EPSILON",
-        "SPHERE_HORIZONTAL_RADIUS_MULT",
-        "SPHERE_VERTICAL_RADIUS_MULT",
-        "INNER_RING_RADIUS_MULT",
-        "OUTER_RING_RADIUS_MULT",
-        "RING_EXPLOSION_RADIUS_MULT"
-      ],
-      "defaults": {
-        "status": "unclear",
-        "coverage": "uncovered",
-        "limits": "Spacing and radius helpers have distinct support."
-      }
+      "leaves": [
+        {
+          "key": "PI",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/6v6-adjustments"
+          ],
+          "limits": "Leaf-level classification for 'PI'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "E",
+          "status": "implemented",
+          "coverage": "covered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:synthetic/primitive-lowering"
+          ],
+          "limits": "Leaf-level classification for 'E'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "FUCKTON_OF_SPACES",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/constants.ts#FUCKTON_OF_SPACES"
+          ],
+          "limits": "Leaf-level classification for 'FUCKTON_OF_SPACES'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "FUCKTON_OF_NEWLINES",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/constants.ts#FUCKTON_OF_NEWLINES"
+          ],
+          "limits": "Leaf-level classification for 'FUCKTON_OF_NEWLINES'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "LOTS_OF_SPACES",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/constants.ts#LOTS_OF_SPACES"
+          ],
+          "limits": "Leaf-level classification for 'LOTS_OF_SPACES'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "INFINITY",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/6v6-adjustments"
+          ],
+          "limits": "Leaf-level classification for 'INFINITY'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "EPSILON",
+          "status": "implemented",
+          "coverage": "partial",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/constants.ts#EPSILON"
+          ],
+          "limits": "Leaf-level classification for 'EPSILON'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "SPHERE_HORIZONTAL_RADIUS_MULT",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/constants.ts#SPHERE_HORIZONTAL_RADIUS_MULT"
+          ],
+          "limits": "Leaf-level classification for 'SPHERE_HORIZONTAL_RADIUS_MULT'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "SPHERE_VERTICAL_RADIUS_MULT",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/constants.ts#SPHERE_VERTICAL_RADIUS_MULT"
+          ],
+          "limits": "Leaf-level classification for 'SPHERE_VERTICAL_RADIUS_MULT'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "INNER_RING_RADIUS_MULT",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/constants.ts#INNER_RING_RADIUS_MULT"
+          ],
+          "limits": "Leaf-level classification for 'INNER_RING_RADIUS_MULT'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "OUTER_RING_RADIUS_MULT",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/constants.ts#OUTER_RING_RADIUS_MULT"
+          ],
+          "limits": "Leaf-level classification for 'OUTER_RING_RADIUS_MULT'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "RING_EXPLOSION_RADIUS_MULT",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/constants.ts#RING_EXPLOSION_RADIUS_MULT"
+          ],
+          "limits": "Leaf-level classification for 'RING_EXPLOSION_RADIUS_MULT'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        }
+      ]
     },
     {
       "id": "registry/textures",
@@ -386,106 +2145,1124 @@
         "objectPath": "opyTextures"
       },
       "contract": "semantics.builtins-members-and-enums/enum-domain-context",
-      "keys": [
-        "GROUP_UP",
-        "ULTIMATE",
-        "NEED_HEALING",
-        "ATTACKING",
-        "EMOTE",
-        "HELLO",
-        "NEED_HELP",
-        "THANKS",
-        "DEFENDING",
-        "FALL_BACK",
-        "GO",
-        "GOING_IN",
-        "INCOMING",
-        "NO",
-        "ON_MY_WAY",
-        "PRESS_THE_ATTACK",
-        "PUSH_FORWARD",
-        "SORRY",
-        "WITH_YOU",
-        "MERCY_ANGELIC_DESCENT",
-        "BRIGITTE_SHIELD_BASH",
-        "LUCIO_HEALING_CROSSFADE",
-        "REAPER_PASSIVE",
-        "TORBJORN_SCRAP_COLLECTOR",
-        "JUNKRAT_PASSIVE",
-        "DVA_LIGHT_GUN",
-        "DVA_ALTERNATE_ULT",
-        "DVA_PASSIVE",
-        "SOMBRA_STEALTH",
-        "SOMBRA_PASSIVE",
-        "DOOMFIST_PASSIVE",
-        "BRIGITTE_PASSIVE",
-        "HANZO_LUNGE",
-        "JUNKER_QUEEN_PASSIVE",
-        "HALLOWEEN_TERROR",
-        "BLIZZARD_SPECIAL",
-        "SUMMER_GAMES",
-        "OVERWATCH_LEAGUE_TOKENS",
-        "PINK_MERCY_HEART",
-        "LOCK",
-        "OVERWATCH_COINS",
-        "COMPETITIVE_POINTS",
-        "ESCORT",
-        "ELIMINATION",
-        "DEATHMATCH",
-        "CAPTURE_THE_FLAG",
-        "CONTROL",
-        "ASSAULT",
-        "FLASHPOINT",
-        "TEAM_DEATHMATCH",
-        "SKIRMISH",
-        "HYBRID",
-        "PUSH",
-        "PRACTICE_RANGE",
-        "EXPERIMENTAL_MODE_DARK",
-        "FLAG_IRELAND",
-        "FLAG_ARGENTINA",
-        "FLAG_BELGIUM",
-        "FLAG_BULGARIA",
-        "FLAG_CHILE",
-        "FLAG_COLOMBIA",
-        "FLAG_GREECE",
-        "FLAG_ICELAND",
-        "FLAG_INDIA",
-        "RIGHT_CLICK",
-        "SCROLL_UP",
-        "SCROLL_DOWN",
-        "SCROLL",
-        "MOUSE_SIDE_BUTTON",
-        "DPAD_UP_ARROW",
-        "DPAD_DOWN_ARROW",
-        "DPAD_LEFT_ARROW",
-        "DPAD_RIGHT_ARROW",
-        "Y_BUTTON",
-        "B_BUTTON",
-        "A_BUTTON",
-        "MOUSE_CURSOR",
-        "MICROPHONE",
-        "WORKSHOP",
-        "HERO_BORDER",
-        "BRONZE_BORDER",
-        "PACKET_LOSS",
-        "CONNECTIVITY_ISSUE",
-        "EXPLOSION_DARK",
-        "TARGET_WITH_CHECKMARK_DARK",
-        "FIRE_DARK",
-        "HEALING_PLUS_DARK",
-        "TARGET_WITH_PERSON_DARK",
-        "TRACER_ICON_DARK",
-        "COMPETITIVE_ICON",
-        "GAME_BROWSER_ICON_DARK",
-        "UNRANKED_ICON_DARK",
-        "SQUARE_GRADIENT_TRANSPARENT_BLACK"
-      ],
-      "defaults": {
-        "status": "unclear",
-        "coverage": "uncovered",
-        "limits": "Texture names are inventoried without copying texture data."
-      }
+      "leaves": [
+        {
+          "key": "GROUP_UP",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#GROUP_UP"
+          ],
+          "limits": "Leaf-level classification for 'GROUP_UP'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "ULTIMATE",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "fixture:real-world/6v6-adjustments"
+          ],
+          "limits": "Leaf-level classification for 'ULTIMATE'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "NEED_HEALING",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#NEED_HEALING"
+          ],
+          "limits": "Leaf-level classification for 'NEED_HEALING'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "ATTACKING",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#ATTACKING"
+          ],
+          "limits": "Leaf-level classification for 'ATTACKING'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "EMOTE",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#EMOTE"
+          ],
+          "limits": "Leaf-level classification for 'EMOTE'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "HELLO",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#HELLO"
+          ],
+          "limits": "Leaf-level classification for 'HELLO'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "NEED_HELP",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#NEED_HELP"
+          ],
+          "limits": "Leaf-level classification for 'NEED_HELP'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "THANKS",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#THANKS"
+          ],
+          "limits": "Leaf-level classification for 'THANKS'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "DEFENDING",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#DEFENDING"
+          ],
+          "limits": "Leaf-level classification for 'DEFENDING'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "FALL_BACK",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#FALL_BACK"
+          ],
+          "limits": "Leaf-level classification for 'FALL_BACK'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "GO",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#GO"
+          ],
+          "limits": "Leaf-level classification for 'GO'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "GOING_IN",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#GOING_IN"
+          ],
+          "limits": "Leaf-level classification for 'GOING_IN'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "INCOMING",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#INCOMING"
+          ],
+          "limits": "Leaf-level classification for 'INCOMING'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "NO",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#NO"
+          ],
+          "limits": "Leaf-level classification for 'NO'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "ON_MY_WAY",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#ON_MY_WAY"
+          ],
+          "limits": "Leaf-level classification for 'ON_MY_WAY'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "PRESS_THE_ATTACK",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#PRESS_THE_ATTACK"
+          ],
+          "limits": "Leaf-level classification for 'PRESS_THE_ATTACK'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "PUSH_FORWARD",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#PUSH_FORWARD"
+          ],
+          "limits": "Leaf-level classification for 'PUSH_FORWARD'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "SORRY",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#SORRY"
+          ],
+          "limits": "Leaf-level classification for 'SORRY'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "WITH_YOU",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#WITH_YOU"
+          ],
+          "limits": "Leaf-level classification for 'WITH_YOU'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "MERCY_ANGELIC_DESCENT",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#MERCY_ANGELIC_DESCENT"
+          ],
+          "limits": "Leaf-level classification for 'MERCY_ANGELIC_DESCENT'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "BRIGITTE_SHIELD_BASH",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#BRIGITTE_SHIELD_BASH"
+          ],
+          "limits": "Leaf-level classification for 'BRIGITTE_SHIELD_BASH'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "LUCIO_HEALING_CROSSFADE",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#LUCIO_HEALING_CROSSFADE"
+          ],
+          "limits": "Leaf-level classification for 'LUCIO_HEALING_CROSSFADE'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "REAPER_PASSIVE",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#REAPER_PASSIVE"
+          ],
+          "limits": "Leaf-level classification for 'REAPER_PASSIVE'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "TORBJORN_SCRAP_COLLECTOR",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#TORBJORN_SCRAP_COLLECTOR"
+          ],
+          "limits": "Leaf-level classification for 'TORBJORN_SCRAP_COLLECTOR'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "JUNKRAT_PASSIVE",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#JUNKRAT_PASSIVE"
+          ],
+          "limits": "Leaf-level classification for 'JUNKRAT_PASSIVE'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "DVA_LIGHT_GUN",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#DVA_LIGHT_GUN"
+          ],
+          "limits": "Leaf-level classification for 'DVA_LIGHT_GUN'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "DVA_ALTERNATE_ULT",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#DVA_ALTERNATE_ULT"
+          ],
+          "limits": "Leaf-level classification for 'DVA_ALTERNATE_ULT'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "DVA_PASSIVE",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#DVA_PASSIVE"
+          ],
+          "limits": "Leaf-level classification for 'DVA_PASSIVE'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "SOMBRA_STEALTH",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#SOMBRA_STEALTH"
+          ],
+          "limits": "Leaf-level classification for 'SOMBRA_STEALTH'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "SOMBRA_PASSIVE",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#SOMBRA_PASSIVE"
+          ],
+          "limits": "Leaf-level classification for 'SOMBRA_PASSIVE'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "DOOMFIST_PASSIVE",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#DOOMFIST_PASSIVE"
+          ],
+          "limits": "Leaf-level classification for 'DOOMFIST_PASSIVE'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "BRIGITTE_PASSIVE",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#BRIGITTE_PASSIVE"
+          ],
+          "limits": "Leaf-level classification for 'BRIGITTE_PASSIVE'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "HANZO_LUNGE",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#HANZO_LUNGE"
+          ],
+          "limits": "Leaf-level classification for 'HANZO_LUNGE'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "JUNKER_QUEEN_PASSIVE",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#JUNKER_QUEEN_PASSIVE"
+          ],
+          "limits": "Leaf-level classification for 'JUNKER_QUEEN_PASSIVE'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "HALLOWEEN_TERROR",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#HALLOWEEN_TERROR"
+          ],
+          "limits": "Leaf-level classification for 'HALLOWEEN_TERROR'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "BLIZZARD_SPECIAL",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#BLIZZARD_SPECIAL"
+          ],
+          "limits": "Leaf-level classification for 'BLIZZARD_SPECIAL'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "SUMMER_GAMES",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#SUMMER_GAMES"
+          ],
+          "limits": "Leaf-level classification for 'SUMMER_GAMES'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "OVERWATCH_LEAGUE_TOKENS",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#OVERWATCH_LEAGUE_TOKENS"
+          ],
+          "limits": "Leaf-level classification for 'OVERWATCH_LEAGUE_TOKENS'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "PINK_MERCY_HEART",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#PINK_MERCY_HEART"
+          ],
+          "limits": "Leaf-level classification for 'PINK_MERCY_HEART'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "LOCK",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#LOCK"
+          ],
+          "limits": "Leaf-level classification for 'LOCK'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "OVERWATCH_COINS",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#OVERWATCH_COINS"
+          ],
+          "limits": "Leaf-level classification for 'OVERWATCH_COINS'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "COMPETITIVE_POINTS",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#COMPETITIVE_POINTS"
+          ],
+          "limits": "Leaf-level classification for 'COMPETITIVE_POINTS'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "ESCORT",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#ESCORT"
+          ],
+          "limits": "Leaf-level classification for 'ESCORT'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "ELIMINATION",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#ELIMINATION"
+          ],
+          "limits": "Leaf-level classification for 'ELIMINATION'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "DEATHMATCH",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#DEATHMATCH"
+          ],
+          "limits": "Leaf-level classification for 'DEATHMATCH'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "CAPTURE_THE_FLAG",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#CAPTURE_THE_FLAG"
+          ],
+          "limits": "Leaf-level classification for 'CAPTURE_THE_FLAG'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "CONTROL",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#CONTROL"
+          ],
+          "limits": "Leaf-level classification for 'CONTROL'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "ASSAULT",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#ASSAULT"
+          ],
+          "limits": "Leaf-level classification for 'ASSAULT'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "FLASHPOINT",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#FLASHPOINT"
+          ],
+          "limits": "Leaf-level classification for 'FLASHPOINT'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "TEAM_DEATHMATCH",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#TEAM_DEATHMATCH"
+          ],
+          "limits": "Leaf-level classification for 'TEAM_DEATHMATCH'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "SKIRMISH",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#SKIRMISH"
+          ],
+          "limits": "Leaf-level classification for 'SKIRMISH'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "HYBRID",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#HYBRID"
+          ],
+          "limits": "Leaf-level classification for 'HYBRID'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "PUSH",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#PUSH"
+          ],
+          "limits": "Leaf-level classification for 'PUSH'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "PRACTICE_RANGE",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#PRACTICE_RANGE"
+          ],
+          "limits": "Leaf-level classification for 'PRACTICE_RANGE'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "EXPERIMENTAL_MODE_DARK",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#EXPERIMENTAL_MODE_DARK"
+          ],
+          "limits": "Leaf-level classification for 'EXPERIMENTAL_MODE_DARK'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "FLAG_IRELAND",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#FLAG_IRELAND"
+          ],
+          "limits": "Leaf-level classification for 'FLAG_IRELAND'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "FLAG_ARGENTINA",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#FLAG_ARGENTINA"
+          ],
+          "limits": "Leaf-level classification for 'FLAG_ARGENTINA'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "FLAG_BELGIUM",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#FLAG_BELGIUM"
+          ],
+          "limits": "Leaf-level classification for 'FLAG_BELGIUM'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "FLAG_BULGARIA",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#FLAG_BULGARIA"
+          ],
+          "limits": "Leaf-level classification for 'FLAG_BULGARIA'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "FLAG_CHILE",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#FLAG_CHILE"
+          ],
+          "limits": "Leaf-level classification for 'FLAG_CHILE'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "FLAG_COLOMBIA",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#FLAG_COLOMBIA"
+          ],
+          "limits": "Leaf-level classification for 'FLAG_COLOMBIA'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "FLAG_GREECE",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#FLAG_GREECE"
+          ],
+          "limits": "Leaf-level classification for 'FLAG_GREECE'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "FLAG_ICELAND",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#FLAG_ICELAND"
+          ],
+          "limits": "Leaf-level classification for 'FLAG_ICELAND'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "FLAG_INDIA",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#FLAG_INDIA"
+          ],
+          "limits": "Leaf-level classification for 'FLAG_INDIA'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "RIGHT_CLICK",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#RIGHT_CLICK"
+          ],
+          "limits": "Leaf-level classification for 'RIGHT_CLICK'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "SCROLL_UP",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#SCROLL_UP"
+          ],
+          "limits": "Leaf-level classification for 'SCROLL_UP'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "SCROLL_DOWN",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#SCROLL_DOWN"
+          ],
+          "limits": "Leaf-level classification for 'SCROLL_DOWN'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "SCROLL",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#SCROLL"
+          ],
+          "limits": "Leaf-level classification for 'SCROLL'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "MOUSE_SIDE_BUTTON",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#MOUSE_SIDE_BUTTON"
+          ],
+          "limits": "Leaf-level classification for 'MOUSE_SIDE_BUTTON'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "DPAD_UP_ARROW",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#DPAD_UP_ARROW"
+          ],
+          "limits": "Leaf-level classification for 'DPAD_UP_ARROW'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "DPAD_DOWN_ARROW",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#DPAD_DOWN_ARROW"
+          ],
+          "limits": "Leaf-level classification for 'DPAD_DOWN_ARROW'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "DPAD_LEFT_ARROW",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#DPAD_LEFT_ARROW"
+          ],
+          "limits": "Leaf-level classification for 'DPAD_LEFT_ARROW'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "DPAD_RIGHT_ARROW",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#DPAD_RIGHT_ARROW"
+          ],
+          "limits": "Leaf-level classification for 'DPAD_RIGHT_ARROW'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "Y_BUTTON",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#Y_BUTTON"
+          ],
+          "limits": "Leaf-level classification for 'Y_BUTTON'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "B_BUTTON",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#B_BUTTON"
+          ],
+          "limits": "Leaf-level classification for 'B_BUTTON'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "A_BUTTON",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#A_BUTTON"
+          ],
+          "limits": "Leaf-level classification for 'A_BUTTON'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "MOUSE_CURSOR",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#MOUSE_CURSOR"
+          ],
+          "limits": "Leaf-level classification for 'MOUSE_CURSOR'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "MICROPHONE",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#MICROPHONE"
+          ],
+          "limits": "Leaf-level classification for 'MICROPHONE'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "WORKSHOP",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#WORKSHOP"
+          ],
+          "limits": "Leaf-level classification for 'WORKSHOP'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "HERO_BORDER",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#HERO_BORDER"
+          ],
+          "limits": "Leaf-level classification for 'HERO_BORDER'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "BRONZE_BORDER",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#BRONZE_BORDER"
+          ],
+          "limits": "Leaf-level classification for 'BRONZE_BORDER'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "PACKET_LOSS",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#PACKET_LOSS"
+          ],
+          "limits": "Leaf-level classification for 'PACKET_LOSS'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "CONNECTIVITY_ISSUE",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#CONNECTIVITY_ISSUE"
+          ],
+          "limits": "Leaf-level classification for 'CONNECTIVITY_ISSUE'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "EXPLOSION_DARK",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#EXPLOSION_DARK"
+          ],
+          "limits": "Leaf-level classification for 'EXPLOSION_DARK'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "TARGET_WITH_CHECKMARK_DARK",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#TARGET_WITH_CHECKMARK_DARK"
+          ],
+          "limits": "Leaf-level classification for 'TARGET_WITH_CHECKMARK_DARK'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "FIRE_DARK",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#FIRE_DARK"
+          ],
+          "limits": "Leaf-level classification for 'FIRE_DARK'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "HEALING_PLUS_DARK",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#HEALING_PLUS_DARK"
+          ],
+          "limits": "Leaf-level classification for 'HEALING_PLUS_DARK'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "TARGET_WITH_PERSON_DARK",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#TARGET_WITH_PERSON_DARK"
+          ],
+          "limits": "Leaf-level classification for 'TARGET_WITH_PERSON_DARK'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "TRACER_ICON_DARK",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#TRACER_ICON_DARK"
+          ],
+          "limits": "Leaf-level classification for 'TRACER_ICON_DARK'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "COMPETITIVE_ICON",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#COMPETITIVE_ICON"
+          ],
+          "limits": "Leaf-level classification for 'COMPETITIVE_ICON'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "GAME_BROWSER_ICON_DARK",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#GAME_BROWSER_ICON_DARK"
+          ],
+          "limits": "Leaf-level classification for 'GAME_BROWSER_ICON_DARK'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "UNRANKED_ICON_DARK",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#UNRANKED_ICON_DARK"
+          ],
+          "limits": "Leaf-level classification for 'UNRANKED_ICON_DARK'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "SQUARE_GRADIENT_TRANSPARENT_BLACK",
+          "status": "partial",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/manifest/mod.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/textures.ts#SQUARE_GRADIENT_TRANSPARENT_BLACK"
+          ],
+          "limits": "Leaf-level classification for 'SQUARE_GRADIENT_TRANSPARENT_BLACK'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        }
+      ]
     },
     {
       "id": "registry/string-entities",
@@ -496,80 +3273,812 @@
         "objectPath": "opyStringEntities"
       },
       "contract": "syntax.lexing/strings-and-modifiers",
-      "keys": [
-        "copyright",
-        "registered",
-        "macron",
-        "middle_dot",
-        "zero_width_space",
-        "horizontal_bar",
-        "reference_mark",
-        "asterism",
-        "left_arrow",
-        "up_arrow",
-        "right_arrow",
-        "down_arrow",
-        "horizontal_arrow",
-        "vertical_arrow",
-        "top_left_arrow",
-        "top_right_arrow",
-        "bottom_right_arrow",
-        "bottom_left_arrow",
-        "right_double_arrow",
-        "horizontal_double_arrow",
-        "infinity",
-        "fullwidth_block",
-        "black_square",
-        "white_square",
-        "square_in_square",
-        "square_horizontal_lines",
-        "square_vertical_lines",
-        "square_grid_lines",
-        "square_top_left_bottom_right_lines",
-        "square_top_right_bottom_left_lines",
-        "square_diagonal_lines",
-        "up_black_triangle",
-        "up_white_triangle",
-        "right_black_triangle",
-        "right_white_triangle",
-        "down_black_triangle",
-        "down_white_triangle",
-        "left_black_triangle",
-        "left_white_triangle",
-        "black_diamond",
-        "white_diamond",
-        "diamond_in_diamond",
-        "white_circle",
-        "black_circle",
-        "black_star",
-        "white_star",
-        "black_phone",
-        "white_phone",
-        "left_hand",
-        "right_hand",
-        "female",
-        "male",
-        "black_spades",
-        "white_heart",
-        "black_clubs",
-        "white_spades",
-        "black_heart",
-        "white_clubs",
-        "java",
-        "quarter_note",
-        "eighth_note",
-        "sixteenth_double_note",
-        "flat_note",
-        "fullwidth_space",
-        "industrial_symbol",
-        "postal_face",
-        "box_with_x"
-      ],
-      "defaults": {
-        "status": "unclear",
-        "coverage": "uncovered",
-        "limits": "String entity names are inventoried separately from string parsing and escaping semantics."
-      }
+      "leaves": [
+        {
+          "key": "copyright",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#copyright"
+          ],
+          "limits": "Leaf-level classification for 'copyright'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "registered",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#registered"
+          ],
+          "limits": "Leaf-level classification for 'registered'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "macron",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#macron"
+          ],
+          "limits": "Leaf-level classification for 'macron'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "middle_dot",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#middle_dot"
+          ],
+          "limits": "Leaf-level classification for 'middle_dot'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "zero_width_space",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#zero_width_space"
+          ],
+          "limits": "Leaf-level classification for 'zero_width_space'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "horizontal_bar",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#horizontal_bar"
+          ],
+          "limits": "Leaf-level classification for 'horizontal_bar'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "reference_mark",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#reference_mark"
+          ],
+          "limits": "Leaf-level classification for 'reference_mark'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "asterism",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#asterism"
+          ],
+          "limits": "Leaf-level classification for 'asterism'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "left_arrow",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#left_arrow"
+          ],
+          "limits": "Leaf-level classification for 'left_arrow'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "up_arrow",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#up_arrow"
+          ],
+          "limits": "Leaf-level classification for 'up_arrow'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "right_arrow",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#right_arrow"
+          ],
+          "limits": "Leaf-level classification for 'right_arrow'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "down_arrow",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#down_arrow"
+          ],
+          "limits": "Leaf-level classification for 'down_arrow'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "horizontal_arrow",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#horizontal_arrow"
+          ],
+          "limits": "Leaf-level classification for 'horizontal_arrow'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "vertical_arrow",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#vertical_arrow"
+          ],
+          "limits": "Leaf-level classification for 'vertical_arrow'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "top_left_arrow",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#top_left_arrow"
+          ],
+          "limits": "Leaf-level classification for 'top_left_arrow'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "top_right_arrow",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#top_right_arrow"
+          ],
+          "limits": "Leaf-level classification for 'top_right_arrow'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "bottom_right_arrow",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#bottom_right_arrow"
+          ],
+          "limits": "Leaf-level classification for 'bottom_right_arrow'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "bottom_left_arrow",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#bottom_left_arrow"
+          ],
+          "limits": "Leaf-level classification for 'bottom_left_arrow'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "right_double_arrow",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#right_double_arrow"
+          ],
+          "limits": "Leaf-level classification for 'right_double_arrow'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "horizontal_double_arrow",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#horizontal_double_arrow"
+          ],
+          "limits": "Leaf-level classification for 'horizontal_double_arrow'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "infinity",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#infinity"
+          ],
+          "limits": "Leaf-level classification for 'infinity'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "fullwidth_block",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#fullwidth_block"
+          ],
+          "limits": "Leaf-level classification for 'fullwidth_block'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "black_square",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#black_square"
+          ],
+          "limits": "Leaf-level classification for 'black_square'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "white_square",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#white_square"
+          ],
+          "limits": "Leaf-level classification for 'white_square'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "square_in_square",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#square_in_square"
+          ],
+          "limits": "Leaf-level classification for 'square_in_square'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "square_horizontal_lines",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#square_horizontal_lines"
+          ],
+          "limits": "Leaf-level classification for 'square_horizontal_lines'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "square_vertical_lines",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#square_vertical_lines"
+          ],
+          "limits": "Leaf-level classification for 'square_vertical_lines'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "square_grid_lines",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#square_grid_lines"
+          ],
+          "limits": "Leaf-level classification for 'square_grid_lines'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "square_top_left_bottom_right_lines",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#square_top_left_bottom_right_lines"
+          ],
+          "limits": "Leaf-level classification for 'square_top_left_bottom_right_lines'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "square_top_right_bottom_left_lines",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#square_top_right_bottom_left_lines"
+          ],
+          "limits": "Leaf-level classification for 'square_top_right_bottom_left_lines'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "square_diagonal_lines",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#square_diagonal_lines"
+          ],
+          "limits": "Leaf-level classification for 'square_diagonal_lines'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "up_black_triangle",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#up_black_triangle"
+          ],
+          "limits": "Leaf-level classification for 'up_black_triangle'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "up_white_triangle",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#up_white_triangle"
+          ],
+          "limits": "Leaf-level classification for 'up_white_triangle'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "right_black_triangle",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#right_black_triangle"
+          ],
+          "limits": "Leaf-level classification for 'right_black_triangle'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "right_white_triangle",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#right_white_triangle"
+          ],
+          "limits": "Leaf-level classification for 'right_white_triangle'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "down_black_triangle",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#down_black_triangle"
+          ],
+          "limits": "Leaf-level classification for 'down_black_triangle'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "down_white_triangle",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#down_white_triangle"
+          ],
+          "limits": "Leaf-level classification for 'down_white_triangle'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "left_black_triangle",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#left_black_triangle"
+          ],
+          "limits": "Leaf-level classification for 'left_black_triangle'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "left_white_triangle",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#left_white_triangle"
+          ],
+          "limits": "Leaf-level classification for 'left_white_triangle'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "black_diamond",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#black_diamond"
+          ],
+          "limits": "Leaf-level classification for 'black_diamond'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "white_diamond",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#white_diamond"
+          ],
+          "limits": "Leaf-level classification for 'white_diamond'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "diamond_in_diamond",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#diamond_in_diamond"
+          ],
+          "limits": "Leaf-level classification for 'diamond_in_diamond'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "white_circle",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#white_circle"
+          ],
+          "limits": "Leaf-level classification for 'white_circle'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "black_circle",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#black_circle"
+          ],
+          "limits": "Leaf-level classification for 'black_circle'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "black_star",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#black_star"
+          ],
+          "limits": "Leaf-level classification for 'black_star'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "white_star",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#white_star"
+          ],
+          "limits": "Leaf-level classification for 'white_star'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "black_phone",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#black_phone"
+          ],
+          "limits": "Leaf-level classification for 'black_phone'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "white_phone",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#white_phone"
+          ],
+          "limits": "Leaf-level classification for 'white_phone'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "left_hand",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#left_hand"
+          ],
+          "limits": "Leaf-level classification for 'left_hand'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "right_hand",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#right_hand"
+          ],
+          "limits": "Leaf-level classification for 'right_hand'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "female",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#female"
+          ],
+          "limits": "Leaf-level classification for 'female'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "male",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#male"
+          ],
+          "limits": "Leaf-level classification for 'male'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "black_spades",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#black_spades"
+          ],
+          "limits": "Leaf-level classification for 'black_spades'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "white_heart",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#white_heart"
+          ],
+          "limits": "Leaf-level classification for 'white_heart'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "black_clubs",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#black_clubs"
+          ],
+          "limits": "Leaf-level classification for 'black_clubs'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "white_spades",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#white_spades"
+          ],
+          "limits": "Leaf-level classification for 'white_spades'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "black_heart",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#black_heart"
+          ],
+          "limits": "Leaf-level classification for 'black_heart'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "white_clubs",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#white_clubs"
+          ],
+          "limits": "Leaf-level classification for 'white_clubs'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "java",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#java"
+          ],
+          "limits": "Leaf-level classification for 'java'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "quarter_note",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#quarter_note"
+          ],
+          "limits": "Leaf-level classification for 'quarter_note'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "eighth_note",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#eighth_note"
+          ],
+          "limits": "Leaf-level classification for 'eighth_note'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "sixteenth_double_note",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#sixteenth_double_note"
+          ],
+          "limits": "Leaf-level classification for 'sixteenth_double_note'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "flat_note",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#flat_note"
+          ],
+          "limits": "Leaf-level classification for 'flat_note'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "fullwidth_space",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#fullwidth_space"
+          ],
+          "limits": "Leaf-level classification for 'fullwidth_space'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "industrial_symbol",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#industrial_symbol"
+          ],
+          "limits": "Leaf-level classification for 'industrial_symbol'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "postal_face",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#postal_face"
+          ],
+          "limits": "Leaf-level classification for 'postal_face'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        },
+        {
+          "key": "box_with_x",
+          "status": "unclear",
+          "coverage": "uncovered",
+          "production": [
+            "crates/opy-rs/src/lexer.rs"
+          ],
+          "evidence": [
+            "upstream:src/data/opy/stringEntities.ts#box_with_x"
+          ],
+          "limits": "Leaf-level classification for 'box_with_x'; registry membership does not imply signature, receiver, contextual, or lowering coverage."
+        }
+      ]
     }
   ],
   "branches": [

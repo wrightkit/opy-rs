@@ -90,8 +90,8 @@ def load_manifest(path: Path = MANIFEST) -> dict[str, Any]:
 
 def load_inventory(path: Path = INVENTORY) -> dict[str, Any]:
     inventory = load_json(path)
-    if inventory.get("schemaVersion") != 1:
-        raise ConformanceError("feature contract inventory schemaVersion must be 1")
+    if inventory.get("schemaVersion") != 2:
+        raise ConformanceError("feature contract inventory schemaVersion must be 2")
     if inventory.get("contract") != "pinned-overpy-feature-contract-inventory":
         raise ConformanceError("unsupported feature contract inventory")
     if not isinstance(inventory.get("reference"), dict):
@@ -119,8 +119,8 @@ def load_inventory(path: Path = INVENTORY) -> dict[str, Any]:
 
 def load_pinned_audit(path: Path = PINNED_AUDIT) -> dict[str, Any]:
     audit = load_json(path)
-    if audit.get("schemaVersion") != 1:
-        raise ConformanceError("pinned OverPy audit schemaVersion must be 1")
+    if audit.get("schemaVersion") != 2:
+        raise ConformanceError("pinned OverPy audit schemaVersion must be 2")
     if audit.get("contract") != "pinned-overpy-source-audit":
         raise ConformanceError("unsupported pinned OverPy audit")
     if not isinstance(audit.get("reference"), dict):
@@ -145,6 +145,14 @@ def load_pinned_audit(path: Path = PINNED_AUDIT) -> dict[str, Any]:
             or not source["objectPath"]
         ):
             raise ConformanceError(f"{registry['id']}: pinned audit source is incomplete")
+        keys = registry.get("keys")
+        if (
+            not isinstance(keys, list)
+            or not keys
+            or any(not isinstance(key, str) or not key for key in keys)
+            or len(keys) != len(set(keys))
+        ):
+            raise ConformanceError(f"{registry['id']}: pinned audit keys are incomplete")
     for branch in audit["branches"]:
         if not isinstance(branch.get("source"), str) or not branch["source"]:
             raise ConformanceError(f"{branch['id']}: pinned audit source is incomplete")
@@ -183,14 +191,16 @@ def _validate_production(production: Any, leaf_id: str) -> None:
 def inventory_leaves(inventory: dict[str, Any]) -> list[dict[str, Any]]:
     leaves: list[dict[str, Any]] = []
     for registry in inventory["registries"]:
-        defaults = registry["defaults"]
-        overrides = registry.get("overrides", {})
-        for key in registry["keys"]:
-            leaf = dict(defaults)
-            leaf.update(overrides.get(key, {}))
-            leaf["id"] = f"{registry['id']}/{key}"
+        records = registry.get("leaves")
+        if not isinstance(records, list):
+            raise ConformanceError(f"{registry.get('id', '<unknown>')}: explicit leaf records are required")
+        for record in records:
+            if not isinstance(record, dict) or not isinstance(record.get("key"), str) or not record["key"]:
+                raise ConformanceError(f"{registry.get('id', '<unknown>')}: leaf records need non-empty keys")
+            leaf = dict(record)
+            leaf["id"] = f"{registry['id']}/{record['key']}"
             leaf["registry"] = registry["id"]
-            leaf["upstreamKey"] = key
+            leaf["upstreamKey"] = record["key"]
             leaf["contract"] = registry["contract"]
             leaves.append(leaf)
     leaves.extend(inventory["branches"])
@@ -360,22 +370,33 @@ def validate_inventory(
             raise ConformanceError(f"{registry_id}: source path and object path are required")
         if registry["source"] != audit_surfaces[registry_id]["source"]:
             raise ConformanceError(f"{registry_id}: source differs from pinned audit")
-        keys = registry.get("keys")
-        if not isinstance(keys, list) or not keys or len(keys) != len(set(keys)) or any(not isinstance(key, str) or not key for key in keys):
-            raise ConformanceError(f"{registry_id}: registry keys must be distinct non-empty strings")
-        defaults = registry.get("defaults")
-        if not isinstance(defaults, dict):
-            raise ConformanceError(f"{registry_id}: defaults are required")
-        overrides = registry.get("overrides", {})
-        if not isinstance(overrides, dict) or set(overrides) - set(keys):
-            raise ConformanceError(f"{registry_id}: overrides must name declared registry keys")
+        records = registry.get("leaves")
+        if (
+            not isinstance(records, list)
+            or not records
+            or any(not isinstance(record, dict) for record in records)
+        ):
+            raise ConformanceError(f"{registry_id}: explicit leaf records are required")
+        keys = [record.get("key") for record in records]
+        if (
+            any(not isinstance(key, str) or not key for key in keys)
+            or len(keys) != len(set(keys))
+        ):
+            raise ConformanceError(f"{registry_id}: leaf keys must be distinct non-empty strings")
+        audit_keys = audit_surfaces[registry_id].get("keys", [])
+        if set(keys) != set(audit_keys):
+            raise ConformanceError(
+                f"{registry_id}: leaf catalog differs from pinned audit: "
+                f"missing={sorted(set(audit_keys) - set(keys))}, "
+                f"extra={sorted(set(keys) - set(audit_keys))}"
+            )
         if upstream_root is not None:
             source = upstream_root / registry["source"]["path"]
             actual = _upstream_object_keys(source, registry["source"]["objectPath"])
-            if actual != set(keys):
-                missing = sorted(actual - set(keys))
-                extra = sorted(set(keys) - actual)
-                raise ConformanceError(f"{registry_id}: upstream key set differs (missing={missing}, extra={extra})")
+            if actual != set(audit_keys):
+                missing = sorted(actual - set(audit_keys))
+                extra = sorted(set(audit_keys) - actual)
+                raise ConformanceError(f"{registry_id}: pinned audit key set differs (missing={missing}, extra={extra})")
     if upstream_root is not None:
         for branch in audit["branches"]:
             source = upstream_root / branch["source"]
@@ -792,7 +813,7 @@ def run(args: argparse.Namespace) -> int:
         "featureInventory": {
             "contract": inventory["contract"],
             "registries": len(inventory["registries"]),
-            "registryLeaves": sum(len(registry["keys"]) for registry in inventory["registries"]),
+            "registryLeaves": sum(len(registry["leaves"]) for registry in inventory["registries"]),
             "branches": len(inventory["branches"]),
             "byStatus": {
                 status: sum(1 for leaf in leaves if leaf["status"] == status)

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "contract": "pinned-overpy-source-audit",
   "reference": {
     "name": "overpy",
@@ -8,43 +8,530 @@
     "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw=="
   },
   "registries": [
-    {"id": "registry/keywords", "source": {"path": "src/data/opy/keywords.ts", "objectPath": "opyKeywords"}},
-    {"id": "registry/directives", "source": {"path": "src/data/opy/preprocessing.ts", "objectPath": "preprocessingDirectives"}},
-    {"id": "registry/annotations", "source": {"path": "src/data/opy/annotations.ts", "objectPath": "opyAnnotations"}},
-    {"id": "registry/random-module", "source": {"path": "src/data/opy/modules.ts", "objectPath": "opyModules.random"}},
-    {"id": "registry/macros", "source": {"path": "src/data/opy/macros.ts", "objectPath": "opyMacros"}},
-    {"id": "registry/functions", "source": {"path": "src/data/opy/functions.ts", "objectPath": "opyFuncs"}},
-    {"id": "registry/member-functions", "source": {"path": "src/data/opy/memberFunctions.ts", "objectPath": "opyMemberFuncs"}},
-    {"id": "registry/vector-constants", "source": {"path": "src/data/opy/constants.ts", "objectPath": "opyConstants.Vector"}},
-    {"id": "registry/math-constants", "source": {"path": "src/data/opy/constants.ts", "objectPath": "opyConstants.Math"}},
-    {"id": "registry/textures", "source": {"path": "src/data/opy/textures.ts", "objectPath": "opyTextures"}},
-    {"id": "registry/string-entities", "source": {"path": "src/data/opy/stringEntities.ts", "objectPath": "opyStringEntities"}}
+    {
+      "id": "registry/keywords",
+      "source": {
+        "path": "src/data/opy/keywords.ts",
+        "objectPath": "opyKeywords"
+      },
+      "keys": [
+        "and",
+        "bool",
+        "case",
+        "def",
+        "default",
+        "del",
+        "elif",
+        "else",
+        "enum",
+        "float",
+        "for",
+        "globalvar",
+        "goto",
+        "if",
+        "in",
+        "int",
+        "lambda",
+        "loc",
+        "macro",
+        "not",
+        "or",
+        "playervar",
+        "rule",
+        "self",
+        "settings",
+        "signed",
+        "subroutine",
+        "switch",
+        "unsigned",
+        "while"
+      ]
+    },
+    {
+      "id": "registry/directives",
+      "source": {
+        "path": "src/data/opy/preprocessing.ts",
+        "objectPath": "preprocessingDirectives"
+      },
+      "keys": [
+        "allowMacroRedeclaration",
+        "debugElementCount",
+        "define",
+        "disableInspector",
+        "disableOptimizations",
+        "disableOptimizeForSize",
+        "disableOptimizeStrict",
+        "disableTranslationSourceLines",
+        "enableOptimizations",
+        "excludeVariablesInCompilation",
+        "extension",
+        "globalvarInitRuleName",
+        "include",
+        "keepUnusedTranslations",
+        "mainFile",
+        "optimizeForSize",
+        "optimizeForSizeAggressive",
+        "optimizeStrict",
+        "playervarInitRuleName",
+        "postCompileHook",
+        "replace0ByCapturePercentage",
+        "replace0ByIsMatchComplete",
+        "replace0ByPayloadProgressPercentage",
+        "replace1ByMatchRound",
+        "replaceEmptyStringByEmptyArray",
+        "replaceEmptyStringByVariable",
+        "replaceTeam1ByControlScoringTeam",
+        "rulePrefix",
+        "rulePrefixTemplate",
+        "setupTags",
+        "suppressWarnings",
+        "translateWithPlayerVar",
+        "translations",
+        "useVariableForCompressionAlphabet",
+        "writeToOutputFile"
+      ]
+    },
+    {
+      "id": "registry/annotations",
+      "source": {
+        "path": "src/data/opy/annotations.ts",
+        "objectPath": "opyAnnotations"
+      },
+      "keys": [
+        "@Condition",
+        "@Delimiter",
+        "@Disabled",
+        "@Event",
+        "@Hero",
+        "@Name",
+        "@NewPage",
+        "@Slot",
+        "@SuppressWarnings",
+        "@Team"
+      ]
+    },
+    {
+      "id": "registry/random-module",
+      "source": {
+        "path": "src/data/opy/modules.ts",
+        "objectPath": "opyModules.random"
+      },
+      "keys": [
+        "choice",
+        "randint",
+        "shuffle",
+        "uniform"
+      ]
+    },
+    {
+      "id": "registry/macros",
+      "source": {
+        "path": "src/data/opy/macros.ts",
+        "objectPath": "opyMacros"
+      },
+      "keys": [
+        ".getEffectiveHero",
+        ".getOppositeTeam",
+        ".getRealPlayerClosestToReticle",
+        ".getRealPlayersClosestToReticle",
+        ".getRealPlayersInViewAngle",
+        ".reverse",
+        ".unique",
+        "buttonToString",
+        "getAllPlayers",
+        "getRealClosestPlayer",
+        "getRealClosestPlayers",
+        "getRealFarthestPlayer",
+        "getRealFarthestPlayers",
+        "getRealPlayersInRadius",
+        "getSign",
+        "hudHeader",
+        "hudSubheader",
+        "hudSubtext",
+        "lerp",
+        "lineIntersectsSphere",
+        "print",
+        "timeToString"
+      ]
+    },
+    {
+      "id": "registry/functions",
+      "source": {
+        "path": "src/data/opy/functions.ts",
+        "objectPath": "opyFuncs"
+      },
+      "keys": [
+        ".all",
+        ".any",
+        ".append",
+        ".filter",
+        ".format",
+        ".getHitPosition",
+        ".getNormal",
+        ".getPlayerHit",
+        ".map",
+        ".remove",
+        ".toArray",
+        "_",
+        "__",
+        "___",
+        "all",
+        "any",
+        "arrayToString",
+        "ceil",
+        "chaseAtRate",
+        "chaseOverTime",
+        "compress",
+        "compressed",
+        "createCasedProgressBarIwt",
+        "debug",
+        "decompressNumbers",
+        "decompressVectors",
+        "floor",
+        "getCurrentMap",
+        "hsl",
+        "log",
+        "pass",
+        "range",
+        "raycast",
+        "round",
+        "ruleCondition",
+        "sorted",
+        "spacesForLength",
+        "spacesForString",
+        "splitDictArray",
+        "stopChasing",
+        "strVisualLength",
+        "tabular"
+      ]
+    },
+    {
+      "id": "registry/member-functions",
+      "source": {
+        "path": "src/data/opy/memberFunctions.ts",
+        "objectPath": "opyMemberFuncs"
+      },
+      "keys": [
+        "x",
+        "y",
+        "z"
+      ]
+    },
+    {
+      "id": "registry/vector-constants",
+      "source": {
+        "path": "src/data/opy/constants.ts",
+        "objectPath": "opyConstants.Vector"
+      },
+      "keys": [
+        "BACKWARD",
+        "DOWN",
+        "FORWARD",
+        "LEFT",
+        "RIGHT",
+        "UP"
+      ]
+    },
+    {
+      "id": "registry/math-constants",
+      "source": {
+        "path": "src/data/opy/constants.ts",
+        "objectPath": "opyConstants.Math"
+      },
+      "keys": [
+        "E",
+        "EPSILON",
+        "FUCKTON_OF_NEWLINES",
+        "FUCKTON_OF_SPACES",
+        "INFINITY",
+        "INNER_RING_RADIUS_MULT",
+        "LOTS_OF_SPACES",
+        "OUTER_RING_RADIUS_MULT",
+        "PI",
+        "RING_EXPLOSION_RADIUS_MULT",
+        "SPHERE_HORIZONTAL_RADIUS_MULT",
+        "SPHERE_VERTICAL_RADIUS_MULT"
+      ]
+    },
+    {
+      "id": "registry/textures",
+      "source": {
+        "path": "src/data/opy/textures.ts",
+        "objectPath": "opyTextures"
+      },
+      "keys": [
+        "ASSAULT",
+        "ATTACKING",
+        "A_BUTTON",
+        "BLIZZARD_SPECIAL",
+        "BRIGITTE_PASSIVE",
+        "BRIGITTE_SHIELD_BASH",
+        "BRONZE_BORDER",
+        "B_BUTTON",
+        "CAPTURE_THE_FLAG",
+        "COMPETITIVE_ICON",
+        "COMPETITIVE_POINTS",
+        "CONNECTIVITY_ISSUE",
+        "CONTROL",
+        "DEATHMATCH",
+        "DEFENDING",
+        "DOOMFIST_PASSIVE",
+        "DPAD_DOWN_ARROW",
+        "DPAD_LEFT_ARROW",
+        "DPAD_RIGHT_ARROW",
+        "DPAD_UP_ARROW",
+        "DVA_ALTERNATE_ULT",
+        "DVA_LIGHT_GUN",
+        "DVA_PASSIVE",
+        "ELIMINATION",
+        "EMOTE",
+        "ESCORT",
+        "EXPERIMENTAL_MODE_DARK",
+        "EXPLOSION_DARK",
+        "FALL_BACK",
+        "FIRE_DARK",
+        "FLAG_ARGENTINA",
+        "FLAG_BELGIUM",
+        "FLAG_BULGARIA",
+        "FLAG_CHILE",
+        "FLAG_COLOMBIA",
+        "FLAG_GREECE",
+        "FLAG_ICELAND",
+        "FLAG_INDIA",
+        "FLAG_IRELAND",
+        "FLASHPOINT",
+        "GAME_BROWSER_ICON_DARK",
+        "GO",
+        "GOING_IN",
+        "GROUP_UP",
+        "HALLOWEEN_TERROR",
+        "HANZO_LUNGE",
+        "HEALING_PLUS_DARK",
+        "HELLO",
+        "HERO_BORDER",
+        "HYBRID",
+        "INCOMING",
+        "JUNKER_QUEEN_PASSIVE",
+        "JUNKRAT_PASSIVE",
+        "LOCK",
+        "LUCIO_HEALING_CROSSFADE",
+        "MERCY_ANGELIC_DESCENT",
+        "MICROPHONE",
+        "MOUSE_CURSOR",
+        "MOUSE_SIDE_BUTTON",
+        "NEED_HEALING",
+        "NEED_HELP",
+        "NO",
+        "ON_MY_WAY",
+        "OVERWATCH_COINS",
+        "OVERWATCH_LEAGUE_TOKENS",
+        "PACKET_LOSS",
+        "PINK_MERCY_HEART",
+        "PRACTICE_RANGE",
+        "PRESS_THE_ATTACK",
+        "PUSH",
+        "PUSH_FORWARD",
+        "REAPER_PASSIVE",
+        "RIGHT_CLICK",
+        "SCROLL",
+        "SCROLL_DOWN",
+        "SCROLL_UP",
+        "SKIRMISH",
+        "SOMBRA_PASSIVE",
+        "SOMBRA_STEALTH",
+        "SORRY",
+        "SQUARE_GRADIENT_TRANSPARENT_BLACK",
+        "SUMMER_GAMES",
+        "TARGET_WITH_CHECKMARK_DARK",
+        "TARGET_WITH_PERSON_DARK",
+        "TEAM_DEATHMATCH",
+        "THANKS",
+        "TORBJORN_SCRAP_COLLECTOR",
+        "TRACER_ICON_DARK",
+        "ULTIMATE",
+        "UNRANKED_ICON_DARK",
+        "WITH_YOU",
+        "WORKSHOP",
+        "Y_BUTTON"
+      ]
+    },
+    {
+      "id": "registry/string-entities",
+      "source": {
+        "path": "src/data/opy/stringEntities.ts",
+        "objectPath": "opyStringEntities"
+      },
+      "keys": [
+        "asterism",
+        "black_circle",
+        "black_clubs",
+        "black_diamond",
+        "black_heart",
+        "black_phone",
+        "black_spades",
+        "black_square",
+        "black_star",
+        "bottom_left_arrow",
+        "bottom_right_arrow",
+        "box_with_x",
+        "copyright",
+        "diamond_in_diamond",
+        "down_arrow",
+        "down_black_triangle",
+        "down_white_triangle",
+        "eighth_note",
+        "female",
+        "flat_note",
+        "fullwidth_block",
+        "fullwidth_space",
+        "horizontal_arrow",
+        "horizontal_bar",
+        "horizontal_double_arrow",
+        "industrial_symbol",
+        "infinity",
+        "java",
+        "left_arrow",
+        "left_black_triangle",
+        "left_hand",
+        "left_white_triangle",
+        "macron",
+        "male",
+        "middle_dot",
+        "postal_face",
+        "quarter_note",
+        "reference_mark",
+        "registered",
+        "right_arrow",
+        "right_black_triangle",
+        "right_double_arrow",
+        "right_hand",
+        "right_white_triangle",
+        "sixteenth_double_note",
+        "square_diagonal_lines",
+        "square_grid_lines",
+        "square_horizontal_lines",
+        "square_in_square",
+        "square_top_left_bottom_right_lines",
+        "square_top_right_bottom_left_lines",
+        "square_vertical_lines",
+        "top_left_arrow",
+        "top_right_arrow",
+        "up_arrow",
+        "up_black_triangle",
+        "up_white_triangle",
+        "vertical_arrow",
+        "white_circle",
+        "white_clubs",
+        "white_diamond",
+        "white_heart",
+        "white_phone",
+        "white_spades",
+        "white_square",
+        "white_star",
+        "zero_width_space"
+      ]
+    }
   ],
   "branches": [
-    {"id": "branch/lexer-token-boundaries", "source": "src/compiler/tokenizer.ts"},
-    {"id": "branch/parser-expressions", "source": "src/compiler/parser.ts"},
-    {"id": "branch/parser-declarations", "source": "src/compiler/astParser.ts"},
-    {"id": "branch/parser-control-flow", "source": "src/compiler/parser.ts"},
-    {"id": "branch/parser-contextual-lambda", "source": "src/compiler/parser.ts"},
-    {"id": "branch/parser-goto-and-dynamic-targets", "source": "src/compiler/parser.ts"},
-    {"id": "branch/compiler-project-closure", "source": "src/compiler/compiler.ts"},
-    {"id": "branch/compiler-macro-expansion", "source": "src/compiler/tokenizer.ts"},
-    {"id": "branch/compiler-directive-state", "source": "src/compiler/compiler.ts"},
-    {"id": "branch/compiler-translations", "source": "src/compiler/translations.ts"},
-    {"id": "branch/compiler-settings", "source": "src/compiler/parser.ts"},
-    {"id": "branch/semantic-dispatch", "source": "src/data/opy/functions.ts"},
-    {"id": "branch/semantic-diagnostic-frontiers", "source": "src/compiler/compiler.ts"},
-    {"id": "branch/lowering-canonical-wir", "source": "src/compiler/astToWorkshop.ts"},
-    {"id": "branch/lowering-unsupported-boundary", "source": "src/compiler/astToWorkshop.ts"},
-    {"id": "branch/project-real-world", "source": "examples"},
-    {"id": "branch/workshop-catalog-boundary", "source": "src/data/actions.ts"},
-    {"id": "branch/workshop-value-boundary", "source": "src/data/values.ts"},
-    {"id": "branch/cli-compile-contract", "source": "src/cli.ts"},
-    {"id": "branch/cli-decompile-contract", "source": "src/decompiler/decompiler.ts"},
-    {"id": "branch/compile-metadata", "source": "src/compiler/compiler.ts"},
-    {"id": "branch/javascript-macro-runtime", "source": "src/compiler/tokenizer.ts"},
-    {"id": "branch/post-compile-hook", "source": "src/compiler/compiler.ts"},
-    {"id": "branch/quickjs-failure-abi", "source": "src/quickjs.ts"},
-    {"id": "branch/cli-project-input", "source": "src/cli.ts"}
+    {
+      "id": "branch/lexer-token-boundaries",
+      "source": "src/compiler/tokenizer.ts"
+    },
+    {
+      "id": "branch/parser-expressions",
+      "source": "src/compiler/parser.ts"
+    },
+    {
+      "id": "branch/parser-declarations",
+      "source": "src/compiler/astParser.ts"
+    },
+    {
+      "id": "branch/parser-control-flow",
+      "source": "src/compiler/parser.ts"
+    },
+    {
+      "id": "branch/parser-contextual-lambda",
+      "source": "src/compiler/parser.ts"
+    },
+    {
+      "id": "branch/parser-goto-and-dynamic-targets",
+      "source": "src/compiler/parser.ts"
+    },
+    {
+      "id": "branch/compiler-project-closure",
+      "source": "src/compiler/compiler.ts"
+    },
+    {
+      "id": "branch/compiler-macro-expansion",
+      "source": "src/compiler/tokenizer.ts"
+    },
+    {
+      "id": "branch/compiler-directive-state",
+      "source": "src/compiler/compiler.ts"
+    },
+    {
+      "id": "branch/compiler-translations",
+      "source": "src/compiler/translations.ts"
+    },
+    {
+      "id": "branch/compiler-settings",
+      "source": "src/compiler/parser.ts"
+    },
+    {
+      "id": "branch/semantic-dispatch",
+      "source": "src/data/opy/functions.ts"
+    },
+    {
+      "id": "branch/semantic-diagnostic-frontiers",
+      "source": "src/compiler/compiler.ts"
+    },
+    {
+      "id": "branch/lowering-canonical-wir",
+      "source": "src/compiler/astToWorkshop.ts"
+    },
+    {
+      "id": "branch/lowering-unsupported-boundary",
+      "source": "src/compiler/astToWorkshop.ts"
+    },
+    {
+      "id": "branch/project-real-world",
+      "source": "examples"
+    },
+    {
+      "id": "branch/workshop-catalog-boundary",
+      "source": "src/data/actions.ts"
+    },
+    {
+      "id": "branch/workshop-value-boundary",
+      "source": "src/data/values.ts"
+    },
+    {
+      "id": "branch/cli-compile-contract",
+      "source": "src/cli.ts"
+    },
+    {
+      "id": "branch/cli-decompile-contract",
+      "source": "src/decompiler/decompiler.ts"
+    },
+    {
+      "id": "branch/compile-metadata",
+      "source": "src/compiler/compiler.ts"
+    },
+    {
+      "id": "branch/javascript-macro-runtime",
+      "source": "src/compiler/tokenizer.ts"
+    },
+    {
+      "id": "branch/post-compile-hook",
+      "source": "src/compiler/compiler.ts"
+    },
+    {
+      "id": "branch/quickjs-failure-abi",
+      "source": "src/quickjs.ts"
+    },
+    {
+      "id": "branch/cli-project-input",
+      "source": "src/cli.ts"
+    }
   ]
 }

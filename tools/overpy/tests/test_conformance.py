@@ -57,6 +57,19 @@ class ConformanceTests(unittest.TestCase):
             {branch["id"] for branch in inventory["branches"]},
             set(inventory["requiredBranches"]),
         )
+        for registry in inventory["registries"]:
+            self.assertNotIn("defaults", registry)
+            self.assertNotIn("overrides", registry)
+            self.assertEqual(
+                {leaf["key"] for leaf in registry["leaves"]},
+                set(
+                    next(
+                        audit["keys"]
+                        for audit in self.audit["registries"]
+                        if audit["id"] == registry["id"]
+                    )
+                ),
+            )
         self.assertEqual(len(leaves), len(conformance.inventory_leaves(inventory)))
         self.assertIn("unclear", {leaf["status"] for leaf in leaves})
         self.assertIn("unsupported", {leaf["status"] for leaf in leaves})
@@ -84,6 +97,13 @@ class ConformanceTests(unittest.TestCase):
         with self.assertRaises(conformance.ConformanceError):
             conformance.validate_inventory(broken, self.manifest, audit=self.audit)
 
+    def test_feature_contract_inventory_requires_every_audited_leaf(self):
+        inventory = conformance.load_inventory()
+        broken = copy.deepcopy(inventory)
+        broken["registries"][0]["leaves"].pop()
+        with self.assertRaises(conformance.ConformanceError):
+            conformance.validate_inventory(broken, self.manifest, audit=self.audit)
+
     def test_feature_contract_inventory_detects_pinned_registry_drift(self):
         inventory = {
             "reference": self.manifest["reference"],
@@ -96,12 +116,20 @@ class ConformanceTests(unittest.TestCase):
                     "authority": "OverPy@9.7.10:src/data/opy/keywords.ts#opyKeywords",
                     "source": {"path": "src/data/opy/keywords.ts", "objectPath": "opyKeywords"},
                     "contract": "syntax.parser-and-control-flow/statement-and-declaration-boundaries",
-                    "keys": ["and", "or"],
-                    "defaults": {
-                        "status": "unclear",
-                        "coverage": "uncovered",
-                        "limits": "test inventory",
-                    },
+                    "leaves": [
+                        {
+                            "key": "and",
+                            "status": "unclear",
+                            "coverage": "uncovered",
+                            "limits": "test inventory",
+                        },
+                        {
+                            "key": "or",
+                            "status": "unclear",
+                            "coverage": "uncovered",
+                            "limits": "test inventory",
+                        },
+                    ],
                 }
             ],
             "branches": [
@@ -125,6 +153,7 @@ class ConformanceTests(unittest.TestCase):
                         "path": "src/data/opy/keywords.ts",
                         "objectPath": "opyKeywords",
                     },
+                    "keys": ["and", "or"],
                 }
             ],
             "branches": [{"id": "branch/test", "source": "src/compiler/parser.ts"}],
