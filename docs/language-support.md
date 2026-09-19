@@ -1,72 +1,58 @@
 # OverPy support
 
-This is the canonical, human-readable compatibility contract for `opy-rs`.
-The detailed inventories linked here are part of the same contract. The
-machine-readable leaf inventory is
-[`feature-contracts.json`](language-support/feature-contracts.json). Its
-completeness is checked against the independent pinned-source catalog in
-[`pinned-overpy-audit.json`](language-support/pinned-overpy-audit.json).
+This page is the user-facing support contract for `opy-rs`. It describes the
+OverPy source forms that can be used today, the limits of bounded support, and
+the capabilities that are intentionally outside the current compiler boundary.
 
-## Reference and audit boundary
-
-| Field | Value |
-| --- | --- |
-| OverPy package | `9.7.10` |
-| Content commit | `889d9749d1def17f146548cbddb94ea1ab015847` (`v9.7.10`) |
-| Repository | <https://github.com/Zezombye/overpy> |
-| Registry integrity | `sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==` |
-| Audited language | `en-US` |
-
-The inventory was audited from the pinned upstream tree, from outside the
-`opy-rs` implementation: the upstream README and public API declaration;
-`src/compiler/` grammar, preprocessing, compiler, translation and decompiler
-surfaces; `src/data/opy/` keyword, annotation, builtin, member, module, macro
-and preprocessing registries; `src/data/` Workshop domains; upstream compile,
-decompile, CLI and QuickJS tests; and the pinned executable oracle. Existing
-`opy-rs` fixtures, HIR names, historical issue lists, and implementation notes were used
-only to determine the second column, never to construct the audited set.
+The compatibility reference is OverPy `9.7.10` at commit
+`889d9749d1def17f146548cbddb94ea1ab015847`. The reference is used as an
+independent behavior oracle; its implementation and data are not copied into
+`opy-rs`.
 
 ## Status vocabulary
 
-Only these public states are used:
+- `✅ Supported` — the listed source form is accepted and lowered within the
+  stated contract.
+- `🚧 Partial` — the listed family has an explicit supported subset; the same
+  row names the forms that remain outside it.
+- `❌ Unsupported` — the source form is rejected or the capability is outside
+  the current `opy-rs` contract.
 
-- `✅ Supported` — the claimed user-visible behavior works within the notes.
-- `🚧 Coming soon` — the pinned capability is recognized, but current behavior
-  is incomplete.
-- `❌ Unsupported` — the capability is outside the current contract.
-- `⚠️ Implemented; leaf evidence partial` — production behavior exists, but this leaf lacks complete executable evidence.
-- `🚧 Leaf evidence incomplete` — the registry entry is known, but its current implementation/evidence boundary is not a full support claim.
-- `❔ Unclassified` — the pinned leaf is inventoried but has no implementation classification yet.
+`Partial` is not an unknown or unreviewed state. A row is useful only when its
+supported subset and limitation are stated in user terms.
 
-“Supported” is an end-to-end claim for the stated row. Parsing a construct or
-having a name in a manifest is not enough to make a compilation row green.
+## Support at a glance
 
-## Audited capability summary
-
-| Area | Status | Detailed inventory |
+| Area | Status | Details |
 | --- | --- | --- |
-| Source syntax, literals and expressions | 🚧 Coming soon | [syntax and project composition](language-support/syntax-and-projects.md) |
-| Assignments, declarations, rules and control flow | 🚧 Coming soon | [syntax and project composition](language-support/syntax-and-projects.md) |
-| Builtins, member functions, constants and contextual domains | 🚧 Coming soon | [callables and domains](language-support/callables-and-domains.md) and [complete registries](language-support/registries.md) |
-| Preprocessing, includes, modules and macros | 🚧 Coming soon | [syntax and project composition](language-support/syntax-and-projects.md) and [complete registries](language-support/registries.md) |
-| Strings, translations and custom-game settings | 🚧 Coming soon | [syntax and project composition](language-support/syntax-and-projects.md) |
-| Compiler directives, optimization and post-compile hooks | 🚧 Coming soon | [tooling and backend](language-support/tooling-and-backend.md) and [complete registries](language-support/registries.md) |
-| Standalone compiler and CLI | ✅ Supported | [tooling and backend](language-support/tooling-and-backend.md) |
-| Workshop-to-OPY decompilation | ❌ Unsupported | [tooling and backend](language-support/tooling-and-backend.md) |
+| Lexing, literals, expressions and assignments | ✅ Supported | [Syntax and project composition](language-support/syntax-and-projects.md) |
+| Rules, annotations and ordinary control flow | ✅ Supported | [Syntax and project composition](language-support/syntax-and-projects.md) |
+| Arrays, dictionaries and lambdas | 🚧 Partial | [Syntax and project composition](language-support/syntax-and-projects.md) |
+| Functions, member functions, enums and constants | 🚧 Partial | [Callables and domains](language-support/callables-and-domains.md) |
+| Multiple files, includes, macros and preprocessing | ✅ Supported | [Syntax and project composition](language-support/syntax-and-projects.md) and [Tooling and backend](language-support/tooling-and-backend.md) |
+| Strings, translations and custom-game settings | 🚧 Partial | [Syntax and project composition](language-support/syntax-and-projects.md) |
+| Compiler directives and post-compile hooks | 🚧 Partial | [Tooling and backend](language-support/tooling-and-backend.md) |
+| Embedded JavaScript macros | ✅ Supported | [Tooling and backend](language-support/tooling-and-backend.md) |
+| OPY → Workshop compilation | 🚧 Partial | [Tooling and backend](language-support/tooling-and-backend.md) |
+| Workshop → OPY reconstruction | ❌ Unsupported | [Tooling and backend](language-support/tooling-and-backend.md) |
 
-The summary is intentionally conservative: the audited upstream surface is
-larger than the currently evidenced `opy-rs` surface. Detailed rows make gaps
-explicit instead of hiding them in a category-level green row.
+## Evidence and ownership
 
-## Contract maintenance
+Support claims are grounded in executable evidence rather than a parallel
+support database:
 
-The feature-contract validator checks an explicit record for every pinned
-registry leaf against the independent pinned-source audit, checks the inventory
-pin against the conformance manifest, and can compare the audit keys with a
-local checkout of the pinned source. Every implemented-and-covered claim must
-cite a fixture that probes its declared contract, including compiler branches;
-audited branches also carry independently selected source fragments and
-fingerprints checked against that checkout. The inventory is not a fixed
-feature-count assertion: status, coverage, ownership, limits, and evidence are
-reported per leaf, and registry membership or category coverage never promotes
-an unresolved leaf to a passing claim.
+- the corpus under `crates/opy-rs/tests/fixtures/corpus/` preserves
+  provenance-linked projects and minimized regressions;
+- `tools/overpy/oracle/` and each fixture's `oracle.json` record pinned upstream
+  behavior;
+- `tools/overpy/run_native.py` and `tools/overpy/diff.py` compare native output,
+  diagnostics, normalized Workshop output, and canonical-WIR evidence;
+- Rust integration tests exercise source semantics and canonical lowering;
+- `cargo test -p opy-rs --test differential` checks the native source pipeline
+  against the corpus expectations.
+
+`opy-rs` owns OverPy syntax, preprocessing, source semantics, diagnostics and
+OverPy-specific lowering. `workshop-rs` owns canonical Workshop identities,
+settings, validation, representation and emission. A limitation caused by the
+canonical Workshop boundary is reported as unsupported or partial here; it is
+not hidden in a Wright-side adapter.

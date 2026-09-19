@@ -201,6 +201,6 @@ stdout.
   declarations are queryable through `SemanticModel::enums`, not the HIR
   declaration list.
 * Broader Workshop emission, decompilation, and unsupported source constructs
-  remain explicit in the canonical language-support inventories and native corpus report. The
+  remain explicit in the canonical language-support contract and native corpus report. The
   compile contract never counts an inconclusive normalized-output comparison
   as successful parity.

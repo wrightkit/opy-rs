@@ -1,72 +1,55 @@
-# OverPy audited inventory: syntax and project composition
+# Syntax and project composition
 
-Source: pinned OverPy `9.7.10`, content commit
-`889d9749d1def17f146548cbddb94ea1ab015847`. The source surfaces used are
-`README.md`, `src/compiler/tokenizer.ts`, `parser.ts`, `astParser.ts`,
-`src/data/opy/keywords.ts`, `annotations.ts`, `preprocessing.ts`,
-`modules.ts`, `macros.ts`, and the upstream files under `src/tests/`.
+## Lexical and expression forms
 
-## Lexical and expression surface
-
-| Feature | Status | Notes |
+| Source form | Status | Limit |
 | --- | --- | --- |
-| `#` line comments and `/* ... */` block comments | ✅ Supported | Source parsing is covered by the native pipeline and corpus. |
-| Identifiers, indentation and rule/subroutine blocks | ✅ Supported | Includes `rule "name":` and `def name():`. |
-| Boolean, integer, float and `null` literals | ✅ Supported | Numeric edge cases remain conformance work. |
-| Strings, escaped strings and implicit concatenation | ✅ Supported | String modifiers are separate rows. |
-| f-string/interpolated strings | ✅ Supported | Supported formatting subset is fixture-covered. |
-| String modifiers `f`, `w`, `l`, `b`, `c`, `t` | ✅ Supported | f/w/b/c have canonical lowering evidence; l/t retain source syntax without duplicating translation content. |
-| Array literals and indexing | ✅ Supported | Includes nested arrays. |
-| Dictionary literals and keyed access | 🚧 Coming soon | Literal-key lookup folds during canonical lowering; dictionary assignment targets remain outside the bounded compiler surface. |
-| List comprehensions | ✅ Supported | Mapping and filtering are separate behaviors. |
-| `lambda` with element/index binders | ✅ Supported | Valid positions are contextual. |
-| Member access, calls and postfix expressions | ✅ Supported | Receiver and dispatch checks are contract-sensitive. |
-| `del` array element statement | 🚧 Coming soon | Audited upstream keyword; compilation support is incomplete. |
-| Conditional value `a if condition else b` | ✅ Supported | Chained forms are right-associative; distinct from statement `if`. |
-| `in` and `not in` membership | ✅ Supported | String containment uses `strContains`. |
-| Arithmetic, comparison, boolean and unary operators | ✅ Supported | Augmented forms are separate rows below. |
-| `++` and `--` postfix assignment modifiers | ✅ Supported | Statement-level global, player and single-level indexed forms are covered by Issue #59; prefix `++` and embedded postfix `++`/`--` remain rejected, while prefix `--x` remains valid consecutive unary-minus syntax. |
-| `0x`/`0X` hexadecimal literals | ✅ Supported | Case variants are one semantic capability. |
+| `#` line comments and `/* ... */` block comments | ✅ Supported | Comments are retained for source attribution where the API exposes it. |
+| Identifiers, indentation, `rule` blocks and `def` subroutines | ✅ Supported | Subroutine declarations follow the OverPy no-parameter/no-return form. |
+| Boolean, integer, float and `null` literals | ✅ Supported | Numeric values are normalized at the canonical Workshop boundary. |
+| Strings, escaped strings, adjacent strings and f-strings | ✅ Supported | Supported string modifiers are listed below. |
+| String modifiers `f`, `w`, `l`, `b`, `c`, `t` | ✅ Supported | Translation output remains subject to the translation limits below. |
+| Array literals, indexing and comprehensions | ✅ Supported | Supported comprehensions lower through canonical array operations. |
+| Dictionary literals and literal-key lookup | ✅ Supported | Literal keys fold to the selected value. |
+| Dictionary mutation through a computed assignment target | ❌ Unsupported | Canonical Workshop has no equivalent mutable dictionary target in this boundary. |
+| `lambda` element/index binders | ✅ Supported | Binders are accepted in the callable contexts that define them. |
+| Member access, calls and postfix expressions | ✅ Supported | Receiver and argument errors retain source locations. |
+| `del array[index]` | 🚧 Partial | Global and player-variable array targets are lowered; arbitrary expressions are rejected. |
+| Conditional values: `a if condition else b` | ✅ Supported | Chained forms are right-associative. |
+| `in`, `not in`, arithmetic, comparison, boolean and unary operators | ✅ Supported | String membership uses the canonical Workshop operation. |
+| `++` and `--` postfix assignment modifiers | ✅ Supported | Statement-level global, player and single-level indexed forms are supported; prefix/embedded forms are rejected. |
+| `0x` and `0X` hexadecimal literals | ✅ Supported | Both spellings have the same numeric meaning. |
 
 ## Assignments and declarations
 
-| Feature | Status | Notes |
+| Source form | Status | Limit |
 | --- | --- | --- |
-| Simple assignment `=` | ✅ Supported | Global, player and indexed forms differ at lowering. |
-| `+=`, `-=`, `*=`, `/=`, `%=` | ✅ Supported | Each spelling is independently audited; postfix `++`/`--` forms lower to canonical Add/Subtract modifications. |
-| `**=` augmented assignment | ✅ Supported | Separate from `**`; uses Raise To Power. |
-| `min=` and `max=` modification forms | 🚧 Coming soon | Recognized by the audit; Workshop support is not claimed. |
-| `globalvar name [index]` | ✅ Supported | Explicit and implicit index forms are distinct. |
-| `playervar name [index]` | ✅ Supported | Explicit and implicit index forms are distinct. |
-| Variable initializer `globalvar/playervar name = value` | ✅ Supported | Constant-zero behavior is observable. |
-| `enum` declarations and inferred member values | ✅ Supported | Contextual enum use is separate. |
-| `macro` constants and function macros | ✅ Supported | Member/default-parameter forms are separate contracts. |
-| `def` subroutines, calls and `return` | ✅ Supported | Upstream subroutines have no parameters or returns. |
+| `=`, `+=`, `-=`, `*=`, `/=`, `%=`, `**=` | ✅ Supported | Global, player and indexed targets use their distinct lowering rules. |
+| `min=` and `max=` modifications | ✅ Supported | The operation is checked and lowered as a canonical variable modification. |
+| `globalvar` and `playervar`, with explicit or implicit indices | ✅ Supported | Initializers and zero defaults follow the source contract. |
+| `enum` declarations | ✅ Supported | See the domain rules in [callables and domains](callables-and-domains.md). |
+| Object, function and member `macro` declarations | ✅ Supported | Defaults, keyword arguments and member receivers are checked separately. |
 
-## Rules, control flow and project composition
+## Rules, control flow and files
 
-| Feature | Status | Notes |
+| Source form | Status | Limit |
 | --- | --- | --- |
-| Rule events: `global`, `eachPlayer`, team/hero/slot domains | ✅ Supported | Event and domain arguments are distinct. |
-| `@Condition` and multiple conditions | ✅ Supported | |
-| `@Name`, `@Disabled`, `@Delimiter`, `@NewPage`, `@SuppressWarnings` | ✅ Supported | Each annotation has independent effects. |
-| `if` / `elif` / `else` statements | ✅ Supported | Inline conditional values are separate. |
-| `for ... in range(start, stop, step)` | ✅ Supported | Declared or implicit global binders and player-variable binders such as `hostPlayer.I` are supported; other iterable forms remain unsupported. |
-| `while` and `do ... while` loops | ✅ Supported | Distinct entry-condition behavior. |
-| `switch` / `case` / `default` | ✅ Supported | Fall-through and `break` are separate. |
-| `break` in loops and switch arms | ✅ Supported | |
-| `continue` in loops | 🚧 Coming soon | Upstream keyword exists; end-to-end support is incomplete. |
-| `goto`, labels and dynamic `loc+` targets | 🚧 Coming soon | Audited from keyword registry and `src/tests/gotos.opy`. |
-| `pass` and `return` statements | ✅ Supported | Context restrictions remain conformance work. |
-| `#!include` including-file-relative composition | ✅ Supported | Main-file includes resolve from the project root; nested includes resolve from the including source file. OverPy-compatible legacy entries retain the resolved file context after multiline macro expansion in an included settings block. Missing files and cycles have distinct failures. |
-| Nested include closure and main-file selection | ✅ Supported | Project behavior is not inferred from one-file tests. |
+| Global and player rules with event/team/hero/slot filters | ✅ Supported | Event and domain arguments are resolved independently. |
+| `@Condition`, `@Name`, `@Disabled`, `@Delimiter`, `@NewPage`, `@SuppressWarnings` | ✅ Supported | Each annotation has its own arity and placement rules. |
+| `if` / `elif` / `else`, `while`, `do ... while` | ✅ Supported | Entry and reevaluation behavior are preserved. |
+| `for ... in range(...)` | ✅ Supported | Global and player-variable range binders are supported; arbitrary iterables are not. |
+| `switch` / `case` / `default`, `break` | ✅ Supported | Supported fall-through and break forms lower to canonical actions. |
+| `continue` in loops | 🚧 Partial | Loop-body forms that can be represented by canonical skips are supported; unsupported nesting is rejected. |
+| `goto`, labels and `loc+` targets | 🚧 Partial | Conditional forward label jumps are supported; unrestricted dynamic and backward jumps are not representable in canonical WIR. |
+| `pass` and `return` | ✅ Supported | Context restrictions remain source diagnostics. |
+| `#!include` and nested include closure | ✅ Supported | Main-file and including-file-relative resolution are preserved, including include cycles and missing-file diagnostics. |
+| `#!mainFile` and directory project input | ✅ Supported | The selected entry source remains part of the project identity. |
 
-## Settings, strings and translations
+## Strings, translations and settings
 
-| Feature | Status | Notes |
+| Source form | Status | Limit |
 | --- | --- | --- |
-| `settings { ... }` custom-game-settings block | ✅ Bounded compiler slice | May be provided by the main source or an included source; lowers through Workshop-owned validation and canonical emission with source provenance. |
-| Schema keys, enum values and map/hero list settings | ✅ Bounded compiler slice | The compiler delegates the supported slice to Workshop-owned settings tables. |
-| `#!translations` and `.po` translation sources | 🚧 Coming soon | Declaration and output lifecycle are separate. |
-| `_`, `__`, `___` translation functions | 🚧 Coming soon | One- and two-argument modes differ. |
-| Localized output language selection | ✅ Bounded compiler slice | The compiler accepts catalog-declared locales and rejects undeclared locales explicitly. |
+| `#!translations` language selection | ✅ Supported | Invalid language codes are rejected explicitly. |
+| Translation declarations and `.po` output lifecycle | 🚧 Partial | The native compiler preserves supported translation state and emits supported localized Workshop text; it does not claim the full upstream translation toolchain. |
+| `settings { ... }` custom-game-settings block | 🚧 Partial | Main-file and included-file blocks use the canonical Workshop settings tables; only the currently exposed schema slice is accepted. |
+| Settings enum, map, hero and numeric-range values | ✅ Supported | Validation and emission belong to `workshop-rs`. |
