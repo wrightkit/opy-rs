@@ -33,7 +33,7 @@ canonical Workshop model.
 
 | Source form | Status | Limit |
 | --- | --- | --- |
-| `Hero`, `Map`, `Gamemode`, `Team`, `Slot`, `Color`, `Button` members | ✅ Supported | Pinned upstream member names, legacy aliases, numeric team/slot filters, and source-only color aliases lower through the canonical Workshop contract; unknown members produce a source diagnostic. |
+| `Hero`, `Map`, `Gamemode`, `Team`, `Slot`, `Color`, `Button`, `Texture` members | ✅ Supported | Pinned upstream member names, legacy aliases, numeric team/slot filters, source-only color aliases, and texture-tag setup lower through the canonical Workshop contract; unknown members produce a source diagnostic. |
 | `Vector.UP`, `Vector.DOWN`, `Vector.LEFT`, `Vector.RIGHT`, `Vector.FORWARD`, `Vector.BACKWARD` | ✅ Supported | These are canonical vector constants, not arbitrary catalog entries. |
 | `Math` numeric, spacing and newline constants | ✅ Supported | `PI`, `E`, `INFINITY`, `EPSILON`, radius multipliers, and the pinned spacing/newline constants lower as numeric or custom-string values. |
 | User `enum` declarations and inferred member values | ✅ Supported | Explicit values and inferred increments follow OverPy declaration rules. |

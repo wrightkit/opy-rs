@@ -45,6 +45,7 @@ pub mod project;
 #[cfg(test)]
 pub(crate) mod resource_metrics;
 pub mod settings;
+mod string_entities;
 pub mod tooling;
 
 use std::path::Path;

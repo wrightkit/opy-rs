@@ -136,6 +136,36 @@ rule "slot":
 }
 
 #[test]
+fn pinned_texture_members_lower_with_texture_tag_setup() {
+    let source = "globalvar value\nrule \"textures\":\n    @Event global\n    value = Texture.MOUSE_CURSOR\n    value = Texture.ASSAULT\n";
+    let hir = crate::compile(source, "textures.opy", Path::new(".")).unwrap();
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+
+    assert!(artifact.emitted.contains("127: __holygrail__"));
+    assert!(
+        artifact
+            .emitted
+            .contains("OverPy <\u{AD}tx> / <\u{AD}fg> setup code")
+    );
+    assert!(
+        artifact
+            .emitted
+            .contains("String Split(First Of(Filtered Array(")
+    );
+    assert!(artifact.emitted.contains("Destroy All Dummy Bots;"));
+    assert!(
+        artifact
+            .emitted
+            .contains("Custom String(\"{0}txc0000000002dd21>\", Global.__holygrail__)")
+    );
+    assert!(
+        artifact
+            .emitted
+            .contains("Custom String(\"{0}txc00000000020af8>\", Global.__holygrail__)")
+    );
+}
+
+#[test]
 fn aliased_member_lowers_to_the_canonical_catalog_identity() {
     let source = "globalvar value\nrule \"r\":\n    @Event eachPlayer\n    @Condition eventPlayer.getHero() == None\n    value = eventPlayer.getHero()\n";
     let hir = crate::compile(source, "source.opy", Path::new(".")).expect("frontend resolves");
