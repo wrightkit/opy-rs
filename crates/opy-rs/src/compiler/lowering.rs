@@ -4414,6 +4414,18 @@ impl<'a> Lowering<'a> {
                 if !matches!(function.kind, FunctionKind::MemberValue) {
                     return Err(self.unsupported(format!("'{name}' is not a member value"), span));
                 }
+                if function.id == "unique" {
+                    if !args.is_empty() {
+                        return Err(self.unsupported("unique requires no arguments", span));
+                    }
+                    let receiver = self.lower_value(receiver)?;
+                    let current_element = self.push_call("currentArrayElement", Vec::new());
+                    let first_index =
+                        self.push_call("indexOfArrayValue", vec![receiver, current_element]);
+                    let current_index = self.push_call("currentArrayIndex", Vec::new());
+                    let condition = self.push_call("==", vec![first_index, current_index]);
+                    return Ok(self.push_call("filteredArray", vec![receiver, condition]));
+                }
                 if matches!(
                     function.id.as_str(),
                     "getHitPosition" | "getPlayerHit" | "getNormal"

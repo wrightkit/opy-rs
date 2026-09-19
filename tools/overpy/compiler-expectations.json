@@ -10,6 +10,20 @@
   },
   "cases": [
     {
+      "fixture": "synthetic/array-unique",
+      "nativeStatus": "success",
+      "classification": "match",
+      "comparison": "semantic-wir",
+      "evidence": [
+        "oracle:synthetic/array-unique/oracle.json",
+        "provenance:synthetic/array-unique/fixture.json",
+        "test:opy-rs::compiler::integration_tests::array_unique::array_unique_matches_the_pinned_canonical_wir"
+      ],
+      "owner": "opy-rs#322",
+      "note": "Array.unique() keeps the first occurrence of each value and lowers to the pinned canonical filtered-array WIR.",
+      "semanticEquivalent": true
+    },
+    {
       "fixture": "synthetic/basic-rule",
       "nativeStatus": "success",
       "classification": "match",

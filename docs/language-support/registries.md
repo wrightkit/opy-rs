@@ -133,7 +133,8 @@ contract.
 | `hudHeader`, `hudSubtext` | ✅ Supported |
 | `hudSubheader` | ✅ Bounded compiler slice |
 | `lerp`, `lineIntersectsSphere` | 🚧 Coming soon |
-| `print`, `.reverse`, `timeToString`, `.unique` | 🚧 Coming soon |
+| `print`, `.reverse`, `timeToString` | 🚧 Coming soon |
+| `.unique` | ✅ Supported; removes duplicate values while preserving first-occurrence order. |
 
 ## Built-in functions and member functions
 
@@ -151,6 +152,7 @@ beginning with `.` are receiver dispatch entries. The separate
 | `.any` | ✅ Supported |
 | `.filter` | ✅ Supported |
 | `.map` | ✅ Supported |
+| `.unique` | ✅ Supported |
 | `arrayToString` | 🚧 Coming soon |
 | `ceil` | ✅ Supported |
 | `floor` | ✅ Supported |

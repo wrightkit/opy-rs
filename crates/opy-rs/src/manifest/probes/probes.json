@@ -3,6 +3,13 @@
   "probes": [
     {
       "expect": "success",
+      "id": "array-unique",
+      "outputSha256": "0738143f861eaa787dfe0c2f3e7bd1d1bd78d16a8bfa05d721e9ca8104eaca78",
+      "sha256": "fe49c630440d4742dcb629d6e6fac628ca5eb17e955221eb7eb695a173d64248",
+      "source": "array-unique.opy"
+    },
+    {
+      "expect": "success",
       "id": "builtin-surface",
       "outputSha256": "244fe58d2880586b673b349beacf278e7ebe7bad4a2331e8cf5ed7fe580b610d",
       "sha256": "9321d1e736a9b6bd2b137170e4b05e5bc51e5971e7240cc6dafc6b18d596ece7",
