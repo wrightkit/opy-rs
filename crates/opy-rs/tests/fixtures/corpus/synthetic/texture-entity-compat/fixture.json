@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/texture-entity-compat",
+  "category": "synthetic",
+  "features": [
+    "compilation/texture-member-setup",
+    "syntax/formatted-named-entities"
+  ],
+  "source": "source.opy",
+  "expectedStatus": "success",
+  "provenance": {
+    "kind": "original",
+    "origin": "opy-rs Issue #330 pinned-oracle Texture setup and formatted named-entity probe",
+    "license": "AGPL-3.0-or-later",
+    "redistributable": true
+  }
+}

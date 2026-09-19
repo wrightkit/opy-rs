@@ -175,6 +175,29 @@ fn pinned_texture_members_lower_with_texture_tag_setup() {
 }
 
 #[test]
+fn texture_setup_and_formatted_named_entities_match_pinned_features() {
+    let artifact = compile_fixture("texture-entity-compat");
+    let oracle = oracle_workshop("texture-entity-compat");
+    for marker in [
+        "Create Dummy Bot(All Heroes,",
+        "String Replace(",
+        "Destroy All Dummy Bots;",
+        "Custom String(\"{0}txc0000000002dd21>\", Global.__holygrail__)",
+        "Custom String(\"■ {0}\", Match Time)",
+    ] {
+        assert!(
+            oracle.contains(marker),
+            "pinned oracle is missing required feature marker: {marker}"
+        );
+        assert!(
+            artifact.emitted.contains(marker),
+            "native output is missing pinned feature marker: {marker}\n{}",
+            artifact.emitted
+        );
+    }
+}
+
+#[test]
 fn aliased_member_lowers_to_the_canonical_catalog_identity() {
     let source = "globalvar value\nrule \"r\":\n    @Event eachPlayer\n    @Condition eventPlayer.getHero() == None\n    value = eventPlayer.getHero()\n";
     let hir = crate::compile(source, "source.opy", Path::new(".")).expect("frontend resolves");

@@ -1,0 +1,33 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: marker\n        127: __holygrail__\n}\n\nrule (\"OverPy <\u00adtx> / <\u00adfg> setup code\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        \"By Zezombye\"\n        Create Dummy Bot(All Heroes, If-Then-Else(Number Of Slots(Team 1), Team 1, If-Then-Else(Number Of Slots(Team 2), Team 2, True)), False, Null, Null);\n        \"More info: https://workshop.codes/wiki/articles/tx-reference-sheet\"\n        Start Forcing Dummy Bot Name(Last Created Entity, Custom String(\"______________________________________________________________________________________________________________________________\u303c\"));\n        Set Global Variable(__holygrail__, String Split(First Of(Last Created Entity), Empty Array));\n        Start Forcing Dummy Bot Name(Last Created Entity, Custom String(\"______________________________________________________________________________________________________________________________\u0840\"));\n        Set Global Variable(__holygrail__, String Slice(String Replace(Custom String(\"______________________________________________________________________________________________________________________________\u303c\"), Global.__holygrail__, First Of(Last Created Entity)), 126, True));\n        Destroy All Dummy Bots;\n    }\n}\n\nrule (\"texture and entity compatibility\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(marker, Custom String(\"{0}txc0000000002dd21>\", Global.__holygrail__));\n        Set Global Variable(marker, Custom String(\"\u25a0 {0}\", Match Time));\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: marker\n        127: __holygrail__\n}\n\nrule (\"OverPy <\u00adtx> / <\u00adfg> setup code\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        \"By Zezombye\"\n        Create Dummy Bot(All Heroes, If-Then-Else(Number Of Slots(Team 1), Team 1, If-Then-Else(Number Of Slots(Team 2), Team 2, True)), False, Null, Null);\n        \"More info: https://workshop.codes/wiki/articles/tx-reference-sheet\"\n        Start Forcing Dummy Bot Name(Last Created Entity, Custom String(\"______________________________________________________________________________________________________________________________\u303c\"));\n        Set Global Variable(__holygrail__, String Split(First Of(Last Created Entity), Empty Array));\n        Start Forcing Dummy Bot Name(Last Created Entity, Custom String(\"______________________________________________________________________________________________________________________________\u0840\"));\n        Set Global Variable(__holygrail__, String Slice(String Replace(Custom String(\"______________________________________________________________________________________________________________________________\u303c\"), Global.__holygrail__, First Of(Last Created Entity)), 126, True));\n        Destroy All Dummy Bots;\n    }\n}\n\nrule (\"texture and entity compatibility\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(marker, Custom String(\"{0}txc0000000002dd21>\", Global.__holygrail__));\n        Set Global Variable(marker, Custom String(\"\u25a0 {0}\", Match Time));\n    }\n}\n\n",
+    "workshopSha256": "f81fd084b73db365db9c23d86497328b29f4ac67d8ce7c75ca1158a3b8d12bbf"
+  },
+  "fixture": "synthetic/texture-entity-compat",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "5623df27352c9d4ce38cc0e5fe1a187ff22249101f337f34ead993565e7ad8b3"
+      }
+    ],
+    "sha256": "17752c59a7c765576d6a3a477cb0ca48f2cc46c72e85157cb2db453551fe19d2",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}
