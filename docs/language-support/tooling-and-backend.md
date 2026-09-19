@@ -1,48 +1,33 @@
-# OverPy audited inventory: tooling and backend behavior
-
-Source: pinned OverPy `9.7.10`, content commit
-`889d9749d1def17f146548cbddb94ea1ab015847`. Evidence surfaces are the
-upstream README, `overpy.d.ts`, `cli.js`, compiler/decompiler sources,
-`runTests.mjs`, `runCliTests.mjs`, QuickJS fixtures and the executable oracle.
+# Tooling and compiler backend
 
 ## Preprocessing, macros and hooks
 
-| Feature | Status | Notes |
+| Source form | Status | Limit |
 | --- | --- | --- |
-| `#!define`/`#!defineMember` object/function macros | ✅ Supported | Member defines use the same textual expansion contract and preserve definition-site provenance. |
-| `#!allowMacroRedeclaration` | ✅ Supported | Duplicate-definition policy is represented in preprocessing state. |
-| `#!mainFile`, `#!include`, `#!excludeVariablesInCompilation` | ✅ Supported | Main-file selection, including-file-relative composition, and output filtering have separate effects. |
-| Optimization controls (`#!enableOptimizations`, `#!disableOptimizations`, `#!optimize*`) | ✅ Bounded compiler slice | `#!optimizeStrict` is accepted and native lowering preserves the strict-sensitive expression forms covered by the pinned compatibility probe; other optimizer controls remain state-only. |
-| Replacement directives (`#!replace0By*`, team/string replacements) | ✅ Source-supported | Directive state is recorded; semantic replacement effects remain a backend concern. |
-| `#!rulePrefix` and `#!rulePrefixTemplate` | ✅ Supported | Source preprocessing applies the resulting rule names before compiler lowering. |
-| `#!extension` and extension-point accounting | ✅ Source-supported | The extension name is checked against the canonical Workshop schema and recorded; extension point accounting remains outside opy-rs. |
-| Remaining pinned backend-only directives | 🚧 Coming soon | `setupTags`, `setupTx`, translation/inspection/output controls, and init-rule names are validated and recorded; `#!useVariableForCompressionAlphabet` is supported for literal `compressed()` arrays with the shared alphabet helper and canonical lowering. |
-| `macro name(params)` function/constant macros | ✅ Supported | Defaults, keywords and member macros differ. |
-| `__script__` JavaScript macros | 🚧 Coming soon | QuickJS return ABI and limits are observable. |
-| `#!postCompileHook` | ✅ Bounded compiler slice | Runs only after final Workshop emission; failures keep directive and script provenance. |
+| `#!define` and function/member macros | ✅ Supported | Expansion order and definition/use-site provenance follow OverPy. |
+| `#!allowMacroRedeclaration` | ✅ Supported | Duplicate-definition policy is explicit in preprocessing state. |
+| `#!mainFile`, `#!include`, `#!excludeVariablesInCompilation` | ✅ Supported | File selection, include closure and output filtering are separate operations. |
+| `#!rulePrefix` and `#!rulePrefixTemplate` | ✅ Supported | Rule names are transformed before lowering. |
+| Optimization controls such as `#!enableOptimizations`, `#!disableOptimizations`, `#!optimizeForSize` and `#!optimizeStrict` | 🚧 Partial | State, directive boundaries and the tested strict-sensitive lowering forms are preserved; every upstream optimizer transformation is not promised. |
+| Replacement directives such as `#!replace0By*` and team/string replacements | 🚧 Partial | Directive state is recorded and supported replacements are lowered; backend-only transformations remain outside the contract. |
+| `#!extension` | ✅ Supported | The extension name is checked against the canonical Workshop schema. |
+| Translation, inspection, output and initialization directives | 🚧 Partial | Supported state and source diagnostics are preserved; directives requiring external output or an upstream-only backend are not claimed. |
+| `#!postCompileHook` | ✅ Supported | The hook runs after final Workshop emission and failures retain script provenance. |
+| `__script__(...)` JavaScript macros | ✅ Supported | The embedded QuickJS runtime exposes the documented OverPy ABI, limits, isolation and string-result contract. |
 
-## Compilation, CLI and API
+## Compilation and CLI
 
-| Feature | Status | Notes |
+| Capability | Status | Limit |
 | --- | --- | --- |
-| Standalone `.opy` compiler library | ✅ Supported | Supported within the documented source/compile scope. |
-| CLI compile/check invocation and structured diagnostics | ✅ Supported | Exit behavior and source attribution are contractual. |
-| Upstream JS `compile(content, language, rootPath, mainFileName)` API | 🚧 Coming soon | API shape audited; Rust parity is incomplete. |
-| Compile metadata: variables, subroutines, warnings, translations, element count | 🚧 Coming soon | Fields have independent completeness requirements. |
-| Localized Workshop text and custom settings emission | ✅ Bounded compiler slice | The compiler delegates validation and emission to `workshop-rs`; undeclared locales fail explicitly. |
-| Observable optimization/replacement effects | 🚧 Coming soon | Formatting is not a target unless observable. |
+| Standalone Rust compiler library | ✅ Supported | The source and Workshop boundaries described on this page apply. |
+| CLI `check`, `compile`, JSON reports and source diagnostics | ✅ Supported | Failure status never produces a misleading successful artifact. |
+| Compile metadata for variables, subroutines, warnings, translations and element count | 🚧 Partial | The JSON report exposes the fields implemented by the native API; it is not a byte-for-byte clone of the upstream JavaScript object. |
+| Observable optimizer and replacement effects | 🚧 Partial | Tested semantic and cost-relevant effects are preserved; formatting and upstream internal optimizer structure are not contracts. |
+| OPY → Workshop emission through `workshop-rs` | 🚧 Partial | The supported language rows above compile end to end; unsupported source forms produce structured diagnostics. |
 
-## Decompilation and round trips
+## Reconstruction
 
-| Feature | Status | Notes |
+| Capability | Status | Limit |
 | --- | --- | --- |
-| `decompileAllRules` Workshop-to-OPY reconstruction | ❌ Unsupported | Outside the current `opy-rs` contract. |
-| `decompileActions` and `decompileConditions` | ❌ Unsupported | Same boundary as full decompilation. |
-| Workshop settings decompilation | ❌ Unsupported | No claim of recovering original source abstractions. |
-| Compile/decompile round trip preserving source identity | ❌ Unsupported | Comments, macros, names and formatting are not promised. |
-
-The upstream source is GPL-3.0-only and is used as an external audit
-reference/oracle. Its implementation and data are not copied into `opy-rs`.
-The exhaustive conformance follow-up should derive stable leaf cases from the
-audited registries, preserve negative behavior, and compare observable
-semantics rather than Workshop formatting or internal compiler structure.
+| Workshop → OPY reconstruction | ❌ Unsupported | `opy-rs` does not currently expose a public decompiler contract. |
+| Source-identity-preserving compile/decompile round trip | ❌ Unsupported | Workshop output cannot retain comments, macros, original names or formatting. |

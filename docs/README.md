@@ -44,14 +44,12 @@ compatibility pointers rather than separate architecture authorities.
 
 - [OverPy support contract](language-support.md): current evidenced feature
   coverage.
-- [Offline conformance evidence](opy/conformance-baseline.md): oracle and
-  comparison methodology.
 - [Upstream references](compatibility/upstream-references.md): pinned upstream
   identity, provenance, licensing, and reference boundaries.
 - [OverPy evidence harness](../tools/overpy/README.md): probes/snapshots and
   differential testing.
 
-Inventories and evidence describe implementation completeness; they do not
+Evidence describes implementation completeness; it does not
 narrow the established upstream core-language scope.
 
 ## APIs and implementation notes

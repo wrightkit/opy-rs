@@ -23,34 +23,6 @@ pnpm install --dir tools/overpy/oracle
 
 The oracle is not bundled into opy-rs and is not imported by the Rust core.
 
-## Pinned feature-contract inventory
-
-[`../../docs/language-support/feature-contracts.json`](../../docs/language-support/feature-contracts.json) is the machine-readable
-leaf inventory for the pinned OverPy source surface. It records the exact
-per-leaf registry status, coverage limits, production ownership, and
-executable or upstream evidence, alongside materially distinct
-compiler/parser/tooling branches. [`../../docs/language-support/pinned-overpy-audit.json`](../../docs/language-support/pinned-overpy-audit.json) is the
-independent pinned-source audit catalog, including the immutable registry leaf
-sets used to detect omitted or added entries, and SHA-256 fingerprints for
-independently selected compiler-branch fragments used to detect omitted or
-changed source branches. Both reference pins must match
-[`../../docs/language-support/conformance-manifest.json`](../../docs/language-support/conformance-manifest.json).
-
-The normal conformance run validates the inventory without requiring the
-upstream checkout. To additionally detect registry drift against a local
-checkout of the pinned OverPy content, pass its root explicitly:
-
-```sh
-python3 tools/overpy/conformance.py \
-  --binary target/debug/opy-cli \
-  --semantic-binary target/debug/opy-compat \
-  --upstream-root /path/to/overpy-at-889d974
-```
-
-The upstream checkout is audit input only and is not committed to this
-repository. Inventory gaps remain visible in the report's
-`featureInventory.gaps`; they are not treated as compatibility matches.
-
 ## Fixture layout
 
 Each fixture lives in its own directory:
@@ -123,8 +95,12 @@ public compiler API remains oracle-free.
 
 `run_native.py` drives the built public compiler contract for every fixture,
 writes ephemeral producer results under `target/`, and delegates compiler
-expectation loading, full project-input validation, stage comparison, and
-blocking classification to `diff.py`. Only the durable, evidence-backed
+expectation loading, full project-input validation, stage comparison, failure
+frontier comparison, and blocking classification to `diff.py`. For reference
+failures, `diff.py` derives the stage and construct from the pinned oracle
+diagnostics and compares that frontier with the native structured diagnostic;
+different known-gap frontiers remain reported as gaps rather than matches.
+Only the durable, evidence-backed
 entries in `compiler-expectations.json` can produce `known-gap` or
 `unsupported` in this report.
 Expectation mismatches are reported as `unexpected-divergence` or `regression`.
@@ -247,44 +223,3 @@ presentation difference. A normalized-output or semantic-WIR regression exits
 `inconclusive` and exit 2 by default, so a CI job cannot silently pass without
 a producer.
 Use `--allow-inconclusive` only for local contract checks.
-
-## Offline conformance evidence (issue #158)
-
-`../../docs/language-support/conformance-manifest.json` is the linked
-executable-evidence inventory for the canonical pinned OverPy source-language
-contract. Its categories cite the pinned upstream registries or an accepted
-canonical-WIR contract. Each category declares structural contracts with a
-claim, probe kinds (`positive`, `negative`, `contextual`, or `composition`),
-and executable fixture probes; validation rejects empty or unknown mappings.
-It contains no native expected outcomes or alternate feature-support authority.
-Reference failures carry an audited stage and first-construct frontier tied to
-text in their pinned oracle snapshot.
-
-Run the evidence check after building both CLI targets:
-
-```sh
-python3 tools/overpy/conformance.py \
-  --binary target/debug/opy-cli \
-  --semantic-binary target/debug/opy-compat \
-  --report target/opy-rs-conformance-report.json
-```
-
-The runner always writes a report, including current divergences. A
-reference-success/native-failure result is a `divergence`; it is never
-converted into a passing or expected-gap result from the native side. For
-reference successes where native compilation succeeds, the `opy-compat`
-target compares the native lowered WIR directly with the oracle Workshop text
-parsed by `workshop-rs::roundtrip::equivalent`. For reference failures, the
-runner compares stage and first construct, retaining both sides' diagnostic
-provenance without requiring diagnostic wording identity.
-
-This command is evidence-producing rather than a production implementation
-gate: current divergence is expected to remain visible while follow-up Issues
-resolve root capabilities. Malformed manifests, stale oracle evidence, and
-missing producer data remain hard failures.
-
-The opy-rs producer side of the differential contract is the native Rust
-suite (`crates/opy-rs/tests/differential.rs`), which runs in `cargo test`
-with no Node or OverPy installed; `diff.py` remains the
-generic external-producer contract for other producers, exercised locally via
-`run_oracle.py` and the corpus snapshots.

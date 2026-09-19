@@ -168,6 +168,71 @@ class DiffTests(unittest.TestCase):
         self.assertEqual(report_result["status"], "unexpected-divergence")
         self.assertIn("compile-status", report_result["regressionStages"])
 
+    def test_oracle_failure_frontiers_are_derived_from_snapshots(self):
+        frontiers = []
+        for oracle_path in sorted(CORPUS_DIR.glob("**/oracle.json")):
+            oracle = json.loads(oracle_path.read_text(encoding="utf-8"))
+            if oracle["compile"]["status"] == "failure":
+                frontiers.append(diff.reference_failure_frontier(oracle))
+        self.assertTrue(frontiers)
+        self.assertTrue(all(frontiers))
+
+    def test_compiler_failure_frontier_is_compared_independently(self):
+        fixture = "synthetic/diagnostics"
+        result = copy.deepcopy(
+            json.loads(
+                (CORPUS_DIR / fixture / "oracle.json").read_text(encoding="utf-8")
+            )
+        )
+        result["compile"]["failureClass"] = "frontend"
+        result["compile"]["diagnostics"] = [
+            {"severity": "error", "code": "parse-error", "text": "native"}
+        ]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write_result(root, result)
+            report_result = diff.compare_compiler_fixture(
+                CORPUS_DIR,
+                fixture,
+                root,
+                diff.load_compiler_expectations(),
+            )
+        self.assertEqual(report_result["status"], "match")
+        frontier = next(
+            item for item in report_result["stages"] if item["name"] == "failure-frontier"
+        )
+        self.assertEqual(frontier["outcome"], "match")
+
+    def test_known_gap_frontier_difference_is_not_a_match(self):
+        fixture = "real-world/ow1-emulator"
+        result = copy.deepcopy(
+            json.loads(
+                (CORPUS_DIR / fixture / "oracle.json").read_text(encoding="utf-8")
+            )
+        )
+        result["compile"]["failureClass"] = "integration"
+        result["compile"]["diagnostics"] = [
+            {
+                "severity": "error",
+                "code": "unsupported-integration-surface",
+                "text": "native",
+            }
+        ]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write_result(root, result)
+            report_result = diff.compare_compiler_fixture(
+                CORPUS_DIR,
+                fixture,
+                root,
+                diff.load_compiler_expectations(),
+            )
+        self.assertEqual(report_result["status"], "known-gap")
+        frontier = next(
+            item for item in report_result["stages"] if item["name"] == "failure-frontier"
+        )
+        self.assertEqual(frontier["outcome"], "difference")
+
     def test_compiler_normalized_output_accepts_equivalent_numeric_spelling(self):
         fixture = "synthetic/declarations-numbers"
         oracle = json.loads(
@@ -310,6 +375,7 @@ class DiffTests(unittest.TestCase):
             report["comparison"]["stages"],
             [
                 "compile-status",
+                "failure-frontier",
                 "normalized-output",
                 "semantic-wir",
                 "diagnostic-code",

@@ -1,63 +1,41 @@
-# OverPy audited inventory: callables and domains
+# Functions, member functions and domains
 
-Source: pinned OverPy `9.7.10`, content commit
-`889d9749d1def17f146548cbddb94ea1ab015847`. The external callable registries
-are `src/data/opy/functions.ts`, `memberFunctions.ts`, `constants.ts`,
-`modules.ts`, and `macros.ts`; Workshop registries are `src/data/actions.ts`,
-`values.ts`, `constants.ts`, `heroes.ts`, `maps.ts`, `gamemodes.ts`,
-`localizedStrings.ts`, and `customGameSettings.ts`.
+The compiler resolves callable names, receiver types, argument order,
+defaults, contextual enum values and return forms before lowering to the
+canonical Workshop model.
 
-The upstream registries are the audited inventory source and are not copied
-into `opy-rs`. Each callable contract has a spelling, receiver (if any),
-ordered arguments, argument type/domain, optional/default behavior, return
-behavior, and dispatch rule.
+## Standalone functions
 
-## Standalone functions and operators
-
-| Feature / representative leaf | Status | Audited contract |
+| Source form | Status | Limit |
 | --- | --- | --- |
-| `abs(value)` | ✅ Supported | One numeric value; numeric result. |
-| `len(arrayOrString)` | ✅ Supported | One array/string value; integer result. |
-| `range(stop)` / `range(start, stop[, step])` | ✅ Supported | Optional start and step have distinct defaults. |
-| `wait(duration[, reevaluation])` | ✅ Supported | Reevaluation has an optional default. |
-| `raiseToPower(base, exponent)` | ✅ Supported | Two numeric arguments in order; value operation. |
-| `sorted(array[, key])` | ✅ Supported | Optional lambda key; element/index binder is contextual. |
-| `all(array)` / `any(array)` | ✅ Supported | One boolean-array value. |
-| `random.randint(min, max)` | ✅ Supported | Two inclusive integer bounds; integer result. |
-| `random.uniform(min, max)` | ✅ Supported | Two float bounds; float result. |
-| `random.choice(array)` | ✅ Supported | One array; returns an element or supplied non-array value. |
-| `random.shuffle(array)` | ✅ Supported | One array; returns a copied array. |
-| `_(contextOrString[, string])` | 🚧 Coming soon | One-argument and two-argument modes differ. |
+| `abs(value)`, `len(value)`, `range(...)` | ✅ Supported | `range` supports its documented one-, two- and three-argument forms. |
+| `wait(duration[, reevaluation])` | ✅ Supported | The omitted reevaluation uses the OverPy default. |
+| `raiseToPower(base, exponent)` | ✅ Supported | Numeric arguments are lowered through the Workshop value model. |
+| `sorted(array[, key])` | ✅ Supported | The supported key form uses contextual element/index binders. |
+| `all(array)`, `any(array)` | ✅ Supported | The array form is supported. |
+| `random.randint`, `random.uniform`, `random.choice`, `random.shuffle` | ✅ Supported | Argument domains and copied-array behavior follow OverPy. |
+| `_`, `__`, `___` translation functions | 🚧 Partial | Translation declarations and supported localized output work; every upstream overload and `.po` lifecycle is not exposed. |
 
-## Receiver/member functions
+## Member functions and properties
 
-| Feature / representative leaf | Status | Audited contract |
+| Source form | Status | Limit |
 | --- | --- | --- |
-| `array.append(value)` | ✅ Supported | Array receiver; mutating; arrays are extended. |
-| `array.concat(value)` | ✅ Supported | Array receiver; returns a copy. |
-| `array.filter(lambda)` | ✅ Supported | Lambda result selects elements; optional index binder. |
-| `array.map(lambda)` | ✅ Supported | Lambda result replaces each element. |
-| `array.all([lambda])` / `array.any([lambda])` | ✅ Supported | Optional lambda defaults to element truthiness. |
-| `array[index]` and `array.slice(start, count)` | ✅ Supported | Indexing and slicing have different arguments. |
-| `string.format(...)` | 🚧 Coming soon | Variadic formatting remains incomplete. |
-| `player.setStatusEffect(player, assister, status, duration)` | 🚧 Coming soon | Receiver plus four ordered explicit arguments. |
-| `vector.x`, `.y`, `.z` | ✅ Supported | Property-like vector access; numeric result. |
-| `self` in member macros | 🚧 Coming soon | Dispatch target is the macro receiver. |
+| `array.append`, `array.concat` | ✅ Supported | `append` mutates the receiver; `concat` returns a copy. |
+| `array.filter`, `array.map` | ✅ Supported | Element and optional index binders are contextual. |
+| `array.all`, `array.any`, `array.unique` | ✅ Supported | `unique` preserves the first occurrence of each value. |
+| `array[index]`, `array.slice(start, count)` | ✅ Supported | Indexing and slicing retain their distinct argument contracts. |
+| `string.format(...)` | 🚧 Partial | Constant folding and the supported dynamic placeholder forms are compiled; unsupported placeholder shapes produce a source diagnostic. |
+| Player members such as `setStatusEffect`, `setMoveSpeed`, `getPosition` and `teleport` | ✅ Supported | Receiver and enum arguments are checked before canonical lowering. |
+| `vector.x`, `vector.y`, `vector.z` | ✅ Supported | Property access returns the corresponding numeric component. |
+| Member macros using `self` | 🚧 Partial | Supported receiver expansion is limited to the native member-macro forms. |
 
-## Constants, enums and contextual dispatch
+## Enums, constants and domains
 
-| Feature | Status | Notes |
+| Source form | Status | Limit |
 | --- | --- | --- |
-| `Hero`, `Map`, `Gamemode`, `Team`, `Slot`, `Color`, `Button` domains | 🚧 Coming soon | Membership and spelling are domain-specific. |
-| `Vector.UP/DOWN/LEFT/RIGHT/FORWARD/BACKWARD` | ✅ Supported | Constants are separate from arbitrary vectors. |
-| `Math.PI`, `Math.E`, `Math.INFINITY`, `Math.EPSILON` | ✅ Supported | Numeric constants lower to source-attributed numeric leaves. |
-| User enum assignment and inferred increments | ✅ Supported | Separate from Workshop catalog domains. |
-| Contextual `None`/reevaluation enum dispatch | 🚧 Coming soon | `ChaseTimeReeval`, `ChaseRateReeval` and `Invis` differ. |
-| Alias resolution (`getCurrentHero`, `hasStatusEffect`, `ChaseReeval`) | ✅ Supported | Non-contextual and call-context aliases differ. |
-
-The pinned `functions.ts`, `actions.ts`, `memberFunctions.ts` and `values.ts`
-registries contain the complete callable surface. The audit keeps families
-separate because action/value position, receiver type, defaults, overloads and
-return behavior differ. A name in the current internal manifest is evidence
-for `opy-rs` only; it does not expand this inventory or make an incomplete
-callable green.
+| `Hero`, `Map`, `Gamemode`, `Team`, `Slot`, `Color`, `Button` members | 🚧 Partial | Catalog-backed members used by the native compiler are supported; unknown or source-only members are rejected with a source diagnostic. |
+| `Vector.UP`, `Vector.DOWN`, `Vector.LEFT`, `Vector.RIGHT`, `Vector.FORWARD`, `Vector.BACKWARD` | ✅ Supported | These are canonical vector constants, not arbitrary catalog entries. |
+| `Math.PI`, `Math.E`, `Math.INFINITY`, `Math.EPSILON` | ✅ Supported | Values lower as numeric constants. |
+| User `enum` declarations and inferred member values | ✅ Supported | Explicit values and inferred increments follow OverPy declaration rules. |
+| Contextual reevaluation values such as `ChaseTimeReeval.NONE` and `ChaseRateReeval` | ✅ Supported | Dispatch is determined by the receiving callable's signature. |
+| Aliases such as `getCurrentHero`, `hasStatusEffect` and `ChaseReeval` | ✅ Supported | Aliases resolve to their canonical callable or enum identity. |

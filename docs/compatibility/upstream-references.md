@@ -40,7 +40,7 @@ never `latest` or a range (see the pinning policy below).
 
 ### Acquisition and verification record
 
-* The reference tree used for the inventory was acquired from the pinned npm
+* The reference tree used for the support contract was acquired from the pinned npm
   tarball `overpy@9.7.10` and byte-verified against the repository content at
   the pinned content commit `889d9749d1def17f146548cbddb94ea1ab015847` (tag
   `v9.7.10`). The durable record is the tarball integrity hash and the content
@@ -66,9 +66,9 @@ it serves as:
 * the reference for S (syntax), D (diagnostic), and N (normalized-output)
   evidence in the compatibility corpus (`crates/opy-rs/tests/fixtures/corpus/**`,
   `tools/overpy/oracle/`);
-* the source of systematic probe validation for the pinned language-support
-  inventories (see [`docs/language-support.md`](../language-support.md) and
-  [`docs/opy/compat-manifest-spec.md`](../opy/compat-manifest-spec.md));
+* the independent reference for support claims in
+  [`docs/language-support.md`](../language-support.md), exercised through the
+  corpus snapshots and differential harness;
 * the reference for differential parity at the Opy HIR v2 boundary
   ([`docs/hir/opy-hir-v2.md`](../hir/opy-hir-v2.md)): the native differential
   suite (`crates/opy-rs/tests/differential.rs`, merged in PR #13) runs
@@ -101,10 +101,9 @@ The harness invokes the oracle only through documented, isolated entry points:
   QuickJS `__script__` probes), `runCliTests.mjs` (CLI behavior), jest via
   `jest.config.cjs` for `src/test/*.test.ts`.
 
-### Upstream surfaces inspected for the inventory
+### Upstream surfaces behind the support contract
 
-The feature inventory in [`docs/language-support.md`](../language-support.md) and
-its linked component inventories is
+The support contract in [`docs/language-support.md`](../language-support.md) is
 grounded in the pinned tree, specifically:
 
 * `README.md`: user-visible syntax tour (rules, annotations, subroutines,
@@ -261,8 +260,7 @@ when the oracle is absent.
 
 ## Related documents
 
-* [`docs/language-support.md`](../language-support.md): audited public support contract and current states
-* [`docs/opy/compat-manifest-spec.md`](../opy/compat-manifest-spec.md): machine-readable semantic manifest specification
+* [`docs/language-support.md`](../language-support.md): public support contract and current states
 * [`docs/opy/tooling-notes.md`](../opy/tooling-notes.md): harness usage
 * [`tools/overpy/README.md`](../../tools/overpy/README.md): oracle and fixture layout
 * [`crates/opy-rs/tests/fixtures/corpus/README.md`](../../crates/opy-rs/tests/fixtures/corpus/README.md): corpus provenance

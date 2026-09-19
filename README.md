@@ -79,18 +79,20 @@ The Rust library surface, including the bounded Workshop compiler, lives in
 ## Compatibility
 
 Compatibility targets observable OverPy semantics for the declared support
-surface, not byte-identical output, optimizer choices, formatting, temporary
-variables, or upstream internal architecture. Support claims are backed by the
-canonical [language-support contract](docs/language-support.md), its linked
-inventories, and pinned OverPy reference evidence.
+surface, not byte-identical output, incidental formatting, temporary variables,
+or upstream internal architecture. Optimizer behavior that materially changes
+Workshop structure or element cost remains in scope; only incidental optimizer
+shape is outside the target. Support claims are backed by the
+canonical [language-support contract](docs/language-support.md), the corpus,
+and pinned OverPy reference evidence.
 
 > [!IMPORTANT]
 > `opy-rs` follows the OverPy language. It does not introduce a WrightKit-only
 > OPY dialect.
 
-The exhaustive per-feature evidence, pinned denominator, and current status are
-maintained in the [canonical human-readable support contract](docs/language-support.md)
-and its linked inventories.
+The current source forms and explicit limits are maintained in the [canonical
+human-readable support contract](docs/language-support.md) and its user-facing
+detail pages.
 
 ## Relationship with Wright
 

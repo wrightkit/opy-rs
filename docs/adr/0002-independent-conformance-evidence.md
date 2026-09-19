@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-09-12 (backfilled)
-- Historical evidence: [Issue #158](https://github.com/wrightkit/opy-rs/issues/158), [PR #159](https://github.com/wrightkit/opy-rs/pull/159), [current conformance evidence](../opy/conformance-baseline.md)
+- Historical evidence: [Issue #158](https://github.com/wrightkit/opy-rs/issues/158), [PR #159](https://github.com/wrightkit/opy-rs/pull/159)
 
 ## Context
 
@@ -13,11 +13,12 @@ output snapshot an accidental authority for the behavior it is meant to test.
 
 ## Decision
 
-Offline OverPy conformance is specified by evidence independent of the native
+Offline OverPy compatibility is specified by evidence independent of the native
 implementation: pinned OverPy executable behavior, public language evidence,
-provenance-linked projects, and reviewed Workshop contracts. The durable
-inventory records structural language contracts and maps them to executable
-positive, negative, contextual, or composition probes.
+provenance-linked projects, and reviewed Workshop contracts. The support
+contract is human-readable; executable claims live in the corpus, oracle
+snapshots, differential expectations and Rust integration tests rather than in
+a second support database.
 
 For reference-success inputs, compare the canonical Workshop semantics parsed
 from the reference output with direct OPY lowering through the
@@ -42,7 +43,7 @@ its own oracle.
 
 ## Consequences
 
-Conformance reports distinguish proven matches, divergences, and inconclusive
-cases and can group follow-up work by root capability. The source-language
-oracle remains an OPY concern, while canonical Workshop parsing, validation,
-normalization, and emission remain `workshop-rs` responsibilities.
+Differential reports distinguish proven matches, divergences, known gaps and
+inconclusive cases. The source-language oracle remains an OPY concern, while
+canonical Workshop parsing, validation, normalization, and emission remain
+`workshop-rs` responsibilities.
