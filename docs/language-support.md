@@ -63,7 +63,9 @@ explicit instead of hiding them in a category-level green row.
 The feature-contract validator checks an explicit record for every pinned
 registry leaf against the independent pinned-source audit, checks the inventory
 pin against the conformance manifest, and can compare the audit keys with a
-local checkout of the pinned source. The inventory is not a fixed feature-count
-assertion: status, coverage, ownership, limits, and evidence are reported per
-leaf, and registry membership or category coverage never promotes an unresolved
-leaf to a passing claim.
+local checkout of the pinned source. Covered registry leaves must cite a fixture
+that probes their declared contract, while audited compiler branches carry
+source fingerprints checked against that checkout. The inventory is not a
+fixed feature-count assertion: status, coverage, ownership, limits, and evidence
+are reported per leaf, and registry membership or category coverage never
+promotes an unresolved leaf to a passing claim.

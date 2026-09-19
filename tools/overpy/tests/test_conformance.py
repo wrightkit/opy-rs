@@ -60,6 +60,7 @@ class ConformanceTests(unittest.TestCase):
         for registry in inventory["registries"]:
             self.assertNotIn("defaults", registry)
             self.assertNotIn("overrides", registry)
+            self.assertTrue(all("contract" in leaf for leaf in registry["leaves"]))
             self.assertEqual(
                 {leaf["key"] for leaf in registry["leaves"]},
                 set(
@@ -101,6 +102,20 @@ class ConformanceTests(unittest.TestCase):
         inventory = conformance.load_inventory()
         broken = copy.deepcopy(inventory)
         broken["registries"][0]["leaves"].pop()
+        with self.assertRaises(conformance.ConformanceError):
+            conformance.validate_inventory(broken, self.manifest, audit=self.audit)
+
+    def test_feature_contract_inventory_requires_fixture_contract_match(self):
+        inventory = conformance.load_inventory()
+        broken = copy.deepcopy(inventory)
+        lambda_leaf = next(
+            leaf
+            for registry in broken["registries"]
+            if registry["id"] == "registry/keywords"
+            for leaf in registry["leaves"]
+            if leaf["key"] == "lambda"
+        )
+        lambda_leaf["contract"] = "syntax.parser-and-control-flow/statement-and-declaration-boundaries"
         with self.assertRaises(conformance.ConformanceError):
             conformance.validate_inventory(broken, self.manifest, audit=self.audit)
 
@@ -165,12 +180,25 @@ class ConformanceTests(unittest.TestCase):
             branch_source = Path(directory) / "src/compiler/parser.ts"
             branch_source.parent.mkdir(parents=True)
             branch_source.write_text("// pinned branch source\n", encoding="utf-8")
+            audit["branches"][0]["fingerprint"] = {
+                "algorithm": "sha256",
+                "value": conformance._source_fingerprint(branch_source),
+            }
             conformance.validate_inventory(
                 inventory,
                 self.manifest,
                 upstream_root=Path(directory),
                 audit=audit,
             )
+            branch_source.write_text("// changed pinned branch source\n", encoding="utf-8")
+            with self.assertRaises(conformance.ConformanceError):
+                conformance.validate_inventory(
+                    inventory,
+                    self.manifest,
+                    upstream_root=Path(directory),
+                    audit=audit,
+                )
+            branch_source.write_text("// pinned branch source\n", encoding="utf-8")
             source.write_text(
                 'export const opyKeywords = {"and": 1, "or": 1, "new": 1};\n',
                 encoding="utf-8",

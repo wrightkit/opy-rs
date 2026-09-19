@@ -31,7 +31,9 @@ per-leaf registry status, coverage limits, production ownership, and
 executable or upstream evidence, alongside materially distinct
 compiler/parser/tooling branches. [`../../docs/language-support/pinned-overpy-audit.json`](../../docs/language-support/pinned-overpy-audit.json) is the
 independent pinned-source audit catalog, including the immutable registry leaf
-sets used to detect omitted or added entries. Both reference pins must match
+sets used to detect omitted or added entries, and SHA-256 fingerprints for
+compiler-branch sources used to detect changed or removed source content. Both
+reference pins must match
 [`../../docs/language-support/conformance-manifest.json`](../../docs/language-support/conformance-manifest.json).
 
 The normal conformance run validates the inventory without requiring the

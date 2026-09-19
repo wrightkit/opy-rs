@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import subprocess
@@ -156,11 +157,23 @@ def load_pinned_audit(path: Path = PINNED_AUDIT) -> dict[str, Any]:
     for branch in audit["branches"]:
         if not isinstance(branch.get("source"), str) or not branch["source"]:
             raise ConformanceError(f"{branch['id']}: pinned audit source is incomplete")
+        fingerprint = branch.get("fingerprint")
+        if (
+            not isinstance(fingerprint, dict)
+            or fingerprint.get("algorithm") != "sha256"
+            or not isinstance(fingerprint.get("value"), str)
+            or not re.fullmatch(r"[0-9a-f]{64}", fingerprint["value"])
+        ):
+            raise ConformanceError(f"{branch['id']}: pinned audit fingerprint is incomplete")
     return audit
 
 
 def _validate_evidence(
-    evidence: Any, fixture_set: set[str], leaf_id: str
+    evidence: Any,
+    fixture_set: set[str],
+    leaf_id: str,
+    fixture_contracts: dict[str, set[str]] | None = None,
+    required_contract: str | None = None,
 ) -> None:
     if not isinstance(evidence, list):
         raise ConformanceError(f"{leaf_id}: evidence must be a list")
@@ -171,6 +184,13 @@ def _validate_evidence(
             fixture_id = item.removeprefix("fixture:")
             if not fixture_id or fixture_id not in fixture_set:
                 raise ConformanceError(f"{leaf_id}: evidence fixture does not exist: {item}")
+            if required_contract is not None and required_contract not in (fixture_contracts or {}).get(
+                fixture_id, set()
+            ):
+                raise ConformanceError(
+                    f"{leaf_id}: evidence fixture does not exercise declared contract "
+                    f"{required_contract}: {item}"
+                )
         elif item.startswith("upstream:"):
             if not item.removeprefix("upstream:"):
                 raise ConformanceError(f"{leaf_id}: upstream evidence path is empty")
@@ -188,6 +208,22 @@ def _validate_production(production: Any, leaf_id: str) -> None:
             raise ConformanceError(f"{leaf_id}: production path does not exist: {item}")
 
 
+def _source_fingerprint(source: Path) -> str:
+    digest = hashlib.sha256()
+    if source.is_file():
+        digest.update(source.read_bytes())
+        return digest.hexdigest()
+    if not source.is_dir():
+        raise ConformanceError(f"cannot fingerprint missing source: {source}")
+    for path in sorted(path for path in source.rglob("*") if path.is_file()):
+        relative = path.relative_to(source).as_posix().encode("utf-8")
+        digest.update(relative)
+        digest.update(b"\0")
+        digest.update(hashlib.sha256(path.read_bytes()).digest())
+        digest.update(b"\n")
+    return digest.hexdigest()
+
+
 def inventory_leaves(inventory: dict[str, Any]) -> list[dict[str, Any]]:
     leaves: list[dict[str, Any]] = []
     for registry in inventory["registries"]:
@@ -201,7 +237,7 @@ def inventory_leaves(inventory: dict[str, Any]) -> list[dict[str, Any]]:
             leaf["id"] = f"{registry['id']}/{record['key']}"
             leaf["registry"] = registry["id"]
             leaf["upstreamKey"] = record["key"]
-            leaf["contract"] = registry["contract"]
+            leaf.setdefault("contract", registry["contract"])
             leaves.append(leaf)
     leaves.extend(inventory["branches"])
     return leaves
@@ -300,6 +336,12 @@ def validate_inventory(
     if audit["reference"] != manifest["reference"]:
         raise ConformanceError("pinned OverPy audit reference pin disagrees with conformance manifest")
     fixture_set = fixture_ids(fixtures_root)
+    fixture_contracts: dict[str, set[str]] = {}
+    for category in manifest["categories"]:
+        for contract in category["contracts"]:
+            contract_id = f"{category['id']}/{contract['id']}"
+            for fixture_id in contract["probes"]:
+                fixture_contracts.setdefault(fixture_id, set()).add(contract_id)
     category_contracts = {
         f"{category['id']}/{contract['id']}"
         for category in manifest["categories"]
@@ -402,6 +444,13 @@ def validate_inventory(
             source = upstream_root / branch["source"]
             if not source.exists():
                 raise ConformanceError(f"{branch['id']}: pinned audit source does not exist: {source}")
+            actual = _source_fingerprint(source)
+            expected = branch["fingerprint"]["value"]
+            if actual != expected:
+                raise ConformanceError(
+                    f"{branch['id']}: pinned audit fingerprint differs "
+                    f"(expected={expected}, actual={actual})"
+                )
     for leaf in leaves:
         leaf_id = leaf["id"]
         status = leaf.get("status")
@@ -422,9 +471,19 @@ def validate_inventory(
                 raise ConformanceError(f"{leaf_id}: covered implementation needs production evidence")
             if not isinstance(leaf.get("evidence"), list) or not leaf["evidence"]:
                 raise ConformanceError(f"{leaf_id}: covered implementation needs executable evidence")
+            if not any(item.startswith("fixture:") for item in leaf["evidence"]):
+                raise ConformanceError(f"{leaf_id}: covered implementation needs fixture evidence")
         if "production" in leaf:
             _validate_production(leaf["production"], leaf_id)
-        _validate_evidence(leaf.get("evidence", []), fixture_set, leaf_id)
+        _validate_evidence(
+            leaf.get("evidence", []),
+            fixture_set,
+            leaf_id,
+            fixture_contracts,
+            leaf["contract"]
+            if "registry" in leaf and status == "implemented" and coverage == "covered"
+            else None,
+        )
     return leaves
 
 

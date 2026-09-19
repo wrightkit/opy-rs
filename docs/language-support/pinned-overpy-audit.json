@@ -435,103 +435,203 @@
   "branches": [
     {
       "id": "branch/lexer-token-boundaries",
-      "source": "src/compiler/tokenizer.ts"
+      "source": "src/compiler/tokenizer.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "c041bf8a5bb012cf003b3aab3e0eebb301bbaad6bff56977f602186705d72f81"
+      }
     },
     {
       "id": "branch/parser-expressions",
-      "source": "src/compiler/parser.ts"
+      "source": "src/compiler/parser.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "056a10a76d036cf4c8b060cf6a60e3966addbc6e65924610f4e2e5e1f4874c22"
+      }
     },
     {
       "id": "branch/parser-declarations",
-      "source": "src/compiler/astParser.ts"
+      "source": "src/compiler/astParser.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "4d3ae05a9e06025f16e783521902cce10b9ddf0dc180a94086a05923eb77481a"
+      }
     },
     {
       "id": "branch/parser-control-flow",
-      "source": "src/compiler/parser.ts"
+      "source": "src/compiler/parser.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "056a10a76d036cf4c8b060cf6a60e3966addbc6e65924610f4e2e5e1f4874c22"
+      }
     },
     {
       "id": "branch/parser-contextual-lambda",
-      "source": "src/compiler/parser.ts"
+      "source": "src/compiler/parser.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "056a10a76d036cf4c8b060cf6a60e3966addbc6e65924610f4e2e5e1f4874c22"
+      }
     },
     {
       "id": "branch/parser-goto-and-dynamic-targets",
-      "source": "src/compiler/parser.ts"
+      "source": "src/compiler/parser.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "056a10a76d036cf4c8b060cf6a60e3966addbc6e65924610f4e2e5e1f4874c22"
+      }
     },
     {
       "id": "branch/compiler-project-closure",
-      "source": "src/compiler/compiler.ts"
+      "source": "src/compiler/compiler.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "c900b2c38af4f703b4f3bc9b3488929ad1a04dd3b38df0247d177544467a4e43"
+      }
     },
     {
       "id": "branch/compiler-macro-expansion",
-      "source": "src/compiler/tokenizer.ts"
+      "source": "src/compiler/tokenizer.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "c041bf8a5bb012cf003b3aab3e0eebb301bbaad6bff56977f602186705d72f81"
+      }
     },
     {
       "id": "branch/compiler-directive-state",
-      "source": "src/compiler/compiler.ts"
+      "source": "src/compiler/compiler.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "c900b2c38af4f703b4f3bc9b3488929ad1a04dd3b38df0247d177544467a4e43"
+      }
     },
     {
       "id": "branch/compiler-translations",
-      "source": "src/compiler/translations.ts"
+      "source": "src/compiler/translations.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "9421494410aaae7cbb3545109185ee0625dc9c54ad1ee6610008fb17e807785f"
+      }
     },
     {
       "id": "branch/compiler-settings",
-      "source": "src/compiler/parser.ts"
+      "source": "src/compiler/parser.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "056a10a76d036cf4c8b060cf6a60e3966addbc6e65924610f4e2e5e1f4874c22"
+      }
     },
     {
       "id": "branch/semantic-dispatch",
-      "source": "src/data/opy/functions.ts"
+      "source": "src/data/opy/functions.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "cb85fb56a696a74665f441ebe6cd8ffee63788b26c97e030cc3bd82fc61e6ef3"
+      }
     },
     {
       "id": "branch/semantic-diagnostic-frontiers",
-      "source": "src/compiler/compiler.ts"
+      "source": "src/compiler/compiler.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "c900b2c38af4f703b4f3bc9b3488929ad1a04dd3b38df0247d177544467a4e43"
+      }
     },
     {
       "id": "branch/lowering-canonical-wir",
-      "source": "src/compiler/astToWorkshop.ts"
+      "source": "src/compiler/astToWorkshop.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "52f77583f366885d7d7057035d57d320b2b4ce6fefeaeca9f044f73adf5571a5"
+      }
     },
     {
       "id": "branch/lowering-unsupported-boundary",
-      "source": "src/compiler/astToWorkshop.ts"
+      "source": "src/compiler/astToWorkshop.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "52f77583f366885d7d7057035d57d320b2b4ce6fefeaeca9f044f73adf5571a5"
+      }
     },
     {
       "id": "branch/project-real-world",
-      "source": "examples"
+      "source": "examples",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "eca6da5bc6def5d96591ada3a6527f30275dd41964a09a35efdec62ba72496e3"
+      }
     },
     {
       "id": "branch/workshop-catalog-boundary",
-      "source": "src/data/actions.ts"
+      "source": "src/data/actions.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "ea1d0d25967df58f1d298f37a8662a94be5dbf6de3522d4313ae9fa516e192ca"
+      }
     },
     {
       "id": "branch/workshop-value-boundary",
-      "source": "src/data/values.ts"
+      "source": "src/data/values.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "77867f8747aade926c2324913b71f64459164fb2214b6e8c4fe41df48af68dc5"
+      }
     },
     {
       "id": "branch/cli-compile-contract",
-      "source": "src/cli.ts"
+      "source": "src/cli.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "4f5f2401f0822f5a2f053591c80990283ffe736245052b3b9c744335e997bc55"
+      }
     },
     {
       "id": "branch/cli-decompile-contract",
-      "source": "src/decompiler/decompiler.ts"
+      "source": "src/decompiler/decompiler.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "cc2a670cda148d436241e7afe94819b4613120800ea2d11fde60965e600b4abb"
+      }
     },
     {
       "id": "branch/compile-metadata",
-      "source": "src/compiler/compiler.ts"
+      "source": "src/compiler/compiler.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "c900b2c38af4f703b4f3bc9b3488929ad1a04dd3b38df0247d177544467a4e43"
+      }
     },
     {
       "id": "branch/javascript-macro-runtime",
-      "source": "src/compiler/tokenizer.ts"
+      "source": "src/compiler/tokenizer.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "c041bf8a5bb012cf003b3aab3e0eebb301bbaad6bff56977f602186705d72f81"
+      }
     },
     {
       "id": "branch/post-compile-hook",
-      "source": "src/compiler/compiler.ts"
+      "source": "src/compiler/compiler.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "c900b2c38af4f703b4f3bc9b3488929ad1a04dd3b38df0247d177544467a4e43"
+      }
     },
     {
       "id": "branch/quickjs-failure-abi",
-      "source": "src/quickjs.ts"
+      "source": "src/quickjs.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "a38338757823e4f33eb9309e89795726f38c52c6122700813bd618fad6bd2240"
+      }
     },
     {
       "id": "branch/cli-project-input",
-      "source": "src/cli.ts"
+      "source": "src/cli.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "4f5f2401f0822f5a2f053591c80990283ffe736245052b3b9c744335e997bc55"
+      }
     }
   ]
 }

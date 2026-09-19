@@ -133,7 +133,8 @@ contract.
 | `hudHeader`, `hudSubtext` | ⚠️ Implemented; leaf evidence partial |
 | `hudSubheader` | 🚧 Leaf evidence incomplete |
 | `lerp`, `lineIntersectsSphere` | 🚧 Leaf evidence incomplete |
-| `print`, `.reverse`, `timeToString`, `.unique` | 🚧 Leaf evidence incomplete |
+| `print`, `.reverse`, `timeToString` | 🚧 Leaf evidence incomplete |
+| `.unique` | ✅ Supported; removes duplicate values while preserving first-occurrence order. |
 
 ## Built-in functions and member functions
 
@@ -151,6 +152,7 @@ beginning with `.` are receiver dispatch entries. The separate
 | `.any` | ⚠️ Implemented; leaf evidence partial |
 | `.filter` | ⚠️ Implemented; leaf evidence partial |
 | `.map` | ⚠️ Implemented; leaf evidence partial |
+| `.unique` | ✅ Supported |
 | `arrayToString` | 🚧 Leaf evidence incomplete |
 | `ceil` | ⚠️ Implemented; leaf evidence partial |
 | `floor` | ⚠️ Implemented; leaf evidence partial |
