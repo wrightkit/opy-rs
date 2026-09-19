@@ -13,8 +13,9 @@ Reference: `889d9749d1def17f146548cbddb94ea1ab015847`.
 ## String entities (`src/data/opy/stringEntities.ts`)
 
 The `opyStringEntities` registry defines the user-visible `\\&name;` escape
-family. Its exact 67 keys and current status/coverage are maintained in the
-machine inventory; string parsing and escaping behavior remains a separate
+family. Its exact 67 keys are explicitly classified in the machine inventory;
+they remain `❔ Unclassified` / `uncovered` until escape-specific executable
+evidence exists. String parsing and escaping behavior remains a separate
 contract.
 
 ## Keywords (`src/data/opy/keywords.ts`)
@@ -24,18 +25,18 @@ contract.
 | `and` | ✅ Supported |
 | `or` | ✅ Supported |
 | `not` | ✅ Supported |
-| `bool` | ✅ Supported |
-| `float` | ✅ Supported |
-| `int` | ✅ Supported |
-| `signed` | ✅ Supported |
-| `unsigned` | ✅ Supported |
+| `bool` | ⚠️ Implemented; leaf evidence partial |
+| `float` | ⚠️ Implemented; leaf evidence partial |
+| `int` | ⚠️ Implemented; leaf evidence partial |
+| `signed` | ⚠️ Implemented; leaf evidence partial |
+| `unsigned` | ⚠️ Implemented; leaf evidence partial |
 | `case` | ✅ Supported |
 | `default` | ✅ Supported |
 | `switch` | ✅ Supported |
 | `def` | ✅ Supported |
 | `subroutine` | ✅ Supported |
 | `rule` | ✅ Supported |
-| `del` | 🚧 Coming soon |
+| `del` | 🚧 Leaf evidence incomplete |
 | `elif` | ✅ Supported |
 | `else` | ✅ Supported |
 | `if` | ✅ Supported |
@@ -44,13 +45,13 @@ contract.
 | `while` | ✅ Supported |
 | `globalvar` | ✅ Supported |
 | `playervar` | ✅ Supported |
-| `goto` | 🚧 Coming soon |
-| `loc` | 🚧 Coming soon |
+| `goto` | 🚧 Leaf evidence incomplete |
+| `loc` | 🚧 Leaf evidence incomplete |
 | `in` | ✅ Supported |
 | `lambda` | ✅ Supported |
 | `macro` | ✅ Supported |
-| `self` | 🚧 Coming soon |
-| `settings` | ✅ Bounded compiler slice |
+| `self` | 🚧 Leaf evidence incomplete |
+| `settings` | 🚧 Leaf evidence incomplete |
 | `main` | 🚧 Coming soon |
 | `gamemodes` | 🚧 Coming soon |
 | `heroes` | 🚧 Coming soon |
@@ -59,40 +60,39 @@ contract.
 
 | Upstream key | Status |
 | --- | --- |
-| `allowMacroRedeclaration` | ✅ Source-supported |
-| `define`, `defineMember` | ✅ Source-supported |
-| `debugElementCount` | ✅ Source-supported |
-| `disableInspector` | ✅ Source-supported |
-| `suppressWarnings` | ✅ Source-supported |
+| `allowMacroRedeclaration` | ⚠️ Implemented; leaf evidence partial |
+| `define` | ⚠️ Implemented; leaf evidence partial |
+| `debugElementCount` | ⚠️ Implemented; leaf evidence partial |
+| `disableInspector` | ⚠️ Implemented; leaf evidence partial |
+| `suppressWarnings` | ⚠️ Implemented; leaf evidence partial |
 | `mainFile` | ✅ Supported |
 | `include` | ✅ Supported |
-| `excludeVariablesInCompilation` | ✅ Source-supported |
-| `setupTags` | ✅ Source-supported |
-| `setupTx` | ✅ Source-supported |
-| `disableOptimizations` | ✅ Source-supported |
-| `enableOptimizations` | ✅ Source-supported |
-| `optimizeForSize` | ✅ Source-supported |
-| `optimizeForSizeAggressive` | ✅ Source-supported |
-| `disableOptimizeForSize` | ✅ Source-supported |
-| `optimizeStrict` | ✅ Compiler-supported |
-| `disableOptimizeStrict` | ✅ Source-supported |
-| `replace0ByCapturePercentage` | ✅ Source-supported |
-| `replace0ByPayloadProgressPercentage` | ✅ Source-supported |
-| `replace0ByIsMatchComplete` | ✅ Source-supported |
-| `replace1ByMatchRound` | ✅ Source-supported |
-| `replaceTeam1ByControlScoringTeam` | ✅ Source-supported |
-| `replaceEmptyStringByEmptyArray` | ✅ Source-supported |
-| `replaceEmptyStringByVariable` | ✅ Source-supported |
-| `translations` | ✅ Source-supported |
-| `translateWithPlayerVar` | ✅ Source-supported |
-| `useVariableForCompressionAlphabet` | 🚧 Coming soon |
-| `extension` | ✅ Source-supported |
-| `globalvarInitRuleName` | ✅ Source-supported |
-| `playervarInitRuleName` | ✅ Source-supported |
-| `keepUnusedTranslations` | ✅ Source-supported |
-| `disableTranslationSourceLines` | ✅ Source-supported |
-| `writeToOutputFile` | ✅ Source-supported |
-| `postCompileHook` | ✅ Bounded compiler slice |
+| `excludeVariablesInCompilation` | ⚠️ Implemented; leaf evidence partial |
+| `setupTags` | ⚠️ Implemented; leaf evidence partial |
+| `disableOptimizations` | ⚠️ Implemented; leaf evidence partial |
+| `enableOptimizations` | ⚠️ Implemented; leaf evidence partial |
+| `optimizeForSize` | ⚠️ Implemented; leaf evidence partial |
+| `optimizeForSizeAggressive` | ⚠️ Implemented; leaf evidence partial |
+| `disableOptimizeForSize` | ⚠️ Implemented; leaf evidence partial |
+| `optimizeStrict` | ⚠️ Implemented; leaf evidence partial |
+| `disableOptimizeStrict` | ⚠️ Implemented; leaf evidence partial |
+| `replace0ByCapturePercentage` | ⚠️ Implemented; leaf evidence partial |
+| `replace0ByPayloadProgressPercentage` | ⚠️ Implemented; leaf evidence partial |
+| `replace0ByIsMatchComplete` | ⚠️ Implemented; leaf evidence partial |
+| `replace1ByMatchRound` | ⚠️ Implemented; leaf evidence partial |
+| `replaceTeam1ByControlScoringTeam` | ⚠️ Implemented; leaf evidence partial |
+| `replaceEmptyStringByEmptyArray` | ⚠️ Implemented; leaf evidence partial |
+| `replaceEmptyStringByVariable` | ⚠️ Implemented; leaf evidence partial |
+| `translations` | ⚠️ Implemented; leaf evidence partial |
+| `translateWithPlayerVar` | ⚠️ Implemented; leaf evidence partial |
+| `useVariableForCompressionAlphabet` | 🚧 Leaf evidence incomplete |
+| `extension` | ⚠️ Implemented; leaf evidence partial |
+| `globalvarInitRuleName` | ⚠️ Implemented; leaf evidence partial |
+| `playervarInitRuleName` | ⚠️ Implemented; leaf evidence partial |
+| `keepUnusedTranslations` | ⚠️ Implemented; leaf evidence partial |
+| `disableTranslationSourceLines` | ⚠️ Implemented; leaf evidence partial |
+| `writeToOutputFile` | ⚠️ Implemented; leaf evidence partial |
+| `postCompileHook` | 🚧 Leaf evidence incomplete |
 | `rulePrefix`, `rulePrefixTemplate` | ✅ Supported |
 
 ## Annotations (`src/data/opy/annotations.ts`)
@@ -114,26 +114,26 @@ contract.
 
 | Upstream key | Status | Contract |
 | --- | --- | --- |
-| `random.randint(min, max)` | ✅ Supported | Two inclusive integer bounds; integer result. |
-| `random.uniform(min, max)` | ✅ Supported | Two float bounds; float result. |
-| `random.choice(array)` | ✅ Supported | One array; element result. |
-| `random.shuffle(array)` | ✅ Supported | One array; copied array result. |
+| `random.randint(min, max)` | ❔ Unclassified | Two inclusive integer bounds; integer result. |
+| `random.uniform(min, max)` | ❔ Unclassified | Two float bounds; float result. |
+| `random.choice(array)` | ❔ Unclassified | One array; element result. |
+| `random.shuffle(array)` | ❔ Unclassified | One array; copied array result. |
 
 ## Built-in macros (`src/data/opy/macros.ts`)
 
 | Upstream key | Status |
 | --- | --- |
-| `buttonToString` | 🚧 Coming soon |
-| `.getEffectiveHero`, `.getOppositeTeam` | 🚧 Coming soon |
-| `getRealClosestPlayer`, `getRealClosestPlayers` | 🚧 Coming soon |
-| `getRealFarthestPlayer`, `getRealFarthestPlayers` | 🚧 Coming soon |
-| `.getRealPlayerClosestToReticle`, `.getRealPlayersClosestToReticle` | 🚧 Coming soon |
-| `getRealPlayersInRadius`, `.getRealPlayersInViewAngle` | 🚧 Coming soon |
-| `getSign`, `getAllPlayers` | 🚧 Coming soon |
-| `hudHeader`, `hudSubtext` | ✅ Supported |
-| `hudSubheader` | ✅ Bounded compiler slice |
-| `lerp`, `lineIntersectsSphere` | 🚧 Coming soon |
-| `print`, `.reverse`, `timeToString` | 🚧 Coming soon |
+| `buttonToString` | 🚧 Leaf evidence incomplete |
+| `.getEffectiveHero`, `.getOppositeTeam` | 🚧 Leaf evidence incomplete |
+| `getRealClosestPlayer`, `getRealClosestPlayers` | 🚧 Leaf evidence incomplete |
+| `getRealFarthestPlayer`, `getRealFarthestPlayers` | 🚧 Leaf evidence incomplete |
+| `.getRealPlayerClosestToReticle`, `.getRealPlayersClosestToReticle` | 🚧 Leaf evidence incomplete |
+| `getRealPlayersInRadius`, `.getRealPlayersInViewAngle` | 🚧 Leaf evidence incomplete |
+| `getSign`, `getAllPlayers` | 🚧 Leaf evidence incomplete |
+| `hudHeader`, `hudSubtext` | ⚠️ Implemented; leaf evidence partial |
+| `hudSubheader` | 🚧 Leaf evidence incomplete |
+| `lerp`, `lineIntersectsSphere` | 🚧 Leaf evidence incomplete |
+| `print`, `.reverse`, `timeToString` | 🚧 Leaf evidence incomplete |
 | `.unique` | ✅ Supported; removes duplicate values while preserving first-occurrence order. |
 
 ## Built-in functions and member functions
@@ -144,47 +144,47 @@ beginning with `.` are receiver dispatch entries. The separate
 
 | Upstream key | Status |
 | --- | --- |
-| `_`, `__`, `___` | 🚧 Coming soon |
-| `all` | ✅ Supported |
-| `any` | ✅ Supported |
-| `.append` | ✅ Supported |
-| `.all` | ✅ Supported |
-| `.any` | ✅ Supported |
-| `.filter` | ✅ Supported |
-| `.map` | ✅ Supported |
+| `_`, `__`, `___` | 🚧 Leaf evidence incomplete |
+| `all` | ⚠️ Implemented; leaf evidence partial |
+| `any` | ⚠️ Implemented; leaf evidence partial |
+| `.append` | ⚠️ Implemented; leaf evidence partial |
+| `.all` | ⚠️ Implemented; leaf evidence partial |
+| `.any` | ⚠️ Implemented; leaf evidence partial |
+| `.filter` | ⚠️ Implemented; leaf evidence partial |
+| `.map` | ⚠️ Implemented; leaf evidence partial |
 | `.unique` | ✅ Supported |
-| `arrayToString` | 🚧 Coming soon |
-| `ceil` | ✅ Supported |
-| `floor` | ✅ Supported |
-| `round` | ✅ Supported |
-| `hsl` | 🚧 Coming soon |
-| `chaseAtRate` | ✅ Supported |
+| `arrayToString` | 🚧 Leaf evidence incomplete |
+| `ceil` | ⚠️ Implemented; leaf evidence partial |
+| `floor` | ⚠️ Implemented; leaf evidence partial |
+| `round` | ⚠️ Implemented; leaf evidence partial |
+| `hsl` | 🚧 Leaf evidence incomplete |
+| `chaseAtRate` | ⚠️ Implemented; leaf evidence partial |
 | `chaseOverTime` | ✅ Supported |
-| `compress` | 🚧 Coming soon |
-| `compressed` | ✅ Supported |
-| `decompressNumbers` | 🚧 Coming soon |
-| `decompressVectors` | 🚧 Coming soon |
-| `createCasedProgressBarIwt` | 🚧 Coming soon |
-| `debug` | 🚧 Coming soon |
-| `.format` | 🚧 Coming soon |
-| `.remove` | 🚧 Coming soon |
-| `getCurrentMap` | ✅ Supported |
-| `.getNormal` | 🚧 Coming soon |
-| `.getPlayerHit` | 🚧 Coming soon |
-| `.getHitPosition` | 🚧 Coming soon |
-| `log` | 🚧 Coming soon |
+| `compress` | 🚧 Leaf evidence incomplete |
+| `compressed` | ⚠️ Implemented; leaf evidence partial |
+| `decompressNumbers` | 🚧 Leaf evidence incomplete |
+| `decompressVectors` | 🚧 Leaf evidence incomplete |
+| `createCasedProgressBarIwt` | 🚧 Leaf evidence incomplete |
+| `debug` | 🚧 Leaf evidence incomplete |
+| `.format` | 🚧 Leaf evidence incomplete |
+| `.remove` | 🚧 Leaf evidence incomplete |
+| `getCurrentMap` | ⚠️ Implemented; leaf evidence partial |
+| `.getNormal` | 🚧 Leaf evidence incomplete |
+| `.getPlayerHit` | 🚧 Leaf evidence incomplete |
+| `.getHitPosition` | 🚧 Leaf evidence incomplete |
+| `log` | 🚧 Leaf evidence incomplete |
 | `pass` | ✅ Supported |
 | `range` | ✅ Supported |
-| `raycast` | 🚧 Coming soon |
-| `ruleCondition` | ✅ Supported |
+| `raycast` | 🚧 Leaf evidence incomplete |
+| `ruleCondition` | ⚠️ Implemented; leaf evidence partial |
 | `sorted` | ✅ Supported |
-| `spacesForString` | 🚧 Coming soon |
-| `spacesForLength` | 🚧 Coming soon |
-| `strVisualLength` | 🚧 Coming soon |
-| `splitDictArray` | 🚧 Coming soon |
-| `stopChasing` | 🚧 Coming soon |
-| `tabular` | 🚧 Coming soon |
-| `.toArray` | 🚧 Coming soon |
+| `spacesForString` | 🚧 Leaf evidence incomplete |
+| `spacesForLength` | 🚧 Leaf evidence incomplete |
+| `strVisualLength` | 🚧 Leaf evidence incomplete |
+| `splitDictArray` | 🚧 Leaf evidence incomplete |
+| `stopChasing` | 🚧 Leaf evidence incomplete |
+| `tabular` | 🚧 Leaf evidence incomplete |
+| `.toArray` | 🚧 Leaf evidence incomplete |
 | `x` (property member) | ✅ Supported |
 | `y` (property member) | ✅ Supported |
 | `z` (property member) | ✅ Supported |
@@ -200,6 +200,6 @@ catalogue.
 
 | Upstream key | Status |
 | --- | --- |
-| `Vector` (`UP`, `DOWN`, `LEFT`, `RIGHT`, `FORWARD`, `BACKWARD`) | ✅ Supported |
-| `Math` (`PI`, `E`, `INFINITY`, `EPSILON`) | ✅ Supported (documented spacing/radius constants remain deferred) |
-| `Texture` (complete texture constant registry) | 🚧 Coming soon |
+| `Vector` (`UP`, `DOWN`, `LEFT`, `RIGHT`, `FORWARD`, `BACKWARD`) | ⚠️ Implemented; leaf evidence partial |
+| `Math` (`PI`, `E`, `INFINITY`, `EPSILON`) | 🚧 Leaf evidence incomplete |
+| `Texture` (complete texture constant registry) | 🚧 Leaf evidence incomplete |

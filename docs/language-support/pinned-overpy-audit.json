@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "contract": "pinned-overpy-source-audit",
   "reference": {
     "name": "overpy",
@@ -8,43 +8,730 @@
     "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw=="
   },
   "registries": [
-    {"id": "registry/keywords", "source": {"path": "src/data/opy/keywords.ts", "objectPath": "opyKeywords"}},
-    {"id": "registry/directives", "source": {"path": "src/data/opy/preprocessing.ts", "objectPath": "preprocessingDirectives"}},
-    {"id": "registry/annotations", "source": {"path": "src/data/opy/annotations.ts", "objectPath": "opyAnnotations"}},
-    {"id": "registry/random-module", "source": {"path": "src/data/opy/modules.ts", "objectPath": "opyModules.random"}},
-    {"id": "registry/macros", "source": {"path": "src/data/opy/macros.ts", "objectPath": "opyMacros"}},
-    {"id": "registry/functions", "source": {"path": "src/data/opy/functions.ts", "objectPath": "opyFuncs"}},
-    {"id": "registry/member-functions", "source": {"path": "src/data/opy/memberFunctions.ts", "objectPath": "opyMemberFuncs"}},
-    {"id": "registry/vector-constants", "source": {"path": "src/data/opy/constants.ts", "objectPath": "opyConstants.Vector"}},
-    {"id": "registry/math-constants", "source": {"path": "src/data/opy/constants.ts", "objectPath": "opyConstants.Math"}},
-    {"id": "registry/textures", "source": {"path": "src/data/opy/textures.ts", "objectPath": "opyTextures"}},
-    {"id": "registry/string-entities", "source": {"path": "src/data/opy/stringEntities.ts", "objectPath": "opyStringEntities"}}
+    {
+      "id": "registry/keywords",
+      "source": {
+        "path": "src/data/opy/keywords.ts",
+        "objectPath": "opyKeywords"
+      },
+      "keys": [
+        "and",
+        "bool",
+        "case",
+        "def",
+        "default",
+        "del",
+        "elif",
+        "else",
+        "enum",
+        "float",
+        "for",
+        "globalvar",
+        "goto",
+        "if",
+        "in",
+        "int",
+        "lambda",
+        "loc",
+        "macro",
+        "not",
+        "or",
+        "playervar",
+        "rule",
+        "self",
+        "settings",
+        "signed",
+        "subroutine",
+        "switch",
+        "unsigned",
+        "while"
+      ]
+    },
+    {
+      "id": "registry/directives",
+      "source": {
+        "path": "src/data/opy/preprocessing.ts",
+        "objectPath": "preprocessingDirectives"
+      },
+      "keys": [
+        "allowMacroRedeclaration",
+        "debugElementCount",
+        "define",
+        "disableInspector",
+        "disableOptimizations",
+        "disableOptimizeForSize",
+        "disableOptimizeStrict",
+        "disableTranslationSourceLines",
+        "enableOptimizations",
+        "excludeVariablesInCompilation",
+        "extension",
+        "globalvarInitRuleName",
+        "include",
+        "keepUnusedTranslations",
+        "mainFile",
+        "optimizeForSize",
+        "optimizeForSizeAggressive",
+        "optimizeStrict",
+        "playervarInitRuleName",
+        "postCompileHook",
+        "replace0ByCapturePercentage",
+        "replace0ByIsMatchComplete",
+        "replace0ByPayloadProgressPercentage",
+        "replace1ByMatchRound",
+        "replaceEmptyStringByEmptyArray",
+        "replaceEmptyStringByVariable",
+        "replaceTeam1ByControlScoringTeam",
+        "rulePrefix",
+        "rulePrefixTemplate",
+        "setupTags",
+        "suppressWarnings",
+        "translateWithPlayerVar",
+        "translations",
+        "useVariableForCompressionAlphabet",
+        "writeToOutputFile"
+      ]
+    },
+    {
+      "id": "registry/annotations",
+      "source": {
+        "path": "src/data/opy/annotations.ts",
+        "objectPath": "opyAnnotations"
+      },
+      "keys": [
+        "@Condition",
+        "@Delimiter",
+        "@Disabled",
+        "@Event",
+        "@Hero",
+        "@Name",
+        "@NewPage",
+        "@Slot",
+        "@SuppressWarnings",
+        "@Team"
+      ]
+    },
+    {
+      "id": "registry/random-module",
+      "source": {
+        "path": "src/data/opy/modules.ts",
+        "objectPath": "opyModules.random"
+      },
+      "keys": [
+        "choice",
+        "randint",
+        "shuffle",
+        "uniform"
+      ]
+    },
+    {
+      "id": "registry/macros",
+      "source": {
+        "path": "src/data/opy/macros.ts",
+        "objectPath": "opyMacros"
+      },
+      "keys": [
+        ".getEffectiveHero",
+        ".getOppositeTeam",
+        ".getRealPlayerClosestToReticle",
+        ".getRealPlayersClosestToReticle",
+        ".getRealPlayersInViewAngle",
+        ".reverse",
+        ".unique",
+        "buttonToString",
+        "getAllPlayers",
+        "getRealClosestPlayer",
+        "getRealClosestPlayers",
+        "getRealFarthestPlayer",
+        "getRealFarthestPlayers",
+        "getRealPlayersInRadius",
+        "getSign",
+        "hudHeader",
+        "hudSubheader",
+        "hudSubtext",
+        "lerp",
+        "lineIntersectsSphere",
+        "print",
+        "timeToString"
+      ]
+    },
+    {
+      "id": "registry/functions",
+      "source": {
+        "path": "src/data/opy/functions.ts",
+        "objectPath": "opyFuncs"
+      },
+      "keys": [
+        ".all",
+        ".any",
+        ".append",
+        ".filter",
+        ".format",
+        ".getHitPosition",
+        ".getNormal",
+        ".getPlayerHit",
+        ".map",
+        ".remove",
+        ".toArray",
+        "_",
+        "__",
+        "___",
+        "all",
+        "any",
+        "arrayToString",
+        "ceil",
+        "chaseAtRate",
+        "chaseOverTime",
+        "compress",
+        "compressed",
+        "createCasedProgressBarIwt",
+        "debug",
+        "decompressNumbers",
+        "decompressVectors",
+        "floor",
+        "getCurrentMap",
+        "hsl",
+        "log",
+        "pass",
+        "range",
+        "raycast",
+        "round",
+        "ruleCondition",
+        "sorted",
+        "spacesForLength",
+        "spacesForString",
+        "splitDictArray",
+        "stopChasing",
+        "strVisualLength",
+        "tabular"
+      ]
+    },
+    {
+      "id": "registry/member-functions",
+      "source": {
+        "path": "src/data/opy/memberFunctions.ts",
+        "objectPath": "opyMemberFuncs"
+      },
+      "keys": [
+        "x",
+        "y",
+        "z"
+      ]
+    },
+    {
+      "id": "registry/vector-constants",
+      "source": {
+        "path": "src/data/opy/constants.ts",
+        "objectPath": "opyConstants.Vector"
+      },
+      "keys": [
+        "BACKWARD",
+        "DOWN",
+        "FORWARD",
+        "LEFT",
+        "RIGHT",
+        "UP"
+      ]
+    },
+    {
+      "id": "registry/math-constants",
+      "source": {
+        "path": "src/data/opy/constants.ts",
+        "objectPath": "opyConstants.Math"
+      },
+      "keys": [
+        "E",
+        "EPSILON",
+        "FUCKTON_OF_NEWLINES",
+        "FUCKTON_OF_SPACES",
+        "INFINITY",
+        "INNER_RING_RADIUS_MULT",
+        "LOTS_OF_SPACES",
+        "OUTER_RING_RADIUS_MULT",
+        "PI",
+        "RING_EXPLOSION_RADIUS_MULT",
+        "SPHERE_HORIZONTAL_RADIUS_MULT",
+        "SPHERE_VERTICAL_RADIUS_MULT"
+      ]
+    },
+    {
+      "id": "registry/textures",
+      "source": {
+        "path": "src/data/opy/textures.ts",
+        "objectPath": "opyTextures"
+      },
+      "keys": [
+        "ASSAULT",
+        "ATTACKING",
+        "A_BUTTON",
+        "BLIZZARD_SPECIAL",
+        "BRIGITTE_PASSIVE",
+        "BRIGITTE_SHIELD_BASH",
+        "BRONZE_BORDER",
+        "B_BUTTON",
+        "CAPTURE_THE_FLAG",
+        "COMPETITIVE_ICON",
+        "COMPETITIVE_POINTS",
+        "CONNECTIVITY_ISSUE",
+        "CONTROL",
+        "DEATHMATCH",
+        "DEFENDING",
+        "DOOMFIST_PASSIVE",
+        "DPAD_DOWN_ARROW",
+        "DPAD_LEFT_ARROW",
+        "DPAD_RIGHT_ARROW",
+        "DPAD_UP_ARROW",
+        "DVA_ALTERNATE_ULT",
+        "DVA_LIGHT_GUN",
+        "DVA_PASSIVE",
+        "ELIMINATION",
+        "EMOTE",
+        "ESCORT",
+        "EXPERIMENTAL_MODE_DARK",
+        "EXPLOSION_DARK",
+        "FALL_BACK",
+        "FIRE_DARK",
+        "FLAG_ARGENTINA",
+        "FLAG_BELGIUM",
+        "FLAG_BULGARIA",
+        "FLAG_CHILE",
+        "FLAG_COLOMBIA",
+        "FLAG_GREECE",
+        "FLAG_ICELAND",
+        "FLAG_INDIA",
+        "FLAG_IRELAND",
+        "FLASHPOINT",
+        "GAME_BROWSER_ICON_DARK",
+        "GO",
+        "GOING_IN",
+        "GROUP_UP",
+        "HALLOWEEN_TERROR",
+        "HANZO_LUNGE",
+        "HEALING_PLUS_DARK",
+        "HELLO",
+        "HERO_BORDER",
+        "HYBRID",
+        "INCOMING",
+        "JUNKER_QUEEN_PASSIVE",
+        "JUNKRAT_PASSIVE",
+        "LOCK",
+        "LUCIO_HEALING_CROSSFADE",
+        "MERCY_ANGELIC_DESCENT",
+        "MICROPHONE",
+        "MOUSE_CURSOR",
+        "MOUSE_SIDE_BUTTON",
+        "NEED_HEALING",
+        "NEED_HELP",
+        "NO",
+        "ON_MY_WAY",
+        "OVERWATCH_COINS",
+        "OVERWATCH_LEAGUE_TOKENS",
+        "PACKET_LOSS",
+        "PINK_MERCY_HEART",
+        "PRACTICE_RANGE",
+        "PRESS_THE_ATTACK",
+        "PUSH",
+        "PUSH_FORWARD",
+        "REAPER_PASSIVE",
+        "RIGHT_CLICK",
+        "SCROLL",
+        "SCROLL_DOWN",
+        "SCROLL_UP",
+        "SKIRMISH",
+        "SOMBRA_PASSIVE",
+        "SOMBRA_STEALTH",
+        "SORRY",
+        "SQUARE_GRADIENT_TRANSPARENT_BLACK",
+        "SUMMER_GAMES",
+        "TARGET_WITH_CHECKMARK_DARK",
+        "TARGET_WITH_PERSON_DARK",
+        "TEAM_DEATHMATCH",
+        "THANKS",
+        "TORBJORN_SCRAP_COLLECTOR",
+        "TRACER_ICON_DARK",
+        "ULTIMATE",
+        "UNRANKED_ICON_DARK",
+        "WITH_YOU",
+        "WORKSHOP",
+        "Y_BUTTON"
+      ]
+    },
+    {
+      "id": "registry/string-entities",
+      "source": {
+        "path": "src/data/opy/stringEntities.ts",
+        "objectPath": "opyStringEntities"
+      },
+      "keys": [
+        "asterism",
+        "black_circle",
+        "black_clubs",
+        "black_diamond",
+        "black_heart",
+        "black_phone",
+        "black_spades",
+        "black_square",
+        "black_star",
+        "bottom_left_arrow",
+        "bottom_right_arrow",
+        "box_with_x",
+        "copyright",
+        "diamond_in_diamond",
+        "down_arrow",
+        "down_black_triangle",
+        "down_white_triangle",
+        "eighth_note",
+        "female",
+        "flat_note",
+        "fullwidth_block",
+        "fullwidth_space",
+        "horizontal_arrow",
+        "horizontal_bar",
+        "horizontal_double_arrow",
+        "industrial_symbol",
+        "infinity",
+        "java",
+        "left_arrow",
+        "left_black_triangle",
+        "left_hand",
+        "left_white_triangle",
+        "macron",
+        "male",
+        "middle_dot",
+        "postal_face",
+        "quarter_note",
+        "reference_mark",
+        "registered",
+        "right_arrow",
+        "right_black_triangle",
+        "right_double_arrow",
+        "right_hand",
+        "right_white_triangle",
+        "sixteenth_double_note",
+        "square_diagonal_lines",
+        "square_grid_lines",
+        "square_horizontal_lines",
+        "square_in_square",
+        "square_top_left_bottom_right_lines",
+        "square_top_right_bottom_left_lines",
+        "square_vertical_lines",
+        "top_left_arrow",
+        "top_right_arrow",
+        "up_arrow",
+        "up_black_triangle",
+        "up_white_triangle",
+        "vertical_arrow",
+        "white_circle",
+        "white_clubs",
+        "white_diamond",
+        "white_heart",
+        "white_phone",
+        "white_spades",
+        "white_square",
+        "white_star",
+        "zero_width_space"
+      ]
+    }
   ],
   "branches": [
-    {"id": "branch/lexer-token-boundaries", "source": "src/compiler/tokenizer.ts"},
-    {"id": "branch/parser-expressions", "source": "src/compiler/parser.ts"},
-    {"id": "branch/parser-declarations", "source": "src/compiler/astParser.ts"},
-    {"id": "branch/parser-control-flow", "source": "src/compiler/parser.ts"},
-    {"id": "branch/parser-contextual-lambda", "source": "src/compiler/parser.ts"},
-    {"id": "branch/parser-goto-and-dynamic-targets", "source": "src/compiler/parser.ts"},
-    {"id": "branch/compiler-project-closure", "source": "src/compiler/compiler.ts"},
-    {"id": "branch/compiler-macro-expansion", "source": "src/compiler/tokenizer.ts"},
-    {"id": "branch/compiler-directive-state", "source": "src/compiler/compiler.ts"},
-    {"id": "branch/compiler-translations", "source": "src/compiler/translations.ts"},
-    {"id": "branch/compiler-settings", "source": "src/compiler/parser.ts"},
-    {"id": "branch/semantic-dispatch", "source": "src/data/opy/functions.ts"},
-    {"id": "branch/semantic-diagnostic-frontiers", "source": "src/compiler/compiler.ts"},
-    {"id": "branch/lowering-canonical-wir", "source": "src/compiler/astToWorkshop.ts"},
-    {"id": "branch/lowering-unsupported-boundary", "source": "src/compiler/astToWorkshop.ts"},
-    {"id": "branch/project-real-world", "source": "examples"},
-    {"id": "branch/workshop-catalog-boundary", "source": "src/data/actions.ts"},
-    {"id": "branch/workshop-value-boundary", "source": "src/data/values.ts"},
-    {"id": "branch/cli-compile-contract", "source": "src/cli.ts"},
-    {"id": "branch/cli-decompile-contract", "source": "src/decompiler/decompiler.ts"},
-    {"id": "branch/compile-metadata", "source": "src/compiler/compiler.ts"},
-    {"id": "branch/javascript-macro-runtime", "source": "src/compiler/tokenizer.ts"},
-    {"id": "branch/post-compile-hook", "source": "src/compiler/compiler.ts"},
-    {"id": "branch/quickjs-failure-abi", "source": "src/quickjs.ts"},
-    {"id": "branch/cli-project-input", "source": "src/cli.ts"}
+    {
+      "id": "branch/lexer-token-boundaries",
+      "source": "src/compiler/tokenizer.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "8c1bf66c74b0302b3d2d1381c7c97fd8c24b0fddd40f9693abfe4cac405baa93"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^OverPyCompiler\\.prototype\\.tokenize = function\\(content: string\\): LogicalLine\\[\\] \\{$"
+      }
+    },
+    {
+      "id": "branch/parser-expressions",
+      "source": "src/compiler/parser.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "68a19772289d547abffd7ea15e5ee6d70955bb15cb72c515d2dbb1d43578e510"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^OverPyCompiler\\.prototype\\.parse = function\\(content: Token\\[\\], kwargs: Record<string, any> = \\{\\}\\): Ast \\{$"
+      }
+    },
+    {
+      "id": "branch/parser-declarations",
+      "source": "src/compiler/astParser.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "96cc2c6b2d15cc4e70a3bc209438b6b80b657325eede98c4e72d09e550d85066"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^OverPyCompiler\\.prototype\\.parseAstRules = function\\(rules: Ast\\[\\]\\) \\{$"
+      }
+    },
+    {
+      "id": "branch/parser-control-flow",
+      "source": "src/compiler/parser.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "5c02a4cd7df4f3a904a8fc0342aec3e0e6f94ec2a4640847468b7114e7b71bb7"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^\\s*} else if \\(\\[\"rule\", \"enum\", \"if\", \"elif\", \"else\", \"do\", \"for\", \"def\", \"while\", \"switch\", \"case\", \"default\", \"macro\"\\]\\.includes"
+      }
+    },
+    {
+      "id": "branch/parser-contextual-lambda",
+      "source": "src/compiler/parser.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "4aa878c77d83a9e488f8821aa898a1aabe5ae57f618dcf9adc91ca3c3d262675"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^\\s*//Lazy & dirty way of properly parsing \"sorted\\(x, lambda a,b: z\\)\""
+      }
+    },
+    {
+      "id": "branch/parser-goto-and-dynamic-targets",
+      "source": "src/compiler/parser.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "357b79ea8056c5f396db31f9347b3dc75f2591837c59f3797dfa65e66c8d4f50"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^\\s*//Parse the \"goto\" directive\\.$"
+      }
+    },
+    {
+      "id": "branch/compiler-project-closure",
+      "source": "src/compiler/compiler.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "aadd54c901a77ebeac8b978e7c2ef58f15a04edcb791525fae3cdec7e52fed70"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^\\s*let mainFilePath = compiler\\.getFilePaths"
+      }
+    },
+    {
+      "id": "branch/compiler-macro-expansion",
+      "source": "src/compiler/tokenizer.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "c54f24bf508a8d01b62ea413c443707affeb1ee58ac2ee15b6ada59ca9712834"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^\\s*const parsePreprocessingDirective = \\(content: string\\) => \\{$"
+      }
+    },
+    {
+      "id": "branch/compiler-directive-state",
+      "source": "src/compiler/compiler.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "44b601d8f76e2cd6dc970d64b0b4b4f3af9c1506ee5256c1f3cbb5914377b83c"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^OverPyCompiler\\.prototype\\.getInitDirectivesRules = function\\(\\) \\{$"
+      }
+    },
+    {
+      "id": "branch/compiler-translations",
+      "source": "src/compiler/translations.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "01ccd859f59ab23eed21a78023dcc443717fad986b33a449654bb0c9684b2b30"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^OverPyCompiler\\.prototype\\.getTranslatedString = function\\(str: string, context: string \\| null, fileStack: BaseNormalFileStackMember\\[\\]\\): Ast \\{$"
+      }
+    },
+    {
+      "id": "branch/compiler-settings",
+      "source": "src/compiler/parser.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "cff3b2564b4be1d5d40d05089fbda268c7b3c09501e37a939328c3a48b4426b8"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^\\s*// Handle custom game settings$"
+      }
+    },
+    {
+      "id": "branch/semantic-dispatch",
+      "source": "src/data/opy/functions.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "40bcaa0a450418f227cb6f07f6f27c488ac30cf6b9f7873a41a2f819efe367cc"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^export const opyFuncs: Record<$"
+      }
+    },
+    {
+      "id": "branch/semantic-diagnostic-frontiers",
+      "source": "src/compiler/compiler.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "174c1262c14e698c3f572623e17957f451343fbd43919e1a6adfa7aee563af16"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^\\s*let uniqueEncounteredWarnings = compiler\\.encounteredWarnings\\.filter"
+      }
+    },
+    {
+      "id": "branch/lowering-canonical-wir",
+      "source": "src/compiler/astToWorkshop.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "fe62cb63038119ff04a0a729af7217e850f4ed3fd2542a095340c53c923de2b3"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^OverPyCompiler\\.prototype\\.astRulesToWs = function\\(rules: Ast\\[\\]\\) \\{$"
+      }
+    },
+    {
+      "id": "branch/lowering-unsupported-boundary",
+      "source": "src/compiler/astToWorkshop.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "0d0678db88b12ebe7963761ffc56455cddc9f0aab3e59d8fd358992e8e4418a4"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^\\s*if \\(rule\\.name === \"pass\"\\) \\{$"
+      }
+    },
+    {
+      "id": "branch/project-real-world",
+      "source": "examples",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "d190c518ada3f532f4f1a99f517319e1dac2753140e1a40024b772d9316baba3"
+      },
+      "selector": {
+        "kind": "glob",
+        "value": "**/*.opy"
+      }
+    },
+    {
+      "id": "branch/workshop-catalog-boundary",
+      "source": "src/data/actions.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "5606203a69c7318f3b709c6a82917756e8c0c61430c6d948fffcbc5be1904d9d"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^export const actionKw: Record<string, Action> ="
+      }
+    },
+    {
+      "id": "branch/workshop-value-boundary",
+      "source": "src/data/values.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "0f58b203d5c810d8eab896903f3c326b449afb4b1642103c037d5142b86aad96"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^export const valueFuncKw: Record<string, Value> ="
+      }
+    },
+    {
+      "id": "branch/cli-compile-contract",
+      "source": "src/cli.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "13e1b1f350ccefb7e07a1965a39a1261f3623e958bc5891966378726168b68d3"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^\\s*if \\(parsed\\.command === \"compile\"\\) \\{$"
+      }
+    },
+    {
+      "id": "branch/cli-decompile-contract",
+      "source": "src/decompiler/decompiler.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "9a6bdd709557ebc9b1359c7eaacb6865cbb8cc97f3520ccc1fb9e8e6e7b4d57b"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^export function decompileAllRules\\(content: string, language: OWLanguage = \"en-US\", options: \\{$"
+      }
+    },
+    {
+      "id": "branch/compile-metadata",
+      "source": "src/compiler/compiler.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "19de252254bfa46c7a9fc0ca0a6ca6d3e4803bac92ccc932d812c7958c2109b7"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^\\s*translationLanguages: compiler\\.translationLanguages,$"
+      }
+    },
+    {
+      "id": "branch/javascript-macro-runtime",
+      "source": "src/compiler/tokenizer.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "8262377e9be2a739fe22e2a4e6ae009fb4ec0cce99f03f94ec4c1c452ae99264"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^\\s*result = executeQuickJSScript\\(scriptContent, \\{$"
+      }
+    },
+    {
+      "id": "branch/post-compile-hook",
+      "source": "src/compiler/compiler.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "dadbf80148ad811d448c1687f336f4578e3384de353fd60231605becc9074097"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^\\s*if \\(compiler\\.postCompileHook\\) \\{$"
+      }
+    },
+    {
+      "id": "branch/quickjs-failure-abi",
+      "source": "src/quickjs.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "9763302ce0205e53089d995202ad78bbbdaae05bba9a8240e509fd814433e656"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^export function executeQuickJSScript\\(script: string, options: ScriptExecutionOptions = \\{\\}\\): string \\{$"
+      }
+    },
+    {
+      "id": "branch/cli-project-input",
+      "source": "src/cli.ts",
+      "fingerprint": {
+        "algorithm": "sha256",
+        "value": "362865f3da356f35074b257b8b50e4e4f162758c3f2bb3988401f133dbc5a812"
+      },
+      "selector": {
+        "kind": "regex",
+        "value": "^\\s*const input = await loadInput\\(parsed\\.inputPath\\);$"
+      }
+    }
   ]
 }

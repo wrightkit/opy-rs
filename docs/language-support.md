@@ -34,6 +34,9 @@ Only these public states are used:
 - `🚧 Coming soon` — the pinned capability is recognized, but current behavior
   is incomplete.
 - `❌ Unsupported` — the capability is outside the current contract.
+- `⚠️ Implemented; leaf evidence partial` — production behavior exists, but this leaf lacks complete executable evidence.
+- `🚧 Leaf evidence incomplete` — the registry entry is known, but its current implementation/evidence boundary is not a full support claim.
+- `❔ Unclassified` — the pinned leaf is inventoried but has no implementation classification yet.
 
 “Supported” is an end-to-end claim for the stated row. Parsing a construct or
 having a name in a manifest is not enough to make a compilation row green.
@@ -57,8 +60,13 @@ explicit instead of hiding them in a category-level green row.
 
 ## Contract maintenance
 
-The feature-contract validator expands every registry key into a leaf, checks
-the inventory pin against the conformance manifest, and can compare registry
-keys with a local checkout of the pinned source. The inventory is not a fixed
+The feature-contract validator checks an explicit record for every pinned
+registry leaf against the independent pinned-source audit, checks the inventory
+pin against the conformance manifest, and can compare the audit keys with a
+local checkout of the pinned source. Every implemented-and-covered claim must
+cite a fixture that probes its declared contract, including compiler branches;
+audited branches also carry independently selected source fragments and
+fingerprints checked against that checkout. The inventory is not a fixed
 feature-count assertion: status, coverage, ownership, limits, and evidence are
-reported separately, and unresolved leaves never become passing cases.
+reported per leaf, and registry membership or category coverage never promotes
+an unresolved leaf to a passing claim.

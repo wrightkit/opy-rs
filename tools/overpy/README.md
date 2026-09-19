@@ -27,11 +27,13 @@ The oracle is not bundled into opy-rs and is not imported by the Rust core.
 
 [`../../docs/language-support/feature-contracts.json`](../../docs/language-support/feature-contracts.json) is the machine-readable
 leaf inventory for the pinned OverPy source surface. It records the exact
-registry keys, materially distinct compiler/parser/tooling branches, status
-and coverage limits, production ownership, and executable or upstream
-evidence. [`../../docs/language-support/pinned-overpy-audit.json`](../../docs/language-support/pinned-overpy-audit.json) is the
-independent pinned-source audit catalog used to detect omitted registry
-families or compiler branches. Both reference pins must match
+per-leaf registry status, coverage limits, production ownership, and
+executable or upstream evidence, alongside materially distinct
+compiler/parser/tooling branches. [`../../docs/language-support/pinned-overpy-audit.json`](../../docs/language-support/pinned-overpy-audit.json) is the
+independent pinned-source audit catalog, including the immutable registry leaf
+sets used to detect omitted or added entries, and SHA-256 fingerprints for
+independently selected compiler-branch fragments used to detect omitted or
+changed source branches. Both reference pins must match
 [`../../docs/language-support/conformance-manifest.json`](../../docs/language-support/conformance-manifest.json).
 
 The normal conformance run validates the inventory without requiring the

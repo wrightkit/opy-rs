@@ -57,6 +57,20 @@ class ConformanceTests(unittest.TestCase):
             {branch["id"] for branch in inventory["branches"]},
             set(inventory["requiredBranches"]),
         )
+        for registry in inventory["registries"]:
+            self.assertNotIn("defaults", registry)
+            self.assertNotIn("overrides", registry)
+            self.assertTrue(all("contract" in leaf for leaf in registry["leaves"]))
+            self.assertEqual(
+                {leaf["key"] for leaf in registry["leaves"]},
+                set(
+                    next(
+                        audit["keys"]
+                        for audit in self.audit["registries"]
+                        if audit["id"] == registry["id"]
+                    )
+                ),
+            )
         self.assertEqual(len(leaves), len(conformance.inventory_leaves(inventory)))
         self.assertIn("unclear", {leaf["status"] for leaf in leaves})
         self.assertIn("unsupported", {leaf["status"] for leaf in leaves})
@@ -71,16 +85,49 @@ class ConformanceTests(unittest.TestCase):
     def test_feature_contract_inventory_requires_every_audited_branch(self):
         inventory = conformance.load_inventory()
         broken = copy.deepcopy(inventory)
+        audit = copy.deepcopy(self.audit)
         broken["branches"].pop()
         broken["requiredBranches"].pop()
+        audit["branches"].pop()
         with self.assertRaises(conformance.ConformanceError):
-            conformance.validate_inventory(broken, self.manifest, audit=self.audit)
+            conformance.validate_inventory(broken, self.manifest, audit=audit)
 
     def test_feature_contract_inventory_requires_every_audited_registry(self):
         inventory = conformance.load_inventory()
         broken = copy.deepcopy(inventory)
         broken["registries"].pop()
         broken["requiredRegistries"].pop()
+        with self.assertRaises(conformance.ConformanceError):
+            conformance.validate_inventory(broken, self.manifest, audit=self.audit)
+
+    def test_feature_contract_inventory_requires_every_audited_leaf(self):
+        inventory = conformance.load_inventory()
+        broken = copy.deepcopy(inventory)
+        broken["registries"][0]["leaves"].pop()
+        with self.assertRaises(conformance.ConformanceError):
+            conformance.validate_inventory(broken, self.manifest, audit=self.audit)
+
+    def test_feature_contract_inventory_requires_fixture_contract_match(self):
+        inventory = conformance.load_inventory()
+        broken = copy.deepcopy(inventory)
+        lambda_leaf = next(
+            leaf
+            for registry in broken["registries"]
+            if registry["id"] == "registry/keywords"
+            for leaf in registry["leaves"]
+            if leaf["key"] == "lambda"
+        )
+        lambda_leaf["contract"] = "syntax.parser-and-control-flow/statement-and-declaration-boundaries"
+        with self.assertRaises(conformance.ConformanceError):
+            conformance.validate_inventory(broken, self.manifest, audit=self.audit)
+
+    def test_feature_contract_inventory_requires_fixture_contract_match_for_branch(self):
+        inventory = conformance.load_inventory()
+        broken = copy.deepcopy(inventory)
+        branch = next(
+            branch for branch in broken["branches"] if branch["id"] == "branch/lexer-token-boundaries"
+        )
+        branch["contract"] = "syntax.lexing/strings-and-modifiers"
         with self.assertRaises(conformance.ConformanceError):
             conformance.validate_inventory(broken, self.manifest, audit=self.audit)
 
@@ -96,12 +143,20 @@ class ConformanceTests(unittest.TestCase):
                     "authority": "OverPy@9.7.10:src/data/opy/keywords.ts#opyKeywords",
                     "source": {"path": "src/data/opy/keywords.ts", "objectPath": "opyKeywords"},
                     "contract": "syntax.parser-and-control-flow/statement-and-declaration-boundaries",
-                    "keys": ["and", "or"],
-                    "defaults": {
-                        "status": "unclear",
-                        "coverage": "uncovered",
-                        "limits": "test inventory",
-                    },
+                    "leaves": [
+                        {
+                            "key": "and",
+                            "status": "unclear",
+                            "coverage": "uncovered",
+                            "limits": "test inventory",
+                        },
+                        {
+                            "key": "or",
+                            "status": "unclear",
+                            "coverage": "uncovered",
+                            "limits": "test inventory",
+                        },
+                    ],
                 }
             ],
             "branches": [
@@ -125,9 +180,16 @@ class ConformanceTests(unittest.TestCase):
                         "path": "src/data/opy/keywords.ts",
                         "objectPath": "opyKeywords",
                     },
+                    "keys": ["and", "or"],
                 }
             ],
-            "branches": [{"id": "branch/test", "source": "src/compiler/parser.ts"}],
+            "branches": [
+                {
+                    "id": "branch/test",
+                    "source": "src/compiler/parser.ts",
+                    "selector": {"kind": "regex", "value": "// pinned branch source"},
+                }
+            ],
         }
         with tempfile.TemporaryDirectory(dir=TOOLS_DIR) as directory:
             source = Path(directory) / "src/data/opy/keywords.ts"
@@ -136,12 +198,41 @@ class ConformanceTests(unittest.TestCase):
             branch_source = Path(directory) / "src/compiler/parser.ts"
             branch_source.parent.mkdir(parents=True)
             branch_source.write_text("// pinned branch source\n", encoding="utf-8")
+            audit["branches"][0]["fingerprint"] = {
+                "algorithm": "sha256",
+                "value": conformance._selector_fingerprint(
+                    branch_source, audit["branches"][0]["selector"]
+                ),
+            }
             conformance.validate_inventory(
                 inventory,
                 self.manifest,
                 upstream_root=Path(directory),
                 audit=audit,
+                branch_selectors={
+                    "branch/test": {
+                        "source": "src/compiler/parser.ts",
+                        "selector": "// pinned branch source",
+                        "kind": "regex",
+                    }
+                },
             )
+            branch_source.write_text("// changed pinned branch source\n", encoding="utf-8")
+            with self.assertRaises(conformance.ConformanceError):
+                conformance.validate_inventory(
+                    inventory,
+                    self.manifest,
+                    upstream_root=Path(directory),
+                    audit=audit,
+                    branch_selectors={
+                        "branch/test": {
+                            "source": "src/compiler/parser.ts",
+                            "selector": "// pinned branch source",
+                            "kind": "regex",
+                        }
+                    },
+                )
+            branch_source.write_text("// pinned branch source\n", encoding="utf-8")
             source.write_text(
                 'export const opyKeywords = {"and": 1, "or": 1, "new": 1};\n',
                 encoding="utf-8",
@@ -152,6 +243,13 @@ class ConformanceTests(unittest.TestCase):
                     self.manifest,
                     upstream_root=Path(directory),
                     audit=audit,
+                    branch_selectors={
+                        "branch/test": {
+                            "source": "src/compiler/parser.ts",
+                            "selector": "// pinned branch source",
+                            "kind": "regex",
+                        }
+                    },
                 )
 
     def test_native_frontier_uses_failure_class_without_hiding_stage(self):
