@@ -3217,9 +3217,10 @@ impl<'a> Lowering<'a> {
         }
         indices.reverse();
         if indices.len() >= 3
-            && indices[..indices.len() - 1]
-                .iter()
-                .any(|index| expr_contains_random(index))
+            && (expr_contains_random(root)
+                || indices[..indices.len() - 1]
+                    .iter()
+                    .any(|index| expr_contains_random(index)))
         {
             return Err(self.unsupported(
                 "Cannot delete from nested array with a random outer or middle index",

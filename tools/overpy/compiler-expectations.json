@@ -911,6 +911,21 @@
       "diagnosticCode": "unsupported-integration-surface"
     },
     {
+      "fixture": "synthetic/collection-mutation-328-random-player-invalid",
+      "nativeStatus": "failure",
+      "classification": "match",
+      "comparison": "diagnostic-code",
+      "evidence": [
+        "oracle:synthetic/collection-mutation-328-random-player-invalid/oracle.json",
+        "provenance:synthetic/collection-mutation-328-random-player-invalid/fixture.json",
+        "test:opy-rs::compiler::integration_tests::indexed_assignments::nested_random_player_receiver_delete_reaches_the_pinned_boundary"
+      ],
+      "owner": "opy-rs#328",
+      "note": "OverPy 9.7.10 rejects a random player-variable receiver in a three-index delete; native preserves the same lowering boundary.",
+      "failureClass": "integration",
+      "diagnosticCode": "unsupported-integration-surface"
+    },
+    {
       "fixture": "synthetic/indexed-assignment-4d-invalid",
       "nativeStatus": "failure",
       "classification": "match",

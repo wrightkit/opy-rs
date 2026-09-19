@@ -243,6 +243,12 @@ fn declared_corpus() -> BTreeMap<&'static str, Case> {
     );
     resolve(
         &mut cases,
+        "synthetic/collection-mutation-328-random-player-invalid",
+        false,
+        "Issue #328 pins the compiler-level rejection of a random player receiver in a three-index delete; the source HIR remains structurally resolvable and the compiler expectation records the lowering boundary.",
+    );
+    resolve(
+        &mut cases,
         "synthetic/wait-optimization",
         false,
         "Issue #282 minimized wait probe; optimizeForSize lowers omitted and sub-default durations to the pinned OverPy boolean forms while preserving explicit duration and reevaluation behavior.",
