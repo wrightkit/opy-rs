@@ -276,7 +276,7 @@ fn texture_setup_rule() -> RuleEntry {
             },
             HirStmt::Expr {
                 expr: Box::new(HirExpr::ReceiverCall {
-                    receiver: Box::new(texture_dummy_players()),
+                    receiver: Box::new(texture_dummy_player()),
                     name: "startForcingName".to_string(),
                     args: vec![texture_marker('\u{303c}')],
                     span: None,
@@ -289,7 +289,7 @@ fn texture_setup_rule() -> RuleEntry {
                     span: None,
                 }),
                 value: Box::new(HirExpr::ReceiverCall {
-                    receiver: Box::new(texture_dummy_player()),
+                    receiver: Box::new(texture_dummy_first_value()),
                     name: "split".to_string(),
                     args: vec![HirExpr::Array {
                         elements: Vec::new(),
@@ -301,7 +301,7 @@ fn texture_setup_rule() -> RuleEntry {
             },
             HirStmt::Expr {
                 expr: Box::new(HirExpr::ReceiverCall {
-                    receiver: Box::new(texture_dummy_players()),
+                    receiver: Box::new(texture_dummy_player()),
                     name: "startForcingName".to_string(),
                     args: vec![texture_marker('\u{840}')],
                     span: None,
@@ -322,7 +322,7 @@ fn texture_setup_rule() -> RuleEntry {
                                 name: "__holygrail__".to_string(),
                                 span: None,
                             },
-                            texture_dummy_player(),
+                            texture_dummy_first_value(),
                         ],
                         span: None,
                     }),
@@ -333,9 +333,8 @@ fn texture_setup_rule() -> RuleEntry {
                             text: "126".to_string(),
                             span: None,
                         },
-                        HirExpr::Number {
-                            value: 999_999_999_999.0,
-                            text: "999999999999".to_string(),
+                        HirExpr::Bool {
+                            value: true,
                             span: None,
                         },
                     ],
@@ -357,40 +356,22 @@ fn texture_setup_rule() -> RuleEntry {
 }
 
 fn texture_dummy_player() -> HirExpr {
+    HirExpr::Call {
+        name: "lastCreatedEntity".to_string(),
+        args: Vec::new(),
+        debug_source: None,
+        span: None,
+    }
+}
+
+fn texture_dummy_first_value() -> HirExpr {
     HirExpr::Index {
-        array: Box::new(texture_dummy_players()),
+        array: Box::new(texture_dummy_player()),
         index: Box::new(HirExpr::Number {
             value: 0.0,
             text: "0".to_string(),
             span: None,
         }),
-        span: None,
-    }
-}
-
-fn texture_dummy_players() -> HirExpr {
-    HirExpr::ReceiverCall {
-        receiver: Box::new(HirExpr::Call {
-            name: "getAllPlayers".to_string(),
-            args: Vec::new(),
-            debug_source: None,
-            span: None,
-        }),
-        name: "filter".to_string(),
-        args: vec![HirExpr::Lambda {
-            params: vec!["player".to_string()],
-            param_spans: vec![None],
-            body: Box::new(HirExpr::ReceiverCall {
-                receiver: Box::new(HirExpr::Local {
-                    name: "player".to_string(),
-                    span: None,
-                }),
-                name: "isDummy".to_string(),
-                args: Vec::new(),
-                span: None,
-            }),
-            span: None,
-        }],
         span: None,
     }
 }

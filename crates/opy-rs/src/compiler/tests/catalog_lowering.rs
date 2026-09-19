@@ -157,7 +157,7 @@ fn pinned_texture_members_lower_with_texture_tag_setup() {
     assert!(
         artifact
             .emitted
-            .contains("String Split(First Of(Filtered Array(")
+            .contains("String Split(First Of(Last Created Entity),")
     );
     assert!(artifact.emitted.contains("String Replace("));
     assert!(artifact.emitted.contains("String Slice("));
@@ -180,7 +180,11 @@ fn texture_setup_and_formatted_named_entities_match_pinned_features() {
     let oracle = oracle_workshop("texture-entity-compat");
     for marker in [
         "Create Dummy Bot(All Heroes,",
+        "Start Forcing Dummy Bot Name(Last Created Entity,",
+        "String Split(First Of(Last Created Entity),",
         "String Replace(",
+        "String Slice(String Replace(",
+        "126, True",
         "Destroy All Dummy Bots;",
         "Custom String(\"{0}txc0000000002dd21>\", Global.__holygrail__)",
         "Custom String(\"■ {0}\", Match Time)",
