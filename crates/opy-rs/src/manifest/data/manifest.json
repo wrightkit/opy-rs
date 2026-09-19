@@ -1313,6 +1313,20 @@
       ]
     },
     {
+      "catalogId": "getNumberOfSlots",
+      "evidence": [
+        "get-number-of-slots"
+      ],
+      "id": "getNumberOfSlots",
+      "kind": "value",
+      "params": [
+        {
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
       "catalogId": "lastCreatedEntity",
       "evidence": [
         "builtin-surface"
@@ -2332,6 +2346,23 @@
         },
         {
           "default": 999999999999,
+          "name": "count"
+        }
+      ],
+      "receiver": "Any"
+    },
+    {
+      "catalogId": "stringSlice",
+      "evidence": [
+        "texture-string-substring"
+      ],
+      "id": "substring",
+      "kind": "memberValue",
+      "params": [
+        {
+          "name": "startIndex"
+        },
+        {
           "name": "count"
         }
       ],

@@ -145,6 +145,13 @@ fn pinned_texture_members_lower_with_texture_tag_setup() {
     assert!(
         artifact
             .emitted
+            .contains("Create Dummy Bot(All Heroes, If-Then-Else(")
+    );
+    assert!(artifact.emitted.contains("Number Of Slots(Team(Team 1))"));
+    assert!(artifact.emitted.contains("Number Of Slots(Team(Team 2))"));
+    assert!(
+        artifact
+            .emitted
             .contains("OverPy <\u{AD}tx> / <\u{AD}fg> setup code")
     );
     assert!(
@@ -152,6 +159,8 @@ fn pinned_texture_members_lower_with_texture_tag_setup() {
             .emitted
             .contains("String Split(First Of(Filtered Array(")
     );
+    assert!(artifact.emitted.contains("String Replace("));
+    assert!(artifact.emitted.contains("String Slice("));
     assert!(artifact.emitted.contains("Destroy All Dummy Bots;"));
     assert!(
         artifact

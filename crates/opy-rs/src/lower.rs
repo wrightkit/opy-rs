@@ -236,15 +236,6 @@ pub fn lower_with_preprocessing(
 }
 
 fn texture_setup_rule() -> RuleEntry {
-    let first_name = HirExpr::String {
-        value: format!("{}〼", "_".repeat(126)),
-        span: None,
-    };
-    let second_name = HirExpr::String {
-        value: format!("{}ࡀ", "_".repeat(126)),
-        span: None,
-    };
-
     RuleEntry::Rule(Rule {
         name: format!("OverPy <{}tx> / <{}fg> setup code", '\u{00ad}', '\u{00ad}'),
         span: None,
@@ -264,16 +255,13 @@ fn texture_setup_rule() -> RuleEntry {
                 expr: Box::new(HirExpr::Call {
                     name: "createDummy".to_string(),
                     args: vec![
-                        HirExpr::Enum {
-                            value_type: "Hero".to_string(),
-                            value: "TRACER".to_string(),
+                        HirExpr::Call {
+                            name: "getAllHeroes".to_string(),
+                            args: Vec::new(),
+                            debug_source: None,
                             span: None,
                         },
-                        HirExpr::Enum {
-                            value_type: "Team".to_string(),
-                            value: "TEAM_1".to_string(),
-                            span: None,
-                        },
+                        texture_dummy_team(),
                         HirExpr::Bool {
                             value: false,
                             span: None,
@@ -290,7 +278,7 @@ fn texture_setup_rule() -> RuleEntry {
                 expr: Box::new(HirExpr::ReceiverCall {
                     receiver: Box::new(texture_dummy_players()),
                     name: "startForcingName".to_string(),
-                    args: vec![first_name.clone()],
+                    args: vec![texture_marker('\u{303c}')],
                     span: None,
                 }),
                 span: None,
@@ -301,15 +289,7 @@ fn texture_setup_rule() -> RuleEntry {
                     span: None,
                 }),
                 value: Box::new(HirExpr::ReceiverCall {
-                    receiver: Box::new(HirExpr::Index {
-                        array: Box::new(texture_dummy_players()),
-                        index: Box::new(HirExpr::Number {
-                            value: 0.0,
-                            text: "0".to_string(),
-                            span: None,
-                        }),
-                        span: None,
-                    }),
+                    receiver: Box::new(texture_dummy_player()),
                     name: "split".to_string(),
                     args: vec![HirExpr::Array {
                         elements: Vec::new(),
@@ -323,7 +303,7 @@ fn texture_setup_rule() -> RuleEntry {
                 expr: Box::new(HirExpr::ReceiverCall {
                     receiver: Box::new(texture_dummy_players()),
                     name: "startForcingName".to_string(),
-                    args: vec![second_name],
+                    args: vec![texture_marker('\u{840}')],
                     span: None,
                 }),
                 span: None,
@@ -333,13 +313,32 @@ fn texture_setup_rule() -> RuleEntry {
                     name: "__holygrail__".to_string(),
                     span: None,
                 }),
-                value: Box::new(HirExpr::Index {
-                    array: Box::new(texture_dummy_players()),
-                    index: Box::new(HirExpr::Number {
-                        value: 0.0,
-                        text: "0".to_string(),
+                value: Box::new(HirExpr::ReceiverCall {
+                    receiver: Box::new(HirExpr::ReceiverCall {
+                        receiver: Box::new(texture_marker('\u{303c}')),
+                        name: "replace".to_string(),
+                        args: vec![
+                            HirExpr::GlobalVar {
+                                name: "__holygrail__".to_string(),
+                                span: None,
+                            },
+                            texture_dummy_player(),
+                        ],
                         span: None,
                     }),
+                    name: "substring".to_string(),
+                    args: vec![
+                        HirExpr::Number {
+                            value: 126.0,
+                            text: "126".to_string(),
+                            span: None,
+                        },
+                        HirExpr::Number {
+                            value: 999_999_999_999.0,
+                            text: "999999999999".to_string(),
+                            span: None,
+                        },
+                    ],
                     span: None,
                 }),
                 span: None,
@@ -355,6 +354,18 @@ fn texture_setup_rule() -> RuleEntry {
             },
         ],
     })
+}
+
+fn texture_dummy_player() -> HirExpr {
+    HirExpr::Index {
+        array: Box::new(texture_dummy_players()),
+        index: Box::new(HirExpr::Number {
+            value: 0.0,
+            text: "0".to_string(),
+            span: None,
+        }),
+        span: None,
+    }
 }
 
 fn texture_dummy_players() -> HirExpr {
@@ -380,6 +391,56 @@ fn texture_dummy_players() -> HirExpr {
             }),
             span: None,
         }],
+        span: None,
+    }
+}
+
+fn texture_dummy_team() -> HirExpr {
+    HirExpr::Conditional {
+        then_value: Box::new(HirExpr::Enum {
+            value_type: "Team".to_string(),
+            value: "TEAM_1".to_string(),
+            span: None,
+        }),
+        condition: Box::new(HirExpr::Call {
+            name: "getNumberOfSlots".to_string(),
+            args: vec![HirExpr::Enum {
+                value_type: "Team".to_string(),
+                value: "TEAM_1".to_string(),
+                span: None,
+            }],
+            debug_source: None,
+            span: None,
+        }),
+        else_value: Box::new(HirExpr::Conditional {
+            then_value: Box::new(HirExpr::Enum {
+                value_type: "Team".to_string(),
+                value: "TEAM_2".to_string(),
+                span: None,
+            }),
+            condition: Box::new(HirExpr::Call {
+                name: "getNumberOfSlots".to_string(),
+                args: vec![HirExpr::Enum {
+                    value_type: "Team".to_string(),
+                    value: "TEAM_2".to_string(),
+                    span: None,
+                }],
+                debug_source: None,
+                span: None,
+            }),
+            else_value: Box::new(HirExpr::Bool {
+                value: true,
+                span: None,
+            }),
+            span: None,
+        }),
+        span: None,
+    }
+}
+
+fn texture_marker(suffix: char) -> HirExpr {
+    HirExpr::String {
+        value: format!("{}{}", "_".repeat(126), suffix),
         span: None,
     }
 }
