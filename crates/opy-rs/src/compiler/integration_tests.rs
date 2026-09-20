@@ -32,6 +32,8 @@ mod hud;
 mod hud_visibility;
 #[path = "tests/indexed_assignments.rs"]
 mod indexed_assignments;
+#[path = "tests/locale.rs"]
+mod locale;
 #[path = "tests/macro_preprocessing.rs"]
 mod macro_preprocessing;
 #[path = "tests/member_angles.rs"]

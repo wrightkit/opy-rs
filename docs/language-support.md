@@ -33,6 +33,7 @@ supported subset and limitation are stated in user terms.
 | Strings, translations and custom-game settings | ✅ Supported | [Syntax and project composition](language-support/syntax-and-projects.md) |
 | Compiler directives and post-compile hooks (forward subset) | ✅ Supported | [Tooling and backend](language-support/tooling-and-backend.md) |
 | Embedded JavaScript macros | ✅ Supported | [Tooling and backend](language-support/tooling-and-backend.md) |
+| Workshop output language | ✅ Supported | [Tooling and backend](language-support/tooling-and-backend.md) |
 | OPY → Workshop compilation | 🚧 Partial | [Tooling and backend](language-support/tooling-and-backend.md) |
 | Workshop → OPY reconstruction | ❌ Unsupported | [Tooling and backend](language-support/tooling-and-backend.md) |
 
