@@ -8,10 +8,12 @@
 | `#!allowMacroRedeclaration` | ✅ Supported | Duplicate-definition policy is explicit in preprocessing state. |
 | `#!mainFile`, `#!include`, `#!excludeVariablesInCompilation` | ✅ Supported | File selection, include closure and output filtering are separate operations. |
 | `#!rulePrefix` and `#!rulePrefixTemplate` | ✅ Supported | Rule names are transformed before lowering. |
-| Optimization controls such as `#!enableOptimizations`, `#!disableOptimizations`, `#!optimizeForSize` and `#!optimizeStrict` | 🚧 Partial | State, directive boundaries and the tested strict-sensitive lowering forms are preserved; every upstream optimizer transformation is not promised. |
-| Replacement directives such as `#!replace0By*` and team/string replacements | 🚧 Partial | Directive state is recorded and supported replacements are lowered; backend-only transformations remain outside the contract. |
+| Optimization controls such as `#!enableOptimizations`, `#!disableOptimizations`, `#!optimizeForSize`, `#!optimizeForSizeAggressive` and `#!optimizeStrict` | ✅ Supported | Optimization state is scoped to source spans; size, aggressive skip, strict-folding and wait-duration effects are lowered. Internal optimizer shape is not a contract. |
+| Replacement directives such as `#!replace0By*`, `#!replace1ByMatchRound`, team and empty-string replacements | ✅ Supported | Observable replacements are lowered when size optimization is active and are excluded from Workshop-setting constructors, matching the pinned upstream boundary. |
 | `#!extension` | ✅ Supported | The extension name is checked against the canonical Workshop schema. |
-| Translation, inspection, output and initialization directives | 🚧 Partial | Supported state and source diagnostics are preserved; directives requiring external output or an upstream-only backend are not claimed. |
+| `#!disableInspector`, `#!excludeVariablesInCompilation`, `#!setupTags`, `#!setupTx`, `#!globalvarInitRuleName` and `#!playervarInitRuleName` | ✅ Supported | Inspector/setup rules, output declaration filtering and generated initialization rule names affect forward Workshop output. |
+| `#!translations` and `#!suppressWarnings` | 🚧 Partial | Translation state and warning policy are recorded; full translation-file lifecycle remains issue #331. |
+| `#!translateWithPlayerVar`, `#!writeToOutputFile`, `#!disableTranslationSourceLines`, `#!keepUnusedTranslations` and `#!debugElementCount` | ❌ Unsupported | These require translation-file, editor-output or presentation capabilities outside the forward compiler contract and are rejected with a source diagnostic. |
 | `#!postCompileHook` | ✅ Supported | The hook runs after final Workshop emission and failures retain script provenance. |
 | `__script__(...)` JavaScript macros | ✅ Supported | The embedded QuickJS runtime exposes the documented OverPy ABI, limits, isolation and string-result contract. |
 
@@ -22,7 +24,7 @@
 | Standalone Rust compiler library | ✅ Supported | The source and Workshop boundaries described on this page apply. |
 | CLI `check`, `compile`, JSON reports and source diagnostics | ✅ Supported | Failure status never produces a misleading successful artifact. |
 | Compile metadata for variables, subroutines, warnings, translations and element count | 🚧 Partial | The JSON report exposes the fields implemented by the native API; it is not a byte-for-byte clone of the upstream JavaScript object. |
-| Observable optimizer and replacement effects | 🚧 Partial | Tested semantic and cost-relevant effects are preserved; formatting and upstream internal optimizer structure are not contracts. |
+| Observable optimizer and replacement effects | ✅ Supported | Tested semantic and cost-relevant effects are preserved; formatting and upstream internal optimizer structure are not contracts. |
 | OPY → Workshop emission through `workshop-rs` | 🚧 Partial | The supported language rows above compile end to end; unsupported source forms produce structured diagnostics. |
 
 ## Reconstruction

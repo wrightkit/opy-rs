@@ -22,9 +22,9 @@
     },
     "compiler": {
       "nativeStatus": "failure",
-      "relationship": "unsupported",
+      "relationship": "known-gap",
       "comparison": "diagnostic-code",
-      "diagnosticCode": "backend-directive-unsupported",
+      "diagnosticCode": "translations-invalid",
       "failureClass": "integration"
     }
   }

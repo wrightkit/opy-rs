@@ -9,6 +9,7 @@ type SubroutineId = usize;
 use workshop_rs::{Event, EventTarget, EventTeam, ModifyOp, PlayerEventKind};
 
 const COMPRESSION_ALPHABET_NAME: &str = "__compressionAlphabet__";
+const EMPTY_STRING_NAME: &str = "__emptyString__";
 
 #[derive(Debug, Clone)]
 enum Value {
@@ -354,6 +355,33 @@ impl<'a> Lowering<'a> {
             })
     }
 
+    fn helper_global_index(
+        &self,
+        reserved: &HashSet<u32>,
+        directive: &str,
+        message: &str,
+    ) -> Result<Option<u32>, IntegrationError> {
+        if !has_directive(self.hir, directive) {
+            return Ok(None);
+        }
+        (0..=127)
+            .rev()
+            .find(|index| !reserved.contains(index))
+            .map(Some)
+            .ok_or_else(|| {
+                IntegrationError::new(
+                    "index-exhausted",
+                    message,
+                    self.hir
+                        .preprocessing
+                        .directives
+                        .iter()
+                        .find(|item| item.name == directive)
+                        .and_then(|item| item.span),
+                )
+            })
+    }
+
     pub(super) fn lower_declarations(&mut self) -> Result<(), IntegrationError> {
         let (implicit_globals, implicit_players) = implicit_default_variables(self.hir);
         for declaration in &self.hir.declarations {
@@ -449,6 +477,16 @@ impl<'a> Lowering<'a> {
         }
         let compression_alphabet_index = self.compression_alphabet_index(&helper_reserved)?;
         if let Some(index) = compression_alphabet_index {
+            helper_reserved.insert(index);
+            global_reserved.insert(index);
+        }
+        let empty_string_index = self.helper_global_index(
+            &helper_reserved,
+            "replaceEmptyStringByVariable",
+            "no available global variable index remains for the empty-string replacement",
+        )?;
+        if let Some(index) = empty_string_index {
+            helper_reserved.insert(index);
             global_reserved.insert(index);
         }
         let empty = HashSet::new();
@@ -577,6 +615,9 @@ impl<'a> Lowering<'a> {
         if let Some(index) = compression_alphabet_index {
             planned_globals.push((COMPRESSION_ALPHABET_NAME.to_string(), index, None, None));
         }
+        if let Some(index) = empty_string_index {
+            planned_globals.push((EMPTY_STRING_NAME.to_string(), index, None, None));
+        }
         planned_globals.sort_by_key(|(_, index, ..)| *index);
         for (name, assigned, span, name_span) in planned_globals {
             let _ = (span, name_span);
@@ -653,6 +694,27 @@ impl<'a> Lowering<'a> {
                 })?;
         }
 
+        let empty_string_initializer = empty_string_index
+            .map(|_| {
+                let variable = *self
+                    .globals
+                    .get(EMPTY_STRING_NAME)
+                    .expect("empty string helper variable is created");
+                let empty_array = self.push_call("emptyArray", Vec::new());
+                let null = self.push_value(Value::Null);
+                let value = self.push_call("charAt", vec![empty_array, null]);
+                let action = self.push_action(Action::SetGlobalVariable {
+                    variable: self.global_names[variable].clone(),
+                    value,
+                });
+                Ok(action)
+            })
+            .transpose()?;
+
+        if has_directive(self.hir, "disableInspector") {
+            let action = self.push_call_action("disableInspector", &[]);
+            self.push_generated_rule("Disable inspector", Event::Global, vec![action])?;
+        }
         let translation_initializer = self
             .hir
             .preprocessing
@@ -690,18 +752,23 @@ impl<'a> Lowering<'a> {
             .transpose()?;
 
         if translation_initializer.is_some()
+            || empty_string_initializer.is_some()
             || compression_alphabet_initializer.is_some()
             || !global_initializers.is_empty()
         {
             let mut actions = Vec::with_capacity(
                 global_initializers.len()
                     + usize::from(translation_initializer.is_some())
+                    + usize::from(empty_string_initializer.is_some())
                     + usize::from(compression_alphabet_initializer.is_some()),
             );
             if let Some(action) = translation_initializer {
                 actions.push(action);
             }
             if let Some(action) = compression_alphabet_initializer {
+                actions.push(action);
+            }
+            if let Some(action) = empty_string_initializer {
                 actions.push(action);
             }
             for (name, init_expr, span, _target_span) in global_initializers {
@@ -747,7 +814,7 @@ impl<'a> Lowering<'a> {
             }
             let rule_index = self.program.rules.len();
             self.program.rules.push(workshop_rs::Rule {
-                name: "Initialize player variables".to_string(),
+                name: self.player_initializer_rule_name(),
                 disabled: false,
                 event: workshop_rs::Event::EachPlayer,
                 conditions: Vec::new(),
@@ -758,6 +825,28 @@ impl<'a> Lowering<'a> {
         }
 
         Ok(())
+    }
+
+    fn push_generated_rule(
+        &mut self,
+        name: &str,
+        event: Event,
+        actions: Vec<ActionId>,
+    ) -> Result<(), IntegrationError> {
+        let rule_index = self.program.rules.len();
+        self.program.rules.push(workshop_rs::Rule {
+            name: name.to_string(),
+            disabled: false,
+            event,
+            conditions: Vec::new(),
+            actions: self.public_actions(&actions),
+        });
+        self.set_rule_provenance(
+            rule_index,
+            None,
+            std::iter::empty(),
+            self.action_provenance(&actions),
+        )
     }
 
     pub(super) fn lower_rules(&mut self) -> Result<(), IntegrationError> {
@@ -923,11 +1012,21 @@ impl<'a> Lowering<'a> {
     }
 
     fn global_initializer_rule_name(&self) -> String {
-        if self.hir.preprocessing.rule_prefix_template.is_some() {
-            "[] Initialize global variables".to_string()
-        } else {
-            "Initialize global variables".to_string()
-        }
+        directive_value(self.hir, "globalvarInitRuleName")
+            .map(str::to_string)
+            .unwrap_or_else(|| {
+                if self.hir.preprocessing.rule_prefix_template.is_some() {
+                    "[] Initialize global variables".to_string()
+                } else {
+                    "Initialize global variables".to_string()
+                }
+            })
+    }
+
+    fn player_initializer_rule_name(&self) -> String {
+        directive_value(self.hir, "playervarInitRuleName")
+            .map(str::to_string)
+            .unwrap_or_else(|| "Initialize player variables".to_string())
     }
 
     fn lower_event(
@@ -2602,10 +2701,10 @@ impl<'a> Lowering<'a> {
     fn lower_print(
         &mut self,
         expr: &Expr,
-        _span: Option<HirSpan>,
+        span: Option<HirSpan>,
     ) -> Result<ActionId, IntegrationError> {
         let argument_span = expr.span().copied();
-        let message = self.lower_value(expr)?;
+        let value = self.lower_value(expr)?;
         let padding_text = self.push_value(Value::String(" ".repeat(45)));
         let padding = self.push_call("customString", vec![padding_text]);
         let body_text = self.push_value(Value::String(format!("{}{{0}}", " ".repeat(125))));
@@ -2631,11 +2730,11 @@ impl<'a> Lowering<'a> {
             value_type: "SpecVisibility".to_string(),
             value: "DEFAULT".to_string(),
         });
-        let args = self.normalize_contextual_arguments(
+        let mut args = self.normalize_contextual_arguments(
             "createHudText",
             vec![
                 all_players,
-                message,
+                value,
                 body,
                 null_value,
                 hud_position,
@@ -2647,6 +2746,7 @@ impl<'a> Lowering<'a> {
                 visibility,
             ],
         );
+        self.apply_replacements("createHudText", &mut args, span);
         Ok(self.push_call_action_with_spans(
             "createHudText",
             &args,
@@ -3196,6 +3296,7 @@ impl<'a> Lowering<'a> {
         {
             return Ok(value);
         }
+        let value = self.apply_replacement(value, "==", 0, expr.span().copied());
         let true_value = self.push_value(Value::Bool(true));
         Ok(self.push_call("==", vec![value, true_value]))
     }
@@ -3847,17 +3948,21 @@ impl<'a> Lowering<'a> {
             })?
         };
         let mut args = self.normalize_catalog_argument_domains(catalog_id, args);
-        self.optimize_wait_duration(catalog_id, &mut args);
+        self.apply_replacements(catalog_id, &mut args, span);
+        self.optimize_wait_duration(catalog_id, &mut args, span);
         Ok(self.push_call_action_with_spans(catalog_id, &args, spans))
     }
 
-    fn optimize_wait_duration(&mut self, catalog_id: &str, args: &mut [ValueId]) {
+    fn optimize_wait_duration(
+        &mut self,
+        catalog_id: &str,
+        args: &mut [ValueId],
+        span: Option<HirSpan>,
+    ) {
         const DEFAULT_WAIT_SECONDS: f64 = 0.016;
 
-        if catalog_id != "wait"
-            || !self.hir.preprocessing.optimization.enabled
-            || !self.hir.preprocessing.optimization.for_size
-        {
+        let optimization = self.optimization_state_at(span.as_ref());
+        if catalog_id != "wait" || !optimization.enabled || !optimization.for_size {
             return;
         }
         let Some(duration) = args.first().copied() else {
@@ -4187,13 +4292,16 @@ impl<'a> Lowering<'a> {
                 .map(|arg| self.lower_value(arg))
                 .collect::<Result<Vec<_>, _>>()?,
         );
-        let args = self.normalize_contextual_arguments(catalog_id, lowered);
+        let mut args = self.normalize_contextual_arguments(catalog_id, lowered);
+        self.apply_replacements(catalog_id, &mut args, span);
         Ok(self.push_call_action_with_spans(catalog_id.clone(), &args, argument_spans))
     }
 
     fn lower_value(&mut self, expr: &Expr) -> Result<ValueId, IntegrationError> {
         let span = expr.span().copied();
-        if !self.strict_optimization_active(expr)
+        let optimization = self.optimization_state_at(span.as_ref());
+        if optimization.enabled
+            && !optimization.strict
             && (matches!(expr, Expr::Binary { .. } | Expr::Unary { .. })
                 || matches!(expr, Expr::Call { name, .. } if matches!(name.as_str(), "len" | "countOf")))
         {
@@ -4414,7 +4522,7 @@ impl<'a> Lowering<'a> {
             Expr::Binary {
                 op, left, right, ..
             } => {
-                if self.hir.preprocessing.optimization.enabled
+                if self.optimization_state_at(span.as_ref()).enabled
                     && matches!(op.as_str(), "in" | "not in")
                 {
                     if let Expr::Array { elements, .. } = right.as_ref() {
@@ -4991,7 +5099,8 @@ impl<'a> Lowering<'a> {
         };
         let name = name.clone();
         let args = args.clone();
-        let args = self.normalize_contextual_values(&name, args);
+        let mut args = self.normalize_contextual_values(&name, args);
+        self.apply_replacements_to_values(&name, &mut args, span);
         if let Some(Value::Call {
             args: target_args, ..
         }) = self.values.get_mut(value_id)
@@ -4999,6 +5108,99 @@ impl<'a> Lowering<'a> {
             *target_args = args;
         }
         Ok(value_id)
+    }
+
+    fn apply_replacements_to_values(
+        &mut self,
+        call_id: &str,
+        args: &mut [ValueId],
+        span: Option<HirSpan>,
+    ) {
+        for (index, value) in args.iter_mut().enumerate() {
+            *value = self.apply_replacement(*value, call_id, index, span);
+        }
+    }
+
+    fn apply_replacements(&mut self, call_id: &str, args: &mut [ValueId], span: Option<HirSpan>) {
+        self.apply_replacements_to_values(call_id, args, span);
+    }
+
+    fn apply_replacement(
+        &mut self,
+        value_id: ValueId,
+        call_id: &str,
+        _arg_index: usize,
+        span: Option<HirSpan>,
+    ) -> ValueId {
+        let optimization = self.optimization_state_at(span.as_ref());
+        if !optimization.enabled
+            || !optimization.for_size
+            || matches!(
+                call_id,
+                "workshopSettingToggle"
+                    | "workshopSettingCombo"
+                    | "workshopSettingInteger"
+                    | "workshopSettingFloat"
+            )
+        {
+            return value_id;
+        }
+        let replacement = |name: &str, hir: &hir::Program| {
+            hir.preprocessing
+                .replacements
+                .iter()
+                .find(|value| value.value == name)
+                .is_some()
+        };
+        match self.value(value_id).clone() {
+            Value::Number(0.0) => {
+                let name = [
+                    "getCapturePercentage",
+                    "getPayloadProgressPercentage",
+                    "isMatchComplete",
+                ]
+                .into_iter()
+                .find(|name| replacement(name, self.hir));
+                name.map_or(value_id, |name| self.push_call(name, Vec::new()))
+            }
+            Value::Number(1.0) => {
+                if replacement("getMatchRound", self.hir) {
+                    self.push_call("getMatchRound", Vec::new())
+                } else {
+                    value_id
+                }
+            }
+            Value::Enum { value_type, value } if value_type == "Team" && value == "TEAM_1" => {
+                if replacement("getControlScoringTeam", self.hir) {
+                    self.push_call("getControlScoringTeam", Vec::new())
+                } else {
+                    value_id
+                }
+            }
+            Value::String(value) if value.is_empty() => {
+                if replacement("emptyArray", self.hir) {
+                    self.push_call("emptyArray", Vec::new())
+                } else if replacement("variable", self.hir) {
+                    self.push_value(Value::GlobalVariable(EMPTY_STRING_NAME.to_string()))
+                } else {
+                    value_id
+                }
+            }
+            Value::Call { name, args }
+                if name == "customString"
+                    && args.len() == 1
+                    && self.value_is_empty_string(args[0]) =>
+            {
+                if replacement("emptyArray", self.hir) {
+                    self.push_call("emptyArray", Vec::new())
+                } else if replacement("variable", self.hir) {
+                    self.push_value(Value::GlobalVariable(EMPTY_STRING_NAME.to_string()))
+                } else {
+                    value_id
+                }
+            }
+            _ => value_id,
+        }
     }
 
     fn lower_compressed(
@@ -6160,6 +6362,15 @@ fn has_directive(hir: &hir::Program, name: &str) -> bool {
         .directives
         .iter()
         .any(|directive| directive.name == name)
+}
+
+fn directive_value<'a>(hir: &'a hir::Program, name: &str) -> Option<&'a str> {
+    hir.preprocessing
+        .directives
+        .iter()
+        .rev()
+        .find(|directive| directive.name == name)
+        .and_then(|directive| directive.value.as_deref())
 }
 
 fn literal_number(expr: &hir::Expr) -> Option<f64> {

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/directive-replacements",
+  "category": "preprocessing",
+  "features": [
+    "preprocessing/optimization",
+    "preprocessing/replacements"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": true
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": true
+    }
+  }
+}

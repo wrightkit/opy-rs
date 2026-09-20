@@ -31,7 +31,7 @@ supported subset and limitation are stated in user terms.
 | Functions, member functions, enums and constants | 🚧 Partial | [Callables and domains](language-support/callables-and-domains.md) |
 | Multiple files, includes, macros and preprocessing | ✅ Supported | [Syntax and project composition](language-support/syntax-and-projects.md) and [Tooling and backend](language-support/tooling-and-backend.md) |
 | Strings, translations and custom-game settings | 🚧 Partial | [Syntax and project composition](language-support/syntax-and-projects.md) |
-| Compiler directives and post-compile hooks | 🚧 Partial | [Tooling and backend](language-support/tooling-and-backend.md) |
+| Compiler directives and post-compile hooks | ✅ Supported | [Tooling and backend](language-support/tooling-and-backend.md) |
 | Embedded JavaScript macros | ✅ Supported | [Tooling and backend](language-support/tooling-and-backend.md) |
 | OPY → Workshop compilation | 🚧 Partial | [Tooling and backend](language-support/tooling-and-backend.md) |
 | Workshop → OPY reconstruction | ❌ Unsupported | [Tooling and backend](language-support/tooling-and-backend.md) |
