@@ -15,7 +15,7 @@ canonical Workshop model.
 | `all(array)`, `any(array)` | ✅ Supported | The array form is supported. |
 | `random.randint`, `random.uniform`, `random.choice`, `random.shuffle` | ✅ Supported | Argument domains and copied-array behavior follow OverPy. |
 | `_`, `__`, `___` translation functions | ✅ Supported | One-argument and literal-context two-argument forms lower through the existing translation helper; external `.po` lifecycle remains outside this repository. |
-| Pinned built-in macro helpers (`buttonToString`, `getReal*`, `getSign`, `lerp`, HUD helpers, `timeToString`) | 🚧 Partial | The covered literal and typed forms lower through special lowering; the remaining OverPy helper surface is outside this contract. |
+| Pinned built-in macro helpers (`buttonToString`, `getReal*`, `getSign`, `lerp`, HUD helpers, `timeToString`) | ✅ Supported | The pinned source-language forms, literal and typed arguments, defaults, aliases, receiver rules, and contextual values lower through the native callable boundary. |
 
 ## Member functions and properties
 

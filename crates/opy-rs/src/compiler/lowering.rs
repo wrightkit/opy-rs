@@ -10,293 +10,7 @@ use workshop_rs::{Event, EventTarget, EventTeam, ModifyOp, PlayerEventKind};
 
 const COMPRESSION_ALPHABET_NAME: &str = "__compressionAlphabet__";
 
-const BLIZZARD_GLOBAL_SPACES: &[(i32, &str)] = &[
-    (1, "\u{2006}"),
-    (2, "\u{2009}"),
-    (71, "\u{202f}"),
-    (128, "\u{2005}"),
-    (142, " "),
-    (171, "\u{2004}"),
-    (223, "\u{0e00}"),
-    (256, "\u{2000}"),
-    (461, "\u{3164}"),
-    (512, "\u{2001}"),
-];
-
-fn blizzard_global_width(character: char) -> i32 {
-    match character {
-        ' ' | '!' | ',' | '.' | ':' | ';' | '[' | '\\' | ']' => 142,
-        '"' => 182,
-        '#' | '$' => 285,
-        '%' => 455,
-        '&' => 342,
-        '\'' => 98,
-        '(' | ')' => 170,
-        '*' => 199,
-        '+' | '<' | '=' | '>' => 299,
-        '-' => 170,
-        '/' => 142,
-        '0'..='9' => 285,
-        '?' => 285,
-        '@' => 520,
-        'A' | 'B' | 'E' | 'K' | 'P' | 'S' | 'X' | 'Y' => 342,
-        'C' | 'D' | 'H' | 'N' | 'R' | 'U' => 370,
-        'F' | 'T' | 'Z' => 313,
-        'G' | 'Q' => 398,
-        'I' => 142,
-        'J' => 256,
-        'L' => 285,
-        'M' => 426,
-        'O' => 398,
-        'V' => 342,
-        'W' => 483,
-        'a' | 'b' | 'd' | 'e' | 'g' | 'h' | 'n' | 'o' | 'p' | 'q' | 'u' => 285,
-        'c' | 'k' | 's' | 'v' | 'x' | 'y' | 'z' => 256,
-        'f' | 't' => 142,
-        'i' | 'j' | 'l' => 114,
-        'm' => 426,
-        'r' => 170,
-        'w' => 370,
-        '{' | '}' => 171,
-        '|' => 133,
-        '~' | '`' | '^' | '_' => 256,
-        _ => 512,
-    }
-}
-
-fn blizzard_global_spaces(width: i32) -> String {
-    if width <= 0 {
-        return String::new();
-    }
-    let width = width as usize;
-    let coins = BLIZZARD_GLOBAL_SPACES
-        .iter()
-        .map(|(width, _)| *width as usize)
-        .collect::<Vec<_>>();
-    let mut cost = vec![usize::MAX; width + 1];
-    let mut previous = vec![None; width + 1];
-    cost[0] = 0;
-    for current in 1..=width {
-        for (index, coin) in coins.iter().enumerate() {
-            if *coin <= current && cost[current - coin] != usize::MAX {
-                let candidate = cost[current - coin] + 1;
-                if candidate < cost[current] {
-                    cost[current] = candidate;
-                    previous[current] = Some(index);
-                }
-            }
-        }
-    }
-    if cost[width] == usize::MAX {
-        return String::new();
-    }
-    let mut result = String::new();
-    let mut remaining = width;
-    while remaining > 0 {
-        let index = previous[remaining].expect("reachable Blizzard Global width");
-        let coin = coins[index];
-        result.push_str(BLIZZARD_GLOBAL_SPACES[index].1);
-        remaining -= coin;
-    }
-    result
-}
-
-#[derive(Clone, Copy)]
-struct CasedGlyph {
-    lower: &'static str,
-    width: i32,
-    xmin: i32,
-    lower_width: i32,
-    lower_xmin: i32,
-}
-
-fn cased_glyph(character: char) -> Option<CasedGlyph> {
-    Some(match character {
-        'a' => CasedGlyph {
-            lower: "ａ",
-            width: 285,
-            xmin: 21,
-            lower_width: 512,
-            lower_xmin: 130,
-        },
-        'b' => CasedGlyph {
-            lower: "ｂ",
-            width: 285,
-            xmin: 28,
-            lower_width: 512,
-            lower_xmin: 136,
-        },
-        'c' => CasedGlyph {
-            lower: "ｃ",
-            width: 256,
-            xmin: 16,
-            lower_width: 512,
-            lower_xmin: 142,
-        },
-        'd' => CasedGlyph {
-            lower: "ｄ",
-            width: 285,
-            xmin: 13,
-            lower_width: 512,
-            lower_xmin: 136,
-        },
-        'e' => CasedGlyph {
-            lower: "ｅ",
-            width: 285,
-            xmin: 20,
-            lower_width: 512,
-            lower_xmin: 135,
-        },
-        'f' => CasedGlyph {
-            lower: "ｆ",
-            width: 142,
-            xmin: 9,
-            lower_width: 512,
-            lower_xmin: 195,
-        },
-        'g' => CasedGlyph {
-            lower: "ｇ",
-            width: 285,
-            xmin: 15,
-            lower_width: 512,
-            lower_xmin: 138,
-        },
-        'h' => CasedGlyph {
-            lower: "ｈ",
-            width: 285,
-            xmin: 36,
-            lower_width: 512,
-            lower_xmin: 150,
-        },
-        'i' => CasedGlyph {
-            lower: "і",
-            width: 114,
-            xmin: 34,
-            lower_width: 115,
-            lower_xmin: 36,
-        },
-        'j' => CasedGlyph {
-            lower: "ј",
-            width: 114,
-            xmin: -9,
-            lower_width: 115,
-            lower_xmin: -9,
-        },
-        'k' => CasedGlyph {
-            lower: "ｋ",
-            width: 256,
-            xmin: 30,
-            lower_width: 512,
-            lower_xmin: 142,
-        },
-        'l' => CasedGlyph {
-            lower: "I",
-            width: 114,
-            xmin: 35,
-            lower_width: 142,
-            lower_xmin: 51,
-        },
-        'm' => CasedGlyph {
-            lower: "ｍ",
-            width: 426,
-            xmin: 36,
-            lower_width: 512,
-            lower_xmin: 79,
-        },
-        'n' => CasedGlyph {
-            lower: "ｎ",
-            width: 285,
-            xmin: 36,
-            lower_width: 512,
-            lower_xmin: 149,
-        },
-        'o' => CasedGlyph {
-            lower: "ｏ",
-            width: 285,
-            xmin: 18,
-            lower_width: 512,
-            lower_xmin: 135,
-        },
-        'p' => CasedGlyph {
-            lower: "ｐ",
-            width: 285,
-            xmin: 28,
-            lower_width: 512,
-            lower_xmin: 136,
-        },
-        'q' => CasedGlyph {
-            lower: "ｑ",
-            width: 285,
-            xmin: 13,
-            lower_width: 512,
-            lower_xmin: 136,
-        },
-        'r' => CasedGlyph {
-            lower: "ｒ",
-            width: 170,
-            xmin: 35,
-            lower_width: 512,
-            lower_xmin: 191,
-        },
-        's' => CasedGlyph {
-            lower: "ｓ",
-            width: 256,
-            xmin: 17,
-            lower_width: 512,
-            lower_xmin: 147,
-        },
-        't' => CasedGlyph {
-            lower: "ｔ",
-            width: 142,
-            xmin: 7,
-            lower_width: 512,
-            lower_xmin: 195,
-        },
-        'u' => CasedGlyph {
-            lower: "ｕ",
-            width: 285,
-            xmin: 33,
-            lower_width: 512,
-            lower_xmin: 149,
-        },
-        'v' => CasedGlyph {
-            lower: "ｖ",
-            width: 256,
-            xmin: 5,
-            lower_width: 512,
-            lower_xmin: 134,
-        },
-        'w' => CasedGlyph {
-            lower: "ｗ",
-            width: 370,
-            xmin: 3,
-            lower_width: 512,
-            lower_xmin: 76,
-        },
-        'x' => CasedGlyph {
-            lower: "ｘ",
-            width: 256,
-            xmin: 9,
-            lower_width: 512,
-            lower_xmin: 139,
-        },
-        'y' => CasedGlyph {
-            lower: "ｙ",
-            width: 256,
-            xmin: 10,
-            lower_width: 512,
-            lower_xmin: 139,
-        },
-        'z' => CasedGlyph {
-            lower: "ｚ",
-            width: 256,
-            xmin: 16,
-            lower_width: 512,
-            lower_xmin: 147,
-        },
-        _ => return None,
-    })
-}
+use super::blizzard_global;
 
 fn is_cased_color_tag(text: &[char], index: usize) -> Option<usize> {
     let remaining = text[index..].iter().collect::<String>();
@@ -329,14 +43,14 @@ fn cased_line(text: &str, text_count: usize) -> Vec<String> {
     let mut text_width = 0;
     let mut found_lowercase = false;
     for character in text_without_tags.chars() {
-        if let Some(glyph) = cased_glyph(character) {
+        if let Some(glyph) = blizzard_global::cased_glyph(character) {
             found_lowercase = true;
             if !matches!(character, 'i' | 'j' | 'l') {
                 text_width = (glyph.lower_xmin - text_width).max(0);
                 break;
             }
         } else {
-            text_width += blizzard_global_width(character);
+            text_width += blizzard_global::width(character);
         }
     }
     if !found_lowercase {
@@ -359,32 +73,34 @@ fn cased_line(text: &str, text_count: usize) -> Vec<String> {
             continue;
         }
         let character = characters[index];
-        if let Some(glyph) = cased_glyph(character) {
+        if let Some(glyph) = blizzard_global::cased_glyph(character) {
             text_index = (text_index + 1) % text_count;
             let padding = (text_width - widths[text_index] - glyph.lower_xmin + glyph.xmin).max(0);
-            outputs[text_index].push_str(&blizzard_global_spaces(padding));
+            outputs[text_index].push_str(&blizzard_global::spaces(padding));
             widths[text_index] += padding;
             outputs[text_index].push_str(glyph.lower);
             widths[text_index] += glyph.lower_width;
             last_character = Some(character);
         } else if character != ' ' {
             if outputs[text_index].is_empty()
-                || last_character.and_then(cased_glyph).is_some()
+                || last_character
+                    .and_then(blizzard_global::cased_glyph)
+                    .is_some()
                 || last_character == Some(' ')
             {
                 text_index = (text_index + 1) % text_count;
                 let padding = (text_width - widths[text_index]).max(0);
-                outputs[text_index].push_str(&blizzard_global_spaces(padding));
+                outputs[text_index].push_str(&blizzard_global::spaces(padding));
                 widths[text_index] += padding;
             }
             outputs[text_index].push(character);
-            widths[text_index] += blizzard_global_width(character);
+            widths[text_index] += blizzard_global::width(character);
             last_character = Some(character);
         } else {
             last_character = Some(character);
         }
-        text_width += cased_glyph(character)
-            .map_or_else(|| blizzard_global_width(character), |glyph| glyph.width);
+        text_width += blizzard_global::cased_glyph(character)
+            .map_or_else(|| blizzard_global::width(character), |glyph| glyph.width);
         index += 1;
     }
     let maximum = widths
@@ -394,7 +110,7 @@ fn cased_line(text: &str, text_count: usize) -> Vec<String> {
         .unwrap_or_default()
         .max(text_width);
     for (output, width) in outputs.iter_mut().zip(widths) {
-        output.push_str(&blizzard_global_spaces(maximum - width));
+        output.push_str(&blizzard_global::spaces(maximum - width));
     }
     outputs
 }
@@ -4204,7 +3920,12 @@ impl<'a> Lowering<'a> {
         let texts = text
             .replace('\n', "  \n  ")
             .split('\n')
-            .map(|line| cased_line(line, text_count))
+            .map(|line| {
+                cased_line(line, text_count)
+                    .into_iter()
+                    .map(|line| format!("{line}\u{ad}"))
+                    .collect::<Vec<_>>()
+            })
             .reduce(|mut all, lines| {
                 for (index, line) in lines.into_iter().enumerate() {
                     if index < all.len() {
@@ -4214,10 +3935,7 @@ impl<'a> Lowering<'a> {
                 }
                 all
             })
-            .unwrap_or_else(|| vec![String::new(); text_count])
-            .into_iter()
-            .map(|line| format!("{line}\u{ad}"))
-            .collect::<Vec<_>>();
+            .unwrap_or_else(|| vec![String::new(); text_count]);
         let mut actions = Vec::with_capacity(text_count);
         for (index, text) in texts.into_iter().enumerate() {
             let value = self.push_number(index as f64, &index.to_string());
@@ -5195,7 +4913,7 @@ impl<'a> Lowering<'a> {
                             self.unsupported("strVisualLength requires one literal string", span)
                         );
                     };
-                    let width = value.chars().map(blizzard_global_width).sum::<i32>();
+                    let width = value.chars().map(blizzard_global::width).sum::<i32>();
                     return Ok(self.push_number(width as f64, ""));
                 }
                 if name == "spacesForLength" {
@@ -5210,7 +4928,7 @@ impl<'a> Lowering<'a> {
                             span,
                         ));
                     }
-                    return self.lower_custom_string(blizzard_global_spaces(*value as i32), span);
+                    return self.lower_custom_string(blizzard_global::spaces(*value as i32), span);
                 }
                 if name == "spacesForString" {
                     let [Expr::String { value, .. }] = args.as_slice() else {
@@ -5229,8 +4947,8 @@ impl<'a> Lowering<'a> {
                             } = text
                         {
                             let replacement = Expr::String {
-                                value: blizzard_global_spaces(
-                                    value.chars().map(blizzard_global_width).sum(),
+                                value: blizzard_global::spaces(
+                                    value.chars().map(blizzard_global::width).sum(),
                                 ),
                                 span: *text_span,
                             };
@@ -5249,7 +4967,7 @@ impl<'a> Lowering<'a> {
                         );
                     };
                     return self.lower_custom_string(
-                        blizzard_global_spaces(value.chars().map(blizzard_global_width).sum()),
+                        blizzard_global::spaces(value.chars().map(blizzard_global::width).sum()),
                         span,
                     );
                 }

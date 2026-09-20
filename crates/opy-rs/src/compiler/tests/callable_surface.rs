@@ -85,6 +85,7 @@ fn helper_callables_emit_pinned_width_array_and_time_shapes() {
 rule "helper behavior":
     @Event global
     value = strVisualLength("Wi")
+    value = strVisualLength("é")
     value = spacesForLength(142)
     value = spacesForString("W")
     value = arrayToString([1, 2, 3], 1)
@@ -95,6 +96,7 @@ rule "helper behavior":
         .compile_source_artifact(source, "helper-behavior.opy", Path::new("."))
         .expect("helper behavior must lower");
     assert!(artifact.emitted.contains("597"));
+    assert!(artifact.emitted.contains("285"));
     assert!(artifact.emitted.contains("Custom String(\" \")"));
     assert!(artifact.emitted.contains("Custom String(\"{0}, …"));
     assert!(artifact.emitted.contains("Custom String(\"{0}:{1}:{2}\""));
@@ -120,6 +122,19 @@ fn cased_progress_bar_preserves_rows_and_caller_arguments() {
     assert!(artifact.emitted.contains("ａ"));
     assert!(artifact.emitted.contains("Red"));
     assert!(artifact.emitted.contains("Do Not Clip"));
+}
+
+#[test]
+fn cased_progress_bar_adds_soft_hyphen_to_each_multiline_row() {
+    let source = r#"rule "multiline cased progress":
+    @Event global
+    createCasedProgressBarIwt(textCount = 2, text = "a\nb", position = vect(0, 0, 0), scale = 1)
+"#;
+    let artifact = Compiler::new()
+        .unwrap()
+        .compile_source_artifact(source, "multiline-cased-progress.opy", Path::new("."))
+        .expect("multiline cased progress bar must lower");
+    assert_eq!(artifact.emitted.matches('\u{ad}').count(), 4);
 }
 
 #[test]
@@ -158,6 +173,23 @@ rule "tabular invalid":
         .compile_source(invalid, "tabular-invalid.opy", Path::new("."))
         .expect_err("invalid tabular shape must be rejected");
     assert!(error.to_string().contains("multiple of 2"));
+}
+
+#[test]
+fn tabular_compression_falls_back_per_non_literal_column() {
+    let source = r#"globalvar left
+globalvar right
+globalvar dynamic
+rule "tabular mixed compression":
+    @Event global
+    tabular([left, right], [1, dynamic, 3, 4], true)
+"#;
+    let artifact = Compiler::new()
+        .unwrap()
+        .compile_source_artifact(source, "tabular-mixed-compression.opy", Path::new("."))
+        .expect("mixed tabular compression must preserve non-literal columns");
+    assert_eq!(artifact.emitted.matches("String Split").count(), 1);
+    assert!(artifact.emitted.contains("Global.dynamic"));
 }
 
 #[test]

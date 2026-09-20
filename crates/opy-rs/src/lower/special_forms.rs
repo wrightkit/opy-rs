@@ -1,5 +1,49 @@
 use super::*;
 
+fn literal_number(expr: &Expr) -> Option<f64> {
+    match expr {
+        Expr::Number { value, .. } => Some(*value),
+        Expr::Unary { op, operand, .. } if matches!(op.as_str(), "+" | "-") => {
+            literal_number(operand).map(|value| if op == "-" { -value } else { value })
+        }
+        _ => None,
+    }
+}
+
+fn compressed_literal_values(expr: &Expr) -> Option<Vec<f64>> {
+    match expr {
+        Expr::Null { .. } => Some(vec![0.0]),
+        Expr::Number { .. } | Expr::Unary { .. } => literal_number(expr).map(|value| vec![value]),
+        Expr::Call { name, args, .. } if name == "vect" && args.len() == 3 => Some(
+            args.iter()
+                .map(|arg| literal_number(&arg.value))
+                .collect::<Option<Vec<_>>>()?,
+        ),
+        _ => None,
+    }
+}
+
+fn is_compressible_column(values: &[&Expr]) -> bool {
+    let Some(numbers) = values
+        .iter()
+        .map(|value| compressed_literal_values(value))
+        .collect::<Option<Vec<_>>>()
+    else {
+        return false;
+    };
+    let Some(first) = numbers.first() else {
+        return false;
+    };
+    let is_vector = first.len() == 3;
+    numbers.iter().all(|value| {
+        value.len() == first.len()
+            && (value.len() == 3) == is_vector
+            && value
+                .iter()
+                .all(|component| component.abs() < if is_vector { 4999.0 } else { 49999.0 })
+    })
+}
+
 impl Lowerer {
     pub(super) fn lower_tabular(
         &mut self,
@@ -56,17 +100,20 @@ impl Lowerer {
         let mut result = Vec::with_capacity(targets.len());
         for (column, target) in targets.iter().enumerate() {
             let target = self.lower_expr(target, macro_params, CallPosition::Value);
-            let column_values = values
+            let column_values_cst = values
                 .iter()
                 .skip(column)
                 .step_by(targets.len())
+                .collect::<Vec<_>>();
+            let column_values = column_values_cst
+                .iter()
                 .map(|value| self.lower_expr(value, macro_params, CallPosition::Value))
                 .collect();
             let value = HirExpr::Array {
                 elements: column_values,
                 span: Some(span.into()),
             };
-            let value = if compress {
+            let value = if compress && is_compressible_column(&column_values_cst) {
                 HirExpr::Call {
                     name: "compressed".to_string(),
                     args: vec![value],
