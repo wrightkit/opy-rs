@@ -14,7 +14,7 @@
 | `#!disableInspector`, `#!excludeVariablesInCompilation`, `#!setupTags`, `#!setupTx`, `#!globalvarInitRuleName` and `#!playervarInitRuleName` | ✅ Supported | Inspector/setup rules, output declaration filtering and generated initialization rule names affect forward Workshop output. |
 | `#!translations` | 🚧 Partial | Translation state is recorded; the full translation-file lifecycle remains issue #331. |
 | `#!suppressWarnings` | ✅ Supported | Matching preprocessing warning codes are omitted from the public diagnostics surface. |
-| `#!debugElementCount` | ✅ Supported | The forward compiler emits canonical-WIR total, per-rule and per-action element-count comments. |
+| `#!debugElementCount` | ✅ Supported | The forward compiler emits a canonical-WIR total, a count-sorted per-rule summary, and per-condition/per-action element-count comments. |
 | `#!translateWithPlayerVar`, `#!writeToOutputFile`, `#!disableTranslationSourceLines` and `#!keepUnusedTranslations` | ❌ Unsupported | These require translation-file or editor-output capabilities outside the forward compiler contract and are rejected with a source diagnostic. |
 | `#!postCompileHook` | ✅ Supported | The hook runs after final Workshop emission and failures retain script provenance. |
 | `__script__(...)` JavaScript macros | ✅ Supported | The embedded QuickJS runtime exposes the documented OverPy ABI, limits, isolation and string-result contract. |

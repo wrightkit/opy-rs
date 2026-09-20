@@ -112,7 +112,9 @@ fn emit_debug_element_counts(
         )
     })?;
     let mut summary = format!("/* Element count: (total {}\n\n", report.total);
-    for (rule, count) in program.rules.iter().zip(&report.rules) {
+    let mut summary_rules: Vec<_> = report.rules.iter().filter(|rule| rule.count > 1).collect();
+    summary_rules.sort_by_key(|rule| std::cmp::Reverse(rule.count));
+    for count in summary_rules {
         let source = count
             .span
             .and_then(|span| {
@@ -121,52 +123,108 @@ fn emit_debug_element_counts(
                     .find(|file| file.id == span.file.index() as u32)
             })
             .map(|file| file.path.as_str())
-            .unwrap_or("<unknown>");
+            .map(|path| format!(" ({path})"))
+            .unwrap_or_default();
         summary.push_str(&format!(
-            "   {}: rule \"{}\" ({source})\n",
-            count.count, rule.name
+            "{:>5}: rule \"{}\"{source}\n",
+            count.count, count.name
         ));
     }
-    summary.push_str("\n*/\n");
+    summary.push_str("\n*/\n\n");
 
     let mut annotated = summary;
     let mut rule_index = 0;
+    let mut condition_index = 0;
+    let mut conditions = Vec::new();
+    let mut actions = Vec::new();
     let mut in_actions = false;
+    let mut in_conditions = false;
     let mut action_index = 0;
     for line in output.split_inclusive('\n') {
         let trimmed = line.trim();
         if line.starts_with("rule (") {
             if let Some(rule) = report.rules.get(rule_index) {
-                annotated.push_str(&format!("//{} elements\n", rule.count));
+                if rule.count > 1 {
+                    let suffix = if rule.count == 1 {
+                        "element"
+                    } else {
+                        "elements"
+                    };
+                    annotated.push_str(&format!("//{} {suffix}\n", rule.count));
+                }
+                conditions.clear();
+                collect_element_nodes(
+                    &rule.children,
+                    workshop_rs::element_count::ElementNodeKind::Condition,
+                    &mut conditions,
+                );
+                actions.clear();
+                collect_element_nodes(
+                    &rule.children,
+                    workshop_rs::element_count::ElementNodeKind::Action,
+                    &mut actions,
+                );
             }
             rule_index += 1;
+            condition_index = 0;
             action_index = 0;
+            in_conditions = false;
+            in_actions = false;
+        } else if trimmed == "conditions {" {
+            in_conditions = true;
             in_actions = false;
         } else if trimmed == "actions {" {
+            in_conditions = false;
             in_actions = true;
         } else if in_actions && line.starts_with("    }") {
             in_actions = false;
+        } else if in_conditions && line.starts_with("    }") {
+            in_conditions = false;
+        }
+
+        if in_conditions && line.starts_with("        ") && trimmed.ends_with(';') {
+            if let Some(condition) = conditions.get(condition_index) {
+                let suffix = if condition.count == 1 {
+                    "element"
+                } else {
+                    "elements"
+                };
+                annotated.push_str(line.trim_end_matches('\n'));
+                annotated.push_str(&format!(" // {} {suffix}\n", condition.count));
+                condition_index += 1;
+                continue;
+            }
         }
 
         if in_actions && line.starts_with("        ") && trimmed.ends_with(';') {
-            if let Some(rule) = report.rules.get(rule_index.saturating_sub(1)) {
-                let action_count = rule
-                    .children
-                    .iter()
-                    .filter(|node| node.kind == workshop_rs::element_count::ElementNodeKind::Action)
-                    .nth(action_index)
-                    .map(|node| node.count);
-                if let Some(action_count) = action_count {
-                    annotated.push_str(line.trim_end_matches('\n'));
-                    annotated.push_str(&format!(" // {action_count} elements\n"));
-                    action_index += 1;
-                    continue;
-                }
+            if let Some(action) = actions.get(action_index) {
+                let suffix = if action.count == 1 {
+                    "element"
+                } else {
+                    "elements"
+                };
+                annotated.push_str(line.trim_end_matches('\n'));
+                annotated.push_str(&format!(" // {} {suffix}\n", action.count));
+                action_index += 1;
+                continue;
             }
         }
         annotated.push_str(line);
     }
     Ok(annotated)
+}
+
+fn collect_element_nodes<'a>(
+    nodes: &'a [workshop_rs::element_count::ElementCountNode],
+    kind: workshop_rs::element_count::ElementNodeKind,
+    collected: &mut Vec<&'a workshop_rs::element_count::ElementCountNode>,
+) {
+    for node in nodes {
+        if node.kind == kind {
+            collected.push(node);
+        }
+        collect_element_nodes(&node.children, kind, collected);
+    }
 }
 
 /// Version of the machine-readable compile report contract.
@@ -1828,19 +1886,60 @@ rule "main":
     }
 
     #[test]
-    fn debug_element_count_emits_rule_and_action_comments() {
+    fn debug_element_count_emits_sorted_rule_condition_and_action_comments() {
         let compiler = Compiler::new().unwrap();
         let hir = crate::compile(
-            "#!debugElementCount\nrule \"r\":\n    @Event global\n    print(1)\n",
+            "#!debugElementCount\nglobalvar value\nrule \"small\":\n    @Event global\n    @Condition value == 1\n    print(1)\nrule \"large\":\n    @Event global\n    @Condition value == 1\n    print(1)\n    print(2)\n",
             "debug.opy",
             Path::new("."),
         )
         .unwrap();
         let artifact = compiler.compile_hir(&hir).unwrap();
+        let report = artifact.wir.element_count(compiler.catalog).unwrap();
+        let small = report
+            .rules
+            .iter()
+            .find(|rule| rule.name == "small")
+            .unwrap();
+        let large = report
+            .rules
+            .iter()
+            .find(|rule| rule.name == "large")
+            .unwrap();
+        let large_summary = artifact
+            .emitted
+            .find(&format!("{:>5}: rule \"large\"", large.count))
+            .unwrap();
+        let small_summary = artifact
+            .emitted
+            .find(&format!("{:>5}: rule \"small\"", small.count))
+            .unwrap();
+        assert!(large.count > small.count);
+        assert!(large_summary < small_summary);
         assert!(artifact.emitted.starts_with("/* Element count: (total "));
-        assert!(artifact.emitted.contains("rule \"r\" (debug.opy)"));
-        assert!(artifact.emitted.contains("//6 elements\nrule (\"r\")"));
-        assert!(artifact.emitted.contains("// 5 elements"));
+        assert!(
+            artifact
+                .emitted
+                .contains(&format!("//{} elements\nrule (\"large\")", large.count))
+        );
+        assert!(
+            artifact
+                .emitted
+                .contains(&format!("//{} elements\nrule (\"small\")", small.count))
+        );
+        let expected_comments = large
+            .children
+            .iter()
+            .chain(&small.children)
+            .filter(|node| {
+                matches!(
+                    node.kind,
+                    workshop_rs::element_count::ElementNodeKind::Condition
+                        | workshop_rs::element_count::ElementNodeKind::Action
+                )
+            })
+            .count();
+        assert_eq!(artifact.emitted.matches(" // ").count(), expected_comments);
     }
 
     #[test]
