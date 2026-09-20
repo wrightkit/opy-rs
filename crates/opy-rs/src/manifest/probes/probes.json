@@ -3,6 +3,13 @@
   "probes": [
     {
       "expect": "success",
+      "id": "callable-behavior",
+      "outputSha256": "8d5aa7cc1533db7ba078f14648727202c1e502097a7c8e039f444e8fcd707baf",
+      "sha256": "0c5d522766386267df1790161003c462b0252c502135ceb8bfec974da0f7369a",
+      "source": "callable-behavior.opy"
+    },
+    {
+      "expect": "success",
       "id": "array-unique",
       "outputSha256": "0738143f861eaa787dfe0c2f3e7bd1d1bd78d16a8bfa05d721e9ca8104eaca78",
       "sha256": "fe49c630440d4742dcb629d6e6fac628ca5eb17e955221eb7eb695a173d64248",

@@ -37,6 +37,22 @@ impl Lowerer {
             );
             return Vec::new();
         }
+        if values.len() % targets.len() != 0 {
+            self.error_at(
+                "tabular-arguments",
+                format!(
+                    "tabular second argument must have a length that is a multiple of {} (length is {})",
+                    targets.len(),
+                    values.len()
+                ),
+                args.get(1).map_or(span, |arg| arg.value.span()),
+            );
+            return Vec::new();
+        }
+        let compress = matches!(
+            args.get(2).map(|arg| &arg.value),
+            Some(cst::Expr::Bool { value: true, .. })
+        );
         let mut result = Vec::with_capacity(targets.len());
         for (column, target) in targets.iter().enumerate() {
             let target = self.lower_expr(target, macro_params, CallPosition::Value);
@@ -46,12 +62,23 @@ impl Lowerer {
                 .step_by(targets.len())
                 .map(|value| self.lower_expr(value, macro_params, CallPosition::Value))
                 .collect();
+            let value = HirExpr::Array {
+                elements: column_values,
+                span: Some(span.into()),
+            };
+            let value = if compress {
+                HirExpr::Call {
+                    name: "compressed".to_string(),
+                    args: vec![value],
+                    debug_source: None,
+                    span: Some(span.into()),
+                }
+            } else {
+                value
+            };
             result.push(HirStmt::Assign {
                 target: Box::new(target),
-                value: Box::new(HirExpr::Array {
-                    elements: column_values,
-                    span: Some(span.into()),
-                }),
+                value: Box::new(value),
                 span: Some(span.into()),
             });
         }

@@ -80,6 +80,87 @@ rule "helper callables":
 }
 
 #[test]
+fn helper_callables_emit_pinned_width_array_and_time_shapes() {
+    let source = r#"globalvar value
+rule "helper behavior":
+    @Event global
+    value = strVisualLength("Wi")
+    value = spacesForLength(142)
+    value = spacesForString("W")
+    value = arrayToString([1, 2, 3], 1)
+    value = timeToString(61)
+"#;
+    let artifact = Compiler::new()
+        .unwrap()
+        .compile_source_artifact(source, "helper-behavior.opy", Path::new("."))
+        .expect("helper behavior must lower");
+    assert!(artifact.emitted.contains("597"));
+    assert!(artifact.emitted.contains("Custom String(\" \")"));
+    assert!(artifact.emitted.contains("Custom String(\"{0}, …"));
+    assert!(artifact.emitted.contains("Custom String(\"{0}:{1}:{2}\""));
+}
+
+#[test]
+fn cased_progress_bar_preserves_rows_and_caller_arguments() {
+    let source = r#"rule "cased progress":
+    @Event global
+    createCasedProgressBarIwt(textCount = 2, text = "abc", position = vect(0, 0, 0), scale = 1, clipping = Clip.NONE, textColor = Color.RED, reevaluation = ProgressWorldTextReeval.VISIBILITY_POSITION_VALUES_AND_COLOR, nonTeamSpectators = SpecVisibility.DEFAULT)
+"#;
+    let artifact = Compiler::new()
+        .unwrap()
+        .compile_source_artifact(source, "cased-progress.opy", Path::new("."))
+        .expect("cased progress bar must lower");
+    assert_eq!(
+        artifact
+            .emitted
+            .matches("Create Progress Bar In-World Text")
+            .count(),
+        2
+    );
+    assert!(artifact.emitted.contains("ａ"));
+    assert!(artifact.emitted.contains("Red"));
+    assert!(artifact.emitted.contains("Do Not Clip"));
+}
+
+#[test]
+fn tabular_compression_and_shape_validation_follow_oracle() {
+    let source = r#"globalvar left
+globalvar right
+rule "tabular compressed":
+    @Event global
+    tabular([left, right], [1, 2, 3, 4], true)
+"#;
+    let artifact = Compiler::new()
+        .unwrap()
+        .compile_source_artifact(source, "tabular-compressed.opy", Path::new("."))
+        .expect("compressed tabular must lower");
+    assert!(artifact.emitted.contains("String Split"));
+    assert!(artifact.emitted.contains("Index Of String Char"));
+
+    let uncompressed = Compiler::new()
+        .unwrap()
+        .compile_source_artifact(
+            &source.replace(", true)", ", false)"),
+            "tabular-uncompressed.opy",
+            Path::new("."),
+        )
+        .expect("uncompressed tabular must lower");
+    assert_ne!(artifact.emitted, uncompressed.emitted);
+
+    let invalid = r#"globalvar left
+globalvar right
+rule "tabular invalid":
+    @Event global
+    tabular([left, right], [1, 2, 3])
+"#;
+    let error = Compiler::new()
+        .unwrap()
+        .compile_source(invalid, "tabular-invalid.opy", Path::new("."))
+        .expect_err("invalid tabular shape must be rejected");
+    assert!(error.to_string().contains("multiple of 2"));
+}
+
+#[test]
 fn tabular_and_chase_macro_forms_keep_statement_semantics() {
     let source = r#"globalvar heroes
 globalvar scores

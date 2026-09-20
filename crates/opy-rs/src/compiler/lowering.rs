@@ -10,6 +10,395 @@ use workshop_rs::{Event, EventTarget, EventTeam, ModifyOp, PlayerEventKind};
 
 const COMPRESSION_ALPHABET_NAME: &str = "__compressionAlphabet__";
 
+const BLIZZARD_GLOBAL_SPACES: &[(i32, &str)] = &[
+    (1, "\u{2006}"),
+    (2, "\u{2009}"),
+    (71, "\u{202f}"),
+    (128, "\u{2005}"),
+    (142, " "),
+    (171, "\u{2004}"),
+    (223, "\u{0e00}"),
+    (256, "\u{2000}"),
+    (461, "\u{3164}"),
+    (512, "\u{2001}"),
+];
+
+fn blizzard_global_width(character: char) -> i32 {
+    match character {
+        ' ' | '!' | ',' | '.' | ':' | ';' | '[' | '\\' | ']' => 142,
+        '"' => 182,
+        '#' | '$' => 285,
+        '%' => 455,
+        '&' => 342,
+        '\'' => 98,
+        '(' | ')' => 170,
+        '*' => 199,
+        '+' | '<' | '=' | '>' => 299,
+        '-' => 170,
+        '/' => 142,
+        '0'..='9' => 285,
+        '?' => 285,
+        '@' => 520,
+        'A' | 'B' | 'E' | 'K' | 'P' | 'S' | 'X' | 'Y' => 342,
+        'C' | 'D' | 'H' | 'N' | 'R' | 'U' => 370,
+        'F' | 'T' | 'Z' => 313,
+        'G' | 'Q' => 398,
+        'I' => 142,
+        'J' => 256,
+        'L' => 285,
+        'M' => 426,
+        'O' => 398,
+        'V' => 342,
+        'W' => 483,
+        'a' | 'b' | 'd' | 'e' | 'g' | 'h' | 'n' | 'o' | 'p' | 'q' | 'u' => 285,
+        'c' | 'k' | 's' | 'v' | 'x' | 'y' | 'z' => 256,
+        'f' | 't' => 142,
+        'i' | 'j' | 'l' => 114,
+        'm' => 426,
+        'r' => 170,
+        'w' => 370,
+        '{' | '}' => 171,
+        '|' => 133,
+        '~' | '`' | '^' | '_' => 256,
+        _ => 512,
+    }
+}
+
+fn blizzard_global_spaces(width: i32) -> String {
+    if width <= 0 {
+        return String::new();
+    }
+    let width = width as usize;
+    let coins = BLIZZARD_GLOBAL_SPACES
+        .iter()
+        .map(|(width, _)| *width as usize)
+        .collect::<Vec<_>>();
+    let mut cost = vec![usize::MAX; width + 1];
+    let mut previous = vec![None; width + 1];
+    cost[0] = 0;
+    for current in 1..=width {
+        for (index, coin) in coins.iter().enumerate() {
+            if *coin <= current && cost[current - coin] != usize::MAX {
+                let candidate = cost[current - coin] + 1;
+                if candidate < cost[current] {
+                    cost[current] = candidate;
+                    previous[current] = Some(index);
+                }
+            }
+        }
+    }
+    if cost[width] == usize::MAX {
+        return String::new();
+    }
+    let mut result = String::new();
+    let mut remaining = width;
+    while remaining > 0 {
+        let index = previous[remaining].expect("reachable Blizzard Global width");
+        let coin = coins[index];
+        result.push_str(BLIZZARD_GLOBAL_SPACES[index].1);
+        remaining -= coin;
+    }
+    result
+}
+
+#[derive(Clone, Copy)]
+struct CasedGlyph {
+    lower: &'static str,
+    width: i32,
+    xmin: i32,
+    lower_width: i32,
+    lower_xmin: i32,
+}
+
+fn cased_glyph(character: char) -> Option<CasedGlyph> {
+    Some(match character {
+        'a' => CasedGlyph {
+            lower: "ａ",
+            width: 285,
+            xmin: 21,
+            lower_width: 512,
+            lower_xmin: 130,
+        },
+        'b' => CasedGlyph {
+            lower: "ｂ",
+            width: 285,
+            xmin: 28,
+            lower_width: 512,
+            lower_xmin: 136,
+        },
+        'c' => CasedGlyph {
+            lower: "ｃ",
+            width: 256,
+            xmin: 16,
+            lower_width: 512,
+            lower_xmin: 142,
+        },
+        'd' => CasedGlyph {
+            lower: "ｄ",
+            width: 285,
+            xmin: 13,
+            lower_width: 512,
+            lower_xmin: 136,
+        },
+        'e' => CasedGlyph {
+            lower: "ｅ",
+            width: 285,
+            xmin: 20,
+            lower_width: 512,
+            lower_xmin: 135,
+        },
+        'f' => CasedGlyph {
+            lower: "ｆ",
+            width: 142,
+            xmin: 9,
+            lower_width: 512,
+            lower_xmin: 195,
+        },
+        'g' => CasedGlyph {
+            lower: "ｇ",
+            width: 285,
+            xmin: 15,
+            lower_width: 512,
+            lower_xmin: 138,
+        },
+        'h' => CasedGlyph {
+            lower: "ｈ",
+            width: 285,
+            xmin: 36,
+            lower_width: 512,
+            lower_xmin: 150,
+        },
+        'i' => CasedGlyph {
+            lower: "і",
+            width: 114,
+            xmin: 34,
+            lower_width: 115,
+            lower_xmin: 36,
+        },
+        'j' => CasedGlyph {
+            lower: "ј",
+            width: 114,
+            xmin: -9,
+            lower_width: 115,
+            lower_xmin: -9,
+        },
+        'k' => CasedGlyph {
+            lower: "ｋ",
+            width: 256,
+            xmin: 30,
+            lower_width: 512,
+            lower_xmin: 142,
+        },
+        'l' => CasedGlyph {
+            lower: "I",
+            width: 114,
+            xmin: 35,
+            lower_width: 142,
+            lower_xmin: 51,
+        },
+        'm' => CasedGlyph {
+            lower: "ｍ",
+            width: 426,
+            xmin: 36,
+            lower_width: 512,
+            lower_xmin: 79,
+        },
+        'n' => CasedGlyph {
+            lower: "ｎ",
+            width: 285,
+            xmin: 36,
+            lower_width: 512,
+            lower_xmin: 149,
+        },
+        'o' => CasedGlyph {
+            lower: "ｏ",
+            width: 285,
+            xmin: 18,
+            lower_width: 512,
+            lower_xmin: 135,
+        },
+        'p' => CasedGlyph {
+            lower: "ｐ",
+            width: 285,
+            xmin: 28,
+            lower_width: 512,
+            lower_xmin: 136,
+        },
+        'q' => CasedGlyph {
+            lower: "ｑ",
+            width: 285,
+            xmin: 13,
+            lower_width: 512,
+            lower_xmin: 136,
+        },
+        'r' => CasedGlyph {
+            lower: "ｒ",
+            width: 170,
+            xmin: 35,
+            lower_width: 512,
+            lower_xmin: 191,
+        },
+        's' => CasedGlyph {
+            lower: "ｓ",
+            width: 256,
+            xmin: 17,
+            lower_width: 512,
+            lower_xmin: 147,
+        },
+        't' => CasedGlyph {
+            lower: "ｔ",
+            width: 142,
+            xmin: 7,
+            lower_width: 512,
+            lower_xmin: 195,
+        },
+        'u' => CasedGlyph {
+            lower: "ｕ",
+            width: 285,
+            xmin: 33,
+            lower_width: 512,
+            lower_xmin: 149,
+        },
+        'v' => CasedGlyph {
+            lower: "ｖ",
+            width: 256,
+            xmin: 5,
+            lower_width: 512,
+            lower_xmin: 134,
+        },
+        'w' => CasedGlyph {
+            lower: "ｗ",
+            width: 370,
+            xmin: 3,
+            lower_width: 512,
+            lower_xmin: 76,
+        },
+        'x' => CasedGlyph {
+            lower: "ｘ",
+            width: 256,
+            xmin: 9,
+            lower_width: 512,
+            lower_xmin: 139,
+        },
+        'y' => CasedGlyph {
+            lower: "ｙ",
+            width: 256,
+            xmin: 10,
+            lower_width: 512,
+            lower_xmin: 139,
+        },
+        'z' => CasedGlyph {
+            lower: "ｚ",
+            width: 256,
+            xmin: 16,
+            lower_width: 512,
+            lower_xmin: 147,
+        },
+        _ => return None,
+    })
+}
+
+fn is_cased_color_tag(text: &[char], index: usize) -> Option<usize> {
+    let remaining = text[index..].iter().collect::<String>();
+    let is_tag = remaining
+        .get(..3)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("<fg"))
+        || remaining
+            .get(..5)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("</fg>"));
+    if !is_tag {
+        return None;
+    }
+    remaining
+        .find('>')
+        .map(|offset| index + remaining[..=offset].chars().count())
+}
+
+fn cased_line(text: &str, text_count: usize) -> Vec<String> {
+    let characters = text.chars().collect::<Vec<_>>();
+    let mut text_without_tags = String::new();
+    let mut plain_index = 0;
+    while plain_index < characters.len() {
+        if let Some(end) = is_cased_color_tag(&characters, plain_index) {
+            plain_index = end;
+        } else {
+            text_without_tags.push(characters[plain_index]);
+            plain_index += 1;
+        }
+    }
+    let mut text_width = 0;
+    let mut found_lowercase = false;
+    for character in text_without_tags.chars() {
+        if let Some(glyph) = cased_glyph(character) {
+            found_lowercase = true;
+            if !matches!(character, 'i' | 'j' | 'l') {
+                text_width = (glyph.lower_xmin - text_width).max(0);
+                break;
+            }
+        } else {
+            text_width += blizzard_global_width(character);
+        }
+    }
+    if !found_lowercase {
+        return vec![text.to_string(); text_count];
+    }
+
+    let mut outputs = vec![String::new(); text_count];
+    let mut widths = vec![0; text_count];
+    let mut text_index = 0;
+    let mut last_character = None;
+    let mut index = 0;
+    while index < characters.len() {
+        if let Some(end) = is_cased_color_tag(&characters, index) {
+            let tag = characters[index..end].iter().collect::<String>();
+            for output in &mut outputs {
+                output.push_str(&tag);
+            }
+            text_index = (text_index + 1) % text_count;
+            index = end;
+            continue;
+        }
+        let character = characters[index];
+        if let Some(glyph) = cased_glyph(character) {
+            text_index = (text_index + 1) % text_count;
+            let padding = (text_width - widths[text_index] - glyph.lower_xmin + glyph.xmin).max(0);
+            outputs[text_index].push_str(&blizzard_global_spaces(padding));
+            widths[text_index] += padding;
+            outputs[text_index].push_str(glyph.lower);
+            widths[text_index] += glyph.lower_width;
+            last_character = Some(character);
+        } else if character != ' ' {
+            if outputs[text_index].is_empty()
+                || last_character.and_then(cased_glyph).is_some()
+                || last_character == Some(' ')
+            {
+                text_index = (text_index + 1) % text_count;
+                let padding = (text_width - widths[text_index]).max(0);
+                outputs[text_index].push_str(&blizzard_global_spaces(padding));
+                widths[text_index] += padding;
+            }
+            outputs[text_index].push(character);
+            widths[text_index] += blizzard_global_width(character);
+            last_character = Some(character);
+        } else {
+            last_character = Some(character);
+        }
+        text_width += cased_glyph(character)
+            .map_or_else(|| blizzard_global_width(character), |glyph| glyph.width);
+        index += 1;
+    }
+    let maximum = widths
+        .iter()
+        .copied()
+        .max()
+        .unwrap_or_default()
+        .max(text_width);
+    for (output, width) in outputs.iter_mut().zip(widths) {
+        output.push_str(&blizzard_global_spaces(maximum - width));
+    }
+    outputs
+}
+
 #[derive(Debug, Clone)]
 enum Value {
     Number(f64),
@@ -1522,6 +1911,8 @@ impl<'a> Lowering<'a> {
                         Ok(vec![self.lower_debug(&args[0], *span, debug_source.as_deref())?])
                     } else if name == "print" && args.len() == 1 {
                         Ok(vec![self.lower_print(&args[0], *span)?])
+                    } else if name == "createCasedProgressBarIwt" {
+                        self.lower_cased_progress_bar(args, *span)
                     } else {
                         self.lower_action_call(name, args, *span).map(|action| vec![action])
                     }
@@ -2527,7 +2918,7 @@ impl<'a> Lowering<'a> {
         let argument_span = expr.span().copied();
         let value = self.lower_text_value(expr)?;
         let array_text = if self.debug_value_is_array(value) {
-            self.lower_debug_array_text(value)
+            self.lower_debug_array_text(value, 6)
         } else {
             value
         };
@@ -2668,7 +3059,7 @@ impl<'a> Lowering<'a> {
         ))
     }
 
-    fn lower_debug_array_text(&mut self, value: ValueId) -> ValueId {
+    fn lower_debug_array_text(&mut self, value: ValueId, max_length: usize) -> ValueId {
         macro_rules! call {
             ($name:literal $(, $arg:expr)* $(,)?) => {{
                 let args = vec![$($arg),*];
@@ -2763,54 +3154,88 @@ impl<'a> Lowering<'a> {
             this.push_call("valueInArray", vec![current, index_value])
         };
         let first = call!("firstOf", call!("currentArrayElement"));
-        let array_tail = call!(
-            "customString",
-            self.push_value(Value::String("{0}, {1}, {2}".to_string())),
-            x_value(self, 4.0),
-            x_value(self, 5.0),
+        let array_head = if max_length == 6 {
+            let array_tail = call!(
+                "customString",
+                self.push_value(Value::String("{0}, {1}, {2}".to_string())),
+                x_value(self, 4.0),
+                x_value(self, 5.0),
+                call!(
+                    "customString",
+                    self.push_value(Value::String("{0}, {1}, …\u{0001}".to_string())),
+                    x_value(self, 6.0),
+                    x_value(self, 7.0),
+                ),
+            );
             call!(
                 "customString",
-                self.push_value(Value::String("{0}, {1}, …\u{0001}".to_string())),
-                x_value(self, 6.0),
-                x_value(self, 7.0),
-            ),
-        );
-        let array_head = call!(
-            "customString",
-            self.push_value(Value::String("{0}, {1}, {2}".to_string())),
-            x_value(self, 2.0),
-            x_value(self, 3.0),
-            array_tail,
+                self.push_value(Value::String("{0}, {1}, {2}".to_string())),
+                x_value(self, 2.0),
+                x_value(self, 3.0),
+                array_tail,
+            )
+        } else if max_length <= 3 {
+            let display = format!(
+                "{}…\u{0001}",
+                (0..max_length)
+                    .map(|index| format!("{{{index}}}, "))
+                    .collect::<String>()
+            );
+            let mut args = vec![self.push_value(Value::String(display))];
+            for index in 0..max_length {
+                args.push(x_value(self, (index + 2) as f64));
+            }
+            self.push_call("customString", args)
+        } else {
+            let mut array_head = self.push_value(Value::String("…\u{0001}".to_string()));
+            for index in (0..max_length).rev() {
+                array_head = call!(
+                    "customString",
+                    self.push_value(Value::String("{0}, {1}".to_string())),
+                    x_value(self, (index + 2) as f64),
+                    array_head,
+                );
+            }
+            array_head
+        };
+        let placeholder_text = format!(
+            "{}\u{2026}\u{0001}",
+            (0..max_length).map(|_| "0, ").collect::<String>()
         );
         let placeholder = call!(
             "customString",
-            self.push_value(Value::String("0, 0, 0, 0, 0, 0, …\u{0001}".to_string())),
+            self.push_value(Value::String(placeholder_text.clone())),
         );
         let length_for_slice = x_length(self);
         let end_length_for_slice = x_length(self);
+        let start = self.push_number(
+            (placeholder_text.chars().count() as isize - 4 - 3 * max_length as isize) as f64,
+            "",
+        );
+        let end = self.push_number((max_length * 3 + 4) as f64, "");
         let slice = call!(
             "stringSlice",
             placeholder,
-            call!("add", self.push_number(-2.0, "-2"), length_for_slice),
-            call!(
-                "subtract",
-                self.push_number(22.0, "22"),
-                end_length_for_slice,
-            ),
+            call!("add", start, length_for_slice),
+            call!("subtract", end, end_length_for_slice,),
         );
         let replaced = call!("stringReplace", array_head, slice, call!("emptyArray"),);
         let length_for_compare = x_length(self);
         let length_for_divide = x_length(self);
         let plus = call!(
             "ifThenElse",
-            call!(">", length_for_compare, self.push_number(18.0, "18")),
+            call!(
+                ">",
+                length_for_compare,
+                self.push_number((max_length * 3) as f64, ""),
+            ),
             call!(
                 "customString",
                 self.push_value(Value::String("+{0}".to_string())),
                 call!(
                     "subtract",
                     call!("divide", length_for_divide, self.push_number(3.0, "3")),
-                    self.push_number(6.0, "6"),
+                    self.push_number(max_length as f64, ""),
                 ),
             ),
             call!("emptyArray"),
@@ -3724,6 +4149,103 @@ impl<'a> Lowering<'a> {
         self.replace_array_element(array, index, replacement, span)
     }
 
+    fn lower_cased_progress_bar(
+        &mut self,
+        args: &[Expr],
+        span: Option<HirSpan>,
+    ) -> Result<Vec<ActionId>, IntegrationError> {
+        let [
+            Expr::Number {
+                value: text_count, ..
+            },
+            visible_to,
+            Expr::String { value: text, .. },
+            position,
+            scale,
+            clipping,
+            text_color,
+            reevaluation,
+            spectators,
+        ] = args
+        else {
+            return Err(self.unsupported(
+                "createCasedProgressBarIwt requires a literal text count and text",
+                span,
+            ));
+        };
+        let text_count_value = *text_count;
+        if !text_count_value.is_finite()
+            || text_count_value.fract() != 0.0
+            || !(2.0..=6.0).contains(&text_count_value)
+        {
+            return Err(self.unsupported(
+                "createCasedProgressBarIwt text count must be between 2 and 6",
+                span,
+            ));
+        }
+        let text_count = text_count_value as usize;
+        if args.iter().any(expr_contains_random) {
+            return Err(self.unsupported(
+                "Cannot use random functions in createCasedProgressBarIwt",
+                span,
+            ));
+        }
+        let visible_to = self.lower_value(visible_to)?;
+        let position = self.lower_value(position)?;
+        let scale = self.lower_value(scale)?;
+        let clipping = self.lower_value(clipping)?;
+        let text_color = self.lower_value(text_color)?;
+        let reevaluation = self.lower_value(reevaluation)?;
+        let spectators = self.lower_value(spectators)?;
+        let header_color = self.push_value(Value::Enum {
+            value_type: "Color".to_string(),
+            value: "WHITE".to_string(),
+        });
+        let texts = text
+            .replace('\n', "  \n  ")
+            .split('\n')
+            .map(|line| cased_line(line, text_count))
+            .reduce(|mut all, lines| {
+                for (index, line) in lines.into_iter().enumerate() {
+                    if index < all.len() {
+                        all[index].push('\n');
+                        all[index].push_str(&line);
+                    }
+                }
+                all
+            })
+            .unwrap_or_else(|| vec![String::new(); text_count])
+            .into_iter()
+            .map(|line| format!("{line}\u{ad}"))
+            .collect::<Vec<_>>();
+        let mut actions = Vec::with_capacity(text_count);
+        for (index, text) in texts.into_iter().enumerate() {
+            let value = self.push_number(index as f64, &index.to_string());
+            let text = self.lower_custom_string(text, span)?;
+            let values = self.normalize_contextual_arguments(
+                "createProgressBarInWorldText",
+                vec![
+                    visible_to,
+                    value,
+                    text,
+                    position,
+                    scale,
+                    clipping,
+                    header_color,
+                    text_color,
+                    reevaluation,
+                    spectators,
+                ],
+            );
+            actions.push(self.push_call_action_with_spans(
+                "createProgressBarInWorldText",
+                &values,
+                [None; 10],
+            ));
+        }
+        Ok(actions)
+    }
+
     fn lower_action_call(
         &mut self,
         name: &str,
@@ -3736,47 +4258,6 @@ impl<'a> Lowering<'a> {
                     subroutine: self.subroutine_names[subroutine].clone(),
                 }));
             }
-        }
-        if name == "createCasedProgressBarIwt" {
-            let [_, visible_to, text, position, scale, ..] = args else {
-                return Err(self.unsupported(
-                    "createCasedProgressBarIwt requires textCount, visibleTo, text, position and scale",
-                    span,
-                ));
-            };
-            let visible_to = self.lower_value(visible_to)?;
-            let text = self.lower_value(text)?;
-            let position = self.lower_value(position)?;
-            let scale = self.lower_value(scale)?;
-            let zero = self.push_number(0.0, "0");
-            let white = self.push_value(Value::Enum {
-                value_type: "Color".to_string(),
-                value: "WHITE".to_string(),
-            });
-            let reeval = self.push_value(Value::Enum {
-                value_type: "ProgressWorldTextReeval".to_string(),
-                value: "VISIBILITY_POSITION_VALUES_AND_COLOR".to_string(),
-            });
-            let spectators = self.push_value(Value::Enum {
-                value_type: "SpecVisibility".to_string(),
-                value: "DEFAULT".to_string(),
-            });
-            let clipping = self.push_value(Value::Enum {
-                value_type: "Clipping".to_string(),
-                value: "DO_NOT_CLIP".to_string(),
-            });
-            let values = self.normalize_contextual_arguments(
-                "createProgressBarInWorldText",
-                vec![
-                    visible_to, zero, text, position, scale, clipping, white, white, reeval,
-                    spectators,
-                ],
-            );
-            return Ok(self.push_call_action_with_spans(
-                "createProgressBarInWorldText",
-                &values,
-                [None; 10],
-            ));
         }
         if name == "chaseAtRate" {
             let spans = args
@@ -4315,6 +4796,11 @@ impl<'a> Lowering<'a> {
             Expr::Enum {
                 value_type, value, ..
             } => {
+                let value = match (value_type.as_str(), value.as_str()) {
+                    ("Clipping", "NONE") => "DO_NOT_CLIP",
+                    ("Clipping", "SURFACES") => "CLIP_AGAINST_SURFACES",
+                    _ => value,
+                };
                 if self
                     .compiler
                     .catalog
@@ -4328,7 +4814,7 @@ impl<'a> Lowering<'a> {
                 }
                 Value::Enum {
                     value_type: value_type.clone(),
-                    value: value.clone(),
+                    value: value.to_string(),
                 }
             }
             Expr::Array { elements, .. } => {
@@ -4681,12 +5167,21 @@ impl<'a> Lowering<'a> {
                     return Ok(self.push_call("<=", vec![angle, limit]));
                 }
                 if name == "arrayToString" {
-                    let array = match args.as_slice() {
-                        [array] | [array, _] => array,
+                    let (array, max_length) = match args.as_slice() {
+                        [array] => (array, 12),
+                        [array, Expr::Number { value, .. }] => {
+                            if !value.is_finite() || *value < 0.0 || value.fract() != 0.0 {
+                                return Err(self.unsupported(
+                                    "arrayToString maxLength must be a non-negative integer literal",
+                                    span,
+                                ));
+                            }
+                            (array, (*value).min(1000.0) as usize)
+                        }
                         _ => return Err(self.unsupported("arrayToString requires an array", span)),
                     };
                     let array = self.lower_value(array)?;
-                    return Ok(self.lower_debug_array_text(array));
+                    return Ok(self.lower_debug_array_text(array, max_length));
                 }
                 if matches!(name.as_str(), "decompressNumbers" | "decompressVectors") {
                     let [text] = args.as_slice() else {
@@ -4700,7 +5195,8 @@ impl<'a> Lowering<'a> {
                             self.unsupported("strVisualLength requires one literal string", span)
                         );
                     };
-                    return Ok(self.push_number(value.chars().count() as f64, ""));
+                    let width = value.chars().map(blizzard_global_width).sum::<i32>();
+                    return Ok(self.push_number(width as f64, ""));
                 }
                 if name == "spacesForLength" {
                     let [Expr::Number { value, .. }] = args.as_slice() else {
@@ -4708,16 +5204,54 @@ impl<'a> Lowering<'a> {
                             self.unsupported("spacesForLength requires one literal number", span)
                         );
                     };
-                    let length = (*value).max(0.0).round() as usize;
-                    return self.lower_custom_string(" ".repeat(length), span);
+                    if !value.is_finite() || *value < 0.0 || value.fract() != 0.0 {
+                        return Err(self.unsupported(
+                            "spacesForLength requires a non-negative integer literal",
+                            span,
+                        ));
+                    }
+                    return self.lower_custom_string(blizzard_global_spaces(*value as i32), span);
                 }
                 if name == "spacesForString" {
                     let [Expr::String { value, .. }] = args.as_slice() else {
+                        if let [
+                            Expr::Call {
+                                name: translation,
+                                args: translation_args,
+                                ..
+                            },
+                        ] = args.as_slice()
+                            && matches!(translation.as_str(), "_" | "__" | "___")
+                            && let Some(text) = translation_args.last()
+                            && let Expr::String {
+                                value,
+                                span: text_span,
+                            } = text
+                        {
+                            let replacement = Expr::String {
+                                value: blizzard_global_spaces(
+                                    value.chars().map(blizzard_global_width).sum(),
+                                ),
+                                span: *text_span,
+                            };
+                            let mut translated_args = translation_args.clone();
+                            *translated_args.last_mut().expect("translation text exists") =
+                                replacement;
+                            return self.lower_value(&Expr::Call {
+                                name: translation.clone(),
+                                args: translated_args,
+                                debug_source: None,
+                                span,
+                            });
+                        }
                         return Err(
                             self.unsupported("spacesForString requires one literal string", span)
                         );
                     };
-                    return self.lower_custom_string(" ".repeat(value.chars().count()), span);
+                    return self.lower_custom_string(
+                        blizzard_global_spaces(value.chars().map(blizzard_global_width).sum()),
+                        span,
+                    );
                 }
                 if name == "hsl" {
                     let (hue, saturation, lightness, alpha) = match args.as_slice() {
@@ -4788,8 +5322,28 @@ impl<'a> Lowering<'a> {
                     let minute_value = self.push_call("divide", vec![minute_remainder, sixty]);
                     let minute = self.push_call("roundToInteger", vec![minute_value, down]);
                     let second = self.push_call("modulo", vec![time, sixty]);
+                    let hundred = self.push_number(100.0, "100");
+                    let first_digit = self.push_number(1.0, "1");
+                    let two = self.push_number(2.0, "2");
+                    let minute_with_padding = self.push_call("add", vec![minute, hundred]);
+                    let padding_template = self.push_value(Value::String("{0}".to_string()));
+                    let minute_with_padding =
+                        self.push_call("customString", vec![padding_template, minute_with_padding]);
+                    let minute_text =
+                        self.push_call("stringSlice", vec![minute_with_padding, first_digit, two]);
+                    let second_with_padding = self.push_call("add", vec![second, hundred]);
+                    let second_with_padding =
+                        self.push_call("customString", vec![padding_template, second_with_padding]);
+                    let all_digits = self.push_number(9999.0, "9999");
+                    let second_text = self.push_call(
+                        "stringSlice",
+                        vec![second_with_padding, first_digit, all_digits],
+                    );
                     let template = self.push_value(Value::String("{0}:{1}:{2}".to_string()));
-                    return Ok(self.push_call("customString", vec![template, hour, minute, second]));
+                    return Ok(self.push_call(
+                        "customString",
+                        vec![template, hour, minute_text, second_text],
+                    ));
                 }
                 if name == "compressed" {
                     return self.lower_compressed(args, span);
