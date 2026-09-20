@@ -858,7 +858,13 @@ impl<'a> Lowering<'a> {
         let (uses_player_translation_var, no_detection_rule, no_tl_err) =
             self.translation_player_options();
         if uses_player_translation_var && !no_detection_rule {
-            self.lower_translation_detection_rule(no_tl_err)?;
+            let translations = self
+                .hir
+                .preprocessing
+                .translations
+                .clone()
+                .expect("player translation mode requires translations");
+            self.lower_translation_detection_rule(no_tl_err, &translations)?;
         }
 
         if translation_initializer.is_some()
@@ -1000,6 +1006,7 @@ impl<'a> Lowering<'a> {
     fn lower_translation_detection_rule(
         &mut self,
         no_tl_err: bool,
+        translations: &hir::TranslationState,
     ) -> Result<(), IntegrationError> {
         let variable = self
             .players
@@ -1017,7 +1024,8 @@ impl<'a> Lowering<'a> {
         );
         let has_spawned = self.push_call("hasSpawned", vec![player]);
         let is_dummy = self.push_call("isDummy", vec![player]);
-        let not_dummy = self.push_call("not", vec![is_dummy]);
+        let false_value = self.push_value(Value::Bool(false));
+        let not_dummy = self.push_call("==", vec![is_dummy, false_value]);
         let initial_language = self.push_call("==", vec![language, initial]);
 
         let facing = self.push_call("getFacingDirection", vec![player]);
@@ -1028,7 +1036,7 @@ impl<'a> Lowering<'a> {
             value: facing,
         });
         let ten = self.push_number(10.0, "10");
-        let direction_index = self.translation_language_index();
+        let direction_index = self.translation_language_index(translations)?;
         let horizontal = self.push_call("multiply", vec![ten, direction_index]);
         let vertical = self.push_number(5.0, "5");
         let direction = self.push_call("directionFromAngles", vec![horizontal, vertical]);
@@ -1059,14 +1067,13 @@ impl<'a> Lowering<'a> {
         let thousand = self.push_number(1000.0, "1000");
         let modulo = self.push_call("modulo", vec![rounded_horizontal, thousand]);
         let zero = self.push_number(0.0, "0");
-        let modulo_zero = self.push_call("==", vec![modulo, zero]);
-        let not_modulo = self.push_call("not", vec![modulo_zero]);
+        let modulo_zero = self.push_call("not", vec![modulo]);
         let vertical_angle = self.push_call("getVerticalFacingAngle", vec![player]);
         let vertical_difference = self.push_call("subtract", vec![vertical_angle, vertical]);
         let vertical_delta = self.push_call("absoluteValue", vec![vertical_difference]);
         let tolerance = self.push_number(0.01, "0.01");
         let vertical_close = self.push_call("<", vec![vertical_delta, tolerance]);
-        let wait_condition = self.push_call("and", vec![not_modulo, vertical_close]);
+        let wait_condition = self.push_call("and", vec![modulo_zero, vertical_close]);
         let timeout = self.push_number(15.0, "15");
         let wait = self.push_call_action("waitUntil", &[wait_condition, timeout]);
 
@@ -1086,16 +1093,21 @@ impl<'a> Lowering<'a> {
         let stop_facing = self.push_call_action("stopFacing", &[player]);
         let last = self.push_call("lastOf", vec![language]);
         let set_facing = self.push_call_action("setFacing", &[player, last, to_world]);
-        let final_value = if no_tl_err {
-            self.push_call("subtract", vec![language, one])
+        let finish = if no_tl_err {
+            self.push_action(Action::ModifyPlayerVariable {
+                player,
+                variable: self.player_names[variable].clone(),
+                op: ModifyOp::Subtract,
+                value: one,
+            })
         } else {
-            self.push_call("firstOf", vec![language])
+            let final_value = self.push_call("firstOf", vec![language]);
+            self.push_action(Action::SetPlayerVariable {
+                player,
+                variable: self.player_names[variable].clone(),
+                value: final_value,
+            })
         };
-        let finish = self.push_action(Action::SetPlayerVariable {
-            player,
-            variable: self.player_names[variable].clone(),
-            value: final_value,
-        });
 
         let actions = [
             append,
@@ -2869,13 +2881,42 @@ impl<'a> Lowering<'a> {
             .languages
             .iter()
             .map(|language| {
+                let locale = match language.as_str() {
+                    "de" => "de-DE",
+                    "en" => "en-US",
+                    "es" => "es-MX",
+                    "es_es" => "es-ES",
+                    "es_mx" => "es-MX",
+                    "fr" => "fr-FR",
+                    "it" => "it-IT",
+                    "ja" => "ja-JP",
+                    "ko" => "ko-KR",
+                    "pl" => "pl-PL",
+                    "pt" => "pt-BR",
+                    "ru" => "ru-RU",
+                    "th" => "th-TH",
+                    "tr" => "tr-TR",
+                    "zh" | "zh_cn" => "zh-CN",
+                    "zh_tw" => "zh-TW",
+                    _ => {
+                        return Err(IntegrationError::new(
+                            "translations-invalid",
+                            format!("unsupported translation language '{language}'"),
+                            translations.span,
+                        ));
+                    }
+                };
                 self.compiler
                     .catalog
-                    .overpy_translation_spelling("Color", "WHITE", language)
+                    .localized_enum_spelling(
+                        "Color",
+                        &workshop_rs::catalog::Locale::new(locale),
+                        "WHITE",
+                    )
                     .ok_or_else(|| {
                         IntegrationError::new(
                             "translations-invalid",
-                            format!("unsupported translation language '{language}'"),
+                            format!("unsupported translation locale '{locale}'"),
                             translations.span,
                         )
                     })
@@ -2968,7 +3009,13 @@ impl<'a> Lowering<'a> {
                     .unwrap_or_else(|| literal.to_string())
             })
             .collect::<Vec<_>>();
-        let replacement_mode = format_args.len() > 3;
+        let tl_err_prefix = if use_tl_err {
+            "\u{ff34}\u{ff2c}\u{ff25}\u{ff52}\u{ff52}\u{ec48}"
+        } else {
+            ""
+        };
+        let raw_string = format!("{tl_err_prefix}{}", localized.join("\u{ec48}"));
+        let replacement_mode = raw_string.len() > 128 || format_args.len() > 3;
         if replacement_mode {
             for (index, replacement) in format_args.iter().enumerate() {
                 let _ = replacement;
@@ -2977,16 +3024,27 @@ impl<'a> Lowering<'a> {
                     *value = value.replace(&format!("{{{index}}}"), &marker);
                 }
             }
+            let encoded_segments = localized.iter().enumerate().map(|(index, value)| {
+                if index == 0 {
+                    format!("{tl_err_prefix}{value}")
+                } else {
+                    value.clone()
+                }
+            });
+            for (index, segment) in encoded_segments.enumerate() {
+                if segment.len() > 511 {
+                    return Err(IntegrationError::new(
+                        "translations-invalid",
+                        format!(
+                            "translated string for language '{}' is too long, maximum length is 511 bytes",
+                            translations.languages[index]
+                        ),
+                        span,
+                    ));
+                }
+            }
         }
-        let encoded = format!(
-            "{}{}",
-            if use_tl_err {
-                "\u{ff34}\u{ff2c}\u{ff25}\u{ff52}\u{ff52}\u{ec48}"
-            } else {
-                ""
-            },
-            localized.join("\u{ec48}")
-        );
+        let encoded = format!("{tl_err_prefix}{}", localized.join("\u{ec48}"));
         let text = self.push_value(Value::String(encoded));
         let custom = if replacement_mode {
             let mut value = self.push_call("customString", vec![text]);
@@ -3054,22 +3112,25 @@ impl<'a> Lowering<'a> {
             value_type: "Color".to_string(),
             value: "WHITE".to_string(),
         });
+        let empty_array = self.push_call("emptyArray", Vec::new());
+        let color = self.push_call("stringSplit", vec![color, empty_array]);
         let index = self.push_call("indexOfArrayValue", vec![helper, color]);
         let index = self.push_call("absoluteValue", vec![index]);
         self.push_call("valueInArray", vec![values, index])
     }
 
-    fn translation_language_index(&mut self) -> ValueId {
-        let helper_id = *self
-            .globals
-            .get(TRANSLATION_HELPER_NAME)
-            .expect("translation helper variable is allocated");
-        let helper = self.push_value(Value::GlobalVariable(self.global_names[helper_id].clone()));
+    fn translation_language_index(
+        &mut self,
+        translations: &hir::TranslationState,
+    ) -> Result<ValueId, IntegrationError> {
+        let helper = self.lower_translation_helper(translations)?;
         let color = self.push_value(Value::Enum {
             value_type: "Color".to_string(),
             value: "WHITE".to_string(),
         });
-        self.push_call("indexOfArrayValue", vec![helper, color])
+        let empty_array = self.push_call("emptyArray", Vec::new());
+        let color = self.push_call("stringSplit", vec![color, empty_array]);
+        Ok(self.push_call("indexOfArrayValue", vec![helper, color]))
     }
 
     pub(super) fn translation_files(&self) -> Vec<(String, String)> {

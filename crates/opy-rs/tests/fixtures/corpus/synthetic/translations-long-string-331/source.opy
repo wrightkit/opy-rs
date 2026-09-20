@@ -1,0 +1,5 @@
+#!translations en fr
+
+rule "translation long string":
+    @Event eachPlayer
+    bigMessage(eventPlayer, _("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA {}".format(eventPlayer)))

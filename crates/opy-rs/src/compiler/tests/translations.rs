@@ -1,8 +1,36 @@
 //! Translation lowering and catalog lifecycle coverage.
 
+use std::fs;
 use std::path::Path;
 
 use crate::{Compiler, compile};
+
+fn pinned_workshop(id: &str) -> String {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/corpus")
+        .join(id)
+        .join("oracle.json");
+    let snapshot: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(path).expect("pinned oracle snapshot"))
+            .expect("valid pinned oracle snapshot");
+    snapshot["compile"]["workshop"]
+        .as_str()
+        .expect("pinned oracle workshop output")
+        .to_string()
+}
+
+fn fixture_output(id: &str) -> String {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/corpus")
+        .join(id);
+    let source = fs::read_to_string(root.join("source.opy")).expect("fixture source");
+    let hir = compile(&source, "source.opy", &root).expect("fixture source should lower");
+    Compiler::new()
+        .expect("compiler")
+        .compile_hir(&hir)
+        .expect("fixture should compile")
+        .emitted
+}
 
 #[test]
 fn literal_translation_uses_the_declared_language_order() {
@@ -113,4 +141,31 @@ fn translated_format_strings_use_replacements_after_the_workshop_argument_limit(
     let output = Compiler::new().unwrap().compile_hir(&hir).unwrap().emitted;
     assert!(output.contains("String Replace"));
     assert!(!output.contains("translated format strings support"));
+}
+
+#[test]
+fn pinned_translation_fixtures_cover_detection_and_fallback_shapes() {
+    let default_oracle = pinned_workshop("synthetic/translations-player-default-331");
+    let default_output = fixture_output("synthetic/translations-player-default-331");
+    assert!(default_oracle.contains("Determine the player's language"));
+    assert!(default_output.contains("Determine the player's language"));
+    assert!(default_oracle.contains("Not(Modulo("));
+    assert!(default_output.contains("Not(Modulo("));
+
+    let no_detection_oracle = pinned_workshop("synthetic/translations-player-no-detection-331");
+    let no_detection_output = fixture_output("synthetic/translations-player-no-detection-331");
+    assert!(!no_detection_oracle.contains("Determine the player's language"));
+    assert!(!no_detection_output.contains("Determine the player's language"));
+
+    let no_tl_err_oracle = pinned_workshop("synthetic/translations-player-no-tlerr-331");
+    let no_tl_err_output = fixture_output("synthetic/translations-player-no-tlerr-331");
+    assert!(no_tl_err_oracle.contains("__languageIndex__, Subtract"));
+    assert!(no_tl_err_output.contains("__languageIndex__, Subtract"));
+    assert!(!no_tl_err_oracle.contains("ＴＬＥｒｒ"));
+    assert!(!no_tl_err_output.contains("ＴＬＥｒｒ"));
+
+    let long_oracle = pinned_workshop("synthetic/translations-long-string-331");
+    let long_output = fixture_output("synthetic/translations-long-string-331");
+    assert!(long_oracle.contains("String Replace"));
+    assert!(long_output.contains("String Replace"));
 }

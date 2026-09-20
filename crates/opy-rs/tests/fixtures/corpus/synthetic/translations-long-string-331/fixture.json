@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/translations-long-string-331",
+  "category": "compilation",
+  "features": ["translations", "translated-format", "long-string-fallback"],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": true
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "compiler-contract"
+    }
+  }
+}

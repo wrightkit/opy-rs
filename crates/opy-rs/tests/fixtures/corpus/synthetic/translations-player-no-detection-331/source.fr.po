@@ -1,0 +1,9 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: fr\n"
+"X-Generator: OverPy\n"
+
+#. file source.opy, line 6, rule "translation player no detection"
+msgid "Hello"
+msgstr ""
