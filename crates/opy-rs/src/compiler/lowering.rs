@@ -3015,7 +3015,7 @@ impl<'a> Lowering<'a> {
             ""
         };
         let raw_string = format!("{tl_err_prefix}{}", localized.join("\u{ec48}"));
-        let replacement_mode = raw_string.len() > 128 || format_args.len() > 3;
+        let replacement_mode = raw_string.chars().count() > 128 || format_args.len() > 3;
         if replacement_mode {
             for (index, replacement) in format_args.iter().enumerate() {
                 let _ = replacement;

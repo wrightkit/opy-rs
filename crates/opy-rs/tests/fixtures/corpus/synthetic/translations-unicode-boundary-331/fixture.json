@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/translations-unicode-boundary-331",
+  "category": "compilation",
+  "features": ["translations", "translated-format", "unicode-length-boundary"],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": true
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "compiler-contract"
+    }
+  }
+}

@@ -24,7 +24,7 @@
       "nativeStatus": "failure",
       "relationship": "known-gap",
       "comparison": "diagnostic-code",
-      "diagnosticCode": "translations-invalid",
+      "diagnosticCode": "unsupported-integration-surface",
       "failureClass": "integration"
     }
   }

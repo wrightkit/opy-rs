@@ -4,7 +4,6 @@ pub(crate) fn reject_unlowered_directives(hir: &hir::Program) -> Result<(), Inte
     let unsupported = [
         "disableTranslationSourceLines",
         "keepUnusedTranslations",
-        "translateWithPlayerVar",
         "writeToOutputFile",
     ];
     if let Some(directive) = hir

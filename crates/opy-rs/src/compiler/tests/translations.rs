@@ -168,4 +168,9 @@ fn pinned_translation_fixtures_cover_detection_and_fallback_shapes() {
     let long_output = fixture_output("synthetic/translations-long-string-331");
     assert!(long_oracle.contains("String Replace"));
     assert!(long_output.contains("String Replace"));
+
+    let unicode_boundary_oracle = pinned_workshop("synthetic/translations-unicode-boundary-331");
+    let unicode_boundary_output = fixture_output("synthetic/translations-unicode-boundary-331");
+    assert!(!unicode_boundary_oracle.contains("String Replace"));
+    assert!(!unicode_boundary_output.contains("String Replace"));
 }
