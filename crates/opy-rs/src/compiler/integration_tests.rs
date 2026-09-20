@@ -66,6 +66,8 @@ mod string_literals;
 mod string_modifiers;
 #[path = "tests/syntax_lowering.rs"]
 mod syntax_lowering;
+#[path = "tests/translations.rs"]
+mod translations;
 #[path = "tests/variable_initializers.rs"]
 mod variable_initializers;
 #[path = "tests/wait_lowering.rs"]

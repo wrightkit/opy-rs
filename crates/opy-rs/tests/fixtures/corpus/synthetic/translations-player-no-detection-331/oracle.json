@@ -1,0 +1,33 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        127: __overpyTranslationHelper__\n    player:\n        127: __languageIndex__\n}\n\nrule (\"Initialize global variables\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(__overpyTranslationHelper__, String Split(Custom String(\"\uec480White0Blanc\"), First Of(Null)));\n    }\n}\n\nrule (\"Initialize player variables\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Set Player Variable(Event Player, __languageIndex__, 1.1);\n    }\n}\n\nrule (\"translation player no detection\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Big Message(Event Player, Value In Array(String Split(Custom String(\"\uff34\uff2c\uff25\uff52\uff52\uec48Hello\uec48Hello\"), Global.__overpyTranslationHelper__), (Local Player).__languageIndex__));\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        127: __overpyTranslationHelper__\n    player:\n        127: __languageIndex__\n}\n\nrule (\"Initialize global variables\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(__overpyTranslationHelper__, String Split(Custom String(\"\uec480White0Blanc\"), First Of(Null)));\n    }\n}\n\nrule (\"Initialize player variables\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Set Player Variable(Event Player, __languageIndex__, 1.1);\n    }\n}\n\nrule (\"translation player no detection\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Big Message(Event Player, Value In Array(String Split(Custom String(\"\uff34\uff2c\uff25\uff52\uff52\uec48Hello\uec48Hello\"), Global.__overpyTranslationHelper__), (Local Player).__languageIndex__));\n    }\n}\n\n",
+    "workshopSha256": "651379b3fe8f861cbb9a66a89dd6874a5a6f91b69fed4314a34a94fcdd181334"
+  },
+  "fixture": "synthetic/translations-player-no-detection-331",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "654fcffd2ceed0a35d025d56441ea2494d530bc22714edba4a9188dc2e1477c7"
+      }
+    ],
+    "sha256": "7b95bec430fea5f3d47f9acdd76ff815dcc4d993e445f5ac8eb562d7fcf708ae",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

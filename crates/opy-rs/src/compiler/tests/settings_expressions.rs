@@ -16,6 +16,54 @@ fn source_with_settings(settings: &str) -> String {
 }
 
 #[test]
+fn external_settings_jsonc_uses_the_same_canonical_emitter() {
+    let overlay = BTreeMap::from([(
+        "settings.opy.json".to_string(),
+        r#"{
+    "gamemodes": {
+        "general": {
+            "heroLimit": "off",
+            "respawnTime%": 30
+        }
+    },
+    "heroes": {
+        "allTeams": {
+            "mei": { "health%": 200 }
+        }
+    }
+}"#
+        .to_string(),
+    )]);
+    let hir = crate::compile_with_overlay(
+        "settings \"settings.opy.json\"\nrule \"settings\":\n    @Event global\n    pass\n",
+        "main.opy",
+        Path::new("."),
+        &overlay,
+    )
+    .expect("external settings should compile through the frontend");
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+    assert!(artifact.emitted.contains("Hero Limit: Off"));
+    assert!(artifact.emitted.contains("Health: 200%"));
+}
+
+#[test]
+fn external_settings_diagnostics_use_the_external_file_registry_entry() {
+    let overlay = BTreeMap::from([(
+        "settings.opy.json".to_string(),
+        "{\n    \"gamemodes\": [\n".to_string(),
+    )]);
+    let error = crate::compile_with_overlay(
+        "settings \"settings.opy.json\"\nrule \"settings\":\n    @Event global\n    pass\n",
+        "main.opy",
+        Path::new("."),
+        &overlay,
+    )
+    .expect_err("malformed external settings must retain its source boundary");
+    assert_eq!(error.code, "settings-invalid");
+    assert_eq!(error.span.expect("external settings span").file, 1);
+}
+
+#[test]
 fn multiline_define_string_composition_resolves_in_settings() {
     let overlay = BTreeMap::from([
         (

@@ -30,7 +30,7 @@ supported subset and limitation are stated in user terms.
 | Arrays, dictionaries and lambdas | 🚧 Partial | [Syntax and project composition](language-support/syntax-and-projects.md) |
 | Functions, member functions, enums and constants | ✅ Supported | [Callables and domains](language-support/callables-and-domains.md) |
 | Multiple files, includes, macros and preprocessing | ✅ Supported | [Syntax and project composition](language-support/syntax-and-projects.md) and [Tooling and backend](language-support/tooling-and-backend.md) |
-| Strings, translations and custom-game settings | 🚧 Partial | [Syntax and project composition](language-support/syntax-and-projects.md) |
+| Strings, translations and custom-game settings | ✅ Supported | [Syntax and project composition](language-support/syntax-and-projects.md) |
 | Compiler directives and post-compile hooks (forward subset) | ✅ Supported | [Tooling and backend](language-support/tooling-and-backend.md) |
 | Embedded JavaScript macros | ✅ Supported | [Tooling and backend](language-support/tooling-and-backend.md) |
 | OPY → Workshop compilation | 🚧 Partial | [Tooling and backend](language-support/tooling-and-backend.md) |

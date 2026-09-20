@@ -1,0 +1,33 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        127: __overpyTranslationHelper__\n    player:\n        127: __languageIndex__\n}\n\nrule (\"OverPy translation setup - Determine the player's language\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    conditions {\n        Has Spawned(Event Player) == True;\n        Is Dummy Bot(Event Player) == False;\n        (Event Player).__languageIndex__ == 1.1;\n    }\n    actions {\n        Modify Player Variable(Event Player, __languageIndex__, Append To Array, Facing Direction Of(Event Player));\n        Start Facing(Event Player, Direction From Angles(Multiply(10, Index Of Array Value(String Split(Custom String(\"\uec480White0Blanc\"), First Of(Null)), String Split(Color(White), Empty Array))), 5), 999999999999, To World, Direction and Turn Rate);\n        \"Have a tolerance of 1/100 of a degree to account for precision errors\"\n        Wait Until(And(Not(Modulo(Round To Integer(Multiply(Horizontal Facing Angle Of(Event Player), 100), To Nearest), 1000)), Compare(Absolute Value(Subtract(Vertical Facing Angle Of(Event Player), 5)), <, 0.01)), 15);\n        Set Player Variable At Index(Event Player, __languageIndex__, 0, Max(1, Multiply(Compare(Absolute Value(Subtract(Vertical Facing Angle Of(Event Player), 5)), <, 0.01), Round To Integer(Divide(Horizontal Facing Angle Of(Event Player), 10), To Nearest))));\n        Stop Facing(Event Player);\n        Set Facing(Event Player, Last Of((Event Player).__languageIndex__), To World);\n        Set Player Variable(Event Player, __languageIndex__, First Of((Event Player).__languageIndex__));\n    }\n}\n\nrule (\"Initialize global variables\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(__overpyTranslationHelper__, String Split(Custom String(\"\uec480White0Blanc\"), First Of(Null)));\n    }\n}\n\nrule (\"Initialize player variables\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Set Player Variable(Event Player, __languageIndex__, 1.1);\n    }\n}\n\nrule (\"translation player default\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Big Message(Event Player, Value In Array(String Split(Custom String(\"\uff34\uff2c\uff25\uff52\uff52\uec48Hello\uec48Hello\"), Global.__overpyTranslationHelper__), (Local Player).__languageIndex__));\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        127: __overpyTranslationHelper__\n    player:\n        127: __languageIndex__\n}\n\nrule (\"OverPy translation setup - Determine the player's language\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    conditions {\n        Has Spawned(Event Player) == True;\n        Is Dummy Bot(Event Player) == False;\n        (Event Player).__languageIndex__ == 1.1;\n    }\n    actions {\n        Modify Player Variable(Event Player, __languageIndex__, Append To Array, Facing Direction Of(Event Player));\n        Start Facing(Event Player, Direction From Angles(Multiply(10, Index Of Array Value(String Split(Custom String(\"\uec480White0Blanc\"), First Of(Null)), String Split(Color(White), Empty Array))), 5), 999999999999, To World, Direction and Turn Rate);\n        \"Have a tolerance of 1/100 of a degree to account for precision errors\"\n        Wait Until(And(Not(Modulo(Round To Integer(Multiply(Horizontal Facing Angle Of(Event Player), 100), To Nearest), 1000)), Compare(Absolute Value(Subtract(Vertical Facing Angle Of(Event Player), 5)), <, 0.01)), 15);\n        Set Player Variable At Index(Event Player, __languageIndex__, 0, Max(1, Multiply(Compare(Absolute Value(Subtract(Vertical Facing Angle Of(Event Player), 5)), <, 0.01), Round To Integer(Divide(Horizontal Facing Angle Of(Event Player), 10), To Nearest))));\n        Stop Facing(Event Player);\n        Set Facing(Event Player, Last Of((Event Player).__languageIndex__), To World);\n        Set Player Variable(Event Player, __languageIndex__, First Of((Event Player).__languageIndex__));\n    }\n}\n\nrule (\"Initialize global variables\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(__overpyTranslationHelper__, String Split(Custom String(\"\uec480White0Blanc\"), First Of(Null)));\n    }\n}\n\nrule (\"Initialize player variables\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Set Player Variable(Event Player, __languageIndex__, 1.1);\n    }\n}\n\nrule (\"translation player default\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Big Message(Event Player, Value In Array(String Split(Custom String(\"\uff34\uff2c\uff25\uff52\uff52\uec48Hello\uec48Hello\"), Global.__overpyTranslationHelper__), (Local Player).__languageIndex__));\n    }\n}\n\n",
+    "workshopSha256": "eab653e4da95c9874cbda9ce1c9936a32f3cc89bd4837abce62cf8a7c23e1dee"
+  },
+  "fixture": "synthetic/translations-player-default-331",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "6d7cdd57e78be01594ce31213df8e03793a1b5e41aceacd9f090677c42883c2e"
+      }
+    ],
+    "sha256": "4a1b2acd993ef16312f347e732fec78678b2ea324ef4709af60d3295219bcd82",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

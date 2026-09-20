@@ -45,7 +45,7 @@ use std::path::{Path, PathBuf};
 use crate::diag::{OpyError, OpyResult, Span};
 use crate::hir::types::{
     DirectiveRecord, DirectiveValue, OptimizationState, PreprocessingSnapshot, PreprocessingState,
-    TranslationState,
+    TranslationEntry, TranslationState,
 };
 use crate::lexer::{LexInput, Token, TokenKind, lex};
 use crate::settings::SettingsBlock;
@@ -295,6 +295,19 @@ pub fn preprocess_with_overlay_outcome(
             };
         }
     };
+    let settings = match settings {
+        Some(block) => match pre.resolve_settings_source(block) {
+            Ok(block) => Some(block),
+            Err(error) => {
+                return PreprocessOutcome {
+                    result: Err(error),
+                    files: pre.files,
+                    warnings: pre.warnings,
+                };
+            }
+        },
+        None => None,
+    };
     let tokens = match &settings {
         Some(block) => {
             let sanitized = crate::settings::sanitize_for_lex(source_text, block);
@@ -319,6 +332,13 @@ pub fn preprocess_with_overlay_outcome(
         }
     };
     if let Err(error) = pre.process_directives(&mut tokens, false, settings) {
+        return PreprocessOutcome {
+            result: Err(error),
+            files: pre.files,
+            warnings: pre.warnings,
+        };
+    }
+    if let Err(error) = pre.load_translation_catalog() {
         return PreprocessOutcome {
             result: Err(error),
             files: pre.files,
@@ -395,6 +415,24 @@ fn shift_settings_span(span: Span, origin: crate::diag::Position) -> Span {
     )
 }
 
+fn external_text_span(file: u32, text: &str) -> Span {
+    let mut line = 1;
+    let mut col = 1;
+    for character in text.chars() {
+        if character == '\n' {
+            line += 1;
+            col = 1;
+        } else {
+            col += 1;
+        }
+    }
+    Span::new(
+        file,
+        crate::diag::Position::new(1, 1),
+        crate::diag::Position::new(line, col),
+    )
+}
+
 struct Preprocessor {
     files: Vec<FileRecord>,
     next_file_id: u32,
@@ -416,13 +454,109 @@ struct Preprocessor {
 }
 
 impl Preprocessor {
+    fn load_translation_catalog(&mut self) -> OpyResult<()> {
+        let Some(translations) = self.preprocessing.translations.as_ref() else {
+            return Ok(());
+        };
+        let languages = translations.languages.clone();
+        let source_path = self
+            .files
+            .get(1)
+            .or_else(|| self.files.first())
+            .map(|file| PathBuf::from(&file.path))
+            .unwrap_or_else(|| PathBuf::from("main.opy"));
+        let base = self.root.join(
+            source_path
+                .file_name()
+                .unwrap_or_else(|| std::ffi::OsStr::new("main.opy")),
+        );
+        let mut entries = BTreeMap::<(Option<String>, String), TranslationEntry>::new();
+        for language in languages.iter().skip(1) {
+            let po_path = base.with_extension(format!("{language}.po"));
+            let Some(text) = std::fs::read_to_string(&po_path).ok() else {
+                continue;
+            };
+            let file_id = self.register_external_file(&po_path, language, text.clone());
+            let parsed = parse_po(&text, language, Some(external_text_span(file_id, &text)))?;
+            for entry in parsed {
+                let key = (entry.context.clone(), entry.msgid.clone());
+                entries
+                    .entry(key)
+                    .and_modify(|existing| existing.translations.extend(entry.translations.clone()))
+                    .or_insert(entry);
+            }
+        }
+        if let Some(translations) = self.preprocessing.translations.as_mut() {
+            translations.entries = entries.into_values().collect();
+        }
+        Ok(())
+    }
+
+    /// Load an external custom-game-settings object relative to the owning
+    /// source file. Open-document overlays take precedence over the filesystem.
+    pub(super) fn resolve_settings_source(
+        &mut self,
+        mut block: SettingsBlock,
+    ) -> OpyResult<SettingsBlock> {
+        let Some(requested) = block.external_path.clone() else {
+            return Ok(block);
+        };
+        let requested = requested.replace('\\', "/");
+        let candidate = self.include_base().join(&requested);
+        let candidate_path = candidate.to_string_lossy().into_owned();
+        let canonical = std::fs::canonicalize(&candidate).ok();
+        let lexical_path = candidate.to_string_lossy().replace('\\', "/");
+        let content = self
+            .overlay
+            .get(&requested)
+            .or_else(|| self.overlay.get(&candidate_path))
+            .or_else(|| self.overlay.get(&lexical_path))
+            .or_else(|| {
+                canonical
+                    .as_ref()
+                    .and_then(|path| self.overlay.get(&path.to_string_lossy().into_owned()))
+            })
+            .cloned()
+            .or_else(|| canonical.and_then(|path| std::fs::read_to_string(path).ok()))
+            .ok_or_else(|| {
+                OpyError::at(
+                    "settings-not-found",
+                    format!("cannot find external settings file '{requested}'"),
+                    block.keyword_span,
+                )
+            })?;
+        let file_id = self.register_external_file(&candidate, &requested, content.clone());
+        block.content_file = file_id;
+        block.text_start = crate::diag::Position::new(1, 1);
+        block.content_span = external_text_span(file_id, &content);
+        block.text = content;
+        Ok(block)
+    }
+
+    fn register_external_file(&mut self, candidate: &Path, requested: &str, text: String) -> u32 {
+        let canonical = std::fs::canonicalize(candidate).ok();
+        let file_id = self.next_file_id;
+        self.next_file_id += 1;
+        self.source_texts.insert(file_id, text);
+        self.files.push(FileRecord {
+            id: file_id,
+            path: display_path(
+                candidate,
+                canonical.as_deref(),
+                &self.display_root,
+                requested,
+            ),
+        });
+        file_id
+    }
+
     /// Apply the same token macro expansion used by ordinary OPY source to
     /// the extracted settings values. Settings are removed before the source
     /// token stream is processed, so this pass is the point where `#!define`
     /// values become visible to the settings parser.
     pub(super) fn expand_settings(&self, block: SettingsBlock) -> OpyResult<SettingsBlock> {
         let tokens = lex(LexInput {
-            file_id: block.span.file,
+            file_id: block.content_file,
             text: &block.text,
         })?;
         let mut tokens = tokens;
@@ -435,6 +569,180 @@ impl Preprocessor {
             ..block
         })
     }
+}
+
+fn parse_po(text: &str, language: &str, span: Option<Span>) -> OpyResult<Vec<TranslationEntry>> {
+    let mut header_language = None;
+    let mut entries = Vec::new();
+    let mut current: Option<(Option<String>, String, String)> = None;
+    let mut field: Option<&str> = None;
+    for line in text.lines().chain(std::iter::once("")) {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            if let Some((context, msgid, msgstr)) = current.take()
+                && !msgid.is_empty()
+            {
+                let mut translations = BTreeMap::new();
+                translations.insert(language.to_string(), msgstr);
+                entries.push(TranslationEntry {
+                    msgid,
+                    context,
+                    translations,
+                });
+            }
+            field = None;
+            continue;
+        }
+        if trimmed.starts_with('#') {
+            continue;
+        }
+        if trimmed.starts_with('"') {
+            let value = serde_json::from_str::<String>(trimmed).map_err(|error| {
+                OpyError::at(
+                    "translations-invalid",
+                    format!("malformed PO string: {error}"),
+                    span.unwrap_or_else(|| {
+                        Span::new(
+                            0,
+                            crate::diag::Position::new(1, 1),
+                            crate::diag::Position::new(1, 1),
+                        )
+                    }),
+                )
+            })?;
+            let Some((context, msgid, msgstr)) = current.as_mut() else {
+                return Err(OpyError::at(
+                    "translations-invalid",
+                    "PO continuation has no preceding field",
+                    span.unwrap_or_else(|| {
+                        Span::new(
+                            0,
+                            crate::diag::Position::new(1, 1),
+                            crate::diag::Position::new(1, 1),
+                        )
+                    }),
+                ));
+            };
+            match field {
+                Some("msgid") => msgid.push_str(&value),
+                Some("msgstr") => msgstr.push_str(&value),
+                Some("msgctxt") => context.get_or_insert_default().push_str(&value),
+                _ => {
+                    return Err(OpyError::at(
+                        "translations-invalid",
+                        "PO continuation has no recognized field",
+                        span.unwrap_or_else(|| {
+                            Span::new(
+                                0,
+                                crate::diag::Position::new(1, 1),
+                                crate::diag::Position::new(1, 1),
+                            )
+                        }),
+                    ));
+                }
+            }
+            if msgid.is_empty() {
+                for line in msgstr.lines() {
+                    if let Some(value) = line.strip_prefix("Language:") {
+                        header_language = Some(value.trim().to_string());
+                    }
+                }
+            }
+            continue;
+        }
+        let (name, value) = trimmed.split_once(' ').ok_or_else(|| {
+            OpyError::at(
+                "translations-invalid",
+                "malformed PO entry",
+                span.unwrap_or_else(|| {
+                    Span::new(
+                        0,
+                        crate::diag::Position::new(1, 1),
+                        crate::diag::Position::new(1, 1),
+                    )
+                }),
+            )
+        })?;
+        let value = serde_json::from_str::<String>(value).map_err(|error| {
+            OpyError::at(
+                "translations-invalid",
+                format!("malformed PO string: {error}"),
+                span.unwrap_or_else(|| {
+                    Span::new(
+                        0,
+                        crate::diag::Position::new(1, 1),
+                        crate::diag::Position::new(1, 1),
+                    )
+                }),
+            )
+        })?;
+        match name {
+            "msgctxt" => {
+                if let Some((context, _, _)) = current.as_mut() {
+                    *context = Some(value);
+                } else {
+                    current = Some((Some(value), String::new(), String::new()));
+                }
+                field = Some("msgctxt");
+            }
+            "msgid" => {
+                if let Some((_, msgid, _)) = current.as_mut() {
+                    *msgid = value;
+                } else {
+                    current = Some((None, value, String::new()));
+                }
+                field = Some("msgid");
+            }
+            "msgstr" => {
+                if let Some((_, _, msgstr)) = current.as_mut() {
+                    *msgstr = value;
+                } else {
+                    current = Some((None, String::new(), value));
+                }
+                field = Some("msgstr");
+            }
+            _ => {
+                return Err(OpyError::at(
+                    "translations-invalid",
+                    format!("unsupported PO field '{name}'"),
+                    span.unwrap_or_else(|| {
+                        Span::new(
+                            0,
+                            crate::diag::Position::new(1, 1),
+                            crate::diag::Position::new(1, 1),
+                        )
+                    }),
+                ));
+            }
+        }
+        if name == "msgstr"
+            && current
+                .as_ref()
+                .is_some_and(|(_, msgid, _)| msgid.is_empty())
+        {
+            if let Some((_, value, _)) = current.as_ref() {
+                for line in value.lines() {
+                    if let Some(value) = line.strip_prefix("Language:") {
+                        header_language = Some(value.trim().to_string());
+                    }
+                }
+            }
+        }
+    }
+    if header_language.as_deref() != Some(language) {
+        return Err(OpyError::at(
+            "translations-invalid",
+            format!("PO language header does not match '{language}'"),
+            span.unwrap_or_else(|| {
+                Span::new(
+                    0,
+                    crate::diag::Position::new(1, 1),
+                    crate::diag::Position::new(1, 1),
+                )
+            }),
+        ));
+    }
+    Ok(entries)
 }
 
 #[cfg(test)]
@@ -699,6 +1007,26 @@ mod tests {
             !pre.tokens.iter().any(|t| t.text.contains("gamemodes")),
             "settings content must not be lexed"
         );
+    }
+
+    #[test]
+    fn external_settings_file_is_loaded_before_lexing() {
+        let overlay = BTreeMap::from([(
+            "settings.opy.json".to_string(),
+            "{\n  \"gamemodes\": {},\n  \"lobby\": {\"maxPlayers\": 12}\n}\n".to_string(),
+        )]);
+        let (pre, _) = preprocess_with_overlay(
+            "settings \"settings.opy.json\"\nrule \"r\":\n    pass\n",
+            "main.opy",
+            Path::new("."),
+            &overlay,
+        )
+        .expect("external settings should load");
+        let block = pre.settings.expect("external settings block");
+        assert_eq!(block.external_path.as_deref(), Some("settings.opy.json"));
+        assert!(block.text.contains("maxPlayers"));
+        let parsed = crate::settings::parse_block(&block).expect("external JSONC object");
+        assert_eq!(parsed.children.len(), 2);
     }
 
     #[test]

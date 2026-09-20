@@ -1,0 +1,33 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        127: __overpyTranslationHelper__\n}\n\nrule (\"Initialize global variables\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(__overpyTranslationHelper__, String Split(Custom String(\"\uec480Blanc\"), First Of(Null)));\n    }\n}\n\nrule (\"translation unicode boundary\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Big Message(Event Player, Value In Array(String Split(Custom String(\"\uff34\uff2c\uff25\uff52\uff52\uec48AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c{0}\", Event Player), Global.__overpyTranslationHelper__), Absolute Value(Index Of Array Value(Global.__overpyTranslationHelper__, String Split(Color(White), Empty Array)))));\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        127: __overpyTranslationHelper__\n}\n\nrule (\"Initialize global variables\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(__overpyTranslationHelper__, String Split(Custom String(\"\uec480Blanc\"), First Of(Null)));\n    }\n}\n\nrule (\"translation unicode boundary\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Big Message(Event Player, Value In Array(String Split(Custom String(\"\uff34\uff2c\uff25\uff52\uff52\uec48AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c\u754c{0}\", Event Player), Global.__overpyTranslationHelper__), Absolute Value(Index Of Array Value(Global.__overpyTranslationHelper__, String Split(Color(White), Empty Array)))));\n    }\n}\n\n",
+    "workshopSha256": "cc29940ed11b7bf66f54177b176fc6bb6afb4572d9986594abbbebfcb9858f49"
+  },
+  "fixture": "synthetic/translations-unicode-boundary-331",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "f2647fa97c6f4f879da01b78898f9f8a7bdabbf2f23f902daa9aa76179f0de25"
+      }
+    ],
+    "sha256": "14d3b10fa5fc3c3ce50ebafb3833e8b014189afeabdad393ad16d4cab1176b86",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

@@ -35,13 +35,19 @@ pub struct SettingsBlock {
     pub end: usize,
     /// The position of the first char of `text` (just past the opening brace).
     pub text_start: Position,
+    /// The source file containing the extracted settings content.
+    pub content_file: u32,
+    /// The span covering the extracted settings content.
+    pub content_span: Span,
+    /// The external source path for `settings "settings.opy.json"`.
+    pub external_path: Option<String>,
 }
 
 /// Locate every `settings { ... }` block in a source text.
 ///
 /// Rules: 0 blocks -> `Ok(vec![])`; the first block must be the first
 /// non-comment construct (`settings-placement` otherwise); after `settings`
-/// a `{` is required (`settings "file"` form -> `settings-invalid`);
+/// a `{` or quoted external path is required;
 /// a second/later block is `settings-placement` at its keyword span; brace
 /// matching respects `"`/`'` strings, `\` escapes, and nesting; an
 /// unterminated block is `settings-invalid`.
@@ -135,12 +141,69 @@ fn match_block(
 ) -> OpyResult<SettingsBlock> {
     scanner.skip_whitespace();
     if scanner.peek(0) != Some('{') {
-        return Err(OpyError::at(
-            "settings-invalid",
-            "settings block must be a `settings { ... }` block (the `settings \"file\"` form is not supported)"
-                .to_string(),
+        let Some(quote) = scanner.peek(0).filter(|ch| matches!(ch, '"' | '\'')) else {
+            return Err(OpyError::at(
+                "settings-invalid",
+                "settings block must be a `settings { ... }` block or `settings \"file\"`",
+                keyword_span,
+            ));
+        };
+        scanner.advance(1);
+        let mut path = String::new();
+        let mut escaped = false;
+        loop {
+            let Some(ch) = scanner.peek(0) else {
+                return Err(OpyError::at(
+                    "settings-invalid",
+                    "unterminated external settings path",
+                    keyword_span,
+                ));
+            };
+            scanner.advance(1);
+            if escaped {
+                path.push(match ch {
+                    'n' => '\n',
+                    'r' => '\r',
+                    't' => '\t',
+                    other => other,
+                });
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == quote {
+                break;
+            } else if ch == '\n' {
+                return Err(OpyError::at(
+                    "settings-invalid",
+                    "external settings path must be one quoted string",
+                    keyword_span,
+                ));
+            } else {
+                path.push(ch);
+            }
+        }
+        scanner.skip_whitespace();
+        if scanner.peek(0) == Some('#') {
+            scanner.skip_to_eol();
+        }
+        if !matches!(scanner.peek(0), None | Some('\n')) {
+            return Err(OpyError::at(
+                "settings-invalid",
+                "external settings declaration has unexpected trailing content",
+                keyword_span,
+            ));
+        }
+        return Ok(SettingsBlock {
+            text: String::new(),
+            span: Span::new(keyword_span.file, keyword_start, scanner.here()),
             keyword_span,
-        ));
+            start: keyword_offset,
+            end: scanner.char_pos,
+            text_start: keyword_start,
+            content_file: keyword_span.file,
+            content_span: keyword_span,
+            external_path: Some(path),
+        });
     }
     let mut depth = 0usize;
     let mut string_quote: Option<char> = None;
@@ -190,6 +253,13 @@ fn match_block(
                         start: keyword_offset,
                         end: scanner.char_pos + 1,
                         text_start: text_start.expect("text start set on '{'"),
+                        content_file: keyword_span.file,
+                        content_span: Span::new(
+                            keyword_span.file,
+                            text_start.expect("text start set on '{'"),
+                            scanner.here(),
+                        ),
+                        external_path: None,
                     });
                 }
             }
@@ -225,12 +295,17 @@ pub fn parse_block(block: &SettingsBlock) -> OpyResult<cst::Settings> {
         pos: 0,
         line: block.text_start.line,
         col: block.text_start.col,
-        file: block.span.file,
+        file: block.content_file,
     };
     parser.skip_whitespace();
-    // The block's own braces delimit the root object; the text between them
-    // parses as its members.
-    let children = parser.parse_members(true)?;
+    let children = if block.external_path.is_some() {
+        let (children, _) = parser.parse_object()?;
+        children
+    } else {
+        // The block's own braces delimit the root object; the text between
+        // them parses as its members.
+        parser.parse_members(true)?
+    };
     parser.skip_whitespace();
     if parser.pos < parser.text.len() {
         return Err(parser.error(
@@ -245,11 +320,11 @@ pub fn parse_block(block: &SettingsBlock) -> OpyResult<cst::Settings> {
         return Err(OpyError::at(
             "settings-invalid",
             "settings block must contain a gamemodes group".to_string(),
-            block.span,
+            block.content_span,
         ));
     }
     Ok(cst::Settings {
-        span: block.span,
+        span: block.content_span,
         children,
     })
 }
@@ -1122,9 +1197,9 @@ mod tests {
     }
 
     #[test]
-    fn settings_file_form_is_invalid() {
-        let error = find_blocks("settings \"file.opy\"\n", 0).unwrap_err();
-        assert_eq!(error.code, "settings-invalid");
+    fn settings_file_form_is_extracted() {
+        let found = block("settings \"file.opy.json\"\n");
+        assert_eq!(found.external_path.as_deref(), Some("file.opy.json"));
     }
 
     #[test]
