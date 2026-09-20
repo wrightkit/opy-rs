@@ -603,6 +603,30 @@ impl Lowerer {
         macro_params: &[String],
         position: CallPosition,
     ) -> HirExpr {
+        if matches!(name, "_" | "__" | "___") {
+            if !matches!(args.len(), 1 | 2) {
+                self.error_at(
+                    "translations-invalid",
+                    format!("translation function '{name}' expects one or two arguments"),
+                    span,
+                );
+                return HirExpr::Null { span: None };
+            }
+            if args.len() == 2 && !matches!(args[0].value, cst::Expr::String { .. }) {
+                self.error_at(
+                    "translations-invalid",
+                    "translation context must be a string literal".to_string(),
+                    args[0].value.span(),
+                );
+                return HirExpr::Null { span: None };
+            }
+            return HirExpr::Call {
+                name: name.to_string(),
+                args: self.lower_arg_values(args, macro_params),
+                debug_source: None,
+                span: Some(span.into()),
+            };
+        }
         if name == "createWorkshopSetting" {
             return self.lower_workshop_setting(args, span, macro_params);
         }

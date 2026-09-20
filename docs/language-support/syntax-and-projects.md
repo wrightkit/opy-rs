@@ -50,6 +50,6 @@
 | Source form | Status | Limit |
 | --- | --- | --- |
 | `#!translations` language selection | ✅ Supported | Invalid language codes are rejected explicitly. |
-| Translation declarations and `.po` output lifecycle | 🚧 Partial | The native compiler preserves supported translation state and emits supported localized Workshop text; it does not claim the full upstream translation toolchain. |
-| `settings { ... }` custom-game-settings block | 🚧 Partial | Main-file and included-file blocks use the canonical Workshop settings tables; only the currently exposed schema slice is accepted. |
+| Translation declarations and `.po` output lifecycle | ✅ Supported | The compiler imports language-matched `.po` files, lowers `_`/`__`/`___`, and writes used entries for each non-base language. |
+| `settings { ... }` and `settings "settings.opy.json"` custom-game-settings blocks | ✅ Supported | Inline and external JSONC objects use the canonical Workshop settings tables for validation and emission. |
 | Settings enum, map, hero and numeric-range values | ✅ Supported | Validation and emission belong to `workshop-rs`. |

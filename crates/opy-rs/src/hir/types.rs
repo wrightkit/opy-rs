@@ -158,11 +158,22 @@ pub struct DirectiveValue {
     pub span: Option<Span>,
 }
 
-/// Translation language selection. Locale/catalog data is intentionally not
-/// represented here.
+/// One source message and its optional localized PO values.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TranslationEntry {
+    pub msgid: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<String>,
+    #[serde(default)]
+    pub translations: BTreeMap<String, String>,
+}
+
+/// Translation language selection and the loaded project catalog.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TranslationState {
     pub languages: Vec<String>,
+    #[serde(default)]
+    pub entries: Vec<TranslationEntry>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub span: Option<Span>,
 }

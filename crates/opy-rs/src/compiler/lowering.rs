@@ -207,6 +207,7 @@ pub(crate) struct Lowering<'a> {
     current_rule_conditions: Option<Vec<ValueId>>,
     visible_labels: Vec<HashSet<String>>,
     deferred_gotos: Vec<(ActionId, String, Option<HirSpan>, usize)>,
+    translation_uses: Vec<(String, Option<String>)>,
 }
 
 #[derive(Debug, Clone)]
@@ -383,6 +384,7 @@ impl<'a> Lowering<'a> {
             current_rule_conditions: None,
             visible_labels: Vec::new(),
             deferred_gotos: Vec::new(),
+            translation_uses: Vec::new(),
         })
     }
 
@@ -517,7 +519,7 @@ impl<'a> Lowering<'a> {
             } = declaration
             {
                 for (implicit_name, implicit_span) in &implicit_players {
-                    if default_var_index(implicit_name) == Some(*index) {
+                    if implicit_player_index(implicit_name) == *index {
                         return Err(IntegrationError::new(
                             "index-collision",
                             format!(
@@ -563,7 +565,7 @@ impl<'a> Lowering<'a> {
             .collect::<HashSet<_>>();
         let implicit_player_reserved = implicit_players
             .keys()
-            .map(|name| default_var_index(name).expect("implicit default player names resolve"))
+            .map(|name| implicit_player_index(name))
             .collect::<HashSet<_>>();
         let mut helper_reserved = implicit_reserved.clone();
         helper_reserved.extend(self.hir.declarations.iter().filter_map(|declaration| {
@@ -748,14 +750,11 @@ impl<'a> Lowering<'a> {
                 .into_iter()
                 .map(|(name, index, span, name_span)| (name.to_string(), index, span, name_span))
                 .collect();
-        planned_players.extend(implicit_players.iter().map(|(name, span)| {
-            (
-                name.clone(),
-                default_var_index(name).expect("implicit default player names resolve"),
-                *span,
-                None,
-            )
-        }));
+        planned_players.extend(
+            implicit_players
+                .iter()
+                .map(|(name, span)| (name.clone(), implicit_player_index(name), *span, None)),
+        );
         planned_players.sort_by_key(|(_, index, ..)| *index);
         for (name, assigned, span, name_span) in planned_players {
             let _ = (span, name_span);
@@ -899,8 +898,29 @@ impl<'a> Lowering<'a> {
             self.set_rule_provenance(rule_index, None, std::iter::empty(), action_provenance)?;
         }
 
-        if !player_initializers.is_empty() {
-            let mut actions = Vec::with_capacity(player_initializers.len());
+        let uses_player_translation_var = self
+            .hir
+            .preprocessing
+            .directives
+            .iter()
+            .any(|directive| directive.name == "translateWithPlayerVar");
+        if uses_player_translation_var || !player_initializers.is_empty() {
+            let mut actions = Vec::with_capacity(
+                player_initializers.len() + usize::from(uses_player_translation_var),
+            );
+            if uses_player_translation_var {
+                let variable = *self
+                    .players
+                    .get("__languageIndex__")
+                    .expect("translation player variable is created");
+                let player = self.push_value(Value::EventPlayer);
+                let value = self.push_number(1.1, "1.1");
+                actions.push(self.push_action(Action::SetPlayerVariable {
+                    player,
+                    variable: self.player_names[variable].clone(),
+                    value,
+                }));
+            }
             for (name, init_expr, span, _target_span) in player_initializers {
                 let variable = *self
                     .players
@@ -2696,24 +2716,13 @@ impl<'a> Lowering<'a> {
             .languages
             .iter()
             .map(|language| {
-                let locale = translation_locale(language).ok_or_else(|| {
+                translation_color_white(language).ok_or_else(|| {
                     IntegrationError::new(
                         "translations-invalid",
                         format!("unsupported translation language '{language}'"),
                         translations.span,
                     )
-                })?;
-                self.compiler
-                    .catalog
-                    .enum_spelling("Color", &Locale::new(locale), "WHITE")
-                    .map(str::to_string)
-                    .ok_or_else(|| {
-                        IntegrationError::new(
-                            "translations-invalid",
-                            format!("catalog has no Color.WHITE spelling for locale '{locale}'"),
-                            translations.span,
-                        )
-                    })
+                })
             })
             .collect::<Result<Vec<_>, _>>()?
             .join("0");
@@ -2722,6 +2731,206 @@ impl<'a> Lowering<'a> {
         let null = self.push_value(Value::Null);
         let separator = self.push_call("firstOf", vec![null]);
         Ok(self.push_call("stringSplit", vec![custom_string, separator]))
+    }
+
+    fn lower_translation(
+        &mut self,
+        name: &str,
+        args: &[Expr],
+        span: Option<HirSpan>,
+    ) -> Result<ValueId, IntegrationError> {
+        let Some(translations) = self.hir.preprocessing.translations.as_ref() else {
+            return Err(IntegrationError::new(
+                "translations-invalid",
+                format!("translation function '{name}' requires #!translations"),
+                span,
+            ));
+        };
+        let (context, target) = match args {
+            [target] => (None, target),
+            [Expr::String { value: context, .. }, target] => (Some(context.as_str()), target),
+            _ => {
+                return Err(IntegrationError::new(
+                    "translations-invalid",
+                    format!("translation function '{name}' expects one or two arguments"),
+                    span,
+                ));
+            }
+        };
+        let (literal, format_args) = match target {
+            Expr::String { value, .. } => (value.clone(), Vec::new()),
+            Expr::Format { text, args, .. } => {
+                let (text, args) = self.fold_format_constants(text, args);
+                (text, args)
+            }
+            _ => {
+                let target = self.lower_value(target)?;
+                if name == "___" {
+                    return Ok(target);
+                }
+                return Ok(self.select_translation(target));
+            }
+        };
+        if format_args.len() > 3 {
+            return Err(IntegrationError::new(
+                "translations-invalid",
+                "translated format strings support at most three dynamic arguments",
+                span,
+            ));
+        }
+        let literal = literal.as_str();
+        let msgid = literal.trim();
+        if literal.contains('\u{ec48}') {
+            return Err(IntegrationError::new(
+                "translations-invalid",
+                "translation strings must not contain the reserved translation separator",
+                span,
+            ));
+        }
+        if !self
+            .translation_uses
+            .iter()
+            .any(|(existing_msgid, existing)| {
+                existing_msgid == msgid && existing.as_deref() == context
+            })
+        {
+            self.translation_uses
+                .push((msgid.to_string(), context.map(str::to_string)));
+        }
+        let localized = translations
+            .languages
+            .iter()
+            .map(|language| {
+                translations
+                    .entries
+                    .iter()
+                    .find(|entry| entry.msgid == msgid && entry.context.as_deref() == context)
+                    .and_then(|entry| entry.translations.get(language))
+                    .filter(|value| !value.is_empty())
+                    .cloned()
+                    .unwrap_or_else(|| literal.to_string())
+            })
+            .collect::<Vec<_>>();
+        let encoded = format!(
+            "\u{ff34}\u{ff2c}\u{ff25}\u{ff52}\u{ff52}\u{ec48}{}",
+            localized.join("\u{ec48}")
+        );
+        let text = self.push_value(Value::String(encoded));
+        let mut custom_args = vec![text];
+        custom_args.extend(
+            format_args
+                .iter()
+                .map(|arg| self.lower_value(arg))
+                .collect::<Result<Vec<_>, _>>()?,
+        );
+        let custom = self.push_call("customString", custom_args);
+        let helper_id = *self.globals.get(TRANSLATION_HELPER_NAME).ok_or_else(|| {
+            IntegrationError::new(
+                "translations-invalid",
+                "translation helper variable was not allocated",
+                span,
+            )
+        })?;
+        let helper = self.push_value(Value::GlobalVariable(self.global_names[helper_id].clone()));
+        let translated = self.push_call("stringSplit", vec![custom, helper]);
+        if name == "___" {
+            return Ok(translated);
+        }
+        if name == "_"
+            && self
+                .hir
+                .preprocessing
+                .directives
+                .iter()
+                .any(|directive| directive.name == "translateWithPlayerVar")
+        {
+            let variable = *self
+                .players
+                .get("__languageIndex__")
+                .expect("translation player variable is allocated");
+            let player = self.push_call("localPlayer", Vec::new());
+            let index = self.push_value(Value::PlayerVariable {
+                player,
+                variable: self.player_names[variable].clone(),
+            });
+            return Ok(self.push_call("valueInArray", vec![translated, index]));
+        }
+        Ok(self.select_translation(translated))
+    }
+
+    fn select_translation(&mut self, values: ValueId) -> ValueId {
+        let helper_id = *self
+            .globals
+            .get(TRANSLATION_HELPER_NAME)
+            .expect("translation helper variable is allocated");
+        let helper = self.push_value(Value::GlobalVariable(self.global_names[helper_id].clone()));
+        let color_text = self.push_value(Value::String("White".to_string()));
+        let color = self.push_call("customString", vec![color_text]);
+        let empty = self.push_call("emptyArray", Vec::new());
+        let color_name = self.push_call("stringSplit", vec![color, empty]);
+        let index = self.push_call("indexOfArrayValue", vec![helper, color_name]);
+        let index = self.push_call("absoluteValue", vec![index]);
+        self.push_call("valueInArray", vec![values, index])
+    }
+
+    pub(super) fn translation_files(&self) -> Vec<(String, String)> {
+        let Some(translations) = self.hir.preprocessing.translations.as_ref() else {
+            return Vec::new();
+        };
+        let keep_unused = self
+            .hir
+            .preprocessing
+            .directives
+            .iter()
+            .any(|directive| directive.name == "keepUnusedTranslations");
+        translations
+            .languages
+            .iter()
+            .skip(1)
+            .map(|language| {
+                let mut keys = self.translation_uses.clone();
+                if keep_unused {
+                    keys.extend(
+                        translations
+                            .entries
+                            .iter()
+                            .map(|entry| (entry.msgid.clone(), entry.context.clone())),
+                    );
+                }
+                keys.sort();
+                keys.dedup();
+                let mut output = String::from(
+                    "msgid \"\"\nmsgstr \"\"\n\"Content-Type: text/plain; charset=UTF-8\\n\"\n",
+                );
+                output.push_str(&format!("\"Language: {language}\\n\"\n\n"));
+                for (msgid, context) in keys {
+                    if let Some(ref context) = context {
+                        output.push_str(&format!(
+                            "msgctxt {}\n",
+                            serde_json::to_string(&context).unwrap()
+                        ));
+                    }
+                    let translated = translations
+                        .entries
+                        .iter()
+                        .find(|entry| {
+                            entry.msgid == msgid && entry.context.as_deref() == context.as_deref()
+                        })
+                        .and_then(|entry| entry.translations.get(language))
+                        .cloned()
+                        .unwrap_or_default();
+                    output.push_str(&format!(
+                        "msgid {}\n",
+                        serde_json::to_string(&msgid).unwrap()
+                    ));
+                    output.push_str(&format!(
+                        "msgstr {}\n\n",
+                        serde_json::to_string(&translated).unwrap()
+                    ));
+                }
+                (language.clone(), output)
+            })
+            .collect()
     }
 
     fn lower_debug(
@@ -4916,6 +5125,9 @@ impl<'a> Lowering<'a> {
                 }
             },
             Expr::Call { name, args, .. } => {
+                if matches!(name.as_str(), "_" | "__" | "___") {
+                    return self.lower_translation(name, args, span);
+                }
                 if name == "createWorkshopSetting" {
                     return self.lower_workshop_setting(args, span);
                 }
@@ -6801,6 +7013,14 @@ fn implicit_default_variables(
             ),
         }
     }
+    if hir
+        .preprocessing
+        .directives
+        .iter()
+        .any(|directive| directive.name == "translateWithPlayerVar")
+    {
+        players.insert("__languageIndex__".to_string(), None);
+    }
     (globals, players)
 }
 
@@ -7368,25 +7588,36 @@ fn is_membership_literal(expr: &hir::Expr, strict: bool) -> bool {
     is_literal_key(expr) && (!strict || !matches!(expr, hir::Expr::String { .. }))
 }
 
-fn translation_locale(language: &str) -> Option<&'static str> {
-    Some(match language {
-        "de" => "de-DE",
-        "en" => "en-US",
-        "es" | "es_mx" => "es-MX",
-        "es_es" => "es-ES",
-        "fr" => "fr-FR",
-        "it" => "it-IT",
-        "ja" => "ja-JP",
-        "ko" => "ko-KR",
-        "pl" => "pl-PL",
-        "pt" => "pt-BR",
-        "ru" => "ru-RU",
-        "th" => "th-TH",
-        "tr" => "tr-TR",
-        "zh" | "zh_cn" => "zh-CN",
-        "zh_tw" => "zh-TW",
-        _ => return None,
-    })
+fn translation_color_white(language: &str) -> Option<String> {
+    Some(
+        match language {
+            "de" => "Weiß",
+            "en" => "White",
+            "es" | "es_mx" => "Blanco",
+            "es_es" => "Blanco",
+            "fr" => "Blanc",
+            "it" => "Bianco",
+            "ja" => "白",
+            "ko" => "흰색",
+            "pl" => "Biały",
+            "pt" => "Branco",
+            "ru" => "Белый",
+            "th" => "สีขาว",
+            "tr" => "Beyaz",
+            "zh" | "zh_cn" => "白色",
+            "zh_tw" => "白色",
+            _ => return None,
+        }
+        .to_string(),
+    )
+}
+
+fn implicit_player_index(name: &str) -> u32 {
+    if name == "__languageIndex__" {
+        127
+    } else {
+        default_var_index(name).expect("implicit default player names resolve")
+    }
 }
 
 fn big_letters(value: &str) -> String {

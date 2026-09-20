@@ -211,6 +211,7 @@ impl Preprocessor {
             let languages = parse_translations(rest.trim(), span)?;
             self.preprocessing.translations = Some(TranslationState {
                 languages: languages.clone(),
+                entries: Vec::new(),
                 span: Some(span.into()),
             });
             self.record(name, Some(&languages.join(" ")), span);

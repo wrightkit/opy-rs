@@ -195,6 +195,10 @@ impl Preprocessor {
                 Err(error) => return Err(error),
                 Ok(mut blocks) => blocks.pop(),
             };
+            let settings = match settings {
+                Some(block) => Some(self.resolve_settings_source(block)?),
+                None => None,
+            };
             let owns_settings = settings.is_some();
             if let Some(block) = settings.as_ref()
                 && self.settings.is_some()

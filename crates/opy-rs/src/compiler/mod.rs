@@ -491,6 +491,7 @@ impl Compiler {
         lowering.copy_files()?;
         lowering.lower_declarations()?;
         lowering.lower_rules()?;
+        let translation_files = lowering.translation_files();
 
         let program = lowering.program;
         program.validate().map_err(|error| {
@@ -536,6 +537,7 @@ impl Compiler {
             emitted,
             catalog_identity: self.catalog.identity(),
             hook_console_output: Vec::new(),
+            translation_files,
         })
     }
 
@@ -647,7 +649,21 @@ impl Compiler {
 
         match self.compile_hir_with_locale_and_hook(&hir, outcome.post_compile_hook, locale) {
             Ok(artifact) => {
-                CompileReport::success(compiler, catalog, artifact, frontend_diagnostics)
+                match write_translation_files(root, &hir, &artifact.translation_files) {
+                    Ok(()) => {
+                        CompileReport::success(compiler, catalog, artifact, frontend_diagnostics)
+                    }
+                    Err(error) => {
+                        let mut diagnostics = frontend_diagnostics;
+                        diagnostics.push(compile_diagnostic(error, &hir.files));
+                        CompileReport::failure(
+                            compiler,
+                            catalog,
+                            CompileFailureClass::Integration,
+                            diagnostics,
+                        )
+                    }
+                }
             }
             Err(error) => {
                 let mut diagnostics = frontend_diagnostics;
@@ -685,8 +701,43 @@ impl Compiler {
                 error.span.map(hir_span_from_diag),
             )
         })?;
-        self.compile_hir_with_locale_and_hook(&hir, outcome.post_compile_hook, locale)
+        let artifact =
+            self.compile_hir_with_locale_and_hook(&hir, outcome.post_compile_hook, locale)?;
+        write_translation_files(root, &hir, &artifact.translation_files)?;
+        Ok(artifact)
     }
+}
+
+fn write_translation_files(
+    root: &std::path::Path,
+    hir: &hir::Program,
+    files: &[(String, String)],
+) -> Result<(), IntegrationError> {
+    let Some(source) = hir.files.get(1).or_else(|| hir.files.first()) else {
+        return Ok(());
+    };
+    let base = root.join(
+        std::path::Path::new(&source.path)
+            .file_name()
+            .unwrap_or_else(|| std::ffi::OsStr::new("main.opy")),
+    );
+    for (language, content) in files {
+        let path = base.with_extension(format!("{language}.po"));
+        std::fs::write(&path, content).map_err(|error| {
+            IntegrationError::new(
+                "translations-io",
+                format!(
+                    "cannot write translation file '{}': {error}",
+                    path.display()
+                ),
+                hir.preprocessing
+                    .translations
+                    .as_ref()
+                    .and_then(|value| value.span),
+            )
+        })?;
+    }
+    Ok(())
 }
 
 fn workshop_error_span(error: &workshop_rs::WorkshopError) -> Option<workshop_rs::source::Span> {
@@ -840,6 +891,7 @@ pub struct CompilationArtifact {
     pub catalog_identity: CatalogIdentity,
     pub final_output: String,
     pub hook_console_output: Vec<String>,
+    pub(crate) translation_files: Vec<(String, String)>,
 }
 
 impl CompilationArtifact {
