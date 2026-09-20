@@ -7,12 +7,6 @@
     "compilation/catalog-backed-member-values"
   ],
   "source": "source.opy",
-  "attribution": {
-    "kind": "original",
-    "origin": "OPY compatibility regression minimized eventPlayer.isDummy() lowering probe",
-    "license": "AGPL-3.0-or-later",
-    "redistributable": true
-  },
   "tests": {
     "source": {
       "nativeStatus": "success",

@@ -94,7 +94,7 @@ def _inside(path: Path, directory: Path) -> bool:
 
 def validate_fixture(path: Path) -> tuple[Path, dict[str, Any]]:
     metadata = load_json(path)
-    required = ("schemaVersion", "id", "category", "source", "attribution")
+    required = ("schemaVersion", "id", "category", "source")
     missing = [key for key in required if key not in metadata]
     if missing:
         raise RunnerError(f"{path}: missing fields: {', '.join(missing)}")
@@ -105,14 +105,15 @@ def validate_fixture(path: Path) -> tuple[Path, dict[str, Any]]:
     if not isinstance(metadata["category"], str) or not metadata["category"]:
         raise RunnerError(f"{path}: category must be a non-empty string")
 
-    attribution = metadata["attribution"]
-    if not isinstance(attribution, dict):
-        raise RunnerError(f"{path}: attribution must be an object")
-    for key in ("kind", "origin", "license", "redistributable"):
-        if key not in attribution:
-            raise RunnerError(f"{path}: attribution missing {key}")
-    if not isinstance(attribution["redistributable"], bool):
-        raise RunnerError(f"{path}: attribution.redistributable must be boolean")
+    attribution = metadata.get("attribution")
+    if attribution is not None:
+        if not isinstance(attribution, dict):
+            raise RunnerError(f"{path}: attribution must be an object")
+        for key in ("kind", "origin", "license", "redistributable"):
+            if key not in attribution:
+                raise RunnerError(f"{path}: attribution missing {key}")
+        if not isinstance(attribution["redistributable"], bool):
+            raise RunnerError(f"{path}: attribution.redistributable must be boolean")
 
     fixture_dir = path.parent.resolve()
     source_value = metadata["source"]

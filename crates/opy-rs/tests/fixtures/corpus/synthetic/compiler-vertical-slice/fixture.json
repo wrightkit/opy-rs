@@ -6,12 +6,6 @@
   "features": [
     "compilation/opy-integration-vertical-slice"
   ],
-  "attribution": {
-    "kind": "original",
-    "origin": "Wright compatibility corpus; OPY-to-Workshop integration boundary compatibility regression",
-    "license": "AGPL-3.0-or-later",
-    "redistributable": true
-  },
   "tests": {
     "source": {
       "nativeStatus": "success",

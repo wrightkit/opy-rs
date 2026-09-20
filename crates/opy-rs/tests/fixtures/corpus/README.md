@@ -10,7 +10,7 @@ relationship.
 
 ```text
 corpus/<category>/<name>/
-  fixture.json   # input, attribution, and test expectations
+  fixture.json   # input, optional attribution, and test expectations
   source.opy     # input, or the source path named by fixture.json
   oracle.json    # pinned reference result snapshot
 ```
@@ -18,7 +18,8 @@ corpus/<category>/<name>/
 `fixture.json` contains:
 
 - `id`, `category`, optional `features`, and the fixture `source`;
-- `attribution` with source kind, origin, license, and redistribution status;
+- optional `attribution` with source kind, origin, license, and redistribution
+  status when a third-party, redistribution, or reproducibility record is needed;
 - imported-source `sourceCommit`, `sourceUrl`, `licenseUrl`, and file hashes
   where attribution or reproducibility requires them;
 - `tests.source` with the native source status, reference relationship, rule

@@ -22,7 +22,7 @@ local WIR/storage/node-ID model and convert it afterward.
 
 OPY retains ownership of helper/index allocation, preprocessing/macros,
 source-language diagnostics, and source mapping. Where source mapping
-is needed, OPY consumes the optional public provenance contract supplied by
+is needed, OPY consumes the optional public source-mapping contract supplied by
 `workshop-rs`. Workshop owns canonical semantics, validation, catalog,
 localization/settings, and emission. Compatibility tests may compare
 canonical semantics, but it does not make Workshop's internal WIR/storage a

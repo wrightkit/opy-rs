@@ -9,12 +9,6 @@
     "player-variables"
   ],
   "source": "source.opy",
-  "attribution": {
-    "kind": "original",
-    "origin": "OPY compatibility regression minimized pinned OverPy 9.7.10 collection-deletion probe",
-    "license": "AGPL-3.0-or-later",
-    "redistributable": true
-  },
   "tests": {
     "source": {
       "nativeStatus": "success",

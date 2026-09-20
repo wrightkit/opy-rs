@@ -93,6 +93,11 @@ class RunnerTests(unittest.TestCase):
         for fixture_path, fixture in run_oracle.discover_fixtures(CORPUS_DIR):
             with self.subTest(fixture=fixture["id"]):
                 self.assertEqual(set(fixture["tests"]), {"source", "compiler"})
+                attribution = fixture.get("attribution")
+                if attribution is not None:
+                    self.assertIsInstance(attribution, dict)
+                    self.assertTrue(attribution["origin"])
+                    self.assertTrue(attribution["license"])
                 self.assertNotIn("expectedStatus", fixture)
                 self.assertNotIn("provenance", fixture)
                 self.assertNotIn("provenanceNote", fixture)

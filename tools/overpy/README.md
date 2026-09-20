@@ -20,10 +20,10 @@ pnpm install --dir tools/overpy/oracle
 Each fixture under
 `crates/opy-rs/tests/fixtures/corpus/<category>/<name>/` contains a
 `fixture.json` manifest, OPY input, and `oracle.json` result snapshot. The
-manifest is the only per-fixture expectation record. It keeps concrete source
-attribution/licensing and reproducibility data, plus the source and compiler
-test declarations. The snapshot records the pinned reference output and the
-complete source-project digest.
+manifest is the only per-fixture expectation record. When needed, it keeps
+concrete source attribution/licensing and reproducibility data, plus the source
+and compiler test declarations. The snapshot records the pinned reference output
+and the complete source-project digest.
 
 The Rust differential test runs the native frontend without Node or OverPy:
 

@@ -16,7 +16,7 @@ make diagnostics and source identity diverge from the standalone library.
 The first-party LPP provider is a thin owner process over `opy-rs`. It accepts
 the selected entry through the approved LPP contract and delegates project
 loading, `#!mainFile`, reachable includes, preprocessing, macros, source
-semantics, diagnostics/provenance, and compilation to `opy-rs`. It advertises
+semantics, diagnostics/source mapping, and compilation to `opy-rs`. It advertises
 only the capabilities its implementation supports and returns structured
 protocol results without exposing OPY AST/HIR or Rust implementation types.
 

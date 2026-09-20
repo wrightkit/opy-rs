@@ -9,12 +9,6 @@
   "id": "synthetic/receiver-playervar",
   "schemaVersion": 1,
   "source": "source.opy",
-  "attribution": {
-    "kind": "original",
-    "license": "AGPL-3.0-or-later",
-    "origin": "Wright compatibility corpus; minimized source-language regression for the pinned OverPy receiver-member behavior.",
-    "redistributable": true
-  },
   "tests": {
     "source": {
       "nativeStatus": "success",

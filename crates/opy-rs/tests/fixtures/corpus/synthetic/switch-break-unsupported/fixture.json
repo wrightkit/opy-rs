@@ -9,12 +9,6 @@
     "negative diagnostic"
   ],
   "source": "source.opy",
-  "attribution": {
-    "kind": "original",
-    "origin": "OPY compatibility regression nested conditional switch-break negative probe",
-    "license": "AGPL-3.0-or-later",
-    "redistributable": true
-  },
   "tests": {
     "source": {
       "nativeStatus": "success",

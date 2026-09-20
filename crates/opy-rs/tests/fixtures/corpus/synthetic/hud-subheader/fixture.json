@@ -7,13 +7,6 @@
   "id": "synthetic/hud-subheader",
   "schemaVersion": 1,
   "source": "source.opy",
-  "attribution": {
-    "kind": "minimized-regression",
-    "license": "AGPL-3.0-or-later",
-    "modifications": "WrightKit-authored minimized reproduction from wrightkit/opy-rs#114",
-    "origin": "OPY compatibility regression acceptance reproduction",
-    "redistributable": true
-  },
   "tests": {
     "source": {
       "nativeStatus": "success",

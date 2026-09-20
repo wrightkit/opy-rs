@@ -51,5 +51,5 @@ this repository records only how OPY consumes that boundary.
 
 No unresolved OPY architecture decision was identified in this audit. The ADRs
 preserve recoverable rationale; current architecture documents remain the
-authority for present boundaries, and implementation evidence must still be
+authority for present boundaries, and current implementation reality must still be
 checked separately.
