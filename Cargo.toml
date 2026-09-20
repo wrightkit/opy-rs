@@ -15,7 +15,7 @@ libquickjs-ng-sys = "0.13.0"
 serde = "1"
 serde_json = "1"
 sha2 = "0.10"
-workshop-rs = { git = "https://github.com/wrightkit/workshop-rs.git", rev = "8493e8adea9846a1b368ffe15c787ef694b89169" }
+workshop-rs = { git = "https://github.com/wrightkit/workshop-rs.git", rev = "a104cf7c60fb45b751aa1bd4230d7ba20bebefe7" }
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
