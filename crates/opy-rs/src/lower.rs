@@ -77,6 +77,7 @@ struct Lowerer {
     manifest: &'static Manifest,
     /// The canonical Workshop catalog linked by the manifest.
     catalog: Catalog,
+    texture_used: bool,
     errors: Vec<OpyError>,
 }
 
@@ -85,6 +86,7 @@ mod expressions;
 pub(crate) mod policy;
 mod special_forms;
 mod statements;
+mod textures;
 
 /// Lower a parsed program into the Opy HIR contract.
 pub fn lower(
@@ -133,6 +135,7 @@ pub fn lower_with_preprocessing(
         allow_dict_literal: false,
         manifest,
         catalog,
+        texture_used: false,
         errors: Vec::new(),
     };
     lowerer.collect_symbols(program);
@@ -199,6 +202,20 @@ pub fn lower_with_preprocessing(
         return Err(lowerer.errors.swap_remove(0));
     }
 
+    if lowerer.texture_used {
+        declarations.insert(
+            0,
+            Declaration::GlobalVariable {
+                name: "__holygrail__".to_string(),
+                index: Some(127),
+                span: None,
+                name_span: None,
+                initializer: None,
+            },
+        );
+        rules.insert(0, texture_setup_rule());
+    }
+
     Ok(HirProgram {
         protocol: Protocol {
             name: PROTOCOL_NAME.to_string(),
@@ -216,6 +233,197 @@ pub fn lower_with_preprocessing(
         settings: program.settings.as_ref().map(lower_settings),
         preprocessing: preprocessing.clone(),
     })
+}
+
+fn texture_setup_rule() -> RuleEntry {
+    RuleEntry::Rule(Rule {
+        name: format!("OverPy <{}tx> / <{}fg> setup code", '\u{00ad}', '\u{00ad}'),
+        span: None,
+        name_span: None,
+        disabled: false,
+        delimiter: false,
+        new_page: None,
+        annotations: Vec::new(),
+        event: Event {
+            name: "global".to_string(),
+            args: Vec::new(),
+            span: None,
+        },
+        conditions: Vec::new(),
+        actions: vec![
+            HirStmt::Expr {
+                expr: Box::new(HirExpr::Call {
+                    name: "createDummy".to_string(),
+                    args: vec![
+                        HirExpr::Call {
+                            name: "getAllHeroes".to_string(),
+                            args: Vec::new(),
+                            debug_source: None,
+                            span: None,
+                        },
+                        texture_dummy_team(),
+                        HirExpr::Bool {
+                            value: false,
+                            span: None,
+                        },
+                        HirExpr::Null { span: None },
+                        HirExpr::Null { span: None },
+                    ],
+                    debug_source: None,
+                    span: None,
+                }),
+                span: None,
+            },
+            HirStmt::Expr {
+                expr: Box::new(HirExpr::ReceiverCall {
+                    receiver: Box::new(texture_dummy_player()),
+                    name: "startForcingName".to_string(),
+                    args: vec![texture_marker('\u{303c}')],
+                    span: None,
+                }),
+                span: None,
+            },
+            HirStmt::Assign {
+                target: Box::new(HirExpr::GlobalVar {
+                    name: "__holygrail__".to_string(),
+                    span: None,
+                }),
+                value: Box::new(HirExpr::ReceiverCall {
+                    receiver: Box::new(texture_dummy_first_value()),
+                    name: "split".to_string(),
+                    args: vec![HirExpr::Array {
+                        elements: Vec::new(),
+                        span: None,
+                    }],
+                    span: None,
+                }),
+                span: None,
+            },
+            HirStmt::Expr {
+                expr: Box::new(HirExpr::ReceiverCall {
+                    receiver: Box::new(texture_dummy_player()),
+                    name: "startForcingName".to_string(),
+                    args: vec![texture_marker('\u{840}')],
+                    span: None,
+                }),
+                span: None,
+            },
+            HirStmt::Assign {
+                target: Box::new(HirExpr::GlobalVar {
+                    name: "__holygrail__".to_string(),
+                    span: None,
+                }),
+                value: Box::new(HirExpr::ReceiverCall {
+                    receiver: Box::new(HirExpr::ReceiverCall {
+                        receiver: Box::new(texture_marker('\u{303c}')),
+                        name: "replace".to_string(),
+                        args: vec![
+                            HirExpr::GlobalVar {
+                                name: "__holygrail__".to_string(),
+                                span: None,
+                            },
+                            texture_dummy_first_value(),
+                        ],
+                        span: None,
+                    }),
+                    name: "substring".to_string(),
+                    args: vec![
+                        HirExpr::Number {
+                            value: 126.0,
+                            text: "126".to_string(),
+                            span: None,
+                        },
+                        HirExpr::Bool {
+                            value: true,
+                            span: None,
+                        },
+                    ],
+                    span: None,
+                }),
+                span: None,
+            },
+            HirStmt::Expr {
+                expr: Box::new(HirExpr::Call {
+                    name: "destroyAllDummies".to_string(),
+                    args: Vec::new(),
+                    debug_source: None,
+                    span: None,
+                }),
+                span: None,
+            },
+        ],
+    })
+}
+
+fn texture_dummy_player() -> HirExpr {
+    HirExpr::Call {
+        name: "lastCreatedEntity".to_string(),
+        args: Vec::new(),
+        debug_source: None,
+        span: None,
+    }
+}
+
+fn texture_dummy_first_value() -> HirExpr {
+    HirExpr::Index {
+        array: Box::new(texture_dummy_player()),
+        index: Box::new(HirExpr::Number {
+            value: 0.0,
+            text: "0".to_string(),
+            span: None,
+        }),
+        span: None,
+    }
+}
+
+fn texture_dummy_team() -> HirExpr {
+    HirExpr::Conditional {
+        then_value: Box::new(HirExpr::Enum {
+            value_type: "Team".to_string(),
+            value: "TEAM_1".to_string(),
+            span: None,
+        }),
+        condition: Box::new(HirExpr::Call {
+            name: "getNumberOfSlots".to_string(),
+            args: vec![HirExpr::Enum {
+                value_type: "Team".to_string(),
+                value: "TEAM_1".to_string(),
+                span: None,
+            }],
+            debug_source: None,
+            span: None,
+        }),
+        else_value: Box::new(HirExpr::Conditional {
+            then_value: Box::new(HirExpr::Enum {
+                value_type: "Team".to_string(),
+                value: "TEAM_2".to_string(),
+                span: None,
+            }),
+            condition: Box::new(HirExpr::Call {
+                name: "getNumberOfSlots".to_string(),
+                args: vec![HirExpr::Enum {
+                    value_type: "Team".to_string(),
+                    value: "TEAM_2".to_string(),
+                    span: None,
+                }],
+                debug_source: None,
+                span: None,
+            }),
+            else_value: Box::new(HirExpr::Bool {
+                value: true,
+                span: None,
+            }),
+            span: None,
+        }),
+        span: None,
+    }
+}
+
+fn texture_marker(suffix: char) -> HirExpr {
+    HirExpr::String {
+        value: format!("{}{}", "_".repeat(126), suffix),
+        span: None,
+    }
 }
 
 /// Lower a settings expression through the same CST-to-HIR semantic path as
@@ -253,6 +461,7 @@ pub(crate) fn lower_settings_expression(
         allow_dict_literal: true,
         manifest,
         catalog,
+        texture_used: false,
         errors: Vec::new(),
     };
     lowerer.collect_symbols(program);
@@ -995,6 +1204,17 @@ mod tests {
         assert_eq!(error.code, "unsupported-member");
         let span = error.span.expect("the error is source-located");
         assert_eq!(span.start.line, 4);
+    }
+
+    #[test]
+    fn unknown_texture_member_is_rejected_by_the_source_surface() {
+        let error = crate::compile(
+            "globalvar g\nrule \"r\":\n    @Event global\n    g = Texture.NOT_A_TEXTURE\n",
+            "test.opy",
+            std::path::Path::new(""),
+        )
+        .expect_err("unknown texture member must be rejected");
+        assert_eq!(error.code, "unknown-texture-member");
     }
 
     // --- Builtin semantic manifest coverage (#109) ---

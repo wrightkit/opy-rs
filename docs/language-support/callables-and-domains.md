@@ -33,9 +33,9 @@ canonical Workshop model.
 
 | Source form | Status | Limit |
 | --- | --- | --- |
-| `Hero`, `Map`, `Gamemode`, `Team`, `Slot`, `Color`, `Button` members | 🚧 Partial | Catalog-backed members used by the native compiler are supported; unknown or source-only members are rejected with a source diagnostic. |
+| `Hero`, `Map`, `Gamemode`, `Team`, `Slot`, `Color`, `Button`, `Texture` members | ✅ Supported | Pinned upstream member names, legacy aliases, numeric team/slot filters, source-only color aliases, and texture-tag setup lower through the canonical Workshop contract; unknown members produce a source diagnostic. |
 | `Vector.UP`, `Vector.DOWN`, `Vector.LEFT`, `Vector.RIGHT`, `Vector.FORWARD`, `Vector.BACKWARD` | ✅ Supported | These are canonical vector constants, not arbitrary catalog entries. |
-| `Math.PI`, `Math.E`, `Math.INFINITY`, `Math.EPSILON` | ✅ Supported | Values lower as numeric constants. |
+| `Math` numeric, spacing and newline constants | ✅ Supported | `PI`, `E`, `INFINITY`, `EPSILON`, radius multipliers, and the pinned spacing/newline constants lower as numeric or custom-string values. |
 | User `enum` declarations and inferred member values | ✅ Supported | Explicit values and inferred increments follow OverPy declaration rules. |
 | Contextual reevaluation values such as `ChaseTimeReeval.NONE` and `ChaseRateReeval` | ✅ Supported | Dispatch is determined by the receiving callable's signature. |
 | Aliases such as `getCurrentHero`, `hasStatusEffect` and `ChaseReeval` | ✅ Supported | Aliases resolve to their canonical callable or enum identity. |

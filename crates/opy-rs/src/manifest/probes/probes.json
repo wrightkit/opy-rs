@@ -156,6 +156,13 @@
       "source": "get-horizontal-facing-angle.opy"
     },
     {
+      "expect": "success",
+      "id": "get-number-of-slots",
+      "outputSha256": "55dda3435528ef1ead9ac811e75e449c00a7eda748d82fc6c0c2682976242ae4",
+      "sha256": "3b35f32169549cecdb476d220c49a08b6cd8bd4bea008fe449643e19158f936f",
+      "source": "get-number-of-slots.opy"
+    },
+    {
       "diagnosticContains": "Unknown function 'setMoveSpeed'",
       "expect": "failure",
       "id": "generic-member-only-action",
@@ -287,6 +294,13 @@
       "id": "unknown-value",
       "sha256": "af4d8f8fe85c141e38867a3b5655525b6a886c000151f39b2a49878c38ddb37b",
       "source": "unknown-value.opy"
+    },
+    {
+      "expect": "success",
+      "id": "texture-string-substring",
+      "outputSha256": "29e5115de542aeff26032cb383fb23ff20d0d0adccb2cb78f27ddd115f39bc74",
+      "sha256": "c486b131d45824c4cc7e09c3d02d938f1a40b3ffaa58e80faf1daa56a9084bee",
+      "source": "texture-string-substring.opy"
     },
     {
       "diagnosticContains": "Expected an action, but got function 'isGameInProgress' which is a value",

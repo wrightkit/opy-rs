@@ -780,6 +780,35 @@ impl Parser<'_> {
                     return Err(());
                 }
                 '\\' if index + 1 < chars.len() => {
+                    if chars[index + 1] == '&' {
+                        let name_start = index + 2;
+                        let mut name_end = name_start;
+                        while name_end < chars.len()
+                            && (chars[name_end].is_ascii_alphanumeric() || chars[name_end] == '_')
+                        {
+                            name_end += 1;
+                        }
+                        if name_end == name_start || chars.get(name_end) != Some(&';') {
+                            self.errors.push(OpyError::at(
+                                "invalid-string-entity",
+                                "string entity must have the form \\&name;".to_string(),
+                                string_span,
+                            ));
+                            return Err(());
+                        }
+                        let name: String = chars[name_start..name_end].iter().collect();
+                        let Some(decoded) = crate::string_entities::codepoint(&name) else {
+                            self.errors.push(OpyError::at(
+                                "unknown-string-entity",
+                                format!("unknown string entity '&{name};'"),
+                                string_span,
+                            ));
+                            return Err(());
+                        };
+                        text.push(decoded);
+                        index = name_end + 1;
+                        continue;
+                    }
                     if chars[index + 1] == 'u'
                         && index + 6 <= chars.len()
                         && chars[index + 2..index + 6]

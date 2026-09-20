@@ -345,17 +345,77 @@ impl Lowerer {
                     }
                 };
             }
+            if name == "Texture" {
+                if let Some(tag) = super::textures::tag(member) {
+                    self.texture_used = true;
+                    return HirExpr::Format {
+                        text: tag.replacen('<', "{0}", 1),
+                        args: vec![HirExpr::GlobalVar {
+                            name: "__holygrail__".to_string(),
+                            span: Some(span.into()),
+                        }],
+                        span: Some(span.into()),
+                    };
+                }
+                self.error_at(
+                    "unknown-texture-member",
+                    format!("unknown texture member '{member}'"),
+                    span,
+                );
+                return HirExpr::Null { span: None };
+            }
             if name == "Math" {
+                match member {
+                    "FUCKTON_OF_SPACES" | "LOTS_OF_SPACES" => {
+                        return HirExpr::String {
+                            value: "\u{2003}".repeat(170),
+                            span: Some(span.into()),
+                        };
+                    }
+                    "FUCKTON_OF_NEWLINES" | "LOTS_OF_NEWLINES" => {
+                        return HirExpr::String {
+                            value: "\n".repeat(125),
+                            span: Some(span.into()),
+                        };
+                    }
+                    _ => {}
+                }
                 if let Some((value, text)) = match member {
                     "PI" => Some((std::f64::consts::PI, "3.141592653589793")),
                     "E" => Some((std::f64::consts::E, "2.718281828459045")),
                     "INFINITY" => Some((999_999_999_999.0, "999999999999")),
                     "EPSILON" => Some((1192093e-13, "0.0000001192093")),
+                    "SPHERE_HORIZONTAL_RADIUS_MULT" => Some((0.984724, "0.984724")),
+                    "SPHERE_VERTICAL_RADIUS_MULT" => Some((0.998959, "0.998959")),
+                    "INNER_RING_RADIUS_MULT" => Some((0.9415, "0.9415")),
+                    "OUTER_RING_RADIUS_MULT" => Some((0.94965, "0.94965")),
+                    "RING_EXPLOSION_RADIUS_MULT" => Some((0.48, "0.48")),
                     _ => None,
                 } {
                     return HirExpr::Number {
                         value,
                         text: text.to_string(),
+                        span: Some(span.into()),
+                    };
+                }
+            }
+            if name == "Color" {
+                if let Some((red, green, blue)) = match member {
+                    "LIGHT_RED" => Some((255, 112, 122)),
+                    "LIGHT_PURPLE" => Some((210, 127, 243)),
+                    "LIGHT_VIOLET" => Some((203, 135, 255)),
+                    "LIGHT_GRAY" => Some((168, 168, 168)),
+                    _ => None,
+                } {
+                    let number = |value: i32| HirExpr::Number {
+                        value: f64::from(value),
+                        text: value.to_string(),
+                        span: Some(span.into()),
+                    };
+                    return HirExpr::Call {
+                        name: "rgb".to_string(),
+                        args: vec![number(red), number(green), number(blue)],
+                        debug_source: None,
                         span: Some(span.into()),
                     };
                 }

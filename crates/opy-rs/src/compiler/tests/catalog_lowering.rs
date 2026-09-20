@@ -98,6 +98,110 @@ fn catalog_enum_members_lower_and_validate() {
 }
 
 #[test]
+fn pinned_builtin_domains_and_constants_lower_through_the_catalog() {
+    let source = r#"globalvar value
+
+rule "domains":
+    @Event eachPlayer
+    @Condition eventPlayer.isHoldingButton(Button.INTERACT)
+    value = Team.ALL
+    value = Hero.BRIGITTE
+    value = Map.BLACK_FOREST_WINTER
+    value = getCurrentGamemode() == Gamemode.ASSAULT
+    value = Color.LIGHT_RED
+    value = Vector.BACKWARD
+    value = Math.FUCKTON_OF_SPACES
+    value = Math.FUCKTON_OF_NEWLINES
+    value = Math.SPHERE_HORIZONTAL_RADIUS_MULT
+    value = Math.RING_EXPLOSION_RADIUS_MULT
+
+rule "slot":
+    @Event playerJoined
+    @Team 1
+    @Slot 11
+    disableInspector()
+"#;
+    let hir = crate::compile(source, "builtin-domains.opy", Path::new("."))
+        .expect("pinned domain and constant source must resolve");
+    let artifact = Compiler::new()
+        .expect("released Workshop contract must load")
+        .compile_hir(&hir)
+        .expect("pinned domain and constant source must lower");
+
+    assert!(artifact.emitted.contains("Player Joined Match;"));
+    assert!(artifact.emitted.contains("Slot 11;"));
+    assert!(artifact.emitted.contains("Custom String("));
+    assert!(artifact.emitted.contains("0.984724"));
+    assert!(artifact.emitted.contains("0.48"));
+}
+
+#[test]
+fn pinned_texture_members_lower_with_texture_tag_setup() {
+    let source = "globalvar value\nrule \"textures\":\n    @Event global\n    value = Texture.MOUSE_CURSOR\n    value = Texture.ASSAULT\n";
+    let hir = crate::compile(source, "textures.opy", Path::new(".")).unwrap();
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+
+    assert!(artifact.emitted.contains("127: __holygrail__"));
+    assert!(
+        artifact
+            .emitted
+            .contains("Create Dummy Bot(All Heroes, If-Then-Else(")
+    );
+    assert!(artifact.emitted.contains("Number Of Slots(Team(Team 1))"));
+    assert!(artifact.emitted.contains("Number Of Slots(Team(Team 2))"));
+    assert!(
+        artifact
+            .emitted
+            .contains("OverPy <\u{AD}tx> / <\u{AD}fg> setup code")
+    );
+    assert!(
+        artifact
+            .emitted
+            .contains("String Split(First Of(Last Created Entity),")
+    );
+    assert!(artifact.emitted.contains("String Replace("));
+    assert!(artifact.emitted.contains("String Slice("));
+    assert!(artifact.emitted.contains("Destroy All Dummy Bots;"));
+    assert!(
+        artifact
+            .emitted
+            .contains("Custom String(\"{0}txc0000000002dd21>\", Global.__holygrail__)")
+    );
+    assert!(
+        artifact
+            .emitted
+            .contains("Custom String(\"{0}txc00000000020af8>\", Global.__holygrail__)")
+    );
+}
+
+#[test]
+fn texture_setup_and_formatted_named_entities_match_pinned_features() {
+    let artifact = compile_fixture("texture-entity-compat");
+    let oracle = oracle_workshop("texture-entity-compat");
+    for marker in [
+        "Create Dummy Bot(All Heroes,",
+        "Start Forcing Dummy Bot Name(Last Created Entity,",
+        "String Split(First Of(Last Created Entity),",
+        "String Replace(",
+        "String Slice(String Replace(",
+        "126, True",
+        "Destroy All Dummy Bots;",
+        "Custom String(\"{0}txc0000000002dd21>\", Global.__holygrail__)",
+        "Custom String(\"■ {0}\", Match Time)",
+    ] {
+        assert!(
+            oracle.contains(marker),
+            "pinned oracle is missing required feature marker: {marker}"
+        );
+        assert!(
+            artifact.emitted.contains(marker),
+            "native output is missing pinned feature marker: {marker}\n{}",
+            artifact.emitted
+        );
+    }
+}
+
+#[test]
 fn aliased_member_lowers_to_the_canonical_catalog_identity() {
     let source = "globalvar value\nrule \"r\":\n    @Event eachPlayer\n    @Condition eventPlayer.getHero() == None\n    value = eventPlayer.getHero()\n";
     let hir = crate::compile(source, "source.opy", Path::new(".")).expect("frontend resolves");
