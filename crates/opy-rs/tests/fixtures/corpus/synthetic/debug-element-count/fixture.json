@@ -16,7 +16,8 @@
       "nativeStatus": "success",
       "relationship": "match",
       "comparison": "semantic-wir",
-      "semanticEquivalent": true
+      "semanticEquivalent": true,
+      "sourceVisible": "debug-element-count"
     }
   }
 }

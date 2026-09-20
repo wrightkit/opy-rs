@@ -111,10 +111,17 @@ fn emit_debug_element_counts(
             None,
         )
     })?;
-    let mut summary = format!("/* Element count: (total {}\n\n", report.total);
-    let mut summary_rules: Vec<_> = report.rules.iter().filter(|rule| rule.count > 1).collect();
-    summary_rules.sort_by_key(|rule| std::cmp::Reverse(rule.count));
-    for count in summary_rules {
+    let rule_counts: Vec<_> = report.rules.iter().map(debug_rule_count).collect();
+    let total = rule_counts.iter().sum::<usize>();
+    let mut summary = format!("/* Element count: (total {total})\n\n");
+    let mut summary_rules: Vec<_> = report
+        .rules
+        .iter()
+        .zip(&rule_counts)
+        .filter(|(_, count)| **count > 1)
+        .collect();
+    summary_rules.sort_by_key(|(_, count)| std::cmp::Reverse(**count));
+    for (count, rule_count) in summary_rules {
         let source = count
             .span
             .and_then(|span| {
@@ -127,7 +134,7 @@ fn emit_debug_element_counts(
             .unwrap_or_default();
         summary.push_str(&format!(
             "{:>5}: rule \"{}\"{source}\n",
-            count.count, count.name
+            rule_count, count.name
         ));
     }
     summary.push_str("\n*/\n\n");
@@ -143,14 +150,16 @@ fn emit_debug_element_counts(
     for line in output.split_inclusive('\n') {
         let trimmed = line.trim();
         if line.starts_with("rule (") {
-            if let Some(rule) = report.rules.get(rule_index) {
-                if rule.count > 1 {
-                    let suffix = if rule.count == 1 {
+            if let (Some(rule), Some(rule_count)) =
+                (report.rules.get(rule_index), rule_counts.get(rule_index))
+            {
+                if *rule_count > 1 {
+                    let suffix = if *rule_count == 1 {
                         "element"
                     } else {
                         "elements"
                     };
-                    annotated.push_str(&format!("//{} {suffix}\n", rule.count));
+                    annotated.push_str(&format!("//{} {suffix}\n", rule_count));
                 }
                 conditions.clear();
                 collect_element_nodes(
@@ -184,13 +193,14 @@ fn emit_debug_element_counts(
 
         if in_conditions && line.starts_with("        ") && trimmed.ends_with(';') {
             if let Some(condition) = conditions.get(condition_index) {
-                let suffix = if condition.count == 1 {
+                let condition_count = debug_condition_count(condition);
+                let suffix = if condition_count == 1 {
                     "element"
                 } else {
                     "elements"
                 };
                 annotated.push_str(line.trim_end_matches('\n'));
-                annotated.push_str(&format!(" // {} {suffix}\n", condition.count));
+                annotated.push_str(&format!(" // {condition_count} {suffix}\n"));
                 condition_index += 1;
                 continue;
             }
@@ -198,13 +208,14 @@ fn emit_debug_element_counts(
 
         if in_actions && line.starts_with("        ") && trimmed.ends_with(';') {
             if let Some(action) = actions.get(action_index) {
-                let suffix = if action.count == 1 {
+                let action_count = debug_action_local_count(action);
+                let suffix = if action_count == 1 {
                     "element"
                 } else {
                     "elements"
                 };
                 annotated.push_str(line.trim_end_matches('\n'));
-                annotated.push_str(&format!(" // {} {suffix}\n", action.count));
+                annotated.push_str(&format!(" // {action_count} {suffix}\n"));
                 action_index += 1;
                 continue;
             }
@@ -212,6 +223,63 @@ fn emit_debug_element_counts(
         annotated.push_str(line);
     }
     Ok(annotated)
+}
+
+fn debug_value_count(node: &workshop_rs::element_count::ElementCountNode) -> usize {
+    let children = node.children.iter().map(debug_value_count).sum::<usize>();
+    match node.name.as_str() {
+        "number" | "global variable" => 2,
+        "localized string" => 2,
+        "customString" => 1 + 4usize.saturating_sub(node.children.len()) + children,
+        "Team" | "Color" => 1 + children.max(1),
+        "array" | "evalOnce" => 2 + children,
+        _ if node.children.is_empty() => 1,
+        _ => 1 + children,
+    }
+}
+
+fn debug_condition_count(node: &workshop_rs::element_count::ElementCountNode) -> usize {
+    let value_count = node.children.iter().map(debug_value_count).sum::<usize>();
+    value_count.saturating_sub(usize::from(node.children.len() > 1))
+}
+
+fn debug_action_local_count(node: &workshop_rs::element_count::ElementCountNode) -> usize {
+    let values = node
+        .children
+        .iter()
+        .filter(|child| child.kind == workshop_rs::element_count::ElementNodeKind::Value)
+        .map(debug_value_count)
+        .sum::<usize>();
+    let value_arguments = node
+        .children
+        .iter()
+        .filter(|child| child.kind == workshop_rs::element_count::ElementNodeKind::Value)
+        .count();
+    1 + values.saturating_sub(value_arguments)
+}
+
+fn debug_action_count(node: &workshop_rs::element_count::ElementCountNode) -> usize {
+    let nested_actions = node
+        .children
+        .iter()
+        .filter(|child| child.kind == workshop_rs::element_count::ElementNodeKind::Action)
+        .map(debug_action_count)
+        .sum::<usize>();
+    debug_action_local_count(node) + nested_actions
+}
+
+fn debug_rule_count(node: &workshop_rs::element_count::ElementCountNode) -> usize {
+    let children = node
+        .children
+        .iter()
+        .map(|child| match child.kind {
+            workshop_rs::element_count::ElementNodeKind::Condition => debug_condition_count(child),
+            workshop_rs::element_count::ElementNodeKind::Action => debug_action_count(child),
+            workshop_rs::element_count::ElementNodeKind::Rule
+            | workshop_rs::element_count::ElementNodeKind::Value => 0,
+        })
+        .sum::<usize>();
+    1 + children
 }
 
 fn collect_element_nodes<'a>(
@@ -1906,27 +1974,23 @@ rule "main":
             .iter()
             .find(|rule| rule.name == "large")
             .unwrap();
-        let large_summary = artifact
-            .emitted
-            .find(&format!("{:>5}: rule \"large\"", large.count))
-            .unwrap();
-        let small_summary = artifact
-            .emitted
-            .find(&format!("{:>5}: rule \"small\"", small.count))
-            .unwrap();
-        assert!(large.count > small.count);
+        let large_summary = artifact.emitted.find("   32: rule \"large\"").unwrap();
+        let small_summary = artifact.emitted.find("   18: rule \"small\"").unwrap();
         assert!(large_summary < small_summary);
-        assert!(artifact.emitted.starts_with("/* Element count: (total "));
         assert!(
             artifact
                 .emitted
-                .contains(&format!("//{} elements\nrule (\"large\")", large.count))
+                .starts_with("/* Element count: (total 50)\n")
         );
+        assert!(artifact.emitted.contains("//32 elements\nrule (\"large\")"));
+        assert!(artifact.emitted.contains("//18 elements\nrule (\"small\")"));
         assert!(
             artifact
                 .emitted
-                .contains(&format!("//{} elements\nrule (\"small\")", small.count))
+                .contains("Global.value == 1; // 3 elements")
         );
+        assert_eq!(artifact.emitted.matches(" // 3 elements").count(), 2);
+        assert_eq!(artifact.emitted.matches(" // 14 elements").count(), 3);
         let expected_comments = large
             .children
             .iter()

@@ -380,6 +380,7 @@ class DiffTests(unittest.TestCase):
                 "failure-frontier",
                 "normalized-output",
                 "semantic-wir",
+                "source-visible",
                 "diagnostic-code",
                 "compiler-contract",
             ],

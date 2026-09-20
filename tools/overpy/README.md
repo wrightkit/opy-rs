@@ -50,9 +50,12 @@ fixture input and concrete attribution/reproducibility data.
 
 `run_native.py` writes producer results and reports under `target/`. The
 comparison stages are compile status, diagnostics, exact/normalized output,
-failure frontier, semantic WIR, diagnostic code, and explicitly declared
-compiler contracts. Missing producer output or unavailable semantic-WIR data
-is `inconclusive` and blocks the normal command.
+failure frontier, semantic WIR, source-visible projections, diagnostic code,
+and explicitly declared compiler contracts. A semantic-WIR fixture may declare
+a named source-visible projection to compare selected pinned exact-output
+comments in addition to its secondary semantic check. Missing producer output
+or unavailable semantic-WIR data is `inconclusive` and blocks the normal
+command.
 
 `diff.py` can also compare any producer that writes the compile-result schema:
 
