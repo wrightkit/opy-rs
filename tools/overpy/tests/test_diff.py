@@ -25,15 +25,16 @@ class DiffTests(unittest.TestCase):
         )
         cls.oracle = json.loads(snapshot.read_text(encoding="utf-8"))
 
-    def test_expectations_cover_every_fixture_with_evidence(self):
+    def test_source_expectations_cover_every_fixture(self):
         expectations = diff.load_expectations()
         fixtures = set(diff.fixture_ids(CORPUS_DIR))
         self.assertEqual(set(expectations), fixtures)
         for fixture, expectation in expectations.items():
-            self.assertTrue(expectation["evidence"], fixture)
-            self.assertTrue(expectation["note"], fixture)
+            self.assertIn(expectation["relationship"], diff.EXPECTED_CLASSIFICATIONS)
+            self.assertNotIn("evidence", expectation)
+            self.assertNotIn("note", expectation)
 
-    def test_compiler_expectations_are_separate_and_cover_every_fixture(self):
+    def test_compiler_expectations_cover_every_fixture(self):
         source = diff.load_expectations()
         compiler = diff.load_compiler_expectations()
         fixtures = set(diff.fixture_ids(CORPUS_DIR))
@@ -41,9 +42,10 @@ class DiffTests(unittest.TestCase):
         self.assertNotIn("comparison", source["synthetic/basic-rule"])
         for fixture, expectation in compiler.items():
             self.assertIn(expectation["comparison"], diff.EXPECTED_COMPILER_COMPARISONS)
-            self.assertTrue(expectation["evidence"], fixture)
-            self.assertTrue(expectation["owner"], fixture)
-            self.assertTrue(expectation["note"], fixture)
+            self.assertIn(expectation["relationship"], diff.EXPECTED_CLASSIFICATIONS)
+            self.assertNotIn("evidence", expectation)
+            self.assertNotIn("owner", expectation)
+            self.assertNotIn("note", expectation)
 
     def write_result(self, root: Path, result: dict):
         path = root / result["fixture"] / "result.json"
@@ -299,13 +301,13 @@ class DiffTests(unittest.TestCase):
                     diff.load_compiler_expectations(),
                 )
 
-    def test_compile_result_rejects_public_semantic_wir_evidence(self):
+    def test_compile_result_rejects_public_semantic_wir_comparison(self):
         result = copy.deepcopy(self.oracle)
         result["compile"]["semanticWIR"] = {}
         with self.assertRaises(diff.DiffError):
             diff.require_result_shape(result, "compile result")
 
-    def test_compiler_semantic_wir_rejects_stale_direct_evidence(self):
+    def test_compiler_semantic_wir_rejects_stale_direct_comparison(self):
         fixture = "synthetic/expressions-values"
         oracle = json.loads(
             (

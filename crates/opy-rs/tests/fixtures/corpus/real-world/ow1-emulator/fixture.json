@@ -1,7 +1,5 @@
 {
-  "acquisitionMethod": "scripts/acquire-corpus.py: GitHub archive of the pinned commit (codeload.tar.gz), include-closure resolution matching the pinned oracle, SHA-256 verification",
   "category": "real-world",
-  "expectedStatus": "failure",
   "features": [
     "preprocessing/includes",
     "declarations",
@@ -156,7 +154,9 @@
     "utilities/watermark.opy": "fcb773484da735c66916280a2d9be7fe3a8dd8db47859ba217bf6135c49ad298"
   },
   "id": "real-world/ow1-emulator",
-  "provenance": {
+  "schemaVersion": 1,
+  "source": "1v1_main.opy",
+  "attribution": {
     "kind": "imported-example",
     "license": "BSD-2-Clause",
     "licenseUrl": "https://github.com/Overwatch-1-Emulator/ow1-emulator/blob/25cd6ce8d4acdd64b66c862a55c7ed66c8e50af1/LICENSE",
@@ -166,7 +166,18 @@
     "sourceCommit": "25cd6ce8d4acdd64b66c862a55c7ed66c8e50af1",
     "sourceUrl": "https://github.com/Overwatch-1-Emulator/ow1-emulator/blob/25cd6ce8d4acdd64b66c862a55c7ed66c8e50af1/src/1v1_main.opy"
   },
-  "runtimeSeconds": 6.8,
-  "schemaVersion": 1,
-  "source": "1v1_main.opy"
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "known-gap",
+      "ruleNames": false
+    },
+    "compiler": {
+      "nativeStatus": "failure",
+      "relationship": "known-gap",
+      "comparison": "diagnostic-code",
+      "diagnosticCode": "unsupported-integration-surface",
+      "failureClass": "integration"
+    }
+  }
 }

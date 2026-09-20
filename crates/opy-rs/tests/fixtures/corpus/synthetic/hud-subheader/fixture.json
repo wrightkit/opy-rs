@@ -1,18 +1,23 @@
 {
   "category": "synthetic",
-  "expectedStatus": "success",
   "features": [
     "hudSubheader special lowering",
     "canonical HUD reevaluation and spectator visibility"
   ],
   "id": "synthetic/hud-subheader",
-  "provenance": {
-    "kind": "minimized-regression",
-    "license": "AGPL-3.0-or-later",
-    "modifications": "WrightKit-authored minimized reproduction from wrightkit/opy-rs#114",
-    "origin": "wrightkit/opy-rs#114 acceptance reproduction",
-    "redistributable": true
-  },
   "schemaVersion": 1,
-  "source": "source.opy"
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": true
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": true
+    }
+  }
 }

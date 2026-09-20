@@ -1,26 +1,24 @@
 //! Native-vs-reference differential suite.
 //!
-//! Runs the declared compatibility corpus
+//! Runs the compatibility corpus
 //! (`crates/opy-rs/tests/fixtures/corpus/**/fixture.json`) through the native frontend and
-//! compares the outcome against the recorded reference evidence
+//! compares the outcome against the recorded reference result
 //! (`oracle.json`, produced by `tools/overpy/run_oracle.py` against the
 //! pinned OverPy 9.7.10 oracle).
 //!
 //! # What is compared
 //!
-//! The recorded reference evidence is the oracle's **Workshop text output**,
+//! The recorded reference result contains the oracle's **Workshop text output**,
 //! not a reference HIR (the wright adapter HIR fixtures do not exist in this
 //! repository). The parity contract is observable semantics, not byte
-//! identity, so the suite compares at the boundary the evidence supports:
+//! identity, so the suite compares the supported observable boundaries:
 //!
 //! * **Status parity** — the native frontend must resolve a fixture the
 //!   oracle accepts, and must reject a fixture the oracle rejects (with a
 //!   structured diagnostic). This is the primary, CI-enforced contract.
-//! * **Expected-outcome table** — every fixture has an explicit expectation
-//!   (`resolve` or `expected-diagnostic`) with a documented rationale, so a
-//!   fixture that is legitimately unsupported is a *documented* entry, not a
-//!   silent failure; behavior that leaves the table is a `divergence` and
-//!   fails the suite (regressions break CI, mirroring the wright contract).
+//! * **Expected outcome** — each fixture manifest declares the native outcome
+//!   and its relationship to the oracle; behavior outside that declaration is
+//!   a `divergence` and fails the suite.
 //! * **Structural self-check** (always runs) — a resolved program must pass
 //!   Opy HIR v2 validation, must round-trip through the wire payload
 //!   (`parse_value(serde_json::to_value(program))`), and its debug dump must
@@ -39,14 +37,14 @@
 //!
 //! * Span endpoints (`span` objects) are removed from the emitted native HIR
 //!   JSON dumps (`target/opy-differential/<fixture>.native.json`):
-//!   frontend-internal provenance that the reference evidence does not
+//!   frontend-internal source mapping that the reference result does not
 //!   record. `protocol`/`generator` identities are contract fields and are
 //!   kept verbatim.
 //! * Reference synthesized rules (`Initialize global variables`,
 //!   `Initialize player variables`, `Subroutine …`) are dropped from the
 //!   rule-name comparison because their emission is lowering-dependent.
 //! * Diagnostic wording is never compared; only status and the stable
-//!   diagnostic `code` (where the expectation table pins one).
+//!   diagnostic `code` (where the fixture manifest pins one).
 //!
 //! # Degradation
 //!
@@ -65,18 +63,6 @@
 //! reference status, and rule-name comparison. A reference-success/native-failure case is never
 //! classified as a match.
 //!
-//! # Current corpus state
-//!
-//! All declared fixtures run (0 skips, 0 divergences): **29 resolve** and
-//! **16 produce expected diagnostics** with pinned codes; 7 fixtures are
-//! documented reference gaps (the oracle accepts a surface the native
-//! frontend deliberately rejects). Settings key-existence/leaf-kind
-//! validation and Workshop enum member/domain validation were removed from
-//! the frontend core (ownership fix): the affected fixtures resolve
-//! structurally with opaque Workshop identity, and the checks are
-//! `lowering-dependent` (issue #8) — the expectation table reflects that
-//! contract.
-
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -89,513 +75,6 @@ fn workspace_root() -> PathBuf {
 
 fn fixtures_root() -> PathBuf {
     workspace_root().join("crates/opy-rs/tests/fixtures/corpus")
-}
-
-fn differential_expectations() -> Value {
-    serde_json::from_str(
-        &std::fs::read_to_string(
-            workspace_root().join("crates/opy-rs/tests/differential-expectations.json"),
-        )
-        .expect("differential-expectations.json must be readable"),
-    )
-    .expect("differential-expectations.json must parse")
-}
-
-fn expectation_for<'a>(expectations: &'a Value, id: &str) -> &'a Value {
-    expectations["cases"]
-        .as_array()
-        .expect("differential expectations must contain cases")
-        .iter()
-        .find(|case| case["fixture"].as_str() == Some(id))
-        .unwrap_or_else(|| panic!("fixture '{id}' is missing from differential expectations"))
-}
-
-/// What the native frontend is expected to do for a fixture on this branch.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Expect {
-    /// The native frontend must resolve the fixture to an Opy HIR program.
-    Resolve,
-    /// The native frontend must reject the fixture with a structured
-    /// diagnostic; `code` pins the stable code when known.
-    Diagnostic { code: Option<&'static str> },
-}
-
-#[derive(Clone, Copy)]
-struct Case {
-    expect: Expect,
-    /// Compare authored rule names against the oracle Workshop text.
-    rule_names: bool,
-    /// Documented rationale; also the divergence entry when the table is
-    /// deliberately not matching the oracle status.
-    note: &'static str,
-}
-
-fn case(expect: Expect, rule_names: bool, note: &'static str) -> Case {
-    Case {
-        expect,
-        rule_names,
-        note,
-    }
-}
-
-/// The declared corpus expectation table. Every fixture in
-/// `crates/opy-rs/tests/fixtures/corpus` must appear here; unknown fixtures fail the suite
-/// so new corpus entries are deliberate.
-fn declared_corpus() -> BTreeMap<&'static str, Case> {
-    let mut cases = BTreeMap::new();
-    let resolve = |cases: &mut BTreeMap<&'static str, Case>, id, rule_names, note| {
-        cases.insert(id, case(Expect::Resolve, rule_names, note));
-    };
-    let diagnostic = |cases: &mut BTreeMap<&'static str, Case>, id, code, note| {
-        cases.insert(id, case(Expect::Diagnostic { code }, false, note));
-    };
-
-    // Synthetic fixtures (WrightKit-authored, AGPL-3.0-or-later).
-    resolve(
-        &mut cases,
-        "synthetic/basic-rule",
-        true,
-        "minimal rule; oracle status success (parity).",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/control-flow",
-        true,
-        "if/elif/else, for-in-range, while, pass; oracle status success (parity).",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/syntax-surface",
-        true,
-        "Issue #28 pure OPY syntax: switch, do-while, hex, membership, dict indexing, comprehensions, lambda arguments, and string modifiers.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/string-modifiers",
-        true,
-        "Issue #28 inventory-backed string modifiers; translation-dependent l/t are syntax-carried outside the fixture.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/switch-break",
-        true,
-        "Issue #33 switch arms preserve source-order fallthrough and explicit break statements validate nested switch/loop context.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/strings-and-lambda",
-        true,
-        "Issue #33 f-string interpolation preserves source-spanned expressions and the approved sorted lambda argument slot.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/compiler-vertical-slice",
-        true,
-        "Issue #35 OPY-to-Workshop integration fixture; the frontend resolves the source and the internal compiler module independently validates the canonical WIR slice.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/compiler-structure",
-        false,
-        "Issue #40 oracle-backed structural probe; the frontend resolves the source while the internal compiler module independently checks canonical WIR identity, allocation, and event filters.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/primitive-lowering",
-        false,
-        "Issue #46 oracle-backed non-control-flow primitives probe; the frontend resolves the source while the compiler test suite constrains native lowering against the pinned oracle through the canonical workshop-rs parser and structural equivalence.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/dictionary-lookup",
-        false,
-        "Issue #46 negative primitive-lowering probe; the frontend and the pinned oracle accept the dict-indexed assignment while the compiler rejects it with the stable source-attributed unsupported-integration-surface diagnostic.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/postfix-assignment",
-        false,
-        "Issue #59 postfix ++/-- assignment probe; global, player, and single-level indexed targets resolve and are constrained by compiler oracle tests.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/indexed-assignment-nested",
-        false,
-        "Issue #60 nested indexed assignment probe; global targets resolve and are constrained by the pinned canonical-WIR oracle.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/collection-mutation-328",
-        true,
-        "Issue #328 pinned collection-deletion probe; one- through four-index global and player-variable targets resolve through canonical indexed mutation lowering.",
-    );
-    diagnostic(
-        &mut cases,
-        "synthetic/collection-mutation-328-invalid",
-        Some("four-dimensional-delete"),
-        "Issue #328 pinned five-index deletion rejection; the native semantic boundary matches the pinned OverPy rejection frontier.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/collection-mutation-328-random-invalid",
-        false,
-        "Issue #328 pins the compiler-level rejection of a random outer index in a three-index delete; the source HIR remains structurally resolvable and the compiler expectation records the lowering boundary.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/collection-mutation-328-random-player-invalid",
-        false,
-        "Issue #328 pins the compiler-level rejection of a random player receiver in a three-index delete; the source HIR remains structurally resolvable and the compiler expectation records the lowering boundary.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/wait-optimization",
-        false,
-        "Issue #282 minimized wait probe; optimizeForSize lowers omitted and sub-default durations to the pinned OverPy boolean forms while preserving explicit duration and reevaluation behavior.",
-    );
-    diagnostic(
-        &mut cases,
-        "synthetic/indexed-assignment-4d-invalid",
-        Some("four-dimensional-assignment"),
-        "Issue #60 four-dimensional negative probe; source semantics reject the assignment at a stable, source-attributed diagnostic frontier before canonical lowering.",
-    );
-    diagnostic(
-        &mut cases,
-        "synthetic/postfix-prefix-invalid",
-        Some("parse-error"),
-        "Issue #59 prefix ++ remains a stable source-attributed parse error; prefix --x remains valid consecutive unary-minus syntax.",
-    );
-    diagnostic(
-        &mut cases,
-        "synthetic/postfix-embedded-invalid",
-        Some("parse-error"),
-        "Issue #59 embedded postfix form remains a stable source-attributed parse error with independent pinned oracle evidence.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/range-player-variable",
-        false,
-        "Issue #65 player-variable range binder resolves in HIR; canonical For Player Variable lowering is constrained by the dedicated compiler test.",
-    );
-    diagnostic(
-        &mut cases,
-        "synthetic/range-invalid-binder",
-        Some("invalid-range-binder"),
-        "Issue #65 non-variable range binder is rejected by source semantics with a stable source-attributed diagnostic before canonical lowering.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/array-unique",
-        true,
-        "Issue #322 Array.unique() resolves as an OPY member; canonical filtered-array lowering is constrained by the dedicated compiler test.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/member-values",
-        true,
-        "Issue #113 catalog-backed eventPlayer.isDummy() member predicate; canonical WIR lowering is constrained by the dedicated compiler test.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/hud-subheader",
-        true,
-        "Issue #114 shared hudSubheader action; canonical WIR lowering is constrained by the dedicated compiler test.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/member-angle",
-        true,
-        "Issue #130 catalog-backed eventPlayer.getHorizontalFacingAngle() member value; canonical WIR lowering is constrained by the dedicated compiler test.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/hud-visibility",
-        true,
-        "Issue #131 maps SpecVisibility.NEVER to the canonical VISIBLE_NEVER member; canonical WIR lowering is constrained by the dedicated compiler test.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/control-flow-lowering",
-        false,
-        "Issue #47 oracle-backed control-flow lowering probe; the frontend resolves the source while the compiler independently constrains canonical WIR against the pinned oracle.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/conditional-forward-gotos",
-        true,
-        "Issue #319 oracle-backed forward-goto probe; branch structure, action distances, and condition evaluation remain aligned with the pinned oracle.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/control-flow-328",
-        true,
-        "Issue #328 pinned continue, do-while, dynamic loc+, and RULE_START probe; accepted control-flow forms resolve through canonical WIR lowering.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/switch-break-unsupported",
-        true,
-        "Issue #47 probe; nested conditional switch-break lowering preserves the upstream Else marker, and a top-level switch with no observable actions is elided like OverPy.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/switch-order",
-        false,
-        "Issue #47 source-order switch probe; default-before-case fallthrough remains represented in ordered HIR arms.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/switch-structured-target",
-        false,
-        "Issue #47 structured switch-target probe; nested canonical control-flow widths preserve later case/default targets.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/switch-multiple-break",
-        false,
-        "Issue #47 multi-break probe; the frontend preserves all authored arms and breaks while the compiler lowers them through canonical nested switch-exit WIR.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/do-while-break",
-        false,
-        "Issue #47 do-while probe; direct, conditional, and nested break shapes resolve in the frontend and are constrained by compiler oracle tests.",
-    );
-    diagnostic(
-        &mut cases,
-        "synthetic/do-while-invalid",
-        Some("do-while-placement"),
-        "Issue #47 invalid do-while placement remains a stable source-attributed frontend diagnostic.",
-    );
-    diagnostic(
-        &mut cases,
-        "synthetic/lambda-invalid",
-        Some("lambda-context"),
-        "Issue #33 standalone lambda use remains rejected outside a signature-approved argument position.",
-    );
-    diagnostic(
-        &mut cases,
-        "synthetic/syntax-invalid",
-        Some("parse-error"),
-        "Issue #28 malformed do-while and dictionary syntax remains a structured parse failure.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/declarations-numbers",
-        true,
-        "numeric literals and variable-index declarations; oracle status success.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/declarations-rules",
-        true,
-        "globalvar/playervar/subroutine/def/enum and rule headers; oracle status success.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/expressions-values",
-        true,
-        "expressions, arrays, strings, vectors, calls, .format; oracle status success.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/preprocessing",
-        false,
-        "include + object/function-like defines; oracle status success.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/directives",
-        true,
-        "advanced directive state and source annotations; oracle status success.",
-    );
-    diagnostic(
-        &mut cases,
-        "synthetic/duplicate-rule-diagnostic",
-        Some("duplicate-rule-name"),
-        "ordinary-rule @Name reaches the pinned duplicate-rule-name semantic frontier; oracle status failure.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/project-main-file",
-        true,
-        "mainFile entry-point redirect and child-include scope; oracle status success.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/project-entry",
-        true,
-        "included-file mainFile scope and root entry-point preservation; oracle status success.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/legacy-entry-include",
-        true,
-        "entry include paths continue from the latest resolved file base, matching the pinned OverPy project topology.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/directives-scoped",
-        false,
-        "pinned positive probe for global rulePrefixTemplate, include prefix restoration, AST macro/enum redeclaration, and translation normalization.",
-    );
-    diagnostic(
-        &mut cases,
-        "synthetic/translations-invalid",
-        Some("translations-invalid"),
-        "pinned negative probe for a language code outside the exact translation set.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/include-scope",
-        false,
-        "nested include optimization directives are retained as observable scoped state; strict-sensitive lowering is covered by the compiler compatibility contract.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/optimize-strict",
-        true,
-        "pinned strict optimizer probe retains expressions whose type-conversion semantics must not be rewritten.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/settings",
-        true,
-        "top-of-file settings block parsed into the typed HIR payload; validation is structural only (group shape, span validity, non-empty key names) — key-existence/leaf-kind checks were removed from the core and are lowering-dependent (#8); oracle status success.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/receiver-calls",
-        true,
-        "receiver/member call forms; oracle status success.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/receiver-playervar",
-        true,
-        "bare variable member expression is preserved as an OPY HIR member node; canonical Workshop member validation remains lowering-dependent.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/chase-enums",
-        true,
-        "ChaseTimeReeval/ChaseRateReeval member accesses resolve as opaque Workshop enum identities (member-existence/domain validation was removed from the core and is lowering-dependent, #8); oracle status success.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/chase-condition-agentlab",
-        true,
-        "chaseOverTime in rule conditions (agent-lab regression); oracle status success.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/chase-keywords",
-        true,
-        "named/keyword arguments and chase/ChaseReeval forms; the contextual member rewrites to the keyword-selected domain without membership checks (lowering-dependent, #8); oracle status success.",
-    );
-    resolve(
-        &mut cases,
-        "synthetic/for-range-agentlab",
-        true,
-        "for with implicit default-variable binder; oracle status success.",
-    );
-    diagnostic(
-        &mut cases,
-        "synthetic/diagnostics",
-        Some("parse-error"),
-        "expected-failure fixture: the native frontend rejects missing-colon with parse-error; oracle status failure (parity).",
-    );
-    resolve(
-        &mut cases,
-        "census/workshop-feature-census",
-        true,
-        "OPy-side Workshop feature census boundary; canonical feature identities remain owned by workshop-rs#10.",
-    );
-
-    // Real-world fixtures derived from upstream OverPy examples (GPL-3.0-only,
-    // provenance-recorded evidence; oracle status success).
-    resolve(
-        &mut cases,
-        "real-world/overpy-cake",
-        true,
-        "cake example; oracle status success (parity).",
-    );
-    resolve(
-        &mut cases,
-        "real-world/overpy-pixelart",
-        false,
-        "pixelart example; oracle status success.",
-    );
-    resolve(
-        &mut cases,
-        "real-world/overpy-santa",
-        false,
-        "the final #141 grammar and #144 builtin/member/enum residuals now resolve the full project; canonical WIR equivalence remains a separate explicit compiler gap.",
-    );
-    resolve(
-        &mut cases,
-        "real-world/overpy-cronch",
-        false,
-        "the final #141 grammar and #144 builtin/member/enum residuals now resolve the full project; canonical WIR equivalence remains a separate explicit compiler gap.",
-    );
-    resolve(
-        &mut cases,
-        "real-world/overpy-broken-weapons",
-        false,
-        "the final #141 return grammar and #144 builtin/member/enum residuals now resolve the full project; canonical WIR equivalence remains a separate explicit compiler gap.",
-    );
-    resolve(
-        &mut cases,
-        "real-world/overpy-client-to-server",
-        false,
-        "the final #141 grammar and #144 builtin/member/enum residuals now resolve the full project; canonical WIR equivalence remains a separate explicit compiler gap.",
-    );
-    resolve(
-        &mut cases,
-        "real-world/overpy-crosshair",
-        false,
-        "the frontend resolves the full project through the audited HUD builtin surface; compiler-only lowering retains the separate stringModifier integration boundary.",
-    );
-    resolve(
-        &mut cases,
-        "real-world/overpy-inputhud",
-        false,
-        "the final #141 grammar and #144 builtin/member/enum residuals now resolve the full project; canonical WIR equivalence remains a separate explicit compiler gap.",
-    );
-    resolve(
-        &mut cases,
-        "real-world/overpy-parabola",
-        false,
-        "the final #141 grammar and #144 builtin/member/enum residuals now resolve the full project; canonical WIR equivalence remains a separate explicit compiler gap.",
-    );
-
-    // Real-world failure fixtures (reference rejects; recorded diagnostics).
-    diagnostic(
-        &mut cases,
-        "real-world/overpy-meipocalypse",
-        Some("lex-error"),
-        "reference fails with ENOENT on the __script__ macros (JS files not ported); the native frontend rejects earlier on the dict-literal surface (baseline category 1b, explicit rejection). Gap: rejection reason differs (documented); the script-macro defines are lexed as directives but never reached.",
-    );
-    diagnostic(
-        &mut cases,
-        "real-world/overpy-zencopter",
-        Some("lex-error"),
-        "reference rejects the example ('Invalid content before string: 'arena'', upstream example bug); the native frontend rejects the triple-quoted-string surface (baseline category 1b, declared rejection, unterminated-string lex error). Gap: rejection reasons differ (documented).",
-    );
-    resolve(
-        &mut cases,
-        "real-world/ow1-emulator",
-        false,
-        "the pinned oracle snapshot still records the pre-fix parser failure, while the native frontend resolves the complete include closure; the compiler gate now passes the hero_roster indexed append/remove frontier and reaches the next existing unknown Hero filter boundary in heroes/mei/blaster.",
-    );
-    diagnostic(
-        &mut cases,
-        "real-world/6v6-adjustments",
-        Some("unknown-member"),
-        "the native frontend reaches the pinned unknown-member semantic frontier after resolving the demonstrated source constructs.",
-    );
-
-    cases
 }
 
 /// Recursively collect `fixture.json` paths under `root`, sorted.
@@ -619,14 +98,25 @@ fn discover_fixtures(root: &Path) -> Vec<PathBuf> {
     out
 }
 
-/// Load a fixture manifest, returning `(id, source_name, expected_status)`.
-fn load_fixture(path: &Path) -> (String, String, String) {
+/// Load a fixture manifest, returning its source-test expectation.
+fn load_fixture(path: &Path) -> (String, String, String, String, bool, Option<String>) {
     let manifest: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap())
         .unwrap_or_else(|error| panic!("cannot parse {}: {error}", path.display()));
     let id = manifest["id"].as_str().unwrap().to_string();
     let source = manifest["source"].as_str().unwrap().to_string();
-    let expected = manifest["expectedStatus"].as_str().unwrap().to_string();
-    (id, source, expected)
+    let source_test = &manifest["tests"]["source"];
+    let native_status = source_test["nativeStatus"].as_str().unwrap().to_string();
+    let relationship = source_test["relationship"].as_str().unwrap().to_string();
+    let rule_names = source_test["ruleNames"].as_bool().unwrap();
+    let diagnostic_code = source_test["diagnosticCode"].as_str().map(str::to_string);
+    (
+        id,
+        source,
+        native_status,
+        relationship,
+        rule_names,
+        diagnostic_code,
+    )
 }
 
 /// Collect authored rule names from the native HIR in program order.
@@ -721,9 +211,7 @@ fn run_native(
 }
 
 #[test]
-fn native_and_reference_agree_on_the_declared_corpus() {
-    let corpus = declared_corpus();
-    let expectations = differential_expectations();
+fn native_and_reference_agree_on_the_corpus() {
     let mut reference_identity = Value::Null;
 
     let mut fixtures = BTreeMap::<String, Value>::new();
@@ -742,39 +230,15 @@ fn native_and_reference_agree_on_the_declared_corpus() {
         "skipped": 0
     });
 
-    let mut seen: Vec<String> = Vec::new();
     for manifest_path in discover_fixtures(&fixtures_root()) {
-        let (id, source_name, expected_status) = load_fixture(&manifest_path);
-        seen.push(id.clone());
-        let case = *corpus.get(id.as_str()).unwrap_or_else(|| {
-            panic!(
-                "fixture '{id}' is not declared in the differential expectation table; \
-                 add an explicit resolve/diagnostic entry with a note"
-            )
-        });
-        let expectation = expectation_for(&expectations, &id);
-        let expected_native_status = expectation["nativeStatus"]
-            .as_str()
-            .unwrap_or_else(|| panic!("{id}: nativeStatus is required"));
-        let expected_classification = expectation["classification"]
-            .as_str()
-            .unwrap_or_else(|| panic!("{id}: classification is required"));
-        let expected_evidence = expectation["evidence"]
-            .as_array()
-            .unwrap_or_else(|| panic!("{id}: evidence is required"));
-        assert!(
-            !expected_evidence.is_empty(),
-            "{id}: differential expectation evidence cannot be empty"
-        );
-        assert_eq!(
+        let (
+            id,
+            source_name,
             expected_native_status,
-            if matches!(case.expect, Expect::Resolve) {
-                "success"
-            } else {
-                "failure"
-            },
-            "{id}: differential expectation disagrees with native expectation table"
-        );
+            expected_relationship,
+            compare_rule_names,
+            expected_diagnostic_code,
+        ) = load_fixture(&manifest_path);
         let fixture_dir = manifest_path.parent().unwrap().to_path_buf();
         let source_path = fixture_dir.join(&source_name);
         let source = std::fs::read_to_string(&source_path)
@@ -808,12 +272,11 @@ fn native_and_reference_agree_on_the_declared_corpus() {
             None
         };
         let reference_entry = json!({
-            "expectedStatus": expected_status,
             "snapshot": if snapshot_present { "present" } else { "absent" },
-            "compileStatus": reference_status,
+            "compileStatus": reference_status.as_deref(),
         });
 
-        // Status determination against the expectation table.
+        // Status determination against the fixture manifest.
         let expect_resolve = expected_native_status == "success";
         let status = if native_ok == expect_resolve {
             if expect_resolve {
@@ -833,14 +296,8 @@ fn native_and_reference_agree_on_the_declared_corpus() {
 
         // Pinned diagnostic codes must match exactly.
         let mut detail = Vec::new();
-        if let (
-            Expect::Diagnostic {
-                code: Some(expected_code),
-            },
-            Err(error),
-        ) = (case.expect, &native)
-        {
-            if error.code != expected_code {
+        if let (Some(expected_code), Err(error)) = (&expected_diagnostic_code, &native) {
+            if error.code != expected_code.as_str() {
                 detail.push(format!(
                     "expected diagnostic code '{expected_code}', got '{}'",
                     error.code
@@ -848,9 +305,8 @@ fn native_and_reference_agree_on_the_declared_corpus() {
             }
         }
 
-        // Reference status parity: informational when the expectation table
-        // deliberately diverges from the oracle (the entry is then a
-        // documented `referenceGap`; hard divergences fail the suite).
+        // Reference status parity: informational when the manifest deliberately
+        // declares a known gap between native and reference behavior.
         let reference_gap = match &reference_status {
             Some(reference_status) => (*reference_status == "success") != native_ok,
             None => false,
@@ -863,33 +319,23 @@ fn native_and_reference_agree_on_the_declared_corpus() {
             ));
         }
 
-        // Oracle snapshot consistency: the recorded compile status must match
-        // the fixture manifest's expectedStatus.
-        if let Some(compile_status) = &reference_status {
-            if compile_status != &expected_status {
-                detail.push(format!(
-                    "oracle.json compile.status '{compile_status}' disagrees with fixture.json expectedStatus '{expected_status}'"
-                ));
-            }
-        }
-
-        let relationship_holds = match expected_classification {
+        let relationship_holds = match expected_relationship.as_str() {
             "match" => !reference_gap,
             "known-gap" | "unsupported" => reference_gap,
-            other => panic!("{id}: unsupported expectation classification '{other}'"),
+            other => panic!("{id}: unsupported relationship '{other}'"),
         };
         let classification = if skipped {
             "inconclusive"
         } else if status == "divergence" || !relationship_holds {
             "unexpected-divergence"
         } else if reference_gap {
-            expected_classification
+            expected_relationship.as_str()
         } else {
             "match"
         };
 
         // Rule-name parity (informational, opt-in per fixture).
-        let rule_names_entry = if case.rule_names && snapshot_present {
+        let rule_names_entry = if compare_rule_names && snapshot_present {
             match &native {
                 Ok(program) => {
                     let oracle: Value =
@@ -917,7 +363,6 @@ fn native_and_reference_agree_on_the_declared_corpus() {
         let entry = json!({
             "status": status,
             "expect": if expect_resolve { "resolve" } else { "diagnostic" },
-            "note": case.note,
             "native": native_entry,
             "reference": reference_entry,
             "ruleNames": rule_names_entry,
@@ -925,8 +370,7 @@ fn native_and_reference_agree_on_the_declared_corpus() {
             "referenceGap": reference_gap,
             "skip": skipped,
             "classification": classification,
-            "expectedClassification": expected_classification,
-            "evidence": expected_evidence,
+            "expectedRelationship": expected_relationship,
         });
         let code = entry["native"].get("code").and_then(Value::as_str);
         let label = if skipped {
@@ -955,7 +399,6 @@ fn native_and_reference_agree_on_the_declared_corpus() {
                 "expect": if expect_resolve { "resolve" } else { "diagnostic" },
                 "native": entry["native"],
                 "reference": entry["reference"],
-                "note": case.note,
                 "detail": detail,
             }));
         }
@@ -964,7 +407,6 @@ fn native_and_reference_agree_on_the_declared_corpus() {
                 "fixture": id,
                 "native": entry["native"],
                 "reference": entry["reference"],
-                "note": case.note,
                 "detail": detail,
             }));
         }
@@ -996,31 +438,9 @@ fn native_and_reference_agree_on_the_declared_corpus() {
         fixtures.insert(id.clone(), entry);
     }
 
-    // Every declared corpus entry must exist on disk.
-    let missing: Vec<&str> = corpus
-        .keys()
-        .filter(|id| !seen.iter().any(|s| s == *id))
-        .copied()
-        .collect();
-    assert!(
-        missing.is_empty(),
-        "declared corpus entries missing from crates/opy-rs/tests/fixtures/corpus: {missing:?}"
-    );
-    let extra_expectations: Vec<&str> = expectations["cases"]
-        .as_array()
-        .expect("differential expectations must contain cases")
-        .iter()
-        .filter_map(|case| case["fixture"].as_str())
-        .filter(|id| !seen.iter().any(|seen_id| seen_id == id))
-        .collect();
-    assert!(
-        extra_expectations.is_empty(),
-        "differential expectations reference missing fixtures: {extra_expectations:?}"
-    );
-
     let report = json!({
         "schemaVersion": 1,
-        "artifact": "opy-rs native-vs-reference differential report (issue #25)",
+        "artifact": "opy-rs native-vs-reference differential report",
         "generatedBy": "crates/opy-rs/tests/differential.rs",
         "frontend": { "name": LANGUAGE_NAME, "version": LANGUAGE_VERSION },
         "reference": reference_identity,
@@ -1058,7 +478,7 @@ fn native_and_reference_agree_on_the_declared_corpus() {
                 entry["fixture"],
                 entry["expect"],
                 entry["detail"].as_array().map_or_else(
-                    || entry["note"].to_string(),
+                    || "no detail".to_string(),
                     |list| {
                         list.iter()
                             .map(Value::to_string)

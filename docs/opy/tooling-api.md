@@ -35,21 +35,18 @@ frontend class; canonical Workshop, locale, directive, and hook failures use
 the integration class. Normalized output removes line-ending and trailing
 presentation noise, while exact output preserves the emitted artifact.
 
-Compatibility evidence is produced by the isolated compatibility harness, not
-by the ordinary compile API. For semantic-WIR cases, the feature-gated internal
-`opy-compat` target parses only the pinned reference Workshop text and compares
-it directly with the native lowered WIR through
+Compatibility comparisons are produced by the isolated compatibility harness,
+not by the ordinary compile API. For semantic-WIR cases, the feature-gated
+internal `opy-compat` target parses only the pinned reference Workshop text and
+compares it directly with the native lowered WIR through
 `workshop-rs::roundtrip::equivalent`. It writes harness-level
-`compatibility.semanticWIR` evidence, including the project and reference
-input digests; the public compile report and `opy-cli compile` have no oracle
-input or compatibility-evidence field.
+`compatibility.semanticWIR` comparison data, including the project and
+reference input digests; the public compile report and `opy-cli compile` have
+no oracle input or comparison field.
 
-The compatibility runner uses the separate reviewed compiler expectation
-contract in
-[`tools/overpy/compiler-expectations.json`](../../tools/overpy/compiler-expectations.json)
-for compiler outcomes. The source/frontend expectation contract is
-kept in `differential-expectations.json`; it is not reused as compiler parity
-evidence. Compiler gaps must carry durable evidence and an owner, while
+The compatibility runner reads source and compiler expectations from each
+fixture's `fixture.json`. A compiler comparison can use normalized output,
+semantic WIR, diagnostic codes, or an explicitly bounded compiler contract;
 expectation mismatches remain blocking.
 
 ## Library API (`opy_rs::tooling`)

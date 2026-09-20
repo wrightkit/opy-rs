@@ -1,11 +1,11 @@
-# Upstream Reference and Provenance: OverPy
+# Upstream Reference and Licensing: OverPy
 
 Status: accepted baseline (issue #2). The pinned compatibility oracle and the
-clean-room/provenance policy for the opy-rs evidence base
-Scope: project-level provenance for the OverPy reference `opy-rs` studies or
-derives compatibility knowledge from; the durable record that lets `opy-rs`
-read and reference upstream source without per-symbol or per-file provenance
-bureaucracy
+clean-room/source-attribution policy for OPY compatibility tests.
+Scope: project-level identity, licensing, and attribution for the OverPy
+reference `opy-rs` studies or derives compatibility behavior from; the durable
+record that lets `opy-rs` read and reference upstream source without per-symbol
+or per-file attribution bureaucracy.
 
 `opy-rs` is independently implemented Rust software (AGPL-3.0-or-later) that
 reimplements OverPy source-language semantics. Reimplementing compatible
@@ -33,7 +33,7 @@ not legal advice and does not settle questions that require a qualified lawyer.
 | Registry integrity | `sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==` (recorded in `tools/overpy/oracle/oracle-metadata.json` and the lockfile) |
 | Recorded `gitHead` | `1e2688954302a402d076944b46db07efb14d7b61`. npm's `gitHead` field lags the tarball content by one release; it is the `v9.7.9` tag commit and must **not** be treated as the content commit |
 | License assumption | GPL-3.0-only (engineering assumption, not a legal conclusion; the npm `package.json` ships no `license` field, see `tools/overpy/oracle/oracle-metadata.json`) |
-| Language | en-US (Workshop locale for reference evidence) |
+| Language | en-US (Workshop locale for reference tests) |
 
 The integrity hash pins the content. Reproduction uses the recorded identity,
 never `latest` or a range (see the pinning policy below).
@@ -64,7 +64,7 @@ dependency of `opy-rs` and is never bundled into release artifacts. Concretely,
 it serves as:
 
 * the reference for S (syntax), D (diagnostic), and N (normalized-output)
-  evidence in the compatibility corpus (`crates/opy-rs/tests/fixtures/corpus/**`,
+  tests in the compatibility corpus (`crates/opy-rs/tests/fixtures/corpus/**`,
   `tools/overpy/oracle/`);
 * the independent reference for support claims in
   [`docs/language-support.md`](../language-support.md), exercised through the
@@ -73,7 +73,7 @@ it serves as:
   ([`docs/hir/opy-hir-v2.md`](../hir/opy-hir-v2.md)): the native differential
   suite (`crates/opy-rs/tests/differential.rs`, merged in PR #13) runs
   every corpus fixture through the native pipeline in `cargo test` and
-  compares status, rule-name, and diagnostic evidence against the recorded
+  compares status, rule names, and diagnostics against the recorded
   oracle snapshots.
 
 ### Invocation records
@@ -129,7 +129,7 @@ grounded in the pinned tree, specifically:
   opy-rs-owned semantic manifest records only oracle-validated facts
   (see `compat-manifest-spec.md`).
 
-## Clean-room and provenance policy
+## Clean-room and source-attribution policy
 
 The policy below is the opy-rs-adapted summary of WrightKit's accepted
 component boundary (wright `docs/licensing.md`) and reference pinning policy
@@ -141,8 +141,8 @@ component boundary (wright `docs/licensing.md`) and reference pinning policy
 | --- | --- | --- |
 | `opy-rs` core (lexer, preprocess, CST/parser, semantic resolution, HIR, diagnostics) | No | Independently implemented code. It must not link to the reference, copy its source, import its internal AST/types, or compile against its generated artifacts. |
 | Compatibility harness / oracle tool | Yes, for isolated evaluation | It may invoke a separately installed/pinned reference and compare documented or generated results. It must remain separable from the core build and runtime distribution. |
-| Compatibility fixtures (upstream example/test corpus) | Only after provenance review | Provenance/license/redistribution-reviewed upstream example and test fixture files (e.g. the GPL-3.0 OverPy `examples/*.opy` corpus) may be retained under `crates/opy-rs/tests/fixtures/corpus/` as documented, isolated oracle evidence, with per-file origin, license, redistribution status, byte-identity against the pinned content commit, and SHA-256 records (see the fixture corpus policy below). They are never imported by core code and never bundled into core builds or release artifacts. |
-| Generated reference artifacts (oracle snapshots, manifests) | Only after provenance review | Store identifiers, hashes, generators, or reviewable artifacts only when their license and redistribution status are recorded. Do not add reference implementation/data content or unclear third-party content. |
+| Compatibility fixtures (upstream example/test corpus) | Only after attribution review | Attributed, licensed, redistribution-reviewed upstream example and test fixture files (e.g. the GPL-3.0 OverPy `examples/*.opy` corpus) may be retained under `crates/opy-rs/tests/fixtures/corpus/` as ordinary test inputs, with per-file origin, license, redistribution status, byte identity against the pinned content commit, and SHA-256 records (see the fixture corpus policy below). They are never imported by core code and never bundled into core builds or release artifacts. |
+| Generated reference artifacts (oracle snapshots, manifests) | Only after attribution review | Store identifiers, hashes, generators, or reviewable artifacts only when their license and redistribution status are recorded. Do not add reference implementation/data content or unclear third-party content. |
 | CI and development scripts | Yes, when isolated | They may install or invoke a pinned external oracle for a compatibility check, but must not silently turn it into a core dependency or bundled release component. |
 
 No allow-listed path may import reference implementation details into the
@@ -152,16 +152,16 @@ or README and linked from this document before it is used.
 
 ### Fixture corpus policy
 
-`crates/opy-rs/tests/fixtures/corpus/` may retain provenance/license/redistribution-reviewed
+`crates/opy-rs/tests/fixtures/corpus/` may retain attribution/license/redistribution-reviewed
 upstream example and test fixture files, e.g. the GPL-3.0 OverPy
-`examples/*.opy` corpus, as documented, isolated oracle evidence. Each
+`examples/*.opy` corpus, as documented test inputs. Each
 imported file carries its per-file record (origin, license, redistribution
 status, byte-identity against the pinned content commit, SHA-256) in
 `crates/opy-rs/tests/fixtures/corpus/README.md` and its `fixture.json`; that record is
-authoritative and is not duplicated here. The fixture corpus is oracle
-evidence, not a core input: core code never imports it, and it is never
+authoritative and is not duplicated here. The fixture corpus is test data,
+not a core input: core code never imports it, and it is never
 bundled into core builds or release artifacts. Content with unclear
-provenance or no license is prohibited, and OverPy implementation or data
+attribution or no license is prohibited, and OverPy implementation or data
 (`src/` sources, `src/data/*` tables, internal AST/types, generated
 artifacts) must not be imported into the core.
 
@@ -172,7 +172,7 @@ The core may be developed from:
 * independently authored `opy-rs` code;
 * public language or output specifications, subject to their own license;
 * behavior observed through lawful, documented compatibility tests;
-* a separately specified interchange format whose provenance and license are
+* a separately specified interchange format whose attribution and license are
   known; and
 * third-party dependencies whose license and compatibility have been reviewed.
 
@@ -186,10 +186,10 @@ Contributors working on the core must:
 
 1. implement opy-rs-owned data structures and transformations rather than
    mechanically translating reference source or types;
-2. keep source provenance for imported examples, fixtures, and generated
+2. keep source attribution for imported examples, fixtures, and generated
    artifacts;
 3. record the reference version and acquisition method for compatibility
-   evidence; and
+   tests; and
 4. stop and request review when a proposed dependency, fixture, or code sample
    has unclear licensing or would place a reference implementation detail in a
    core API.
@@ -210,7 +210,7 @@ on **demonstrated behavioral need**, never on release recency:
    and the byte-verified git content commit. A version bump alone is not an
    oracle change.
 3. **Demonstrated need only.** "Demonstrated" means a version-sensitivity run
-   (the minimal repro plus the evidence source against candidate versions)
+   (the minimal repro plus the comparison result against candidate versions)
    showing a different accept/reject outcome or a different normalized output
    for a construct the corpus needs. Absence of measured divergence is a
    no-change decision.
@@ -223,7 +223,7 @@ on **demonstrated behavioral need**, never on release recency:
    re-baseline.
 
 A pin change follows the structured review path: `oracle-metadata.json`,
-lockfile, `run_oracle.py --update` snapshot review, fixture provenance notes,
+lockfile, `run_oracle.py --update` snapshot review, fixture attribution notes,
 and the affected docs in one reviewed change.
 
 ### Distribution policy
@@ -242,7 +242,7 @@ when the oracle is absent.
   changed only on demonstrated behavioral need, never on release recency.
   A version bump alone is not an oracle change.
 * **Measured stability.** Every accept/reject outcome and diagnostic in the
-  ported evidence set is byte-identical across `9.7.10 → 9.7.13` (measured in
+  ported fixture set is byte-identical across `9.7.10 → 9.7.13` (measured in
   the WrightKit Track B investigation); only hero/settings schema data
   differs. Historical claims stay interpretable because every result records
   the exact pinned identity.
@@ -263,5 +263,5 @@ when the oracle is absent.
 * [`docs/language-support.md`](../language-support.md): public support contract and current states
 * [`docs/opy/tooling-notes.md`](../opy/tooling-notes.md): harness usage
 * [`tools/overpy/README.md`](../../tools/overpy/README.md): oracle and fixture layout
-* [`crates/opy-rs/tests/fixtures/corpus/README.md`](../../crates/opy-rs/tests/fixtures/corpus/README.md): corpus provenance
+* [`crates/opy-rs/tests/fixtures/corpus/README.md`](../../crates/opy-rs/tests/fixtures/corpus/README.md): fixture attribution and layout
 * WrightKit's policy sources this document adapts: `wright/docs/licensing.md`, wright ADR-0004 (OverPy licensing and clean-room boundary), ADR-0007 (reference pinning policy)

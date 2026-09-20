@@ -2,13 +2,23 @@
   "schemaVersion": 1,
   "id": "synthetic/wait-optimization",
   "category": "compilation",
-  "features": ["wait", "optimizeForSize", "default arguments"],
+  "features": [
+    "wait",
+    "optimizeForSize",
+    "default arguments"
+  ],
   "source": "source.opy",
-  "expectedStatus": "success",
-  "provenance": {
-    "kind": "minimized-regression",
-    "origin": "opy-rs Issue #282 pinned OverPy 9.7.10 wait lowering probe",
-    "license": "AGPL-3.0-or-later",
-    "redistributable": true
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": false
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": true
+    }
   }
 }

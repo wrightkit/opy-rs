@@ -2,13 +2,25 @@
   "schemaVersion": 1,
   "id": "synthetic/syntax-invalid",
   "category": "diagnostics",
-  "features": ["syntax/do-while", "syntax/string-modifiers", "syntax/dicts"],
+  "features": [
+    "syntax/do-while",
+    "syntax/string-modifiers",
+    "syntax/dicts"
+  ],
   "source": "source.opy",
-  "expectedStatus": "failure",
-  "provenance": {
-    "kind": "original",
-    "origin": "opy-rs Issue #28 minimized reference-rejected syntax probe",
-    "license": "AGPL-3.0-or-later",
-    "redistributable": true
+  "tests": {
+    "source": {
+      "nativeStatus": "failure",
+      "relationship": "match",
+      "ruleNames": false,
+      "diagnosticCode": "parse-error"
+    },
+    "compiler": {
+      "nativeStatus": "failure",
+      "relationship": "match",
+      "comparison": "diagnostic-code",
+      "diagnosticCode": "parse-error",
+      "failureClass": "frontend"
+    }
   }
 }

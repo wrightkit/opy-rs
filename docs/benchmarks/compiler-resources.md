@@ -4,7 +4,7 @@ This is the reproducible resource baseline for [opy-rs#296](https://github.com/w
 
 The accepted baseline record is [`compiler-resources-baseline.json`](compiler-resources-baseline.json), generated from the audited `origin/main` revision on macOS arm64 with five samples per workload. It records seven independent workloads; the instrumented candidate workflow adds the `macro-runtime-heavy` workload:
 
-| Workload | Mechanism isolated | Input and provenance |
+| Workload | Mechanism isolated | Input and attribution |
 | --- | --- | --- |
 | `nested-expression-lowering` | Nested lowering values and subtree copies | Generated source, depth 24, SHA-256 recorded in the baseline record |
 | `wide-call-value-construction` | Wide value construction and nested argument copies | Generated `[vect(...)]`, 32 vectors, SHA-256 recorded in the baseline record |
@@ -13,7 +13,7 @@ The accepted baseline record is [`compiler-resources-baseline.json`](compiler-re
 | `macro-runtime` | QuickJS engine creation per invocation | Fixed script `(x + 2).toString();`, 64 invocations, SHA-256 recorded in the baseline record |
 | `macro-runtime-heavy` | QuickJS lifecycle cost with non-trivial script work | Helper- and collection-heavy script, 64 invocations, SHA-256 recorded in the candidate record |
 | `large-settings-source` | Settings scanner materialization | Generated JSONC-like block with 1,000 keys, SHA-256 recorded in the baseline record |
-| `real-world-parabola` | End-to-end compiler path on a provenance-linked project | `tests/fixtures/corpus/real-world/overpy-parabola`, including its `fixture.json` provenance and source SHA-256 |
+| `real-world-parabola` | End-to-end compiler path on an attributed project | `tests/fixtures/corpus/real-world/overpy-parabola`, including its `fixture.json` attribution and source SHA-256 |
 
 The test-only counters report retained lowering values, copied value-tree nodes from the pre-#299 lowering path, canonical value materialization nodes, action-copy events, manifest/catalog contract checks, materialized settings characters, and QuickJS engine creations. The clone counters retain their original #296 meanings so before/after and ablation records remain comparable; they are zero for the #299 candidate because the copied lowering path has been removed. For the two macro workloads they also report aggregate nanoseconds for runtime/context creation, host registration, builtin-helper evaluation, user-script evaluation, and runtime/context teardown. They are compiled only for unit tests and do not add a production API or telemetry surface. Each workload runs in a separate child test process; peak RSS is read with `getrusage(RUSAGE_SELF)` inside that child. macOS reports bytes directly; Linux converts the kernel's KiB value to bytes. Other platforms report `null` for RSS.
 
@@ -35,7 +35,7 @@ To intentionally refresh the pinned record, run the command at the audited defau
 
 For a before/after comparison, run the command once at the audited `origin/main` revision and once at the candidate revision, keeping OS, architecture, Rust version, build profile, and workload parameters unchanged. Compare elapsed time directionally and compare mechanism counters exactly; do not turn a single-machine timing into a fixed percentage contract. Repeat the command when a directional result matters and report run count and environmental noise with the result.
 
-The real-project case is intentionally the small, successful `overpy-parabola` fixture so a complete lowering/emission path is exercised without making a large corpus failure the benchmark's success condition. Its committed `fixture.json`, source hash, upstream commit, license, and source URL remain the provenance authority.
+The real-project case is intentionally the small, successful `overpy-parabola` fixture so a complete lowering/emission path is exercised without making a large corpus failure the benchmark's success condition. Its committed `fixture.json`, source hash, upstream commit, license, and source URL remain the attribution authority.
 
 ## QuickJS lifecycle conclusion (#300)
 

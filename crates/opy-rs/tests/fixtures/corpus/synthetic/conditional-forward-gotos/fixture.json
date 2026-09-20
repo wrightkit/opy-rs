@@ -2,13 +2,24 @@
   "schemaVersion": 1,
   "id": "synthetic/conditional-forward-gotos",
   "category": "compilation",
-  "features": ["if", "else", "goto", "forward-control-flow"],
+  "features": [
+    "if",
+    "else",
+    "goto",
+    "forward-control-flow"
+  ],
   "source": "source.opy",
-  "expectedStatus": "success",
-  "provenance": {
-    "kind": "original",
-    "origin": "opy-rs Issue #319 review regression probe",
-    "license": "AGPL-3.0-or-later",
-    "redistributable": true
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": true
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": true
+    }
   }
 }

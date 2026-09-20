@@ -2,13 +2,23 @@
   "schemaVersion": 1,
   "id": "synthetic/translations-invalid",
   "category": "preprocessing",
-  "features": ["preprocessing/translations"],
+  "features": [
+    "preprocessing/translations"
+  ],
   "source": "source.opy",
-  "expectedStatus": "failure",
-  "provenance": {
-    "kind": "original",
-    "origin": "opy-rs Issue #31 minimized pinned-oracle negative probe",
-    "license": "AGPL-3.0-or-later",
-    "redistributable": true
+  "tests": {
+    "source": {
+      "nativeStatus": "failure",
+      "relationship": "match",
+      "ruleNames": false,
+      "diagnosticCode": "translations-invalid"
+    },
+    "compiler": {
+      "nativeStatus": "failure",
+      "relationship": "match",
+      "comparison": "diagnostic-code",
+      "diagnosticCode": "translations-invalid",
+      "failureClass": "frontend"
+    }
   }
 }

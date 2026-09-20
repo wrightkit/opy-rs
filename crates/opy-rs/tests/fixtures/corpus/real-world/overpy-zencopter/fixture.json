@@ -1,7 +1,5 @@
 {
-  "acquisitionMethod": "scripts/acquire-corpus.py: GitHub archive of the pinned commit (codeload.tar.gz), include-closure resolution matching the pinned oracle, SHA-256 verification",
   "category": "real-world",
-  "expectedStatus": "failure",
   "features": [
     "preprocessing/macros",
     "expressions",
@@ -12,7 +10,9 @@
     "heli.opy": "246f74a946b097c299853dc3d46d1a722cbdc6f97baf7e095986cda6963cfe96"
   },
   "id": "real-world/overpy-zencopter",
-  "provenance": {
+  "schemaVersion": 1,
+  "source": "heli.opy",
+  "attribution": {
     "kind": "imported-example",
     "license": "GPL-3.0-only",
     "licenseUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/LICENSE",
@@ -22,7 +22,19 @@
     "sourceCommit": "eea67adbcf6926c4004e35e25ab4be072624a44e",
     "sourceUrl": "https://github.com/Zezombye/overpy/blob/eea67adbcf6926c4004e35e25ab4be072624a44e/examples/Zencopter/heli.opy"
   },
-  "runtimeSeconds": 7.4,
-  "schemaVersion": 1,
-  "source": "heli.opy"
+  "tests": {
+    "source": {
+      "nativeStatus": "failure",
+      "relationship": "match",
+      "ruleNames": false,
+      "diagnosticCode": "lex-error"
+    },
+    "compiler": {
+      "nativeStatus": "failure",
+      "relationship": "match",
+      "comparison": "diagnostic-code",
+      "diagnosticCode": "lex-error",
+      "failureClass": "frontend"
+    }
+  }
 }

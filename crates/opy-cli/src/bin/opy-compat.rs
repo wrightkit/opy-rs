@@ -1,4 +1,4 @@
-//! Internal compatibility evidence producer.
+//! Internal compatibility comparison producer.
 //!
 //! This target is built only by the compatibility gate. It is deliberately
 //! separate from `opy-cli compile`: pinned oracle input must never become part

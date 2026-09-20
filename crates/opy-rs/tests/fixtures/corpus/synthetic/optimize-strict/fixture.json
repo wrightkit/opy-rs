@@ -2,13 +2,22 @@
   "schemaVersion": 1,
   "id": "synthetic/optimize-strict",
   "category": "compiler",
-  "features": ["compiler/optimization", "preprocessing/optimization"],
+  "features": [
+    "compiler/optimization",
+    "preprocessing/optimization"
+  ],
   "source": "source.opy",
-  "expectedStatus": "success",
-  "provenance": {
-    "kind": "original",
-    "origin": "opy-rs Issue #288 minimized pinned-oracle strict optimizer probe",
-    "license": "AGPL-3.0-or-later",
-    "redistributable": true
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": true
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": true
+    }
   }
 }

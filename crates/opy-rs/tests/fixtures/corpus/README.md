@@ -1,155 +1,56 @@
-# Compatibility Fixture Corpus — Provenance
+# OPY compatibility fixtures
 
-This directory is the opy-rs compatibility corpus: OPY sources with their
-pinned-oracle snapshots (`oracle.json`), ported from the WrightKit project's
-evidence base and re-verified against the pinned OverPy 9.7.10 oracle (see
-[`docs/compatibility/upstream-references.md`](../../../../../docs/compatibility/upstream-references.md)
-for the dated verification record).
-
-Corpus policy: every fixture records provenance in its `fixture.json`
-(`kind`, `origin`, `license`, `redistributable`, and — for imported
-fixtures — `sourceCommit`, `sourceUrl`, `licenseUrl`, `modifications`).
-No fixture is committed without a clear provenance record. The pinned
-reference identity and the clean-room policy are in
-[`docs/compatibility/upstream-references.md`](../../../../../docs/compatibility/upstream-references.md).
-These files are oracle evidence, not core inputs: the core never imports
-them, and they are never bundled into core builds or release artifacts.
+This directory contains OPY inputs and pinned OverPy results used by the
+source and compiler differential tests. Each fixture is ordinary test data:
+the native implementation runs against the input, the pinned OverPy 9.7.10
+result provides the reference behavior, and the runners assert the declared
+relationship.
 
 ## Layout
 
 ```text
 corpus/<category>/<name>/
-  fixture.json   # metadata and expected compile status
-  source.opy     # input (or the source path named by fixture.json; multi-file
-                 # fixtures name their main file via fixture.json "source")
-  oracle.json    # normalized pinned-oracle snapshot (compile status, exit code,
-                 # diagnostics, normalized Workshop text, output hash)
+  fixture.json   # input, optional attribution, and test expectations
+  source.opy     # input, or the source path named by fixture.json
+  oracle.json    # pinned reference result snapshot
 ```
 
-## Synthetic fixtures (WrightKit-authored)
+`fixture.json` contains:
 
-`fixtures/synthetic/` — fixtures authored for the WrightKit compatibility
-corpus (AGPL-3.0-or-later, `kind: original`): an initial set ported unchanged
-from the wright repository corpus, extended by fixtures added in this
-repository:
+- `id`, `category`, optional `features`, and the fixture `source`;
+- optional `attribution` with source kind, origin, license, and redistribution
+  status when a third-party, redistribution, or reproducibility record is needed;
+- imported-source `sourceCommit`, `sourceUrl`, `licenseUrl`, and file hashes
+  where attribution or reproducibility requires them;
+- `tests.source` with the native source status, reference relationship, rule
+  name comparison flag, and stable diagnostic code when applicable;
+- `tests.compiler` with the native compiler status, relationship, comparison
+  contract, and diagnostic details when applicable.
 
-| Fixture | Covers |
-| --- | --- |
-| `basic-rule` | minimal rule with `@Event global`, `disableInspector()` |
-| `control-flow` | `if`/`elif`/`else`, `for … in range`, `while`, `pass` |
-| `declarations-rules` | `globalvar`/`playervar`/`subroutine`/`def`/`enum`, rule headers |
-| `declarations-numbers` | numeric literal forms and variable-index declarations |
-| `expressions-values` | expressions, arrays, strings, vectors, calls, `.format` |
-| `preprocessing` | `#!include` (with `shared.opy`), `#!define` object/function-like |
-| `directives-scoped` | Pinned positive probe for rule-prefix templates, include prefix restoration, macro/enum redeclaration, and normalized translations |
-| `translations-invalid` | Pinned negative probe for a translation code outside the oracle's exact set |
-| `include-scope` | Pinned nested-include probe for observable optimization state transitions |
-| `optimize-strict` | #288 pinned strict-optimizer probe for expressions whose type-conversion semantics must be preserved |
-| `diagnostics` | expected-failure fixture with a syntax diagnostic |
-| `settings` | top-of-file `settings { … }` JSONC block |
-| `receiver-calls` | receiver/member call forms (derived from the real-world overpy-meipocalypse corpus; see its `fixture.json` provenance note) |
-| `chase-enums` | `ChaseTimeReeval`/`ChaseRateReeval` enum domains |
-| `chase-condition-agentlab` | `chaseOverTime(...)` in rule conditions (agent-lab regression) |
-| `chase-keywords` | named/keyword arguments and the `chase`/`ChaseReeval` contextual forms |
-| `for-range-agentlab` | `for` with implicit default-variable binder (agent-lab regression, `kind: derived`) |
-| `syntax-surface`, `syntax-invalid`, `string-modifiers` | pure OPY syntax probes for switch, do-while, hex, membership, modifiers, dicts, comprehensions, lambda, and negative diagnostics |
-| `compiler-vertical-slice` | minimal OPY HIR to canonical Workshop WIR validation and deterministic emission slice |
-| `primitive-lowering` | #46 oracle-backed primitive lowering probe: assignments and modifications (including `**=`), expressions, indexing, format, initializers, implicit default variables at fixed slots; the snapshot constrains the native compiler through structural equivalence |
-| `dictionary-lookup` | #145 literal dictionary lookup probe retained from #46: the compiler folds literal key hits and misses to the oracle's selected value or `Null`; dictionary-indexed assignment targets remain a separate boundary |
-| `postfix-assignment` | #59 oracle-backed postfix `++`/`--` assignment probe for global, player, and single-level indexed variables; the snapshot constrains native lowering through canonical WIR equivalence |
-| `indexed-assignment-nested` | #145 oracle-backed nested indexed-assignment probe for two- and three-level global targets, including compound modification |
-| `indexed-assignment-4d-invalid` | #162 pinned negative probe preserving OverPy's structured rejection of four-dimensional indexed assignments at the source semantic boundary |
-| `postfix-prefix-invalid` | #59 pinned negative probe for rejected prefix `++` with a stable source-attributed parse diagnostic; prefix `--x` remains valid consecutive unary-minus syntax |
-| `postfix-embedded-invalid` | #59 pinned negative probe for the rejected embedded postfix form with a stable source-attributed parse diagnostic |
-| `range-player-variable` | #65 pinned oracle-backed player-variable range binder probe for canonical `For Player Variable` lowering |
-| `range-invalid-binder` | #162 pinned negative probe for a non-variable range binder with a stable source-attributed semantic diagnostic |
-| `member-angle` | #130 catalog-backed `eventPlayer.getHorizontalFacingAngle()` member-value lowering |
-| `hud-visibility` | #131 `SpecVisibility.NEVER` to canonical `VISIBLE_NEVER` enum mapping |
-| `control-flow-lowering` | #47 pinned oracle-backed control-flow lowering probe: if/elif/else, while, range-for, do-while expansion, switch fallthrough/default, and direct break |
-| `switch-break-unsupported` | #47 probe: a break hidden inside a conditional switch arm follows OverPy's `Else` marker lowering, and a top-level no-op switch is elided |
-| `switch-order` | #47 pinned oracle probe for a default arm before later case arms and source-order fallthrough |
-| `switch-structured-target` | #47 pinned oracle probe for nested if/while structure in an earlier arm and later case/default targets |
-| `switch-multiple-break` | #47 pinned oracle probe for multiple direct breaks lowered through canonical nested switch-exit WIR |
-| `do-while-break` | #47 pinned oracle probe for direct, conditional, and nested do-while break lowering |
-| `do-while-invalid` | #47 pinned negative probe for the stable do-while placement diagnostic |
-| `directives`, `duplicate-rule-diagnostic`, `project-main-file` | directive/include/main-file preprocessing probes |
-| `switch-break`, `strings-and-lambda`, `lambda-invalid` | switch break/fallthrough, f-string interpolation, and lambda negative probes |
-| `receiver-playervar` | bare variable member expression `A = B.C` with preserved receiver/member provenance |
+There is one manifest per fixture. The manifest does not contain Issue/PR
+history, run timing, generic verification records, or generated reports.
 
-## Real-world fixtures
+`oracle.json` records the pinned oracle identity, the complete resolved OPY
+source graph with per-file SHA-256 hashes, compile status, exit code,
+diagnostics, normalized Workshop output, and output hash. It is the reference
+test result, not a second expectation table. Run `python3 tools/overpy/run_oracle.py`
+to verify the snapshots; use `--update` only when intentionally accepting a
+new result from the pinned oracle.
 
-### Derived from upstream OverPy `examples/` (GPL-3.0-only)
+## Fixture groups
 
-Fixtures whose OPY sources are byte-identical to the pinned reference tree's
-`examples/` content (verified by `diff` against the pinned content
-commit on acquisition; the fixture `fixture.json` files additionally record
-the example-capture commit `eea67adbcf6926c4004e35e25ab4be072624a44e` used
-by the original WrightKit acquisition pipeline — both identities describe
-the same bytes). Mapping to the pinned tree (content commit
-`889d9749d1def17f146548cbddb94ea1ab015847`):
+Synthetic fixtures cover OPY syntax, preprocessing, diagnostics, source
+semantics, and focused compiler lowering. Real-world fixtures retain complete
+projects from the pinned OverPy examples or independently licensed projects;
+their `regressions` entries only identify minimized `.opy` files excluded from
+the full-project source digest. The complete project remains the integration
+test.
 
-| Fixture | Pinned-tree source | `expectedStatus` |
-| --- | --- | --- |
-| `overpy-cake` | `examples/cake.opy` | success |
-| `overpy-pixelart` | `examples/pixelart.opy` | success |
-| `overpy-santa` | `examples/santa.opy` | success |
-| `overpy-cronch` | `examples/cronch.opy` | success |
-| `overpy-broken-weapons` | `examples/broken_weapons.opy` | success |
-| `overpy-client-to-server` | `examples/clientToServer.opy` | success |
-| `overpy-crosshair` | `examples/crosshair.opy` | success |
-| `overpy-inputhud` | `examples/inputhud.opy` | success |
-| `overpy-parabola` | `examples/parabola.opy` | success |
-| `overpy-meipocalypse` | `examples/meipocalypse/*.opy` (the non-OPY generators `generateWalls.js`, `generateZoneVariables.js`, `elements.md`, `todo.md` are not ported) | failure (reference rejects part of the project; recorded in the snapshot) |
-| `overpy-zencopter` | `examples/Zencopter/heli.opy` (`heliturrets.js` is not ported) | failure |
+`census/workshop-feature-census` contains opaque Workshop feature IDs used by
+the OPY-side consumer test. Catalog definitions, validation, and emission
+remain owned by `workshop-rs`.
 
-License note: the upstream `examples/` are part of the GPL-3.0-only OverPy
-repository. These fixture OPY sources are retained **as provenance-recorded
-evidence** for oracle evaluation: they are not redistributed as library code
-or imported into the opy-rs core, and the repository's AGPL-3.0-or-later
-license does not relicense them. `oracle.json` snapshots record observed
-oracle behavior (accept/reject, diagnostics, normalized Workshop text) for
-compatibility evidence. See the clean-room policy in
-`docs/compatibility/upstream-references.md`.
-
-Current real-world reference-success/native-gap cases also keep a
-minimized regression snippet in the parent fixture's `regressions` metadata.
-Those snippets retain a link to the full-project oracle evidence; they are not
-standalone replacement expectations.
-
-`census/workshop-feature-census` is the OPY consumer-side census fixture. Its
-`workshopFeatureIds` are opaque IDs reserved for the `workshop-rs#10` contract;
-this repository does not copy Workshop catalog definitions or signatures.
-
-### Independent third-party projects (BSD-2-Clause)
-
-| Fixture | Origin | `expectedStatus` |
-| --- | --- | --- |
-| `ow1-emulator` | [Overwatch-1-Emulator/ow1-emulator](https://github.com/Overwatch-1-Emulator/ow1-emulator) `src/1v1_main.opy`, full include closure, pinned commit `25cd6ce8d4acdd64b66c862a55c7ed66c8e50af1`, BSD-2-Clause | failure (recorded reference diagnostics) |
-| `6v6-adjustments` | [6v6-Adjustments/6v6-adjustments](https://github.com/6v6-Adjustments/6v6-adjustments) `src/main.opy`, full include closure, pinned dev-branch commit `624480db6b7494f8bd5f3ab68fbb7e96a7726702`, BSD-2-Clause | failure (recorded reference diagnostics) |
-
-Both are committed unchanged from their pinned commits with per-file SHA-256
-records in `fixture.json` (`files` map). The multi-file fixtures exercise
-large include closures, macros, subroutines, settings blocks, and Workshop
-enum/action surfaces; their snapshots keep `expectedStatus: failure` with the
-reference diagnostics, exactly like the pinned oracle behaves.
-
-> Note on `acquisitionMethod` in imported `fixture.json` files: imported
-> fixtures preserve `scripts/acquire-corpus.py` as the **historical** Wright
-> acquisition method. That one-off M11 helper and its corpus manifest were
-> retired after live OPY compatibility ownership moved to opy-rs. The field is
-> retained only as provenance and is not an executable instruction. Current
-> corpus/oracle acquisition and re-validation are owned by this repository;
-> do not reintroduce the old Wright helper unless new evidence demonstrates a
-> concrete need for an equivalent owner-side acquisition workflow.
-
-## Not ported / dropped
-
-* **No fixture was dropped for provenance reasons**: fixtures in the WrightKit
-  corpus carried complete, reviewed provenance and are ported.
-* Upstream `examples/` not ported (candidates for later expansion once a
-  demonstrated need exists): `lucioball_all_heroes.opy`, `skirmish_elim.opy`,
-  `settings.opy.json` (settings schema data, not an OPY source), and the
-  non-OPY generator files listed above.
-* The full-gamemode list in the upstream `examples/README.md` (OverWordle,
-  Riptire Racing, Conquest, …) points to third-party repositories; they stay
-  out of the corpus until their licenses are reviewed.
+Imported source files retain their applicable license, attribution, immutable
+source revision, redistribution status, and file hashes. These concrete
+records protect licensing and reproducibility; they do not define a generic
+compatibility metadata model.

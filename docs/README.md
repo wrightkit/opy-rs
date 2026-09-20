@@ -10,8 +10,8 @@ architecture/README.md       current architecture routing
   ├─ language-core.md        current OverPy semantic/scope contract
   └─ workshop-boundary.md    current canonical Workshop boundary
 adr/                         historical architecture decisions
-language-support.md          current evidenced support
-compatibility/               pinned reference/provenance
+language-support.md          current tested support
+compatibility/               pinned reference/licensing
 opy/ + hir/                  public/API/provider and implementation notes
 source/tests/corpus          current implementation reality
 Issues / PRs / releases      mutable execution state
@@ -20,7 +20,7 @@ Issues / PRs / releases      mutable execution state
 For substantive implementation work, start from
 [`architecture/README.md`](architecture/README.md), then inspect the relevant
 source/tests and Issue contract. Current support is established by executable
-evidence and [`language-support.md`](language-support.md), not by architecture
+tests and [`language-support.md`](language-support.md), not by architecture
 intent alone.
 
 ## Current architecture
@@ -32,7 +32,7 @@ intent alone.
 - [OverPy / Workshop boundary](architecture/workshop-boundary.md): lowering,
   canonical WIR, reconstruction, and dependency direction.
 - [Repository agent guidance](../AGENTS.md): implementation preflight,
-  provenance, validation, and delivery.
+  source attribution, validation, and delivery.
 - [ADR registry](adr/README.md): historical decisions and their rationale;
   current contracts remain under `docs/architecture/`.
 
@@ -42,21 +42,21 @@ compatibility pointers rather than separate architecture authorities.
 
 ## Compatibility and current support
 
-- [OverPy support contract](language-support.md): current evidenced feature
+- [OverPy support contract](language-support.md): current tested feature
   coverage.
 - [Upstream references](compatibility/upstream-references.md): pinned upstream
-  identity, provenance, licensing, and reference boundaries.
-- [OverPy evidence harness](../tools/overpy/README.md): probes/snapshots and
+  identity, source attribution, licensing, and reference boundaries.
+- [OverPy compatibility harness](../tools/overpy/README.md): tests/snapshots and
   differential testing.
 
-Evidence describes implementation completeness; it does not
+Tests describe implementation completeness; they do not
 narrow the established upstream core-language scope.
 
 ## APIs and implementation notes
 
 - [Tooling API](opy/tooling-api.md): standalone Rust and CLI contracts.
 - [LPP provider](opy/provider.md): integration/process contract.
-- [Source-edit policy](opy/trivia-retention-policy.md): provenance/trivia
+- [Source-edit policy](opy/trivia-retention-policy.md): source mapping/trivia
   requirements.
 - [Opy HIR v2](hir/opy-hir-v2.md): current HIR representation/wire contract,
   subject to the current architecture contracts and code reality.

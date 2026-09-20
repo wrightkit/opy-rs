@@ -41,7 +41,7 @@ emission. Its arena-backed WIR/storage is internal support representation.
 The ordinary consumer boundary is the public `workshop-rs::Program` model;
 arena-backed WIR/storage and node-ID mechanics are internal to `workshop-rs`,
 as recorded by [workshop-rs ADR-0008](https://github.com/wrightkit/workshop-rs/blob/main/docs/adr/0008-canonical-public-program-boundary.md).
-OPY may use canonical semantic APIs and approved provenance access, but must
+OPY may use canonical semantic APIs and approved source-mapping access, but must
 not recreate or depend on that internal storage representation.
 
 Do not move OverPy names, aliases, contextual dispatch records, compiler helper identities, or reconstruction carriers into canonical Workshop merely to simplify compilation.

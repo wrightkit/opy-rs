@@ -2,13 +2,24 @@
   "schemaVersion": 1,
   "id": "synthetic/preprocessing",
   "category": "synthetic",
-  "features": ["include", "macro", "enum", "compiler directives"],
+  "features": [
+    "include",
+    "macro",
+    "enum",
+    "compiler directives"
+  ],
   "source": "source.opy",
-  "expectedStatus": "success",
-  "provenance": {
-    "kind": "original",
-    "origin": "Wright compatibility corpus",
-    "license": "AGPL-3.0-or-later",
-    "redistributable": true
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": false
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "known-gap",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": false
+    }
   }
 }
