@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.48](https://github.com/wrightkit/opy-rs/compare/v0.1.47...v0.1.48) - 2026-09-20
+
+### Added
+
+- *(opy)* complete translations and external settings ([#339](https://github.com/wrightkit/opy-rs/pull/339))
+- *(opy)* complete compiler directives and replacements ([#341](https://github.com/wrightkit/opy-rs/pull/341))
+- *(opy)* complete pinned callable surface ([#340](https://github.com/wrightkit/opy-rs/pull/340))
+- *(opy)* complete enum and constant domain coverage ([#334](https://github.com/wrightkit/opy-rs/pull/334))
+- *(opy)* complete collection mutation and control flow ([#335](https://github.com/wrightkit/opy-rs/pull/335))
+
+### Other
+
+- *(opy)* consolidate compatibility test metadata ([#338](https://github.com/wrightkit/opy-rs/pull/338))
+
 ## [0.1.47](https://github.com/wrightkit/opy-rs/compare/v0.1.46...v0.1.47) - 2026-09-19
 
 ### Added
