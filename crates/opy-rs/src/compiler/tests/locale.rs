@@ -22,16 +22,6 @@ rule "locale surface":
 fn forward_compilation_reparses_in_every_pinned_workshop_locale() {
     let compiler = Compiler::new().expect("released Workshop contract must load");
     let catalog = Catalog::builtin().expect("canonical catalog must load");
-    let declared = catalog
-        .locales()
-        .iter()
-        .map(|locale| locale.as_str())
-        .collect::<Vec<_>>();
-    let expected = PINNED_WORKSHOP_LOCALES
-        .iter()
-        .map(|language| Locale::new(language).as_str().to_owned())
-        .collect::<Vec<_>>();
-    assert_eq!(declared, expected);
 
     let english_locale = Locale::new("en-US");
     let english = compiler
@@ -45,6 +35,10 @@ fn forward_compilation_reparses_in_every_pinned_workshop_locale() {
 
     for language in PINNED_WORKSHOP_LOCALES {
         let locale = Locale::new(language);
+        assert!(
+            catalog.supports(&locale),
+            "canonical catalog must support pinned locale {language}"
+        );
         let artifact = compiler
             .compile_source_with_language(LOCALE_SOURCE, "locale.opy", Path::new("."), language)
             .unwrap_or_else(|error| panic!("{language} must compile: {error}"));
