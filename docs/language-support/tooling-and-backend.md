@@ -12,8 +12,10 @@
 | Replacement directives such as `#!replace0By*`, `#!replace1ByMatchRound`, team and empty-string replacements | ✅ Supported | Observable replacements are lowered when size optimization is active and are excluded from Workshop-setting constructors, matching the pinned upstream boundary. |
 | `#!extension` | ✅ Supported | The extension name is checked against the canonical Workshop schema. |
 | `#!disableInspector`, `#!excludeVariablesInCompilation`, `#!setupTags`, `#!setupTx`, `#!globalvarInitRuleName` and `#!playervarInitRuleName` | ✅ Supported | Inspector/setup rules, output declaration filtering and generated initialization rule names affect forward Workshop output. |
-| `#!translations` and `#!suppressWarnings` | 🚧 Partial | Translation state and warning policy are recorded; full translation-file lifecycle remains issue #331. |
-| `#!translateWithPlayerVar`, `#!writeToOutputFile`, `#!disableTranslationSourceLines`, `#!keepUnusedTranslations` and `#!debugElementCount` | ❌ Unsupported | These require translation-file, editor-output or presentation capabilities outside the forward compiler contract and are rejected with a source diagnostic. |
+| `#!translations` | 🚧 Partial | Translation state is recorded; the full translation-file lifecycle remains issue #331. |
+| `#!suppressWarnings` | ✅ Supported | Matching preprocessing warning codes are omitted from the public diagnostics surface. |
+| `#!debugElementCount` | ✅ Supported | The forward compiler emits canonical-WIR total, per-rule and per-action element-count comments. |
+| `#!translateWithPlayerVar`, `#!writeToOutputFile`, `#!disableTranslationSourceLines` and `#!keepUnusedTranslations` | ❌ Unsupported | These require translation-file or editor-output capabilities outside the forward compiler contract and are rejected with a source diagnostic. |
 | `#!postCompileHook` | ✅ Supported | The hook runs after final Workshop emission and failures retain script provenance. |
 | `__script__(...)` JavaScript macros | ✅ Supported | The embedded QuickJS runtime exposes the documented OverPy ABI, limits, isolation and string-result contract. |
 

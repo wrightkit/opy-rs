@@ -2704,7 +2704,13 @@ impl<'a> Lowering<'a> {
         span: Option<HirSpan>,
     ) -> Result<ActionId, IntegrationError> {
         let argument_span = expr.span().copied();
+        let empty_string = matches!(expr, Expr::String { value, .. } if value.is_empty());
         let value = self.lower_value(expr)?;
+        let value = if empty_string {
+            self.push_value(Value::Null)
+        } else {
+            value
+        };
         let padding_text = self.push_value(Value::String(" ".repeat(45)));
         let padding = self.push_call("customString", vec![padding_text]);
         let body_text = self.push_value(Value::String(format!("{}{{0}}", " ".repeat(125))));
@@ -2718,10 +2724,14 @@ impl<'a> Lowering<'a> {
             value: "LEFT".to_string(),
         });
         let sort_order = self.push_number(-9999.0, "-9999");
-        let color = self.push_value(Value::Enum {
-            value_type: "Color".to_string(),
-            value: "ORANGE".to_string(),
-        });
+        let color = if empty_string {
+            self.push_value(Value::Null)
+        } else {
+            self.push_value(Value::Enum {
+                value_type: "Color".to_string(),
+                value: "ORANGE".to_string(),
+            })
+        };
         let reevaluation = self.push_value(Value::Enum {
             value_type: "HudReeval".to_string(),
             value: "VISIBILITY_AND_STRING".to_string(),

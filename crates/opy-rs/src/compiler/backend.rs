@@ -2,7 +2,6 @@ use super::*;
 
 pub(crate) fn reject_unlowered_directives(hir: &hir::Program) -> Result<(), IntegrationError> {
     let unsupported = [
-        "debugElementCount",
         "disableTranslationSourceLines",
         "keepUnusedTranslations",
         "translateWithPlayerVar",

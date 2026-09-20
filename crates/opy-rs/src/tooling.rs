@@ -38,7 +38,17 @@ use crate::hir;
 use crate::hir::types::{
     Declaration, Define, Expr as HirExpr, RuleEntry, SourceFile, Stmt as HirStmt,
 };
-use crate::preprocess::{FileRecord, PreprocessOutcome, PreprocessWarning};
+use crate::preprocess::{FileRecord, PreprocessOutcome, PreprocessWarning, Preprocessed};
+
+fn visible_warnings(preprocessed: &Preprocessed) -> impl Iterator<Item = &PreprocessWarning> {
+    preprocessed.warnings.iter().filter(|warning| {
+        !preprocessed
+            .preprocessing
+            .suppressed_warnings
+            .iter()
+            .any(|code| code == &warning.code)
+    })
+}
 
 /// The outcome of [`check`]: structured diagnostics plus the resolved model.
 ///
@@ -114,9 +124,7 @@ pub fn check_with_overlay(
     let Some(mut program) = parsed.program else {
         // The parser recovers at statement boundaries; every collected error
         // is reported (the compile pipeline reads only the first).
-        let mut diagnostics = preprocessed
-            .warnings
-            .iter()
+        let mut diagnostics = visible_warnings(&preprocessed)
             .map(|warning| Diagnostic::from_warning(warning, &files))
             .collect::<Vec<_>>();
         diagnostics.extend(
@@ -139,9 +147,7 @@ pub fn check_with_overlay(
         match crate::settings::parse_block(block) {
             Ok(parsed_settings) => program.settings = Some(parsed_settings),
             Err(error) => {
-                let mut diagnostics = preprocessed
-                    .warnings
-                    .iter()
+                let mut diagnostics = visible_warnings(&preprocessed)
                     .map(|warning| Diagnostic::from_warning(warning, &files))
                     .collect::<Vec<_>>();
                 diagnostics.push(Diagnostic::from_error(error, &files));
@@ -178,13 +184,12 @@ pub fn check_with_overlay(
         &preprocessed.preprocessing,
     ) {
         Ok(mut hir) => {
+            let frontend_warnings = visible_warnings(&preprocessed)
+                .map(|warning| Diagnostic::from_warning(warning, &files))
+                .collect::<Vec<_>>();
             hir.preprocessing = preprocessed.preprocessing;
             if let Err(error) = crate::settings::resolve_hir_settings(&mut hir, &program) {
-                let mut diagnostics = preprocessed
-                    .warnings
-                    .iter()
-                    .map(|warning| Diagnostic::from_warning(warning, &files))
-                    .collect::<Vec<_>>();
+                let mut diagnostics = frontend_warnings;
                 diagnostics.push(Diagnostic::from_error(error, &files));
                 return CheckOutcome {
                     diagnostics,
@@ -194,11 +199,7 @@ pub fn check_with_overlay(
                 };
             }
             CheckOutcome {
-                diagnostics: preprocessed
-                    .warnings
-                    .iter()
-                    .map(|warning| Diagnostic::from_warning(warning, &files))
-                    .collect(),
+                diagnostics: frontend_warnings,
                 model: Some(SemanticModel::build(hir, &program)),
                 files,
                 // The directive was parsed, validated, and recorded by
@@ -209,9 +210,7 @@ pub fn check_with_overlay(
             }
         }
         Err(error) => {
-            let mut diagnostics = preprocessed
-                .warnings
-                .iter()
+            let mut diagnostics = visible_warnings(&preprocessed)
                 .map(|warning| Diagnostic::from_warning(warning, &files))
                 .collect::<Vec<_>>();
             diagnostics.push(Diagnostic::from_error(error, &files));

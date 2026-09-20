@@ -98,6 +98,77 @@ fn omit_declaration_sections(output: &str, program: &workshop_rs::Program) -> St
         .collect()
 }
 
+fn emit_debug_element_counts(
+    output: &str,
+    program: &workshop_rs::Program,
+    catalog: &Catalog,
+    hir: &hir::Program,
+) -> Result<String, IntegrationError> {
+    let report = program.element_count(catalog).map_err(|error| {
+        IntegrationError::new(
+            "element-count",
+            format!("cannot compute Workshop element counts: {error}"),
+            None,
+        )
+    })?;
+    let mut summary = format!("/* Element count: (total {}\n\n", report.total);
+    for (rule, count) in program.rules.iter().zip(&report.rules) {
+        let source = count
+            .span
+            .and_then(|span| {
+                hir.files
+                    .iter()
+                    .find(|file| file.id == span.file.index() as u32)
+            })
+            .map(|file| file.path.as_str())
+            .unwrap_or("<unknown>");
+        summary.push_str(&format!(
+            "   {}: rule \"{}\" ({source})\n",
+            count.count, rule.name
+        ));
+    }
+    summary.push_str("\n*/\n");
+
+    let mut annotated = summary;
+    let mut rule_index = 0;
+    let mut in_actions = false;
+    let mut action_index = 0;
+    for line in output.split_inclusive('\n') {
+        let trimmed = line.trim();
+        if line.starts_with("rule (") {
+            if let Some(rule) = report.rules.get(rule_index) {
+                annotated.push_str(&format!("//{} elements\n", rule.count));
+            }
+            rule_index += 1;
+            action_index = 0;
+            in_actions = false;
+        } else if trimmed == "actions {" {
+            in_actions = true;
+        } else if in_actions && line.starts_with("    }") {
+            in_actions = false;
+        }
+
+        if in_actions && line.starts_with("        ") && trimmed.ends_with(';') {
+            if let Some(rule) = report.rules.get(rule_index.saturating_sub(1)) {
+                let action_count = rule
+                    .children
+                    .iter()
+                    .filter(|node| node.kind == workshop_rs::element_count::ElementNodeKind::Action)
+                    .nth(action_index)
+                    .map(|node| node.count);
+                if let Some(action_count) = action_count {
+                    annotated.push_str(line.trim_end_matches('\n'));
+                    annotated.push_str(&format!(" // {action_count} elements\n"));
+                    action_index += 1;
+                    continue;
+                }
+            }
+        }
+        annotated.push_str(line);
+    }
+    Ok(annotated)
+}
+
 /// Version of the machine-readable compile report contract.
 pub const COMPILE_SCHEMA_VERSION: u32 = 1;
 
@@ -323,6 +394,11 @@ impl Compiler {
             })?;
         let emitted = if exclude_variables {
             omit_declaration_sections(&emitted, &program)
+        } else {
+            emitted
+        };
+        let emitted = if has_directive(&expanded_hir, "debugElementCount") {
+            emit_debug_element_counts(&emitted, &program, self.catalog, &expanded_hir)?
         } else {
             emitted
         };
@@ -812,6 +888,26 @@ mod tests {
             report.compile.diagnostics[1].span.as_ref().unwrap().path,
             "broken.opy"
         );
+    }
+
+    #[test]
+    fn suppress_warnings_hides_matching_preprocessing_diagnostics() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/corpus/synthetic/preprocessing");
+        let outcome = crate::tooling::check(
+            concat!(
+                "#!suppressWarnings w_already_imported\n",
+                "#!include \"shared.opy\"\n",
+                "#!include \"shared.opy\"\n",
+                "rule \"r\":\n",
+                "    @Event global\n",
+                "    pass\n",
+            ),
+            "main.opy",
+            &root,
+        );
+        assert!(outcome.model.is_some());
+        assert!(outcome.diagnostics.is_empty());
     }
 
     #[test]
@@ -1729,6 +1825,22 @@ rule "main":
         .unwrap();
         let artifact = compiler.compile_hir(&hir).unwrap();
         assert!(artifact.emitted.contains("Point Capture Percentage"));
+    }
+
+    #[test]
+    fn debug_element_count_emits_rule_and_action_comments() {
+        let compiler = Compiler::new().unwrap();
+        let hir = crate::compile(
+            "#!debugElementCount\nrule \"r\":\n    @Event global\n    print(1)\n",
+            "debug.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        assert!(artifact.emitted.starts_with("/* Element count: (total "));
+        assert!(artifact.emitted.contains("rule \"r\" (debug.opy)"));
+        assert!(artifact.emitted.contains("//6 elements\nrule (\"r\")"));
+        assert!(artifact.emitted.contains("// 5 elements"));
     }
 
     #[test]
