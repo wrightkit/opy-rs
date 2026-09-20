@@ -14,7 +14,8 @@ canonical Workshop model.
 | `sorted(array[, key])` | ✅ Supported | The supported key form uses contextual element/index binders. |
 | `all(array)`, `any(array)` | ✅ Supported | The array form is supported. |
 | `random.randint`, `random.uniform`, `random.choice`, `random.shuffle` | ✅ Supported | Argument domains and copied-array behavior follow OverPy. |
-| `_`, `__`, `___` translation functions | 🚧 Partial | Translation declarations and supported localized output work; every upstream overload and `.po` lifecycle is not exposed. |
+| `_`, `__`, `___` translation functions | ✅ Supported | One-argument and literal-context two-argument forms lower through the existing translation helper; external `.po` lifecycle remains outside this repository. |
+| Pinned built-in macro helpers (`buttonToString`, `getReal*`, `getSign`, `lerp`, HUD helpers, `timeToString`) | ✅ Supported | The pinned source-language forms, literal and typed arguments, defaults, aliases, receiver rules, and contextual values lower through the native callable boundary. |
 
 ## Member functions and properties
 
@@ -24,10 +25,10 @@ canonical Workshop model.
 | `array.filter`, `array.map` | ✅ Supported | Element and optional index binders are contextual. |
 | `array.all`, `array.any`, `array.unique` | ✅ Supported | `unique` preserves the first occurrence of each value. |
 | `array[index]`, `array.slice(start, count)` | ✅ Supported | Indexing and slicing retain their distinct argument contracts. |
-| `string.format(...)` | 🚧 Partial | Constant folding and the supported dynamic placeholder forms are compiled; unsupported placeholder shapes produce a source diagnostic. |
+| `string.format(...)` | ✅ Supported | Constant and dynamic indexed/sequential placeholder forms lower to canonical custom strings, including chunked forms beyond three dynamic values. |
 | Player members such as `setStatusEffect`, `setMoveSpeed`, `getPosition` and `teleport` | ✅ Supported | Receiver and enum arguments are checked before canonical lowering. |
 | `vector.x`, `vector.y`, `vector.z` | ✅ Supported | Property access returns the corresponding numeric component. |
-| Member macros using `self` | 🚧 Partial | Supported receiver expansion is limited to the native member-macro forms. |
+| Member macros using `self` | ✅ Supported | Class-qualified member macros expand `self` to the call receiver while preserving argument and statement boundaries. |
 
 ## Enums, constants and domains
 

@@ -2,6 +2,8 @@
 mod array_unique;
 #[path = "tests/builtins.rs"]
 mod builtins;
+#[path = "tests/callable_surface.rs"]
+mod callable_surface;
 #[path = "tests/catalog_lowering.rs"]
 mod catalog_lowering;
 #[path = "tests/compiler_semantics.rs"]

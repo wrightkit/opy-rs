@@ -109,7 +109,11 @@ fn scalar_player_comprehension_is_wrapped_before_filtering() {
         .expect("released workshop contract must load")
         .compile_hir(&hir)
         .expect("scalar player comprehension must lower to canonical WIR");
-    assert!(artifact.emitted.contains(
-        "Filtered Array(Array(Player Closest To Reticle(Event Player, Team(All Teams))), Is Alive(Current Array Element))"
-    ));
+    assert!(artifact.emitted.contains("Sorted Array"));
+    assert!(
+        artifact
+            .emitted
+            .contains("Has Spawned(Current Array Element)")
+    );
+    assert!(artifact.emitted.contains("Is Alive(Current Array Element)"));
 }

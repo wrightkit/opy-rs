@@ -202,7 +202,7 @@
       "receiver": "Player"
     },
     {
-      "catalogId": "getPlayerClosestToReticle",
+      "catalogLink": "special-lowering",
       "evidence": [
         "builtin-surface"
       ],
@@ -210,6 +210,7 @@
       "kind": "memberValue",
       "params": [
         {
+          "default": "ALL",
           "domain": "Team",
           "name": "team"
         }
@@ -352,6 +353,7 @@
       "kind": "value",
       "params": [
         {
+          "default": "ALL",
           "domain": "Team",
           "name": "team"
         }
@@ -773,6 +775,7 @@
       "kind": "action",
       "params": [
         {
+          "default": "ALL",
           "domain": "Team",
           "name": "team"
         }
@@ -1240,6 +1243,7 @@
       "kind": "value",
       "params": [
         {
+          "default": "ALL",
           "domain": "Team",
           "name": "team"
         }
@@ -4312,7 +4316,7 @@
       "params": []
     },
     {
-      "catalogId": "getClosestPlayer",
+      "catalogLink": "special-lowering",
       "evidence": [
         "builtin-surface"
       ],
@@ -4323,6 +4327,7 @@
           "name": "center"
         },
         {
+          "default": "ALL",
           "domain": "Team",
           "name": "team"
         }
@@ -4767,6 +4772,532 @@
           "name": "transform"
         }
       ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "_",
+      "kind": "value",
+      "params": [
+        {
+          "name": "contextOrString"
+        },
+        {
+          "name": "string",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "__",
+      "kind": "value",
+      "params": [
+        {
+          "name": "contextOrString"
+        },
+        {
+          "name": "string",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "___",
+      "kind": "value",
+      "params": [
+        {
+          "name": "contextOrString"
+        },
+        {
+          "name": "string",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "arrayToString",
+      "kind": "value",
+      "params": [
+        {
+          "name": "array"
+        },
+        {
+          "default": 12,
+          "name": "maxLength"
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "compress",
+      "kind": "value",
+      "params": [
+        {
+          "name": "array"
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "compressed",
+      "kind": "value",
+      "params": [
+        {
+          "name": "array"
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "decompressNumbers",
+      "kind": "value",
+      "params": [
+        {
+          "name": "string"
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "decompressVectors",
+      "kind": "value",
+      "params": [
+        {
+          "name": "string"
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "hsl",
+      "kind": "value",
+      "params": [
+        {
+          "name": "hue"
+        },
+        {
+          "name": "saturation"
+        },
+        {
+          "name": "lightness"
+        },
+        {
+          "default": 255,
+          "name": "alpha"
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "log",
+      "kind": "value",
+      "params": [
+        {
+          "name": "number"
+        },
+        {
+          "default": 2.718281828459045,
+          "name": "base"
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "pass",
+      "kind": "action",
+      "params": []
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "spacesForLength",
+      "kind": "value",
+      "params": [
+        {
+          "name": "length"
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "spacesForString",
+      "kind": "value",
+      "params": [
+        {
+          "name": "text"
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "splitDictArray",
+      "kind": "action",
+      "params": [
+        {
+          "name": "variables"
+        },
+        {
+          "name": "values"
+        },
+        {
+          "default": false,
+          "name": "compress"
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "stopChasing",
+      "kind": "action",
+      "params": [
+        {
+          "name": "variable"
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "strVisualLength",
+      "kind": "value",
+      "params": [
+        {
+          "name": "text"
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "tabular",
+      "kind": "action",
+      "params": [
+        {
+          "name": "variables"
+        },
+        {
+          "name": "values"
+        },
+        {
+          "default": false,
+          "name": "compress"
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "map",
+      "kind": "memberValue",
+      "params": [
+        {
+          "name": "lambda"
+        }
+      ],
+      "receiver": "Any"
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "reverse",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Any"
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getEffectiveHero",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getRealPlayersClosestToReticle",
+      "kind": "memberValue",
+      "params": [
+        {
+          "default": "ALL",
+          "domain": "Team",
+          "name": "team"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getRealPlayersInViewAngle",
+      "kind": "memberValue",
+      "params": [
+        {
+          "domain": "Team",
+          "name": "team"
+        },
+        {
+          "name": "viewAngle"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getSign",
+      "kind": "value",
+      "params": [
+        {
+          "name": "number"
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "lerp",
+      "kind": "value",
+      "params": [
+        {
+          "name": "start"
+        },
+        {
+          "name": "end"
+        },
+        {
+          "name": "t"
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "lineIntersectsSphere",
+      "kind": "value",
+      "params": [
+        {
+          "name": "lineStart"
+        },
+        {
+          "name": "lineDirection"
+        },
+        {
+          "name": "sphereCenter"
+        },
+        {
+          "name": "sphereRadius"
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "timeToString",
+      "kind": "value",
+      "params": [
+        {
+          "name": "time"
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "buttonToString",
+      "kind": "value",
+      "params": [
+        {
+          "name": "button"
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "createCasedProgressBarIwt",
+      "kind": "action",
+      "params": [
+        {
+          "default": 3,
+          "name": "textCount"
+        },
+        {
+          "default": {
+            "call": "getAllPlayers"
+          },
+          "name": "visibleTo"
+        },
+        {
+          "name": "text"
+        },
+        {
+          "name": "position"
+        },
+        {
+          "name": "scale"
+        },
+        {
+          "default": "NONE",
+          "domain": "Clipping",
+          "name": "clipping"
+        },
+        {
+          "default": "WHITE",
+          "domain": "Color",
+          "name": "textColor"
+        },
+        {
+          "default": "VISIBILITY_POSITION_VALUES_AND_COLOR",
+          "domain": "ProgressWorldTextReeval",
+          "name": "reevaluation"
+        },
+        {
+          "default": "DEFAULT",
+          "domain": "SpecVisibility",
+          "name": "nonTeamSpectators"
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getRealClosestPlayers",
+      "kind": "value",
+      "params": [
+        {
+          "name": "center"
+        },
+        {
+          "default": "ALL",
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getRealFarthestPlayer",
+      "kind": "value",
+      "params": [
+        {
+          "name": "center"
+        },
+        {
+          "default": "ALL",
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "getRealFarthestPlayers",
+      "kind": "value",
+      "params": [
+        {
+          "name": "center"
+        },
+        {
+          "default": "ALL",
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "builtin-surface"
+      ],
+      "id": "toArray",
+      "kind": "memberValue",
+      "params": [
+        {
+          "name": "__enumType__"
+        }
+      ],
+      "receiver": "Any"
     }
   ],
   "provenance": {

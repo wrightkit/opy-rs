@@ -1165,6 +1165,35 @@ impl Lowerer {
                 span: Some(span.into()),
             };
         }
+        if name == "getOppositeTeam" {
+            return HirExpr::ReceiverCall {
+                receiver: Box::new(self.lower_expr(receiver, macro_params, CallPosition::Value)),
+                name: "getOppositeTeam".to_string(),
+                args: self.lower_arg_values(args, macro_params),
+                span: Some(span.into()),
+            };
+        }
+        if name == "toArray" {
+            if let Expr::Name {
+                name: type_name, ..
+            } = receiver
+            {
+                if self.manifest.domain_identity(type_name)
+                    || self.catalog.enum_domain(type_name).is_some()
+                {
+                    return HirExpr::ReceiverCall {
+                        receiver: Box::new(HirExpr::Type {
+                            name: type_name.clone(),
+                            args: Vec::new(),
+                            span: Some(receiver.span().into()),
+                        }),
+                        name: name.to_string(),
+                        args: self.lower_arg_values(args, macro_params),
+                        span: Some(span.into()),
+                    };
+                }
+            }
+        }
         if matches!(name, "map" | "filter" | "all" | "any") {
             let lowered = HirExpr::ReceiverCall {
                 receiver: Box::new(self.lower_expr(receiver, macro_params, CallPosition::Value)),

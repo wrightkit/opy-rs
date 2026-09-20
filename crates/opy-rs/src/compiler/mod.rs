@@ -16,6 +16,7 @@ use workshop_rs::catalog::{Catalog, CatalogIdentity, Kind, Locale, ParamCoercion
 pub mod reconstruct;
 
 mod backend;
+mod blizzard_global;
 mod hooks;
 mod integration;
 mod lowering;

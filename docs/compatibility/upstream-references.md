@@ -176,6 +176,22 @@ The core may be developed from:
   known; and
 * third-party dependencies whose license and compatibility have been reviewed.
 
+### Blizzard Global derived data
+
+`crates/opy-rs/src/compiler/blizzard_global.rs` contains compact, opy-rs-owned
+compatibility facts for Blizzard Global glyph widths, spacing characters, and
+the cased-progress glyph substitutions. The facts are independently represented
+from observed output of the pinned OverPy 9.7.10 oracle; they are not copied
+from `src/data/opy/blizzardGlobal.ts` or another upstream source file. The
+lowering algorithms remain native Rust code in `compiler/lowering.rs`.
+
+The data file is part of the core's independently authored compatibility
+implementation, not a generated upstream artifact or runtime dependency. Its
+provenance is the pinned identity above, and its distribution decision is to
+ship only the compact facts required for interoperable output, with this
+attribution record. Changes to the table must be justified by an oracle
+behavior comparison and reviewed against the clean-room boundary.
+
 Observed behavior is an interoperability input, not permission to copy an
 implementation. A test that passes only by importing a reference module or
 reusing its internal representation belongs outside the core boundary.
