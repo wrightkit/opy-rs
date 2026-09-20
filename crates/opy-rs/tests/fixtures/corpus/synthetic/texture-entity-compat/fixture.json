@@ -7,7 +7,19 @@
     "syntax/formatted-named-entities"
   ],
   "source": "source.opy",
-  "expectedStatus": "success",
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": true
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": true
+    }
+  },
   "provenance": {
     "kind": "original",
     "origin": "opy-rs Issue #330 pinned-oracle Texture setup and formatted named-entity probe",
