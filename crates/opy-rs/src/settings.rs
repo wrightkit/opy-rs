@@ -35,6 +35,10 @@ pub struct SettingsBlock {
     pub end: usize,
     /// The position of the first char of `text` (just past the opening brace).
     pub text_start: Position,
+    /// The source file containing the extracted settings content.
+    pub content_file: u32,
+    /// The span covering the extracted settings content.
+    pub content_span: Span,
     /// The external source path for `settings "settings.opy.json"`.
     pub external_path: Option<String>,
 }
@@ -196,6 +200,8 @@ fn match_block(
             start: keyword_offset,
             end: scanner.char_pos,
             text_start: keyword_start,
+            content_file: keyword_span.file,
+            content_span: keyword_span,
             external_path: Some(path),
         });
     }
@@ -247,6 +253,12 @@ fn match_block(
                         start: keyword_offset,
                         end: scanner.char_pos + 1,
                         text_start: text_start.expect("text start set on '{'"),
+                        content_file: keyword_span.file,
+                        content_span: Span::new(
+                            keyword_span.file,
+                            text_start.expect("text start set on '{'"),
+                            scanner.here(),
+                        ),
                         external_path: None,
                     });
                 }
@@ -283,7 +295,7 @@ pub fn parse_block(block: &SettingsBlock) -> OpyResult<cst::Settings> {
         pos: 0,
         line: block.text_start.line,
         col: block.text_start.col,
-        file: block.span.file,
+        file: block.content_file,
     };
     parser.skip_whitespace();
     let children = if block.external_path.is_some() {
@@ -308,11 +320,11 @@ pub fn parse_block(block: &SettingsBlock) -> OpyResult<cst::Settings> {
         return Err(OpyError::at(
             "settings-invalid",
             "settings block must contain a gamemodes group".to_string(),
-            block.span,
+            block.content_span,
         ));
     }
     Ok(cst::Settings {
-        span: block.span,
+        span: block.content_span,
         children,
     })
 }

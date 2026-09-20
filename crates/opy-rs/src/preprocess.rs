@@ -415,6 +415,24 @@ fn shift_settings_span(span: Span, origin: crate::diag::Position) -> Span {
     )
 }
 
+fn external_text_span(file: u32, text: &str) -> Span {
+    let mut line = 1;
+    let mut col = 1;
+    for character in text.chars() {
+        if character == '\n' {
+            line += 1;
+            col = 1;
+        } else {
+            col += 1;
+        }
+    }
+    Span::new(
+        file,
+        crate::diag::Position::new(1, 1),
+        crate::diag::Position::new(line, col),
+    )
+}
+
 struct Preprocessor {
     files: Vec<FileRecord>,
     next_file_id: u32,
@@ -437,9 +455,10 @@ struct Preprocessor {
 
 impl Preprocessor {
     fn load_translation_catalog(&mut self) -> OpyResult<()> {
-        let Some(translations) = self.preprocessing.translations.as_mut() else {
+        let Some(translations) = self.preprocessing.translations.as_ref() else {
             return Ok(());
         };
+        let languages = translations.languages.clone();
         let source_path = self
             .files
             .get(1)
@@ -452,22 +471,13 @@ impl Preprocessor {
                 .unwrap_or_else(|| std::ffi::OsStr::new("main.opy")),
         );
         let mut entries = BTreeMap::<(Option<String>, String), TranslationEntry>::new();
-        for language in translations.languages.iter().skip(1) {
+        for language in languages.iter().skip(1) {
             let po_path = base.with_extension(format!("{language}.po"));
             let Some(text) = std::fs::read_to_string(&po_path).ok() else {
                 continue;
             };
-            let parsed = parse_po(
-                &text,
-                language,
-                translations.span.map(|span| {
-                    Span::new(
-                        span.file,
-                        crate::diag::Position::new(span.start.line, span.start.col),
-                        crate::diag::Position::new(span.end.line, span.end.col),
-                    )
-                }),
-            )?;
+            let file_id = self.register_external_file(&po_path, language, text.clone());
+            let parsed = parse_po(&text, language, Some(external_text_span(file_id, &text)))?;
             for entry in parsed {
                 let key = (entry.context.clone(), entry.msgid.clone());
                 entries
@@ -476,14 +486,16 @@ impl Preprocessor {
                     .or_insert(entry);
             }
         }
-        translations.entries = entries.into_values().collect();
+        if let Some(translations) = self.preprocessing.translations.as_mut() {
+            translations.entries = entries.into_values().collect();
+        }
         Ok(())
     }
 
     /// Load an external custom-game-settings object relative to the owning
     /// source file. Open-document overlays take precedence over the filesystem.
     pub(super) fn resolve_settings_source(
-        &self,
+        &mut self,
         mut block: SettingsBlock,
     ) -> OpyResult<SettingsBlock> {
         let Some(requested) = block.external_path.clone() else {
@@ -513,8 +525,29 @@ impl Preprocessor {
                     block.keyword_span,
                 )
             })?;
+        let file_id = self.register_external_file(&candidate, &requested, content.clone());
+        block.content_file = file_id;
+        block.text_start = crate::diag::Position::new(1, 1);
+        block.content_span = external_text_span(file_id, &content);
         block.text = content;
         Ok(block)
+    }
+
+    fn register_external_file(&mut self, candidate: &Path, requested: &str, text: String) -> u32 {
+        let canonical = std::fs::canonicalize(candidate).ok();
+        let file_id = self.next_file_id;
+        self.next_file_id += 1;
+        self.source_texts.insert(file_id, text);
+        self.files.push(FileRecord {
+            id: file_id,
+            path: display_path(
+                candidate,
+                canonical.as_deref(),
+                &self.display_root,
+                requested,
+            ),
+        });
+        file_id
     }
 
     /// Apply the same token macro expansion used by ordinary OPY source to
@@ -523,7 +556,7 @@ impl Preprocessor {
     /// values become visible to the settings parser.
     pub(super) fn expand_settings(&self, block: SettingsBlock) -> OpyResult<SettingsBlock> {
         let tokens = lex(LexInput {
-            file_id: block.span.file,
+            file_id: block.content_file,
             text: &block.text,
         })?;
         let mut tokens = tokens;

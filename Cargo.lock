@@ -631,7 +631,7 @@ dependencies = [
 [[package]]
 name = "workshop-rs"
 version = "0.4.2"
-source = "git+https://github.com/wrightkit/workshop-rs.git?rev=a104cf7c60fb45b751aa1bd4230d7ba20bebefe7#a104cf7c60fb45b751aa1bd4230d7ba20bebefe7"
+source = "git+https://github.com/wrightkit/workshop-rs.git?rev=e078965f7bbfb961a061c6143c764c6a616c1bb8#e078965f7bbfb961a061c6143c764c6a616c1bb8"
 dependencies = [
  "serde",
  "serde_json",

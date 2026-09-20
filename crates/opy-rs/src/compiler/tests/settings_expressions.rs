@@ -47,6 +47,23 @@ fn external_settings_jsonc_uses_the_same_canonical_emitter() {
 }
 
 #[test]
+fn external_settings_diagnostics_use_the_external_file_registry_entry() {
+    let overlay = BTreeMap::from([(
+        "settings.opy.json".to_string(),
+        "{\n    \"gamemodes\": [\n".to_string(),
+    )]);
+    let error = crate::compile_with_overlay(
+        "settings \"settings.opy.json\"\nrule \"settings\":\n    @Event global\n    pass\n",
+        "main.opy",
+        Path::new("."),
+        &overlay,
+    )
+    .expect_err("malformed external settings must retain its source boundary");
+    assert_eq!(error.code, "settings-invalid");
+    assert_eq!(error.span.expect("external settings span").file, 1);
+}
+
+#[test]
 fn multiline_define_string_composition_resolves_in_settings() {
     let overlay = BTreeMap::from([
         (
