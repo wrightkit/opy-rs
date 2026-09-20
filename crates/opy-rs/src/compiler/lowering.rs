@@ -6677,60 +6677,6 @@ impl<'a> Lowering<'a> {
         self.lower_compressed_mode(args, span, false)
     }
 
-    fn lower_translation(
-        &mut self,
-        name: &str,
-        args: &[Expr],
-        span: Option<HirSpan>,
-    ) -> Result<ValueId, IntegrationError> {
-        if self.hir.preprocessing.translations.is_none() {
-            return Err(
-                self.unsupported("translation calls require a #!translations directive", span)
-            );
-        }
-        let (context, text) = match args {
-            [text] => (None, text),
-            [context, text] => (Some(context), text),
-            _ => {
-                return Err(self.unsupported(
-                    "translation calls require one string or a context and string",
-                    span,
-                ));
-            }
-        };
-        if let Some(context) = context
-            && !matches!(context, Expr::String { .. })
-        {
-            return Err(self.unsupported(
-                "translation context must be a string literal",
-                context.span().copied(),
-            ));
-        }
-        let Some(text) = (match text {
-            Expr::String { value, .. } => Some(value.as_str()),
-            _ => None,
-        }) else {
-            // Dynamic strings are still valid at the source boundary. They
-            // remain opaque until the translation lifecycle in #326 supplies
-            // the catalog lookup data.
-            return self.lower_value(text);
-        };
-        let marker = format!("\u{ec48}0{text}\u{ec48}{text}");
-        let marker = self.lower_custom_string(marker, span)?;
-        let null = self.push_value(Value::Null);
-        let separator = self.push_call("firstOf", vec![null]);
-        let unresolved = self.push_call("stringSplit", vec![marker, separator]);
-        if name == "___" {
-            return Ok(unresolved);
-        }
-        let helper = *self
-            .globals
-            .get(TRANSLATION_HELPER_NAME)
-            .ok_or_else(|| self.unsupported("translation helper was not allocated", span))?;
-        let helper = self.push_value(Value::GlobalVariable(self.global_names[helper].clone()));
-        Ok(self.push_call("valueInArray", vec![helper, unresolved]))
-    }
-
     fn strict_optimization_active(&self, expr: &Expr) -> bool {
         self.optimization_state_at(expr.span()).strict
     }
