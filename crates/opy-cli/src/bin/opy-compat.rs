@@ -108,7 +108,7 @@ fn run() -> Result<CompatibilityResult, String> {
     let catalog = Catalog::builtin().map_err(|error| error.to_string())?;
     let context = CompatibilityExpectedDomain { catalog: &catalog };
     let reference_wir = workshop_rs::parser::parse_with_context(
-        reference_workshop,
+        &strip_workshop_comments(reference_workshop),
         &catalog,
         &Locale::new("en-US"),
         &context,
@@ -125,6 +125,52 @@ fn run() -> Result<CompatibilityResult, String> {
             equivalent: workshop_rs::roundtrip::equivalent(&artifact.wir, &reference_wir),
         },
     })
+}
+
+fn strip_workshop_comments(source: &str) -> String {
+    let mut output = String::with_capacity(source.len());
+    let mut chars = source.chars().peekable();
+    let mut in_string = false;
+    let mut escaped = false;
+
+    while let Some(character) = chars.next() {
+        if in_string {
+            output.push(character);
+            if escaped {
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+
+        if character == '"' {
+            in_string = true;
+            output.push(character);
+        } else if character == '/' && chars.peek() == Some(&'*') {
+            chars.next();
+            while let Some(comment_character) = chars.next() {
+                if comment_character == '*' && chars.peek() == Some(&'/') {
+                    chars.next();
+                    break;
+                }
+            }
+        } else if character == '/' && chars.peek() == Some(&'/') {
+            chars.next();
+            for comment_character in chars.by_ref() {
+                if comment_character == '\n' {
+                    output.push('\n');
+                    break;
+                }
+            }
+        } else {
+            output.push(character);
+        }
+    }
+
+    output
 }
 
 fn parse_args<I>(mut args: I) -> Result<Args, String>

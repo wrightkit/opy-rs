@@ -30,6 +30,7 @@ EXPECTED_COMPILER_COMPARISONS = {
     "diagnostic-code",
     "compiler-contract",
 }
+SOURCE_VISIBLE_CONTRACTS = {"debug-element-count"}
 NUMBER_TOKEN = re.compile(r"\d[\d.]*")
 
 # These rules classify the pinned oracle's recorded diagnostics, not a
@@ -183,6 +184,14 @@ def load_compiler_expectations(
                 raise DiffError(f"{fixture}: diagnostic-code requires diagnosticCode")
             if not isinstance(case.get("failureClass"), str) or not case["failureClass"]:
                 raise DiffError(f"{fixture}: diagnostic-code requires failureClass")
+        source_visible = case.get("sourceVisible")
+        if source_visible is not None:
+            if source_visible not in SOURCE_VISIBLE_CONTRACTS:
+                raise DiffError(f"{fixture}: sourceVisible is invalid")
+            if comparison != "semantic-wir":
+                raise DiffError(
+                    f"{fixture}: sourceVisible requires semantic-wir comparison"
+                )
     return expectations
 
 
@@ -382,6 +391,35 @@ def compare_stage(oracle: dict[str, Any], producer: dict[str, Any]) -> list[dict
 
 def _sha256(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def source_visible_projection(value: str, contract: str) -> str:
+    """Extract the pinned source-visible comments for a compiler contract."""
+
+    if contract not in SOURCE_VISIBLE_CONTRACTS:
+        raise DiffError(f"unsupported source-visible contract: {contract}")
+
+    projection = []
+    in_summary = False
+    normalized = value.replace("\r\n", "\n").replace("\r", "\n")
+    for line in normalized.splitlines():
+        stripped = line.rstrip()
+        if in_summary:
+            projection.append(stripped)
+            if stripped.endswith("*/"):
+                in_summary = False
+            continue
+        if stripped.startswith("/* Element count:"):
+            in_summary = True
+            projection.append(stripped)
+            continue
+        if re.fullmatch(r"//\d+ elements?", stripped):
+            projection.append(stripped)
+            continue
+        match = re.search(r" // \d+ elements?$", stripped)
+        if match:
+            projection.append(stripped[match.start() :])
+    return "\n".join(projection) + ("\n" if projection else "")
 
 
 def _number_boundary(value: str, start: int, end: int) -> bool:
@@ -714,6 +752,38 @@ def compare_compiler_fixture(
         )
         status = expectation["relationship"]
 
+    source_visible = expectation.get("sourceVisible")
+    if source_visible is not None:
+        oracle_exact = oracle["compile"].get("workshopExact")
+        producer_exact = native_compile.get("workshopExact")
+        if isinstance(oracle_exact, str) and isinstance(producer_exact, str):
+            oracle_projection = source_visible_projection(oracle_exact, source_visible)
+            producer_projection = source_visible_projection(producer_exact, source_visible)
+            source_visible_status = (
+                "match" if oracle_projection == producer_projection else "regression"
+            )
+            stages.append(
+                stage(
+                    "source-visible",
+                    source_visible_status,
+                    contract=source_visible,
+                    oracleSha256=_sha256(oracle_projection),
+                    producerSha256=_sha256(producer_projection),
+                )
+            )
+            if source_visible_status == "regression":
+                status = "regression"
+        else:
+            stages.append(
+                stage(
+                    "source-visible",
+                    "inconclusive",
+                    contract=source_visible,
+                    reason="exact output is absent",
+                )
+            )
+            status = "inconclusive"
+
     if expectation["relationship"] != "match" and status == "match":
         status = expectation["relationship"]
     frontier_stage = next(
@@ -806,6 +876,7 @@ def build_compiler_report(results: list[dict[str, Any]]) -> dict[str, Any]:
             "failure-frontier",
             "normalized-output",
             "semantic-wir",
+            "source-visible",
             "diagnostic-code",
             "compiler-contract",
         ],

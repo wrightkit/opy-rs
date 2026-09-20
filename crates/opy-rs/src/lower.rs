@@ -78,6 +78,7 @@ struct Lowerer {
     /// The canonical Workshop catalog linked by the manifest.
     catalog: Catalog,
     texture_used: bool,
+    setup_tags: bool,
     errors: Vec<OpyError>,
 }
 
@@ -136,6 +137,10 @@ pub fn lower_with_preprocessing(
         manifest,
         catalog,
         texture_used: false,
+        setup_tags: preprocessing
+            .directives
+            .iter()
+            .any(|directive| matches!(directive.name.as_str(), "setupTags" | "setupTx")),
         errors: Vec::new(),
     };
     lowerer.collect_symbols(program);
@@ -202,7 +207,7 @@ pub fn lower_with_preprocessing(
         return Err(lowerer.errors.swap_remove(0));
     }
 
-    if lowerer.texture_used {
+    if lowerer.texture_used || lowerer.setup_tags {
         declarations.insert(
             0,
             Declaration::GlobalVariable {
@@ -462,6 +467,7 @@ pub(crate) fn lower_settings_expression(
         manifest,
         catalog,
         texture_used: false,
+        setup_tags: false,
         errors: Vec::new(),
     };
     lowerer.collect_symbols(program);

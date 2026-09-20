@@ -33,6 +33,269 @@ mod integration_tests;
 
 const TRANSLATION_HELPER_NAME: &str = "__overpyTranslationHelper__";
 
+fn has_directive(hir: &hir::Program, name: &str) -> bool {
+    hir.preprocessing
+        .directives
+        .iter()
+        .any(|directive| directive.name == name)
+}
+
+fn omit_declaration_sections(output: &str, program: &workshop_rs::Program) -> String {
+    let mut markers = Vec::new();
+    for variable in program
+        .global_variables
+        .iter()
+        .chain(program.player_variables.iter())
+    {
+        markers.push(variable.index.map_or_else(
+            || variable.name.clone(),
+            |index| format!("{index}: {}", variable.name),
+        ));
+    }
+    markers.extend(program.subroutines.iter().map(|subroutine| {
+        subroutine.index.map_or_else(
+            || subroutine.name.clone(),
+            |index| format!("{index}: {}", subroutine.name),
+        )
+    }));
+    if markers.is_empty() {
+        return output.to_string();
+    }
+
+    let lines: Vec<&str> = output.split_inclusive('\n').collect();
+    let mut removed = vec![false; lines.len()];
+    for (index, line) in lines.iter().enumerate() {
+        if !markers.iter().any(|marker| line.trim() == marker) {
+            continue;
+        }
+        let Some(start) = (0..=index).rev().find(|candidate| {
+            let trimmed = lines[*candidate].trim_end();
+            !trimmed.starts_with(char::is_whitespace) && trimmed.ends_with('{')
+        }) else {
+            continue;
+        };
+        let mut depth = 0usize;
+        let mut end = start;
+        for (candidate, line) in lines.iter().enumerate().skip(start) {
+            depth += line.matches('{').count();
+            depth = depth.saturating_sub(line.matches('}').count());
+            if depth == 0 {
+                end = candidate;
+                break;
+            }
+        }
+        for removed_line in removed.iter_mut().take(end + 1).skip(start) {
+            *removed_line = true;
+        }
+        if end + 1 < removed.len() && lines[end + 1].trim().is_empty() {
+            removed[end + 1] = true;
+        }
+    }
+
+    lines
+        .into_iter()
+        .enumerate()
+        .filter_map(|(index, line)| (!removed[index]).then_some(line))
+        .collect()
+}
+
+fn emit_debug_element_counts(
+    output: &str,
+    program: &workshop_rs::Program,
+    catalog: &Catalog,
+    hir: &hir::Program,
+) -> Result<String, IntegrationError> {
+    let report = program.element_count(catalog).map_err(|error| {
+        IntegrationError::new(
+            "element-count",
+            format!("cannot compute Workshop element counts: {error}"),
+            None,
+        )
+    })?;
+    let rule_counts: Vec<_> = report.rules.iter().map(debug_rule_count).collect();
+    let total = rule_counts.iter().sum::<usize>();
+    let mut summary = format!("/* Element count: (total {total})\n\n");
+    let mut summary_rules: Vec<_> = report
+        .rules
+        .iter()
+        .zip(&rule_counts)
+        .filter(|(_, count)| **count > 1)
+        .collect();
+    summary_rules.sort_by_key(|(_, count)| std::cmp::Reverse(**count));
+    for (count, rule_count) in summary_rules {
+        let source = count
+            .span
+            .and_then(|span| {
+                hir.files
+                    .iter()
+                    .find(|file| file.id == span.file.index() as u32)
+            })
+            .map(|file| file.path.as_str())
+            .map(|path| format!(" ({path})"))
+            .unwrap_or_default();
+        summary.push_str(&format!(
+            "{:>5}: rule \"{}\"{source}\n",
+            rule_count, count.name
+        ));
+    }
+    summary.push_str("\n*/\n\n");
+
+    let mut annotated = summary;
+    let mut rule_index = 0;
+    let mut condition_index = 0;
+    let mut conditions = Vec::new();
+    let mut actions = Vec::new();
+    let mut in_actions = false;
+    let mut in_conditions = false;
+    let mut action_index = 0;
+    for line in output.split_inclusive('\n') {
+        let trimmed = line.trim();
+        if line.starts_with("rule (") {
+            if let (Some(rule), Some(rule_count)) =
+                (report.rules.get(rule_index), rule_counts.get(rule_index))
+            {
+                if *rule_count > 1 {
+                    let suffix = if *rule_count == 1 {
+                        "element"
+                    } else {
+                        "elements"
+                    };
+                    annotated.push_str(&format!("//{} {suffix}\n", rule_count));
+                }
+                conditions.clear();
+                collect_element_nodes(
+                    &rule.children,
+                    workshop_rs::element_count::ElementNodeKind::Condition,
+                    &mut conditions,
+                );
+                actions.clear();
+                collect_element_nodes(
+                    &rule.children,
+                    workshop_rs::element_count::ElementNodeKind::Action,
+                    &mut actions,
+                );
+            }
+            rule_index += 1;
+            condition_index = 0;
+            action_index = 0;
+            in_conditions = false;
+            in_actions = false;
+        } else if trimmed == "conditions {" {
+            in_conditions = true;
+            in_actions = false;
+        } else if trimmed == "actions {" {
+            in_conditions = false;
+            in_actions = true;
+        } else if in_actions && line.starts_with("    }") {
+            in_actions = false;
+        } else if in_conditions && line.starts_with("    }") {
+            in_conditions = false;
+        }
+
+        if in_conditions && line.starts_with("        ") && trimmed.ends_with(';') {
+            if let Some(condition) = conditions.get(condition_index) {
+                let condition_count = debug_condition_count(condition);
+                let suffix = if condition_count == 1 {
+                    "element"
+                } else {
+                    "elements"
+                };
+                annotated.push_str(line.trim_end_matches('\n'));
+                annotated.push_str(&format!(" // {condition_count} {suffix}\n"));
+                condition_index += 1;
+                continue;
+            }
+        }
+
+        if in_actions && line.starts_with("        ") && trimmed.ends_with(';') {
+            if let Some(action) = actions.get(action_index) {
+                let action_count = debug_action_local_count(action);
+                let suffix = if action_count == 1 {
+                    "element"
+                } else {
+                    "elements"
+                };
+                annotated.push_str(line.trim_end_matches('\n'));
+                annotated.push_str(&format!(" // {action_count} {suffix}\n"));
+                action_index += 1;
+                continue;
+            }
+        }
+        annotated.push_str(line);
+    }
+    Ok(annotated)
+}
+
+fn debug_value_count(node: &workshop_rs::element_count::ElementCountNode) -> usize {
+    let children = node.children.iter().map(debug_value_count).sum::<usize>();
+    match node.name.as_str() {
+        "number" | "global variable" => 2,
+        "localized string" => 2,
+        "customString" => 1 + 4usize.saturating_sub(node.children.len()) + children,
+        "Team" | "Color" => 1 + children.max(1),
+        "array" | "evalOnce" => 2 + children,
+        _ if node.children.is_empty() => 1,
+        _ => 1 + children,
+    }
+}
+
+fn debug_condition_count(node: &workshop_rs::element_count::ElementCountNode) -> usize {
+    let value_count = node.children.iter().map(debug_value_count).sum::<usize>();
+    value_count.saturating_sub(usize::from(node.children.len() > 1))
+}
+
+fn debug_action_local_count(node: &workshop_rs::element_count::ElementCountNode) -> usize {
+    let values = node
+        .children
+        .iter()
+        .filter(|child| child.kind == workshop_rs::element_count::ElementNodeKind::Value)
+        .map(debug_value_count)
+        .sum::<usize>();
+    let value_arguments = node
+        .children
+        .iter()
+        .filter(|child| child.kind == workshop_rs::element_count::ElementNodeKind::Value)
+        .count();
+    1 + values.saturating_sub(value_arguments)
+}
+
+fn debug_action_count(node: &workshop_rs::element_count::ElementCountNode) -> usize {
+    let nested_actions = node
+        .children
+        .iter()
+        .filter(|child| child.kind == workshop_rs::element_count::ElementNodeKind::Action)
+        .map(debug_action_count)
+        .sum::<usize>();
+    debug_action_local_count(node) + nested_actions
+}
+
+fn debug_rule_count(node: &workshop_rs::element_count::ElementCountNode) -> usize {
+    let children = node
+        .children
+        .iter()
+        .map(|child| match child.kind {
+            workshop_rs::element_count::ElementNodeKind::Condition => debug_condition_count(child),
+            workshop_rs::element_count::ElementNodeKind::Action => debug_action_count(child),
+            workshop_rs::element_count::ElementNodeKind::Rule
+            | workshop_rs::element_count::ElementNodeKind::Value => 0,
+        })
+        .sum::<usize>();
+    1 + children
+}
+
+fn collect_element_nodes<'a>(
+    nodes: &'a [workshop_rs::element_count::ElementCountNode],
+    kind: workshop_rs::element_count::ElementNodeKind,
+    collected: &mut Vec<&'a workshop_rs::element_count::ElementCountNode>,
+) {
+    for node in nodes {
+        if node.kind == kind {
+            collected.push(node);
+        }
+        collect_element_nodes(&node.children, kind, collected);
+    }
+}
+
 /// Version of the machine-readable compile report contract.
 pub const COMPILE_SCHEMA_VERSION: u32 = 1;
 
@@ -229,7 +492,8 @@ impl Compiler {
         lowering.lower_declarations()?;
         lowering.lower_rules()?;
 
-        lowering.program.validate().map_err(|error| {
+        let program = lowering.program;
+        program.validate().map_err(|error| {
             IntegrationError::new(
                 "workshop-validation",
                 error.to_string(),
@@ -237,29 +501,37 @@ impl Compiler {
                     .and_then(|span| hir_span_from_workshop(span, &expanded_hir)),
             )
         })?;
-        workshop_rs::validate::validate_canonical_ids(&lowering.program, self.catalog).map_err(
-            |error| {
-                IntegrationError::new(
-                    "catalog-validation",
-                    error.to_string(),
-                    workshop_error_span(&error)
-                        .and_then(|span| hir_span_from_workshop(span, &expanded_hir)),
-                )
-            },
-        )?;
-        let emitted = workshop_rs::emitter::emit(&lowering.program, self.catalog, locale).map_err(
-            |error| {
+        workshop_rs::validate::validate_canonical_ids(&program, self.catalog).map_err(|error| {
+            IntegrationError::new(
+                "catalog-validation",
+                error.to_string(),
+                workshop_error_span(&error)
+                    .and_then(|span| hir_span_from_workshop(span, &expanded_hir)),
+            )
+        })?;
+        let exclude_variables = has_directive(&expanded_hir, "excludeVariablesInCompilation");
+        let emitted =
+            workshop_rs::emitter::emit(&program, self.catalog, locale).map_err(|error| {
                 IntegrationError::new(
                     "workshop-emission",
                     error.to_string(),
                     workshop_error_span(&error)
                         .and_then(|span| hir_span_from_workshop(span, &expanded_hir)),
                 )
-            },
-        )?;
+            })?;
+        let emitted = if exclude_variables {
+            omit_declaration_sections(&emitted, &program)
+        } else {
+            emitted
+        };
+        let emitted = if has_directive(&expanded_hir, "debugElementCount") {
+            emit_debug_element_counts(&emitted, &program, self.catalog, &expanded_hir)?
+        } else {
+            emitted
+        };
 
         Ok(CompilationArtifact {
-            wir: lowering.program,
+            wir: program,
             final_output: emitted.clone(),
             emitted,
             catalog_identity: self.catalog.identity(),
@@ -743,6 +1015,26 @@ mod tests {
             report.compile.diagnostics[1].span.as_ref().unwrap().path,
             "broken.opy"
         );
+    }
+
+    #[test]
+    fn suppress_warnings_hides_matching_preprocessing_diagnostics() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/corpus/synthetic/preprocessing");
+        let outcome = crate::tooling::check(
+            concat!(
+                "#!suppressWarnings w_already_imported\n",
+                "#!include \"shared.opy\"\n",
+                "#!include \"shared.opy\"\n",
+                "rule \"r\":\n",
+                "    @Event global\n",
+                "    pass\n",
+            ),
+            "main.opy",
+            &root,
+        );
+        assert!(outcome.model.is_some());
+        assert!(outcome.diagnostics.is_empty());
     }
 
     #[test]
@@ -1587,10 +1879,10 @@ rule "main":
     }
 
     #[test]
-    fn unsupported_backend_directives_fail_at_their_source_anchor() {
+    fn unsupported_output_directives_fail_at_their_source_anchor() {
         let compiler = Compiler::new().unwrap();
         let hir = crate::compile(
-            "#!replace0ByCapturePercentage\nrule \"r\":\n    @Event global\n    pass\n",
+            "#!writeToOutputFile\nrule \"r\":\n    @Event global\n    pass\n",
             "directives.opy",
             Path::new("."),
         )
@@ -1650,40 +1942,109 @@ rule "main":
     }
 
     #[test]
-    fn replacement_directive_records_are_checked_even_if_final_state_is_restored() {
+    fn replacement_directives_lower_when_size_optimization_is_active() {
         let compiler = Compiler::new().unwrap();
-        let mut hir = crate::compile(
-            "#!replace0ByCapturePercentage\nrule \"r\":\n    @Event global\n    pass\n",
+        let hir = crate::compile(
+            "#!optimizeForSize\n#!replace0ByCapturePercentage\nrule \"r\":\n    @Event global\n    print(0)\n",
             "directives.opy",
             Path::new("."),
         )
         .unwrap();
-        hir.preprocessing.replacements.clear();
-        let error = match compiler.compile_hir(&hir) {
-            Ok(_) => panic!("replacement directive unexpectedly compiled"),
-            Err(error) => error,
-        };
-        assert_eq!(error.diagnostic.code, "backend-directive-unsupported");
-        assert_eq!(error.diagnostic.span.unwrap().start.line, 1);
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        assert!(artifact.emitted.contains("Point Capture Percentage"));
     }
 
     #[test]
-    fn active_replacement_state_is_checked_without_directive_history() {
+    fn debug_element_count_emits_sorted_rule_condition_and_action_comments() {
         let compiler = Compiler::new().unwrap();
-        let mut hir = crate::compile(
-            "#!replace0ByCapturePercentage\nrule \"r\":\n    @Event global\n    pass\n",
+        let hir = crate::compile(
+            "#!debugElementCount\nglobalvar value\nrule \"small\":\n    @Event global\n    @Condition value == 1\n    print(1)\nrule \"large\":\n    @Event global\n    @Condition value == 1\n    print(1)\n    print(2)\n",
+            "debug.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        let report = artifact.wir.element_count(compiler.catalog).unwrap();
+        let small = report
+            .rules
+            .iter()
+            .find(|rule| rule.name == "small")
+            .unwrap();
+        let large = report
+            .rules
+            .iter()
+            .find(|rule| rule.name == "large")
+            .unwrap();
+        let large_summary = artifact.emitted.find("   32: rule \"large\"").unwrap();
+        let small_summary = artifact.emitted.find("   18: rule \"small\"").unwrap();
+        assert!(large_summary < small_summary);
+        assert!(
+            artifact
+                .emitted
+                .starts_with("/* Element count: (total 50)\n")
+        );
+        assert!(artifact.emitted.contains("//32 elements\nrule (\"large\")"));
+        assert!(artifact.emitted.contains("//18 elements\nrule (\"small\")"));
+        assert!(
+            artifact
+                .emitted
+                .contains("Global.value == 1; // 3 elements")
+        );
+        assert_eq!(artifact.emitted.matches(" // 3 elements").count(), 2);
+        assert_eq!(artifact.emitted.matches(" // 14 elements").count(), 3);
+        let expected_comments = large
+            .children
+            .iter()
+            .chain(&small.children)
+            .filter(|node| {
+                matches!(
+                    node.kind,
+                    workshop_rs::element_count::ElementNodeKind::Condition
+                        | workshop_rs::element_count::ElementNodeKind::Action
+                )
+            })
+            .count();
+        assert_eq!(artifact.emitted.matches(" // ").count(), expected_comments);
+    }
+
+    #[test]
+    fn setup_and_initialization_directives_change_forward_output() {
+        let compiler = Compiler::new().unwrap();
+        let hir = crate::compile(
+            "#!setupTx\n#!disableInspector\n#!globalvarInitRuleName \"Init globals\"\n#!playervarInitRuleName \"Init players\"\nglobalvar value = 1\nplayervar playerValue = 1\nrule \"r\":\n    @Event global\n    print(\"<fgFF0000FF>ready</fg>\")\n",
             "directives.opy",
             Path::new("."),
         )
         .unwrap();
-        hir.preprocessing.directives.clear();
-        hir.preprocessing.replacements[0].span = None;
-        let error = match compiler.compile_hir(&hir) {
-            Ok(_) => panic!("active replacement state unexpectedly compiled"),
-            Err(error) => error,
-        };
-        assert_eq!(error.diagnostic.code, "backend-directive-unsupported");
-        assert_eq!(error.diagnostic.span, None);
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        assert!(artifact.emitted.contains("OverPy <"));
+        assert!(artifact.emitted.contains("Disable inspector"));
+        assert!(artifact.emitted.contains("Init globals"));
+        assert!(artifact.emitted.contains("Init players"));
+        assert!(artifact.emitted.contains("__holygrail__"));
+        assert!(
+            artifact
+                .emitted
+                .contains("Custom String(\"{0}fgFF0000FF>ready{0}/fg>\", Global.__holygrail__)")
+        );
+    }
+
+    #[test]
+    fn exclude_variables_directive_omits_variable_declarations() {
+        let compiler = Compiler::new().unwrap();
+        let hir = crate::compile(
+            "#!excludeVariablesInCompilation\nglobalvar value 0\nrule \"r\":\n    @Event global\n    pass\n",
+            "directives.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        assert!(!artifact.wir.global_variables.is_empty());
+        assert!(
+            !artifact.emitted.contains("variables {"),
+            "{}",
+            artifact.emitted
+        );
     }
 
     #[test]

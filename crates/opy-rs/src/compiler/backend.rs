@@ -1,36 +1,25 @@
 use super::*;
 
 pub(crate) fn reject_unlowered_directives(hir: &hir::Program) -> Result<(), IntegrationError> {
-    if let Some(replacement) = hir.preprocessing.replacements.first() {
-        let span = hir
-            .preprocessing
-            .directives
-            .iter()
-            .find(|directive| directive.name.starts_with("replace"))
-            .and_then(|directive| directive.span)
-            .or(replacement.span);
-        return Err(IntegrationError::new(
-            "backend-directive-unsupported",
-            format!(
-                "replacement directive '{}' has no canonical workshop-rs lowering",
-                replacement.value
-            ),
-            span,
-        ));
-    }
-    if let Some(replacement) = hir
+    let unsupported = [
+        "disableTranslationSourceLines",
+        "keepUnusedTranslations",
+        "translateWithPlayerVar",
+        "writeToOutputFile",
+    ];
+    if let Some(directive) = hir
         .preprocessing
         .directives
         .iter()
-        .find(|directive| directive.name.starts_with("replace"))
+        .find(|directive| unsupported.contains(&directive.name.as_str()))
     {
         return Err(IntegrationError::new(
             "backend-directive-unsupported",
             format!(
-                "replacement directive '{}' has no canonical workshop-rs lowering",
-                replacement.name
+                "directive '{}' requires an editor or translation-output capability outside the forward compiler contract",
+                directive.name
             ),
-            replacement.span,
+            directive.span,
         ));
     }
     Ok(())

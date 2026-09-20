@@ -13,10 +13,7 @@ impl Lowerer {
                 text: text.clone(),
                 span: Some(span.into()),
             },
-            Expr::String { value, span } => HirExpr::String {
-                value: value.clone(),
-                span: Some(span.into()),
-            },
+            Expr::String { value, span } => self.lower_string(value, *span),
             Expr::Bool { value, span } => HirExpr::Bool {
                 value: *value,
                 span: Some(span.into()),
@@ -1422,6 +1419,47 @@ impl Lowerer {
                 ),
                 span,
             );
+        }
+    }
+}
+
+impl Lowerer {
+    fn lower_string(&mut self, value: &str, span: Span) -> HirExpr {
+        if !self.setup_tags {
+            return HirExpr::String {
+                value: value.to_string(),
+                span: Some(span.into()),
+            };
+        }
+        let mut text = value.to_string();
+        let mut tagged = false;
+        for (source, replacement) in [
+            ("<fg", "{0}fg"),
+            ("</fg>", "{0}/fg>"),
+            ("<tx", "{0}tx"),
+            ("<TX", "{0}TX"),
+            ("</tx>", "{0}/tx>"),
+            ("</TX>", "{0}/TX>"),
+        ] {
+            if text.contains(source) {
+                text = text.replace(source, replacement);
+                tagged = true;
+            }
+        }
+        if !tagged {
+            return HirExpr::String {
+                value: value.to_string(),
+                span: Some(span.into()),
+            };
+        }
+        self.texture_used = true;
+        HirExpr::Format {
+            text,
+            args: vec![HirExpr::GlobalVar {
+                name: "__holygrail__".to_string(),
+                span: Some(span.into()),
+            }],
+            span: Some(span.into()),
         }
     }
 }
