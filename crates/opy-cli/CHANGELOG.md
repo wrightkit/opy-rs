@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.48](https://github.com/wrightkit/opy-rs/compare/opy-cli-v0.1.47...opy-cli-v0.1.48) - 2026-09-20
+
+### Added
+
+- *(opy)* complete compiler directives and replacements ([#341](https://github.com/wrightkit/opy-rs/pull/341))
+
+### Other
+
+- *(opy)* consolidate compatibility test metadata ([#338](https://github.com/wrightkit/opy-rs/pull/338))
+
 ## [0.1.45](https://github.com/wrightkit/opy-rs/compare/opy-cli-v0.1.44...opy-cli-v0.1.45) - 2026-09-17
 
 ### Other
