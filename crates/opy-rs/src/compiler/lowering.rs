@@ -1516,6 +1516,8 @@ impl<'a> Lowering<'a> {
                 } => {
                     if name == "disableInspector" && args.is_empty() {
                         Ok(vec![self.push_call_action("disableInspector", &[])])
+                    } else if name == "pass" && args.is_empty() {
+                        Ok(Vec::new())
                     } else if name == "debug" && args.len() == 1 {
                         Ok(vec![self.lower_debug(&args[0], *span, debug_source.as_deref())?])
                     } else if name == "print" && args.len() == 1 {
@@ -3735,6 +3737,47 @@ impl<'a> Lowering<'a> {
                 }));
             }
         }
+        if name == "createCasedProgressBarIwt" {
+            let [_, visible_to, text, position, scale, ..] = args else {
+                return Err(self.unsupported(
+                    "createCasedProgressBarIwt requires textCount, visibleTo, text, position and scale",
+                    span,
+                ));
+            };
+            let visible_to = self.lower_value(visible_to)?;
+            let text = self.lower_value(text)?;
+            let position = self.lower_value(position)?;
+            let scale = self.lower_value(scale)?;
+            let zero = self.push_number(0.0, "0");
+            let white = self.push_value(Value::Enum {
+                value_type: "Color".to_string(),
+                value: "WHITE".to_string(),
+            });
+            let reeval = self.push_value(Value::Enum {
+                value_type: "ProgressWorldTextReeval".to_string(),
+                value: "VISIBILITY_POSITION_VALUES_AND_COLOR".to_string(),
+            });
+            let spectators = self.push_value(Value::Enum {
+                value_type: "SpecVisibility".to_string(),
+                value: "DEFAULT".to_string(),
+            });
+            let clipping = self.push_value(Value::Enum {
+                value_type: "Clipping".to_string(),
+                value: "DO_NOT_CLIP".to_string(),
+            });
+            let values = self.normalize_contextual_arguments(
+                "createProgressBarInWorldText",
+                vec![
+                    visible_to, zero, text, position, scale, clipping, white, white, reeval,
+                    spectators,
+                ],
+            );
+            return Ok(self.push_call_action_with_spans(
+                "createProgressBarInWorldText",
+                &values,
+                [None; 10],
+            ));
+        }
         if name == "chaseAtRate" {
             let spans = args
                 .iter()
@@ -3824,7 +3867,7 @@ impl<'a> Lowering<'a> {
             .iter()
             .map(|expr| self.lower_value(expr))
             .collect::<Result<Vec<_>, _>>()?;
-        let catalog_id = if function.id == "stopChasingVariable" {
+        let catalog_id = if matches!(function.id.as_str(), "stopChasingVariable" | "stopChasing") {
             match args.first().map(|value| self.value(*value)) {
                 Some(Value::GlobalVariable(_)) => "stopChasingGlobalVariable",
                 Some(Value::PlayerVariable { .. }) => "stopChasingPlayerVariable",
@@ -4554,8 +4597,257 @@ impl<'a> Lowering<'a> {
                 if name == "createWorkshopSetting" {
                     return self.lower_workshop_setting(args, span);
                 }
+                if matches!(name.as_str(), "_" | "__" | "___") {
+                    return self.lower_translation(name, args, span);
+                }
+                if name == "buttonToString" {
+                    let [button] = args.as_slice() else {
+                        return Err(self.unsupported("buttonToString requires one button", span));
+                    };
+                    let button = self.lower_value(button)?;
+                    return Ok(self.push_call("inputBindingString", vec![button]));
+                }
+                if matches!(
+                    name.as_str(),
+                    "getRealClosestPlayer"
+                        | "getRealClosestPlayers"
+                        | "getRealFarthestPlayer"
+                        | "getRealFarthestPlayers"
+                ) {
+                    let [center, team] = args.as_slice() else {
+                        return Err(
+                            self.unsupported(format!("{name} requires center and team"), span)
+                        );
+                    };
+                    let center = self.lower_value(center)?;
+                    let team = self.lower_value(team)?;
+                    let players = self.push_call("getLivingPlayers", vec![team]);
+                    let current = self.push_call("currentArrayElement", Vec::new());
+                    let spawned = self.push_call("hasSpawned", vec![current]);
+                    let players = self.push_call("filteredArray", vec![players, spawned]);
+                    let distance = self.push_call("distance", vec![current, center]);
+                    let key = if matches!(
+                        name.as_str(),
+                        "getRealFarthestPlayer" | "getRealFarthestPlayers"
+                    ) {
+                        let negative_one = self.push_number(-1.0, "-1");
+                        self.push_call("multiply", vec![negative_one, distance])
+                    } else {
+                        distance
+                    };
+                    let sorted = self.push_call("sortedArray", vec![players, key]);
+                    return if matches!(
+                        name.as_str(),
+                        "getRealClosestPlayer" | "getRealFarthestPlayer"
+                    ) {
+                        Ok(self.push_call("firstOf", vec![sorted]))
+                    } else {
+                        Ok(sorted)
+                    };
+                }
+                if name == "getRealPlayersInRadius" {
+                    let lowered = args
+                        .iter()
+                        .map(|arg| self.lower_value(arg))
+                        .collect::<Result<Vec<_>, _>>()?;
+                    let players = self.push_call("getPlayersInRadius", lowered);
+                    let current = self.push_call("currentArrayElement", Vec::new());
+                    let alive = self.push_call("isAlive", vec![current]);
+                    let spawned = self.push_call("hasSpawned", vec![current]);
+                    let condition = self.push_call("and", vec![alive, spawned]);
+                    return Ok(self.push_call("filteredArray", vec![players, condition]));
+                }
+                if name == "lineIntersectsSphere" {
+                    let [line_start, line_direction, sphere_center, sphere_radius] =
+                        args.as_slice()
+                    else {
+                        return Err(
+                            self.unsupported("lineIntersectsSphere requires four arguments", span)
+                        );
+                    };
+                    let line_start = self.lower_value(line_start)?;
+                    let line_direction = self.lower_value(line_direction)?;
+                    let sphere_center = self.lower_value(sphere_center)?;
+                    let sphere_radius = self.lower_value(sphere_radius)?;
+                    let center_direction =
+                        self.push_call("subtract", vec![sphere_center, line_start]);
+                    let angle = self.push_call(
+                        "angleBetweenVectors",
+                        vec![line_direction, center_direction],
+                    );
+                    let distance = self.push_call("distance", vec![line_start, sphere_center]);
+                    let ratio = self.push_call("divide", vec![sphere_radius, distance]);
+                    let limit = self.push_call("asinDeg", vec![ratio]);
+                    return Ok(self.push_call("<=", vec![angle, limit]));
+                }
+                if name == "arrayToString" {
+                    let array = match args.as_slice() {
+                        [array] | [array, _] => array,
+                        _ => return Err(self.unsupported("arrayToString requires an array", span)),
+                    };
+                    let array = self.lower_value(array)?;
+                    return Ok(self.lower_debug_array_text(array));
+                }
+                if matches!(name.as_str(), "decompressNumbers" | "decompressVectors") {
+                    let [text] = args.as_slice() else {
+                        return Err(self.unsupported(format!("{name} requires one string"), span));
+                    };
+                    return self.lower_decompression(text, name == "decompressVectors", span);
+                }
+                if name == "strVisualLength" {
+                    let [Expr::String { value, .. }] = args.as_slice() else {
+                        return Err(
+                            self.unsupported("strVisualLength requires one literal string", span)
+                        );
+                    };
+                    return Ok(self.push_number(value.chars().count() as f64, ""));
+                }
+                if name == "spacesForLength" {
+                    let [Expr::Number { value, .. }] = args.as_slice() else {
+                        return Err(
+                            self.unsupported("spacesForLength requires one literal number", span)
+                        );
+                    };
+                    let length = (*value).max(0.0).round() as usize;
+                    return self.lower_custom_string(" ".repeat(length), span);
+                }
+                if name == "spacesForString" {
+                    let [Expr::String { value, .. }] = args.as_slice() else {
+                        return Err(
+                            self.unsupported("spacesForString requires one literal string", span)
+                        );
+                    };
+                    return self.lower_custom_string(" ".repeat(value.chars().count()), span);
+                }
+                if name == "hsl" {
+                    let (hue, saturation, lightness, alpha) = match args.as_slice() {
+                        [hue, saturation, lightness] => (hue, saturation, lightness, None),
+                        [hue, saturation, lightness, alpha] => {
+                            (hue, saturation, lightness, Some(alpha))
+                        }
+                        _ => {
+                            return Err(
+                                self.unsupported("hsl requires three or four arguments", span)
+                            );
+                        }
+                    };
+                    let hue = self.lower_value(hue)?;
+                    let saturation = self.lower_value(saturation)?;
+                    let lightness = self.lower_value(lightness)?;
+                    let alpha = match alpha {
+                        Some(alpha) => self.lower_value(alpha)?,
+                        None => self.push_number(255.0, "255"),
+                    };
+                    let one = self.push_number(1.0, "1");
+                    let thirty = self.push_number(30.0, "30");
+                    let hue_thirtieths = self.push_call("divide", vec![hue, thirty]);
+                    let lightness_complement = self.push_call("subtract", vec![one, lightness]);
+                    let lightness_limit =
+                        self.push_call("min", vec![lightness, lightness_complement]);
+                    let channel = |this: &mut Self, offset: f64| {
+                        let offset = this.push_number(offset, "");
+                        let phase = this.push_call("add", vec![offset, hue_thirtieths]);
+                        let twelve = this.push_number(12.0, "12");
+                        let phase = this.push_call("modulo", vec![phase, twelve]);
+                        let three = this.push_number(3.0, "3");
+                        let lower = this.push_call("subtract", vec![phase, three]);
+                        let nine = this.push_number(9.0, "9");
+                        let upper = this.push_call("subtract", vec![nine, phase]);
+                        let clamped = this.push_call("min", vec![lower, upper]);
+                        let negative_one = this.push_number(-1.0, "-1");
+                        let clamped = this.push_call("max", vec![clamped, negative_one]);
+                        let saturation_limit =
+                            this.push_call("multiply", vec![saturation, lightness_limit]);
+                        let adjustment =
+                            this.push_call("multiply", vec![saturation_limit, clamped]);
+                        let value = this.push_call("subtract", vec![lightness, adjustment]);
+                        let scale = this.push_number(255.0, "255");
+                        this.push_call("multiply", vec![scale, value])
+                    };
+                    let red = channel(self, 0.0);
+                    let green = channel(self, 8.0);
+                    let blue = channel(self, 4.0);
+                    return Ok(self.push_call("customColor", vec![red, green, blue, alpha]));
+                }
+                if name == "timeToString" {
+                    let [time] = args.as_slice() else {
+                        return Err(self.unsupported("timeToString requires one argument", span));
+                    };
+                    let time = self.lower_value(time)?;
+                    let three_thousand_six_hundred = self.push_number(3600.0, "3600");
+                    let sixty = self.push_number(60.0, "60");
+                    let hour_value =
+                        self.push_call("divide", vec![time, three_thousand_six_hundred]);
+                    let down = self.push_value(Value::Enum {
+                        value_type: "Rounding".to_string(),
+                        value: "DOWN".to_string(),
+                    });
+                    let hour = self.push_call("roundToInteger", vec![hour_value, down]);
+                    let minute_remainder =
+                        self.push_call("modulo", vec![time, three_thousand_six_hundred]);
+                    let minute_value = self.push_call("divide", vec![minute_remainder, sixty]);
+                    let minute = self.push_call("roundToInteger", vec![minute_value, down]);
+                    let second = self.push_call("modulo", vec![time, sixty]);
+                    let template = self.push_value(Value::String("{0}:{1}:{2}".to_string()));
+                    return Ok(self.push_call("customString", vec![template, hour, minute, second]));
+                }
                 if name == "compressed" {
                     return self.lower_compressed(args, span);
+                }
+                if name == "compress" {
+                    return self.lower_compress(args, span);
+                }
+                if name == "getSign" {
+                    let [number] = args.as_slice() else {
+                        return Err(self.unsupported("getSign requires one argument", span));
+                    };
+                    let number = self.lower_value(number)?;
+                    let zero = self.push_number(0.0, "0");
+                    let positive = self.push_call(">", vec![number, zero]);
+                    let one = self.push_number(1.0, "1");
+                    let negative_one = self.push_number(-1.0, "-1");
+                    let sign = self.push_call("ifThenElse", vec![positive, one, negative_one]);
+                    let is_zero = self.push_call("==", vec![number, zero]);
+                    return Ok(self.push_call("ifThenElse", vec![is_zero, zero, sign]));
+                }
+                if name == "lerp" {
+                    let [start, end, t] = args.as_slice() else {
+                        return Err(self.unsupported("lerp requires three arguments", span));
+                    };
+                    let start = self.lower_value(start)?;
+                    let end = self.lower_value(end)?;
+                    let t = self.lower_value(t)?;
+                    let one = self.push_number(1.0, "1");
+                    let weight = self.push_call("subtract", vec![one, t]);
+                    let start_part = self.push_call("multiply", vec![start, weight]);
+                    let end_part = self.push_call("multiply", vec![end, t]);
+                    return Ok(self.push_call("add", vec![start_part, end_part]));
+                }
+                if name == "log" {
+                    let (number, base) = match args.as_slice() {
+                        [number] => (number, None),
+                        [number, base] => (number, Some(base)),
+                        _ => {
+                            return Err(self.unsupported("log requires one or two arguments", span));
+                        }
+                    };
+                    let number = self.lower_value(number)?;
+                    let exponent = self.push_number(0.0001, "0.0001");
+                    let powered = self.push_call("raiseToPower", vec![number, exponent]);
+                    let one = self.push_number(1.0, "1");
+                    let delta = self.push_call("subtract", vec![powered, one]);
+                    let scale = self.push_number(10000.0, "10000");
+                    let approximation = self.push_call("multiply", vec![scale, delta]);
+                    if let Some(base) = base {
+                        let base = self.lower_value(base)?;
+                        let base_powered = self.push_call("raiseToPower", vec![base, exponent]);
+                        let base_one = self.push_number(1.0, "1");
+                        let base_delta = self.push_call("subtract", vec![base_powered, base_one]);
+                        let base_scale = self.push_number(10000.0, "10000");
+                        let base_log = self.push_call("multiply", vec![base_scale, base_delta]);
+                        return Ok(self.push_call("divide", vec![approximation, base_log]));
+                    }
+                    return Ok(approximation);
                 }
                 if matches!(name.as_str(), "attacker" | "victim") && args.is_empty() {
                     return Ok(self.push_call(name, Vec::new()));
@@ -4749,19 +5041,63 @@ impl<'a> Lowering<'a> {
                 args,
                 ..
             } => {
-                if matches!(name.as_str(), "all" | "any") {
-                    let [
-                        Expr::Lambda {
-                            params, body, span, ..
-                        },
-                    ] = args.as_slice()
+                if name == "getOppositeTeam" {
+                    if !args.is_empty() {
+                        return Err(self.unsupported("getOppositeTeam requires no arguments", span));
+                    }
+                    let receiver = self.lower_value(receiver)?;
+                    let team = self.push_call("teamOf", vec![receiver]);
+                    return Ok(self.push_call("oppositeTeamOf", vec![team]));
+                }
+                if name == "toArray" {
+                    if !args.is_empty() {
+                        return Err(self.unsupported("toArray requires no arguments", span));
+                    }
+                    let Expr::Type {
+                        name: type_name, ..
+                    } = receiver.as_ref()
                     else {
                         return Err(
-                            self.unsupported(format!("{name} requires one lambda argument"), span)
+                            self.unsupported("toArray requires an enum type receiver", span)
                         );
                     };
-                    let condition = self.lower_array_callback(params, body, *span)?;
+                    let domain_name = match type_name.as_str() {
+                        "Clip" => "Clipping",
+                        _ => type_name.as_str(),
+                    };
+                    let Some(domain) = self.compiler.catalog.enum_domain(domain_name) else {
+                        return Err(
+                            self.unsupported(format!("unknown enum type '{type_name}'"), span)
+                        );
+                    };
+                    let values = domain
+                        .members
+                        .iter()
+                        .map(|member| {
+                            self.push_value(Value::Enum {
+                                value_type: domain_name.to_string(),
+                                value: member.member.clone(),
+                            })
+                        })
+                        .collect();
+                    return Ok(self.push_call("array", values));
+                }
+                if matches!(name.as_str(), "all" | "any") {
                     let receiver = self.lower_value(receiver)?;
+                    let condition = match args.as_slice() {
+                        [] => self.push_call("currentArrayElement", Vec::new()),
+                        [
+                            Expr::Lambda {
+                                params, body, span, ..
+                            },
+                        ] => self.lower_array_callback(params, body, *span)?,
+                        _ => {
+                            return Err(self.unsupported(
+                                format!("{name} requires zero or one lambda argument"),
+                                span,
+                            ));
+                        }
+                    };
                     let args = self.value_args(&[receiver, condition]);
                     return Ok(self.push_value(Value::Call {
                         name: if name == "all" {
@@ -4790,6 +5126,86 @@ impl<'a> Lowering<'a> {
                     let current_index = self.push_call("currentArrayIndex", Vec::new());
                     let condition = self.push_call("==", vec![first_index, current_index]);
                     return Ok(self.push_call("filteredArray", vec![receiver, condition]));
+                }
+                if function.id == "reverse" {
+                    if !args.is_empty() {
+                        return Err(self.unsupported("reverse requires no arguments", span));
+                    }
+                    let receiver = self.lower_value(receiver)?;
+                    let index = self.push_call("currentArrayIndex", Vec::new());
+                    let key = self.push_call("-", vec![index]);
+                    return Ok(self.push_call("sortedArray", vec![receiver, key]));
+                }
+                if function.id == "getEffectiveHero" {
+                    if !args.is_empty() {
+                        return Err(
+                            self.unsupported("getEffectiveHero requires no arguments", span)
+                        );
+                    }
+                    let receiver = self.lower_value(receiver)?;
+                    let duplicated = self.push_call("getHeroOfDuplication", vec![receiver]);
+                    let hero = self.push_call("getHero", vec![receiver]);
+                    let null = self.push_value(Value::Null);
+                    let condition = self.push_call("==", vec![duplicated, null]);
+                    return Ok(self.push_call("ifThenElse", vec![condition, hero, duplicated]));
+                }
+                if function.id == "getRealPlayersInViewAngle" {
+                    let [team, view_angle] = args.as_slice() else {
+                        return Err(self.unsupported(
+                            "getRealPlayersInViewAngle requires team and view angle",
+                            span,
+                        ));
+                    };
+                    let receiver = self.lower_value(receiver)?;
+                    let team = self.lower_value(team)?;
+                    let view_angle = self.lower_value(view_angle)?;
+                    let players =
+                        self.push_call("getPlayersInViewAngle", vec![receiver, team, view_angle]);
+                    let current = self.push_call("currentArrayElement", Vec::new());
+                    let alive = self.push_call("isAlive", vec![current]);
+                    let spawned = self.push_call("hasSpawned", vec![current]);
+                    let condition = self.push_call("and", vec![alive, spawned]);
+                    return Ok(self.push_call("filteredArray", vec![players, condition]));
+                }
+                if matches!(
+                    function.id.as_str(),
+                    "getRealPlayerClosestToReticle" | "getRealPlayersClosestToReticle"
+                ) {
+                    let [team] = args.as_slice() else {
+                        return Err(self
+                            .unsupported("getRealPlayersClosestToReticle requires a team", span));
+                    };
+                    let receiver = self.lower_value(receiver)?;
+                    let team = self.lower_value(team)?;
+                    let players = self.push_call("getLivingPlayers", vec![team]);
+                    let current = self.push_call("currentArrayElement", Vec::new());
+                    let spawned = self.push_call("hasSpawned", vec![current]);
+                    let not_self = self.push_call("!=", vec![current, receiver]);
+                    let condition = self.push_call("and", vec![spawned, not_self]);
+                    let players = self.push_call("filteredArray", vec![players, condition]);
+                    let facing = self.push_call("getFacingDirection", vec![receiver]);
+                    let eye_position = self.push_call("getEyePosition", vec![receiver]);
+                    let direction = self.push_call("subtract", vec![current, eye_position]);
+                    let angle = self.push_call("angleBetweenVectors", vec![facing, direction]);
+                    let sorted = self.push_call("sortedArray", vec![players, angle]);
+                    return if function.id == "getRealPlayerClosestToReticle" {
+                        Ok(self.push_call("firstOf", vec![sorted]))
+                    } else {
+                        Ok(sorted)
+                    };
+                }
+                if function.id == "map" {
+                    let [
+                        Expr::Lambda {
+                            params, body, span, ..
+                        },
+                    ] = args.as_slice()
+                    else {
+                        return Err(self.unsupported("map requires one lambda argument", span));
+                    };
+                    let mapped = self.lower_array_callback(params, body, *span)?;
+                    let receiver = self.lower_value(receiver)?;
+                    return Ok(self.push_call("mappedArray", vec![receiver, mapped]));
                 }
                 if matches!(
                     function.id.as_str(),
@@ -5006,6 +5422,83 @@ impl<'a> Lowering<'a> {
         args: &[Expr],
         span: Option<HirSpan>,
     ) -> Result<ValueId, IntegrationError> {
+        self.lower_compressed_mode(args, span, true)
+    }
+
+    fn lower_decompression(
+        &mut self,
+        text: &Expr,
+        is_vector: bool,
+        span: Option<HirSpan>,
+    ) -> Result<ValueId, IntegrationError> {
+        let text = self.lower_value(text)?;
+        let null = self.push_value(Value::Null);
+        let separator = self.push_call("firstOf", vec![null]);
+        let split = self.push_call("stringSplit", vec![text, separator]);
+        let alphabet = if has_directive(self.hir, "useVariableForCompressionAlphabet") {
+            let variable = *self
+                .globals
+                .get(COMPRESSION_ALPHABET_NAME)
+                .expect("compression alphabet variable is created");
+            self.push_value(Value::GlobalVariable(self.global_names[variable].clone()))
+        } else {
+            self.lower_custom_string(compression_alphabet(), span)?
+        };
+        let decoded = if has_directive(self.hir, "useVariableForCompressionAlphabet") {
+            split
+        } else {
+            let current = self.push_call("currentArrayElement", Vec::new());
+            let alphabet = self.push_call("appendToArray", vec![current, alphabet]);
+            self.push_call("mappedArray", vec![split, alphabet])
+        };
+        let width = if is_vector { 3 } else { 4 };
+        let min_decimal_place = if is_vector { -2.0 } else { -3.0 };
+        let offset = if is_vector { 5000.0 } else { 50000.0 };
+        let component = |this: &mut Self, component_offset: usize| {
+            let current = this.push_call("currentArrayElement", Vec::new());
+            let mut terms = Vec::with_capacity(width);
+            for index in 0..width {
+                let position = this.push_number((index + component_offset) as f64, "");
+                let character = this.push_call("charAt", vec![current, position]);
+                let formula_alphabet =
+                    if has_directive(this.hir, "useVariableForCompressionAlphabet") {
+                        alphabet
+                    } else {
+                        this.push_call("lastOf", vec![current])
+                    };
+                let digit = this.push_call("strIndex", vec![formula_alphabet, character]);
+                let power = 100_f64.powf(index as f64 + min_decimal_place / 2.0);
+                let power = this.push_number(power, "");
+                terms.push(this.push_call("multiply", vec![power, digit]));
+            }
+            let mut value = terms
+                .first()
+                .copied()
+                .unwrap_or_else(|| this.push_number(0.0, ""));
+            for term in terms.into_iter().skip(1) {
+                value = this.push_call("add", vec![value, term]);
+            }
+            let offset = this.push_number(offset, "");
+            this.push_call("subtract", vec![value, offset])
+        };
+        if is_vector {
+            let x = component(self, 0);
+            let y = component(self, width * 2);
+            let z = component(self, width);
+            let vector = self.push_call("vector", vec![x, y, z]);
+            Ok(self.push_call("mappedArray", vec![decoded, vector]))
+        } else {
+            let number = component(self, 0);
+            Ok(self.push_call("mappedArray", vec![decoded, number]))
+        }
+    }
+
+    fn lower_compressed_mode(
+        &mut self,
+        args: &[Expr],
+        span: Option<HirSpan>,
+        decode: bool,
+    ) -> Result<ValueId, IntegrationError> {
         let [Expr::Array { elements, .. }] = args else {
             return Err(self.unsupported(
                 "compressed requires one literal array of numbers or vectors",
@@ -5047,7 +5540,13 @@ impl<'a> Lowering<'a> {
         }
 
         let max_decimals = if is_vector { 2 } else { 3 };
-        let compression_offset = flattened.iter().copied().fold(0.0_f64, f64::min).min(0.0);
+        let compression_offset = if decode {
+            flattened.iter().copied().fold(0.0_f64, f64::min).min(0.0)
+        } else if is_vector {
+            -5000.0
+        } else {
+            -50000.0
+        };
         let adjusted = flattened
             .iter()
             .map(|value| value - compression_offset)
@@ -5063,14 +5562,23 @@ impl<'a> Lowering<'a> {
             })
             .collect::<Vec<_>>();
         let mut min_decimal_place = -(max_decimals as i32);
-        while strings.iter().all(|value| value.starts_with('0')) {
-            for value in &mut strings {
-                value.remove(0);
+        if decode {
+            while strings.iter().all(|value| value.starts_with('0')) {
+                for value in &mut strings {
+                    value.remove(0);
+                }
+                min_decimal_place += 1;
             }
-            min_decimal_place += 1;
+        } else {
+            min_decimal_place = if is_vector { -2 } else { -3 };
         }
-        let max_decimal_place =
-            min_decimal_place + strings.iter().map(String::len).max().unwrap_or_default() as i32;
+        let max_decimal_place = if decode {
+            min_decimal_place + strings.iter().map(String::len).max().unwrap_or_default() as i32
+        } else if is_vector {
+            4
+        } else {
+            5
+        };
         for value in &mut strings {
             let trimmed = value.trim_end_matches('0');
             *value = if trimmed.is_empty() {
@@ -5125,6 +5633,9 @@ impl<'a> Lowering<'a> {
                 .ok_or_else(|| self.unsupported("compressed value cannot be encoded", span))?
                 .join("0")
         };
+        if !decode {
+            return self.lower_custom_string(compressed, span);
+        }
         let compressed_string = self.lower_custom_string(compressed, span)?;
         let null = self.push_value(Value::Null);
         let separator = self.push_call("firstOf", vec![null]);
@@ -5200,6 +5711,68 @@ impl<'a> Lowering<'a> {
             self.push_call("mappedArray", vec![decoded, number])
         };
         Ok(value)
+    }
+
+    fn lower_compress(
+        &mut self,
+        args: &[Expr],
+        span: Option<HirSpan>,
+    ) -> Result<ValueId, IntegrationError> {
+        self.lower_compressed_mode(args, span, false)
+    }
+
+    fn lower_translation(
+        &mut self,
+        name: &str,
+        args: &[Expr],
+        span: Option<HirSpan>,
+    ) -> Result<ValueId, IntegrationError> {
+        if self.hir.preprocessing.translations.is_none() {
+            return Err(
+                self.unsupported("translation calls require a #!translations directive", span)
+            );
+        }
+        let (context, text) = match args {
+            [text] => (None, text),
+            [context, text] => (Some(context), text),
+            _ => {
+                return Err(self.unsupported(
+                    "translation calls require one string or a context and string",
+                    span,
+                ));
+            }
+        };
+        if let Some(context) = context
+            && !matches!(context, Expr::String { .. })
+        {
+            return Err(self.unsupported(
+                "translation context must be a string literal",
+                context.span().copied(),
+            ));
+        }
+        let Some(text) = (match text {
+            Expr::String { value, .. } => Some(value.as_str()),
+            _ => None,
+        }) else {
+            // Dynamic strings are still valid at the source boundary. They
+            // remain opaque until the translation lifecycle in #326 supplies
+            // the catalog lookup data.
+            return self.lower_value(text);
+        };
+        let marker = format!("\u{ec48}0{text}\u{ec48}{text}");
+        let marker = self.lower_custom_string(marker, span)?;
+        let null = self.push_value(Value::Null);
+        let separator = self.push_call("firstOf", vec![null]);
+        let unresolved = self.push_call("stringSplit", vec![marker, separator]);
+        if name == "___" {
+            return Ok(unresolved);
+        }
+        let helper = *self
+            .globals
+            .get(TRANSLATION_HELPER_NAME)
+            .ok_or_else(|| self.unsupported("translation helper was not allocated", span))?;
+        let helper = self.push_value(Value::GlobalVariable(self.global_names[helper].clone()));
+        Ok(self.push_call("valueInArray", vec![helper, unresolved]))
     }
 
     fn strict_optimization_active(&self, expr: &Expr) -> bool {

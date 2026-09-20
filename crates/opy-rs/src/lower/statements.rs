@@ -85,6 +85,10 @@ impl Lowerer {
                     lowered.extend(self.lower_split_dict_array(args, *span, macro_params));
                     continue;
                 }
+                if name == "tabular" {
+                    lowered.extend(self.lower_tabular(args, *span, macro_params));
+                    continue;
+                }
             }
             lowered.push(self.lower_stmt(stmt, macro_params, breakable, loopable));
         }

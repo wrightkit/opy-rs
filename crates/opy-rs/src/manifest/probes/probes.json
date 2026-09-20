@@ -16,6 +16,13 @@
       "source": "builtin-surface.opy"
     },
     {
+      "expect": "success",
+      "id": "callable-surface",
+      "outputSha256": "1eb3fb352a795ec61864dada0dc0167d16f4a7183562ec7f37571f5bbd5de60e",
+      "sha256": "043186f67fd7876850df77e3890661b4a6fffbf4c145fb4d61f0530f4cc6a4a1",
+      "source": "callable-surface.opy"
+    },
+    {
       "diagnosticContains": "Expected a value, but got function 'wait' which is an action",
       "expect": "failure",
       "id": "action-in-value-position",

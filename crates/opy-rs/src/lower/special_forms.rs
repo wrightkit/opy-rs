@@ -1,6 +1,63 @@
 use super::*;
 
 impl Lowerer {
+    pub(super) fn lower_tabular(
+        &mut self,
+        args: &[cst::CallArg],
+        span: Span,
+        macro_params: &[String],
+    ) -> Vec<HirStmt> {
+        let Some(cst::Expr::Array {
+            elements: targets, ..
+        }) = args.first().map(|arg| &arg.value)
+        else {
+            self.error_at(
+                "tabular-arguments",
+                "tabular first argument must be an array of variables".to_string(),
+                span,
+            );
+            return Vec::new();
+        };
+        let Some(cst::Expr::Array {
+            elements: values, ..
+        }) = args.get(1).map(|arg| &arg.value)
+        else {
+            self.error_at(
+                "tabular-arguments",
+                "tabular second argument must be an array".to_string(),
+                span,
+            );
+            return Vec::new();
+        };
+        if targets.is_empty() {
+            self.error_at(
+                "tabular-arguments",
+                "tabular requires at least one target variable".to_string(),
+                span,
+            );
+            return Vec::new();
+        }
+        let mut result = Vec::with_capacity(targets.len());
+        for (column, target) in targets.iter().enumerate() {
+            let target = self.lower_expr(target, macro_params, CallPosition::Value);
+            let column_values = values
+                .iter()
+                .skip(column)
+                .step_by(targets.len())
+                .map(|value| self.lower_expr(value, macro_params, CallPosition::Value))
+                .collect();
+            result.push(HirStmt::Assign {
+                target: Box::new(target),
+                value: Box::new(HirExpr::Array {
+                    elements: column_values,
+                    span: Some(span.into()),
+                }),
+                span: Some(span.into()),
+            });
+        }
+        result
+    }
+
     pub(super) fn lower_split_dict_array(
         &mut self,
         args: &[cst::CallArg],
