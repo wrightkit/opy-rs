@@ -23,6 +23,10 @@ const LITERAL_DICT_LOOKUP_FIXTURE: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../opy-rs/tests/fixtures/corpus/synthetic/dictionary-lookup/source.opy"
 );
+const WORKSHOP_OUTPUT_LOCALES: &[&str] = &[
+    "de-DE", "en-US", "es-ES", "es-MX", "fr-FR", "it-IT", "ja-JP", "ko-KR", "pl-PL", "pt-BR",
+    "ru-RU", "th-TH", "tr-TR", "zh-CN", "zh-TW",
+];
 fn run(args: &[&str]) -> std::process::Output {
     run_with_env(args, &[])
 }
@@ -187,6 +191,35 @@ fn compile_rejects_unsupported_locale_with_structured_diagnostic() {
         json["compile"]["diagnostics"][0]["span"],
         serde_json::Value::Null
     );
+}
+
+#[test]
+fn compile_accepts_every_pinned_workshop_output_locale() {
+    for locale in WORKSHOP_OUTPUT_LOCALES {
+        let output = run(&[
+            "compile",
+            "--format",
+            "json",
+            "--language",
+            locale,
+            BASIC_RULE,
+        ]);
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "{locale} must compile: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let json: serde_json::Value =
+            serde_json::from_slice(&output.stdout).expect("compile JSON response");
+        assert_eq!(json["compile"]["status"], "success", "locale: {locale}");
+        assert!(
+            json["compile"]["workshopExact"]
+                .as_str()
+                .is_some_and(|workshop| !workshop.is_empty()),
+            "{locale} must emit Workshop"
+        );
+    }
 }
 
 #[test]

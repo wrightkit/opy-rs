@@ -29,6 +29,20 @@
 | Observable optimizer and replacement effects | ✅ Supported | Tested semantic and cost-relevant effects are preserved; formatting and upstream internal optimizer structure are not contracts. |
 | OPY → Workshop emission through `workshop-rs` | 🚧 Partial | The supported language rows above compile end to end; unsupported source forms produce structured diagnostics. |
 
+## Workshop output language
+
+`opy-cli compile --language` and the `Compiler` language-selection APIs emit
+localized Workshop source through the canonical `workshop-rs` catalog. The
+supported pinned OverPy 9.7.10 output locales are:
+
+`de-DE`, `en-US`, `es-ES`, `es-MX`, `fr-FR`, `it-IT`, `ja-JP`, `ko-KR`,
+`pl-PL`, `pt-BR`, `ru-RU`, `th-TH`, `tr-TR`, `zh-CN`, and `zh-TW`.
+
+This output-language selection is separate from OverPy `#!translations` and
+`.po` files: output language selects the localized Workshop syntax emitted for
+the game client, while runtime translation support selects user-authored string
+translations in the compiled program.
+
 ## Reconstruction
 
 | Capability | Status | Limit |
