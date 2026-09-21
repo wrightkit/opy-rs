@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.49](https://github.com/wrightkit/opy-rs/compare/v0.1.48...v0.1.49) - 2026-09-21
+
+### Added
+
+- *(opy)* complete Workshop output locale integration ([#344](https://github.com/wrightkit/opy-rs/pull/344))
+
 ## [0.1.48](https://github.com/wrightkit/opy-rs/compare/v0.1.47...v0.1.48) - 2026-09-20
 
 ### Added
