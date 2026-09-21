@@ -1172,6 +1172,13 @@ impl<'a> Lowering<'a> {
         self.current_rule_conditions = previous_conditions;
         let mut actions = Vec::new();
         actions.extend(lowered_actions?);
+        let optimization = self.optimization_state_at(rule.span.as_ref());
+        if optimization.enabled
+            && !rule.delimiter
+            && !self.has_meaningful_rule_action(&actions, &event)
+        {
+            return Ok(());
+        }
         let elide_noop_switch = actions.is_empty()
             && rule.actions.len() == 1
             && matches!(rule.actions.first(), Some(Stmt::Switch { .. }));
@@ -1197,6 +1204,29 @@ impl<'a> Lowering<'a> {
             action_provenance,
         )?;
         Ok(())
+    }
+
+    fn has_meaningful_rule_action(&self, actions: &[ActionId], event: &Event) -> bool {
+        actions
+            .iter()
+            .any(|action| match self.actions.get(*action) {
+                Some(
+                    Action::If { .. }
+                    | Action::ElseIf { .. }
+                    | Action::Else
+                    | Action::While { .. }
+                    | Action::End,
+                ) => false,
+                Some(Action::CallSubroutine { .. }) => true,
+                Some(Action::Call { name, .. }) => match name.as_str() {
+                    "abortIf" | "break" | "continue" | "loop" | "loopIf" | "return" | "skip"
+                    | "skipIf" => false,
+                    "wait" => matches!(event, Event::Subroutine(_)),
+                    _ => true,
+                },
+                Some(_) => true,
+                None => false,
+            })
     }
 
     fn lower_subroutine(

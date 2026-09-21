@@ -1134,7 +1134,7 @@ mod tests {
     fn expanded_control_flow_actions_keep_their_originating_spans() {
         let compiler = Compiler::new().unwrap();
         let hir = crate::compile(
-            "globalvar value = 1\nrule \"if\":\n    @Event global\n    if true:\n        wait(1)\n",
+            "globalvar value = 1\nrule \"if\":\n    @Event global\n    if true:\n        wait(1)\n    disableInspector()\n",
             "control-flow-provenance.opy",
             Path::new("."),
         )
@@ -1151,7 +1151,7 @@ mod tests {
                 .line,
             1
         );
-        assert_eq!(artifact.wir.rules[1].actions.len(), 3);
+        assert_eq!(artifact.wir.rules[1].actions.len(), 4);
         assert_eq!(artifact.wir.action_span(1, 0).unwrap().start.line, 4);
         assert_eq!(artifact.wir.action_span(1, 1).unwrap().start.line, 5);
         assert_eq!(
@@ -1813,10 +1813,26 @@ rule "empty rule":
         )
         .unwrap();
         let artifact = compiler.compile_hir(&hir).unwrap();
+        assert_eq!(artifact.wir.rules.len(), 1);
         let rule0 = artifact.wir.rules.first().unwrap();
         assert!(rule0.actions.is_empty());
-        let rule1 = artifact.wir.rules.get(1).unwrap();
-        assert!(rule1.actions.is_empty());
+    }
+
+    #[test]
+    fn optimized_non_subroutine_wait_only_rule_matches_overpy_noop_elision() {
+        let compiler = Compiler::new().unwrap();
+        let hir = crate::compile(
+            r#"
+rule "wait-only":
+    @Event eachPlayer
+    wait(0.032)
+"#,
+            "wait-only.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        assert!(artifact.wir.rules.is_empty());
     }
 
     #[test]
@@ -2103,7 +2119,7 @@ rule "main":
     fn post_compile_hook_receives_exact_emitted_workshop() {
         let compiler = Compiler::new().unwrap();
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/macros");
-        let source = "#!postCompileHook \"hook.js\"\n\nrule \"setup\":\n    pass\n";
+        let source = "#!postCompileHook \"hook.js\"\n\nrule \"setup\":\n    debug(\"ready\")\n";
         let artifact = compiler
             .compile_source_with_locale(source, "hook.opy", &root, &Locale::new("en-US"))
             .unwrap();

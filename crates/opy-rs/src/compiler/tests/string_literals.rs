@@ -65,12 +65,21 @@ fn unicode_escape_in_subroutine_name_reaches_canonical_workshop() {
     assert_eq!(program.rules.len(), 2);
     assert_eq!(
         program.rules[0].name,
-        "Subroutine save player data if the player has pa\u{feff}ssed round 2"
+        "Subroutine save player data if the player has passed round 2"
     );
     assert_eq!(program.rules[1].name, "Subroutine literal ufeff");
-    assert!(artifact.emitted.contains("pa\u{feff}ssed"));
-    assert!(!artifact.emitted.contains("paufeffssed"));
+    assert!(artifact.emitted.contains("passed round 2"));
+    assert!(!artifact.emitted.contains('\u{feff}'));
     assert!(artifact.emitted.contains("literal ufeff"));
+}
+
+#[test]
+fn rule_name_formatting_strip_preserves_unrelated_unicode() {
+    let source = "rule \"中文 é 😀\":\n    @Event global\n    debug(\"ok\")\n";
+    let hir = crate::compile(source, "unicode.opy", Path::new(".")).unwrap();
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+    assert_eq!(artifact.wir.rules[0].name, "中文 é 😀");
+    assert!(artifact.emitted.contains("中文 é 😀"));
 }
 
 #[test]

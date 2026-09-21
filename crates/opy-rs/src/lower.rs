@@ -484,6 +484,17 @@ fn prefixed_rule_name(name: &str, prefix: Option<&str>, delimiter: bool) -> Stri
     }
 }
 
+fn strip_rule_name_formatting(text: &str) -> String {
+    text.chars()
+        .filter(|character| {
+            !matches!(
+                character,
+                '\u{200B}' | '\u{200E}' | '\u{200F}' | '\u{FEFF}' | '\u{061C}'
+            )
+        })
+        .collect()
+}
+
 #[derive(Clone, Debug)]
 enum TemplateValue {
     String(String),
@@ -503,7 +514,9 @@ fn render_rule_name(
         .as_ref()
         .map(|value| value.value.as_str())
     else {
-        return Ok(prefixed_rule_name(name, prefix, delimiter));
+        return Ok(strip_rule_name_formatting(&prefixed_rule_name(
+            name, prefix, delimiter,
+        )));
     };
     let (file, path) = rule_file_parts(span.file, files);
     let prefix = prefix.unwrap_or_default();
@@ -523,13 +536,15 @@ fn render_rule_name(
         ("$pathUpper", TemplateValue::String(path.to_uppercase())),
         ("$pathLower", TemplateValue::String(path.to_lowercase())),
     ];
-    evaluate_template(template, &values).map_err(|message| {
-        OpyError::at(
-            "rule-prefix-template-invalid",
-            format!("could not resolve rule prefix template: {message}"),
-            span,
-        )
-    })
+    evaluate_template(template, &values)
+        .map(|name| strip_rule_name_formatting(&name))
+        .map_err(|message| {
+            OpyError::at(
+                "rule-prefix-template-invalid",
+                format!("could not resolve rule prefix template: {message}"),
+                span,
+            )
+        })
 }
 
 fn rule_file_parts(file_id: u32, files: &[SourceFile]) -> (String, String) {
