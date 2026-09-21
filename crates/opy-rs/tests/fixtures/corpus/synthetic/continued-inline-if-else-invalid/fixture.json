@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/continued-inline-if-else-invalid",
+  "category": "diagnostics",
+  "features": [
+    "syntax/backslash-continuation",
+    "syntax/inline-if"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "failure",
+      "relationship": "match",
+      "ruleNames": false,
+      "diagnosticCode": "parse-error"
+    },
+    "compiler": {
+      "nativeStatus": "failure",
+      "relationship": "match",
+      "comparison": "diagnostic-code",
+      "diagnosticCode": "parse-error",
+      "failureClass": "frontend"
+    }
+  }
+}

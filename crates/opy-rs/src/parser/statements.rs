@@ -256,6 +256,14 @@ impl Parser<'_> {
         }
         let body = self.parse_colon_body(line_indent)?;
         let continued_inline_body = self.last_colon_body_continued;
+        if continued_inline_body {
+            self.errors.push(OpyError::at(
+                "parse-error",
+                "Found 'if', but no 'else'".to_string(),
+                start.span,
+            ));
+            return Err(());
+        }
         let mut branches = vec![IfBranch { condition, body }];
         let mut r#else = None;
         loop {
@@ -304,14 +312,6 @@ impl Parser<'_> {
                 self.pos = save;
                 break;
             }
-        }
-        if continued_inline_body && r#else.is_none() {
-            self.errors.push(OpyError::at(
-                "parse-error",
-                "Found 'if', but no 'else'".to_string(),
-                start.span,
-            ));
-            return Err(());
         }
         Ok(Stmt::If {
             branches,
