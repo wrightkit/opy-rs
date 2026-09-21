@@ -7,9 +7,10 @@ evaluation tooling, not a dependency of the `opy-rs` core.
 ## Pinned oracle
 
 `oracle/package.json` pins OverPy `9.7.10`; `oracle/pnpm-lock.yaml` pins its
-integrity. `oracle-metadata.json` records the package identity, repository,
-license assumption, and Workshop language. The oracle is installed separately
-and is never bundled into `opy-rs` or imported by the Rust core.
+integrity. `oracle-metadata.json` records the package `gitHead`, the
+byte-verified `contentCommit`, repository, license assumption, and Workshop
+language. The oracle is installed separately and is never bundled into
+`opy-rs` or imported by the Rust core.
 
 ```sh
 pnpm install --dir tools/overpy/oracle
