@@ -1813,10 +1813,29 @@ rule "empty rule":
         )
         .unwrap();
         let artifact = compiler.compile_hir(&hir).unwrap();
+        assert_eq!(artifact.wir.rules.len(), 2);
         let rule0 = artifact.wir.rules.first().unwrap();
         assert!(rule0.actions.is_empty());
         let rule1 = artifact.wir.rules.get(1).unwrap();
         assert!(rule1.actions.is_empty());
+    }
+
+    #[test]
+    fn non_subroutine_wait_only_rule_matches_overpy_noop_elision() {
+        let compiler = Compiler::new().unwrap();
+        let hir = crate::compile(
+            r#"
+rule "disabled wait":
+    @Event eachPlayer
+    @Disabled
+    wait(0.032)
+"#,
+            "wait-only.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let artifact = compiler.compile_hir(&hir).unwrap();
+        assert!(artifact.wir.rules.is_empty());
     }
 
     #[test]
