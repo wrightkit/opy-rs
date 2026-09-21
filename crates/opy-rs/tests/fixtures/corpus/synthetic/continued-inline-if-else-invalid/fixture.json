@@ -1,26 +1,24 @@
 {
   "schemaVersion": 1,
-  "id": "synthetic/collection-mutation-328-random-invalid",
-  "category": "compilation",
+  "id": "synthetic/continued-inline-if-else-invalid",
+  "category": "diagnostics",
   "features": [
-    "del",
-    "nested-arrays",
-    "random-index",
-    "semantic-boundary"
+    "syntax/backslash-continuation",
+    "syntax/inline-if"
   ],
   "source": "source.opy",
   "tests": {
     "source": {
       "nativeStatus": "failure",
       "relationship": "match",
-      "diagnosticCode": "random-indexed-delete",
-      "ruleNames": false
+      "ruleNames": false,
+      "diagnosticCode": "parse-error"
     },
     "compiler": {
       "nativeStatus": "failure",
       "relationship": "match",
       "comparison": "diagnostic-code",
-      "diagnosticCode": "random-indexed-delete",
+      "diagnosticCode": "parse-error",
       "failureClass": "frontend"
     }
   }

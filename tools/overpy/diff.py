@@ -68,10 +68,14 @@ NATIVE_FRONTIER_STAGES = {
     "invalid-range-binder": "semantic",
     "four-dimensional-assignment": "semantic",
     "four-dimensional-delete": "semantic",
+    "random-indexed-delete": "lowering",
     "duplicate-rule-name": "semantic",
     "unknown-member": "semantic",
 }
-NATIVE_FRONTIER_CONSTRUCTS = {"lambda-context": "parse-error"}
+NATIVE_FRONTIER_CONSTRUCTS = {
+    "lambda-context": "parse-error",
+    "random-indexed-delete": "unsupported-integration-surface",
+}
 
 
 class DiffError(RuntimeError):

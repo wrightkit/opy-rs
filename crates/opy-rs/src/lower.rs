@@ -906,6 +906,89 @@ fn indexed_expr_depth(expr: &Expr) -> usize {
     }
 }
 
+fn has_random_nested_delete(target: &HirExpr) -> bool {
+    let mut indices = Vec::new();
+    let mut root = target;
+    while let HirExpr::Index { array, index, .. } = root {
+        indices.push(index.as_ref());
+        root = array.as_ref();
+    }
+    indices.reverse();
+    indices.len() >= 3
+        && (hir_expr_contains_random(root)
+            || indices[..indices.len() - 1]
+                .iter()
+                .any(|index| hir_expr_contains_random(index)))
+}
+
+fn hir_expr_contains_random(expr: &HirExpr) -> bool {
+    match expr {
+        HirExpr::Call { name, args, .. } | HirExpr::MacroCall { name, args, .. } => {
+            name.starts_with("random.") || args.iter().any(hir_expr_contains_random)
+        }
+        HirExpr::Array { elements, .. } => elements.iter().any(hir_expr_contains_random),
+        HirExpr::Dict { entries, .. } => entries.iter().any(|entry| {
+            hir_expr_contains_random(&entry.key) || hir_expr_contains_random(&entry.value)
+        }),
+        HirExpr::Comprehension {
+            element,
+            iterable,
+            condition,
+            ..
+        } => {
+            hir_expr_contains_random(element)
+                || hir_expr_contains_random(iterable)
+                || condition.as_deref().is_some_and(hir_expr_contains_random)
+        }
+        HirExpr::Lambda { body, .. } | HirExpr::Unary { operand: body, .. } => {
+            hir_expr_contains_random(body)
+        }
+        HirExpr::Vector { x, y, z, .. } => {
+            hir_expr_contains_random(x)
+                || hir_expr_contains_random(y)
+                || hir_expr_contains_random(z)
+        }
+        HirExpr::PlayerVar { player, .. }
+        | HirExpr::Member {
+            receiver: player, ..
+        } => hir_expr_contains_random(player),
+        HirExpr::ReceiverCall { receiver, args, .. } => {
+            hir_expr_contains_random(receiver) || args.iter().any(hir_expr_contains_random)
+        }
+        HirExpr::Type { args, .. } | HirExpr::Format { args, .. } => {
+            args.iter().any(hir_expr_contains_random)
+        }
+        HirExpr::Binary { left, right, .. } => {
+            hir_expr_contains_random(left) || hir_expr_contains_random(right)
+        }
+        HirExpr::Conditional {
+            then_value,
+            condition,
+            else_value,
+            ..
+        } => {
+            hir_expr_contains_random(then_value)
+                || hir_expr_contains_random(condition)
+                || hir_expr_contains_random(else_value)
+        }
+        HirExpr::Index { array, index, .. } => {
+            hir_expr_contains_random(array) || hir_expr_contains_random(index)
+        }
+        HirExpr::Number { .. }
+        | HirExpr::String { .. }
+        | HirExpr::Bool { .. }
+        | HirExpr::Null { .. }
+        | HirExpr::StringModifier { .. }
+        | HirExpr::Local { .. }
+        | HirExpr::Enum { .. }
+        | HirExpr::GlobalVar { .. }
+        | HirExpr::HostPlayer { .. }
+        | HirExpr::EventPlayer { .. }
+        | HirExpr::Constant { .. }
+        | HirExpr::MacroParam { .. } => false,
+    }
+}
+
 impl From<Span> for HirSpan {
     fn from(span: Span) -> HirSpan {
         HirSpan {

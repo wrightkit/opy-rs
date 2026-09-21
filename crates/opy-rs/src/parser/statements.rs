@@ -255,6 +255,15 @@ impl Parser<'_> {
             return Err(());
         }
         let body = self.parse_colon_body(line_indent)?;
+        let continued_inline_body = self.last_colon_body_continued;
+        if continued_inline_body {
+            self.errors.push(OpyError::at(
+                "parse-error",
+                "Found 'if', but no 'else'".to_string(),
+                start.span,
+            ));
+            return Err(());
+        }
         let mut branches = vec![IfBranch { condition, body }];
         let mut r#else = None;
         loop {
@@ -312,12 +321,14 @@ impl Parser<'_> {
     }
 
     pub(super) fn parse_colon_body(&mut self, line_indent: u32) -> Result<Vec<Stmt>, ()> {
+        self.last_colon_body_continued = false;
         if matches!(self.peek_kind(), TokenKind::Newline | TokenKind::Eof) {
             let save = self.pos;
             self.skip_newlines();
             if self.peek_kind() != TokenKind::Eof && self.peek().span.start.col == line_indent {
                 let statement = self.parse_statement()?;
                 self.expect_statement_end("the inline statement")?;
+                self.last_colon_body_continued = self.last_statement_continued;
                 return Ok(vec![statement]);
             }
             self.pos = save;
@@ -326,6 +337,7 @@ impl Parser<'_> {
         } else {
             let statement = self.parse_statement()?;
             self.expect_statement_end("the inline statement")?;
+            self.last_colon_body_continued = self.last_statement_continued;
             Ok(vec![statement])
         }
     }

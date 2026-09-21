@@ -239,8 +239,17 @@ impl Lowerer {
                         target.span(),
                     );
                 }
+                let target = self.lower_expr(target, macro_params, CallPosition::Value);
+                if has_random_nested_delete(&target) {
+                    self.error_at(
+                        "random-indexed-delete",
+                        "Cannot delete from nested array with a random outer or middle index"
+                            .to_string(),
+                        *span,
+                    );
+                }
                 HirStmt::Delete {
-                    target: Box::new(self.lower_expr(target, macro_params, CallPosition::Value)),
+                    target: Box::new(target),
                     span: Some(span.into()),
                 }
             }

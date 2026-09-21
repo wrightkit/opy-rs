@@ -35,6 +35,8 @@ pub fn parse_with_options(tokens: &[Token], allow_macro_redeclaration: bool) -> 
         pos: 0,
         errors: Vec::new(),
         allow_macro_redeclaration,
+        last_statement_continued: false,
+        last_colon_body_continued: false,
     };
     let program = parser.parse_program();
     if parser.errors.is_empty() {
@@ -60,6 +62,8 @@ struct Parser<'a> {
     pos: usize,
     errors: Vec<OpyError>,
     allow_macro_redeclaration: bool,
+    last_statement_continued: bool,
+    last_colon_body_continued: bool,
 }
 
 fn is_identifier(text: &str) -> bool {
@@ -307,6 +311,7 @@ impl Parser<'_> {
             .tokens
             .get(self.pos.saturating_sub(1))
             .is_some_and(|previous| self.peek().span.start.line > previous.span.end.line);
+        self.last_statement_continued = continued_line;
         if matches!(self.peek_kind(), TokenKind::Newline | TokenKind::Eof) || continued_line {
             Ok(())
         } else {
@@ -335,6 +340,8 @@ pub(crate) fn parse_expression_fragment(
         pos: 0,
         allow_macro_redeclaration: false,
         errors: Vec::new(),
+        last_statement_continued: false,
+        last_colon_body_continued: false,
     };
     let expression = parser.parse_expr().map_err(|()| {
         parser.errors.first().cloned().unwrap_or_else(|| {
@@ -615,6 +622,20 @@ mod tests {
             assert!(errors.iter().all(|error| error.code == "parse-error"));
             assert!(errors.iter().all(|error| error.span.is_some()));
         }
+    }
+
+    #[test]
+    fn rejects_continued_inline_if_without_else() {
+        let errors = parse_err(concat!(
+            "globalvar value\n",
+            "macro nextHero():\n",
+            "    value = 1\\\n",
+            "    if value == 0: value = 2\\\n",
+            "    value = 3\\\n",
+        ));
+        assert!(errors.iter().any(|error| {
+            error.code == "parse-error" && error.message == "Found 'if', but no 'else'"
+        }));
     }
 
     #[test]

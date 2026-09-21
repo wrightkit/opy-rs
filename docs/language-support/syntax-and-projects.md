@@ -40,7 +40,7 @@
 | `for ... in range(...)` | ✅ Supported | Global and player-variable range binders are supported; arbitrary iterables are not. |
 | `switch` / `case` / `default`, `break` | ✅ Supported | Supported fall-through and break forms lower to canonical actions. |
 | `continue` in loops | ✅ Supported | The pinned `for`, `while` and `do ... while` forms, including accepted nested control-flow positions, lower through canonical skip/loop actions. |
-| `goto`, labels and `loc+` targets | 🚧 Partial | Forward labels, `loc+` offsets, conditional dynamic jumps and `RULE_START` lower natively. Backward named jumps remain unsupported because canonical WIR has no backward-jump representation; this is a real forward-compiler boundary. |
+| `goto`, labels and `loc+` targets | ✅ Supported | Forward labels, `loc+` offsets, conditional dynamic jumps and `RULE_START` lower natively. Backward named jumps are rejected by the pinned OverPy reference and are therefore outside the source contract. |
 | `pass` and `return` | ✅ Supported | Context restrictions remain source diagnostics. |
 | `#!include` and nested include closure | ✅ Supported | Main-file and including-file-relative resolution are preserved, including include cycles and missing-file diagnostics. |
 | `#!mainFile` and directory project input | ✅ Supported | The selected entry source remains part of the project identity. |

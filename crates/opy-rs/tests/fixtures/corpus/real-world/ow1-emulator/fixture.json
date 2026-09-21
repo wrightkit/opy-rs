@@ -168,16 +168,17 @@
   },
   "tests": {
     "source": {
-      "nativeStatus": "success",
-      "relationship": "known-gap",
+      "nativeStatus": "failure",
+      "relationship": "match",
+      "diagnosticCode": "parse-error",
       "ruleNames": false
     },
     "compiler": {
       "nativeStatus": "failure",
       "relationship": "known-gap",
       "comparison": "diagnostic-code",
-      "diagnosticCode": "unsupported-integration-surface",
-      "failureClass": "integration"
+      "diagnosticCode": "parse-error",
+      "failureClass": "frontend"
     }
   }
 }

@@ -31,7 +31,7 @@ supported subset and limitation are stated in user terms.
 | --- | --- | --- |
 | Lexing, literals, expressions and assignments | ✅ Supported | [Syntax and project composition](language-support/syntax-and-projects.md) |
 | Rules, annotations and ordinary control flow | ✅ Supported | [Syntax and project composition](language-support/syntax-and-projects.md) |
-| Arrays, dictionaries and lambdas | 🚧 Partial | [Syntax and project composition](language-support/syntax-and-projects.md) |
+| Arrays, dictionaries and lambdas | ✅ Supported | [Syntax and project composition](language-support/syntax-and-projects.md) |
 | Functions, member functions, enums and constants | ✅ Supported | [Callables and domains](language-support/callables-and-domains.md) |
 | Multiple files, includes, macros and preprocessing | ✅ Supported | [Syntax and project composition](language-support/syntax-and-projects.md) and [Tooling and backend](language-support/tooling-and-backend.md) |
 | Strings, translations and custom-game settings | ✅ Supported | [Syntax and project composition](language-support/syntax-and-projects.md) |
