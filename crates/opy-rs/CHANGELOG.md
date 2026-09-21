@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.50](https://github.com/wrightkit/opy-rs/compare/v0.1.49...v0.1.50) - 2026-09-21
+
+### Fixed
+
+- close remaining Bastion rule compatibility gaps ([#346](https://github.com/wrightkit/opy-rs/pull/346))
+
 ## [0.1.49](https://github.com/wrightkit/opy-rs/compare/v0.1.48...v0.1.49) - 2026-09-21
 
 ### Added
