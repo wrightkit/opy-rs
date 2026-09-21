@@ -1173,13 +1173,8 @@ impl<'a> Lowering<'a> {
         let mut actions = Vec::new();
         actions.extend(lowered_actions?);
         let optimization = self.optimization_state_at(rule.span.as_ref());
-        let has_wait_action = actions.iter().any(|action| {
-            matches!(self.actions.get(*action), Some(Action::Call { name, .. }) if name == "wait")
-        });
         if optimization.enabled
-            && rule.disabled
             && !rule.delimiter
-            && has_wait_action
             && !self.has_meaningful_rule_action(&actions, &event)
         {
             return Ok(());
@@ -1220,8 +1215,6 @@ impl<'a> Lowering<'a> {
                     | Action::ElseIf { .. }
                     | Action::Else
                     | Action::While { .. }
-                    | Action::ForGlobalVariable { .. }
-                    | Action::ForPlayerVariable { .. }
                     | Action::End,
                 ) => false,
                 Some(Action::CallSubroutine { .. }) => true,

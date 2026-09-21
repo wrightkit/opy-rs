@@ -92,7 +92,7 @@ fn source_surface_reaches_validated_hir_with_spans() {
 
 #[test]
 fn source_return_reaches_abort_if_in_canonical_wir() {
-    let source = "rule \"return\":\n    @Event global\n    return\n";
+    let source = "rule \"return\":\n    @Event global\n    return\n    debug(\"retained\")\n";
     let artifact = opy_rs::Compiler::new()
         .expect("the compiler contract loads")
         .compile_source(source, "source-syntax-return.opy", Path::new(""))
@@ -168,6 +168,7 @@ fn source_continue_reaches_canonical_loop_control() {
         "        if A == 0:\n",
         "            continue\n",
         "        wait()\n",
+        "        A += 1\n",
     );
     let artifact = opy_rs::Compiler::new()
         .expect("the compiler contract loads")

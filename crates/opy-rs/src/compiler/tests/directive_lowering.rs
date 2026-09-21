@@ -65,7 +65,7 @@ fn disabled_rule_is_lowered_with_rule_and_action_provenance() {
 
 #[test]
 fn delimiter_is_consumed_after_preserving_its_unprefixed_name() {
-    let source = "#!rulePrefix \"Section\"\nrule \"ordinary\":\n    @Event global\n    pass\nrule \"delimiter\":\n    @Event global\n    @Disabled\n    @Delimiter\n";
+    let source = "#!rulePrefix \"Section\"\nrule \"ordinary\":\n    @Event global\n    disableInspector()\nrule \"delimiter\":\n    @Event global\n    @Disabled\n    @Delimiter\n";
     let hir = crate::compile(source, "delimiters.opy", Path::new(".")).unwrap();
     let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
 

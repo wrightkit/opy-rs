@@ -46,8 +46,8 @@ fn optimized_wait_forms_match_the_pinned_oracle() {
 }
 
 #[test]
-fn default_wait_remains_concrete_without_size_optimization() {
-    let source = "rule \"default wait\":\n    @Event global\n    wait()\n";
+fn disabled_optimizations_keep_default_wait_concrete() {
+    let source = "#!disableOptimizations\nrule \"default wait\":\n    @Event global\n    wait()\n";
     let hir =
         crate::compile(source, "default-wait.opy", Path::new(".")).expect("source must resolve");
     let artifact = Compiler::new()
@@ -56,6 +56,23 @@ fn default_wait_remains_concrete_without_size_optimization() {
         .expect("source must lower to canonical WIR");
 
     assert!(artifact.emitted.contains("Wait(0.016, Ignore Condition);"));
+}
+
+#[test]
+fn optimized_for_loop_is_meaningful_without_body_actions() {
+    let source = "globalvar index\nrule \"for loop\":\n    @Event global\n    for index in range(0, 1):\n        pass\n";
+    let hir = crate::compile(source, "for-loop.opy", Path::new(".")).expect("source must resolve");
+    let artifact = Compiler::new()
+        .expect("released workshop contract must load")
+        .compile_hir(&hir)
+        .expect("source must lower to canonical WIR");
+    let program = super::canonical_program(&artifact);
+
+    assert_eq!(program.rules.len(), 1);
+    assert!(matches!(
+        program.rules[0].actions.first(),
+        Some(workshop_rs::Action::ForGlobalVariable { .. })
+    ));
 }
 
 #[test]

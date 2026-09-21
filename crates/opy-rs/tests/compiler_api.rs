@@ -7,7 +7,7 @@ fn ordinary_compile_api_uses_only_opy_types() {
     let compiler = Compiler::new().expect("the embedded compiler contract loads");
     let output = compiler
         .compile_source(
-            "rule \"api\":\n    @Event global\n    pass\n",
+            "rule \"api\":\n    @Event global\n    debug(\"ready\")\n",
             "api.opy",
             Path::new("."),
         )
@@ -18,7 +18,7 @@ fn ordinary_compile_api_uses_only_opy_types() {
     assert!(output.hook_console_output.is_empty());
 
     let report = compiler.compile_source_report_with_language(
-        "rule \"api\":\n    @Event global\n    pass\n",
+        "rule \"api\":\n    @Event global\n    debug(\"ready\")\n",
         "api.opy",
         Path::new("."),
         "en-US",
