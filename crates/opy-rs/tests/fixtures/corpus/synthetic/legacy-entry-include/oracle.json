@@ -61,6 +61,7 @@
   },
   "oracle": {
     "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
     "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
     "language": "en-US",
     "license": "GPL-3.0-only",

@@ -12,10 +12,10 @@
 | Replacement directives such as `#!replace0By*`, `#!replace1ByMatchRound`, team and empty-string replacements | ✅ Supported | Observable replacements are lowered when size optimization is active and are excluded from Workshop-setting constructors, matching the pinned upstream boundary. |
 | `#!extension` | ✅ Supported | The extension name is checked against the canonical Workshop schema. |
 | `#!disableInspector`, `#!excludeVariablesInCompilation`, `#!setupTags`, `#!setupTx`, `#!globalvarInitRuleName` and `#!playervarInitRuleName` | ✅ Supported | Inspector/setup rules, output declaration filtering and generated initialization rule names affect forward Workshop output. |
-| `#!translations` | 🚧 Partial | Translation state is recorded; the full translation-file lifecycle remains issue #331. |
+| `#!translations` and `#!translateWithPlayerVar` | ✅ Supported | Language selection, `.po` import/output, dynamic player-language lookup, and the `noDetectionRule`/`noTlErr` options lower through the forward compiler. |
 | `#!suppressWarnings` | ✅ Supported | Matching preprocessing warning codes are omitted from the public diagnostics surface. |
 | `#!debugElementCount` | ✅ Supported | The forward compiler emits a canonical-WIR total, a count-sorted per-rule summary, and per-condition/per-action element-count comments. |
-| `#!translateWithPlayerVar`, `#!writeToOutputFile`, `#!disableTranslationSourceLines` and `#!keepUnusedTranslations` | ❌ Unsupported | These require translation-file or editor-output capabilities outside the forward compiler contract and are rejected with a source diagnostic. |
+| `#!writeToOutputFile`, `#!disableTranslationSourceLines` and `#!keepUnusedTranslations` | ❌ Unsupported | Intentionally out of scope: these are editor or translation-output controls, not forward-language semantics. The compiler records them and rejects them with a source-attributed diagnostic rather than pretending to implement their side effects. |
 | `#!postCompileHook` | ✅ Supported | The hook runs after final Workshop emission and failures retain script provenance. |
 | `__script__(...)` JavaScript macros | ✅ Supported | The embedded QuickJS runtime exposes the documented OverPy ABI, limits, isolation and string-result contract. |
 
@@ -25,7 +25,7 @@
 | --- | --- | --- |
 | Standalone Rust compiler library | ✅ Supported | The source and Workshop boundaries described on this page apply. |
 | CLI `check`, `compile`, JSON reports and source diagnostics | ✅ Supported | Failure status never produces a misleading successful artifact. |
-| Compile metadata for variables, subroutines, warnings, translations and element count | 🚧 Partial | The JSON report exposes the fields implemented by the native API; it is not a byte-for-byte clone of the upstream JavaScript object. |
+| Compile metadata for variables, subroutines, warnings, translations and element count | 🚧 Partial | Tooling-only: the JSON report exposes the fields implemented by the native API; it is not a byte-for-byte clone of the upstream JavaScript object, and its shape is not a forward-language support gate. |
 | Observable optimizer and replacement effects | ✅ Supported | Tested semantic and cost-relevant effects are preserved; formatting and upstream internal optimizer structure are not contracts. |
 | OPY → Workshop emission through `workshop-rs` | 🚧 Partial | The supported language rows above compile end to end; unsupported source forms produce structured diagnostics. |
 

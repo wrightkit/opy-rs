@@ -150,6 +150,7 @@ def oracle_identity(metadata: dict[str, Any]) -> dict[str, Any]:
         "name",
         "version",
         "gitHead",
+        "contentCommit",
         "repository",
         "registryTarball",
         "integrity",

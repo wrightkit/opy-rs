@@ -324,6 +324,11 @@ fn native_and_reference_agree_on_the_corpus() {
             "known-gap" | "unsupported" => reference_gap,
             other => panic!("{id}: unsupported relationship '{other}'"),
         };
+        if !relationship_holds {
+            detail.push(format!(
+                "expected relationship '{expected_relationship}' is not satisfied (reference-gap: {reference_gap})"
+            ));
+        }
         let classification = if skipped {
             "inconclusive"
         } else if status == "divergence" || !relationship_holds {
@@ -375,7 +380,7 @@ fn native_and_reference_agree_on_the_corpus() {
         let code = entry["native"].get("code").and_then(Value::as_str);
         let label = if skipped {
             "SKIP"
-        } else if status == "divergence" {
+        } else if classification == "unexpected-divergence" {
             "FAIL"
         } else if reference_gap {
             "KNOWN GAP"
@@ -393,12 +398,14 @@ fn native_and_reference_agree_on_the_corpus() {
                 snapshot_path.display()
             );
         }
-        if status == "divergence" {
+        if classification == "unexpected-divergence" {
             divergences.push(json!({
                 "fixture": id,
                 "expect": if expect_resolve { "resolve" } else { "diagnostic" },
                 "native": entry["native"],
                 "reference": entry["reference"],
+                "expectedRelationship": expected_relationship,
+                "referenceGap": reference_gap,
                 "detail": detail,
             }));
         }

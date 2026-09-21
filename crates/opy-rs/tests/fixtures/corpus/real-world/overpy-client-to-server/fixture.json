@@ -37,7 +37,7 @@
   "tests": {
     "source": {
       "nativeStatus": "success",
-      "relationship": "known-gap",
+      "relationship": "match",
       "ruleNames": false
     },
     "compiler": {
