@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.51](https://github.com/wrightkit/opy-rs/compare/v0.1.50...v0.1.51) - 2026-09-21
+
+### Fixed
+
+- *(opy)* close v0.1.50 forward-language residuals ([#351](https://github.com/wrightkit/opy-rs/pull/351))
+
+### Other
+
+- *(opy)* finalize v0.1.50 language support audit ([#348](https://github.com/wrightkit/opy-rs/pull/348))
+
 ## [0.1.50](https://github.com/wrightkit/opy-rs/compare/v0.1.49...v0.1.50) - 2026-09-21
 
 ### Fixed
