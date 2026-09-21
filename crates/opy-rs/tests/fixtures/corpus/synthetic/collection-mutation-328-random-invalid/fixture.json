@@ -11,16 +11,17 @@
   "source": "source.opy",
   "tests": {
     "source": {
-      "nativeStatus": "success",
-      "relationship": "known-gap",
+      "nativeStatus": "failure",
+      "relationship": "match",
+      "diagnosticCode": "random-indexed-delete",
       "ruleNames": false
     },
     "compiler": {
       "nativeStatus": "failure",
       "relationship": "match",
       "comparison": "diagnostic-code",
-      "diagnosticCode": "unsupported-integration-surface",
-      "failureClass": "integration"
+      "diagnosticCode": "random-indexed-delete",
+      "failureClass": "frontend"
     }
   }
 }

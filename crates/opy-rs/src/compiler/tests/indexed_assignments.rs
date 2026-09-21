@@ -54,10 +54,7 @@ fn nested_random_delete_reaches_the_pinned_boundary() {
         .unwrap()
         .compile_source_report(&source, "source.opy", &dir);
     assert_eq!(report.compile.status, crate::CompileStatus::Failure);
-    assert_eq!(
-        report.compile.diagnostics[0].code,
-        "unsupported-integration-surface"
-    );
+    assert_eq!(report.compile.diagnostics[0].code, "random-indexed-delete");
 }
 
 #[test]
@@ -68,10 +65,7 @@ fn nested_random_player_receiver_delete_reaches_the_pinned_boundary() {
         .unwrap()
         .compile_source_report(&source, "source.opy", &dir);
     assert_eq!(report.compile.status, crate::CompileStatus::Failure);
-    assert_eq!(
-        report.compile.diagnostics[0].code,
-        "unsupported-integration-surface"
-    );
+    assert_eq!(report.compile.diagnostics[0].code, "random-indexed-delete");
 }
 
 #[test]
