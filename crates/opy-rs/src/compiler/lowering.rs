@@ -1162,8 +1162,11 @@ impl<'a> Lowering<'a> {
     fn lower_rule(&mut self, rule: &hir::Rule) -> Result<(), IntegrationError> {
         self.reject_rule_metadata(rule)?;
         let event = self.lower_event(&rule.event, &rule.annotations)?;
-        let conditions = rule
-            .conditions
+        let mut condition_exprs = Vec::new();
+        for expr in &rule.conditions {
+            Self::split_rule_condition(expr, &mut condition_exprs);
+        }
+        let conditions = condition_exprs
             .iter()
             .map(|expr| self.lower_condition(expr))
             .collect::<Result<Vec<_>, _>>()?;
@@ -1200,10 +1203,30 @@ impl<'a> Lowering<'a> {
         self.set_rule_provenance(
             rule_index,
             rule.span,
-            rule.conditions.iter().map(|expr| expr.span().copied()),
+            condition_exprs.iter().map(|expr| expr.span().copied()),
             action_provenance,
         )?;
         Ok(())
+    }
+
+    fn split_rule_condition<'expr>(expr: &'expr Expr, conditions: &mut Vec<&'expr Expr>) {
+        match expr {
+            Expr::Binary {
+                op, left, right, ..
+            } if op == "and" => {
+                Self::split_rule_condition(left, conditions);
+                Self::split_rule_condition(right, conditions);
+            }
+            Expr::Binary {
+                op, left, right, ..
+            } if op == "=="
+                && matches!(right.as_ref(), Expr::Bool { value: true, .. })
+                && matches!(left.as_ref(), Expr::Binary { op, .. } if op == "and") =>
+            {
+                Self::split_rule_condition(left, conditions);
+            }
+            _ => conditions.push(expr),
+        }
     }
 
     fn has_meaningful_rule_action(&self, actions: &[ActionId], event: &Event) -> bool {
@@ -3933,6 +3956,16 @@ impl<'a> Lowering<'a> {
     }
 
     fn lower_condition(&mut self, expr: &Expr) -> Result<ValueId, IntegrationError> {
+        if let Expr::Binary {
+            op, left, right, ..
+        } = expr
+            && op == "!="
+            && matches!(right.as_ref(), Expr::Bool { value: true, .. })
+        {
+            let value = self.lower_value(left)?;
+            let false_value = self.push_value(Value::Bool(false));
+            return Ok(self.push_call("==", vec![value, false_value]));
+        }
         if let Expr::Unary { op, operand, .. } = expr
             && op == "not"
             && !matches!(operand.as_ref(), Expr::Binary { .. })

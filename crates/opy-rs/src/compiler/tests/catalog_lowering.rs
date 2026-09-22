@@ -80,17 +80,14 @@ fn bastion_condition_folding_matches_pinned_reference_contract() {
     let oracle = parsed_oracle(name);
     let split_artifact = compile_fixture("bastion-contextual-values-split");
     let split_oracle = parsed_oracle("bastion-contextual-values-split");
-    let mut native_without_condition_shape = super::canonical_program(&artifact);
-    native_without_condition_shape.rules[0].conditions = oracle.rules[0].conditions.clone();
-    assert!(equivalent(&native_without_condition_shape, &oracle));
+    assert!(equivalent(&artifact.wir, &oracle));
     assert!(equivalent(&split_artifact.wir, &split_oracle));
     assert!(equivalent(&oracle, &split_oracle));
 
     // The source uses two runtime predicates that can change between ongoing
-    // rule evaluations. The pinned OverPy output is the independent contract:
-    // it preserves their short-circuit order as two top-level conditions
-    // instead of requiring this test to reimplement Workshop evaluation.
-    assert_eq!(artifact.wir.rules[0].conditions.len(), 2);
+    // rule evaluations. Lowering preserves their short-circuit order as
+    // top-level conditions, matching the pinned OverPy contract directly.
+    assert_eq!(artifact.wir.rules[0].conditions.len(), 3);
     assert_eq!(oracle.rules[0].conditions.len(), 3);
     assert_eq!(split_artifact.wir.rules[0].conditions.len(), 3);
     assert!(matches!(
@@ -104,13 +101,8 @@ fn bastion_condition_folding_matches_pinned_reference_contract() {
 
     let transition = compile_fixture("bastion-condition-reevaluation");
     let transition_oracle = parsed_oracle("bastion-condition-reevaluation");
-    let mut transition_without_condition_shape = super::canonical_program(&transition);
-    transition_without_condition_shape.rules[0].conditions =
-        transition_oracle.rules[0].conditions.clone();
-    assert!(equivalent(
-        &transition_without_condition_shape,
-        &transition_oracle
-    ));
+    assert!(equivalent(&transition.wir, &transition_oracle));
+    assert_eq!(transition.wir.rules[0].conditions.len(), 2);
     assert_eq!(transition_oracle.rules[0].conditions.len(), 2);
     assert!(
         transition
