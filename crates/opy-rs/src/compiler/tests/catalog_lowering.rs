@@ -78,9 +78,13 @@ fn bastion_condition_folding_matches_pinned_reference_contract() {
     let name = "bastion-contextual-values";
     let artifact = compile_fixture(name);
     let oracle = parsed_oracle(name);
+    let split_artifact = compile_fixture("bastion-contextual-values-split");
+    let split_oracle = parsed_oracle("bastion-contextual-values-split");
     let mut native_without_condition_shape = super::canonical_program(&artifact);
     native_without_condition_shape.rules[0].conditions = oracle.rules[0].conditions.clone();
     assert!(equivalent(&native_without_condition_shape, &oracle));
+    assert!(equivalent(&split_artifact.wir, &split_oracle));
+    assert!(equivalent(&oracle, &split_oracle));
 
     // The source uses two runtime predicates that can change between ongoing
     // rule evaluations. The pinned OverPy output is the independent contract:
@@ -88,6 +92,7 @@ fn bastion_condition_folding_matches_pinned_reference_contract() {
     // instead of requiring this test to reimplement Workshop evaluation.
     assert_eq!(artifact.wir.rules[0].conditions.len(), 2);
     assert_eq!(oracle.rules[0].conditions.len(), 3);
+    assert_eq!(split_artifact.wir.rules[0].conditions.len(), 3);
     assert!(matches!(
         oracle.rules[0].conditions[0].value,
         workshop_rs::Value::Call { ref name, .. } if name == "=="
