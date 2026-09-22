@@ -64,6 +64,80 @@ fn assert_matches_oracle(name: &str) {
     );
 }
 
+fn parsed_oracle(name: &str) -> workshop_rs::Program {
+    workshop_rs::parser::parse(
+        &oracle_workshop(name),
+        &Catalog::builtin().expect("catalog must load"),
+        &Locale::new("en-US"),
+    )
+    .expect("oracle output must reparse")
+}
+
+#[test]
+fn bastion_condition_folding_matches_pinned_reference_contract() {
+    let name = "bastion-contextual-values";
+    let artifact = compile_fixture(name);
+    let oracle = parsed_oracle(name);
+    let split_artifact = compile_fixture("bastion-contextual-values-split");
+    let split_oracle = parsed_oracle("bastion-contextual-values-split");
+    assert!(equivalent(&artifact.wir, &oracle));
+    assert!(equivalent(&split_artifact.wir, &split_oracle));
+    assert!(equivalent(&oracle, &split_oracle));
+
+    // The source uses two runtime predicates that can change between ongoing
+    // rule evaluations. Lowering preserves their short-circuit order as
+    // top-level conditions, matching the pinned OverPy contract directly.
+    assert_eq!(artifact.wir.rules[0].conditions.len(), 3);
+    assert_eq!(oracle.rules[0].conditions.len(), 3);
+    assert_eq!(split_artifact.wir.rules[0].conditions.len(), 3);
+    assert!(matches!(
+        oracle.rules[0].conditions[0].value,
+        workshop_rs::Value::Call { ref name, .. } if name == "=="
+    ));
+    assert!(matches!(
+        oracle.rules[0].conditions[1].value,
+        workshop_rs::Value::Call { ref name, .. } if name == "=="
+    ));
+
+    let transition = compile_fixture("bastion-condition-reevaluation");
+    let transition_oracle = parsed_oracle("bastion-condition-reevaluation");
+    assert!(equivalent(&transition.wir, &transition_oracle));
+    assert_eq!(transition.wir.rules[0].conditions.len(), 2);
+    assert_eq!(transition_oracle.rules[0].conditions.len(), 2);
+    assert!(
+        transition
+            .emitted
+            .contains("Wait(0.016, Ignore Condition);")
+    );
+    assert!(
+        transition
+            .emitted
+            .contains("Modify Global Variable(hits, Add, 1);")
+    );
+
+    assert!(
+        artifact
+            .emitted
+            .contains("Set Global Variable At Index(values, 1, Null);")
+    );
+    assert!(
+        artifact
+            .emitted
+            .contains("Set Status(Event Player, Null, Invincible, 0);")
+    );
+    assert!(
+        artifact
+            .emitted
+            .contains("Create Effect(Null, Ring, Color(Red), Vector(0, 1, 0), 0, Visible To);")
+    );
+    assert!(artifact.emitted.contains("Wait(0, Ignore Condition);"));
+    assert!(
+        artifact
+            .emitted
+            .contains("For Global Variable(index, False, True, False);")
+    );
+}
+
 #[test]
 fn catalog_backed_receiver_calls_match_the_pinned_oracle() {
     assert_matches_oracle("receiver-calls");
