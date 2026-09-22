@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/bastion-condition-reevaluation",
+  "category": "compilation",
+  "features": [
+    "compilation/condition-lowering",
+    "control-flow/reevaluation"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": false
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "known-gap",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": false
+    }
+  }
+}

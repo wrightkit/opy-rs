@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "id": "synthetic/bastion-contextual-values-319",
+  "id": "synthetic/bastion-contextual-values",
   "category": "compilation",
   "features": [
     "compilation/condition-lowering",

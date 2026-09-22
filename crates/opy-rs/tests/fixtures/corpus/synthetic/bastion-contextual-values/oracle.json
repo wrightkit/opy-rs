@@ -8,7 +8,7 @@
     "workshopExact": "variables {\n    global:\n        0: index\n        1: values\n    player:\n        0: savedEffect\n}\n\nrule (\"Apply hero selection context\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    conditions {\n        Is In Spawn Room(Event Player) == True;\n        Is Moving(Event Player) == False;\n        Global.index == Null;\n    }\n    actions {\n        Set Global Variable(index, False);\n        Set Global Variable(values, Array(Null, Null));\n        Set Global Variable At Index(values, True, Null);\n        Set Player Variable(Event Player, savedEffect, Null);\n        Set Status(Event Player, Null, Invincible, False);\n        Create Effect(Null, Ring, Color(Red), Vector(False, True, False), False, Visible To);\n        Wait(False, Ignore Condition);\n        For Global Variable(index, False, True, False);\n        End;\n    }\n}\n\n",
     "workshopSha256": "83836f416948257cdfec30d52ac2108498186d2f5153461dc048077fd5055e59"
   },
-  "fixture": "synthetic/bastion-contextual-values-319",
+  "fixture": "synthetic/bastion-contextual-values",
   "input": {
     "files": [
       {
