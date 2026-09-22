@@ -3768,6 +3768,7 @@ impl<'a> Lowering<'a> {
         self.normalize_value_with_coercions(coercions, value_id)
     }
 
+    #[allow(unreachable_patterns)]
     fn normalize_modify_value(&mut self, op: ModifyOp, value_id: ValueId) -> ValueId {
         let coercions = match op {
             ModifyOp::Add
@@ -3787,6 +3788,7 @@ impl<'a> Lowering<'a> {
             ModifyOp::Multiply | ModifyOp::Divide | ModifyOp::RaiseToPower => {
                 return value_id;
             }
+            _ => return value_id,
         };
         self.normalize_value_with_coercions(coercions, value_id)
     }
