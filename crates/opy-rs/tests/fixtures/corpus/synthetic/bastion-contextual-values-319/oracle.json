@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: index\n        1: values\n    player:\n        0: savedEffect\n}\n\nrule (\"Apply hero selection context\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    conditions {\n        Is In Spawn Room(Event Player) == True;\n        Is Moving(Event Player) == False;\n        Global.index == Null;\n    }\n    actions {\n        Set Global Variable(index, False);\n        Set Global Variable(values, Array(Null, Null));\n        Set Global Variable At Index(values, True, Null);\n        Set Player Variable(Event Player, savedEffect, Null);\n        Set Status(Event Player, Null, Invincible, False);\n        Create Effect(Null, Ring, Color(Red), Vector(False, True, False), False, Visible To);\n        Wait(False, Ignore Condition);\n        For Global Variable(index, False, True, False);\n        End;\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: index\n        1: values\n    player:\n        0: savedEffect\n}\n\nrule (\"Apply hero selection context\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    conditions {\n        Is In Spawn Room(Event Player) == True;\n        Is Moving(Event Player) == False;\n        Global.index == Null;\n    }\n    actions {\n        Set Global Variable(index, False);\n        Set Global Variable(values, Array(Null, Null));\n        Set Global Variable At Index(values, True, Null);\n        Set Player Variable(Event Player, savedEffect, Null);\n        Set Status(Event Player, Null, Invincible, False);\n        Create Effect(Null, Ring, Color(Red), Vector(False, True, False), False, Visible To);\n        Wait(False, Ignore Condition);\n        For Global Variable(index, False, True, False);\n        End;\n    }\n}\n\n",
+    "workshopSha256": "83836f416948257cdfec30d52ac2108498186d2f5153461dc048077fd5055e59"
+  },
+  "fixture": "synthetic/bastion-contextual-values-319",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "d3e3a548fc839901cd30b76e65ea01b99d0057d863e9ac42563baf1d7bdd382e"
+      }
+    ],
+    "sha256": "4363b04045d22b34a651d0a783244acfb25ffa9583cf339dc86da2727280c6f3",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

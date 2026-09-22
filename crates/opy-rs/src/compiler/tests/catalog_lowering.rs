@@ -1,5 +1,6 @@
 //! Oracle-backed catalog/member/enum lowering evidence.
 
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 use crate::Compiler;
@@ -61,6 +62,163 @@ fn assert_matches_oracle(name: &str) {
         "lowering diverged for {name}\n--- native ---\n{}\n--- oracle ---\n{}",
         artifact.emitted,
         oracle_workshop(name)
+    );
+}
+
+fn parsed_oracle(name: &str) -> workshop_rs::Program {
+    workshop_rs::parser::parse(
+        &oracle_workshop(name),
+        &Catalog::builtin().expect("catalog must load"),
+        &Locale::new("en-US"),
+    )
+    .expect("oracle output must reparse")
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum BooleanFormula {
+    Atom(String),
+    Not(Box<Self>),
+    And(Vec<Self>),
+}
+
+fn condition_formula(value: &workshop_rs::Value) -> BooleanFormula {
+    match value {
+        workshop_rs::Value::Call { name, args } if name == "and" => {
+            BooleanFormula::And(args.iter().map(condition_formula).collect())
+        }
+        workshop_rs::Value::Call { name, args }
+            if name == "=="
+                && args.len() == 2
+                && matches!(args[1], workshop_rs::Value::Bool(true)) =>
+        {
+            condition_formula(&args[0])
+        }
+        workshop_rs::Value::Call { name, args }
+            if (name == "==" || name == "!=")
+                && args.len() == 2
+                && matches!(args[1], workshop_rs::Value::Bool(false | true)) =>
+        {
+            let formula = condition_formula(&args[0]);
+            let negated = (name == "==" && matches!(args[1], workshop_rs::Value::Bool(false)))
+                || (name == "!=" && matches!(args[1], workshop_rs::Value::Bool(true)));
+            if negated {
+                BooleanFormula::Not(Box::new(formula))
+            } else {
+                formula
+            }
+        }
+        _ => BooleanFormula::Atom(format!("{value:?}")),
+    }
+}
+
+fn evaluate_formula(
+    formula: &BooleanFormula,
+    assignments: &HashMap<String, bool>,
+    visits: &mut Vec<String>,
+) -> bool {
+    match formula {
+        BooleanFormula::Atom(atom) => {
+            visits.push(atom.clone());
+            assignments[atom]
+        }
+        BooleanFormula::Not(value) => !evaluate_formula(value, assignments, visits),
+        BooleanFormula::And(values) => values
+            .iter()
+            .all(|value| evaluate_formula(value, assignments, visits)),
+    }
+}
+
+fn evaluate_rule_conditions(
+    conditions: &[workshop_rs::Condition],
+    assignments: &HashMap<String, bool>,
+) -> (bool, Vec<String>) {
+    let mut visits = Vec::new();
+    let result = conditions.iter().all(|condition| {
+        evaluate_formula(
+            &condition_formula(&condition.value),
+            assignments,
+            &mut visits,
+        )
+    });
+    (result, visits)
+}
+
+#[test]
+fn bastion_condition_folding_and_contextual_values_match_pinned_semantics() {
+    let name = "bastion-contextual-values-319";
+    let artifact = compile_fixture(name);
+    let oracle = parsed_oracle(name);
+    let mut native_without_condition_shape = super::canonical_program(&artifact);
+    native_without_condition_shape.rules[0].conditions = oracle.rules[0].conditions.clone();
+    assert!(equivalent(&native_without_condition_shape, &oracle));
+
+    let native_conditions = &artifact.wir.rules[0].conditions;
+    let oracle_conditions = &oracle.rules[0].conditions;
+    let atoms = native_conditions
+        .iter()
+        .chain(oracle_conditions)
+        .flat_map(|condition| {
+            fn collect(formula: &BooleanFormula, atoms: &mut BTreeSet<String>) {
+                match formula {
+                    BooleanFormula::Atom(atom) => {
+                        atoms.insert(atom.clone());
+                    }
+                    BooleanFormula::Not(value) => collect(value, atoms),
+                    BooleanFormula::And(values) => {
+                        for value in values {
+                            collect(value, atoms);
+                        }
+                    }
+                }
+            }
+            let mut atoms = BTreeSet::new();
+            collect(&condition_formula(&condition.value), &mut atoms);
+            atoms
+        })
+        .collect::<BTreeSet<_>>();
+
+    let atoms = atoms.into_iter().collect::<Vec<_>>();
+    assert_eq!(
+        atoms.len(),
+        3,
+        "fixture should contain three pure predicates"
+    );
+    for mask in 0..(1_u8 << atoms.len()) {
+        let assignments = atoms
+            .iter()
+            .enumerate()
+            .map(|(index, atom)| (atom.clone(), mask & (1 << index) != 0))
+            .collect::<HashMap<_, _>>();
+        let native = evaluate_rule_conditions(native_conditions, &assignments);
+        let expected = evaluate_rule_conditions(oracle_conditions, &assignments);
+        assert_eq!(native, expected, "condition mismatch for {assignments:?}");
+        assert_eq!(
+            native,
+            evaluate_rule_conditions(native_conditions, &assignments),
+            "reevaluation changed the result or short-circuit trace"
+        );
+    }
+
+    assert!(
+        artifact
+            .emitted
+            .contains("Set Global Variable At Index(values, 1, Null);")
+    );
+    assert!(
+        artifact
+            .emitted
+            .contains("Set Status(Event Player, Null, Invincible, 0);")
+    );
+    assert!(
+        artifact
+            .emitted
+            .contains("Create Effect(Null, Ring, Color(Red), Vector(0, 1, 0), 0, Visible To);")
+    );
+    assert!(artifact.emitted.contains("Wait(0, Ignore Condition);"));
+    assert!(
+        artifact
+            .emitted
+            .contains("For Global Variable(index, False, True, False);")
     );
 }
 
