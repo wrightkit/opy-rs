@@ -22,8 +22,8 @@ pub(super) fn merge_extensions(
             continue;
         }
         let path = [
-            workshop_rs::settings::table::PathPart::Part("extensions"),
-            workshop_rs::settings::table::PathPart::Part(name),
+            workshop_rs::settings::PathPart::Part("extensions"),
+            workshop_rs::settings::PathPart::Part(name),
         ];
         let Some(definition) = workshop_rs::settings::definition(&path) else {
             return Err(IntegrationError::new(
