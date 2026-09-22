@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.52](https://github.com/wrightkit/opy-rs/compare/v0.1.51...v0.1.52) - 2026-09-22
+
+### Other
+
+- pin Bastion condition and coercion semantics ([#352](https://github.com/wrightkit/opy-rs/pull/352))
+
 ## [0.1.51](https://github.com/wrightkit/opy-rs/compare/v0.1.50...v0.1.51) - 2026-09-21
 
 ### Fixed
