@@ -135,3 +135,23 @@ real-project compatibility; rerun the affected full-project workflow.
   tests.
 - Never commit credentials, private runtime data, or unreviewed third-party
   material.
+
+
+## Documentation
+
+`docs/README.md` is the durable documentation index. Keep durable project
+documentation under `docs/` and use progressive disclosure: higher-level
+documents summarize the contract and route to focused owner documents rather
+than accumulating unrelated detail.
+
+If a change materially changes supported behavior, a public contract,
+architecture, ownership, a user/contributor workflow, or an operational
+procedure, update the owning durable documentation in the same PR when
+applicable. Review must explicitly check documentation impact. Incidental
+implementation changes that do not alter a durable contract do not require
+documentation churn.
+
+When adding, splitting, moving, or retiring durable documentation, update
+`docs/README.md` and affected links. Keep mutable progress and current execution
+state in Issues, PRs, CI, releases, or generated output rather than durable
+documentation.
