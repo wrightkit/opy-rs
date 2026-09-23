@@ -161,11 +161,10 @@ errors. `check`/`inspect` resolve includes against the entry's include root and
 the resolved file context required by OverPy-compatible legacy layouts. The CLI runs anywhere the binary runs: no Node, no Workshop
 backend, and no runtime data files; the semantic manifest is embedded.
 
-### Presentation candidate for Issue #43
+### CLI presentation
 
-The following additive CLI surface is implemented as a candidate pending the
-main-thread contract review; existing command defaults and exit codes remain
-unchanged:
+The standalone CLI supports the following presentation controls while preserving
+existing command defaults and exit codes:
 
 * `--renderer auto|terminal|plain|github-actions` selects presentation. In
   `auto`, truthy `GITHUB_ACTIONS` selects GitHub Actions, then truthy `CI` or a
