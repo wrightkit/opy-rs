@@ -1,9 +1,9 @@
 //! OPY-to-Workshop integration, kept behind the `opy-rs` library boundary.
 //!
-//! This module consumes the `workshop-rs` 0.3 contract, checks the OPY
-//! manifest links against the canonical catalog, and lowers the supported OPY
-//! program structure into the canonical Workshop `Program` before validation and deterministic
-//! Workshop emission.
+//! This module consumes the public `workshop-rs` contract, checks OPY manifest
+//! links against the canonical catalog, and lowers supported OPY program
+//! structure into the canonical Workshop `Program` before validation and
+//! deterministic Workshop emission.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -226,6 +226,8 @@ fn emit_debug_element_counts(
     Ok(annotated)
 }
 
+// Keep OPY's source-visible debugElementCount contract; Workshop's canonical
+// ElementCountNode counts differ from these OverPy-compatible display counts.
 fn debug_value_count(node: &workshop_rs::actions::ElementCountNode) -> usize {
     let children = node.children.iter().map(debug_value_count).sum::<usize>();
     match node.name.as_str() {
