@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.53](https://github.com/wrightkit/opy-rs/compare/v0.1.52...v0.1.53) - 2026-09-23
+
+### Fixed
+
+- *(compiler)* handle future Workshop modify operations ([#354](https://github.com/wrightkit/opy-rs/pull/354))
+
+### Other
+
+- use canonical Workshop exports ([#356](https://github.com/wrightkit/opy-rs/pull/356))
+
 ## [0.1.52](https://github.com/wrightkit/opy-rs/compare/v0.1.51...v0.1.52) - 2026-09-22
 
 ### Other
