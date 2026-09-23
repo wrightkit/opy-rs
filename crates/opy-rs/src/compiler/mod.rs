@@ -1,9 +1,9 @@
 //! OPY-to-Workshop integration, kept behind the `opy-rs` library boundary.
 //!
-//! This module consumes the `workshop-rs` 0.3 contract, checks the OPY
-//! manifest links against the canonical catalog, and lowers the supported OPY
-//! program structure into the canonical Workshop `Program` before validation and deterministic
-//! Workshop emission.
+//! This module consumes the public `workshop-rs` contract, checks OPY manifest
+//! links against the canonical catalog, and lowers supported OPY program
+//! structure into the canonical Workshop `Program` before validation and
+//! deterministic Workshop emission.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -112,8 +112,8 @@ fn emit_debug_element_counts(
             None,
         )
     })?;
-    let rule_counts: Vec<_> = report.rules.iter().map(debug_rule_count).collect();
-    let total = rule_counts.iter().sum::<usize>();
+    let rule_counts: Vec<_> = report.rules.iter().map(|rule| rule.count).collect();
+    let total = report.total;
     let mut summary = format!("/* Element count: (total {total})\n\n");
     let mut summary_rules: Vec<_> = report
         .rules
@@ -194,7 +194,7 @@ fn emit_debug_element_counts(
 
         if in_conditions && line.starts_with("        ") && trimmed.ends_with(';') {
             if let Some(condition) = conditions.get(condition_index) {
-                let condition_count = debug_condition_count(condition);
+                let condition_count = condition.count;
                 let suffix = if condition_count == 1 {
                     "element"
                 } else {
@@ -226,61 +226,14 @@ fn emit_debug_element_counts(
     Ok(annotated)
 }
 
-fn debug_value_count(node: &workshop_rs::actions::ElementCountNode) -> usize {
-    let children = node.children.iter().map(debug_value_count).sum::<usize>();
-    match node.name.as_str() {
-        "number" | "global variable" => 2,
-        "localized string" => 2,
-        "customString" => 1 + 4usize.saturating_sub(node.children.len()) + children,
-        "Team" | "Color" => 1 + children.max(1),
-        "array" | "evalOnce" => 2 + children,
-        _ if node.children.is_empty() => 1,
-        _ => 1 + children,
-    }
-}
-
-fn debug_condition_count(node: &workshop_rs::actions::ElementCountNode) -> usize {
-    let value_count = node.children.iter().map(debug_value_count).sum::<usize>();
-    value_count.saturating_sub(usize::from(node.children.len() > 1))
-}
-
 fn debug_action_local_count(node: &workshop_rs::actions::ElementCountNode) -> usize {
-    let values = node
-        .children
-        .iter()
-        .filter(|child| child.kind == workshop_rs::actions::ElementNodeKind::Value)
-        .map(debug_value_count)
-        .sum::<usize>();
-    let value_arguments = node
-        .children
-        .iter()
-        .filter(|child| child.kind == workshop_rs::actions::ElementNodeKind::Value)
-        .count();
-    1 + values.saturating_sub(value_arguments)
-}
-
-fn debug_action_count(node: &workshop_rs::actions::ElementCountNode) -> usize {
     let nested_actions = node
         .children
         .iter()
         .filter(|child| child.kind == workshop_rs::actions::ElementNodeKind::Action)
-        .map(debug_action_count)
+        .map(|child| child.count)
         .sum::<usize>();
-    debug_action_local_count(node) + nested_actions
-}
-
-fn debug_rule_count(node: &workshop_rs::actions::ElementCountNode) -> usize {
-    let children = node
-        .children
-        .iter()
-        .map(|child| match child.kind {
-            workshop_rs::actions::ElementNodeKind::Condition => debug_condition_count(child),
-            workshop_rs::actions::ElementNodeKind::Action => debug_action_count(child),
-            workshop_rs::actions::ElementNodeKind::Rule
-            | workshop_rs::actions::ElementNodeKind::Value => 0,
-        })
-        .sum::<usize>();
-    1 + children
+    node.count.saturating_sub(nested_actions)
 }
 
 fn collect_element_nodes<'a>(
@@ -2043,36 +1996,63 @@ rule "main":
             .iter()
             .find(|rule| rule.name == "large")
             .unwrap();
-        let large_summary = artifact.emitted.find("   32: rule \"large\"").unwrap();
-        let small_summary = artifact.emitted.find("   18: rule \"small\"").unwrap();
+        let large_summary = artifact
+            .emitted
+            .find(&format!("{:>5}: rule \"large\"", large.count))
+            .unwrap();
+        let small_summary = artifact
+            .emitted
+            .find(&format!("{:>5}: rule \"small\"", small.count))
+            .unwrap();
+        assert!(large.count > small.count);
         assert!(large_summary < small_summary);
         assert!(
             artifact
                 .emitted
-                .starts_with("/* Element count: (total 50)\n")
+                .starts_with(&format!("/* Element count: (total {})\n", report.total))
         );
-        assert!(artifact.emitted.contains("//32 elements\nrule (\"large\")"));
-        assert!(artifact.emitted.contains("//18 elements\nrule (\"small\")"));
         assert!(
             artifact
                 .emitted
-                .contains("Global.value == 1; // 3 elements")
+                .contains(&format!("//{} elements\nrule (\"large\")", large.count))
         );
-        assert_eq!(artifact.emitted.matches(" // 3 elements").count(), 2);
-        assert_eq!(artifact.emitted.matches(" // 14 elements").count(), 3);
-        let expected_comments = large
-            .children
-            .iter()
-            .chain(&small.children)
-            .filter(|node| {
-                matches!(
-                    node.kind,
-                    workshop_rs::actions::ElementNodeKind::Condition
-                        | workshop_rs::actions::ElementNodeKind::Action
-                )
+        assert!(
+            artifact
+                .emitted
+                .contains(&format!("//{} elements\nrule (\"small\")", small.count))
+        );
+        let mut expected_inline_counts = Vec::new();
+        for rule in [&small, &large] {
+            let mut conditions = Vec::new();
+            let mut actions = Vec::new();
+            super::collect_element_nodes(
+                &rule.children,
+                workshop_rs::actions::ElementNodeKind::Condition,
+                &mut conditions,
+            );
+            super::collect_element_nodes(
+                &rule.children,
+                workshop_rs::actions::ElementNodeKind::Action,
+                &mut actions,
+            );
+            expected_inline_counts.extend(conditions.iter().map(|node| node.count));
+            expected_inline_counts.extend(actions.iter().map(|node| node.count));
+        }
+        let mut actual_inline_counts = artifact
+            .emitted
+            .lines()
+            .filter_map(|line| {
+                let comment = line.split_once(" // ")?.1;
+                comment
+                    .strip_suffix(" elements")
+                    .or_else(|| comment.strip_suffix(" element"))?
+                    .parse()
+                    .ok()
             })
-            .count();
-        assert_eq!(artifact.emitted.matches(" // ").count(), expected_comments);
+            .collect::<Vec<usize>>();
+        expected_inline_counts.sort_unstable();
+        actual_inline_counts.sort_unstable();
+        assert_eq!(actual_inline_counts, expected_inline_counts);
     }
 
     #[test]

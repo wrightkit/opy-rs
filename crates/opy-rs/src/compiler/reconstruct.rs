@@ -1,55 +1,14 @@
-//! Workshop IR → OPY reconstruction (issue #124).
-//!
-//! Consumes a validated [`workshop_rs::wir::Program`] and emits deterministic,
-//! byte-stable canonical OPY source that the native `opy-rs` parser accepts
-//! and that re-lowers to a structurally equivalent WIR
-//! program under `workshop_rs::roundtrip::equivalent`.
-//!
-//! Scope and ownership:
-//!
-//! * Builtin action/value/member/enum identities resolve only through the
-//!   OPY semantic compatibility manifest ([`Manifest`]) and the Workshop
-//!   catalog ([`Catalog`]) — no new content/signature tables and no invented
-//!   OPY syntax.
-//! * Reconstructed OPY is simple low-level valid OPY: it does not recover
-//!   comments, macros, functions, or source abstractions. Names must be valid
-//!   OPY identifiers; calls must use the OPY source names the manifest
-//!   declares (`len`, `wait`, `playEffect`, …), because the frontend's own
-//!   lowering stamps those names into the recompiled WIR and the equivalence
-//!   contract compares them exactly.
-//! * Every WIR construct the frontend cannot recompile identically is
-//!   rejected with a structured [`ReconstructIssue`] naming the construct —
-//!   never partial or misleading OPY. This includes the per-player loop
-//!   form, disabled rules, arbitrary-player variable targets, negative and
-//!   non-finite number literals (the OPY lexer has no negative-literal
-//!   token), Workshop-spelled call names with no manifest source form
-//!   (`add`, `countOf`, `createBeamEffect`, …), enums outside the manifest's
-//!   declared domains, `Remove From Array` modifies, calls the frontend
-//!   lowers to dedicated nodes (`append`, `vect`), and any
-//!   rule layout the frontend's deterministic re-lowering cannot reproduce
-//!   (non-leading initializer rules, out-of-table-order subroutine rules,
-//!   unsorted global slots, non-canonical subroutine indices).
-//! * Arrays, vectors, and `format` are emitted in their OPY source forms
-//!   (`[...]`, `vect(x, y, z)`, `"text".format(...)`) from the dedicated WIR
-//!   nodes. Debug and print lower to canonical Workshop calls and are therefore
-//!   outside this reconstruction surface.
-//!
-//! Pipeline: [`reconstruct`] validates the table layout, then emits the
-//! declarations (variables, subroutines), the `def` bodies, and the rules in
-//! deterministic arena order. Any issue collected anywhere fails the whole
-//! reconstruction with all collected diagnostics.
-
 use std::fmt;
 
+use workshop_rs::Program;
 use workshop_rs::catalog::{Catalog, Locale};
+use workshop_rs::program::{Action, Event, EventTarget, EventTeam, ModifyOp, Rule, Value};
 use workshop_rs::source::Span;
-use workshop_rs::wir::{self, Action, Event, ModifyOp, Value};
 
 use crate::manifest::{Function, FunctionKind, Manifest};
 
-/// A structured reconstruction diagnostic naming one non-representable WIR
-/// construct. Stable `code`, a human-readable `message`, and the offending
-/// source span when the WIR carries one.
+/// A structured reconstruction diagnostic naming one non-representable
+/// Workshop construct, with its source span when available.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReconstructIssue {
     pub code: &'static str,
@@ -57,9 +16,8 @@ pub struct ReconstructIssue {
     pub span: Option<Span>,
 }
 
-/// All reconstruction failures for one program, in deterministic arena
-/// order. The emitter never returns partial output: a non-empty issue list
-/// means no OPY was produced.
+/// All reconstruction failures for one program. The emitter never returns
+/// partial output: a non-empty issue list means no OPY was produced.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReconstructError {
     pub issues: Vec<ReconstructIssue>,
@@ -83,14 +41,12 @@ impl fmt::Display for ReconstructError {
 
 impl std::error::Error for ReconstructError {}
 
-/// Reconstruct a validated WIR program into deterministic OPY source.
+/// Reconstruct a canonical Workshop program into OPY source.
 ///
 /// Resolves builtin identities through the built-in OPY semantic manifest
-/// and the built-in Workshop catalog (`en-US`), the declared surface for
-/// reconstruction (issue #124). Returns an error carrying every
-/// non-representable construct diagnostic when the program cannot be
-/// reconstructed.
-pub fn reconstruct(program: &wir::Program) -> Result<String, ReconstructError> {
+/// and Workshop catalog (`en-US`). Returns all diagnostics when a construct
+/// cannot be represented in OPY.
+pub fn reconstruct(program: &Program) -> Result<String, ReconstructError> {
     let manifest = match Manifest::builtin() {
         Ok(manifest) => manifest,
         Err(error) => {
@@ -125,7 +81,7 @@ pub fn reconstruct(program: &wir::Program) -> Result<String, ReconstructError> {
 /// spellings used for cross-checks (reconstruction emits OPY, which is
 /// locale-independent; `en-US` is the catalog's declared surface).
 pub fn reconstruct_with(
-    program: &wir::Program,
+    program: &Program,
     manifest: &Manifest,
     catalog: &Catalog,
     locale: &Locale,
@@ -141,8 +97,8 @@ pub fn reconstruct_with(
     }
 }
 
-/// OPY names the parser treats as keywords or literals; a WIR table name that
-/// collides with one of these can never be referenced or declared faithfully.
+/// OPY names the parser treats as keywords or literals; a Workshop table name
+/// that collides with one of these cannot be referenced or declared faithfully.
 const RESERVED_NAMES: &[&str] = &[
     "true",
     "false",
@@ -184,12 +140,12 @@ const BINARY_OPS: &[&str] = &[
     "+", "-", "*", "/", "%", "**", "==", "!=", "<", "<=", ">", ">=", "and", "or",
 ];
 
-/// Call names the frontend lowers to dedicated WIR nodes (never `Call`s).
+/// Call names the frontend lowers to dedicated Workshop actions or values.
 const DEDICATED_ACTION_NAMES: &[&str] = &["append"];
 const DEDICATED_VALUE_NAMES: &[&str] = &["vect", "range", "chase"];
 
 struct Emitter<'a> {
-    program: &'a wir::Program,
+    program: &'a Program,
     manifest: &'a Manifest,
     catalog: &'a Catalog,
     locale: &'a Locale,
@@ -199,23 +155,18 @@ struct Emitter<'a> {
     subroutine_names: std::collections::HashSet<String>,
 }
 
-/// The canonical rule layout the frontend's re-lowering reproduces.
+type IndexedRule<'a> = (usize, &'a Rule);
+
 struct RuleLayout<'a> {
-    /// The leading "Initialize global variables" rule, converted to
-    /// declaration initializers.
-    global_init: Option<Vec<wir::ActionId>>,
-    /// The leading "Initialize player variables" rule, converted to
-    /// declaration initializers.
-    player_init: Option<Vec<wir::ActionId>>,
-    /// Subroutine-body rules (defs), in subroutine table order.
-    sub_rules: Vec<&'a wir::Rule>,
-    /// Everything else, in input order.
-    normal_rules: Vec<&'a wir::Rule>,
+    global_init: Option<IndexedRule<'a>>,
+    player_init: Option<IndexedRule<'a>>,
+    sub_rules: Vec<IndexedRule<'a>>,
+    normal_rules: Vec<IndexedRule<'a>>,
 }
 
 impl<'a> Emitter<'a> {
     fn new(
-        program: &'a wir::Program,
+        program: &'a Program,
         manifest: &'a Manifest,
         catalog: &'a Catalog,
         locale: &'a Locale,
@@ -270,60 +221,47 @@ impl<'a> Emitter<'a> {
         // so only slot-ordered input reproduces the same table).
         let mut previous_index: Option<u32> = None;
         for (position, variable) in self.program.global_variables.iter().enumerate() {
-            self.check_variable_name(variable.name.as_str(), variable.span, "global variable");
-            self.check_duplicate_name(
-                variable.name.as_str(),
-                position,
-                "global variable",
-                variable.span,
-            );
+            let index = variable.index.unwrap_or(position as u32);
+            self.check_variable_name(&variable.name, None, "global variable");
+            self.check_duplicate_name(&variable.name, position, "global variable", None);
             if let Some(previous) = previous_index {
-                if variable.index < previous {
+                if index < previous {
                     self.issue(
                         "unsupported-global-order",
                         format!(
                             "global variables must be in ascending index order \
                              (slot {} precedes slot {})",
-                            previous, variable.index
+                            previous, index
                         ),
-                        variable.span,
+                        None,
                     );
                 }
             }
-            previous_index = Some(variable.index);
+            previous_index = Some(index);
         }
         // Player table: unique names and valid identifiers; player slots are
         // explicit in the `playervar name <index>` form, so no order rule.
         for (position, variable) in self.program.player_variables.iter().enumerate() {
-            self.check_variable_name(variable.name.as_str(), variable.span, "player variable");
-            self.check_duplicate_name(
-                variable.name.as_str(),
-                position,
-                "player variable",
-                variable.span,
-            );
+            self.check_variable_name(&variable.name, None, "player variable");
+            self.check_duplicate_name(&variable.name, position, "player variable", None);
         }
         // Subroutine table: unique names, valid identifiers, and indices
         // exactly equal to table position (the OPY `subroutine name`
         // declaration cannot carry an index; the re-lowered index is the
         // table position).
         for (position, subroutine) in self.program.subroutines.iter().enumerate() {
-            self.check_variable_name(subroutine.name.as_str(), subroutine.span, "subroutine");
-            self.check_duplicate_name(
-                subroutine.name.as_str(),
-                position,
-                "subroutine",
-                subroutine.span,
-            );
-            if subroutine.index as usize != position {
+            self.check_variable_name(&subroutine.name, None, "subroutine");
+            self.check_duplicate_name(&subroutine.name, position, "subroutine", None);
+            let index = subroutine.index.unwrap_or(position as u32);
+            if index as usize != position {
                 self.issue(
                     "unsupported-subroutine-index",
                     format!(
                         "subroutine '{}' has index {} but the OPY surface requires \
                          table position {} (subroutine declarations cannot carry an index)",
-                        subroutine.name, subroutine.index, position
+                        subroutine.name, index, position
                     ),
-                    subroutine.span,
+                    None,
                 );
             }
         }
@@ -397,24 +335,33 @@ impl<'a> Emitter<'a> {
     /// rules. Any other arrangement cannot be reproduced by the frontend's
     /// deterministic re-lowering and is rejected.
     fn classify_rules(&mut self) -> RuleLayout<'a> {
-        let rules: Vec<&wir::Rule> = self.program.rules.iter().collect();
+        let rules: Vec<IndexedRule<'a>> = self.program.rules.iter().enumerate().collect();
         let mut index = 0;
         let mut global_init = None;
         let mut player_init = None;
-        if let Some(rule) = rules.first() {
+        if let Some(&(rule_index, rule)) = rules.first() {
             if rule.name == "Initialize global variables" {
-                global_init = self.canonical_init(rule, true);
-                index = 1;
+                let candidate = self.canonical_init(rule_index, rule, true);
+                if candidate.is_some() {
+                    global_init = candidate;
+                    index = 1;
+                }
             } else if rule.name == "Initialize player variables" {
-                player_init = self.canonical_init(rule, false);
-                index = 1;
+                let candidate = self.canonical_init(rule_index, rule, false);
+                if candidate.is_some() {
+                    player_init = candidate;
+                    index = 1;
+                }
             }
         }
         if index == 1 {
-            if let Some(rule) = rules.get(1) {
+            if let Some(&(rule_index, rule)) = rules.get(1) {
                 if rule.name == "Initialize player variables" && global_init.is_some() {
-                    player_init = self.canonical_init(rule, false);
-                    index = 2;
+                    let candidate = self.canonical_init(rule_index, rule, false);
+                    if candidate.is_some() {
+                        player_init = candidate;
+                        index = 2;
+                    }
                 }
             }
         }
@@ -422,7 +369,7 @@ impl<'a> Emitter<'a> {
         let mut sub_rules = Vec::new();
         let mut normal_rules = Vec::new();
         let mut in_sub_rules = true;
-        for rule in rules.iter().copied().skip(index) {
+        for (rule_index, rule) in rules.iter().copied().skip(index) {
             match &rule.event {
                 Event::Subroutine(_) => {
                     if !in_sub_rules {
@@ -433,7 +380,7 @@ impl<'a> Emitter<'a> {
                                  the frontend re-lowering emits subroutine rules first",
                                 rule.name
                             ),
-                            rule.span,
+                            self.program.rule_span(rule_index),
                         );
                     }
                     if !rule.conditions.is_empty() {
@@ -444,14 +391,14 @@ impl<'a> Emitter<'a> {
                                  bodies cannot express them",
                                 rule.name
                             ),
-                            rule.span,
+                            self.program.rule_span(rule_index),
                         );
                     }
-                    sub_rules.push(rule);
+                    sub_rules.push((rule_index, rule));
                 }
                 _ => {
                     in_sub_rules = false;
-                    normal_rules.push(rule);
+                    normal_rules.push((rule_index, rule));
                 }
             }
         }
@@ -459,11 +406,17 @@ impl<'a> Emitter<'a> {
         // Subroutine rules must be in subroutine table order, and each rule
         // must carry the exact name the re-lowering synthesizes for its def.
         let mut expected = 0usize;
-        for rule in &sub_rules {
+        for (rule_index, rule) in &sub_rules {
             let Event::Subroutine(subroutine) = &rule.event else {
                 continue;
             };
-            if subroutine.index() != expected {
+            if self
+                .program
+                .subroutines
+                .iter()
+                .position(|definition| definition.name == *subroutine)
+                != Some(expected)
+            {
                 self.issue(
                     "unsupported-rule-order",
                     format!(
@@ -471,11 +424,16 @@ impl<'a> Emitter<'a> {
                          '{}' is out of order",
                         rule.name
                     ),
-                    rule.span,
+                    self.program.rule_span(*rule_index),
                 );
             }
             expected += 1;
-            if let Some(definition) = self.program.subroutines.get(*subroutine) {
+            if let Some(definition) = self
+                .program
+                .subroutines
+                .iter()
+                .find(|definition| definition.name == *subroutine)
+            {
                 let expected_name = format!("Subroutine {}", definition.name);
                 if rule.name != expected_name {
                     self.issue(
@@ -485,7 +443,7 @@ impl<'a> Emitter<'a> {
                              form '{}' the frontend synthesizes",
                             rule.name, expected_name
                         ),
-                        rule.span,
+                        self.program.rule_span(*rule_index),
                     );
                 }
             }
@@ -499,15 +457,28 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// Validate a leading initializer rule: exactly the synthesized shape
-    /// (name, event, empty conditions, all-Set actions). Returns the action
-    /// ids to convert into declaration initializers, or records an issue.
-    fn canonical_init(&mut self, rule: &wir::Rule, global: bool) -> Option<Vec<wir::ActionId>> {
+    fn canonical_init(
+        &mut self,
+        rule_index: usize,
+        rule: &'a Rule,
+        global: bool,
+    ) -> Option<IndexedRule<'a>> {
+        if rule.disabled {
+            return None;
+        }
         let expected_name = if global {
             "Initialize global variables"
         } else {
             "Initialize player variables"
         };
+        let canonical_event = if global {
+            matches!(&rule.event, Event::Global)
+        } else {
+            matches!(&rule.event, Event::EachPlayer)
+        };
+        if !canonical_event {
+            return None;
+        }
         if !rule.conditions.is_empty() {
             self.issue(
                 "unsupported-init-rule",
@@ -515,18 +486,13 @@ impl<'a> Emitter<'a> {
                     "initializer rule '{expected_name}' carries conditions; the \
                      frontend synthesizes it from declarations with none"
                 ),
-                rule.span,
+                self.program.rule_span(rule_index),
             );
             return None;
         }
-        let mut actions = Vec::with_capacity(rule.actions.len());
-        for action in &rule.actions {
-            let Some(node) = self.program.actions.get(*action) else {
-                self.issue("unsupported-dangling", "dangling action id", rule.span);
-                return None;
-            };
+        for (action_index, action) in rule.actions.iter().enumerate() {
             let set = matches!(
-                (global, node),
+                (global, action),
                 (true, Action::SetGlobalVariable { .. })
                     | (false, Action::SetPlayerVariable { .. })
             );
@@ -537,20 +503,19 @@ impl<'a> Emitter<'a> {
                         "initializer rule '{expected_name}' mixes non-Set actions; \
                          the frontend's synthesized initializer rule is all-Set"
                     ),
-                    node.span(),
+                    self.program.action_span(rule_index, action_index),
                 );
                 return None;
             }
-            actions.push(*action);
         }
-        Some(actions)
+        Some((rule_index, rule))
     }
 
     // ---- emission ----
 
     fn emit_program(&mut self, layout: &RuleLayout) {
-        let global_initializers = self.collect_global_initializers(&layout.global_init);
-        let player_initializers = self.collect_player_initializers(&layout.player_init);
+        let global_initializers = self.collect_global_initializers(layout.global_init);
+        let player_initializers = self.collect_player_initializers(layout.player_init);
         self.check_initializer_slot(&global_initializers);
 
         // Declarations.
@@ -560,11 +525,12 @@ impl<'a> Emitter<'a> {
             match global_initializers.get(&position) {
                 Some(value) => {
                     self.out.push_str(" = ");
-                    self.emit_initializer(*value);
+                    self.emit_initializer(&value.0, value.1);
                 }
                 None => {
                     self.out.push(' ');
-                    self.out.push_str(&variable.index.to_string());
+                    self.out
+                        .push_str(&variable.index.unwrap_or(position as u32).to_string());
                 }
             }
             self.out.push('\n');
@@ -575,11 +541,12 @@ impl<'a> Emitter<'a> {
             match player_initializers.get(&position) {
                 Some(value) => {
                     self.out.push_str(" = ");
-                    self.emit_initializer(*value);
+                    self.emit_initializer(&value.0, value.1);
                 }
                 None => {
                     self.out.push(' ');
-                    self.out.push_str(&variable.index.to_string());
+                    self.out
+                        .push_str(&variable.index.unwrap_or(position as u32).to_string());
                 }
             }
             self.out.push('\n');
@@ -596,22 +563,7 @@ impl<'a> Emitter<'a> {
         }
 
         // Subroutine bodies.
-        for rule in &layout.sub_rules {
-            let Event::Subroutine(subroutine) = &rule.event else {
-                continue;
-            };
-            let Some(definition) = self.program.subroutines.get(*subroutine) else {
-                continue;
-            };
-            self.out.push_str("def ");
-            self.out.push_str(&definition.name);
-            self.out.push_str("():\n");
-            self.emit_actions(&rule.actions, 1);
-            self.out.push('\n');
-        }
-
-        // Rules.
-        for rule in &layout.normal_rules {
+        for (rule_index, rule) in &layout.sub_rules {
             if rule.disabled {
                 self.issue(
                     "unsupported-disabled-rule",
@@ -619,28 +571,59 @@ impl<'a> Emitter<'a> {
                         "rule '{}' is disabled; the OPY surface cannot express it",
                         rule.name
                     ),
-                    rule.span,
+                    self.program.rule_span(*rule_index),
+                );
+                continue;
+            }
+            let Event::Subroutine(subroutine_name) = &rule.event else {
+                continue;
+            };
+            let Some(definition) = self
+                .program
+                .subroutines
+                .iter()
+                .find(|definition| definition.name == *subroutine_name)
+            else {
+                continue;
+            };
+            self.out.push_str("def ");
+            self.out.push_str(&definition.name);
+            self.out.push_str("():\n");
+            self.emit_actions(*rule_index, &rule.actions, 1);
+            self.out.push('\n');
+        }
+
+        // Rules.
+        for (rule_index, rule) in &layout.normal_rules {
+            if rule.disabled {
+                self.issue(
+                    "unsupported-disabled-rule",
+                    format!(
+                        "rule '{}' is disabled; the OPY surface cannot express it",
+                        rule.name
+                    ),
+                    self.program.rule_span(*rule_index),
                 );
                 continue;
             }
             if rule.actions.is_empty() {
                 continue;
             }
-            self.out.push_str("rule \"");
-            self.out.push_str(&rule.name);
-            self.out.push_str("\":\n");
+            self.out.push_str("rule ");
+            self.emit_string_literal(&rule.name);
+            self.out.push_str(":\n");
             match &rule.event {
                 Event::Global => self.out.push_str("    @Event global\n"),
                 Event::EachPlayer => self.out.push_str("    @Event eachPlayer\n"),
                 Event::EachPlayerWithFilters {
-                    team: workshop_rs::wir::EventTeam::All,
-                    target: workshop_rs::wir::EventTarget::All,
+                    team: EventTeam::All,
+                    target: EventTarget::All,
                 } => self.out.push_str("    @Event eachPlayer\n"),
                 Event::EachPlayerWithFilters { .. } | Event::Player { .. } => {
                     self.issue(
                         "unsupported-rule-event",
                         format!("rule '{}' uses an event outside the OPY surface", rule.name),
-                        rule.span,
+                        self.program.rule_span(*rule_index),
                     );
                     continue;
                 }
@@ -651,17 +634,28 @@ impl<'a> Emitter<'a> {
                             "rule '{}' has a subroutine event outside the def layout",
                             rule.name
                         ),
-                        rule.span,
+                        self.program.rule_span(*rule_index),
                     );
                     continue;
                 }
             }
-            for condition in &rule.conditions {
+            for (condition_index, condition) in rule.conditions.iter().enumerate() {
+                if condition.disabled {
+                    self.issue(
+                        "unsupported-disabled-condition",
+                        "disabled conditions are outside the OPY reconstruction surface",
+                        self.program.condition_span(*rule_index, condition_index),
+                    );
+                    continue;
+                }
                 self.out.push_str("    @Condition ");
-                self.emit_value(*condition);
+                self.emit_value(
+                    &condition.value,
+                    self.program.condition_span(*rule_index, condition_index),
+                );
                 self.out.push('\n');
             }
-            self.emit_actions(&rule.actions, 1);
+            self.emit_actions(*rule_index, &rule.actions, 1);
             self.out.push('\n');
         }
     }
@@ -671,38 +665,37 @@ impl<'a> Emitter<'a> {
     /// synthesized initializer rule.
     fn collect_global_initializers(
         &mut self,
-        actions: &Option<Vec<wir::ActionId>>,
-    ) -> std::collections::HashMap<usize, wir::ValueId> {
+        initializer: Option<IndexedRule<'_>>,
+    ) -> std::collections::HashMap<usize, (Value, Option<Span>)> {
         let mut initializers = std::collections::HashMap::new();
-        let Some(actions) = actions else {
+        let Some((rule_index, rule)) = initializer else {
             return initializers;
         };
         let mut previous: Option<usize> = None;
-        for action in actions {
-            let span = self
-                .program
-                .actions
-                .get(*action)
-                .and_then(|node| node.span());
-            let Some(Action::SetGlobalVariable {
-                variable, value, ..
-            }) = self.program.actions.get(*action)
-            else {
+        for (action_index, action) in rule.actions.iter().enumerate() {
+            let span = self.program.action_span(rule_index, action_index);
+            let Action::SetGlobalVariable { variable, value } = action else {
                 continue;
             };
-            let variable_position = variable.index();
-            let name = self
+            let Some(variable_position) = self
                 .program
                 .global_variables
-                .get(*variable)
-                .map(|variable| variable.name.clone())
-                .unwrap_or_default();
+                .iter()
+                .position(|declaration| declaration.name == *variable)
+            else {
+                self.issue(
+                    "unsupported-dangling",
+                    format!("unknown global variable '{variable}'"),
+                    span,
+                );
+                continue;
+            };
             if let Some(previous_position) = previous {
                 if variable_position <= previous_position {
                     self.issue(
                         "unsupported-init-rule",
                         format!(
-                            "initializer rule Sets '{name}' out of global table order; \
+                            "initializer rule Sets '{variable}' out of global table order; \
                              the frontend synthesizes initializers in declaration order"
                         ),
                         span,
@@ -710,55 +703,63 @@ impl<'a> Emitter<'a> {
                 }
             }
             previous = Some(variable_position);
-            initializers.insert(variable_position, *value);
+            initializers.insert(
+                variable_position,
+                (
+                    value.clone(),
+                    self.program
+                        .action_argument_span(rule_index, action_index, 0),
+                ),
+            );
         }
         initializers
     }
 
     fn collect_player_initializers(
         &mut self,
-        actions: &Option<Vec<wir::ActionId>>,
-    ) -> std::collections::HashMap<usize, wir::ValueId> {
+        initializer: Option<IndexedRule<'_>>,
+    ) -> std::collections::HashMap<usize, (Value, Option<Span>)> {
         let mut initializers = std::collections::HashMap::new();
-        let Some(actions) = actions else {
+        let Some((rule_index, rule)) = initializer else {
             return initializers;
         };
         let mut previous: Option<usize> = None;
-        for action in actions {
-            let span = self
-                .program
-                .actions
-                .get(*action)
-                .and_then(|node| node.span());
-            let Some(Action::SetPlayerVariable {
+        for (action_index, action) in rule.actions.iter().enumerate() {
+            let span = self.program.action_span(rule_index, action_index);
+            let Action::SetPlayerVariable {
                 player,
                 variable,
                 value,
-                ..
-            }) = self.program.actions.get(*action)
+            } = action
             else {
                 continue;
             };
-            if !self.is_event_player(*player) {
+            if !self.is_event_player(player) {
                 self.issue(
                     "unsupported-init-rule",
                     "player initializer targets a non-event-player expression",
                     span,
                 );
             }
-            let variable_position = variable.index();
-            let name = self
+            let Some(variable_position) = self
                 .program
                 .player_variables
-                .get(*variable)
-                .map(|variable| variable.name.clone())
-                .unwrap_or_default();
+                .iter()
+                .position(|declaration| declaration.name == *variable)
+            else {
+                self.issue(
+                    "unsupported-dangling",
+                    format!("unknown player variable '{variable}'"),
+                    span,
+                );
+                continue;
+            };
             if let Some(previous_position) = previous {
                 if variable_position <= previous_position {
                     self.issue(
                         "unsupported-init-rule",
                         format!(
-                            "initializer rule Sets '{name}' out of player table order; \
+                            "initializer rule Sets '{variable}' out of player table order; \
                              the frontend synthesizes initializers in declaration order"
                         ),
                         span,
@@ -766,7 +767,14 @@ impl<'a> Emitter<'a> {
                 }
             }
             previous = Some(variable_position);
-            initializers.insert(variable_position, *value);
+            initializers.insert(
+                variable_position,
+                (
+                    value.clone(),
+                    self.program
+                        .action_argument_span(rule_index, action_index, 1),
+                ),
+            );
         }
         initializers
     }
@@ -774,27 +782,23 @@ impl<'a> Emitter<'a> {
     /// A declaration initializer: same value emission, but zero literals are
     /// spelled `0.0` because the frontend drops integer-`0` initializers
     /// (matching the reference adapter).
-    fn emit_initializer(&mut self, value: wir::ValueId) {
-        let Some(node) = self.program.values.get(value) else {
-            self.issue("unsupported-dangling", "dangling value id", None);
-            return;
-        };
-        if let Value::Number { value: number, .. } = &node.value {
+    fn emit_initializer(&mut self, value: &Value, span: Option<Span>) {
+        if let Value::Number(number) = value {
             if *number == 0.0 {
                 self.out.push_str("0.0");
                 return;
             }
         }
-        self.emit_value(value);
+        self.emit_value(value, span);
     }
 
     /// The OPY declaration `globalvar name = value` cannot carry an explicit
     /// slot, so the frontend re-lowering assigns the lowest free slot. An
     /// initializer-bearing global is only representable when that slot equals
-    /// its WIR index; otherwise the reconstructed table would differ.
+    /// its Workshop index; otherwise the reconstructed table would differ.
     fn check_initializer_slot(
         &mut self,
-        initializers: &std::collections::HashMap<usize, wir::ValueId>,
+        initializers: &std::collections::HashMap<usize, (Value, Option<Span>)>,
     ) {
         let mut taken: std::collections::HashSet<u32> = std::collections::HashSet::new();
         for (position, variable) in self.program.global_variables.iter().enumerate() {
@@ -803,28 +807,201 @@ impl<'a> Emitter<'a> {
                 while taken.contains(&next_free) {
                     next_free += 1;
                 }
-                if next_free != variable.index {
+                let index = variable.index.unwrap_or(position as u32);
+                if next_free != index {
                     self.issues.push(ReconstructIssue {
                         code: "unsupported-indexed-initializer",
                         message: format!(
                             "initializer-bearing global '{}' occupies slot {} but the \
                              OPY `globalvar name = value` form assigns the lowest free \
                              slot ({}) on re-lowering",
-                            variable.name, variable.index, next_free
+                            variable.name, index, next_free
                         ),
-                        span: variable.span,
+                        span: None,
                     });
                 }
                 taken.insert(next_free);
             } else {
-                taken.insert(variable.index);
+                taken.insert(variable.index.unwrap_or(position as u32));
             }
         }
     }
 
-    fn emit_actions(&mut self, actions: &[wir::ActionId], level: usize) {
-        for action in actions {
-            self.emit_action(*action, level);
+    fn emit_actions(&mut self, rule_index: usize, actions: &[Action], level: usize) {
+        let mut position = 0;
+        self.emit_action_block(rule_index, actions, &mut position, level);
+        if position < actions.len() {
+            self.issue(
+                "unsupported-control-flow",
+                "unexpected control-flow marker in Workshop action sequence",
+                self.program.action_span(rule_index, position),
+            );
+        }
+    }
+
+    fn emit_action_block(
+        &mut self,
+        rule_index: usize,
+        actions: &[Action],
+        position: &mut usize,
+        level: usize,
+    ) {
+        while let Some(action) = actions.get(*position) {
+            match action {
+                Action::ElseIf { .. } | Action::Else | Action::End => return,
+                Action::If { condition } => {
+                    let action_index = *position;
+                    let span = self.program.action_span(rule_index, action_index);
+                    self.out.push_str(&Self::indent(level));
+                    self.out.push_str("if ");
+                    self.emit_value(
+                        condition,
+                        self.program
+                            .action_argument_span(rule_index, action_index, 0),
+                    );
+                    self.out.push_str(":\n");
+                    *position += 1;
+                    self.emit_action_block(rule_index, actions, position, level + 1);
+                    while let Some(Action::ElseIf { condition }) = actions.get(*position) {
+                        let action_index = *position;
+                        self.out.push_str(&Self::indent(level));
+                        self.out.push_str("elif ");
+                        self.emit_value(
+                            condition,
+                            self.program
+                                .action_argument_span(rule_index, action_index, 0),
+                        );
+                        self.out.push_str(":\n");
+                        *position += 1;
+                        self.emit_action_block(rule_index, actions, position, level + 1);
+                    }
+                    if matches!(actions.get(*position), Some(Action::Else)) {
+                        *position += 1;
+                        self.out.push_str(&Self::indent(level));
+                        self.out.push_str("else:\n");
+                        self.emit_action_block(rule_index, actions, position, level + 1);
+                    }
+                    if matches!(actions.get(*position), Some(Action::End)) {
+                        *position += 1;
+                    } else {
+                        self.issue("unsupported-control-flow", "if action is missing End", span);
+                    }
+                }
+                Action::While { condition } => {
+                    let action_index = *position;
+                    let span = self.program.action_span(rule_index, action_index);
+                    self.out.push_str(&Self::indent(level));
+                    self.out.push_str("while ");
+                    self.emit_value(
+                        condition,
+                        self.program
+                            .action_argument_span(rule_index, action_index, 0),
+                    );
+                    self.out.push_str(":\n");
+                    *position += 1;
+                    self.emit_action_block(rule_index, actions, position, level + 1);
+                    self.require_end(rule_index, actions, position, "while", span);
+                }
+                Action::ForGlobalVariable {
+                    variable,
+                    start,
+                    stop,
+                    step,
+                } => {
+                    let action_index = *position;
+                    let span = self.program.action_span(rule_index, action_index);
+                    let Some(declaration) = self
+                        .program
+                        .global_variables
+                        .iter()
+                        .find(|declaration| declaration.name == *variable)
+                    else {
+                        self.issue(
+                            "unsupported-dangling",
+                            format!("unknown loop variable '{variable}'"),
+                            span,
+                        );
+                        *position += 1;
+                        self.emit_action_block(rule_index, actions, position, level + 1);
+                        self.require_end(rule_index, actions, position, "for", span);
+                        continue;
+                    };
+                    self.out.push_str(&Self::indent(level));
+                    self.out.push_str("for ");
+                    self.out.push_str(&declaration.name);
+                    self.out.push_str(" in range(");
+                    for (arg_index, value) in [start, stop, step].into_iter().enumerate() {
+                        if arg_index > 0 {
+                            self.out.push_str(", ");
+                        }
+                        self.emit_value(
+                            value,
+                            self.program
+                                .action_argument_span(rule_index, action_index, arg_index),
+                        );
+                    }
+                    self.out.push_str("):\n");
+                    *position += 1;
+                    self.emit_action_block(rule_index, actions, position, level + 1);
+                    self.require_end(rule_index, actions, position, "for", span);
+                }
+                Action::ForPlayerVariable { .. } => {
+                    let action_index = *position;
+                    let span = self.program.action_span(rule_index, action_index);
+                    self.issue(
+                        "unsupported-per-player-loop",
+                        "For Player Variable is outside the reconstruction surface \
+                         (the OPY `for` form binds a global variable)",
+                        span,
+                    );
+                    *position += 1;
+                    self.skip_action_block(actions, position);
+                }
+                _ => {
+                    let action_index = *position;
+                    *position += 1;
+                    self.emit_action(rule_index, action_index, action, level);
+                }
+            }
+        }
+    }
+
+    fn require_end(
+        &mut self,
+        rule_index: usize,
+        actions: &[Action],
+        position: &mut usize,
+        kind: &str,
+        span: Option<Span>,
+    ) {
+        if matches!(actions.get(*position), Some(Action::End)) {
+            *position += 1;
+        } else {
+            self.issue(
+                "unsupported-control-flow",
+                format!("{kind} action is missing End"),
+                span.or_else(|| self.program.action_span(rule_index, *position)),
+            );
+        }
+    }
+
+    fn skip_action_block(&self, actions: &[Action], position: &mut usize) {
+        let mut depth = 1usize;
+        while let Some(action) = actions.get(*position) {
+            *position += 1;
+            match action {
+                Action::If { .. }
+                | Action::While { .. }
+                | Action::ForGlobalVariable { .. }
+                | Action::ForPlayerVariable { .. } => depth += 1,
+                Action::End => {
+                    depth -= 1;
+                    if depth == 0 {
+                        break;
+                    }
+                }
+                _ => {}
+            }
         }
     }
 
@@ -832,64 +1009,59 @@ impl<'a> Emitter<'a> {
         "    ".repeat(level)
     }
 
-    fn emit_action(&mut self, id: wir::ActionId, level: usize) {
-        let Some(node) = self.program.actions.get(id) else {
-            self.issue("unsupported-dangling", "dangling action id", None);
-            return;
-        };
-        let span = node.span();
+    fn emit_action(
+        &mut self,
+        rule_index: usize,
+        action_index: usize,
+        action: &Action,
+        level: usize,
+    ) {
+        let span = self.program.action_span(rule_index, action_index);
         let indent = Self::indent(level);
-        match node {
-            Action::SetGlobalVariable {
-                variable, value, ..
-            } => {
-                let variable_id = *variable;
-                let Some(variable) = self.program.global_variables.get(variable_id) else {
-                    self.issue("unsupported-dangling", "dangling global variable id", span);
-                    return;
-                };
-                if self.set_has_modify_pattern(*value, variable_id.index(), true) {
+        match action {
+            Action::SetGlobalVariable { variable, value } => {
+                if self.set_has_modify_pattern(value, variable, true) {
                     self.issue(
                         "unsupported-set-binary",
                         format!(
                             "Set Global Variable('{}', <binary over the same variable>) \
                              re-lowers to a Modify action; emit the modify form",
-                            variable.name
+                            variable
                         ),
                         span,
                     );
                     return;
                 }
                 self.out.push_str(&indent);
-                self.out.push_str(&variable.name);
+                self.out.push_str(variable);
                 self.out.push_str(" = ");
-                self.emit_value(*value);
+                self.emit_value(
+                    value,
+                    self.program
+                        .action_argument_span(rule_index, action_index, 0),
+                );
                 self.out.push('\n');
             }
             Action::ModifyGlobalVariable {
                 variable,
                 op,
                 value,
-                ..
             } => {
-                let Some(variable) = self.program.global_variables.get(*variable) else {
-                    self.issue("unsupported-dangling", "dangling global variable id", span);
-                    return;
-                };
-                self.emit_modify(level, &variable.name, *op, *value, span);
+                self.emit_modify(
+                    level,
+                    variable,
+                    *op,
+                    value,
+                    self.program
+                        .action_argument_span(rule_index, action_index, 0),
+                );
             }
             Action::SetPlayerVariable {
                 player,
                 variable,
                 value,
-                ..
             } => {
-                let variable_id = *variable;
-                let Some(variable) = self.program.player_variables.get(variable_id) else {
-                    self.issue("unsupported-dangling", "dangling player variable id", span);
-                    return;
-                };
-                if !self.is_event_player(*player) {
+                if !self.is_event_player(player) {
                     self.issue(
                         "unsupported-arbitrary-player-target",
                         "Set Player Variable targets a non-event-player expression; \
@@ -899,13 +1071,13 @@ impl<'a> Emitter<'a> {
                     );
                     return;
                 }
-                if self.set_has_modify_pattern(*value, variable_id.index(), false) {
+                if self.set_has_modify_pattern(value, variable, false) {
                     self.issue(
                         "unsupported-set-binary",
                         format!(
                             "Set Player Variable('{}', <binary over the same variable>) \
                              re-lowers to a Modify action; emit the modify form",
-                            variable.name
+                            variable
                         ),
                         span,
                     );
@@ -913,9 +1085,13 @@ impl<'a> Emitter<'a> {
                 }
                 self.out.push_str(&indent);
                 self.out.push_str("eventPlayer.");
-                self.out.push_str(&variable.name);
+                self.out.push_str(variable);
                 self.out.push_str(" = ");
-                self.emit_value(*value);
+                self.emit_value(
+                    value,
+                    self.program
+                        .action_argument_span(rule_index, action_index, 1),
+                );
                 self.out.push('\n');
             }
             Action::ModifyPlayerVariable {
@@ -923,13 +1099,8 @@ impl<'a> Emitter<'a> {
                 variable,
                 op,
                 value,
-                ..
             } => {
-                let Some(variable) = self.program.player_variables.get(*variable) else {
-                    self.issue("unsupported-dangling", "dangling player variable id", span);
-                    return;
-                };
-                if !self.is_event_player(*player) {
+                if !self.is_event_player(player) {
                     self.issue(
                         "unsupported-arbitrary-player-target",
                         "Modify Player Variable targets a non-event-player expression; \
@@ -941,143 +1112,98 @@ impl<'a> Emitter<'a> {
                 }
                 self.emit_modify(
                     level,
-                    &format!("eventPlayer.{}", variable.name),
+                    &format!("eventPlayer.{variable}"),
                     *op,
-                    *value,
-                    span,
+                    value,
+                    self.program
+                        .action_argument_span(rule_index, action_index, 1),
                 );
             }
-            Action::AssignMember { span, .. } => {
+            Action::AssignMember { .. } => {
                 self.issue(
                     "unsupported-member-assignment",
                     "dynamic member assignments are outside the OPY reconstruction surface",
-                    *span,
+                    span,
                 );
             }
-            Action::CallSubroutine {
-                subroutine, span, ..
-            } => {
-                let Some(subroutine) = self.program.subroutines.get(*subroutine) else {
-                    self.issue("unsupported-dangling", "dangling subroutine id", *span);
+            Action::CallSubroutine { subroutine } => {
+                if !self
+                    .program
+                    .subroutines
+                    .iter()
+                    .any(|definition| definition.name == *subroutine)
+                {
+                    self.issue(
+                        "unsupported-dangling",
+                        format!("unknown subroutine '{subroutine}'"),
+                        span,
+                    );
                     return;
-                };
+                }
                 self.out.push_str(&indent);
-                self.out.push_str(&subroutine.name);
+                self.out.push_str(subroutine);
                 self.out.push_str("()\n");
             }
-            Action::If {
-                branches,
-                else_body,
+            Action::If { .. } | Action::ElseIf { .. } | Action::Else | Action::End => self.issue(
+                "unsupported-control-flow",
+                "unexpected control-flow marker in Workshop action sequence",
                 span,
-            } => {
-                for (index, branch) in branches.iter().enumerate() {
-                    let keyword = if index == 0 { "if" } else { "elif" };
-                    self.out.push_str(&indent);
-                    self.out.push_str(keyword);
-                    self.out.push(' ');
-                    self.emit_value(branch.condition);
-                    self.out.push_str(":\n");
-                    self.emit_actions(&branch.body, level + 1);
-                }
-                if let Some(else_body) = else_body {
-                    self.out.push_str(&indent);
-                    self.out.push_str("else:\n");
-                    self.emit_actions(else_body, level + 1);
-                }
-                let _ = span;
-            }
-            Action::While {
-                condition,
-                body,
+            ),
+            Action::While { .. } => self.issue(
+                "unsupported-control-flow",
+                "unexpected while action in Workshop action sequence",
                 span,
-            } => {
-                self.out.push_str(&indent);
-                self.out.push_str("while ");
-                self.emit_value(*condition);
-                self.out.push_str(":\n");
-                self.emit_actions(body, level + 1);
-                let _ = span;
-            }
-            Action::ForGlobalVariable {
-                variable,
-                start,
-                stop,
-                step,
-                body,
+            ),
+            Action::ForGlobalVariable { .. } => self.issue(
+                "unsupported-control-flow",
+                "unexpected for action in Workshop action sequence",
                 span,
-                ..
-            } => {
-                let Some(variable) = self.program.global_variables.get(*variable) else {
-                    self.issue("unsupported-dangling", "dangling loop variable id", *span);
-                    return;
-                };
-                self.out.push_str(&indent);
-                self.out.push_str("for ");
-                self.out.push_str(&variable.name);
-                self.out.push_str(" in range(");
-                self.emit_value(*start);
-                self.out.push_str(", ");
-                self.emit_value(*stop);
-                self.out.push_str(", ");
-                self.emit_value(*step);
-                self.out.push_str("):\n");
-                self.emit_actions(body, level + 1);
-            }
-            Action::ForPlayerVariable { span, .. } => {
+            ),
+            Action::ForPlayerVariable { .. } => {
                 self.issue(
                     "unsupported-per-player-loop",
                     "For Player Variable is outside the reconstruction surface \
                      (the OPY `for` form binds a global variable)",
-                    *span,
+                    span,
                 );
             }
-            Action::Call { name, args, span } => {
-                self.emit_call_action(name, args, &indent, *span);
+            Action::Disabled { .. } => self.issue(
+                "unsupported-disabled-action",
+                "disabled actions are outside the OPY reconstruction surface",
+                span,
+            ),
+            Action::Call { name, args } => {
+                let argument_spans = (0..args.len())
+                    .map(|index| {
+                        self.program
+                            .action_argument_span(rule_index, action_index, index)
+                    })
+                    .collect::<Vec<_>>();
+                self.emit_call_action(name, args, &indent, span, &argument_spans);
             }
         }
     }
 
     /// `x = x <op> v` (or the player form) re-lowers to a Modify action, so a
     /// Set whose value matches the pattern cannot be reconstructed as a Set.
-    fn set_has_modify_pattern(
-        &self,
-        value: wir::ValueId,
-        variable_index: usize,
-        global: bool,
-    ) -> bool {
-        let Some(node) = self.program.values.get(value) else {
-            return false;
-        };
-        let Value::Call { name, args } = &node.value else {
+    fn set_has_modify_pattern(&self, value: &Value, variable: &str, global: bool) -> bool {
+        let Value::Call { name, args } = value else {
             return false;
         };
         if !matches!(name.as_str(), "+" | "-" | "*" | "/" | "%" | "**") {
             return false;
         }
-        if args.len() != 2 {
-            return false;
-        }
-        args.iter().any(|operand| {
-            let Some(node) = self.program.values.get(*operand) else {
-                return false;
-            };
+        args.len() == 2 && args.iter().any(|operand| {
             if global {
-                matches!(node.value, Value::GlobalVariable(id) if id.index() == variable_index)
+                matches!(operand, Value::GlobalVariable(name) if name == variable)
             } else {
-                matches!(
-                    node.value,
-                    Value::PlayerVariable { variable: id, .. } if id.index() == variable_index
-                )
+                matches!(operand, Value::PlayerVariable { variable: name, .. } if name == variable)
             }
         })
     }
 
-    /// Whether a value node is the event-player pseudo-symbol.
-    fn is_event_player(&self, value: wir::ValueId) -> bool {
-        matches!(
-            self.program.values.get(value).map(|node| &node.value),
-            Some(Value::EventPlayer)
-        )
+    fn is_event_player(&self, value: &Value) -> bool {
+        matches!(value, Value::EventPlayer)
     }
 
     fn emit_modify(
@@ -1085,7 +1211,7 @@ impl<'a> Emitter<'a> {
         level: usize,
         name: &str,
         op: ModifyOp,
-        value: wir::ValueId,
+        value: &Value,
         span: Option<Span>,
     ) {
         let indent = Self::indent(level);
@@ -1094,7 +1220,7 @@ impl<'a> Emitter<'a> {
                 self.out.push_str(&indent);
                 self.out.push_str(name);
                 self.out.push_str(".append(");
-                self.emit_value(value);
+                self.emit_value(value, span);
                 self.out.push_str(")\n");
             }
             ModifyOp::RemoveFromArrayByValue => {
@@ -1119,7 +1245,11 @@ impl<'a> Emitter<'a> {
                     format!(
                         "Modify ... {} is outside the reconstruction surface \
                          (the OPY surface has no equivalent modification form)",
-                        op.as_str()
+                        match op {
+                            ModifyOp::Min => "Min",
+                            ModifyOp::Max => "Max",
+                            _ => unreachable!(),
+                        }
                     ),
                     span,
                 );
@@ -1146,9 +1276,14 @@ impl<'a> Emitter<'a> {
                 self.out.push(' ');
                 self.out.push_str(operator);
                 self.out.push(' ');
-                self.emit_value(value);
+                self.emit_value(value, span);
                 self.out.push('\n');
             }
+            _ => self.issue(
+                "unsupported-modify-op",
+                format!("Workshop modification operation {op:?} has no OPY form"),
+                span,
+            ),
         }
     }
 
@@ -1156,16 +1291,17 @@ impl<'a> Emitter<'a> {
     fn emit_call_action(
         &mut self,
         name: &str,
-        args: &[wir::ValueId],
+        args: &[Value],
         indent: &str,
         span: Option<Span>,
+        argument_spans: &[Option<Span>],
     ) {
         if DEDICATED_ACTION_NAMES.contains(&name) {
             self.issue(
                 "unsupported-action-call",
                 format!(
-                    "action call '{name}' is lowered to a dedicated WIR node by the \
-                     OPY frontend and has no reconstructible call form"
+                    "action call '{name}' is lowered to a dedicated Workshop action \
+                     and has no reconstructible call form"
                 ),
                 span,
             );
@@ -1174,7 +1310,7 @@ impl<'a> Emitter<'a> {
         let Some(entry) = self.manifest.resolve_function(name) else {
             match self.manifest.resolve_member(name) {
                 Some(entry) if entry.kind.is_action() => {
-                    self.emit_member_call(entry, args, indent, span);
+                    self.emit_member_call(entry, args, indent, span, argument_spans);
                 }
                 Some(_) => {
                     self.issue(
@@ -1222,25 +1358,26 @@ impl<'a> Emitter<'a> {
             return;
         }
         self.out.push_str(indent);
-        self.emit_manifest_call(entry, args, false, span);
+        self.emit_manifest_call(entry, args, false, span, argument_spans);
         self.out.push('\n');
     }
 
     /// Emit a manifest function call with explicit full-arity arguments, no
     /// indent and no trailing newline (the caller frames the line). The OPY
-    /// frontend fills declared defaults at recompile time, so any WIR call
+    /// frontend fills declared defaults at recompile time, so any Workshop call
     /// that omits a defaulted or required parameter cannot be reconstructed
     /// identically and is rejected.
     fn emit_manifest_call(
         &mut self,
         entry: &Function,
-        args: &[wir::ValueId],
+        args: &[Value],
         member: bool,
         span: Option<Span>,
+        argument_spans: &[Option<Span>],
     ) {
         let (receiver, params) = if member {
             match args.split_first() {
-                Some((receiver, rest)) => (Some(*receiver), rest),
+                Some((receiver, rest)) => (Some(receiver), rest),
                 None => {
                     self.issue(
                         "unsupported-invalid-arity",
@@ -1258,7 +1395,7 @@ impl<'a> Emitter<'a> {
             self.issue(
                 "unsupported-invalid-arity",
                 format!(
-                    "{} '{}' expects at most {} arguments but the WIR carries {}",
+                    "{} '{}' expects at most {} arguments but the Workshop call carries {}",
                     kind_label(entry.kind),
                     name,
                     entry.params.len(),
@@ -1271,14 +1408,14 @@ impl<'a> Emitter<'a> {
         // Every parameter beyond the provided arguments must be omittable
         // (`optional`). A required parameter (with or without a declared
         // default) cannot be omitted: the OPY frontend would reject it or
-        // fill its default, changing the recompiled WIR.
+        // fill its default, changing the resulting Workshop program.
         for (_index, param) in entry.params.iter().enumerate().skip(params.len()) {
             if !param.optional {
                 self.issue(
                     "unsupported-missing-argument",
                     format!(
                         "{} '{}' omits parameter '{}'; the OPY frontend would \
-                         reject or default-fill it and change the recompiled WIR",
+                         reject or default-fill it and change the resulting Workshop program",
                         kind_label(entry.kind),
                         name,
                         param.name
@@ -1289,7 +1426,8 @@ impl<'a> Emitter<'a> {
         }
 
         if let Some(receiver) = receiver {
-            self.emit_value(receiver);
+            let receiver_span = argument_spans.first().copied().flatten().or(span);
+            self.emit_value(receiver, receiver_span);
             self.out.push('.');
         }
         self.out.push_str(name);
@@ -1328,8 +1466,14 @@ impl<'a> Emitter<'a> {
             if index > 0 {
                 self.out.push_str(", ");
             }
-            self.check_param_argument(entry, index, *arg, span);
-            self.emit_value(*arg);
+            let argument_index = index + if member { 1 } else { 0 };
+            let argument_span = argument_spans
+                .get(argument_index)
+                .copied()
+                .flatten()
+                .or(span);
+            self.check_param_argument(entry, index, arg, argument_span);
+            self.emit_value(arg, argument_span);
         }
         self.out.push(')');
     }
@@ -1338,12 +1482,13 @@ impl<'a> Emitter<'a> {
     fn emit_member_call(
         &mut self,
         entry: &Function,
-        args: &[wir::ValueId],
+        args: &[Value],
         indent: &str,
         span: Option<Span>,
+        argument_spans: &[Option<Span>],
     ) {
         self.out.push_str(indent);
-        self.emit_manifest_call(entry, args, true, span);
+        self.emit_manifest_call(entry, args, true, span, argument_spans);
         self.out.push('\n');
     }
 
@@ -1354,17 +1499,14 @@ impl<'a> Emitter<'a> {
         &mut self,
         entry: &Function,
         index: usize,
-        arg: wir::ValueId,
+        arg: &Value,
         span: Option<Span>,
     ) {
         let Some(param) = entry.params.get(index) else {
             return;
         };
-        let Some(node) = self.program.values.get(arg) else {
-            return;
-        };
         if let Some(domain) = &param.domain {
-            match &node.value {
+            match arg {
                 Value::Enum { value_type, value } if value_type == domain => {
                     if !self.enum_member_in_domain(domain, value) {
                         self.issue(
@@ -1384,7 +1526,7 @@ impl<'a> Emitter<'a> {
                         "unsupported-enum-domain-mismatch",
                         format!(
                             "argument {} of '{}' expects enum domain '{domain}' but \
-                             the WIR carries '{value_type}'",
+                             the Workshop value carries '{value_type}'",
                             index + 1,
                             entry.id
                         ),
@@ -1406,10 +1548,8 @@ impl<'a> Emitter<'a> {
             }
         }
         if param.variable {
-            let is_variable = matches!(
-                node.value,
-                Value::GlobalVariable(_) | Value::PlayerVariable { .. }
-            );
+            let is_variable =
+                matches!(arg, Value::GlobalVariable(_) | Value::PlayerVariable { .. });
             if !is_variable {
                 self.issue(
                     "unsupported-invalid-argument",
@@ -1435,18 +1575,14 @@ impl<'a> Emitter<'a> {
 
     // ---- value emission ----
 
-    fn emit_value(&mut self, id: wir::ValueId) {
-        let Some(node) = self.program.values.get(id) else {
-            self.issue("unsupported-dangling", "dangling value id", None);
-            return;
-        };
-        match &node.value {
-            Value::Number { value, .. } => {
+    fn emit_value(&mut self, value: &Value, span: Option<Span>) {
+        match value {
+            Value::Number(value) => {
                 if !value.is_finite() {
                     self.issue(
                         "unsupported-non-finite-number",
                         format!("non-finite number literal '{value}' has no OPY spelling"),
-                        node.span,
+                        span,
                     );
                 } else if *value < 0.0 {
                     self.issue(
@@ -1456,7 +1592,7 @@ impl<'a> Emitter<'a> {
                              (the lexer has no negative-number token)",
                             workshop_rs::format::format_number(*value)
                         ),
-                        node.span,
+                        span,
                     );
                 } else {
                     self.out
@@ -1468,7 +1604,7 @@ impl<'a> Emitter<'a> {
                 self.issue(
                     "unsupported-localized-string",
                     format!("localized Workshop preset string '{value}' has no OPY source representation"),
-                    node.span,
+                    span,
                 );
             }
             Value::Bool(value) => {
@@ -1483,67 +1619,77 @@ impl<'a> Emitter<'a> {
                     if index > 0 {
                         self.out.push_str(", ");
                     }
-                    self.emit_value(*element);
+                    self.emit_value(element, span);
                 }
                 self.out.push(']');
             }
             Value::Vector { x, y, z } => {
                 self.out.push_str("vect(");
-                self.emit_value(*x);
+                self.emit_value(x, span);
                 self.out.push_str(", ");
-                self.emit_value(*y);
+                self.emit_value(y, span);
                 self.out.push_str(", ");
-                self.emit_value(*z);
+                self.emit_value(z, span);
                 self.out.push(')');
             }
             Value::Enum { value_type, value } => {
-                self.emit_enum(value_type, value, node.span);
+                self.emit_enum(value_type, value, span);
             }
             Value::GlobalVariable(variable) => {
-                let Some(variable) = self.program.global_variables.get(*variable) else {
+                if !self
+                    .program
+                    .global_variables
+                    .iter()
+                    .any(|declaration| declaration.name == *variable)
+                {
                     self.issue(
                         "unsupported-dangling",
-                        "dangling global variable id",
-                        node.span,
+                        format!("unknown global variable '{variable}'"),
+                        span,
                     );
                     return;
-                };
-                self.out.push_str(&variable.name);
+                }
+                self.out.push_str(variable);
             }
             Value::PlayerVariable { player, variable } => {
-                if !self.is_event_player(*player) {
+                if !self.is_event_player(player) {
                     self.issue(
                         "unsupported-arbitrary-player-target",
                         "a player-variable access on a non-event-player expression is \
                          outside the reconstruction surface (only eventPlayer.member \
                          is representable)",
-                        node.span,
+                        span,
                     );
                     return;
                 }
-                let Some(variable) = self.program.player_variables.get(*variable) else {
+                if !self
+                    .program
+                    .player_variables
+                    .iter()
+                    .any(|declaration| declaration.name == *variable)
+                {
                     self.issue(
                         "unsupported-dangling",
-                        "dangling player variable id",
-                        node.span,
+                        format!("unknown player variable '{variable}'"),
+                        span,
                     );
                     return;
-                };
+                }
                 self.out.push_str("eventPlayer.");
-                self.out.push_str(&variable.name);
+                self.out.push_str(variable);
             }
             Value::Subroutine(_) => {
                 self.issue(
                     "unsupported-subroutine-value",
                     "subroutine values are outside the OPY reconstruction surface",
-                    node.span,
+                    span,
                 );
             }
             Value::EventPlayer => {
                 self.out.push_str("eventPlayer");
             }
             Value::Call { name, args } => {
-                self.emit_value_call(name, args, node.span);
+                self.emit_value_call(name, args, span);
             }
         }
     }
@@ -1576,7 +1722,7 @@ impl<'a> Emitter<'a> {
         self.out.push_str(value);
     }
 
-    fn emit_value_call(&mut self, name: &str, args: &[wir::ValueId], span: Option<Span>) {
+    fn emit_value_call(&mut self, name: &str, args: &[Value], span: Option<Span>) {
         if name == "localPlayer" && args.is_empty() {
             self.out.push_str(name);
             return;
@@ -1584,23 +1730,23 @@ impl<'a> Emitter<'a> {
         // Binary and unary operator calls keep their source spelling.
         if BINARY_OPS.contains(&name) && args.len() == 2 {
             self.out.push('(');
-            self.emit_value(args[0]);
+            self.emit_value(&args[0], span);
             self.out.push(' ');
             self.out.push_str(name);
             self.out.push(' ');
-            self.emit_value(args[1]);
+            self.emit_value(&args[1], span);
             self.out.push(')');
             return;
         }
         if name == "not" && args.len() == 1 {
             self.out.push_str("(not ");
-            self.emit_value(args[0]);
+            self.emit_value(&args[0], span);
             self.out.push(')');
             return;
         }
         if name == "-" && args.len() == 1 {
             self.out.push_str("(-");
-            self.emit_value(args[0]);
+            self.emit_value(&args[0], span);
             self.out.push(')');
             return;
         }
@@ -1614,8 +1760,7 @@ impl<'a> Emitter<'a> {
                 );
                 return;
             };
-            let Some(Value::String(text)) = self.program.values.get(*first).map(|node| &node.value)
-            else {
+            let Value::String(text) = first else {
                 self.issue(
                     "unsupported-value-call",
                     "format call without a string receiver is outside the \
@@ -1630,7 +1775,7 @@ impl<'a> Emitter<'a> {
                 if index > 0 {
                     self.out.push_str(", ");
                 }
-                self.emit_value(*arg);
+                self.emit_value(arg, span);
             }
             self.out.push(')');
             return;
@@ -1639,8 +1784,8 @@ impl<'a> Emitter<'a> {
             self.issue(
                 "unsupported-value-call",
                 format!(
-                    "value call '{name}' is lowered to a dedicated WIR node by the \
-                     OPY frontend and has no reconstructible call form"
+                    "value call '{name}' is lowered to a dedicated Workshop value \
+                     and has no reconstructible call form"
                 ),
                 span,
             );
@@ -1649,7 +1794,7 @@ impl<'a> Emitter<'a> {
         let Some(entry) = self.manifest.resolve_function(name) else {
             match self.manifest.resolve_member(name) {
                 Some(entry) if entry.kind.is_value() => {
-                    self.emit_manifest_call(entry, args, true, span);
+                    self.emit_manifest_call(entry, args, true, span, &[]);
                 }
                 Some(_) => {
                     self.issue(
@@ -1696,7 +1841,7 @@ impl<'a> Emitter<'a> {
             );
             return;
         }
-        self.emit_manifest_call(entry, args, false, span);
+        self.emit_manifest_call(entry, args, false, span, &[]);
     }
 
     fn emit_string_literal(&mut self, value: &str) {
@@ -1708,6 +1853,9 @@ impl<'a> Emitter<'a> {
                 '\n' => self.out.push_str("\\n"),
                 '\t' => self.out.push_str("\\t"),
                 '\r' => self.out.push_str("\\r"),
+                other if other.is_control() => {
+                    self.out.push_str(&format!("\\u{:04X}", other as u32));
+                }
                 other => self.out.push(other),
             }
         }
@@ -1721,5 +1869,241 @@ fn kind_label(kind: FunctionKind) -> &'static str {
         FunctionKind::Value => "value",
         FunctionKind::MemberAction => "member action",
         FunctionKind::MemberValue => "member value",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::reconstruct;
+    use crate::compiler::Compiler;
+    use workshop_rs::catalog::{Catalog, Locale};
+    use workshop_rs::source::{Position, SourceFile, Span};
+    use workshop_rs::{Action, Event, ModifyOp, Program, Rule, Subroutine, Value, Variable};
+
+    fn compile_to_program(source: &str, path: &str) -> Program {
+        let artifact = Compiler::new()
+            .expect("compiler loads")
+            .compile_source_artifact(source, path, Path::new("."))
+            .expect("reconstructed OPY compiles");
+        let catalog = Catalog::builtin().expect("catalog loads");
+        workshop_rs::parser::parse(&artifact.emitted, &catalog, &Locale::new("en-US"))
+            .expect("compiler output parses through the public Workshop parser")
+    }
+
+    #[test]
+    fn reconstructs_public_program_control_flow() {
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("score", 0));
+        program.rule(
+            Rule::new("main", Event::Global)
+                .action(Action::If {
+                    condition: Value::call(
+                        "==",
+                        [Value::global_variable("score"), Value::number(0.0)],
+                    ),
+                })
+                .action(Action::SetGlobalVariable {
+                    variable: "score".into(),
+                    value: Value::number(1.0),
+                })
+                .action(Action::ElseIf {
+                    condition: Value::call(
+                        "<",
+                        [Value::global_variable("score"), Value::number(0.0)],
+                    ),
+                })
+                .action(Action::ModifyGlobalVariable {
+                    variable: "score".into(),
+                    op: ModifyOp::Add,
+                    value: Value::number(2.0),
+                })
+                .action(Action::Else)
+                .action(Action::ModifyGlobalVariable {
+                    variable: "score".into(),
+                    op: ModifyOp::Add,
+                    value: Value::number(3.0),
+                })
+                .action(Action::End)
+                .action(Action::While {
+                    condition: Value::call(
+                        "<",
+                        [Value::global_variable("score"), Value::number(10.0)],
+                    ),
+                })
+                .action(Action::ModifyGlobalVariable {
+                    variable: "score".into(),
+                    op: ModifyOp::Add,
+                    value: Value::number(1.0),
+                })
+                .action(Action::End)
+                .action(Action::ForGlobalVariable {
+                    variable: "score".into(),
+                    start: Value::number(0.0),
+                    stop: Value::number(2.0),
+                    step: Value::number(1.0),
+                })
+                .action(Action::ModifyGlobalVariable {
+                    variable: "score".into(),
+                    op: ModifyOp::Add,
+                    value: Value::number(1.0),
+                })
+                .action(Action::End),
+        );
+
+        let source = reconstruct(&program).expect("canonical Program should reconstruct");
+        assert!(source.contains("if (score == 0):"));
+        assert!(source.contains("elif (score < 0):"));
+        assert!(source.contains("else:"));
+        assert!(source.contains("while (score < 10):"));
+        assert!(source.contains("for score in range(0, 2, 1):"));
+
+        let reparsed = compile_to_program(&source, "reconstructed.opy");
+        assert!(workshop_rs::roundtrip::equivalent(&program, &reparsed));
+    }
+
+    #[test]
+    fn initializer_name_with_another_event_remains_an_ordinary_rule() {
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("score", 0));
+        program.rule(
+            Rule::new("Initialize global variables", Event::EachPlayer).action(
+                Action::SetGlobalVariable {
+                    variable: "score".into(),
+                    value: Value::number(1.0),
+                },
+            ),
+        );
+
+        let source = reconstruct(&program).expect("ordinary rule should reconstruct");
+        assert!(source.contains("rule \"Initialize global variables\":"));
+        assert!(source.contains("@Event eachPlayer"));
+        let reparsed = compile_to_program(&source, "initializer-name.opy");
+        assert!(workshop_rs::roundtrip::equivalent(&program, &reparsed));
+    }
+
+    #[test]
+    fn disabled_initializer_is_not_reconstructed_as_a_declaration_initializer() {
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("score", 0));
+        let mut initializer = Rule::new("Initialize global variables", Event::Global).action(
+            Action::SetGlobalVariable {
+                variable: "score".into(),
+                value: Value::number(1.0),
+            },
+        );
+        initializer.disabled = true;
+        program.rule(initializer);
+
+        let error = reconstruct(&program).expect_err("disabled initializer cannot be emitted");
+        assert_eq!(error.issues[0].code, "unsupported-disabled-rule");
+    }
+
+    #[test]
+    fn disabled_subroutine_rule_is_not_reconstructed_as_an_active_definition() {
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("score", 0));
+        program.subroutine(Subroutine::with_index("reset", 0));
+        let mut subroutine = Rule::new("Subroutine reset", Event::Subroutine("reset".into()))
+            .action(Action::SetGlobalVariable {
+                variable: "score".into(),
+                value: Value::number(0.0),
+            });
+        subroutine.disabled = true;
+        program.rule(subroutine);
+
+        let error = reconstruct(&program).expect_err("disabled subroutine cannot be emitted");
+        assert_eq!(error.issues[0].code, "unsupported-disabled-rule");
+    }
+
+    #[test]
+    fn escaped_rule_names_remain_valid_opy_strings() {
+        let rule_name = "quoted \"rule\" \\ path\nnext\u{0001}";
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("score", 0));
+        program.rule(
+            Rule::new(rule_name, Event::Global).action(Action::SetGlobalVariable {
+                variable: "score".into(),
+                value: Value::number(1.0),
+            }),
+        );
+
+        let source = reconstruct(&program).expect("special characters should be escaped");
+        let artifact = Compiler::new()
+            .expect("compiler loads")
+            .compile_source_artifact(&source, "escaped-name.opy", Path::new("."))
+            .expect("escaped OPY rule name parses");
+        assert_eq!(artifact.wir.rules[0].name, rule_name);
+    }
+
+    #[test]
+    fn reconstructs_public_subroutine_names() {
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("score", 0));
+        program.subroutine(Subroutine::with_index("reset", 0));
+        program.rule(
+            Rule::new("Subroutine reset", Event::Subroutine("reset".into())).action(
+                Action::SetGlobalVariable {
+                    variable: "score".into(),
+                    value: Value::number(0.0),
+                },
+            ),
+        );
+        program.rule(
+            Rule::new("main", Event::Global).action(Action::CallSubroutine {
+                subroutine: "reset".into(),
+            }),
+        );
+
+        let source = reconstruct(&program).expect("canonical subroutine should reconstruct");
+        assert!(source.contains("def reset():"));
+        assert!(source.contains("reset()"));
+
+        let reparsed = compile_to_program(&source, "subroutine.opy");
+        assert!(workshop_rs::roundtrip::equivalent(&program, &reparsed));
+    }
+
+    #[test]
+    fn action_argument_diagnostics_use_public_argument_spans() {
+        let mut program = Program::new();
+        let file = program.add_file(SourceFile::new("main.opy"));
+        program.rule(Rule::new("main", Event::Global).action(Action::call(
+            "chaseAtRate",
+            [
+                Value::number(1.0),
+                Value::number(10.0),
+                Value::number(1.0),
+                Value::Enum {
+                    value_type: "ChaseRateReeval".into(),
+                    value: "DESTINATION_AND_RATE".into(),
+                },
+            ],
+        )));
+        let action_span = Span::new(file, Position::new(1, 1), Position::new(1, 25));
+        let argument_span = Span::new(file, Position::new(1, 13), Position::new(1, 14));
+        program.set_action_span(0, 0, Some(action_span)).unwrap();
+        program
+            .set_action_argument_span(0, 0, 0, Some(argument_span))
+            .unwrap();
+
+        let error = reconstruct(&program).expect_err("the first parameter must be a variable");
+        assert_eq!(error.issues[0].code, "unsupported-invalid-argument");
+        assert_eq!(error.issues[0].span, Some(argument_span));
+    }
+
+    #[test]
+    fn rejects_public_program_actions_without_an_opy_form() {
+        let mut program = Program::new();
+        program.rule(
+            Rule::new("main", Event::Global).action(Action::AssignMember {
+                target: Value::EventPlayer,
+                op: None,
+                value: Value::number(1.0),
+            }),
+        );
+
+        let error = reconstruct(&program).expect_err("dynamic member assignment is unsupported");
+        assert_eq!(error.issues[0].code, "unsupported-member-assignment");
     }
 }

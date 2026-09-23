@@ -270,7 +270,7 @@ fn compiled_settings_are_queryable_through_the_canonical_consumer_api() {
         definition.presentation().localized_name("en-US"),
         Some("Max Spectators")
     );
-    assert!(definition.provenance().reviewed);
+    assert!(definition.source().reviewed);
     assert_eq!(
         definition
             .applicability(&SettingTarget::Global)

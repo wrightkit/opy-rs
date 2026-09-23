@@ -26,7 +26,7 @@ callers do not need to construct a `workshop-rs` `Locale`.
 `CompileReport` contract with structured diagnostics. The explicit
 `*_with_locale` and `compile_hir*` methods, `CompilationArtifact`, and
 `opy_rs::reconstruct` are advanced integration APIs for consumers that
-intentionally interoperate with canonical Workshop WIR/catalog types.
+intentionally interoperate with canonical Workshop Program/catalog types.
 
 The report schema version is 1. It contains compiler and catalog identities,
 compile status, exit code, failure class, source-attributed diagnostics, exact
