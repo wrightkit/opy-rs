@@ -369,8 +369,8 @@ fn parse_single_word<'a>(rest: &'a str, name: &str, span: Span) -> OpyResult<&'a
 
 fn validate_extension_name(extension: &str, span: Span) -> OpyResult<()> {
     let path = [
-        workshop_rs::settings::table::PathPart::Part("extensions"),
-        workshop_rs::settings::table::PathPart::Part(extension),
+        workshop_rs::settings::PathPart::Part("extensions"),
+        workshop_rs::settings::PathPart::Part(extension),
     ];
     if workshop_rs::settings::definition(&path).is_some() {
         Ok(())

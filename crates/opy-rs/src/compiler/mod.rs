@@ -165,13 +165,13 @@ fn emit_debug_element_counts(
                 conditions.clear();
                 collect_element_nodes(
                     &rule.children,
-                    workshop_rs::element_count::ElementNodeKind::Condition,
+                    workshop_rs::actions::ElementNodeKind::Condition,
                     &mut conditions,
                 );
                 actions.clear();
                 collect_element_nodes(
                     &rule.children,
-                    workshop_rs::element_count::ElementNodeKind::Action,
+                    workshop_rs::actions::ElementNodeKind::Action,
                     &mut actions,
                 );
             }
@@ -226,7 +226,7 @@ fn emit_debug_element_counts(
     Ok(annotated)
 }
 
-fn debug_value_count(node: &workshop_rs::element_count::ElementCountNode) -> usize {
+fn debug_value_count(node: &workshop_rs::actions::ElementCountNode) -> usize {
     let children = node.children.iter().map(debug_value_count).sum::<usize>();
     match node.name.as_str() {
         "number" | "global variable" => 2,
@@ -239,54 +239,54 @@ fn debug_value_count(node: &workshop_rs::element_count::ElementCountNode) -> usi
     }
 }
 
-fn debug_condition_count(node: &workshop_rs::element_count::ElementCountNode) -> usize {
+fn debug_condition_count(node: &workshop_rs::actions::ElementCountNode) -> usize {
     let value_count = node.children.iter().map(debug_value_count).sum::<usize>();
     value_count.saturating_sub(usize::from(node.children.len() > 1))
 }
 
-fn debug_action_local_count(node: &workshop_rs::element_count::ElementCountNode) -> usize {
+fn debug_action_local_count(node: &workshop_rs::actions::ElementCountNode) -> usize {
     let values = node
         .children
         .iter()
-        .filter(|child| child.kind == workshop_rs::element_count::ElementNodeKind::Value)
+        .filter(|child| child.kind == workshop_rs::actions::ElementNodeKind::Value)
         .map(debug_value_count)
         .sum::<usize>();
     let value_arguments = node
         .children
         .iter()
-        .filter(|child| child.kind == workshop_rs::element_count::ElementNodeKind::Value)
+        .filter(|child| child.kind == workshop_rs::actions::ElementNodeKind::Value)
         .count();
     1 + values.saturating_sub(value_arguments)
 }
 
-fn debug_action_count(node: &workshop_rs::element_count::ElementCountNode) -> usize {
+fn debug_action_count(node: &workshop_rs::actions::ElementCountNode) -> usize {
     let nested_actions = node
         .children
         .iter()
-        .filter(|child| child.kind == workshop_rs::element_count::ElementNodeKind::Action)
+        .filter(|child| child.kind == workshop_rs::actions::ElementNodeKind::Action)
         .map(debug_action_count)
         .sum::<usize>();
     debug_action_local_count(node) + nested_actions
 }
 
-fn debug_rule_count(node: &workshop_rs::element_count::ElementCountNode) -> usize {
+fn debug_rule_count(node: &workshop_rs::actions::ElementCountNode) -> usize {
     let children = node
         .children
         .iter()
         .map(|child| match child.kind {
-            workshop_rs::element_count::ElementNodeKind::Condition => debug_condition_count(child),
-            workshop_rs::element_count::ElementNodeKind::Action => debug_action_count(child),
-            workshop_rs::element_count::ElementNodeKind::Rule
-            | workshop_rs::element_count::ElementNodeKind::Value => 0,
+            workshop_rs::actions::ElementNodeKind::Condition => debug_condition_count(child),
+            workshop_rs::actions::ElementNodeKind::Action => debug_action_count(child),
+            workshop_rs::actions::ElementNodeKind::Rule
+            | workshop_rs::actions::ElementNodeKind::Value => 0,
         })
         .sum::<usize>();
     1 + children
 }
 
 fn collect_element_nodes<'a>(
-    nodes: &'a [workshop_rs::element_count::ElementCountNode],
-    kind: workshop_rs::element_count::ElementNodeKind,
-    collected: &mut Vec<&'a workshop_rs::element_count::ElementCountNode>,
+    nodes: &'a [workshop_rs::actions::ElementCountNode],
+    kind: workshop_rs::actions::ElementNodeKind,
+    collected: &mut Vec<&'a workshop_rs::actions::ElementCountNode>,
 ) {
     for node in nodes {
         if node.kind == kind {
@@ -2067,8 +2067,8 @@ rule "main":
             .filter(|node| {
                 matches!(
                     node.kind,
-                    workshop_rs::element_count::ElementNodeKind::Condition
-                        | workshop_rs::element_count::ElementNodeKind::Action
+                    workshop_rs::actions::ElementNodeKind::Condition
+                        | workshop_rs::actions::ElementNodeKind::Action
                 )
             })
             .count();
