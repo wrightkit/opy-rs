@@ -58,7 +58,9 @@ narrow the established upstream core-language scope.
 - [LPP provider](opy/provider.md): integration/process contract.
 - [Source-edit policy](opy/trivia-retention-policy.md): source mapping/trivia
   requirements.
-- [HIR contracts](hir/README.md): current v2 contract and retained v1 baseline.
+- [Opy HIR v2](hir/opy-hir-v2.md): current HIR representation/wire contract,
+  retaining the v1 baseline except where v2 explicitly changes it.
+- [Opy HIR v1](hir/opy-hir-v1.md): retained baseline used by the v2 contract.
 - [Compatibility manifest implementation note](opy/compat-manifest-spec.md):
   current manifest mechanism and its architecture limitations. It is not the
   semantic authority for OverPy.
