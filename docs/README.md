@@ -44,8 +44,8 @@ compatibility pointers rather than separate architecture authorities.
 
 - [OverPy support contract](language-support.md): current tested feature
   coverage.
-- [Upstream references](compatibility/upstream-references.md): pinned upstream
-  identity, source attribution, licensing, and reference boundaries.
+- [Compatibility references](compatibility/README.md): pinned upstream identity,
+  oracle boundaries, source attribution, and licensing policy.
 - [OverPy compatibility harness](../tools/overpy/README.md): tests/snapshots and
   differential testing.
 
@@ -59,8 +59,8 @@ narrow the established upstream core-language scope.
 - [Source-edit policy](opy/trivia-retention-policy.md): source mapping/trivia
   requirements.
 - [Opy HIR v2](hir/opy-hir-v2.md): current HIR representation/wire contract,
-  subject to the current architecture contracts and code reality.
-- [Opy HIR v1](hir/opy-hir-v1.md): prior wire/migration baseline.
+  retaining the v1 baseline except where v2 explicitly changes it.
+- [Opy HIR v1](hir/opy-hir-v1.md): retained baseline used by the v2 contract.
 - [Compatibility manifest implementation note](opy/compat-manifest-spec.md):
   current manifest mechanism and its architecture limitations. It is not the
   semantic authority for OverPy.
