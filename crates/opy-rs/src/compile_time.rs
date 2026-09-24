@@ -199,9 +199,21 @@ fn evaluate_index(collection: Value, index: Value) -> Option<Value> {
 
 fn display(value: &Value) -> Option<String> {
     match value {
-        Value::Number(value) if value.is_finite() => Some(value.to_string()),
+        Value::Number(value) if value.is_finite() => Some(workshop_number_text(*value)),
         Value::String(value) => Some(value.clone()),
         Value::Bool(value) => Some(value.to_string()),
         _ => None,
+    }
+}
+
+/// Numbers substituted into text keep two decimals, as Workshop displays
+/// them: `2.5` becomes `2.50`, and a value that rounds to an integer drops
+/// its fraction.
+pub(crate) fn workshop_number_text(value: f64) -> String {
+    let rounded = (value * 100.0).round() / 100.0;
+    if rounded.fract() == 0.0 {
+        format!("{}", rounded as i64)
+    } else {
+        format!("{rounded:.2}")
     }
 }

@@ -611,16 +611,41 @@ fn zero_vector(value: &Value) -> bool {
 }
 
 fn number_components(value: &Value) -> Option<[f64; 3]> {
-    let Value::Vector { x, y, z } = value else {
-        return None;
-    };
-    match (&**x, &**y, &**z) {
-        (Value::Number(x), Value::Number(y), Value::Number(z)) => Some([*x, *y, *z]),
+    match value {
+        Value::Vector { x, y, z } => match (&**x, &**y, &**z) {
+            (Value::Number(x), Value::Number(y), Value::Number(z)) => Some([*x, *y, *z]),
+            _ => None,
+        },
+        Value::Enum { value_type, value } if value_type == "Vector" => match value.as_str() {
+            "LEFT" => Some([1.0, 0.0, 0.0]),
+            "RIGHT" => Some([-1.0, 0.0, 0.0]),
+            "UP" => Some([0.0, 1.0, 0.0]),
+            "DOWN" => Some([0.0, -1.0, 0.0]),
+            "FORWARD" => Some([0.0, 0.0, 1.0]),
+            "BACKWARD" => Some([0.0, 0.0, -1.0]),
+            _ => None,
+        },
         _ => None,
     }
 }
 
+/// A numeric vector, written as its direction constant when it is one.
 fn vector(components: [f64; 3]) -> Value {
+    let name = match components {
+        [1.0, 0.0, 0.0] => Some("LEFT"),
+        [-1.0, 0.0, 0.0] => Some("RIGHT"),
+        [0.0, 1.0, 0.0] => Some("UP"),
+        [0.0, -1.0, 0.0] => Some("DOWN"),
+        [0.0, 0.0, 1.0] => Some("FORWARD"),
+        [0.0, 0.0, -1.0] => Some("BACKWARD"),
+        _ => None,
+    };
+    if let Some(name) = name {
+        return Value::Enum {
+            value_type: "Vector".to_string(),
+            value: name.to_string(),
+        };
+    }
     let [x, y, z] = components;
     Value::Vector {
         x: Box::new(Value::Number(x)),

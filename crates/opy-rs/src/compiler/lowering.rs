@@ -8215,7 +8215,9 @@ fn split_format_chunks(text: &str, arg_count: usize) -> Option<Vec<(String, Vec<
 
 fn compile_time_value_text(value: crate::compile_time::Value) -> Option<String> {
     match value {
-        crate::compile_time::Value::Number(value) if value.is_finite() => Some(value.to_string()),
+        crate::compile_time::Value::Number(value) if value.is_finite() => {
+            Some(crate::compile_time::workshop_number_text(value))
+        }
         crate::compile_time::Value::Number(_) => None,
         crate::compile_time::Value::String(value) => Some(value),
         crate::compile_time::Value::Bool(value) => Some(value.to_string()),
