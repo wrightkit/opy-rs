@@ -33,8 +33,20 @@ fn assert_converges(name: &str) {
             .as_str()
             .expect("oracle snapshot records the compiled Workshop text"),
     );
+    let native = parse(&artifact.emitted);
+    assert_eq!(
+        format!(
+            "{:#?}{:#?}{:#?}",
+            native.rules, native.global_variables, native.player_variables
+        ),
+        format!(
+            "{:#?}{:#?}{:#?}",
+            expected.rules, expected.global_variables, expected.player_variables
+        ),
+        "{name} rules differ structurally from the pinned oracle"
+    );
     assert!(
-        equivalent(&parse(&artifact.emitted), &expected),
+        equivalent(&native, &expected),
         "{name} diverged from the pinned oracle:\n{}",
         artifact.emitted
     );
