@@ -1327,11 +1327,17 @@ impl<'a> Lowering<'a> {
         }
         let mut actions = Vec::new();
         actions.extend(self.lower_actions(body, None)?);
+        let event = Event::Subroutine(self.subroutine_names[subroutine].clone());
+        if self.optimization_state_at(span.as_ref()).enabled
+            && !self.has_meaningful_rule_action(&actions, &event)
+        {
+            return Ok(());
+        }
         let rule_index = self.program.rules.len();
         self.program.rules.push(workshop_rs::Rule {
             name: self.subroutine_rule_name(name),
             disabled: false,
-            event: Event::Subroutine(self.subroutine_names[subroutine].clone()),
+            event,
             conditions: Vec::new(),
             actions: self.public_actions(&actions),
         });

@@ -321,7 +321,7 @@ class DiffTests(unittest.TestCase):
             "schemaVersion": 1,
             "semanticWIR": {
                 "schemaVersion": 1,
-                "algorithm": "workshop-rs::roundtrip::equivalent",
+                "algorithm": "opy-rs::structural-identity",
                 "inputSha256": oracle["input"]["sha256"],
                 "referenceInputSha256": oracle["input"]["sha256"],
                 "equivalent": False,

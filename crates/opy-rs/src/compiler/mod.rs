@@ -1818,9 +1818,9 @@ rule "empty rule":
         )
         .unwrap();
         let artifact = compiler.compile_hir(&hir).unwrap();
-        assert_eq!(artifact.wir.rules.len(), 1);
-        let rule0 = artifact.wir.rules.first().unwrap();
-        assert!(rule0.actions.is_empty());
+        // Rules and subroutines with nothing to run are dropped, as the
+        // pinned OverPy does.
+        assert!(artifact.wir.rules.is_empty());
     }
 
     #[test]

@@ -51,6 +51,8 @@ fn unicode_escape_in_subroutine_name_reaches_canonical_workshop() {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/regressions/bastion-unicode-name.opy");
     let source = std::fs::read_to_string(&fixture).expect("Unicode regression must be readable");
+    // The names matter here, so keep the otherwise empty subroutines.
+    let source = format!("#!disableOptimizations\n{source}");
     let artifact = Compiler::new()
         .expect("released workshop contract must load")
         .compile_source_with_locale(

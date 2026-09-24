@@ -13,7 +13,7 @@ use serde_json::Value;
 use workshop_rs::catalog::{Catalog, Kind, Locale};
 use workshop_rs::signatures::ExpectedDomain;
 
-const ALGORITHM: &str = "workshop-rs::roundtrip::equivalent";
+const ALGORITHM: &str = "opy-rs::structural-identity";
 
 #[derive(Debug)]
 struct Args {
@@ -132,7 +132,7 @@ fn run() -> Result<CompatibilityResult, String> {
             algorithm: ALGORITHM,
             input_sha256: args.input_sha256,
             reference_input_sha256: reference_input_sha256.to_string(),
-            equivalent: workshop_rs::roundtrip::equivalent(&native_wir, &reference_wir),
+            equivalent: structurally_identical(&native_wir, &reference_wir),
         },
     })
 }
@@ -210,4 +210,31 @@ where
         oracle: oracle.ok_or_else(|| "--oracle is required".to_string())?,
         input_sha256: input_sha256.ok_or_else(|| "--input-sha256 is required".to_string())?,
     })
+}
+
+/// Structural identity of two parsed programs: settings, variables,
+/// subroutines, and rules must be identical. Only source provenance, which
+/// the public program keeps private, is ignored. The semantic
+/// `roundtrip::equivalent` is deliberately not used: it treats structurally
+/// different but behaviorally equal programs as the same.
+fn structurally_identical(native: &workshop_rs::Program, reference: &workshop_rs::Program) -> bool {
+    fn shape(program: &workshop_rs::Program) -> String {
+        let dump = format!(
+            "{:#?}\n{:#?}\n{:#?}\n{:#?}\n{:#?}",
+            program.settings,
+            program.global_variables,
+            program.player_variables,
+            program.subroutines,
+            program.rules
+        );
+        // Source positions are presentation, not structure.
+        dump.lines()
+            .filter(|line| {
+                let line = line.trim_start();
+                !(line.starts_with("line: ") || line.starts_with("col: "))
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+    shape(native) == shape(reference)
 }

@@ -121,3 +121,8 @@ fn team_settings_order_matches_the_pinned_oracle() {
 fn unoptimized_output_matches_the_pinned_oracle() {
     assert_converges("structural-unoptimized");
 }
+
+#[test]
+fn empty_rules_and_subroutines_are_dropped_like_the_pinned_oracle() {
+    assert_converges("structural-empty-rules");
+}

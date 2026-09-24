@@ -37,9 +37,13 @@ presentation noise, while exact output preserves the emitted artifact.
 
 Compatibility comparisons are produced by the isolated compatibility harness,
 not by the ordinary compile API. For semantic-WIR cases, the feature-gated
-internal `opy-compat` target parses only the pinned reference Workshop text and
-compares it directly with the native lowered WIR through
-`workshop-rs::roundtrip::equivalent`. It writes harness-level
+internal `opy-compat` target parses the pinned reference Workshop text and the
+native Workshop text with the same `workshop-rs` parser and requires the two
+programs (settings, variables, subroutines, rules) to be structurally
+identical, ignoring only source positions. The semantic
+`workshop-rs::roundtrip::equivalent` is not used because it accepts
+behaviorally equivalent rewrites that the structural-convergence contract
+treats as defects. It writes harness-level
 `compatibility.semanticWIR` comparison data, including the project and
 reference input digests; the public compile report and `opy-cli compile` have
 no oracle input or comparison field.
