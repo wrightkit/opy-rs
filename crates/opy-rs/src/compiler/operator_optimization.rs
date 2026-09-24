@@ -9,6 +9,7 @@ use workshop_rs::catalog::Kind;
 use workshop_rs::{Action, ModifyOp, Value};
 
 use super::Compiler;
+use super::string_format;
 
 /// Folded numbers beyond this magnitude keep their operator form.
 const NUMBER_LIMIT: f64 = 1e7;
@@ -63,9 +64,7 @@ impl<'a> OperatorOptimizer<'a> {
     /// Apply the rule of one node; a rewrite that changes the head is applied
     /// again to its result, as the reference does.
     pub(super) fn node(&self, value: Value) -> Value {
-        let value = match value {
-            other => literal_array(other),
-        };
+        let value = literal_array(value);
         let head = head_of(&value);
         let rewritten = match self.rewrite(value) {
             Rewrite::Same(value) => return value,
@@ -102,6 +101,7 @@ impl<'a> OperatorOptimizer<'a> {
             ("-", 1) => self.negate(args),
             ("roundToInteger", 2) => Self::round(args),
             ("absoluteValue", 1) => Self::absolute(args),
+            ("customString", _) if !args.is_empty() => Self::custom_string(args),
             ("slice", 3) => Self::slice(args),
             ("charAt", 2) => Self::char_at(args),
             ("lastOf", 1) => {
@@ -454,6 +454,22 @@ impl<'a> OperatorOptimizer<'a> {
         match number {
             Value::Number(number) => Rewrite::Changed(Value::Number(number.abs())),
             other => Rewrite::Same(call("absoluteValue", vec![other])),
+        }
+    }
+
+    /// Nested strings merge into their parent, and constant arguments become
+    /// text.
+    fn custom_string(args: Vec<Value>) -> Rewrite {
+        let value = call("customString", args);
+        let Some(tokens) = string_format::tokens(&value) else {
+            return Rewrite::Same(value);
+        };
+        let (merged, changed) = string_format::merge(tokens);
+        let merged = string_format::unsplit(merged);
+        if changed {
+            Rewrite::Changed(merged)
+        } else {
+            Rewrite::Same(merged)
         }
     }
 

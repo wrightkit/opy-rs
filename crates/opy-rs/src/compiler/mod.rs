@@ -23,6 +23,7 @@ mod lowering;
 mod operator_optimization;
 mod settings;
 mod size_optimization;
+mod string_format;
 
 pub(crate) use backend::MacroExpander;
 pub(super) use backend::{expand_macros, reject_unlowered_directives};

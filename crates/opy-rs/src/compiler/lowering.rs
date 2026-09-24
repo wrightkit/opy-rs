@@ -1,5 +1,6 @@
 use super::operator_optimization::{OperatorOptimizer, same, self_modification};
-use super::size_optimization::SizeOptimizer;
+use super::size_optimization::{SizeOptimizer, action_values};
+use super::string_format::split_all;
 use super::*;
 use crate::hir::OptimizationState;
 
@@ -1229,6 +1230,7 @@ impl<'a> Lowering<'a> {
                 .zip(&condition_exprs)
                 .map(|(value, expr)| {
                     let mut condition = self.materialize_value(*value);
+                    split_all(&mut condition);
                     let optimization = self.optimization_state_at(expr.span());
                     if optimization.enabled && optimization.for_size {
                         SizeOptimizer::new(self.compiler).condition(&mut condition);
@@ -7236,6 +7238,9 @@ impl<'a> Lowering<'a> {
             .map(|id| {
                 let mut action = self.materialize_action(&self.actions[*id]);
                 let optimization = self.optimization_state_at(self.action_origins[*id].as_ref());
+                for value in action_values(&mut action) {
+                    split_all(value);
+                }
                 if optimization.enabled {
                     if let Some(modification) = self_modification(&action) {
                         action = modification;
