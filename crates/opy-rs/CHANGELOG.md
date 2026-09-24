@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.54](https://github.com/wrightkit/opy-rs/compare/v0.1.53...v0.1.54) - 2026-09-23
+
+### Other
+
+- Migrate OPY to the public Workshop API ([#360](https://github.com/wrightkit/opy-rs/pull/360))
+
 ## [0.1.53](https://github.com/wrightkit/opy-rs/compare/v0.1.52...v0.1.53) - 2026-09-23
 
 ### Fixed
