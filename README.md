@@ -78,11 +78,11 @@ The Rust library surface, including the bounded Workshop compiler, lives in
 
 ## Compatibility
 
-Compatibility targets observable OverPy semantics for the declared support
-surface, not byte-identical output, incidental formatting, temporary variables,
-or upstream internal architecture. Optimizer behavior that materially changes
-Workshop structure or element cost remains in scope; only incidental optimizer
-shape is outside the target. Support claims are backed by the
+For the declared support surface, compiled output converges structurally on
+the pinned upstream OverPy output: rule order, element identities, control
+flow, conditions, values, variable names and indices, and element cost match
+when both outputs are parsed as canonical Workshop programs. Formatting,
+whitespace, and comments are not compared. Support claims are backed by the
 canonical [language-support contract](docs/language-support.md), the corpus,
 and pinned OverPy reference results.
 
