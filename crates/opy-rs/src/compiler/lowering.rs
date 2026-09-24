@@ -601,6 +601,30 @@ impl<'a> Lowering<'a> {
             global_reserved.insert(index);
         }
         let empty = HashSet::new();
+        let mut globals = globals;
+        let mut players = players;
+        let mut explicit_globals = global_reserved.clone();
+        explicit_globals.extend(globals.iter().filter_map(|(index, _)| *index));
+        let mut explicit_players = implicit_player_reserved.clone();
+        explicit_players.extend(players.iter().filter_map(|(index, _)| *index));
+        let global_names =
+            self.hir
+                .declarations
+                .iter()
+                .filter_map(|declaration| match declaration {
+                    hir::Declaration::GlobalVariable { name, .. } => Some(name.as_str()),
+                    _ => None,
+                });
+        top_allocate_reserved_names(global_names, &mut globals, &mut explicit_globals);
+        let player_names =
+            self.hir
+                .declarations
+                .iter()
+                .filter_map(|declaration| match declaration {
+                    hir::Declaration::PlayerVariable { name, .. } => Some(name.as_str()),
+                    _ => None,
+                });
+        top_allocate_reserved_names(player_names, &mut players, &mut explicit_players);
         let global_indices = allocate_indices(&globals, &global_reserved, "global variable")?;
         let player_indices =
             allocate_indices(&players, &implicit_player_reserved, "player variable")?;
@@ -7748,6 +7772,24 @@ fn collect_implicit_expr(
         | Expr::HostPlayer { .. }
         | Expr::Constant { .. }
         | Expr::MacroParam { .. } => {}
+    }
+}
+
+/// Variables named `__name__` take the highest free indices, in declaration
+/// order, instead of filling the low free slots.
+fn top_allocate_reserved_names<'a>(
+    names: impl Iterator<Item = &'a str>,
+    entries: &mut [(Option<u32>, Option<HirSpan>)],
+    reserved: &mut HashSet<u32>,
+) {
+    for (name, entry) in names.zip(entries.iter_mut()) {
+        if entry.0.is_some() || !(name.starts_with("__") && name.ends_with("__")) {
+            continue;
+        }
+        if let Some(index) = (0..=127u32).rev().find(|index| !reserved.contains(index)) {
+            reserved.insert(index);
+            entry.0 = Some(index);
+        }
     }
 }
 

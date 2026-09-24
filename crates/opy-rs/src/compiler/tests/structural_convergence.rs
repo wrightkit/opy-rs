@@ -49,3 +49,13 @@ fn size_optimization_literals_match_the_pinned_oracle() {
 fn operator_optimization_matches_the_pinned_oracle() {
     assert_converges("structural-operators");
 }
+
+#[test]
+fn declarations_names_and_arrays_match_the_pinned_oracle() {
+    assert_converges("structural-declarations");
+}
+
+#[test]
+fn terminal_conditionals_match_the_pinned_oracle() {
+    assert_converges("structural-control-flow");
+}

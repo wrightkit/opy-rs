@@ -422,7 +422,11 @@ impl<'a> OperatorOptimizer<'a> {
     fn filtered(&self, args: Vec<Value>) -> Rewrite {
         let [array, predicate] = two(args);
         let element_free = |value: &Value| !mentions_element(value);
-        if let Value::Call { name, args: operands } = &predicate {
+        if let Value::Call {
+            name,
+            args: operands,
+        } = &predicate
+        {
             if name == "!=" && operands.len() == 2 {
                 for (element, other) in [(0, 1), (1, 0)] {
                     if matches!(&operands[element], Value::Call { name, .. } if name == "currentArrayElement")

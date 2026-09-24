@@ -59,10 +59,7 @@ impl<'a> SizeOptimizer<'a> {
         }
         Value::Call {
             name: "charAt".to_string(),
-            args: vec![
-                Value::String(String::new()),
-                Value::Number(0.0),
-            ],
+            args: vec![Value::String(String::new()), Value::Number(0.0)],
         }
     }
 

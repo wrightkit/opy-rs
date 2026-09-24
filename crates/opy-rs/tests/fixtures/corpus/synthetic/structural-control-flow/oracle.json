@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: g\n}\n\nrule (\"terminal conditionals\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    conditions {\n        Global.g > 0;\n    }\n    actions {\n        Abort If(Compare(Global.g, ==, 1));\n        Loop If Condition Is True;\n        Abort If Condition Is False;\n        Abort;\n        Set Global Variable(g, 2);\n        Loop If(Compare(Global.g, ==, 3));\n        Abort;\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: g\n}\n\nrule (\"terminal conditionals\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    conditions {\n        Global.g > 0;\n    }\n    actions {\n        Abort If(Compare(Global.g, ==, 1));\n        Loop If Condition Is True;\n        Abort If Condition Is False;\n        Abort;\n        Set Global Variable(g, 2);\n        Loop If(Compare(Global.g, ==, 3));\n        Abort;\n    }\n}\n\n",
+    "workshopSha256": "0d959d7b32304d367950b9d6ff9f14639d79952d513768c71ecb5098260f47d4"
+  },
+  "fixture": "synthetic/structural-control-flow",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "3663677ead86260f8cd028abc17f4d1a844a9d878f0061e5e04d49fe548d0125"
+      }
+    ],
+    "sha256": "6f78a856c9ffd5015d82c757080c69dc88b1e687882325a7a0f852d7f003e03d",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}
