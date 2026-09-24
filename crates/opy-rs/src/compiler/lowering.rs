@@ -212,6 +212,7 @@ pub(crate) struct Lowering<'a> {
     deferred_gotos: Vec<(ActionId, String, Option<HirSpan>, usize)>,
     translation_uses: Vec<(String, Option<String>)>,
     optimized_nodes: HashMap<ValueId, bool>,
+    used_maps: Vec<&'static str>,
 }
 
 #[derive(Debug, Clone)]
@@ -387,6 +388,7 @@ impl<'a> Lowering<'a> {
             array_bindings: Vec::new(),
             current_rule_conditions: None,
             optimized_nodes: HashMap::new(),
+            used_maps: used_bugged_maps(hir),
             visible_labels: Vec::new(),
             deferred_gotos: Vec::new(),
             translation_uses: Vec::new(),
@@ -5425,6 +5427,11 @@ impl<'a> Lowering<'a> {
                         }
                     }
                 }
+                if op == "==" && self.optimization_state_at(span.as_ref()).enabled {
+                    if let Some(value) = self.lower_current_map_equality(left, right)? {
+                        return Ok(value);
+                    }
+                }
                 let left = self.lower_value(left)?;
                 let right = self.lower_value(right)?;
                 if let Some(value) = self.fold_numeric_binary(op, left, right) {
@@ -5871,6 +5878,9 @@ impl<'a> Lowering<'a> {
                         return Ok(self.push_call("divide", vec![approximation, base_log]));
                     }
                     return Ok(approximation);
+                }
+                if name == "getCurrentMap" && args.is_empty() && !self.used_maps.is_empty() {
+                    return Ok(self.lower_bugged_current_map());
                 }
                 if matches!(name.as_str(), "attacker" | "victim") && args.is_empty() {
                     return Ok(self.push_call(name, Vec::new()));
@@ -6447,6 +6457,68 @@ impl<'a> Lowering<'a> {
             self.optimized_nodes.insert(value_id, optimization.strict);
         }
         Ok(value_id)
+    }
+
+    /// `getCurrentMap() == Map.X`: the maps whose value comparison the
+    /// Workshop gets wrong are compared as text instead.
+    fn lower_current_map_equality(
+        &mut self,
+        left: &Expr,
+        right: &Expr,
+    ) -> Result<Option<ValueId>, IntegrationError> {
+        let is_current_map = |expr: &Expr| matches!(expr, Expr::Call { name, args, .. } if name == "getCurrentMap" && args.is_empty());
+        let map_of = |expr: &Expr| match expr {
+            Expr::Enum {
+                value_type, value, ..
+            } if value_type == "Map" => Some(value.clone()),
+            _ => None,
+        };
+        let (map, other) = match (map_of(left), map_of(right)) {
+            (Some(map), None) if is_current_map(right) => (map, right),
+            (None, Some(map)) if is_current_map(left) => (map, left),
+            _ => return Ok(None),
+        };
+        let _ = other;
+        let current = self.push_call("currentMap", Vec::new());
+        let map_value = self.push_value(Value::Enum {
+            value_type: "Map".to_string(),
+            value: map.clone(),
+        });
+        if !BUGGED_MAPS.contains(&map.as_str()) {
+            return Ok(Some(self.push_call("==", vec![current, map_value])));
+        }
+        let format = self.push_value(Value::String("{0}".to_string()));
+        let current_text = self.push_call("customString", vec![format, current]);
+        let format = self.push_value(Value::String("{0}".to_string()));
+        let map_text = self.push_call("customString", vec![format, map_value]);
+        Ok(Some(self.push_call("==", vec![current_text, map_text])))
+    }
+
+    /// A bare `getCurrentMap()` selects the used map from the bugged ones by
+    /// its text, since comparing the map values themselves fails for them.
+    fn lower_bugged_current_map(&mut self) -> ValueId {
+        let mut maps: Vec<ValueId> = self
+            .used_maps
+            .clone()
+            .into_iter()
+            .map(|map| {
+                self.push_value(Value::Enum {
+                    value_type: "Map".to_string(),
+                    value: map.to_string(),
+                })
+            })
+            .collect();
+        maps.push(self.push_call("currentMap", Vec::new()));
+        let candidates = self.push_call("array", maps);
+        let current = self.push_call("currentMap", Vec::new());
+        let format = self.push_value(Value::String("{0}".to_string()));
+        let current_text = self.push_call("customString", vec![format, current]);
+        let element = self.push_call("currentArrayElement", Vec::new());
+        let empty = self.push_call("emptyArray", Vec::new());
+        let element_text = self.push_call("stringSplit", vec![element, empty]);
+        let matches = self.push_call("==", vec![current_text, element_text]);
+        let filtered = self.push_call("filteredArray", vec![candidates, matches]);
+        self.push_call("firstOf", vec![filtered])
     }
 
     fn apply_replacements_to_values(
@@ -8535,4 +8607,37 @@ fn filtered_word_split(text: &[char], start: usize) -> Option<usize> {
         .get(position)
         .is_none_or(|c| !(c.is_alphanumeric() || *c == '_'));
     boundary.then_some(split?)
+}
+
+const BUGGED_MAPS: [&str; 4] = ["COLOSSEO", "ESPERANCA", "SAMOA", "THRONE_OF_ANUBIS"];
+
+/// The maps named anywhere in the program whose value comparison the
+/// Workshop gets wrong.
+fn used_bugged_maps(hir: &hir::Program) -> Vec<&'static str> {
+    fn collect(value: &serde_json::Value, found: &mut HashSet<String>) {
+        match value {
+            serde_json::Value::Object(fields) => {
+                if fields.get("kind").and_then(|kind| kind.as_str()) == Some("enum")
+                    && fields.get("type").and_then(|kind| kind.as_str()) == Some("Map")
+                    && let Some(member) = fields.get("value").and_then(|value| value.as_str())
+                {
+                    found.insert(member.to_string());
+                }
+                fields.values().for_each(|field| collect(field, found));
+            }
+            serde_json::Value::Array(items) => items.iter().for_each(|item| collect(item, found)),
+            _ => {}
+        }
+    }
+    let mut found = HashSet::new();
+    if let Ok(value) = serde_json::to_value(&hir.rules) {
+        collect(&value, &mut found);
+    }
+    if let Ok(value) = serde_json::to_value(&hir.declarations) {
+        collect(&value, &mut found);
+    }
+    BUGGED_MAPS
+        .into_iter()
+        .filter(|map| found.contains(*map))
+        .collect()
 }
