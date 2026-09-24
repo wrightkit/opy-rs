@@ -3175,7 +3175,7 @@
       "receiver": "Player"
     },
     {
-      "catalogId": "isFiringSecondaryFire",
+      "catalogId": "isFiringSecondary",
       "evidence": [
         "receiver-calls"
       ],
@@ -3985,7 +3985,7 @@
           "name": "relativity"
         },
         {
-          "default": "INCORPORATE_CONTRARY_MOTION",
+          "default": "CANCEL_CONTRARY_MOTION_XYZ",
           "domain": "Impulse",
           "name": "motion"
         }

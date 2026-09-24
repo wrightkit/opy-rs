@@ -29,6 +29,7 @@ impl<'a> SizeOptimizer<'a> {
             }
             Action::Call { name, args } => {
                 self.indexed_variable_call(name, args);
+                self.chase_call(name, args);
                 self.call_arguments(Kind::Action, name, args);
             }
             _ => {}
@@ -115,6 +116,25 @@ impl<'a> SizeOptimizer<'a> {
         }
     }
 
+    /// Chase destinations and rates spell `0` and `1` as `False` and `True`.
+    fn chase_call(&self, name: &str, args: &mut [Value]) {
+        let positions: &[usize] = match name {
+            "chaseAtRate" | "chaseOverTime" => &[1, 2],
+            "chasePlayerVariableAtRate" | "chasePlayerVariableOverTime" => &[2, 3],
+            _ => return,
+        };
+        for position in positions {
+            match args.get_mut(*position) {
+                Some(arg @ Value::Number(_)) => match arg {
+                    Value::Number(number) if *number == 0.0 => *arg = Value::Bool(false),
+                    Value::Number(number) if *number == 1.0 => *arg = Value::Bool(true),
+                    _ => {}
+                },
+                _ => {}
+            }
+        }
+    }
+
     fn call_arguments(&self, kind: Kind, name: &str, args: &mut [Value]) {
         let entry = self.compiler.catalog.entry(kind, name);
         for (index, arg) in args.iter_mut().enumerate() {
@@ -138,18 +158,30 @@ impl<'a> SizeOptimizer<'a> {
         }
     }
 
-    /// A rule condition also replaces `1` beside an ordering comparison.
+    /// A rule condition is written as a comparison of its operands, which
+    /// the reference does not treat as arguments: they only lose `0` and
+    /// (beside an ordering) `1`, and their contents are optimized as usual.
     pub(super) fn condition(&self, value: &mut Value) {
-        if let Value::Call { name, args } = value {
-            if matches!(name.as_str(), "<" | "<=" | ">" | ">=") {
+        match value {
+            Value::Call { name, args }
+                if matches!(name.as_str(), "==" | "!=" | "<" | "<=" | ">" | ">=") =>
+            {
+                let ordering = matches!(name.as_str(), "<" | "<=" | ">" | ">=");
                 for arg in args.iter_mut().take(2) {
-                    if matches!(arg, Value::Number(number) if *number == 1.0) {
-                        *arg = Value::Bool(true);
+                    match arg {
+                        Value::Number(number) if *number == 0.0 => *arg = Value::Null,
+                        Value::Number(number) if *number == 1.0 && ordering => {
+                            *arg = Value::Bool(true);
+                        }
+                        _ => self.nested(arg),
                     }
                 }
             }
+            Value::Call { name, args } if name == "not" && args.len() == 1 => {
+                self.nested(&mut args[0]);
+            }
+            other => self.nested(other),
         }
-        self.nested(value);
     }
 
     fn nested(&self, value: &mut Value) {
