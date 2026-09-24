@@ -37,6 +37,7 @@ pub fn parse_with_options(tokens: &[Token], allow_macro_redeclaration: bool) -> 
         allow_macro_redeclaration,
         last_statement_continued: false,
         last_colon_body_continued: false,
+        open_if_indents: Vec::new(),
     };
     let program = parser.parse_program();
     if parser.errors.is_empty() {
@@ -64,6 +65,8 @@ struct Parser<'a> {
     allow_macro_redeclaration: bool,
     last_statement_continued: bool,
     last_colon_body_continued: bool,
+    /// Columns of the `if` statements whose branches are being parsed.
+    open_if_indents: Vec<u32>,
 }
 
 fn is_identifier(text: &str) -> bool {
@@ -342,6 +345,7 @@ pub(crate) fn parse_expression_fragment(
         errors: Vec::new(),
         last_statement_continued: false,
         last_colon_body_continued: false,
+        open_if_indents: Vec::new(),
     };
     let expression = parser.parse_expr().map_err(|()| {
         parser.errors.first().cloned().unwrap_or_else(|| {

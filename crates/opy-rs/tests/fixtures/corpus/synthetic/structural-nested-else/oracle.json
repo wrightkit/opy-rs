@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: g\n        1: h\n}\n\n//Optimize for size enabled\nrule (\"x\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        If(Compare(Global.g, ==, 1));\n            Set Global Variable(g, 2);\n            If(Or(Compare(Global.h, ==, Null), Compare(Global.h, ==, Null)));\n                Set Global Variable(h, 3);\n            End;\n        Else;\n            If(Or(Compare(Global.h, ==, Null), Compare(Global.h, ==, Null)));\n                Set Global Variable(h, 4);\n            End;\n        End;\n        Set Global Variable(g, 5);\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: g\n        1: h\n}\n\n//Optimize for size enabled\nrule (\"x\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        If(Compare(Global.g, ==, 1));\n            Set Global Variable(g, 2);\n            If(Or(Compare(Global.h, ==, Null), Compare(Global.h, ==, Null)));\n                Set Global Variable(h, 3);\n            End;\n        Else;\n            If(Or(Compare(Global.h, ==, Null), Compare(Global.h, ==, Null)));\n                Set Global Variable(h, 4);\n            End;\n        End;\n        Set Global Variable(g, 5);\n    }\n}\n\n",
+    "workshopSha256": "d0925db9bca3c9ce167c804745078040e3859af55371cd88f6a43669fdd68481"
+  },
+  "fixture": "synthetic/structural-nested-else",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "fb2287f21d74e5ec241bd0cd5e1210752b5d6467a3f8b44fa5941f7c8dd0552f"
+      }
+    ],
+    "sha256": "c2240db79a0308cfae51379a434bccf9c96b8d106ea1d0f9d426f896fa992a27",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

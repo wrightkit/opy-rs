@@ -245,6 +245,14 @@ impl Parser<'_> {
     }
 
     pub(super) fn parse_if(&mut self) -> Result<Stmt, ()> {
+        let indent = self.peek().span.start.col;
+        self.open_if_indents.push(indent);
+        let stmt = self.parse_if_chain();
+        self.open_if_indents.pop();
+        stmt
+    }
+
+    fn parse_if_chain(&mut self) -> Result<Stmt, ()> {
         let start = self.advance();
         let line_indent = start.span.start.col;
         let condition = self.parse_expr()?;
@@ -269,7 +277,11 @@ impl Parser<'_> {
         loop {
             let save = self.pos;
             self.skip_newlines();
-            if self.peek_kind() == TokenKind::Eof || self.peek().span.start.col > line_indent {
+            let column = self.peek().span.start.col;
+            if self.peek_kind() == TokenKind::Eof
+                || column > line_indent
+                || (column != line_indent && self.open_if_indents.contains(&column))
+            {
                 self.pos = save;
                 break;
             }

@@ -59,3 +59,8 @@ fn declarations_names_and_arrays_match_the_pinned_oracle() {
 fn terminal_conditionals_match_the_pinned_oracle() {
     assert_converges("structural-control-flow");
 }
+
+#[test]
+fn else_after_a_nested_conditional_belongs_to_the_outer_conditional() {
+    assert_converges("structural-nested-else");
+}
