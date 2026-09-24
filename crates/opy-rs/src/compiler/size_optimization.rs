@@ -137,13 +137,12 @@ impl<'a> SizeOptimizer<'a> {
             _ => return,
         };
         for position in positions {
-            match args.get_mut(*position) {
-                Some(arg @ Value::Number(_)) => match arg {
+            if let Some(arg @ Value::Number(_)) = args.get_mut(*position) {
+                match arg {
                     Value::Number(number) if *number == 0.0 => *arg = Value::Bool(false),
                     Value::Number(number) if *number == 1.0 => *arg = Value::Bool(true),
                     _ => {}
-                },
-                _ => {}
+                }
             }
         }
     }
