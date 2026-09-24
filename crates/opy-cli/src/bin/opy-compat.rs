@@ -115,6 +115,16 @@ fn run() -> Result<CompatibilityResult, String> {
     )
     .map_err(|error| error.to_string())?;
 
+    // Both sides are compared as Workshop text parsed by the same parser, so
+    // representation choices in the in-memory program do not count.
+    let native_wir = workshop_rs::parser::parse_with_context(
+        &strip_workshop_comments(&artifact.emitted),
+        &catalog,
+        &Locale::new("en-US"),
+        &context,
+    )
+    .map_err(|error| error.to_string())?;
+
     Ok(CompatibilityResult {
         schema_version: 1,
         semantic_wir: SemanticWIRComparison {
@@ -122,7 +132,7 @@ fn run() -> Result<CompatibilityResult, String> {
             algorithm: ALGORITHM,
             input_sha256: args.input_sha256,
             reference_input_sha256: reference_input_sha256.to_string(),
-            equivalent: workshop_rs::roundtrip::equivalent(&artifact.wir, &reference_wir),
+            equivalent: workshop_rs::roundtrip::equivalent(&native_wir, &reference_wir),
         },
     })
 }
