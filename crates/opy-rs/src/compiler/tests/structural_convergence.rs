@@ -101,6 +101,11 @@ fn goto_distance_excludes_instructions_the_output_drops() {
 }
 
 #[test]
+fn rounding_bare_returns_and_map_comparisons_match_the_pinned_oracle() {
+    assert_converges("structural-reference-quirks");
+}
+
+#[test]
 fn skip_over_nothing_is_a_disabled_abort() {
     assert_converges("structural-zero-skip");
 }

@@ -1288,8 +1288,8 @@ impl<'a> Lowering<'a> {
                 ) => false,
                 Some(Action::CallSubroutine { .. }) => true,
                 Some(Action::Call { name, .. }) => match name.as_str() {
-                    "abortIf" | "break" | "continue" | "loop" | "loopIf" | "return" | "skip"
-                    | "skipIf" => false,
+                    "abort" | "abortIf" | "break" | "continue" | "loop" | "loopIf" | "return"
+                    | "skip" | "skipIf" => false,
                     "wait" => matches!(event, Event::Subroutine(_)),
                     _ => true,
                 },
@@ -6486,7 +6486,7 @@ impl<'a> Lowering<'a> {
             value_type: "Map".to_string(),
             value: map.clone(),
         });
-        if !BUGGED_MAPS.contains(&map.as_str()) {
+        if !TEXT_COMPARED_MAPS.contains(&map.as_str()) {
             return Ok(Some(self.push_call("==", vec![current, map_value])));
         }
         let format = self.push_value(Value::String("{0}".to_string()));
@@ -8626,6 +8626,9 @@ fn filtered_word_split(text: &[char], start: usize) -> Option<usize> {
 }
 
 const BUGGED_MAPS: [&str; 4] = ["COLOSSEO", "ESPERANCA", "SAMOA", "THRONE_OF_ANUBIS"];
+/// Only these are compared as text; the pinned OverPy leaves an equality
+/// with `THRONE_OF_ANUBIS` as it is, though a bare current map still filters it.
+const TEXT_COMPARED_MAPS: [&str; 3] = ["COLOSSEO", "ESPERANCA", "SAMOA"];
 
 /// The maps named anywhere in the program whose value comparison the
 /// Workshop gets wrong.

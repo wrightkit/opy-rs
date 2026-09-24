@@ -10,6 +10,7 @@ use workshop_rs::{Action, ModifyOp, Value};
 
 use super::Compiler;
 use super::string_format;
+use crate::compile_time::round_half_up;
 
 /// Folded numbers beyond this magnitude keep their operator form.
 const NUMBER_LIMIT: f64 = 1e7;
@@ -440,7 +441,7 @@ impl<'a> OperatorOptimizer<'a> {
         let [number, direction] = two(args);
         if let (Value::Number(number), Value::Enum { value, .. }) = (&number, &direction) {
             match value.as_str() {
-                "NEAREST" => return Rewrite::Changed(Value::Number(number.round())),
+                "NEAREST" => return Rewrite::Changed(Value::Number(round_half_up(*number))),
                 "UP" => return Rewrite::Changed(Value::Number(number.ceil())),
                 "DOWN" => return Rewrite::Changed(Value::Number(number.floor())),
                 _ => {}
