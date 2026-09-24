@@ -1,3 +1,5 @@
+use super::operator_optimization::OperatorOptimizer;
+use super::size_optimization::SizeOptimizer;
 use super::*;
 use crate::hir::OptimizationState;
 
@@ -208,6 +210,7 @@ pub(crate) struct Lowering<'a> {
     visible_labels: Vec<HashSet<String>>,
     deferred_gotos: Vec<(ActionId, String, Option<HirSpan>, usize)>,
     translation_uses: Vec<(String, Option<String>)>,
+    optimized_nodes: HashMap<ValueId, bool>,
 }
 
 #[derive(Debug, Clone)]
@@ -382,6 +385,7 @@ impl<'a> Lowering<'a> {
             defined_subroutines: HashSet::new(),
             array_bindings: Vec::new(),
             current_rule_conditions: None,
+            optimized_nodes: HashMap::new(),
             visible_labels: Vec::new(),
             deferred_gotos: Vec::new(),
             translation_uses: Vec::new(),
@@ -1195,7 +1199,18 @@ impl<'a> Lowering<'a> {
             event,
             conditions: conditions
                 .iter()
-                .map(|value| workshop_rs::Condition::new(self.materialize_value(*value)))
+                .zip(&condition_exprs)
+                .map(|(value, expr)| {
+                    let mut condition = self.materialize_value(*value);
+                    let optimization = self.optimization_state_at(expr.span());
+                    if optimization.enabled && optimization.for_size {
+                        SizeOptimizer::new(self.compiler).condition(&mut condition);
+                    }
+                    workshop_rs::Condition::new(
+                        OperatorOptimizer::new(self.compiler, optimization.strict)
+                            .wrap_condition(condition),
+                    )
+                })
                 .collect(),
             actions: self.public_actions(&actions),
         });
@@ -3958,34 +3973,7 @@ impl<'a> Lowering<'a> {
     }
 
     fn lower_condition(&mut self, expr: &Expr) -> Result<ValueId, IntegrationError> {
-        if let Expr::Binary {
-            op, left, right, ..
-        } = expr
-            && op == "!="
-            && matches!(right.as_ref(), Expr::Bool { value: true, .. })
-        {
-            let value = self.lower_value(left)?;
-            let false_value = self.push_value(Value::Bool(false));
-            return Ok(self.push_call("==", vec![value, false_value]));
-        }
-        if let Expr::Unary { op, operand, .. } = expr
-            && op == "not"
-            && !matches!(operand.as_ref(), Expr::Binary { .. })
-        {
-            let value = self.lower_value(operand)?;
-            let false_value = self.push_value(Value::Bool(false));
-            return Ok(self.push_call("==", vec![value, false_value]));
-        }
-        let value = self.lower_value(expr)?;
-        let is_comparison = |expr: &Expr| matches!(expr, Expr::Binary { op, .. } if matches!(op.as_str(), "==" | "!=" | "<" | "<=" | ">" | ">="));
-        if is_comparison(expr)
-            || matches!(expr, Expr::Unary { op, operand, .. } if op == "not" && is_comparison(operand))
-        {
-            return Ok(value);
-        }
-        let value = self.apply_replacement(value, "==", 0, expr.span().copied());
-        let true_value = self.push_value(Value::Bool(true));
-        Ok(self.push_call("==", vec![value, true_value]))
+        self.lower_value(expr)
     }
 
     fn lower_delete(
@@ -5432,13 +5420,17 @@ impl<'a> Lowering<'a> {
                         }
                     }
                 }
-                "-" => Value::Call {
-                    name: "-".to_string(),
-                    args: {
-                        let operand = self.lower_value(operand)?;
-                        self.value_args(&[operand])
-                    },
-                },
+                "-" => {
+                    let operand = self.lower_value(operand)?;
+                    if let Value::Number(number) = self.value(operand) {
+                        Value::Number(-number)
+                    } else {
+                        Value::Call {
+                            name: "-".to_string(),
+                            args: self.value_args(&[operand]),
+                        }
+                    }
+                }
                 "+" => return self.lower_value(operand),
                 _ => {
                     return Err(self.unsupported(
@@ -6342,6 +6334,17 @@ impl<'a> Lowering<'a> {
         {
             *target_args = args;
         }
+        if optimization.enabled
+            && matches!(
+                expr,
+                Expr::Binary { .. }
+                    | Expr::Unary { .. }
+                    | Expr::Conditional { .. }
+                    | Expr::Index { .. }
+            )
+        {
+            self.optimized_nodes.insert(value_id, optimization.strict);
+        }
         Ok(value_id)
     }
 
@@ -6897,7 +6900,7 @@ impl<'a> Lowering<'a> {
         &self,
         actions: &[ActionId],
     ) -> Vec<(Option<HirSpan>, Vec<Option<HirSpan>>)> {
-        actions
+        self.useful_actions(actions)
             .iter()
             .map(|action| {
                 (
@@ -7014,6 +7017,14 @@ impl<'a> Lowering<'a> {
     }
 
     fn materialize_value_inner(&self, id: ValueId) -> workshop_rs::Value {
+        let value = self.materialize_node(id);
+        match self.optimized_nodes.get(&id) {
+            Some(strict) => OperatorOptimizer::new(self.compiler, *strict).node(value),
+            None => value,
+        }
+    }
+
+    fn materialize_node(&self, id: ValueId) -> workshop_rs::Value {
         match self.value(id) {
             Value::Number(value) => workshop_rs::Value::Number(*value),
             Value::String(value) => workshop_rs::Value::String(value.clone()),
@@ -7072,10 +7083,41 @@ impl<'a> Lowering<'a> {
         )))
     }
 
-    fn public_actions(&self, actions: &[ActionId]) -> Vec<workshop_rs::Action> {
+    /// Modifications the pinned reference drops as useless instructions.
+    fn useful_actions(&self, actions: &[ActionId]) -> Vec<ActionId> {
         actions
             .iter()
-            .map(|id| self.materialize_action(&self.actions[*id]))
+            .copied()
+            .filter(|id| {
+                let (op, value) = match &self.actions[*id] {
+                    Action::ModifyGlobalVariable { op, value, .. }
+                    | Action::ModifyPlayerVariable { op, value, .. } => (*op, *value),
+                    _ => return true,
+                };
+                let optimization = self.optimization_state_at(self.action_origins[*id].as_ref());
+                let identity = match op {
+                    ModifyOp::Add | ModifyOp::Subtract => 0.0,
+                    ModifyOp::Multiply | ModifyOp::Divide | ModifyOp::RaiseToPower => 1.0,
+                    _ => return true,
+                };
+                !(optimization.enabled
+                    && !optimization.strict
+                    && self.value_is_number(value, identity))
+            })
+            .collect()
+    }
+
+    fn public_actions(&self, actions: &[ActionId]) -> Vec<workshop_rs::Action> {
+        self.useful_actions(actions)
+            .iter()
+            .map(|id| {
+                let mut action = self.materialize_action(&self.actions[*id]);
+                let optimization = self.optimization_state_at(self.action_origins[*id].as_ref());
+                if optimization.enabled && optimization.for_size {
+                    SizeOptimizer::new(self.compiler).action(&mut action);
+                }
+                action
+            })
             .collect()
     }
 

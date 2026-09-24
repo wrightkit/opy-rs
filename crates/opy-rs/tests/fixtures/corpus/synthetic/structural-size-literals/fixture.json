@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/structural-size-literals",
+  "category": "compilation",
+  "features": [
+    "structural convergence",
+    "optimizeForSize",
+    "optimizeStrict"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": false
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": true
+    }
+  }
+}

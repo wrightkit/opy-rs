@@ -20,7 +20,9 @@ mod blizzard_global;
 mod hooks;
 mod integration;
 mod lowering;
+mod operator_optimization;
 mod settings;
+mod size_optimization;
 
 pub(crate) use backend::MacroExpander;
 pub(super) use backend::{expand_macros, reject_unlowered_directives};

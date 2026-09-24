@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: g\n        1: h\n    player:\n        0: p\n}\n\n//Strict optimizations enabled\nrule (\"operators\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    conditions {\n        Is Dummy Bot(Event Player) == True;\n        Is Alive(Event Player) == True;\n        (Event Player).p == False;\n        (Event Player).p != True;\n        (Event Player).p != False;\n        Global.h > 0;\n    }\n    actions {\n        Set Global Variable(g, -5);\n        Set Global Variable(g, Multiply(1, Global.h));\n        Set Global Variable(g, 5);\n        Set Global Variable(g, Add(-5, Global.h));\n        Set Global Variable(g, True);\n        Set Global Variable(g, False);\n        Set Global Variable(g, False);\n        Set Global Variable(g, And(Compare(Global.h, >, 1), True));\n        Set Global Variable(g, 1);\n        Set Global Variable(g, Multiply(Global.h, 0));\n        Set Global Variable(g, Add(Global.h, 0));\n        Set Global Variable(g, Multiply(-1, Global.h));\n        Set Global Variable(g, Compare(Global.h, !=, 1));\n        Set Global Variable(g, Is Alive(Event Player));\n        Set Global Variable(g, Compare(Custom String(\"am\"), ==, Custom String(\"**\")));\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: g\n        1: h\n    player:\n        0: p\n}\n\n//Strict optimizations enabled\nrule (\"operators\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    conditions {\n        Is Dummy Bot(Event Player) == True;\n        Is Alive(Event Player) == True;\n        (Event Player).p == False;\n        (Event Player).p != True;\n        (Event Player).p != False;\n        Global.h > 0;\n    }\n    actions {\n        Set Global Variable(g, -5);\n        Set Global Variable(g, Multiply(1, Global.h));\n        Set Global Variable(g, 5);\n        Set Global Variable(g, Add(-5, Global.h));\n        Set Global Variable(g, True);\n        Set Global Variable(g, False);\n        Set Global Variable(g, False);\n        Set Global Variable(g, And(Compare(Global.h, >, 1), True));\n        Set Global Variable(g, 1);\n        Set Global Variable(g, Multiply(Global.h, 0));\n        Set Global Variable(g, Add(Global.h, 0));\n        Set Global Variable(g, Multiply(-1, Global.h));\n        Set Global Variable(g, Compare(Global.h, !=, 1));\n        Set Global Variable(g, Is Alive(Event Player));\n        Set Global Variable(g, Compare(Custom String(\"am\"), ==, Custom String(\"**\")));\n    }\n}\n\n",
+    "workshopSha256": "a29efc22084ccf4405950164c3c2c52c0a0c54f6c858334ef5fccca7d5605ace"
+  },
+  "fixture": "synthetic/structural-operators",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "fe4c1982b7fbc3c6b07879fa45e6f13829819dd168dc5348bb907bfc9e211929"
+      }
+    ],
+    "sha256": "d001ad8814a19fe5303ace206785dc1759bf7aa6008a88c0de541802eeeffd6f",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

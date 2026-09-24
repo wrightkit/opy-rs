@@ -102,6 +102,7 @@ fn chained_conditional_lowers_to_right_associative_canonical_values() {
         "tests/fixtures/corpus/real-world/overpy-client-to-server/regressions/chained-ternary.opy",
     ))
     .expect("the minimized regression must be readable");
+    let source = format!("#!disableOptimizations\n{source}");
     let artifact = Compiler::new()
         .expect("released Workshop contract must load")
         .compile_source_with_locale(&source, "source.opy", Path::new("."), &Locale::new("en-US"))
@@ -126,7 +127,7 @@ fn chained_conditional_lowers_to_right_associative_canonical_values() {
 
 #[test]
 fn preprocessor_conditional_preserves_macro_argument_provenance() {
-    let source = "#!define choose(value) value if value else 0\n\nglobalvar result\n\nrule \"r\":\n    @Event global\n    result = choose(1)\n";
+    let source = "#!disableOptimizations\n#!define choose(value) value if value else 0\n\nglobalvar result\n\nrule \"r\":\n    @Event global\n    result = choose(1)\n";
     let hir = crate::compile(source, "source.opy", Path::new("."))
         .expect("macro-expanded conditional must parse");
     hir.validate().expect("conditional HIR must validate");
@@ -147,11 +148,11 @@ fn preprocessor_conditional_preserves_macro_argument_provenance() {
     else {
         panic!("expected a conditional expression in the expanded HIR");
     };
-    assert_eq!(span.unwrap().start.line, 7);
-    assert_eq!(span.unwrap().end.line, 7);
-    assert_eq!(then_value.span().unwrap().start.line, 7);
-    assert_eq!(condition.span().unwrap().start.line, 7);
-    assert_eq!(else_value.span().unwrap().start.line, 7);
+    assert_eq!(span.unwrap().start.line, 8);
+    assert_eq!(span.unwrap().end.line, 8);
+    assert_eq!(then_value.span().unwrap().start.line, 8);
+    assert_eq!(condition.span().unwrap().start.line, 8);
+    assert_eq!(else_value.span().unwrap().start.line, 8);
 
     let artifact = Compiler::new()
         .expect("released Workshop contract must load")

@@ -66,6 +66,8 @@ mod string_continuations;
 mod string_literals;
 #[path = "tests/string_modifiers.rs"]
 mod string_modifiers;
+#[path = "tests/structural_convergence.rs"]
+mod structural_convergence;
 #[path = "tests/syntax_lowering.rs"]
 mod syntax_lowering;
 #[path = "tests/translations.rs"]
