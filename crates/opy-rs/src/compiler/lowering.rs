@@ -4932,13 +4932,10 @@ impl<'a> Lowering<'a> {
             self.push_value(Value::Null),
         ];
         let text_value = self.lower_text_value(text)?;
-        text_slots[text_slot - 1] = if matches!(
-            self.value(text_value),
-            Value::Call { name, .. } if name == "customString"
-        ) {
-            text_value
-        } else {
+        text_slots[text_slot - 1] = if matches!(self.value(text_value), Value::String(_)) {
             self.push_call("customString", vec![text_value])
+        } else {
+            text_value
         };
         let mut colors = [
             self.push_value(Value::Null),
