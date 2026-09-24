@@ -97,6 +97,8 @@ impl<'a> OperatorOptimizer<'a> {
             ("modulo", 2) => self.modulo(args),
             ("raiseToPower", 2) => self.power(args),
             ("-", 1) => self.negate(args),
+            ("roundToInteger", 2) => Self::round(args),
+            ("absoluteValue", 1) => Self::absolute(args),
             ("mappedArray", 2) => Self::mapped(args),
             ("filteredArray", 2) => self.filtered(args),
             ("arrayContains", 2) => self.array_contains(args),
@@ -408,6 +410,27 @@ impl<'a> OperatorOptimizer<'a> {
                 }
                 Rewrite::Changed(call("multiply", vec![Value::Number(-1.0), other]))
             }
+        }
+    }
+
+    fn round(args: Vec<Value>) -> Rewrite {
+        let [number, direction] = two(args);
+        if let (Value::Number(number), Value::Enum { value, .. }) = (&number, &direction) {
+            match value.as_str() {
+                "NEAREST" => return Rewrite::Changed(Value::Number(number.round())),
+                "UP" => return Rewrite::Changed(Value::Number(number.ceil())),
+                "DOWN" => return Rewrite::Changed(Value::Number(number.floor())),
+                _ => {}
+            }
+        }
+        Rewrite::Same(call("roundToInteger", vec![number, direction]))
+    }
+
+    fn absolute(args: Vec<Value>) -> Rewrite {
+        let [number] = one(args);
+        match number {
+            Value::Number(number) => Rewrite::Changed(Value::Number(number.abs())),
+            other => Rewrite::Same(call("absoluteValue", vec![other])),
         }
     }
 

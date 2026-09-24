@@ -106,7 +106,7 @@ rule "builtin surface":
     @Condition strContains("abc", "b")
     @Condition ceil(1.2) == 2
     @Condition floor(1.8) == 1
-    @Condition round(1.5) == 2
+    @Condition round(eventPlayer.getHealth()) == 2
     g = getPlayers(Team.ALL)
     g = getAllHeroes()
     g = heroIcon(Hero.ANA)

@@ -6442,14 +6442,6 @@ impl<'a> Lowering<'a> {
             *target_args = args;
         }
         if optimization.enabled
-            && matches!(
-                expr,
-                Expr::Binary { .. }
-                    | Expr::Unary { .. }
-                    | Expr::Conditional { .. }
-                    | Expr::Index { .. }
-                    | Expr::Comprehension { .. }
-            )
         {
             self.optimized_nodes.insert(value_id, optimization.strict);
         }
