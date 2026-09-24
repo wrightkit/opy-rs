@@ -175,6 +175,10 @@ impl Lowerer {
             return Vec::new();
         };
 
+        let compress = matches!(
+            args.get(2).map(|arg| &arg.value),
+            Some(Expr::Bool { value: true, .. })
+        );
         let mut result = Vec::with_capacity(field_entries.len());
         for field in field_entries {
             let Some(field_name) = expr_identifier(&field.key) else {
@@ -188,7 +192,7 @@ impl Lowerer {
             let target = self.lower_expr(&field.value, macro_params, CallPosition::Value);
             let previous = self.allow_dict_literal;
             self.allow_dict_literal = true;
-            let values = elements
+            let values: Vec<HirExpr> = elements
                 .iter()
                 .map(|element| match element {
                     Expr::Dict { entries, .. } => entries
@@ -202,12 +206,24 @@ impl Lowerer {
                 })
                 .collect();
             self.allow_dict_literal = previous;
+            let compressible = compress && is_compressible(&values);
+            let array = HirExpr::Array {
+                elements: values,
+                span: Some(span.into()),
+            };
+            let value = if compressible {
+                HirExpr::Call {
+                    name: "compressed".to_string(),
+                    args: vec![array],
+                    debug_source: None,
+                    span: Some(span.into()),
+                }
+            } else {
+                array
+            };
             result.push(HirStmt::Assign {
                 target: Box::new(target),
-                value: Box::new(HirExpr::Array {
-                    elements: values,
-                    span: Some(span.into()),
-                }),
+                value: Box::new(value),
                 span: Some(span.into()),
             });
         }
@@ -315,4 +331,37 @@ impl Lowerer {
             .map(|(name, _)| name.clone())
             .next()
     }
+}
+
+/// Whether `compressed()` accepts these elements: only numbers, or only
+/// vectors of numbers.
+fn is_compressible(values: &[HirExpr]) -> bool {
+    fn number(expr: &HirExpr) -> Option<f64> {
+        match expr {
+            HirExpr::Number { value, .. } => Some(*value),
+            HirExpr::Null { .. } => Some(0.0),
+            HirExpr::Unary { op, operand, .. } if op == "-" => number(operand).map(|v| -v),
+            HirExpr::Unary { op, operand, .. } if op == "+" => number(operand),
+            _ => None,
+        }
+    }
+    if values.is_empty() {
+        return false;
+    }
+    let vectors = values
+        .iter()
+        .all(|value| matches!(value, HirExpr::Vector { .. }));
+    if vectors {
+        return values.iter().all(|value| {
+            let HirExpr::Vector { x, y, z, .. } = value else {
+                return false;
+            };
+            [x, y, z]
+                .into_iter()
+                .all(|component| number(component).is_some_and(|v| v.abs() < 4999.0))
+        });
+    }
+    values
+        .iter()
+        .all(|value| number(value).is_some_and(|v| v.abs() < 49999.0))
 }

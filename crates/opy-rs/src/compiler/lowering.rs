@@ -6839,6 +6839,7 @@ impl<'a> Lowering<'a> {
             self.push_call("mappedArray", vec![split, alphabet])
         };
         let width = ((max_decimal_place - min_decimal_place + 1) / 2) as usize;
+        let optimization = self.optimization_state_at(span.as_ref());
         let component = |this: &mut Self, component_offset: usize| {
             let current = this.push_call("currentArrayElement", Vec::new());
             let mut terms = Vec::with_capacity(width);
@@ -6853,12 +6854,11 @@ impl<'a> Lowering<'a> {
                     };
                 let digit = this.push_call("strIndex", vec![formula_alphabet, character]);
                 let power = 100_f64.powf(index as f64 + f64::from(min_decimal_place) / 2.0);
-                let weighted = if power == 1.0 {
-                    digit
-                } else {
-                    let power = this.push_number(power, "");
-                    this.push_call("multiply", vec![power, digit])
-                };
+                let power = this.push_number(power, "");
+                let weighted = this.push_call("multiply", vec![power, digit]);
+                if optimization.enabled {
+                    this.optimized_nodes.insert(weighted, optimization.strict);
+                }
                 terms.push(weighted);
             }
             let mut value = terms
