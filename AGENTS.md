@@ -40,9 +40,12 @@ Workshop emission. Compilation may depend on `workshop-rs`; `check`, semantic
 inspection, source queries, and other Workshop-independent operations should
 not be forced through the compiler pipeline without a concrete requirement.
 
-Do not invent WrightKit-only OPY syntax. Compatibility is observable semantics,
-not output-text identity, optimizer implementation, formatting, temporary
-variables, or upstream internal architecture.
+Do not invent WrightKit-only OPY syntax. Compilation converges structurally on
+the pinned upstream OverPy output, compared as `workshop-rs`-parsed canonical
+programs; formatting is not a criterion. Structural differences, including
+behaviorally equivalent or cheaper rewrites, are defects unless recorded as an
+approved exception (see
+[`language-core.md`](docs/architecture/language-core.md#compatibility-target)).
 
 ## Architecture routing
 

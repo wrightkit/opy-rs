@@ -50,21 +50,22 @@ When implementing a feature in an already mixed responsibility, the smallest loc
 
 ## Compatibility target
 
-For the declared OverPy compiler surface, target upstream compiler behavior and compiler-output convergence, not only end-result semantic equivalence.
+For the declared OverPy compiler surface, the pinned upstream OverPy compiler output is the correctness target. `opy-rs` compilation converges structurally on it, as defined by WrightKit goal principle 7.
 
-Compatibility work should preserve, where the canonical Workshop model can represent it:
+The compared structure is the canonical Workshop program, and it must match upstream for:
 
-- the same Workshop action/value/event/enum identities;
-- equivalent control-flow structure rather than semantically lossy rewrites;
-- upstream lowering choices when an alternative form adds no value;
-- upstream string/value construction shape when divergence only adds Workshop elements;
-- optimizer behavior that materially affects Workshop element cost or emitted structure;
-- stable source-to-output behavior demonstrated by differential or real-project tests.
+- rule order;
+- Workshop action/value/event/enum identities;
+- control-flow structure;
+- condition shape, including the number and order of rule conditions;
+- string and value construction, including null and literal forms;
+- variable names and indices, including compiler-generated helper variables and their initialization;
+- element cost, including optimizer behavior that affects emitted structure.
 
-A systematic output difference is a compatibility residual by default. It should be explained and classified rather than dismissed merely because the resulting program may appear behaviorally equivalent.
+Compatibility is measured by parsing both the upstream output and the `opy-rs` output with `workshop-rs` and comparing the canonical programs structurally. Text diffs, line counts, and text-pattern counts are not compatibility evidence. Formatting, whitespace, and comments are not criteria.
 
-Exact byte-for-byte identity is not a universal completion requirement. Incidental whitespace, formatting, or other representation details may differ when they do not change Workshop structure, element cost, accepted syntax, source mapping, or downstream behavior. Likewise, upstream internal architecture, helper names, and IR remain non-contractual.
+Structural rewrites are not accepted, even when they appear behaviorally equivalent or reduce element cost. Any structural difference is a defect unless it is a recorded exception approved by the owner, including a difference for an apparent upstream bug. Each exception records the upstream behavior, the `opy-rs` behavior, the approving decision, and the test that pins it.
 
-The practical objective is to make supported `opy-rs` compilation converge as closely as reasonably possible on upstream Workshop output while retaining WrightKit's canonical ownership boundaries. Where equivalent canonical representations exist, prefer the representation demonstrated by upstream unless there is concrete evidence that divergence is necessary.
+Upstream internal architecture and IR remain non-contractual; only the emitted Workshop structure is.
 
 `opy-rs` does not introduce a WrightKit-only OPY dialect.
