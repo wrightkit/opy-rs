@@ -5,8 +5,8 @@
 //! pass applies the same rewrites to the canonical value tree of one action or
 //! condition under the optimization state active at its source location.
 
-use workshop_rs::Value;
 use workshop_rs::catalog::Kind;
+use workshop_rs::{Action, ModifyOp, Value};
 
 use super::Compiler;
 
@@ -102,6 +102,19 @@ impl<'a> OperatorOptimizer<'a> {
             ("-", 1) => self.negate(args),
             ("roundToInteger", 2) => Self::round(args),
             ("absoluteValue", 1) => Self::absolute(args),
+            ("slice", 3) => Self::slice(args),
+            ("charAt", 2) => Self::char_at(args),
+            ("lastOf", 1) => {
+                let [array] = one(args);
+                match literal_array(array) {
+                    Value::Array(mut elements) if !elements.is_empty() => {
+                        Rewrite::Changed(elements.pop().expect("non-empty"))
+                    }
+                    other => Rewrite::Same(call("lastOf", vec![other])),
+                }
+            }
+            ("appendToArray", 2) => self.concat(args),
+            ("removeFromArray", 2) => self.exclude(args),
             ("mappedArray", 2) => Self::mapped(args),
             ("filteredArray", 2) => self.filtered(args),
             ("arrayContains", 2) => self.array_contains(args),
@@ -444,6 +457,109 @@ impl<'a> OperatorOptimizer<'a> {
         }
     }
 
+    fn slice(args: Vec<Value>) -> Rewrite {
+        let [array, start, length] = three(args);
+        let array = literal_array(array);
+        let mut length_value = None;
+        if let Value::Number(length) = &length {
+            let length = length.round();
+            if length <= 0.0 {
+                return Rewrite::Changed(call("emptyArray", Vec::new()));
+            }
+            length_value = Some(length);
+        }
+        if let (Value::Array(elements), Value::Number(start), Some(mut length)) =
+            (&array, &start, length_value)
+        {
+            let mut start = start.round();
+            if start < 0.0 {
+                length += start;
+                start = 0.0;
+            }
+            let from = (start as usize).min(elements.len());
+            let to = ((start + length).max(0.0) as usize).min(elements.len());
+            return Rewrite::Changed(Value::Array(elements[from..to.max(from)].to_vec()));
+        }
+        Rewrite::Same(call("slice", vec![array, start, length]))
+    }
+
+    fn char_at(args: Vec<Value>) -> Rewrite {
+        let [text, index] = two(args);
+        let literal = match &text {
+            Value::String(text) => Some(text.as_str()),
+            Value::Call { name, args } if name == "customString" && args.len() == 1 => {
+                match &args[0] {
+                    Value::String(text) => Some(text.as_str()),
+                    _ => None,
+                }
+            }
+            _ => None,
+        };
+        if let (Some(text), Value::Number(index)) = (literal, &index) {
+            let position = index.max(0.0) as usize;
+            let character = text
+                .chars()
+                .nth(position)
+                .map(String::from)
+                .unwrap_or_default();
+            return Rewrite::Changed(Value::String(character));
+        }
+        Rewrite::Same(call("charAt", vec![text, index]))
+    }
+
+    fn concat(&self, args: Vec<Value>) -> Rewrite {
+        let [array, addition] = two(args);
+        let array = literal_array(array);
+        if let Value::Array(mut elements) = array {
+            let addition = literal_array(addition);
+            if let Value::Array(more) = addition {
+                elements.extend(more);
+                return Rewrite::Changed(Value::Array(elements));
+            }
+            if self.literal(&addition) {
+                elements.push(addition);
+                return Rewrite::Changed(Value::Array(elements));
+            }
+            return Rewrite::Same(call(
+                "appendToArray",
+                vec![Value::Array(elements), addition],
+            ));
+        }
+        Rewrite::Same(call("appendToArray", vec![array, addition]))
+    }
+
+    fn exclude(&self, args: Vec<Value>) -> Rewrite {
+        let [array, removed] = two(args);
+        let array = literal_array(array);
+        let removed = literal_array(removed);
+        let Value::Array(mut elements) = array else {
+            return Rewrite::Same(call("removeFromArray", vec![array, removed]));
+        };
+        if self.literal(&removed) && !matches!(removed, Value::Array(_)) {
+            elements.retain(|element| !same(element, &removed));
+            if elements.iter().all(|element| self.literal(element)) {
+                return Rewrite::Changed(Value::Array(elements));
+            }
+        }
+        if let Value::Array(mut removals) = removed {
+            elements.retain(|element| !removals.iter().any(|other| same(element, other)));
+            if elements.iter().all(|element| self.literal(element))
+                && removals.iter().all(|element| self.literal(element))
+            {
+                return Rewrite::Changed(Value::Array(elements));
+            }
+            removals.retain(|element| !self.literal(element));
+            return Rewrite::Same(call(
+                "removeFromArray",
+                vec![Value::Array(elements), Value::Array(removals)],
+            ));
+        }
+        Rewrite::Same(call(
+            "removeFromArray",
+            vec![Value::Array(elements), removed],
+        ))
+    }
+
     fn mapped(args: Vec<Value>) -> Rewrite {
         let [array, mapping] = two(args);
         if matches!(&mapping, Value::Call { name, .. } if name == "currentArrayElement") {
@@ -535,7 +651,7 @@ impl<'a> OperatorOptimizer<'a> {
         }
     }
 
-    fn boolean(&self, value: &Value) -> bool {
+    pub(super) fn boolean(&self, value: &Value) -> bool {
         match value {
             Value::Bool(_) => true,
             Value::Call { name, .. } => {
@@ -746,7 +862,7 @@ fn negates(value: &Value, other: &Value) -> bool {
 }
 
 /// Structural equality that never treats random calls as equal.
-fn same(left: &Value, right: &Value) -> bool {
+pub(super) fn same(left: &Value, right: &Value) -> bool {
     match (left, right) {
         (Value::Number(a), Value::Number(b)) => a == b,
         (Value::String(a), Value::String(b))
@@ -818,5 +934,105 @@ fn literal_array(value: Value) -> Value {
     match value {
         Value::Call { name, args } if name == "array" => Value::Array(args),
         other => other,
+    }
+}
+
+fn modify_operation(name: &str) -> Option<ModifyOp> {
+    Some(match name {
+        "add" => ModifyOp::Add,
+        "subtract" => ModifyOp::Subtract,
+        "multiply" => ModifyOp::Multiply,
+        "divide" => ModifyOp::Divide,
+        "modulo" => ModifyOp::Modulo,
+        "raiseToPower" => ModifyOp::RaiseToPower,
+        "min" => ModifyOp::Min,
+        "max" => ModifyOp::Max,
+        "appendToArray" => ModifyOp::AppendToArray,
+        "removeFromArray" => ModifyOp::RemoveFromArrayByValue,
+        _ => return None,
+    })
+}
+
+/// The operand of `target = target <op> operand`.
+fn self_operand(
+    name: &str,
+    args: &mut Vec<Value>,
+    is_target: impl Fn(&Value) -> bool,
+) -> Option<(ModifyOp, Value)> {
+    let op = modify_operation(name)?;
+    if args.len() != 2 || !is_target(&args[0]) {
+        return None;
+    }
+    Some((op, args.pop().expect("two arguments")))
+}
+
+/// `x = x <op> y` is the modification `x <op>= y`.
+pub(super) fn self_modification(action: &Action) -> Option<Action> {
+    match action {
+        Action::SetGlobalVariable {
+            variable,
+            value: Value::Call { name, args },
+        } => {
+            let (op, value) = self_operand(
+                name,
+                &mut args.clone(),
+                |target| matches!(target, Value::GlobalVariable(other) if other == variable),
+            )?;
+            Some(Action::ModifyGlobalVariable {
+                variable: variable.clone(),
+                op,
+                value,
+            })
+        }
+        Action::SetPlayerVariable {
+            player,
+            variable,
+            value: Value::Call { name, args },
+        } => {
+            let (op, value) = self_operand(name, &mut args.clone(), |target| {
+                matches!(target, Value::PlayerVariable { player: other, variable: other_variable }
+                    if other_variable == variable && same(player, other))
+            })?;
+            Some(Action::ModifyPlayerVariable {
+                player: player.clone(),
+                variable: variable.clone(),
+                op,
+                value,
+            })
+        }
+        Action::Call { name, args }
+            if matches!(
+                name.as_str(),
+                "setGlobalVariableAtIndex" | "setPlayerVariableAtIndex"
+            ) && args.len() == 3 =>
+        {
+            let Value::Call {
+                name: operation,
+                args: operands,
+            } = &args[2]
+            else {
+                return None;
+            };
+            let (variable, index) = (&args[0], &args[1]);
+            let (_, value) = self_operand(operation, &mut operands.clone(), |read| match read {
+                Value::Call { name, args } if name == "valueInArray" && args.len() == 2 => {
+                    same(&args[0], variable) && same(&args[1], index)
+                }
+                Value::Call { name, args } if name == "firstOf" && args.len() == 1 => {
+                    same(&args[0], variable) && is_number(index, 0.0)
+                }
+                _ => false,
+            })?;
+            Some(Action::Call {
+                name: name.replace("set", "modify"),
+                args: vec![
+                    variable.clone(),
+                    index.clone(),
+                    call(operation, Vec::new()),
+                    value,
+                ],
+            })
+        }
+        _ => None,
     }
 }

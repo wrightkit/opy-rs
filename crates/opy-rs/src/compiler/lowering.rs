@@ -1,4 +1,4 @@
-use super::operator_optimization::OperatorOptimizer;
+use super::operator_optimization::{OperatorOptimizer, same, self_modification};
 use super::size_optimization::SizeOptimizer;
 use super::*;
 use crate::hir::OptimizationState;
@@ -7188,12 +7188,36 @@ impl<'a> Lowering<'a> {
             .iter()
             .copied()
             .filter(|id| {
+                let optimization = self.optimization_state_at(self.action_origins[*id].as_ref());
+                if optimization.enabled {
+                    let assigns_itself = match &self.actions[*id] {
+                        Action::SetGlobalVariable { variable, value } => {
+                            matches!(self.value(*value), Value::GlobalVariable(other) if other == variable)
+                        }
+                        Action::SetPlayerVariable {
+                            player,
+                            variable,
+                            value,
+                        } => matches!(
+                            self.value(*value),
+                            Value::PlayerVariable { player: other, variable: other_variable }
+                                if other_variable == variable
+                                    && same(
+                                        &self.materialize_value(*player),
+                                        &self.materialize_value(*other),
+                                    )
+                        ),
+                        _ => false,
+                    };
+                    if assigns_itself {
+                        return false;
+                    }
+                }
                 let (op, value) = match &self.actions[*id] {
                     Action::ModifyGlobalVariable { op, value, .. }
                     | Action::ModifyPlayerVariable { op, value, .. } => (*op, *value),
                     _ => return true,
                 };
-                let optimization = self.optimization_state_at(self.action_origins[*id].as_ref());
                 let identity = match op {
                     ModifyOp::Add | ModifyOp::Subtract => 0.0,
                     ModifyOp::Multiply | ModifyOp::Divide | ModifyOp::RaiseToPower => 1.0,
@@ -7212,6 +7236,11 @@ impl<'a> Lowering<'a> {
             .map(|id| {
                 let mut action = self.materialize_action(&self.actions[*id]);
                 let optimization = self.optimization_state_at(self.action_origins[*id].as_ref());
+                if optimization.enabled {
+                    if let Some(modification) = self_modification(&action) {
+                        action = modification;
+                    }
+                }
                 if optimization.enabled && optimization.for_size {
                     SizeOptimizer::new(self.compiler).action(&mut action);
                 }
