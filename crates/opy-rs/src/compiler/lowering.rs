@@ -5264,9 +5264,18 @@ impl<'a> Lowering<'a> {
                         span,
                     ));
                 }
-                Value::Enum {
+                let member = Value::Enum {
                     value_type: value_type.clone(),
                     value: value.to_string(),
+                };
+                if value_type == "Gamemode" {
+                    let member = self.push_value(member);
+                    Value::Call {
+                        name: "gameMode".to_string(),
+                        args: vec![member],
+                    }
+                } else {
+                    member
                 }
             }
             Expr::Array { elements, .. } => {
