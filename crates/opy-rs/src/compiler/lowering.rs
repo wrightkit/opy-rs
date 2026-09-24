@@ -1908,7 +1908,8 @@ impl<'a> Lowering<'a> {
             // slice is not necessarily a standalone valid action sequence.
             // The flat lowering stream has one action id per native action,
             // including the structural markers that the jump must cross.
-            let width = actions[position + 1..target].len();
+            // Instructions dropped from the output must not widen the jump.
+            let width = self.useful_actions(&actions[position + 1..target]).len();
             let distance = self.push_number(width as f64, &width.to_string());
             let Some(Action::Call { args, .. }) = self.actions.get_mut(action) else {
                 unreachable!("deferred goto placeholder must be a call action")
@@ -6475,12 +6476,11 @@ impl<'a> Lowering<'a> {
             } if value_type == "Map" => Some(value.clone()),
             _ => None,
         };
-        let (map, other) = match (map_of(left), map_of(right)) {
-            (Some(map), None) if is_current_map(right) => (map, right),
-            (None, Some(map)) if is_current_map(left) => (map, left),
+        let map = match (map_of(left), map_of(right)) {
+            (Some(map), None) if is_current_map(right) => map,
+            (None, Some(map)) if is_current_map(left) => map,
             _ => return Ok(None),
         };
-        let _ = other;
         let current = self.push_call("currentMap", Vec::new());
         let map_value = self.push_value(Value::Enum {
             value_type: "Map".to_string(),

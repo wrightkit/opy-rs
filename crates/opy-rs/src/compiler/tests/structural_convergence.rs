@@ -9,6 +9,25 @@ use crate::Compiler;
 use workshop_rs::catalog::{Catalog, Locale};
 use workshop_rs::roundtrip::equivalent;
 
+/// Everything the program says except where the text put it.
+fn structure(program: &workshop_rs::Program) -> String {
+    format!(
+        "{:#?}{:#?}{:#?}{:#?}{:#?}",
+        program.settings,
+        program.global_variables,
+        program.player_variables,
+        program.subroutines,
+        program.rules
+    )
+    .lines()
+    .filter(|line| {
+        let line = line.trim_start();
+        !line.starts_with("line: ") && !line.starts_with("col: ")
+    })
+    .collect::<Vec<_>>()
+    .join("\n")
+}
+
 fn assert_converges(name: &str) {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/corpus/synthetic")
@@ -35,15 +54,9 @@ fn assert_converges(name: &str) {
     );
     let native = parse(&artifact.emitted);
     assert_eq!(
-        format!(
-            "{:#?}{:#?}{:#?}",
-            native.rules, native.global_variables, native.player_variables
-        ),
-        format!(
-            "{:#?}{:#?}{:#?}",
-            expected.rules, expected.global_variables, expected.player_variables
-        ),
-        "{name} rules differ structurally from the pinned oracle"
+        structure(&native),
+        structure(&expected),
+        "{name} differs structurally from the pinned oracle"
     );
     assert!(
         equivalent(&native, &expected),
@@ -80,6 +93,11 @@ fn else_after_a_nested_conditional_belongs_to_the_outer_conditional() {
 #[test]
 fn goto_out_of_a_loop_stays_a_skip() {
     assert_converges("structural-loop-exit");
+}
+
+#[test]
+fn goto_distance_excludes_instructions_the_output_drops() {
+    assert_converges("structural-goto-dropped");
 }
 
 #[test]
