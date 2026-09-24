@@ -97,6 +97,8 @@ impl<'a> OperatorOptimizer<'a> {
             ("modulo", 2) => self.modulo(args),
             ("raiseToPower", 2) => self.power(args),
             ("-", 1) => self.negate(args),
+            ("mappedArray", 2) => Self::mapped(args),
+            ("filteredArray", 2) => self.filtered(args),
             ("arrayContains", 2) => self.array_contains(args),
             ("valueInArray", 2) => self.value_in_array(args),
             ("__xComponentOf__", 1) => Self::component(args, 0),
@@ -409,6 +411,34 @@ impl<'a> OperatorOptimizer<'a> {
         }
     }
 
+    fn mapped(args: Vec<Value>) -> Rewrite {
+        let [array, mapping] = two(args);
+        if matches!(&mapping, Value::Call { name, .. } if name == "currentArrayElement") {
+            return Rewrite::Changed(array);
+        }
+        Rewrite::Same(call("mappedArray", vec![array, mapping]))
+    }
+
+    fn filtered(&self, args: Vec<Value>) -> Rewrite {
+        let [array, predicate] = two(args);
+        let element_free = |value: &Value| !mentions_element(value);
+        if let Value::Call { name, args: operands } = &predicate {
+            if name == "!=" && operands.len() == 2 {
+                for (element, other) in [(0, 1), (1, 0)] {
+                    if matches!(&operands[element], Value::Call { name, .. } if name == "currentArrayElement")
+                        && element_free(&operands[other])
+                    {
+                        return Rewrite::Changed(call(
+                            "removeFromArray",
+                            vec![array, operands[other].clone()],
+                        ));
+                    }
+                }
+            }
+        }
+        Rewrite::Same(call("filteredArray", vec![array, predicate]))
+    }
+
     fn array_contains(&self, args: Vec<Value>) -> Rewrite {
         let [array, needle] = two(args);
         let Value::Array(mut elements) = array else {
@@ -702,6 +732,19 @@ fn same(left: &Value, right: &Value) -> bool {
                 && aa.len() == ba.len()
                 && aa.iter().zip(ba).all(|(a, b)| same(a, b))
         }
+        _ => false,
+    }
+}
+
+fn mentions_element(value: &Value) -> bool {
+    match value {
+        Value::Call { name, args } => {
+            matches!(name.as_str(), "currentArrayElement" | "currentArrayIndex")
+                || args.iter().any(mentions_element)
+        }
+        Value::Array(elements) => elements.iter().any(mentions_element),
+        Value::Vector { x, y, z } => [x, y, z].into_iter().any(|v| mentions_element(v)),
+        Value::PlayerVariable { player, .. } => mentions_element(player),
         _ => false,
     }
 }

@@ -6351,7 +6351,12 @@ impl<'a> Lowering<'a> {
                 let element = element?;
                 let iterable = if let Some(predicate) = predicate {
                     let predicate = predicate?;
-                    self.push_call("filteredArray", vec![iterable, predicate])
+                    let filtered = self.push_call("filteredArray", vec![iterable, predicate]);
+                    let optimization = self.optimization_state_at(comprehension_span.as_ref());
+                    if optimization.enabled {
+                        self.optimized_nodes.insert(filtered, optimization.strict);
+                    }
+                    filtered
                 } else {
                     iterable
                 };
@@ -6417,6 +6422,7 @@ impl<'a> Lowering<'a> {
                     | Expr::Unary { .. }
                     | Expr::Conditional { .. }
                     | Expr::Index { .. }
+                    | Expr::Comprehension { .. }
             )
         {
             self.optimized_nodes.insert(value_id, optimization.strict);
