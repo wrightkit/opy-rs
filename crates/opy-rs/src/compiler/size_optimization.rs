@@ -30,6 +30,7 @@ impl<'a> SizeOptimizer<'a> {
             Action::Call { name, args } => {
                 self.indexed_variable_call(name, args);
                 self.chase_call(name, args);
+                Self::hud_text_call(name, args);
                 self.call_arguments(Kind::Action, name, args);
             }
             _ => {}
@@ -112,6 +113,18 @@ impl<'a> SizeOptimizer<'a> {
                 (false, _) => self.assigned(target),
                 (true, Some(op)) => self.modified(op, target),
                 (true, None) => {}
+            }
+        }
+    }
+
+    /// An unused HUD text drops its color.
+    fn hud_text_call(name: &str, args: &mut [Value]) {
+        if name != "createHudText" {
+            return;
+        }
+        for (text, color) in [(1, 6), (2, 7), (3, 8)] {
+            if matches!(args.get(text), Some(Value::Null)) && args.len() > color {
+                args[color] = Value::Null;
             }
         }
     }

@@ -3338,7 +3338,7 @@
           "name": "throttle"
         },
         {
-          "default": "NONE",
+          "default": "DIRECTION_AND_MAGNITUDE",
           "domain": "ThrottleReeval",
           "name": "reevaluation"
         }
@@ -4279,7 +4279,7 @@
           "name": "color"
         },
         {
-          "default": false,
+          "default": true,
           "name": "showWhenOffscreen"
         }
       ]
