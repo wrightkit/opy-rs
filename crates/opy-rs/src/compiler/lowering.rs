@@ -5431,7 +5431,9 @@ impl<'a> Lowering<'a> {
                 }
                 let left = self.lower_value(left)?;
                 let right = self.lower_value(right)?;
-                if let Some(value) = self.fold_numeric_binary(op, left, right) {
+                if self.optimization_state_at(span.as_ref()).enabled
+                    && let Some(value) = self.fold_numeric_binary(op, left, right)
+                {
                     Value::Number(value)
                 } else {
                     match op.as_str() {

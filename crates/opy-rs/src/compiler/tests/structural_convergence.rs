@@ -104,3 +104,8 @@ fn compression_matches_the_pinned_oracle() {
 fn team_settings_order_matches_the_pinned_oracle() {
     assert_converges("structural-settings");
 }
+
+#[test]
+fn unoptimized_output_matches_the_pinned_oracle() {
+    assert_converges("structural-unoptimized");
+}

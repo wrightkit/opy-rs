@@ -24,3 +24,5 @@ rule "size literals":
     if g > 0 and h >= 1 and g != 0:
         g = 1 if eventPlayer.p else 0
     wait(0)
+    smallMessage(eventPlayer, "")
+    g = ["", 1]
