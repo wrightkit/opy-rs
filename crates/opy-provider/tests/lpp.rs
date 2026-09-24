@@ -69,11 +69,15 @@ impl Session {
     }
 
     fn initialize(&mut self) -> Value {
+        self.initialize_version("1.1")
+    }
+
+    fn initialize_version(&mut self, version: &str) -> Value {
         self.request(json!({
             "jsonrpc": "2.0",
             "id": 1,
             "method": "lpp/initialize",
-            "params": { "protocolVersion": "1.1" },
+            "params": { "protocolVersion": version },
         }))
     }
 
@@ -632,4 +636,276 @@ fn lifecycle_and_capability_failures_are_structured() {
         "symbols"
     );
     session.shutdown();
+}
+
+const MAPPED_FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/mapped-text");
+const REAL_PROJECT_MAIN: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../opy-rs/tests/fixtures/corpus/real-world/overpy-cake/source.opy"
+);
+const TEXT_V1: &str = "workshop-rs/text-v1";
+const MAPPED_V1: &str = "workshop-rs/mapped-text-v1";
+
+fn compile_entry(session: &mut Session, path: &str, accepted: Option<Value>) -> Value {
+    let mut params = json!({
+        "entry": { "uri": file_uri(path), "languageId": "opy", "version": 1 }
+    });
+    if let Some(accepted) = accepted {
+        params["acceptedArtifactFormats"] = accepted;
+    }
+    session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "lpp/compile",
+        "params": params,
+    }))
+}
+
+fn mapped_document(response: &Value) -> Value {
+    assert_eq!(response["result"]["artifact"]["format"], MAPPED_V1);
+    serde_json::from_str(
+        response["result"]["artifact"]["content"]
+            .as_str()
+            .expect("mapped content is a string"),
+    )
+    .expect("mapped content is JSON")
+}
+
+fn mapped_span<'a>(document: &'a Value, node: &str, keys: &[(&str, usize)]) -> Option<&'a Value> {
+    document["spans"]
+        .as_array()
+        .expect("spans")
+        .iter()
+        .find(|entry| {
+            entry["node"] == node && keys.iter().all(|(key, value)| entry[*key] == json!(value))
+        })
+        .map(|entry| &entry["span"])
+}
+
+fn span_text(span: &Value) -> (u64, u64, u64, u64, u64) {
+    let number = |value: &Value| value.as_u64().expect("number");
+    (
+        number(&span["file"]),
+        number(&span["start"]["line"]),
+        number(&span["start"]["column"]),
+        number(&span["end"]["line"]),
+        number(&span["end"]["column"]),
+    )
+}
+
+#[test]
+fn compile_negotiation_is_valid_only_in_lpp_14() {
+    let main = format!("{MAPPED_FIXTURES}/unicode.opy");
+    let mut session = Session::spawn();
+    let initialized = session.initialize_version("1.4");
+    assert_eq!(initialized["result"]["protocolVersion"], "1.4");
+    assert_eq!(
+        initialized["result"]["capabilities"]["sourceIdentity"],
+        true
+    );
+
+    let absent = compile_entry(&mut session, &main, None);
+    assert_eq!(absent["result"]["artifact"]["format"], TEXT_V1);
+    let text_only = compile_entry(&mut session, &main, Some(json!([TEXT_V1])));
+    assert_eq!(
+        text_only["result"]["artifact"],
+        absent["result"]["artifact"]
+    );
+    let unknown_first = compile_entry(&mut session, &main, Some(json!(["x/unknown", TEXT_V1])));
+    assert_eq!(
+        unknown_first["result"]["artifact"],
+        absent["result"]["artifact"]
+    );
+    let mapped_first = compile_entry(&mut session, &main, Some(json!([MAPPED_V1, TEXT_V1])));
+    assert_eq!(
+        mapped_document(&mapped_first)["text"],
+        absent["result"]["artifact"]["content"]
+    );
+
+    let unsupported = compile_entry(&mut session, &main, Some(json!(["x/unknown"])));
+    assert_eq!(
+        unsupported["error"]["data"]["lpp"]["details"]["refusalCode"],
+        "compile.artifactFormatUnsupported"
+    );
+    for invalid in [
+        json!([]),
+        json!("workshop-rs/text-v1"),
+        json!([1]),
+        Value::Null,
+    ] {
+        let rejected = compile_entry(&mut session, &main, Some(invalid));
+        assert_eq!(rejected["error"]["code"], -32602);
+    }
+    session.shutdown();
+
+    let mut session = Session::spawn();
+    session.initialize_version("1.3");
+    let rejected = compile_entry(&mut session, &main, Some(json!([MAPPED_V1])));
+    assert_eq!(rejected["error"]["code"], -32602);
+    let absent = compile_entry(&mut session, &main, None);
+    assert_eq!(absent["result"]["artifact"]["format"], TEXT_V1);
+    session.shutdown();
+}
+
+#[test]
+fn mapped_columns_are_unicode_scalar_values() {
+    let mut session = Session::spawn();
+    session.initialize_version("1.4");
+    let response = compile_entry(
+        &mut session,
+        &format!("{MAPPED_FIXTURES}/unicode.opy"),
+        Some(json!([MAPPED_V1])),
+    );
+    let document = mapped_document(&response);
+    // `    total = "héllo ✓" == "界" and 1` is 30 scalar values from column 5; bytes or
+    // UTF-16 units would give a different end column.
+    let action = mapped_span(&document, "action", &[("rule", 0), ("action", 0)]).expect("action");
+    assert_eq!(span_text(action), (0, 5, 5, 5, 35));
+    session.shutdown();
+}
+
+#[test]
+fn mapped_includes_carry_their_own_document_uris_and_macros_map_to_the_invocation() {
+    let main = format!("{MAPPED_FIXTURES}/main.opy");
+    let mut session = Session::spawn();
+    session.initialize_version("1.4");
+    let response = compile_entry(&mut session, &main, Some(json!([MAPPED_V1])));
+    let document = mapped_document(&response);
+    let files = document["files"]
+        .as_array()
+        .expect("files")
+        .iter()
+        .map(|file| file["path"].as_str().expect("path").to_owned())
+        .collect::<Vec<_>>();
+    let main_index = files
+        .iter()
+        .position(|uri| *uri == file_uri(&main))
+        .expect("entry document URI");
+    let lib_index = files
+        .iter()
+        .position(|uri| *uri == file_uri(&format!("{MAPPED_FIXTURES}/lib.opy")))
+        .expect("included document URI");
+
+    // The included file's rule is emitted first and maps into `lib.opy`.
+    let lib_rule = mapped_span(&document, "rule", &[("rule", 0)]).expect("lib rule");
+    assert_eq!(span_text(lib_rule).0, lib_index as u64);
+    let main_rule = mapped_span(&document, "rule", &[("rule", 1)]).expect("main rule");
+    assert_eq!(span_text(main_rule).0, main_index as u64);
+
+    // `bump(total)` is line 6 of `main.opy`: the macro-expanded modification maps to it,
+    // not to the `#!define` in `lib.opy`.
+    let expanded = mapped_span(&document, "action", &[("rule", 1), ("action", 1)]).expect("bump");
+    let (file, start_line, start_column, end_line, _) = span_text(expanded);
+    assert_eq!(
+        (file, start_line, start_column, end_line),
+        (main_index as u64, 6, 5, 6)
+    );
+    session.shutdown();
+}
+
+#[test]
+fn hir_macro_expansions_map_to_the_invocation_site() {
+    let mut session = Session::spawn();
+    session.initialize_version("1.4");
+    let response = compile_entry(
+        &mut session,
+        &format!("{MAPPED_FIXTURES}/macro.opy"),
+        Some(json!([MAPPED_V1])),
+    );
+    let document = mapped_document(&response);
+    // `twice(3)` is line 9; its two expanded actions map there, the plain `wait(2)` to line 10.
+    for action in 0..2 {
+        let span = mapped_span(&document, "action", &[("rule", 0), ("action", action)])
+            .expect("expanded action");
+        assert_eq!(span_text(span), (0, 9, 5, 9, 13));
+    }
+    let plain = mapped_span(&document, "action", &[("rule", 0), ("action", 2)]).expect("wait");
+    assert_eq!(span_text(plain), (0, 10, 5, 10, 12));
+    session.shutdown();
+}
+
+#[test]
+fn generated_helper_nodes_are_unmapped() {
+    let mut session = Session::spawn();
+    session.initialize_version("1.4");
+    let response = compile_entry(
+        &mut session,
+        &format!("{MAPPED_FIXTURES}/helper.opy"),
+        Some(json!([MAPPED_V1])),
+    );
+    let document = mapped_document(&response);
+    let rules = document["shape"]["rules"].as_array().expect("rules");
+    // The translation/initializer rule is generated: it precedes the authored rule and has no entry.
+    assert!(rules.len() >= 2, "expected a generated helper rule");
+    let authored = rules.len() - 1;
+    assert!(mapped_span(&document, "rule", &[("rule", authored)]).is_some());
+    for helper in 0..authored {
+        assert!(mapped_span(&document, "rule", &[("rule", helper)]).is_none());
+    }
+    session.shutdown();
+}
+
+#[test]
+fn document_requests_map_to_supplied_document_uris() {
+    let path = format!("{MAPPED_FIXTURES}/unicode.opy");
+    let uri = file_uri(&path);
+    let text = std::fs::read_to_string(&path).expect("fixture");
+    let mut session = Session::spawn();
+    session.initialize_version("1.4");
+    let response = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "lpp/compile",
+        "params": {
+            "documents": { uri.clone(): {
+                "uri": uri, "languageId": "opy", "version": 3, "text": text,
+            } },
+            "acceptedArtifactFormats": [MAPPED_V1],
+        },
+    }));
+    let document = mapped_document(&response);
+    assert_eq!(document["files"][0]["path"], json!(uri));
+    session.shutdown();
+}
+
+/// Compile `main` to `mapped-text-v1` and prove the mapping applies to the re-parsed text.
+fn assert_mapping_applies_to_reparsed_text(main: &str) {
+    let mut session = Session::spawn();
+    session.initialize_version("1.4");
+    let response = compile_entry(&mut session, main, Some(json!([MAPPED_V1])));
+    let content = response["result"]["artifact"]["content"]
+        .as_str()
+        .unwrap_or_else(|| panic!("mapped artifact expected: {response}"));
+    let mapped = workshop_rs::program::MappedText::from_json(content).expect("mapped-text-v1");
+    let catalog = workshop_rs::catalog::Catalog::builtin().expect("catalog");
+    let mut program = workshop_rs::parser::parse(
+        &mapped.text,
+        &catalog,
+        &workshop_rs::catalog::Locale::new("en-US"),
+    )
+    .expect("emitted text parses");
+    mapped
+        .map
+        .apply(&mut program)
+        .expect("mapping applies without shape mismatch");
+    assert!(
+        (0..program.rules.len()).any(|rule| program.rule_span(rule).is_some()),
+        "authored rules are mapped"
+    );
+    session.shutdown();
+}
+
+#[test]
+fn real_project_mapping_applies_to_the_reparsed_workshop_text() {
+    assert_mapping_applies_to_reparsed_text(REAL_PROJECT_MAIN);
+}
+
+/// Set `OPY_BASTION_MAIN` to `src/main.opy` of OWBastion/Bastion at revision
+/// c010e1a2d468ec7140f474e334067e5ab8d02d89 to run the pinned real-project check.
+#[test]
+fn pinned_bastion_mapping_applies_to_the_reparsed_workshop_text() {
+    let Ok(main) = std::env::var("OPY_BASTION_MAIN") else {
+        return;
+    };
+    assert_mapping_applies_to_reparsed_text(&main);
 }
