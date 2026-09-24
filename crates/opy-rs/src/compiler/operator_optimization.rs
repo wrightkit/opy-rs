@@ -67,11 +67,11 @@ impl<'a> OperatorOptimizer<'a> {
         let value = literal_array(value);
         let head = head_of(&value);
         let rewritten = match self.rewrite(value) {
-            Rewrite::Same(value) => return value,
+            Rewrite::Same(value) => return array_call(value),
             Rewrite::Changed(value) => value,
         };
         if head_of(&rewritten) == head {
-            rewritten
+            array_call(rewritten)
         } else {
             self.node(rewritten)
         }
@@ -1050,5 +1050,16 @@ pub(super) fn self_modification(action: &Action) -> Option<Action> {
             })
         }
         _ => None,
+    }
+}
+
+/// Array literals are written as the `Array` call.
+fn array_call(value: Value) -> Value {
+    match value {
+        Value::Array(elements) => Value::Call {
+            name: "array".to_string(),
+            args: elements,
+        },
+        other => other,
     }
 }

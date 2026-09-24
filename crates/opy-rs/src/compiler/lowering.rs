@@ -5178,6 +5178,17 @@ impl<'a> Lowering<'a> {
     }
 
     fn lower_value(&mut self, expr: &Expr) -> Result<ValueId, IntegrationError> {
+        let value_id = self.lower_value_unoptimized(expr)?;
+        let optimization = self.optimization_state_at(expr.span());
+        if optimization.enabled {
+            self.optimized_nodes
+                .entry(value_id)
+                .or_insert(optimization.strict);
+        }
+        Ok(value_id)
+    }
+
+    fn lower_value_unoptimized(&mut self, expr: &Expr) -> Result<ValueId, IntegrationError> {
         let span = expr.span().copied();
         let optimization = self.optimization_state_at(span.as_ref());
         if optimization.enabled
@@ -6452,9 +6463,6 @@ impl<'a> Lowering<'a> {
         }) = self.values.get_mut(value_id)
         {
             *target_args = args;
-        }
-        if optimization.enabled {
-            self.optimized_nodes.insert(value_id, optimization.strict);
         }
         Ok(value_id)
     }
