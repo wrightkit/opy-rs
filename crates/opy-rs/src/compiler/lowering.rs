@@ -1160,6 +1160,9 @@ impl<'a> Lowering<'a> {
                 }
             }
         }
+        for rule in &mut self.program.rules {
+            rule.name = escape_rule_name(&rule.name);
+        }
         Ok(())
     }
 
@@ -8398,4 +8401,61 @@ fn modify_catalog_name_from_str(op: &str) -> Option<&'static str> {
         "**" => Some("raiseToPower"),
         _ => None,
     }
+}
+
+/// Rule names lose invisible formatting characters, and the Workshop's
+/// filtered word `rigger` is split with a soft hyphen, as the pinned OverPy
+/// does when it writes a rule name.
+fn escape_rule_name(name: &str) -> String {
+    let stripped: Vec<char> = name
+        .chars()
+        .filter(|character| {
+            !matches!(
+                character,
+                '\u{200B}' | '\u{200E}' | '\u{200F}' | '\u{FEFF}' | '\u{061C}'
+            )
+        })
+        .collect();
+    let mut escaped = String::with_capacity(name.len());
+    let mut index = 0;
+    while index < stripped.len() {
+        escaped.push(stripped[index]);
+        if matches!(stripped[index], 'r' | 'R') {
+            if let Some(split) = filtered_word_split(&stripped, index) {
+                escaped.extend(&stripped[index + 1..split]);
+                escaped.push('\u{00AD}');
+                index = split;
+                continue;
+            }
+        }
+        index += 1;
+    }
+    escaped
+}
+
+/// Where the soft hyphen goes when `r i gg e r` (whitespace allowed between
+/// the letters, ending at a word boundary) starts at `start`.
+fn filtered_word_split(text: &[char], start: usize) -> Option<usize> {
+    let mut position = start + 1;
+    let mut split = None;
+    for letter in ['i', 'g', 'g', 'e', 'r'] {
+        while text.get(position).is_some_and(|c| c.is_whitespace()) {
+            position += 1;
+        }
+        if !text.get(position)?.eq_ignore_ascii_case(&letter) {
+            return None;
+        }
+        if letter == 'i' {
+            let mut after = position + 1;
+            while text.get(after).is_some_and(|c| c.is_whitespace()) {
+                after += 1;
+            }
+            split = Some(after);
+        }
+        position += 1;
+    }
+    let boundary = text
+        .get(position)
+        .is_none_or(|c| !(c.is_alphanumeric() || *c == '_'));
+    boundary.then_some(split?)
 }
