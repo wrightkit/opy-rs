@@ -10,7 +10,8 @@
   "tests": {
     "source": {
       "nativeStatus": "success",
-      "relationship": "match"
+      "relationship": "match",
+      "ruleNames": true
     },
     "compiler": {
       "nativeStatus": "success",
