@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: g\n    player:\n        0: pv\n}\n\n//Optimize for size enabled\nrule (\"builtins\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Chase Player Variable At Rate(Event Player, pv, False, True, None);\n        Chase Player Variable At Rate(Event Player, pv, False, True, None);\n        Apply Impulse(Event Player, Up, 1, To World, Cancel Contrary Motion XYZ);\n        Start Throttle In Direction(Event Player, Up, Global.g, To World, Replace existing throttle, Direction and Magnitude);\n        Create Icon(All Players(All Teams), Vector(True, 2, 3), Flag, Visible To and Position, Color(Blue), True);\n        Create HUD Text(All Players(All Teams), Null, Custom String(\"h {0}\", Global.g), Custom String(\"t {0} {0} {0} {1}\", Global.g, Add(Global.g, True)), Left, 6, Null, Color(White), Color(White), Visible To and String, Default Visibility);\n        Create HUD Text(All Players(All Teams), Custom String(\"h\"), Null, If-Then-Else(Global.g, Global.g, Custom String(\"z\")), Top, False, Color(White), Null, Color(White), Visible To and String, Default Visibility);\n        If(Is Firing Secondary(Event Player));\n            Set Global Variable(g, 1);\n        End;\n        If(Compare(Current Game Mode, !=, Game Mode(Skirmish)));\n            Set Global Variable(g, 2);\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: g\n    player:\n        0: pv\n}\n\n//Optimize for size enabled\nrule (\"builtins\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Chase Player Variable At Rate(Event Player, pv, False, True, None);\n        Chase Player Variable At Rate(Event Player, pv, False, True, None);\n        Apply Impulse(Event Player, Up, 1, To World, Cancel Contrary Motion XYZ);\n        Start Throttle In Direction(Event Player, Up, Global.g, To World, Replace existing throttle, Direction and Magnitude);\n        Create Icon(All Players(All Teams), Vector(True, 2, 3), Flag, Visible To and Position, Color(Blue), True);\n        Create HUD Text(All Players(All Teams), Null, Custom String(\"h {0}\", Global.g), Custom String(\"t {0} {0} {0} {1}\", Global.g, Add(Global.g, True)), Left, 6, Null, Color(White), Color(White), Visible To and String, Default Visibility);\n        Create HUD Text(All Players(All Teams), Custom String(\"h\"), Null, If-Then-Else(Global.g, Global.g, Custom String(\"z\")), Top, False, Color(White), Null, Color(White), Visible To and String, Default Visibility);\n        If(Is Firing Secondary(Event Player));\n            Set Global Variable(g, 1);\n        End;\n        If(Compare(Current Game Mode, !=, Game Mode(Skirmish)));\n            Set Global Variable(g, 2);\n    }\n}\n\n",
+    "workshopSha256": "a75bd0f4f7a21946d321230ab9dca4f38fb07c0f424adcd07f6b69e0535493b9"
+  },
+  "fixture": "synthetic/structural-builtins",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "2cd1fc2fd5eab6a90630aa16dabdcf5785e9b904630c3b06a2cd3dddf87d59fd"
+      }
+    ],
+    "sha256": "e2818fc1d43ccbfae688c7555ea6d2f3ee2c12c7d6c3dce2b24f90629b5d247a",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

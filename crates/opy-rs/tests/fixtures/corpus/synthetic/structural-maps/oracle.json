@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: g\n}\n\nrule (\"maps\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(g, First Of(Filtered Array(Array(Map(Colosseo), Map(Esperan\u00e7a), Map(Samoa), Map(Throne of Anubis), Current Map), Compare(Custom String(\"{0}\", Current Map), ==, String Split(Current Array Element, Empty Array)))));\n        Set Global Variable(g, Compare(Custom String(\"{0}\", Current Map), ==, Custom String(\"{0}\", Map(Colosseo))));\n        Set Global Variable(g, Compare(Current Map, ==, Map(Busan)));\n        Set Global Variable(g, Compare(Custom String(\"{0}\", Current Map), ==, Custom String(\"{0}\", Map(Samoa))));\n        Set Global Variable(g, Compare(First Of(Filtered Array(Array(Map(Colosseo), Map(Esperan\u00e7a), Map(Samoa), Map(Throne of Anubis), Current Map), Compare(Custom String(\"{0}\", Current Map), ==, String Split(Current Array Element, Empty Array)))), !=, Map(Esperan\u00e7a)));\n        Set Global Variable(g, Array(Map(Throne of Anubis), Map(Busan)));\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: g\n}\n\nrule (\"maps\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(g, First Of(Filtered Array(Array(Map(Colosseo), Map(Esperan\u00e7a), Map(Samoa), Map(Throne of Anubis), Current Map), Compare(Custom String(\"{0}\", Current Map), ==, String Split(Current Array Element, Empty Array)))));\n        Set Global Variable(g, Compare(Custom String(\"{0}\", Current Map), ==, Custom String(\"{0}\", Map(Colosseo))));\n        Set Global Variable(g, Compare(Current Map, ==, Map(Busan)));\n        Set Global Variable(g, Compare(Custom String(\"{0}\", Current Map), ==, Custom String(\"{0}\", Map(Samoa))));\n        Set Global Variable(g, Compare(First Of(Filtered Array(Array(Map(Colosseo), Map(Esperan\u00e7a), Map(Samoa), Map(Throne of Anubis), Current Map), Compare(Custom String(\"{0}\", Current Map), ==, String Split(Current Array Element, Empty Array)))), !=, Map(Esperan\u00e7a)));\n        Set Global Variable(g, Array(Map(Throne of Anubis), Map(Busan)));\n    }\n}\n\n",
+    "workshopSha256": "0c7681851405ebd3831624a8a693c14146c13f52272f0d3fc964960e6dd87561"
+  },
+  "fixture": "synthetic/structural-maps",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "f697d0e14c11d824c82016b4a4f063614fc6d4f87027487c925c221f7c0748d3"
+      }
+    ],
+    "sha256": "b4de7d9fb001156628542462d45834a64671d663273cb66fba376f244c550b2c",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

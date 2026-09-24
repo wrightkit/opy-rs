@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: a\n        1: b\n        2: c\n        127: __compressionAlphabet__\n}\n\nrule (\"Initialize global variables\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(__compressionAlphabet__, Custom String(\"\u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\\n\u000b\f\\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f !\\\"#$%&'()*+,-./2:;<=>?@Q[\\\\]^_`q|}~\u007f\u0080\u0081\u0082\u0083\u0084\u0085\u0086\u0087\u0088\u0089\u008a\u008b\u008c\u008d\u008e\u008f\u0090\u0091\u0092\u0093\u0094\u0095\u0096\u0097\u0098\u0099\u009a\u009b\u009c\u009d\u009e\u009f\u00a1\"));\n    }\n}\n\n//Strict optimizations enabled\nrule (\"compression\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(a, Mapped Array(String Split(Custom String(\"\u00020\u00030\u0004\"), First Of(Null)), Multiply(1, Index Of String Char(Global.__compressionAlphabet__, Char In String(Current Array Element, 0)))));\n        Set Global Variable(b, Mapped Array(String Split(Custom String(\"\u00020\u0017\"), First Of(Null)), Multiply(1, Index Of String Char(Global.__compressionAlphabet__, Char In String(Current Array Element, 0)))));\n        Set Global Variable(c, Mapped Array(String Split(Custom String(\"\u00010\u0004\"), First Of(Null)), Multiply(1, Index Of String Char(Global.__compressionAlphabet__, Char In String(Current Array Element, 0)))));\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: a\n        1: b\n        2: c\n        127: __compressionAlphabet__\n}\n\nrule (\"Initialize global variables\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(__compressionAlphabet__, Custom String(\"\u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\\n\u000b\f\\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f !\\\"#$%&'()*+,-./2:;<=>?@Q[\\\\]^_`q|}~\u007f\u0080\u0081\u0082\u0083\u0084\u0085\u0086\u0087\u0088\u0089\u008a\u008b\u008c\u008d\u008e\u008f\u0090\u0091\u0092\u0093\u0094\u0095\u0096\u0097\u0098\u0099\u009a\u009b\u009c\u009d\u009e\u009f\u00a1\"));\n    }\n}\n\n//Strict optimizations enabled\nrule (\"compression\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(a, Mapped Array(String Split(Custom String(\"\u00020\u00030\u0004\"), First Of(Null)), Multiply(1, Index Of String Char(Global.__compressionAlphabet__, Char In String(Current Array Element, 0)))));\n        Set Global Variable(b, Mapped Array(String Split(Custom String(\"\u00020\u0017\"), First Of(Null)), Multiply(1, Index Of String Char(Global.__compressionAlphabet__, Char In String(Current Array Element, 0)))));\n        Set Global Variable(c, Mapped Array(String Split(Custom String(\"\u00010\u0004\"), First Of(Null)), Multiply(1, Index Of String Char(Global.__compressionAlphabet__, Char In String(Current Array Element, 0)))));\n    }\n}\n\n",
+    "workshopSha256": "2ea1a7bf9b8baee00a146850ebe9deb52b2f623cda01034db95dcb747476f541"
+  },
+  "fixture": "synthetic/structural-compression",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "1b77daa8d1acb7aa11f041c28536ff900a5b42d4691317beb7a3b63c93ce6208"
+      }
+    ],
+    "sha256": "e740330b6745b0e87d63317b6fe7f2a535d257836a8e8a153b735c00b64d7799",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

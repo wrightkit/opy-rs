@@ -74,3 +74,33 @@ fn goto_out_of_a_loop_stays_a_skip() {
 fn skip_over_nothing_is_a_disabled_abort() {
     assert_converges("structural-zero-skip");
 }
+
+#[test]
+fn custom_string_merging_and_splitting_match_the_pinned_oracle() {
+    assert_converges("structural-strings");
+}
+
+#[test]
+fn array_and_assignment_rewrites_match_the_pinned_oracle() {
+    assert_converges("structural-arrays");
+}
+
+#[test]
+fn bugged_map_handling_matches_the_pinned_oracle() {
+    assert_converges("structural-maps");
+}
+
+#[test]
+fn builtin_defaults_and_size_arguments_match_the_pinned_oracle() {
+    assert_converges("structural-builtins");
+}
+
+#[test]
+fn compression_matches_the_pinned_oracle() {
+    assert_converges("structural-compression");
+}
+
+#[test]
+fn team_settings_order_matches_the_pinned_oracle() {
+    assert_converges("structural-settings");
+}
