@@ -69,3 +69,8 @@ fn else_after_a_nested_conditional_belongs_to_the_outer_conditional() {
 fn goto_out_of_a_loop_stays_a_skip() {
     assert_converges("structural-loop-exit");
 }
+
+#[test]
+fn skip_over_nothing_is_a_disabled_abort() {
+    assert_converges("structural-zero-skip");
+}

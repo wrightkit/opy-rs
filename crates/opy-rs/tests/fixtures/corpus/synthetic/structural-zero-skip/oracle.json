@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: g\n        1: h\n}\n\nrule (\"x\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(g, 1);\n        \"pass\"\n        disabled Abort;\n        //lbl_0:\n        Set Global Variable(g, 2);\n    }\n}\n\nrule (\"y\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(g, 1);\n        Skip If(Compare(Global.h, ==, Null), 1);\n        Set Global Variable(g, 5);\n        //lbl_1:\n        Set Global Variable(g, 2);\n    }\n}\n\nrule (\"z\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(g, 1);\n        Skip If(Compare(Global.h, ==, Null), 2);\n        Set Global Variable(g, 5);\n        Set Global Variable(g, 6);\n        //lbl_2:\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: g\n        1: h\n}\n\nrule (\"x\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(g, 1);\n        \"pass\"\n        disabled Abort;\n        //lbl_0:\n        Set Global Variable(g, 2);\n    }\n}\n\nrule (\"y\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(g, 1);\n        Skip If(Compare(Global.h, ==, Null), 1);\n        Set Global Variable(g, 5);\n        //lbl_1:\n        Set Global Variable(g, 2);\n    }\n}\n\nrule (\"z\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(g, 1);\n        Skip If(Compare(Global.h, ==, Null), 2);\n        Set Global Variable(g, 5);\n        Set Global Variable(g, 6);\n        //lbl_2:\n    }\n}\n\n",
+    "workshopSha256": "7a0f82b54872fd4b26e0eb99e022db2f2750862a09ebd873ddfee8e0f84620a1"
+  },
+  "fixture": "synthetic/structural-zero-skip",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "277bb133b1df818e644de9484a40b5c087208b8eed47d87a5c73162d6f8ba74c"
+      }
+    ],
+    "sha256": "9e231c57e26b25b0e6639ddc31ad7ef6ad6b467fd96f8fbcba1a9a76a8c6227d",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

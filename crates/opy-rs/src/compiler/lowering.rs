@@ -1730,7 +1730,7 @@ impl<'a> Lowering<'a> {
                 let goto = self.push_call_action("skip", &[offset]);
                 self.mark_action_origins(std::slice::from_ref(&goto), span);
                 actions.push(goto);
-                actions.push(self.push_call_action("abort", &[]));
+                actions.push(self.push_call_action("disabledAbort", &[]));
                 index += 1;
                 continue;
             }
@@ -7307,6 +7307,14 @@ impl<'a> Lowering<'a> {
                 for value in action_values(&mut action) {
                     split_all(value);
                 }
+                if is_zero_skip(&action) {
+                    action = workshop_rs::Action::Disabled {
+                        action: Box::new(workshop_rs::Action::Call {
+                            name: "abort".to_string(),
+                            args: Vec::new(),
+                        }),
+                    };
+                }
                 if optimization.enabled {
                     if let Some(modification) = self_modification(&action) {
                         action = modification;
@@ -7395,6 +7403,12 @@ impl<'a> Lowering<'a> {
                 step: self.materialize_value(*step),
             },
             Action::End => workshop_rs::Action::End,
+            Action::Call { name, .. } if name == "disabledAbort" => workshop_rs::Action::Disabled {
+                action: Box::new(workshop_rs::Action::Call {
+                    name: "abort".to_string(),
+                    args: Vec::new(),
+                }),
+            },
             Action::Call { name, args } => workshop_rs::Action::Call {
                 name: name.clone(),
                 args: args
@@ -8634,4 +8648,15 @@ fn used_bugged_maps(hir: &hir::Program) -> Vec<&'static str> {
         .into_iter()
         .filter(|map| found.contains(*map))
         .collect()
+}
+
+/// A skip over nothing does nothing; the pinned OverPy writes it as a
+/// disabled `Abort`.
+fn is_zero_skip(action: &workshop_rs::Action) -> bool {
+    matches!(
+        action,
+        workshop_rs::Action::Call { name, args }
+            if matches!(name.as_str(), "skip" | "skipIf")
+                && matches!(args.last(), Some(workshop_rs::Value::Number(distance)) if *distance == 0.0)
+    )
 }
