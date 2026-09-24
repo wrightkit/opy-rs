@@ -30,6 +30,17 @@ impl<'a> OperatorOptimizer<'a> {
         Self { compiler, strict }
     }
 
+    /// Whether a value is definitely truthy or falsy, when it is constant.
+    pub(super) fn constant_truth(&self, value: &Value) -> Option<bool> {
+        if falsy(value) {
+            Some(false)
+        } else if self.truthy(value) {
+            Some(true)
+        } else {
+            None
+        }
+    }
+
     /// The comparison a rule condition is emitted as: comparisons stay as
     /// they are, `not x` becomes `x == False`, Boolean values `x == True`, and
     /// any other value `x != False`.

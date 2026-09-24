@@ -159,6 +159,9 @@ impl<'a> SizeOptimizer<'a> {
                 self.nested(x);
                 self.nested(y);
                 self.nested(z);
+                if let Some(form) = compact_vector(x, y, z) {
+                    *value = form;
+                }
             }
             Value::PlayerVariable { player, .. } => self.nested(player),
             _ => {}
@@ -190,6 +193,65 @@ impl<'a> SizeOptimizer<'a> {
                 },
             ],
         }
+    }
+}
+
+fn direction(name: &str) -> Value {
+    Value::Enum {
+        value_type: "Vector".to_string(),
+        value: name.to_string(),
+    }
+}
+
+fn number_of(value: &Value) -> Option<f64> {
+    match value {
+        Value::Number(number) => Some(*number),
+        _ => None,
+    }
+}
+
+/// The shorter spellings of a vector: the sum of two directions, or one
+/// component scaling its direction.
+fn compact_vector(x: &Value, y: &Value, z: &Value) -> Option<Value> {
+    let (nx, ny, nz) = (number_of(x), number_of(y), number_of(z));
+    if (nx, ny, nz) == (Some(0.0), Some(0.0), Some(0.0)) {
+        return None;
+    }
+    if let (Some(nx), Some(ny), Some(nz)) = (nx, ny, nz) {
+        let pair = match (nx, ny, nz) {
+            (1.0, 1.0, 0.0) => Some(("LEFT", "UP")),
+            (1.0, -1.0, 0.0) => Some(("LEFT", "DOWN")),
+            (1.0, 0.0, 1.0) => Some(("LEFT", "FORWARD")),
+            (1.0, 0.0, -1.0) => Some(("LEFT", "BACKWARD")),
+            (-1.0, 1.0, 0.0) => Some(("RIGHT", "UP")),
+            (-1.0, -1.0, 0.0) => Some(("RIGHT", "DOWN")),
+            (-1.0, 0.0, 1.0) => Some(("RIGHT", "FORWARD")),
+            (-1.0, 0.0, -1.0) => Some(("RIGHT", "BACKWARD")),
+            (0.0, 1.0, 1.0) => Some(("UP", "FORWARD")),
+            (0.0, 1.0, -1.0) => Some(("UP", "BACKWARD")),
+            (0.0, -1.0, 1.0) => Some(("DOWN", "FORWARD")),
+            (0.0, -1.0, -1.0) => Some(("DOWN", "BACKWARD")),
+            _ => None,
+        };
+        if let Some((first, second)) = pair {
+            return Some(Value::Call {
+                name: "add".to_string(),
+                args: vec![direction(first), direction(second)],
+            });
+        }
+    }
+    let scaled = |component: &Value, axis: &str| Value::Call {
+        name: "multiply".to_string(),
+        args: vec![component.clone(), direction(axis)],
+    };
+    if ny == Some(0.0) && nz == Some(0.0) {
+        Some(scaled(x, "LEFT"))
+    } else if nx == Some(0.0) && nz == Some(0.0) {
+        Some(scaled(y, "UP"))
+    } else if nx == Some(0.0) && ny == Some(0.0) {
+        Some(scaled(z, "FORWARD"))
+    } else {
+        None
     }
 }
 

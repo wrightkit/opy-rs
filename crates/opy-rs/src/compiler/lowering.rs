@@ -1777,6 +1777,75 @@ impl<'a> Lowering<'a> {
         Ok(actions)
     }
 
+    /// `if condition: return` and `if condition: loop()` lower to a single
+    /// conditional action; with optimization a constant condition removes the
+    /// condition entirely.
+    fn lower_terminal_if(
+        &mut self,
+        branch: &hir::types::IfBranch,
+        span: Option<HirSpan>,
+    ) -> Result<Option<Vec<ActionId>>, IntegrationError> {
+        let [child] = branch.body.as_slice() else {
+            return Ok(None);
+        };
+        let is_loop_call = matches!(
+            child,
+            Stmt::Expr { expr, .. }
+                if matches!(expr.as_ref(), Expr::Call { name, args, .. } if name == "loop" && args.is_empty())
+        );
+        let (unconditional, conditional, on_true, on_false) = match child {
+            Stmt::Return { .. } => (
+                "abort",
+                "abortIf",
+                "__abortIfConditionIsTrue__",
+                "__abortIfConditionIsFalse__",
+            ),
+            Stmt::Goto {
+                rule_start: true, ..
+            } => (
+                "loop",
+                "loopIf",
+                "loopIfConditionIsTrue",
+                "__loopIfConditionIsFalse__",
+            ),
+            _ if is_loop_call => (
+                "loop",
+                "loopIf",
+                "loopIfConditionIsTrue",
+                "__loopIfConditionIsFalse__",
+            ),
+            _ => return Ok(None),
+        };
+        let is_rule_condition =
+            |expr: &Expr| matches!(expr, Expr::Call { name, .. } if name == "ruleCondition");
+        let rule_condition = match branch.condition.as_ref() {
+            condition if is_rule_condition(condition) => Some(on_true),
+            Expr::Unary { op, operand, .. }
+                if op == "not" && is_rule_condition(operand.as_ref()) =>
+            {
+                Some(on_false)
+            }
+            _ => None,
+        };
+        if let Some(name) = rule_condition {
+            return Ok(Some(vec![self.push_call_action(name, &[])]));
+        }
+        let optimization = self.optimization_state_at(span.as_ref());
+        if !optimization.enabled {
+            return Ok(None);
+        }
+        let condition = self.lower_value(&branch.condition)?;
+        let materialized = self.materialize_value(condition);
+        let operators = OperatorOptimizer::new(self.compiler, optimization.strict);
+        let action = match operators.constant_truth(&materialized) {
+            Some(false) => return Ok(Some(Vec::new())),
+            Some(true) => self.push_call_action(unconditional, &[]),
+            None => self.push_call_action(conditional, &[condition]),
+        };
+        self.mark_action_origins(std::slice::from_ref(&action), span);
+        Ok(Some(vec![action]))
+    }
+
     fn resolve_deferred_gotos(
         &mut self,
         actions: &[ActionId],
@@ -1829,8 +1898,13 @@ impl<'a> Lowering<'a> {
             Stmt::If {
                 branches,
                 r#else,
-                span: _,
+                span,
             } => {
+                if let ([branch], None) = (branches.as_slice(), r#else)
+                    && let Some(actions) = self.lower_terminal_if(branch, *span)?
+                {
+                    return Ok(actions);
+                }
                 let branches = branches
                     .iter()
                     .map(|branch| {
@@ -1960,10 +2034,7 @@ impl<'a> Lowering<'a> {
                     *span,
                 )),
             },
-            Stmt::Return { span: _ } => {
-                let true_value = self.push_value(Value::Bool(true));
-                Ok(vec![self.push_call_action("abortIf", &[true_value])])
-            }
+            Stmt::Return { span: _ } => Ok(vec![self.push_call_action("abort", &[])]),
             Stmt::Expr { expr, span } => match expr.as_ref() {
                 Expr::Call {
                     name,
@@ -3940,7 +4011,12 @@ impl<'a> Lowering<'a> {
             _ => None,
         };
         match (number(x), number(y), number(z)) {
+            (Some(1.0), Some(0.0), Some(0.0)) => Some("LEFT"),
+            (Some(-1.0), Some(0.0), Some(0.0)) => Some("RIGHT"),
             (Some(0.0), Some(1.0), Some(0.0)) => Some("UP"),
+            (Some(0.0), Some(-1.0), Some(0.0)) => Some("DOWN"),
+            (Some(0.0), Some(0.0), Some(1.0)) => Some("FORWARD"),
+            (Some(0.0), Some(0.0), Some(-1.0)) => Some("BACKWARD"),
             _ => None,
         }
     }
