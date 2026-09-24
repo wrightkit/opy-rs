@@ -43,6 +43,26 @@ impl<'a> SizeOptimizer<'a> {
             *value = Value::Null;
         } else if is_zero_vector(value) {
             *value = self.zero_vector_sum();
+        } else if is_empty_string(value) {
+            *value = self.empty_string(false);
+        }
+    }
+
+    /// An empty string is spelled as the first character of nothing, or as an
+    /// empty array where the parameter accepts one.
+    fn empty_string(&self, empty_array: bool) -> Value {
+        if empty_array {
+            return Value::Call {
+                name: "emptyArray".to_string(),
+                args: Vec::new(),
+            };
+        }
+        Value::Call {
+            name: "charAt".to_string(),
+            args: vec![
+                Value::String(String::new()),
+                Value::Number(0.0),
+            ],
         }
     }
 
@@ -110,7 +130,9 @@ impl<'a> SizeOptimizer<'a> {
     }
 
     fn argument(&self, coercions: ParamCoercions, value: &mut Value) {
-        if is_zero_vector(value) {
+        if is_empty_string(value) {
+            *value = self.empty_string(coercions.empty_array_as_string);
+        } else if is_zero_vector(value) {
             *value = if coercions.null_vector_as_null {
                 Value::Null
             } else {
@@ -135,6 +157,14 @@ impl<'a> SizeOptimizer<'a> {
 
     fn nested(&self, value: &mut Value) {
         match value {
+            Value::Call { name, args } if name == "vector" && args.len() == 3 => {
+                for arg in args.iter_mut() {
+                    self.nested(arg);
+                }
+                if let Some(form) = compact_vector(&args[0], &args[1], &args[2]) {
+                    *value = form;
+                }
+            }
             Value::Call { name, args } => {
                 self.compared(name, args);
                 self.call_arguments(Kind::Value, name, args);
@@ -252,6 +282,18 @@ fn compact_vector(x: &Value, y: &Value, z: &Value) -> Option<Value> {
         Some(scaled(z, "FORWARD"))
     } else {
         None
+    }
+}
+
+fn is_empty_string(value: &Value) -> bool {
+    match value {
+        Value::String(text) => text.is_empty(),
+        Value::Call { name, args } => {
+            name == "customString"
+                && args.len() == 1
+                && matches!(&args[0], Value::String(text) if text.is_empty())
+        }
+        _ => false,
     }
 }
 
