@@ -28,3 +28,8 @@ rule "Clear trigger admin﻿":
     __d = 1
     __f___ = 1
     c = 1
+    a = vect(1, 0, 0)
+    a = vect(-1, 0, 0)
+    a = vect(0, -1, 0)
+    a = vect(0, 0, 1)
+    a = vect(0, 1, 0)
