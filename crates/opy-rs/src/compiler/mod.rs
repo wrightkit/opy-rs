@@ -20,7 +20,10 @@ mod blizzard_global;
 mod hooks;
 mod integration;
 mod lowering;
+mod operator_optimization;
 mod settings;
+mod size_optimization;
+mod string_format;
 
 pub(crate) use backend::MacroExpander;
 pub(super) use backend::{expand_macros, reject_unlowered_directives};
@@ -1815,9 +1818,9 @@ rule "empty rule":
         )
         .unwrap();
         let artifact = compiler.compile_hir(&hir).unwrap();
-        assert_eq!(artifact.wir.rules.len(), 1);
-        let rule0 = artifact.wir.rules.first().unwrap();
-        assert!(rule0.actions.is_empty());
+        // Rules and subroutines with nothing to run are dropped, as the
+        // pinned OverPy does.
+        assert!(artifact.wir.rules.is_empty());
     }
 
     #[test]

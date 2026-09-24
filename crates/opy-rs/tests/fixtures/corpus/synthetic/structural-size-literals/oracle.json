@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: g\n        1: h\n    player:\n        0: p\n        1: q\n}\n\n//Optimize for size enabled\nrule (\"size literals\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Set Player Variable(Event Player, p, Null);\n        Set Player Variable(Event Player, q, Null);\n        Set Global Variable(g, Null);\n        Set Global Variable(g, Add(Left, Right));\n        Set Global Variable(g, Array(Null, False, True, Add(Left, Right), -1, Vector(-1.5, 2, -3)));\n        Modify Global Variable(g, Add, True);\n        Modify Global Variable(g, Subtract, True);\n        Modify Global Variable(g, Append To Array, Null);\n        Set Global Variable At Index(h, False, Null);\n        Modify Global Variable At Index(h, True, Add, True);\n        Set Player Variable At Index(Event Player, p, True, Null);\n        For Global Variable(h, 0, 3, True);\n            Modify Global Variable(g, Add, 2);\n        End;\n        If(And(And(Compare(Global.g, >, Null), Compare(Global.h, >=, 1)), Compare(Global.g, !=, Null)));\n            Set Global Variable(g, If-Then-Else((Event Player).p, 1, Null));\n        End;\n        Wait(False, Ignore Condition);\n        Small Message(Event Player, Char In String(Empty Array, False));\n        Set Global Variable(g, Array(Char In String(Empty Array, False), 1));\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: g\n        1: h\n    player:\n        0: p\n        1: q\n}\n\n//Optimize for size enabled\nrule (\"size literals\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Set Player Variable(Event Player, p, Null);\n        Set Player Variable(Event Player, q, Null);\n        Set Global Variable(g, Null);\n        Set Global Variable(g, Add(Left, Right));\n        Set Global Variable(g, Array(Null, False, True, Add(Left, Right), -1, Vector(-1.5, 2, -3)));\n        Modify Global Variable(g, Add, True);\n        Modify Global Variable(g, Subtract, True);\n        Modify Global Variable(g, Append To Array, Null);\n        Set Global Variable At Index(h, False, Null);\n        Modify Global Variable At Index(h, True, Add, True);\n        Set Player Variable At Index(Event Player, p, True, Null);\n        For Global Variable(h, 0, 3, True);\n            Modify Global Variable(g, Add, 2);\n        End;\n        If(And(And(Compare(Global.g, >, Null), Compare(Global.h, >=, 1)), Compare(Global.g, !=, Null)));\n            Set Global Variable(g, If-Then-Else((Event Player).p, 1, Null));\n        End;\n        Wait(False, Ignore Condition);\n        Small Message(Event Player, Char In String(Empty Array, False));\n        Set Global Variable(g, Array(Char In String(Empty Array, False), 1));\n    }\n}\n\n",
+    "workshopSha256": "27efd2d25a120c1ef56a3e8467a2aeb7b4a1409d7903b116a8012e63f09caf35"
+  },
+  "fixture": "synthetic/structural-size-literals",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "6fa198d06dc6fc7778bc867f1334715d92770806ded939be28359632669db042"
+      }
+    ],
+    "sha256": "978553804c577afbe8f2e7afde01f0da89b1d81190bab9ff0a1296b83be6b482",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

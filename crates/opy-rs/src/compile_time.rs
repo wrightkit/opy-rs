@@ -121,7 +121,7 @@ fn evaluate_builtin(name: &str, values: &[Value]) -> Option<Value> {
             _ => None,
         },
         "round" => match values {
-            [Value::Number(value)] => Some(Value::Number(value.round())),
+            [Value::Number(value)] => Some(Value::Number(round_half_up(*value))),
             _ => None,
         },
         "abs" => match values {
@@ -199,9 +199,31 @@ fn evaluate_index(collection: Value, index: Value) -> Option<Value> {
 
 fn display(value: &Value) -> Option<String> {
     match value {
-        Value::Number(value) if value.is_finite() => Some(value.to_string()),
+        Value::Number(value) if value.is_finite() => Some(workshop_number_text(*value)),
         Value::String(value) => Some(value.clone()),
         Value::Bool(value) => Some(value.to_string()),
         _ => None,
+    }
+}
+
+/// Numbers substituted into text keep two decimals, as Workshop displays
+/// them: `2.5` becomes `2.50`, and a value that rounds to an integer drops
+/// its fraction.
+/// Rounds halves toward positive infinity, as the pinned reference does.
+pub(crate) fn round_half_up(value: f64) -> f64 {
+    let floor = value.floor();
+    if value - floor >= 0.5 {
+        floor + 1.0
+    } else {
+        floor
+    }
+}
+
+pub(crate) fn workshop_number_text(value: f64) -> String {
+    let rounded = (value * 100.0).round() / 100.0;
+    if rounded.fract() == 0.0 {
+        format!("{}", rounded as i64)
+    } else {
+        format!("{rounded:.2}")
     }
 }

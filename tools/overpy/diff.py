@@ -685,7 +685,7 @@ def compare_compiler_fixture(
             algorithm_matches = (
                 semantic.get("schemaVersion") == 1
                 and semantic.get("algorithm")
-                == "workshop-rs::roundtrip::equivalent"
+                == "opy-rs::structural-identity"
             )
             equivalent = semantic.get("equivalent") is True
             reference_error = semantic.get("referenceError")

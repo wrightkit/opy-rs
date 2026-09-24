@@ -3175,7 +3175,7 @@
       "receiver": "Player"
     },
     {
-      "catalogId": "isFiringSecondaryFire",
+      "catalogId": "isFiringSecondary",
       "evidence": [
         "receiver-calls"
       ],
@@ -3338,7 +3338,7 @@
           "name": "throttle"
         },
         {
-          "default": "NONE",
+          "default": "DIRECTION_AND_MAGNITUDE",
           "domain": "ThrottleReeval",
           "name": "reevaluation"
         }
@@ -3985,7 +3985,7 @@
           "name": "relativity"
         },
         {
-          "default": "INCORPORATE_CONTRARY_MOTION",
+          "default": "CANCEL_CONTRARY_MOTION_XYZ",
           "domain": "Impulse",
           "name": "motion"
         }
@@ -4279,7 +4279,7 @@
           "name": "color"
         },
         {
-          "default": false,
+          "default": true,
           "name": "showWhenOffscreen"
         }
       ]

@@ -91,7 +91,8 @@ fn collect_value_call_names(value: &workshop_rs::Value, names: &mut Vec<String>)
 
 #[test]
 fn catalog_backed_builtin_inventory_lowers_to_canonical_calls() {
-    let source = r#"globalvar g
+    let source = r#"#!disableOptimizations
+globalvar g
 
 rule "builtin surface":
     @Event global
@@ -106,7 +107,7 @@ rule "builtin surface":
     @Condition strContains("abc", "b")
     @Condition ceil(1.2) == 2
     @Condition floor(1.8) == 1
-    @Condition round(1.5) == 2
+    @Condition round(eventPlayer.getHealth()) == 2
     g = getPlayers(Team.ALL)
     g = getAllHeroes()
     g = heroIcon(Hero.ANA)

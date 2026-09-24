@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: g\n        1: h\n    player:\n        0: pv\n}\n\nrule (\"arrays\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Modify Global Variable(g, Add, 1);\n        Modify Global Variable(g, Append To Array, Array(5));\n        Modify Global Variable(g, Remove From Array By Value, Array(5));\n        Modify Global Variable(g, Remove From Array By Value, Global.h);\n        Modify Global Variable(g, Remove From Array By Value, Null);\n        Modify Global Variable(g, Append To Array, Global.h);\n        Modify Player Variable At Index(Event Player, pv, 0, Multiply, -1);\n        Modify Player Variable At Index(Event Player, pv, 1, Add, 2);\n        Modify Global Variable At Index(g, 0, Add, 1);\n        Set Global Variable(g, Array(1, 2));\n        Set Global Variable(g, Array(2, 3));\n        Set Global Variable(g, Custom String(\"b\"));\n        Set Global Variable(g, 3);\n        Set Global Variable(g, Remove From Array(Global.h, 1));\n        Set Global Variable(g, Global.h);\n        Set Global Variable(g, 62800);\n        Set Global Variable(g, String Split(Custom String(\"7-4\"), Custom String(\"-\")));\n        Set Global Variable(g, Custom String(\"8\"));\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: g\n        1: h\n    player:\n        0: pv\n}\n\nrule (\"arrays\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Modify Global Variable(g, Add, 1);\n        Modify Global Variable(g, Append To Array, Array(5));\n        Modify Global Variable(g, Remove From Array By Value, Array(5));\n        Modify Global Variable(g, Remove From Array By Value, Global.h);\n        Modify Global Variable(g, Remove From Array By Value, Null);\n        Modify Global Variable(g, Append To Array, Global.h);\n        Modify Player Variable At Index(Event Player, pv, 0, Multiply, -1);\n        Modify Player Variable At Index(Event Player, pv, 1, Add, 2);\n        Modify Global Variable At Index(g, 0, Add, 1);\n        Set Global Variable(g, Array(1, 2));\n        Set Global Variable(g, Array(2, 3));\n        Set Global Variable(g, Custom String(\"b\"));\n        Set Global Variable(g, 3);\n        Set Global Variable(g, Remove From Array(Global.h, 1));\n        Set Global Variable(g, Global.h);\n        Set Global Variable(g, 62800);\n        Set Global Variable(g, String Split(Custom String(\"7-4\"), Custom String(\"-\")));\n        Set Global Variable(g, Custom String(\"8\"));\n    }\n}\n\n",
+    "workshopSha256": "23e771709cbdc0d6c87f6c99bc73723a68e05610bca4afa299da82db3b369ca3"
+  },
+  "fixture": "synthetic/structural-arrays",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "b89a1e2f1598b9d22db870250554f319b8f69f0e1be235f37d2fd4da734b0a6c"
+      }
+    ],
+    "sha256": "8848b2506269b431aeb60326247c7a5d67d7d79df653339d68db52580f90c1e5",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

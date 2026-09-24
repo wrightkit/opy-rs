@@ -1,0 +1,151 @@
+//! Structural convergence with the pinned OverPy output.
+//!
+//! Each fixture pairs OPY source with the pinned oracle snapshot. Native output
+//! must parse to a canonical Workshop program structurally equal to it.
+
+use std::path::Path;
+
+use crate::Compiler;
+use workshop_rs::catalog::{Catalog, Locale};
+use workshop_rs::roundtrip::equivalent;
+
+/// Everything the program says except where the text put it.
+fn structure(program: &workshop_rs::Program) -> String {
+    format!(
+        "{:#?}{:#?}{:#?}{:#?}{:#?}",
+        program.settings,
+        program.global_variables,
+        program.player_variables,
+        program.subroutines,
+        program.rules
+    )
+    .lines()
+    .filter(|line| {
+        let line = line.trim_start();
+        !line.starts_with("line: ") && !line.starts_with("col: ")
+    })
+    .collect::<Vec<_>>()
+    .join("\n")
+}
+
+fn assert_converges(name: &str) {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/corpus/synthetic")
+        .join(name);
+    let source = std::fs::read_to_string(dir.join("source.opy")).expect("source must be readable");
+    let hir = crate::compile(&source, "source.opy", &dir).expect("fixture must resolve");
+    let artifact = Compiler::new()
+        .expect("released workshop contract must load")
+        .compile_hir(&hir)
+        .expect("fixture must lower to canonical WIR");
+    let oracle: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(dir.join("oracle.json")).expect("oracle.json must be readable"),
+    )
+    .expect("oracle.json must parse");
+    let catalog = Catalog::builtin().expect("catalog must load");
+    let locale = Locale::new("en-US");
+    let parse = |text: &str| {
+        workshop_rs::parser::parse(text, &catalog, &locale).expect("Workshop text must parse")
+    };
+    let expected = parse(
+        oracle["compile"]["workshop"]
+            .as_str()
+            .expect("oracle snapshot records the compiled Workshop text"),
+    );
+    let native = parse(&artifact.emitted);
+    assert_eq!(
+        structure(&native),
+        structure(&expected),
+        "{name} differs structurally from the pinned oracle"
+    );
+    assert!(
+        equivalent(&native, &expected),
+        "{name} diverged from the pinned oracle:\n{}",
+        artifact.emitted
+    );
+}
+
+#[test]
+fn size_optimization_literals_match_the_pinned_oracle() {
+    assert_converges("structural-size-literals");
+}
+
+#[test]
+fn operator_optimization_matches_the_pinned_oracle() {
+    assert_converges("structural-operators");
+}
+
+#[test]
+fn declarations_names_and_arrays_match_the_pinned_oracle() {
+    assert_converges("structural-declarations");
+}
+
+#[test]
+fn terminal_conditionals_match_the_pinned_oracle() {
+    assert_converges("structural-control-flow");
+}
+
+#[test]
+fn else_after_a_nested_conditional_belongs_to_the_outer_conditional() {
+    assert_converges("structural-nested-else");
+}
+
+#[test]
+fn goto_out_of_a_loop_stays_a_skip() {
+    assert_converges("structural-loop-exit");
+}
+
+#[test]
+fn goto_distance_excludes_instructions_the_output_drops() {
+    assert_converges("structural-goto-dropped");
+}
+
+#[test]
+fn rounding_bare_returns_and_map_comparisons_match_the_pinned_oracle() {
+    assert_converges("structural-reference-quirks");
+}
+
+#[test]
+fn skip_over_nothing_is_a_disabled_abort() {
+    assert_converges("structural-zero-skip");
+}
+
+#[test]
+fn custom_string_merging_and_splitting_match_the_pinned_oracle() {
+    assert_converges("structural-strings");
+}
+
+#[test]
+fn array_and_assignment_rewrites_match_the_pinned_oracle() {
+    assert_converges("structural-arrays");
+}
+
+#[test]
+fn bugged_map_handling_matches_the_pinned_oracle() {
+    assert_converges("structural-maps");
+}
+
+#[test]
+fn builtin_defaults_and_size_arguments_match_the_pinned_oracle() {
+    assert_converges("structural-builtins");
+}
+
+#[test]
+fn compression_matches_the_pinned_oracle() {
+    assert_converges("structural-compression");
+}
+
+#[test]
+fn team_settings_order_matches_the_pinned_oracle() {
+    assert_converges("structural-settings");
+}
+
+#[test]
+fn unoptimized_output_matches_the_pinned_oracle() {
+    assert_converges("structural-unoptimized");
+}
+
+#[test]
+fn empty_rules_and_subroutines_are_dropped_like_the_pinned_oracle() {
+    assert_converges("structural-empty-rules");
+}

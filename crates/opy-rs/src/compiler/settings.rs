@@ -109,13 +109,7 @@ fn expand_settings_node(
                 .map(|child| expand_settings_node(child, constants))
                 .collect::<Vec<_>>();
             let children = if matches!(name.as_str(), "team1" | "team2" | "allTeams") {
-                children
-                    .into_iter()
-                    .flat_map(|child| match child {
-                        SettingsNode::Group { name, children, .. } if name == "general" => children,
-                        child => vec![child],
-                    })
-                    .collect()
+                general_first(children)
             } else {
                 children
             };
@@ -146,22 +140,25 @@ fn settings_node_from_expr(
             .and_then(|expr| settings_node_from_expr(name, expr, constants, span)),
         Expr::Dict { entries, .. } => Some(SettingsNode::Group {
             name,
-            children: entries
-                .iter()
-                .filter_map(|entry| {
-                    let Expr::String {
-                        value: child_name, ..
-                    } = entry.key.as_ref()
-                    else {
-                        return None;
-                    };
-                    settings_node_from_expr(child_name.clone(), &entry.value, constants, entry.span)
-                })
-                .flat_map(|child| match child {
-                    SettingsNode::Group { name, children, .. } if name == "general" => children,
-                    child => vec![child],
-                })
-                .collect(),
+            children: general_first(
+                entries
+                    .iter()
+                    .filter_map(|entry| {
+                        let Expr::String {
+                            value: child_name, ..
+                        } = entry.key.as_ref()
+                        else {
+                            return None;
+                        };
+                        settings_node_from_expr(
+                            child_name.clone(),
+                            &entry.value,
+                            constants,
+                            entry.span,
+                        )
+                    })
+                    .collect(),
+            ),
             span,
         }),
         Expr::Number { value, .. } => Some(SettingsNode::Number {
@@ -314,4 +311,22 @@ fn convert_settings_span(span: HirSpan) -> WorkshopSpan {
         WorkshopPosition::new(span.start.line, span.start.col),
         WorkshopPosition::new(span.end.line, span.end.col),
     )
+}
+
+/// The hero-independent settings of a team come before its per-hero groups,
+/// as the pinned OverPy writes them.
+fn general_first(children: Vec<crate::hir::SettingsNode>) -> Vec<crate::hir::SettingsNode> {
+    use crate::hir::SettingsNode;
+    let mut general = Vec::new();
+    let mut rest = Vec::new();
+    for child in children {
+        match child {
+            SettingsNode::Group { name, children, .. } if name == "general" => {
+                general.extend(children);
+            }
+            child => rest.push(child),
+        }
+    }
+    general.extend(rest);
+    general
 }

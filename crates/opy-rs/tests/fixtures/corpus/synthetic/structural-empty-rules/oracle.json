@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: g\n}\n\nsubroutines {\n    0: emptySub\n    1: fullSub\n}\n\nrule (\"Subroutine fullSub\") {\n    event {\n        Subroutine;\n        fullSub;\n    }\n    actions {\n        Set Global Variable(g, 1);\n    }\n}\n\nrule (\"calls\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Call Subroutine(emptySub);\n        Call Subroutine(fullSub);\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: g\n}\n\nsubroutines {\n    0: emptySub\n    1: fullSub\n}\n\nrule (\"Subroutine fullSub\") {\n    event {\n        Subroutine;\n        fullSub;\n    }\n    actions {\n        Set Global Variable(g, 1);\n    }\n}\n\nrule (\"calls\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Call Subroutine(emptySub);\n        Call Subroutine(fullSub);\n    }\n}\n\n",
+    "workshopSha256": "0ef09078b7e6caea861bd572e19cc2dd3ab1d7791f4e3c6135534922161f3964"
+  },
+  "fixture": "synthetic/structural-empty-rules",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "edf47b2c783eac364ba02a47f380b2ce87556afc7d9e83254b117fa7b7110da6"
+      }
+    ],
+    "sha256": "51d7c436d368ec911e7a18d49b58b41f5b7fd9356d11bbdc4120dc0d6c938f75",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

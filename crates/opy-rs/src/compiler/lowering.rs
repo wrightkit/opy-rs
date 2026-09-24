@@ -1,3 +1,6 @@
+use super::operator_optimization::{OperatorOptimizer, same, self_modification};
+use super::size_optimization::{SizeOptimizer, action_values};
+use super::string_format::split_all;
 use super::*;
 use crate::hir::OptimizationState;
 
@@ -208,6 +211,8 @@ pub(crate) struct Lowering<'a> {
     visible_labels: Vec<HashSet<String>>,
     deferred_gotos: Vec<(ActionId, String, Option<HirSpan>, usize)>,
     translation_uses: Vec<(String, Option<String>)>,
+    optimized_nodes: HashMap<ValueId, bool>,
+    used_maps: Vec<&'static str>,
 }
 
 #[derive(Debug, Clone)]
@@ -382,6 +387,8 @@ impl<'a> Lowering<'a> {
             defined_subroutines: HashSet::new(),
             array_bindings: Vec::new(),
             current_rule_conditions: None,
+            optimized_nodes: HashMap::new(),
+            used_maps: used_bugged_maps(hir),
             visible_labels: Vec::new(),
             deferred_gotos: Vec::new(),
             translation_uses: Vec::new(),
@@ -597,6 +604,30 @@ impl<'a> Lowering<'a> {
             global_reserved.insert(index);
         }
         let empty = HashSet::new();
+        let mut globals = globals;
+        let mut players = players;
+        let mut explicit_globals = global_reserved.clone();
+        explicit_globals.extend(globals.iter().filter_map(|(index, _)| *index));
+        let mut explicit_players = implicit_player_reserved.clone();
+        explicit_players.extend(players.iter().filter_map(|(index, _)| *index));
+        let global_names =
+            self.hir
+                .declarations
+                .iter()
+                .filter_map(|declaration| match declaration {
+                    hir::Declaration::GlobalVariable { name, .. } => Some(name.as_str()),
+                    _ => None,
+                });
+        top_allocate_reserved_names(global_names, &mut globals, &mut explicit_globals);
+        let player_names =
+            self.hir
+                .declarations
+                .iter()
+                .filter_map(|declaration| match declaration {
+                    hir::Declaration::PlayerVariable { name, .. } => Some(name.as_str()),
+                    _ => None,
+                });
+        top_allocate_reserved_names(player_names, &mut players, &mut explicit_players);
         let global_indices = allocate_indices(&globals, &global_reserved, "global variable")?;
         let player_indices =
             allocate_indices(&players, &implicit_player_reserved, "player variable")?;
@@ -1156,6 +1187,9 @@ impl<'a> Lowering<'a> {
                 }
             }
         }
+        for rule in &mut self.program.rules {
+            rule.name = escape_rule_name(&rule.name);
+        }
         Ok(())
     }
 
@@ -1195,7 +1229,19 @@ impl<'a> Lowering<'a> {
             event,
             conditions: conditions
                 .iter()
-                .map(|value| workshop_rs::Condition::new(self.materialize_value(*value)))
+                .zip(&condition_exprs)
+                .map(|(value, expr)| {
+                    let mut condition = self.materialize_value(*value);
+                    split_all(&mut condition);
+                    let optimization = self.optimization_state_at(expr.span());
+                    if optimization.enabled && optimization.for_size {
+                        SizeOptimizer::new(self.compiler).condition(&mut condition);
+                    }
+                    workshop_rs::Condition::new(
+                        OperatorOptimizer::new(self.compiler, optimization.strict)
+                            .wrap_condition(condition),
+                    )
+                })
                 .collect(),
             actions: self.public_actions(&actions),
         });
@@ -1242,8 +1288,8 @@ impl<'a> Lowering<'a> {
                 ) => false,
                 Some(Action::CallSubroutine { .. }) => true,
                 Some(Action::Call { name, .. }) => match name.as_str() {
-                    "abortIf" | "break" | "continue" | "loop" | "loopIf" | "return" | "skip"
-                    | "skipIf" => false,
+                    "abort" | "abortIf" | "break" | "continue" | "loop" | "loopIf" | "return"
+                    | "skip" | "skipIf" => false,
                     "wait" => matches!(event, Event::Subroutine(_)),
                     _ => true,
                 },
@@ -1281,11 +1327,17 @@ impl<'a> Lowering<'a> {
         }
         let mut actions = Vec::new();
         actions.extend(self.lower_actions(body, None)?);
+        let event = Event::Subroutine(self.subroutine_names[subroutine].clone());
+        if self.optimization_state_at(span.as_ref()).enabled
+            && !self.has_meaningful_rule_action(&actions, &event)
+        {
+            return Ok(());
+        }
         let rule_index = self.program.rules.len();
         self.program.rules.push(workshop_rs::Rule {
             name: self.subroutine_rule_name(name),
             disabled: false,
-            event: Event::Subroutine(self.subroutine_names[subroutine].clone()),
+            event,
             conditions: Vec::new(),
             actions: self.public_actions(&actions),
         });
@@ -1358,11 +1410,10 @@ impl<'a> Lowering<'a> {
         directive_value(self.hir, "globalvarInitRuleName")
             .map(str::to_string)
             .unwrap_or_else(|| {
-                if self.hir.preprocessing.rule_prefix_template.is_some() {
-                    "[] Initialize global variables".to_string()
-                } else {
-                    "Initialize global variables".to_string()
-                }
+                crate::lower::render_generated_rule_name(
+                    "Initialize global variables",
+                    &self.hir.preprocessing,
+                )
             })
     }
 
@@ -1685,7 +1736,7 @@ impl<'a> Lowering<'a> {
                 let goto = self.push_call_action("skip", &[offset]);
                 self.mark_action_origins(std::slice::from_ref(&goto), span);
                 actions.push(goto);
-                actions.push(self.push_call_action("abort", &[]));
+                actions.push(self.push_call_action("disabledAbort", &[]));
                 index += 1;
                 continue;
             }
@@ -1762,6 +1813,75 @@ impl<'a> Lowering<'a> {
         Ok(actions)
     }
 
+    /// `if condition: return` and `if condition: loop()` lower to a single
+    /// conditional action; with optimization a constant condition removes the
+    /// condition entirely.
+    fn lower_terminal_if(
+        &mut self,
+        branch: &hir::types::IfBranch,
+        span: Option<HirSpan>,
+    ) -> Result<Option<Vec<ActionId>>, IntegrationError> {
+        let [child] = branch.body.as_slice() else {
+            return Ok(None);
+        };
+        let is_loop_call = matches!(
+            child,
+            Stmt::Expr { expr, .. }
+                if matches!(expr.as_ref(), Expr::Call { name, args, .. } if name == "loop" && args.is_empty())
+        );
+        let (unconditional, conditional, on_true, on_false) = match child {
+            Stmt::Return { .. } => (
+                "abort",
+                "abortIf",
+                "__abortIfConditionIsTrue__",
+                "__abortIfConditionIsFalse__",
+            ),
+            Stmt::Goto {
+                rule_start: true, ..
+            } => (
+                "loop",
+                "loopIf",
+                "loopIfConditionIsTrue",
+                "__loopIfConditionIsFalse__",
+            ),
+            _ if is_loop_call => (
+                "loop",
+                "loopIf",
+                "loopIfConditionIsTrue",
+                "__loopIfConditionIsFalse__",
+            ),
+            _ => return Ok(None),
+        };
+        let is_rule_condition =
+            |expr: &Expr| matches!(expr, Expr::Call { name, .. } if name == "ruleCondition");
+        let rule_condition = match branch.condition.as_ref() {
+            condition if is_rule_condition(condition) => Some(on_true),
+            Expr::Unary { op, operand, .. }
+                if op == "not" && is_rule_condition(operand.as_ref()) =>
+            {
+                Some(on_false)
+            }
+            _ => None,
+        };
+        if let Some(name) = rule_condition {
+            return Ok(Some(vec![self.push_call_action(name, &[])]));
+        }
+        let optimization = self.optimization_state_at(span.as_ref());
+        if !optimization.enabled {
+            return Ok(None);
+        }
+        let condition = self.lower_value(&branch.condition)?;
+        let materialized = self.materialize_value(condition);
+        let operators = OperatorOptimizer::new(self.compiler, optimization.strict);
+        let action = match operators.constant_truth(&materialized) {
+            Some(false) => return Ok(Some(Vec::new())),
+            Some(true) => self.push_call_action(unconditional, &[]),
+            None => self.push_call_action(conditional, &[condition]),
+        };
+        self.mark_action_origins(std::slice::from_ref(&action), span);
+        Ok(Some(vec![action]))
+    }
+
     fn resolve_deferred_gotos(
         &mut self,
         actions: &[ActionId],
@@ -1788,7 +1908,8 @@ impl<'a> Lowering<'a> {
             // slice is not necessarily a standalone valid action sequence.
             // The flat lowering stream has one action id per native action,
             // including the structural markers that the jump must cross.
-            let width = actions[position + 1..target].len();
+            // Instructions dropped from the output must not widen the jump.
+            let width = self.useful_actions(&actions[position + 1..target]).len();
             let distance = self.push_number(width as f64, &width.to_string());
             let Some(Action::Call { args, .. }) = self.actions.get_mut(action) else {
                 unreachable!("deferred goto placeholder must be a call action")
@@ -1814,8 +1935,13 @@ impl<'a> Lowering<'a> {
             Stmt::If {
                 branches,
                 r#else,
-                span: _,
+                span,
             } => {
+                if let ([branch], None) = (branches.as_slice(), r#else)
+                    && let Some(actions) = self.lower_terminal_if(branch, *span)?
+                {
+                    return Ok(actions);
+                }
                 let branches = branches
                     .iter()
                     .map(|branch| {
@@ -1945,10 +2071,7 @@ impl<'a> Lowering<'a> {
                     *span,
                 )),
             },
-            Stmt::Return { span: _ } => {
-                let true_value = self.push_value(Value::Bool(true));
-                Ok(vec![self.push_call_action("abortIf", &[true_value])])
-            }
+            Stmt::Return { span: _ } => Ok(vec![self.push_call_action("abort", &[])]),
             Stmt::Expr { expr, span } => match expr.as_ref() {
                 Expr::Call {
                     name,
@@ -2323,40 +2446,20 @@ impl<'a> Lowering<'a> {
                     return Ok(actions);
                 }
             }
-            if let Some((conditions, label)) = pure_goto_conditions(statement) {
-                let local_label = statements.iter().any(
-                    |candidate| matches!(candidate, Stmt::Label { name, .. } if name == label),
-                );
-                let outer_label = self
+            if let Some((condition, label, span)) = direct_conditional_goto(statement)
+                && self
                     .visible_labels
-                    .last()
-                    .is_some_and(|labels| labels.contains(label));
-                if !local_label && outer_label {
-                    let _span = statement.span().copied();
-                    let mut condition = None;
-                    for expression in conditions {
-                        let value = self.lower_value(expression)?;
-                        condition = Some(match condition {
-                            Some(left) => self.push_call("and", vec![left, value]),
-                            None => value,
-                        });
-                    }
-                    let break_action = self.push_call_action("break", &[]);
-                    self.mark_action_origins(
-                        std::slice::from_ref(&break_action),
-                        statement.span().copied(),
-                    );
-                    if let Some(condition) = condition {
-                        let lowered =
-                            self.push_if_actions(vec![(condition, vec![break_action])], None);
-                        self.mark_action_origins(&lowered, statement.span().copied());
-                        actions.extend(lowered);
-                    } else {
-                        actions.push(break_action);
-                    }
-                    index += 1;
-                    continue;
-                }
+                    .iter()
+                    .any(|labels| labels.iter().any(|candidate| candidate == label))
+            {
+                let condition = self.lower_value(condition)?;
+                let placeholder = self.push_number(0.0, "0");
+                let skip = self.push_call_action("skipIf", &[condition, placeholder]);
+                self.mark_action_origins(std::slice::from_ref(&skip), span);
+                actions.push(skip);
+                self.deferred_gotos.push((skip, label.to_string(), span, 1));
+                index += 1;
+                continue;
             }
             if matches!(statement, Stmt::Label { .. }) {
                 index += 1;
@@ -3925,7 +4028,12 @@ impl<'a> Lowering<'a> {
             _ => None,
         };
         match (number(x), number(y), number(z)) {
+            (Some(1.0), Some(0.0), Some(0.0)) => Some("LEFT"),
+            (Some(-1.0), Some(0.0), Some(0.0)) => Some("RIGHT"),
             (Some(0.0), Some(1.0), Some(0.0)) => Some("UP"),
+            (Some(0.0), Some(-1.0), Some(0.0)) => Some("DOWN"),
+            (Some(0.0), Some(0.0), Some(1.0)) => Some("FORWARD"),
+            (Some(0.0), Some(0.0), Some(-1.0)) => Some("BACKWARD"),
             _ => None,
         }
     }
@@ -3958,34 +4066,7 @@ impl<'a> Lowering<'a> {
     }
 
     fn lower_condition(&mut self, expr: &Expr) -> Result<ValueId, IntegrationError> {
-        if let Expr::Binary {
-            op, left, right, ..
-        } = expr
-            && op == "!="
-            && matches!(right.as_ref(), Expr::Bool { value: true, .. })
-        {
-            let value = self.lower_value(left)?;
-            let false_value = self.push_value(Value::Bool(false));
-            return Ok(self.push_call("==", vec![value, false_value]));
-        }
-        if let Expr::Unary { op, operand, .. } = expr
-            && op == "not"
-            && !matches!(operand.as_ref(), Expr::Binary { .. })
-        {
-            let value = self.lower_value(operand)?;
-            let false_value = self.push_value(Value::Bool(false));
-            return Ok(self.push_call("==", vec![value, false_value]));
-        }
-        let value = self.lower_value(expr)?;
-        let is_comparison = |expr: &Expr| matches!(expr, Expr::Binary { op, .. } if matches!(op.as_str(), "==" | "!=" | "<" | "<=" | ">" | ">="));
-        if is_comparison(expr)
-            || matches!(expr, Expr::Unary { op, operand, .. } if op == "not" && is_comparison(operand))
-        {
-            return Ok(value);
-        }
-        let value = self.apply_replacement(value, "==", 0, expr.span().copied());
-        let true_value = self.push_value(Value::Bool(true));
-        Ok(self.push_call("==", vec![value, true_value]))
+        self.lower_value(expr)
     }
 
     fn lower_delete(
@@ -4838,13 +4919,10 @@ impl<'a> Lowering<'a> {
             self.push_value(Value::Null),
         ];
         let text_value = self.lower_text_value(text)?;
-        text_slots[text_slot - 1] = if matches!(
-            self.value(text_value),
-            Value::Call { name, .. } if name == "customString"
-        ) {
-            text_value
-        } else {
+        text_slots[text_slot - 1] = if matches!(self.value(text_value), Value::String(_)) {
             self.push_call("customString", vec![text_value])
+        } else {
+            text_value
         };
         let mut colors = [
             self.push_value(Value::Null),
@@ -5084,6 +5162,17 @@ impl<'a> Lowering<'a> {
     }
 
     fn lower_value(&mut self, expr: &Expr) -> Result<ValueId, IntegrationError> {
+        let value_id = self.lower_value_unoptimized(expr)?;
+        let optimization = self.optimization_state_at(expr.span());
+        if optimization.enabled {
+            self.optimized_nodes
+                .entry(value_id)
+                .or_insert(optimization.strict);
+        }
+        Ok(value_id)
+    }
+
+    fn lower_value_unoptimized(&mut self, expr: &Expr) -> Result<ValueId, IntegrationError> {
         let span = expr.span().copied();
         let optimization = self.optimization_state_at(span.as_ref());
         if optimization.enabled
@@ -5182,9 +5271,18 @@ impl<'a> Lowering<'a> {
                         span,
                     ));
                 }
-                Value::Enum {
+                let member = Value::Enum {
                     value_type: value_type.clone(),
                     value: value.to_string(),
+                };
+                if value_type == "Gamemode" {
+                    let member = self.push_value(member);
+                    Value::Call {
+                        name: "gameMode".to_string(),
+                        args: vec![member],
+                    }
+                } else {
+                    member
                 }
             }
             Expr::Array { elements, .. } => {
@@ -5333,9 +5431,16 @@ impl<'a> Lowering<'a> {
                         }
                     }
                 }
+                if op == "==" && self.optimization_state_at(span.as_ref()).enabled {
+                    if let Some(value) = self.lower_current_map_equality(left, right)? {
+                        return Ok(value);
+                    }
+                }
                 let left = self.lower_value(left)?;
                 let right = self.lower_value(right)?;
-                if let Some(value) = self.fold_numeric_binary(op, left, right) {
+                if self.optimization_state_at(span.as_ref()).enabled
+                    && let Some(value) = self.fold_numeric_binary(op, left, right)
+                {
                     Value::Number(value)
                 } else {
                     match op.as_str() {
@@ -5432,13 +5537,17 @@ impl<'a> Lowering<'a> {
                         }
                     }
                 }
-                "-" => Value::Call {
-                    name: "-".to_string(),
-                    args: {
-                        let operand = self.lower_value(operand)?;
-                        self.value_args(&[operand])
-                    },
-                },
+                "-" => {
+                    let operand = self.lower_value(operand)?;
+                    if let Value::Number(number) = self.value(operand) {
+                        Value::Number(-number)
+                    } else {
+                        Value::Call {
+                            name: "-".to_string(),
+                            args: self.value_args(&[operand]),
+                        }
+                    }
+                }
                 "+" => return self.lower_value(operand),
                 _ => {
                     return Err(self.unsupported(
@@ -5775,6 +5884,9 @@ impl<'a> Lowering<'a> {
                         return Ok(self.push_call("divide", vec![approximation, base_log]));
                     }
                     return Ok(approximation);
+                }
+                if name == "getCurrentMap" && args.is_empty() && !self.used_maps.is_empty() {
+                    return Ok(self.lower_bugged_current_map());
                 }
                 if matches!(name.as_str(), "attacker" | "victim") && args.is_empty() {
                     return Ok(self.push_call(name, Vec::new()));
@@ -6283,7 +6395,12 @@ impl<'a> Lowering<'a> {
                 let element = element?;
                 let iterable = if let Some(predicate) = predicate {
                     let predicate = predicate?;
-                    self.push_call("filteredArray", vec![iterable, predicate])
+                    let filtered = self.push_call("filteredArray", vec![iterable, predicate]);
+                    let optimization = self.optimization_state_at(comprehension_span.as_ref());
+                    if optimization.enabled {
+                        self.optimized_nodes.insert(filtered, optimization.strict);
+                    }
+                    filtered
                 } else {
                     iterable
                 };
@@ -6343,6 +6460,67 @@ impl<'a> Lowering<'a> {
             *target_args = args;
         }
         Ok(value_id)
+    }
+
+    /// `getCurrentMap() == Map.X`: the maps whose value comparison the
+    /// Workshop gets wrong are compared as text instead.
+    fn lower_current_map_equality(
+        &mut self,
+        left: &Expr,
+        right: &Expr,
+    ) -> Result<Option<ValueId>, IntegrationError> {
+        let is_current_map = |expr: &Expr| matches!(expr, Expr::Call { name, args, .. } if name == "getCurrentMap" && args.is_empty());
+        let map_of = |expr: &Expr| match expr {
+            Expr::Enum {
+                value_type, value, ..
+            } if value_type == "Map" => Some(value.clone()),
+            _ => None,
+        };
+        let map = match (map_of(left), map_of(right)) {
+            (Some(map), None) if is_current_map(right) => map,
+            (None, Some(map)) if is_current_map(left) => map,
+            _ => return Ok(None),
+        };
+        let current = self.push_call("currentMap", Vec::new());
+        let map_value = self.push_value(Value::Enum {
+            value_type: "Map".to_string(),
+            value: map.clone(),
+        });
+        if !TEXT_COMPARED_MAPS.contains(&map.as_str()) {
+            return Ok(Some(self.push_call("==", vec![current, map_value])));
+        }
+        let format = self.push_value(Value::String("{0}".to_string()));
+        let current_text = self.push_call("customString", vec![format, current]);
+        let format = self.push_value(Value::String("{0}".to_string()));
+        let map_text = self.push_call("customString", vec![format, map_value]);
+        Ok(Some(self.push_call("==", vec![current_text, map_text])))
+    }
+
+    /// A bare `getCurrentMap()` selects the used map from the bugged ones by
+    /// its text, since comparing the map values themselves fails for them.
+    fn lower_bugged_current_map(&mut self) -> ValueId {
+        let mut maps: Vec<ValueId> = self
+            .used_maps
+            .clone()
+            .into_iter()
+            .map(|map| {
+                self.push_value(Value::Enum {
+                    value_type: "Map".to_string(),
+                    value: map.to_string(),
+                })
+            })
+            .collect();
+        maps.push(self.push_call("currentMap", Vec::new()));
+        let candidates = self.push_call("array", maps);
+        let current = self.push_call("currentMap", Vec::new());
+        let format = self.push_value(Value::String("{0}".to_string()));
+        let current_text = self.push_call("customString", vec![format, current]);
+        let element = self.push_call("currentArrayElement", Vec::new());
+        let empty = self.push_call("emptyArray", Vec::new());
+        let element_text = self.push_call("stringSplit", vec![element, empty]);
+        let matches = self.push_call("==", vec![current_text, element_text]);
+        let filtered = self.push_call("filteredArray", vec![candidates, matches]);
+        self.push_call("firstOf", vec![filtered])
     }
 
     fn apply_replacements_to_values(
@@ -6678,6 +6856,7 @@ impl<'a> Lowering<'a> {
             self.push_call("mappedArray", vec![split, alphabet])
         };
         let width = ((max_decimal_place - min_decimal_place + 1) / 2) as usize;
+        let optimization = self.optimization_state_at(span.as_ref());
         let component = |this: &mut Self, component_offset: usize| {
             let current = this.push_call("currentArrayElement", Vec::new());
             let mut terms = Vec::with_capacity(width);
@@ -6692,12 +6871,11 @@ impl<'a> Lowering<'a> {
                     };
                 let digit = this.push_call("strIndex", vec![formula_alphabet, character]);
                 let power = 100_f64.powf(index as f64 + f64::from(min_decimal_place) / 2.0);
-                let weighted = if power == 1.0 {
-                    digit
-                } else {
-                    let power = this.push_number(power, "");
-                    this.push_call("multiply", vec![power, digit])
-                };
+                let power = this.push_number(power, "");
+                let weighted = this.push_call("multiply", vec![power, digit]);
+                if optimization.enabled {
+                    this.optimized_nodes.insert(weighted, optimization.strict);
+                }
                 terms.push(weighted);
             }
             let mut value = terms
@@ -6897,7 +7075,7 @@ impl<'a> Lowering<'a> {
         &self,
         actions: &[ActionId],
     ) -> Vec<(Option<HirSpan>, Vec<Option<HirSpan>>)> {
-        actions
+        self.useful_actions(actions)
             .iter()
             .map(|action| {
                 (
@@ -7014,6 +7192,14 @@ impl<'a> Lowering<'a> {
     }
 
     fn materialize_value_inner(&self, id: ValueId) -> workshop_rs::Value {
+        let value = self.materialize_node(id);
+        match self.optimized_nodes.get(&id) {
+            Some(strict) => OperatorOptimizer::new(self.compiler, *strict).node(value),
+            None => value,
+        }
+    }
+
+    fn materialize_node(&self, id: ValueId) -> workshop_rs::Value {
         match self.value(id) {
             Value::Number(value) => workshop_rs::Value::Number(*value),
             Value::String(value) => workshop_rs::Value::String(value.clone()),
@@ -7072,10 +7258,81 @@ impl<'a> Lowering<'a> {
         )))
     }
 
-    fn public_actions(&self, actions: &[ActionId]) -> Vec<workshop_rs::Action> {
+    /// Modifications the pinned reference drops as useless instructions.
+    fn useful_actions(&self, actions: &[ActionId]) -> Vec<ActionId> {
         actions
             .iter()
-            .map(|id| self.materialize_action(&self.actions[*id]))
+            .copied()
+            .filter(|id| {
+                let optimization = self.optimization_state_at(self.action_origins[*id].as_ref());
+                if optimization.enabled {
+                    let assigns_itself = match &self.actions[*id] {
+                        Action::SetGlobalVariable { variable, value } => {
+                            matches!(self.value(*value), Value::GlobalVariable(other) if other == variable)
+                        }
+                        Action::SetPlayerVariable {
+                            player,
+                            variable,
+                            value,
+                        } => matches!(
+                            self.value(*value),
+                            Value::PlayerVariable { player: other, variable: other_variable }
+                                if other_variable == variable
+                                    && same(
+                                        &self.materialize_value(*player),
+                                        &self.materialize_value(*other),
+                                    )
+                        ),
+                        _ => false,
+                    };
+                    if assigns_itself {
+                        return false;
+                    }
+                }
+                let (op, value) = match &self.actions[*id] {
+                    Action::ModifyGlobalVariable { op, value, .. }
+                    | Action::ModifyPlayerVariable { op, value, .. } => (*op, *value),
+                    _ => return true,
+                };
+                let identity = match op {
+                    ModifyOp::Add | ModifyOp::Subtract => 0.0,
+                    ModifyOp::Multiply | ModifyOp::Divide | ModifyOp::RaiseToPower => 1.0,
+                    _ => return true,
+                };
+                !(optimization.enabled
+                    && !optimization.strict
+                    && self.value_is_number(value, identity))
+            })
+            .collect()
+    }
+
+    fn public_actions(&self, actions: &[ActionId]) -> Vec<workshop_rs::Action> {
+        self.useful_actions(actions)
+            .iter()
+            .map(|id| {
+                let mut action = self.materialize_action(&self.actions[*id]);
+                let optimization = self.optimization_state_at(self.action_origins[*id].as_ref());
+                for value in action_values(&mut action) {
+                    split_all(value);
+                }
+                if is_zero_skip(&action) {
+                    action = workshop_rs::Action::Disabled {
+                        action: Box::new(workshop_rs::Action::Call {
+                            name: "abort".to_string(),
+                            args: Vec::new(),
+                        }),
+                    };
+                }
+                if optimization.enabled {
+                    if let Some(modification) = self_modification(&action) {
+                        action = modification;
+                    }
+                }
+                if optimization.enabled && optimization.for_size {
+                    SizeOptimizer::new(self.compiler).action(&mut action);
+                }
+                action
+            })
             .collect()
     }
 
@@ -7154,6 +7411,12 @@ impl<'a> Lowering<'a> {
                 step: self.materialize_value(*step),
             },
             Action::End => workshop_rs::Action::End,
+            Action::Call { name, .. } if name == "disabledAbort" => workshop_rs::Action::Disabled {
+                action: Box::new(workshop_rs::Action::Call {
+                    name: "abort".to_string(),
+                    args: Vec::new(),
+                }),
+            },
             Action::Call { name, args } => workshop_rs::Action::Call {
                 name: name.clone(),
                 args: args
@@ -7625,6 +7888,24 @@ fn collect_implicit_expr(
     }
 }
 
+/// Variables named `__name__` take the highest free indices, in declaration
+/// order, instead of filling the low free slots.
+fn top_allocate_reserved_names<'a>(
+    names: impl Iterator<Item = &'a str>,
+    entries: &mut [(Option<u32>, Option<HirSpan>)],
+    reserved: &mut HashSet<u32>,
+) {
+    for (name, entry) in names.zip(entries.iter_mut()) {
+        if entry.0.is_some() || !(name.starts_with("__") && name.ends_with("__")) {
+            continue;
+        }
+        if let Some(index) = (0..=127u32).rev().find(|index| !reserved.contains(index)) {
+            reserved.insert(index);
+            entry.0 = Some(index);
+        }
+    }
+}
+
 fn allocate_indices(
     entries: &[(Option<u32>, Option<HirSpan>)],
     pre_reserved: &HashSet<u32>,
@@ -8047,7 +8328,9 @@ fn split_format_chunks(text: &str, arg_count: usize) -> Option<Vec<(String, Vec<
 
 fn compile_time_value_text(value: crate::compile_time::Value) -> Option<String> {
     match value {
-        crate::compile_time::Value::Number(value) if value.is_finite() => Some(value.to_string()),
+        crate::compile_time::Value::Number(value) if value.is_finite() => {
+            Some(crate::compile_time::workshop_number_text(value))
+        }
         crate::compile_time::Value::Number(_) => None,
         crate::compile_time::Value::String(value) => Some(value),
         crate::compile_time::Value::Bool(value) => Some(value.to_string()),
@@ -8274,4 +8557,117 @@ fn modify_catalog_name_from_str(op: &str) -> Option<&'static str> {
         "**" => Some("raiseToPower"),
         _ => None,
     }
+}
+
+/// Rule names lose invisible formatting characters, and the Workshop's
+/// filtered word `rigger` is split with a soft hyphen, as the pinned OverPy
+/// does when it writes a rule name.
+fn escape_rule_name(name: &str) -> String {
+    let stripped: Vec<char> = name
+        .chars()
+        .filter(|character| {
+            !matches!(
+                character,
+                '\u{200B}' | '\u{200E}' | '\u{200F}' | '\u{FEFF}' | '\u{061C}'
+            )
+        })
+        .collect();
+    let mut escaped = String::with_capacity(name.len());
+    let mut index = 0;
+    while index < stripped.len() {
+        escaped.push(stripped[index]);
+        if matches!(stripped[index], 'a' | 'A')
+            && stripped[index + 1..]
+                .iter()
+                .take(4)
+                .collect::<String>()
+                .eq_ignore_ascii_case("dmin")
+        {
+            escaped.push('\u{00AD}');
+        }
+        if matches!(stripped[index], 'r' | 'R') {
+            if let Some(split) = filtered_word_split(&stripped, index) {
+                escaped.extend(&stripped[index + 1..split]);
+                escaped.push('\u{00AD}');
+                index = split;
+                continue;
+            }
+        }
+        index += 1;
+    }
+    escaped
+}
+
+/// Where the soft hyphen goes when `r i gg e r` (whitespace allowed between
+/// the letters, ending at a word boundary) starts at `start`.
+fn filtered_word_split(text: &[char], start: usize) -> Option<usize> {
+    let mut position = start + 1;
+    let mut split = None;
+    for letter in ['i', 'g', 'g', 'e', 'r'] {
+        while text.get(position).is_some_and(|c| c.is_whitespace()) {
+            position += 1;
+        }
+        if !text.get(position)?.eq_ignore_ascii_case(&letter) {
+            return None;
+        }
+        if letter == 'i' {
+            let mut after = position + 1;
+            while text.get(after).is_some_and(|c| c.is_whitespace()) {
+                after += 1;
+            }
+            split = Some(after);
+        }
+        position += 1;
+    }
+    let boundary = text
+        .get(position)
+        .is_none_or(|c| !(c.is_alphanumeric() || *c == '_'));
+    boundary.then_some(split?)
+}
+
+const BUGGED_MAPS: [&str; 4] = ["COLOSSEO", "ESPERANCA", "SAMOA", "THRONE_OF_ANUBIS"];
+/// Only these are compared as text; the pinned OverPy leaves an equality
+/// with `THRONE_OF_ANUBIS` as it is, though a bare current map still filters it.
+const TEXT_COMPARED_MAPS: [&str; 3] = ["COLOSSEO", "ESPERANCA", "SAMOA"];
+
+/// The maps named anywhere in the program whose value comparison the
+/// Workshop gets wrong.
+fn used_bugged_maps(hir: &hir::Program) -> Vec<&'static str> {
+    fn collect(value: &serde_json::Value, found: &mut HashSet<String>) {
+        match value {
+            serde_json::Value::Object(fields) => {
+                if fields.get("kind").and_then(|kind| kind.as_str()) == Some("enum")
+                    && fields.get("type").and_then(|kind| kind.as_str()) == Some("Map")
+                    && let Some(member) = fields.get("value").and_then(|value| value.as_str())
+                {
+                    found.insert(member.to_string());
+                }
+                fields.values().for_each(|field| collect(field, found));
+            }
+            serde_json::Value::Array(items) => items.iter().for_each(|item| collect(item, found)),
+            _ => {}
+        }
+    }
+    let mut found = HashSet::new();
+    if let Ok(value) = serde_json::to_value(&hir.rules) {
+        collect(&value, &mut found);
+    }
+    if let Ok(value) = serde_json::to_value(&hir.declarations) {
+        collect(&value, &mut found);
+    }
+    BUGGED_MAPS
+        .into_iter()
+        .filter(|map| found.contains(*map))
+        .collect()
+}
+
+/// A skip over nothing does nothing; the pinned OverPy writes it as a
+/// disabled `Abort`.
+fn is_zero_skip(action: &workshop_rs::Action) -> bool {
+    matches!(
+        action,
+        workshop_rs::Action::Call { name, args }
+            if matches!(name.as_str(), "skip" | "skipIf")
+                && matches!(args.last(), Some(workshop_rs::Value::Number(distance)) if *distance == 0.0)
+    )
 }

@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: g\n        1: h\n}\n\n//Optimizations disabled\nrule (\"unoptimized\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(g, -5);\n        Set Global Variable(g, Multiply(-1, Global.h));\n        Set Global Variable(g, Multiply(-1, Multiply(-1, Global.h)));\n        Set Global Variable(g, Add(2, 3));\n        Set Global Variable(g, Multiply(Global.h, 0));\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: g\n        1: h\n}\n\n//Optimizations disabled\nrule (\"unoptimized\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(g, -5);\n        Set Global Variable(g, Multiply(-1, Global.h));\n        Set Global Variable(g, Multiply(-1, Multiply(-1, Global.h)));\n        Set Global Variable(g, Add(2, 3));\n        Set Global Variable(g, Multiply(Global.h, 0));\n    }\n}\n\n",
+    "workshopSha256": "40e0e7eee83a862c26b7ab1e9953d5ee8fe6af7442d0616b5cad3f31e27c287e"
+  },
+  "fixture": "synthetic/structural-unoptimized",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "470dae015065521775b2b4504875e4c51d1b2e2876980cded2eac80a4a0e07a2"
+      }
+    ],
+    "sha256": "2c56c32fcf89945c2eb50e94f2a4ad6dcbfce2f59046d7ad44713b1afb835c8d",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}
