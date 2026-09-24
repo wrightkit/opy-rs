@@ -2439,40 +2439,20 @@ impl<'a> Lowering<'a> {
                     return Ok(actions);
                 }
             }
-            if let Some((conditions, label)) = pure_goto_conditions(statement) {
-                let local_label = statements.iter().any(
-                    |candidate| matches!(candidate, Stmt::Label { name, .. } if name == label),
-                );
-                let outer_label = self
+            if let Some((condition, label, span)) = direct_conditional_goto(statement)
+                && self
                     .visible_labels
-                    .last()
-                    .is_some_and(|labels| labels.contains(label));
-                if !local_label && outer_label {
-                    let _span = statement.span().copied();
-                    let mut condition = None;
-                    for expression in conditions {
-                        let value = self.lower_value(expression)?;
-                        condition = Some(match condition {
-                            Some(left) => self.push_call("and", vec![left, value]),
-                            None => value,
-                        });
-                    }
-                    let break_action = self.push_call_action("break", &[]);
-                    self.mark_action_origins(
-                        std::slice::from_ref(&break_action),
-                        statement.span().copied(),
-                    );
-                    if let Some(condition) = condition {
-                        let lowered =
-                            self.push_if_actions(vec![(condition, vec![break_action])], None);
-                        self.mark_action_origins(&lowered, statement.span().copied());
-                        actions.extend(lowered);
-                    } else {
-                        actions.push(break_action);
-                    }
-                    index += 1;
-                    continue;
-                }
+                    .iter()
+                    .any(|labels| labels.iter().any(|candidate| candidate == label))
+            {
+                let condition = self.lower_value(condition)?;
+                let placeholder = self.push_number(0.0, "0");
+                let skip = self.push_call_action("skipIf", &[condition, placeholder]);
+                self.mark_action_origins(std::slice::from_ref(&skip), span);
+                actions.push(skip);
+                self.deferred_gotos.push((skip, label.to_string(), span, 1));
+                index += 1;
+                continue;
             }
             if matches!(statement, Stmt::Label { .. }) {
                 index += 1;

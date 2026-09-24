@@ -64,3 +64,8 @@ fn terminal_conditionals_match_the_pinned_oracle() {
 fn else_after_a_nested_conditional_belongs_to_the_outer_conditional() {
     assert_converges("structural-nested-else");
 }
+
+#[test]
+fn goto_out_of_a_loop_stays_a_skip() {
+    assert_converges("structural-loop-exit");
+}
