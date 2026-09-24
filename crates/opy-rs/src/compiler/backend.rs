@@ -29,6 +29,9 @@ pub(crate) type MacroBindings = HashMap<String, Expr>;
 pub(crate) struct MacroExpander {
     macros: HashMap<String, (Vec<String>, Vec<Stmt>)>,
     stack: Vec<String>,
+    /// Relocate expanded spans to the invocation site; only the source
+    /// attribution pass sets it, so diagnostics keep the definition spans.
+    attribute_to_site: bool,
 }
 
 impl MacroExpander {
@@ -46,12 +49,28 @@ impl MacroExpander {
         Self {
             macros,
             stack: Vec::new(),
+            attribute_to_site: false,
         }
     }
 }
 
 pub(crate) fn expand_macros(program: &hir::Program) -> Result<hir::Program, IntegrationError> {
+    expand_macros_with(program, false)
+}
+
+/// Expand macros with every expanded span attributed to its invocation site.
+pub(crate) fn expand_macros_attributed(
+    program: &hir::Program,
+) -> Result<hir::Program, IntegrationError> {
+    expand_macros_with(program, true)
+}
+
+fn expand_macros_with(
+    program: &hir::Program,
+    attribute_to_site: bool,
+) -> Result<hir::Program, IntegrationError> {
     let mut expander = MacroExpander::from_program(program);
+    expander.attribute_to_site = attribute_to_site;
     let mut expanded = program.clone();
     let bindings = MacroBindings::new();
 
@@ -455,7 +474,7 @@ impl MacroExpander {
         let result = self.expand_stmts(&body, &bindings);
         self.stack.pop();
         let mut result = result?;
-        if let Some(site) = span {
+        if let Some(site) = span.filter(|_| self.attribute_to_site) {
             relocate_stmts(&mut result, site);
         }
         Ok(result)

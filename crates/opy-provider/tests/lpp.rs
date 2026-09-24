@@ -909,3 +909,38 @@ fn pinned_bastion_mapping_applies_to_the_reparsed_workshop_text() {
     };
     assert_mapping_applies_to_reparsed_text(&main);
 }
+
+#[test]
+fn unsupported_accepted_formats_refuse_only_when_an_artifact_would_be_returned() {
+    let mut session = Session::spawn();
+    session.initialize_version("1.4");
+    let failing = compile_entry(
+        &mut session,
+        &format!("{MAPPED_FIXTURES}/broken.opy"),
+        Some(json!(["x/unknown"])),
+    );
+    assert_eq!(failing["result"]["artifact"], Value::Null);
+    assert!(
+        failing["result"]["diagnostics"][0]["diagnostics"]
+            .as_array()
+            .is_some_and(|diagnostics| !diagnostics.is_empty())
+    );
+    session.shutdown();
+}
+
+#[test]
+fn macro_definition_spans_stay_in_the_shared_lowering() {
+    let path = format!("{MAPPED_FIXTURES}/macro.opy");
+    let source = std::fs::read_to_string(&path).expect("fixture");
+    let compiler = opy_rs::Compiler::new().expect("compiler");
+    let artifact = compiler
+        .compile_source_artifact(&source, &path, Path::new(MAPPED_FIXTURES))
+        .expect("compiles");
+    // Only the mapped artifact relocates expansions; the shared lowering (which diagnostics
+    // read) keeps the macro body span on line 4.
+    let span = artifact
+        .wir
+        .action_span(0, 0)
+        .expect("expanded action span");
+    assert_eq!(span.start.line, 4);
+}

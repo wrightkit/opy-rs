@@ -485,7 +485,7 @@ impl Server {
         ensure_entry_sources_loaded(&project, &check_outcome)?;
         let compiler = self.compiler.as_ref().expect("compiler initialized");
         let main_path = path_string(project.filesystem.main_path());
-        let report = if format == Some(ArtifactFormat::Mapped) {
+        let (report, mapped) = if format == Some(ArtifactFormat::Mapped) {
             compiler.compile_source_report_mapped_with_language(
                 project.filesystem.source(),
                 &main_path,
@@ -493,12 +493,13 @@ impl Server {
                 &project.locale,
             )
         } else {
-            compiler.compile_source_report_with_language(
+            let report = compiler.compile_source_report_with_language(
                 project.filesystem.source(),
                 &main_path,
                 project.filesystem.root(),
                 &project.locale,
-            )
+            );
+            (report, None)
         };
         let paths = check_outcome
             .files
@@ -511,7 +512,7 @@ impl Server {
                 artifact_json(
                     format,
                     &report.compile.workshop_exact,
-                    report.compile.mapped.as_ref(),
+                    mapped.as_ref(),
                     &|path| path_to_file_uri(&resolved_project_path(&project, path)),
                 )
             })
@@ -935,7 +936,7 @@ fn compile_document(
     let artifact = match outcome.hir.as_ref() {
         Some(hir) => match compiler.compile_hir(hir).and_then(|artifact| {
             let mapped = (format == Some(ArtifactFormat::Mapped))
-                .then(|| compiler.mapped_text(&artifact, "en-US"))
+                .then(|| compiler.mapped_text(&artifact, hir, "en-US"))
                 .transpose()?;
             Ok((artifact, mapped))
         }) {
