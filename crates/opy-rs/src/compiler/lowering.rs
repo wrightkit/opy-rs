@@ -6441,8 +6441,7 @@ impl<'a> Lowering<'a> {
         {
             *target_args = args;
         }
-        if optimization.enabled
-        {
+        if optimization.enabled {
             self.optimized_nodes.insert(value_id, optimization.strict);
         }
         Ok(value_id)

@@ -63,6 +63,9 @@ impl<'a> OperatorOptimizer<'a> {
     /// Apply the rule of one node; a rewrite that changes the head is applied
     /// again to its result, as the reference does.
     pub(super) fn node(&self, value: Value) -> Value {
+        let value = match value {
+            other => literal_array(other),
+        };
         let head = head_of(&value);
         let rewritten = match self.rewrite(value) {
             Rewrite::Same(value) => return value,
@@ -103,6 +106,13 @@ impl<'a> OperatorOptimizer<'a> {
             ("filteredArray", 2) => self.filtered(args),
             ("arrayContains", 2) => self.array_contains(args),
             ("valueInArray", 2) => self.value_in_array(args),
+            ("firstOf", 1) => {
+                let [array] = one(args);
+                if matches!(&array, Value::Array(elements) if elements.is_empty()) && self.strict {
+                    return Rewrite::Same(call("firstOf", vec![array]));
+                }
+                self.value_in_array(vec![array, Value::Number(0.0)])
+            }
             ("__xComponentOf__", 1) => Self::component(args, 0),
             ("__yComponentOf__", 1) => Self::component(args, 1),
             ("__zComponentOf__", 1) => Self::component(args, 2),
@@ -468,6 +478,7 @@ impl<'a> OperatorOptimizer<'a> {
 
     fn array_contains(&self, args: Vec<Value>) -> Rewrite {
         let [array, needle] = two(args);
+        let array = literal_array(array);
         let Value::Array(mut elements) = array else {
             return Rewrite::Same(call("arrayContains", vec![array, needle]));
         };
@@ -489,6 +500,7 @@ impl<'a> OperatorOptimizer<'a> {
 
     fn value_in_array(&self, args: Vec<Value>) -> Rewrite {
         let [array, index] = two(args);
+        let array = literal_array(array);
         if let Value::Number(position) = index {
             if position < 0.0 {
                 return Rewrite::Changed(Value::Null);
@@ -798,5 +810,13 @@ fn mentions_element(value: &Value) -> bool {
         Value::Vector { x, y, z } => [x, y, z].into_iter().any(|v| mentions_element(v)),
         Value::PlayerVariable { player, .. } => mentions_element(player),
         _ => false,
+    }
+}
+
+/// An `Array(...)` call is the array literal it constructs.
+fn literal_array(value: Value) -> Value {
+    match value {
+        Value::Call { name, args } if name == "array" => Value::Array(args),
+        other => other,
     }
 }
