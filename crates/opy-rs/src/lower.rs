@@ -547,6 +547,37 @@ fn render_rule_name(
         })
 }
 
+/// The name of a compiler-generated rule under the active rule prefix
+/// template: it has no prefix, no file, and is not a delimiter.
+pub(crate) fn render_generated_rule_name(name: &str, preprocessing: &PreprocessingState) -> String {
+    let Some(template) = preprocessing
+        .rule_prefix_template
+        .as_ref()
+        .map(|value| value.value.as_str())
+    else {
+        return name.to_string();
+    };
+    let values = [
+        ("$rule", TemplateValue::String(name.to_string())),
+        ("$prefix", TemplateValue::String(String::new())),
+        ("$file", TemplateValue::String(String::new())),
+        ("$path", TemplateValue::String(String::new())),
+        ("$isDelimiter", TemplateValue::Bool(false)),
+        ("$prefixTitle", TemplateValue::String(String::new())),
+        ("$prefixUpper", TemplateValue::String(String::new())),
+        ("$prefixLower", TemplateValue::String(String::new())),
+        ("$fileTitle", TemplateValue::String(String::new())),
+        ("$fileUpper", TemplateValue::String(String::new())),
+        ("$fileLower", TemplateValue::String(String::new())),
+        ("$pathTitle", TemplateValue::String(String::new())),
+        ("$pathUpper", TemplateValue::String(String::new())),
+        ("$pathLower", TemplateValue::String(String::new())),
+    ];
+    evaluate_template(template, &values)
+        .map(|rendered| strip_rule_name_formatting(&rendered))
+        .unwrap_or_else(|_| name.to_string())
+}
+
 fn rule_file_parts(file_id: u32, files: &[SourceFile]) -> (String, String) {
     let path = files
         .iter()

@@ -1376,11 +1376,10 @@ impl<'a> Lowering<'a> {
         directive_value(self.hir, "globalvarInitRuleName")
             .map(str::to_string)
             .unwrap_or_else(|| {
-                if self.hir.preprocessing.rule_prefix_template.is_some() {
-                    "[] Initialize global variables".to_string()
-                } else {
-                    "Initialize global variables".to_string()
-                }
+                crate::lower::render_generated_rule_name(
+                    "Initialize global variables",
+                    &self.hir.preprocessing,
+                )
             })
     }
 
@@ -8420,6 +8419,15 @@ fn escape_rule_name(name: &str) -> String {
     let mut index = 0;
     while index < stripped.len() {
         escaped.push(stripped[index]);
+        if matches!(stripped[index], 'a' | 'A')
+            && stripped[index + 1..]
+                .iter()
+                .take(4)
+                .collect::<String>()
+                .eq_ignore_ascii_case("dmin")
+        {
+            escaped.push('\u{00AD}');
+        }
         if matches!(stripped[index], 'r' | 'R') {
             if let Some(split) = filtered_word_split(&stripped, index) {
                 escaped.extend(&stripped[index + 1..split]);
