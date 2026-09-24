@@ -29,6 +29,9 @@ pub(crate) type MacroBindings = HashMap<String, Expr>;
 pub(crate) struct MacroExpander {
     macros: HashMap<String, (Vec<String>, Vec<Stmt>)>,
     stack: Vec<String>,
+    /// Relocate expanded spans to the invocation site; only the source
+    /// attribution pass sets it, so diagnostics keep the definition spans.
+    attribute_to_site: bool,
 }
 
 impl MacroExpander {
@@ -46,12 +49,28 @@ impl MacroExpander {
         Self {
             macros,
             stack: Vec::new(),
+            attribute_to_site: false,
         }
     }
 }
 
 pub(crate) fn expand_macros(program: &hir::Program) -> Result<hir::Program, IntegrationError> {
+    expand_macros_with(program, false)
+}
+
+/// Expand macros with every expanded span attributed to its invocation site.
+pub(crate) fn expand_macros_attributed(
+    program: &hir::Program,
+) -> Result<hir::Program, IntegrationError> {
+    expand_macros_with(program, true)
+}
+
+fn expand_macros_with(
+    program: &hir::Program,
+    attribute_to_site: bool,
+) -> Result<hir::Program, IntegrationError> {
     let mut expander = MacroExpander::from_program(program);
+    expander.attribute_to_site = attribute_to_site;
     let mut expanded = program.clone();
     let bindings = MacroBindings::new();
 
@@ -454,6 +473,233 @@ impl MacroExpander {
         self.stack.push(name.to_string());
         let result = self.expand_stmts(&body, &bindings);
         self.stack.pop();
-        result
+        let mut result = result?;
+        if let Some(site) = span.filter(|_| self.attribute_to_site) {
+            relocate_stmts(&mut result, site);
+        }
+        Ok(result)
+    }
+}
+
+/// Attribute every span of macro-expanded code to the invocation `site`, so
+/// source attribution never points into the macro definition.
+fn relocate_stmts(statements: &mut [Stmt], site: HirSpan) {
+    for statement in statements {
+        relocate_stmt(statement, site);
+    }
+}
+
+fn relocate_stmt(statement: &mut Stmt, site: HirSpan) {
+    let at = Some(site);
+    match statement {
+        Stmt::Expr { expr, span } | Stmt::Delete { target: expr, span } => {
+            relocate_expr(expr, site);
+            *span = at;
+        }
+        Stmt::Assign {
+            target,
+            value,
+            span,
+        } => {
+            relocate_expr(target, site);
+            relocate_expr(value, site);
+            *span = at;
+        }
+        Stmt::If {
+            branches,
+            r#else,
+            span,
+        } => {
+            for branch in branches {
+                relocate_expr(&mut branch.condition, site);
+                relocate_stmts(&mut branch.body, site);
+            }
+            if let Some(body) = r#else {
+                relocate_stmts(body, site);
+            }
+            *span = at;
+        }
+        Stmt::For {
+            variable,
+            iterable,
+            body,
+            span,
+        } => {
+            relocate_expr(variable, site);
+            relocate_expr(iterable, site);
+            relocate_stmts(body, site);
+            *span = at;
+        }
+        Stmt::While {
+            condition,
+            body,
+            span,
+        }
+        | Stmt::DoWhile {
+            condition,
+            body,
+            span,
+        } => {
+            relocate_expr(condition, site);
+            relocate_stmts(body, site);
+            *span = at;
+        }
+        Stmt::Switch { value, arms, span } => {
+            relocate_expr(value, site);
+            for arm in arms {
+                match arm {
+                    SwitchArm::Case { value, body, span } => {
+                        relocate_expr(value, site);
+                        relocate_stmts(body, site);
+                        *span = at;
+                    }
+                    SwitchArm::Default { body, span } => {
+                        relocate_stmts(body, site);
+                        *span = at;
+                    }
+                }
+            }
+            *span = at;
+        }
+        Stmt::Goto { offset, span, .. } => {
+            if let Some(offset) = offset {
+                relocate_expr(offset, site);
+            }
+            *span = at;
+        }
+        Stmt::Break { span }
+        | Stmt::Return { span }
+        | Stmt::Continue { span }
+        | Stmt::Label { span, .. }
+        | Stmt::CallSubroutine { span, .. }
+        | Stmt::Pass { span } => *span = at,
+    }
+}
+
+fn relocate_expr(expression: &mut Expr, site: HirSpan) {
+    let at = Some(site);
+    match expression {
+        Expr::Number { span, .. }
+        | Expr::String { span, .. }
+        | Expr::Bool { span, .. }
+        | Expr::Null { span }
+        | Expr::StringModifier { span, .. }
+        | Expr::Local { span, .. }
+        | Expr::Enum { span, .. }
+        | Expr::GlobalVar { span, .. }
+        | Expr::HostPlayer { span }
+        | Expr::EventPlayer { span }
+        | Expr::Constant { span, .. }
+        | Expr::MacroParam { span, .. } => *span = at,
+        Expr::Array {
+            elements: args,
+            span,
+        }
+        | Expr::Call { args, span, .. }
+        | Expr::MacroCall { args, span, .. }
+        | Expr::Type { args, span, .. }
+        | Expr::Format { args, span, .. } => {
+            for arg in args {
+                relocate_expr(arg, site);
+            }
+            *span = at;
+        }
+        Expr::Dict { entries, span } => {
+            for entry in entries {
+                relocate_expr(&mut entry.key, site);
+                relocate_expr(&mut entry.value, site);
+                entry.span = at;
+            }
+            *span = at;
+        }
+        Expr::Comprehension {
+            element,
+            variable_span,
+            index_span,
+            iterable,
+            condition,
+            span,
+            ..
+        } => {
+            relocate_expr(element, site);
+            relocate_expr(iterable, site);
+            if let Some(condition) = condition {
+                relocate_expr(condition, site);
+            }
+            *variable_span = at;
+            *index_span = at;
+            *span = at;
+        }
+        Expr::Lambda {
+            param_spans,
+            body,
+            span,
+            ..
+        } => {
+            relocate_expr(body, site);
+            param_spans.iter_mut().for_each(|param| *param = at);
+            *span = at;
+        }
+        Expr::Vector { x, y, z, span } => {
+            for component in [x, y, z] {
+                relocate_expr(component, site);
+            }
+            *span = at;
+        }
+        Expr::PlayerVar {
+            player: receiver,
+            member_span,
+            span,
+            ..
+        }
+        | Expr::Member {
+            receiver,
+            member_span,
+            span,
+            ..
+        } => {
+            relocate_expr(receiver, site);
+            *member_span = at;
+            *span = at;
+        }
+        Expr::ReceiverCall {
+            receiver,
+            args,
+            span,
+            ..
+        } => {
+            relocate_expr(receiver, site);
+            for arg in args {
+                relocate_expr(arg, site);
+            }
+            *span = at;
+        }
+        Expr::Binary {
+            left, right, span, ..
+        } => {
+            relocate_expr(left, site);
+            relocate_expr(right, site);
+            *span = at;
+        }
+        Expr::Conditional {
+            then_value,
+            condition,
+            else_value,
+            span,
+        } => {
+            for part in [then_value, condition, else_value] {
+                relocate_expr(part, site);
+            }
+            *span = at;
+        }
+        Expr::Unary { operand, span, .. } => {
+            relocate_expr(operand, site);
+            *span = at;
+        }
+        Expr::Index { array, index, span } => {
+            relocate_expr(array, site);
+            relocate_expr(index, site);
+            *span = at;
+        }
     }
 }

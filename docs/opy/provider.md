@@ -8,7 +8,8 @@ compiler; it does not expose OPY AST/HIR or Workshop WIR.
 
 The provider serves language id `opy` and the `opy` extension. It supports LPP
 `1.0` for document-supplied requests, LPP `1.1` for file-entry project loading,
-and LPP `1.2` for provider-owned directory targets.
+LPP `1.2` for provider-owned directory targets, LPP `1.3` for source identity,
+and LPP `1.4` for compile artifact format negotiation.
 
 | Capability | Method | Behavior |
 | --- | --- | --- |
@@ -75,6 +76,28 @@ Successful compilation returns the opaque LPP artifact:
 
 The artifact contains only emitted Workshop text. It is `null` whenever
 compilation produces an error-severity diagnostic.
+
+### Mapped artifact (LPP 1.4)
+
+A client that lists `workshop-rs/mapped-text-v1` in `acceptedArtifactFormats`
+receives that format, and the provider returns the first listed format it can
+produce (`workshop-rs/text-v1` or `workshop-rs/mapped-text-v1`). Without the
+field, or when only `text-v1` is listed, the output is unchanged. When no listed
+format is producible, the request is refused with
+`compile.artifactFormatUnsupported`; the field is rejected with `-32602` before
+LPP 1.4.
+
+The mapping is built with the `workshop-rs` `SourceMap` from the spans lowering
+attaches, and is checked against the re-parsed Workshop text before it is
+returned. Attribution is owned here:
+
+- Included files map to their own document URIs, which are the `files` entries
+  of the artifact.
+- Macro-expanded code maps to the invocation site, never into the macro
+  definition.
+- Generated helper nodes (initializer rules, translation helpers) carry no span.
+
+Columns are 1-based Unicode scalar values, matching `Position`.
 
 ## Running locally
 

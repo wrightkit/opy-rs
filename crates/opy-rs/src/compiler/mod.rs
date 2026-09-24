@@ -12,6 +12,8 @@ use crate::manifest::{FunctionKind, Manifest};
 use serde::Serialize;
 use workshop_rs::Program;
 use workshop_rs::catalog::{Catalog, CatalogIdentity, Kind, Locale, ParamCoercions};
+use workshop_rs::program::MappedText;
+use workshop_rs::program::SourceMap;
 
 pub mod reconstruct;
 
@@ -26,7 +28,7 @@ mod size_optimization;
 mod string_format;
 
 pub(crate) use backend::MacroExpander;
-pub(super) use backend::{expand_macros, reject_unlowered_directives};
+pub(super) use backend::{expand_macros, expand_macros_attributed, reject_unlowered_directives};
 pub use integration::LinkReport;
 pub(super) use integration::load_compiler_contract;
 pub(super) use lowering::Lowering;
@@ -546,6 +548,37 @@ impl Compiler {
         })
     }
 
+    /// Pair the artifact's Workshop text with the source map of its authored
+    /// origin (`workshop-rs/mapped-text-v1`). `hir` is the program the artifact
+    /// was compiled from. Spans come from a second lowering that attributes
+    /// macro-expanded code to its invocation site, so diagnostics keep their
+    /// spans. The map is proven against the re-parsed text, so a program shape
+    /// that differs is reported instead of yielding displaced spans.
+    pub fn mapped_text(
+        &self,
+        artifact: &CompilationArtifact,
+        hir: &hir::Program,
+        language: &str,
+    ) -> Result<MappedText, IntegrationError> {
+        let locale = Locale::new(language);
+        let expanded = expand_macros_attributed(hir)?;
+        let mut lowering = Lowering::new(self, &expanded)?;
+        lowering.copy_files()?;
+        lowering.lower_declarations()?;
+        lowering.lower_rules()?;
+        let map = SourceMap::extract(&lowering.program);
+        let mut reparsed =
+            workshop_rs::parser::parse(&artifact.final_output, self.catalog, &locale).map_err(
+                |error| IntegrationError::new("source-map-parse", error.to_string(), None),
+            )?;
+        map.apply(&mut reparsed)
+            .map_err(|error| IntegrationError::new("source-map-shape", error.to_string(), None))?;
+        Ok(MappedText {
+            text: artifact.final_output.clone(),
+            map,
+        })
+    }
+
     /// Compile source using the default `en-US` catalog locale.
     ///
     /// This is the ordinary embedding API. It returns Workshop text and does
@@ -630,6 +663,30 @@ impl Compiler {
         root: &std::path::Path,
         locale: &Locale,
     ) -> CompileReport {
+        self.compile_source_report_impl(source, main_path, root, locale, false)
+            .0
+    }
+
+    /// Like [`Compiler::compile_source_report_with_language`], and on success
+    /// also returns the mapped Workshop text of the same compile.
+    pub fn compile_source_report_mapped_with_language(
+        &self,
+        source: &str,
+        main_path: &str,
+        root: &std::path::Path,
+        language: &str,
+    ) -> (CompileReport, Option<MappedText>) {
+        self.compile_source_report_impl(source, main_path, root, &Locale::new(language), true)
+    }
+
+    fn compile_source_report_impl(
+        &self,
+        source: &str,
+        main_path: &str,
+        root: &std::path::Path,
+        locale: &Locale,
+        mapped: bool,
+    ) -> (CompileReport, Option<MappedText>) {
         let outcome = crate::compile_with_overlay_outcome(
             source,
             main_path,
@@ -644,28 +701,55 @@ impl Compiler {
             .map(compile_frontend_diagnostic)
             .collect::<Vec<_>>();
         let Some(hir) = outcome.hir else {
-            return CompileReport::failure(
-                compiler,
-                catalog,
-                CompileFailureClass::Frontend,
-                frontend_diagnostics,
+            return (
+                CompileReport::failure(
+                    compiler,
+                    catalog,
+                    CompileFailureClass::Frontend,
+                    frontend_diagnostics,
+                ),
+                None,
             );
         };
 
         match self.compile_hir_with_locale_and_hook(&hir, outcome.post_compile_hook, locale) {
             Ok(artifact) => {
-                match write_translation_files(root, &hir, &artifact.translation_files) {
-                    Ok(()) => {
-                        CompileReport::success(compiler, catalog, artifact, frontend_diagnostics)
+                let mapped = if mapped {
+                    match self.mapped_text(&artifact, &hir, &locale.to_string()) {
+                        Ok(text) => Some(text),
+                        Err(error) => {
+                            let mut diagnostics = frontend_diagnostics;
+                            diagnostics.push(compile_diagnostic(error, &hir.files));
+                            return (
+                                CompileReport::failure(
+                                    compiler,
+                                    catalog,
+                                    CompileFailureClass::Integration,
+                                    diagnostics,
+                                ),
+                                None,
+                            );
+                        }
                     }
+                } else {
+                    None
+                };
+                match write_translation_files(root, &hir, &artifact.translation_files) {
+                    Ok(()) => (
+                        CompileReport::success(compiler, catalog, artifact, frontend_diagnostics),
+                        mapped,
+                    ),
                     Err(error) => {
                         let mut diagnostics = frontend_diagnostics;
                         diagnostics.push(compile_diagnostic(error, &hir.files));
-                        CompileReport::failure(
-                            compiler,
-                            catalog,
-                            CompileFailureClass::Integration,
-                            diagnostics,
+                        (
+                            CompileReport::failure(
+                                compiler,
+                                catalog,
+                                CompileFailureClass::Integration,
+                                diagnostics,
+                            ),
+                            None,
                         )
                     }
                 }
@@ -673,11 +757,14 @@ impl Compiler {
             Err(error) => {
                 let mut diagnostics = frontend_diagnostics;
                 diagnostics.push(compile_diagnostic(error, &hir.files));
-                CompileReport::failure(
-                    compiler,
-                    catalog,
-                    CompileFailureClass::Integration,
-                    diagnostics,
+                (
+                    CompileReport::failure(
+                        compiler,
+                        catalog,
+                        CompileFailureClass::Integration,
+                        diagnostics,
+                    ),
+                    None,
                 )
             }
         }
