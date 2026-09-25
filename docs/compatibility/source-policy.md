@@ -65,6 +65,18 @@ ship only the compact facts required for interoperable output, with this
 attribution record. Changes to the table must be justified by an oracle
 behavior comparison and reviewed against the clean-room boundary.
 
+### Rule-name filtered words
+
+`compiler/lowering.rs` lists the words the Workshop refuses in a rule name
+(`FILTERED_ANYWHERE`, `FILTERED_STANDALONE`). The list is a compact set of
+interoperability facts: each word, whether it is split anywhere or only when
+standing alone, and where the soft hyphen goes. It is arranged independently of
+the upstream source, and every entry is pinned by the oracle snapshot of
+`structural-rule-name-words`, which is the evidence for it. The set of words
+cannot be derived without the reference, so this record is the boundary
+decision: it is a reviewed exception for facts of this kind, in the same way as
+the Blizzard Global facts above, and it needs the owner's approval to stay.
+
 Observed behavior is an interoperability input, not permission to copy an
 implementation. A test that passes only by importing a reference module or
 reusing its internal representation belongs outside the core boundary.

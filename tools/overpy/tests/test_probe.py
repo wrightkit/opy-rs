@@ -16,7 +16,7 @@ def finding(status: str, probe_id: str) -> dict:
 
 class ProbeClassificationTests(unittest.TestCase):
     GAPS = [
-        {"id": "omission", "status": "native-rejects", "functions": "*", "variant": ":omit-arg"},
+        {"id": "omission", "status": "native-rejects", "functions": ["createBeam"], "variant": ":omit-arg"},
         {"id": "folds", "status": "different", "functions": ["min", "max"]},
     ]
 
@@ -39,10 +39,21 @@ class ProbeClassificationTests(unittest.TestCase):
         self.assertEqual([f["id"] for f in unexplained], ["default:sqrt:base"])
         self.assertEqual(stale, ["omission", "folds"])
 
+    def test_an_unrelated_rejection_stays_unexplained(self):
+        _, unexplained, _ = probe_builtins.classify(
+            [
+                finding("native-rejects", "default:sqrt:base"),
+                finding("native-rejects", "default:sqrt:omit-arg0"),
+            ],
+            self.GAPS,
+        )
+        self.assertEqual(len(unexplained), 2)
+
     def test_recorded_gaps_are_well_formed(self):
         gaps = json.loads(probe_builtins.GAPS.read_text(encoding="utf-8"))["gaps"]
         for gap in gaps:
             self.assertTrue({"id", "status", "functions", "cause", "owner", "decision"} <= gap.keys())
+            self.assertIsInstance(gap["functions"], list)
 
 
 if __name__ == "__main__":

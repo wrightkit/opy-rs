@@ -8575,38 +8575,41 @@ fn modify_catalog_name_from_str(op: &str) -> Option<&'static str> {
     }
 }
 
-/// Words the Workshop refuses in a rule name. Each entry is the text before the
-/// soft hyphen, the text after it, and whether the word must stand alone.
-/// The pinned OverPy applies them in this order, each over the whole name.
-const FILTERED_RULE_NAME_WORDS: [(&str, &str, bool); 28] = [
-    ("1", "488", false),
-    ("a", "ccount", false),
-    ("a", "dmin", false),
-    ("a", "ss", true),
-    ("b", "attlenet", false),
-    ("b", "liz", true),
-    ("b", "lizzaard", true),
-    ("b", "lizzard", false),
-    ("b", "low", true),
-    ("bn", "et", true),
-    ("b", "razil", true),
-    ("c", "anada", true),
-    ("d", "enmark", true),
-    ("e", "ngland", true),
-    ("f", "inland", true),
-    ("f", "uck", false),
-    ("g", "oddamn", false),
-    ("i", "reland", true),
-    ("n", "etherlands", true),
-    ("n", "orway", true),
-    ("p", "oland", true),
-    ("p", "olish", true),
-    ("s", "anctuary", true),
-    ("s", "atan", true),
-    ("s", "ingapore", true),
-    ("s", "hit", false),
-    ("s", "weden", true),
-    ("s", "witzerland", true),
+/// Words the Workshop refuses in a rule name, as observed from the pinned
+/// OverPy's output (`structural-rule-name-words`, source-policy.md). A word of
+/// the first list is split wherever it occurs, one of the second only when it
+/// stands alone.
+const FILTERED_ANYWHERE: [&str; 8] = [
+    "1488",
+    "account",
+    "admin",
+    "battlenet",
+    "blizzard",
+    "fuck",
+    "goddamn",
+    "shit",
+];
+const FILTERED_STANDALONE: [&str; 20] = [
+    "ass",
+    "bliz",
+    "blizzaard",
+    "blow",
+    "bnet",
+    "brazil",
+    "canada",
+    "denmark",
+    "england",
+    "finland",
+    "ireland",
+    "netherlands",
+    "norway",
+    "poland",
+    "polish",
+    "sanctuary",
+    "satan",
+    "singapore",
+    "sweden",
+    "switzerland",
 ];
 
 /// Rule names lose invisible formatting characters, and the Workshop's
@@ -8622,8 +8625,15 @@ fn escape_rule_name(name: &str) -> String {
             )
         })
         .collect();
-    for (head, tail, standalone) in FILTERED_RULE_NAME_WORDS {
-        text = split_filtered_word(&text, head, tail, standalone);
+    for (words, standalone) in [
+        (&FILTERED_ANYWHERE[..], false),
+        (&FILTERED_STANDALONE[..], true),
+    ] {
+        for word in words {
+            // The soft hyphen follows the first letter, or `bn` of `bnet`.
+            let at = if *word == "bnet" { 2 } else { 1 };
+            text = split_filtered_word(&text, &word[..at], &word[at..], standalone);
+        }
     }
     split_spaced_rigger(&text).into_iter().collect()
 }

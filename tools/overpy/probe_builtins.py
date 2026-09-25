@@ -49,6 +49,7 @@ def classify(findings: list[dict], gaps: list[dict]):
                 finding["status"] == gap["status"]
                 and (functions == "*" or function_of(finding["id"]) in functions)
                 and gap.get("variant", "") in finding["id"]
+                and gap.get("detail", "") in finding["detail"]
             ):
                 explained[gap["id"]].append(finding)
                 break
