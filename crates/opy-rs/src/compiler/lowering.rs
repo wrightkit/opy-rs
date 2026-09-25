@@ -935,13 +935,13 @@ impl<'a> Lowering<'a> {
                 actions.push(action);
             }
             let rule_index = self.program.rules.len();
-            self.program.rules.push(workshop_rs::Rule {
-                name: self.global_initializer_rule_name(),
-                disabled: false,
-                event: workshop_rs::Event::Global,
-                conditions: Vec::new(),
-                actions: self.public_actions(&actions),
-            });
+            self.program.rules.push(rule_from_parts(
+                self.global_initializer_rule_name(),
+                false,
+                workshop_rs::Event::Global,
+                Vec::new(),
+                self.public_actions(&actions),
+            ));
             let action_provenance = self.action_provenance(&actions);
             self.set_rule_provenance(rule_index, None, std::iter::empty(), action_provenance)?;
         }
@@ -983,13 +983,13 @@ impl<'a> Lowering<'a> {
                 actions.push(action);
             }
             let rule_index = self.program.rules.len();
-            self.program.rules.push(workshop_rs::Rule {
-                name: self.player_initializer_rule_name(),
-                disabled: false,
-                event: workshop_rs::Event::EachPlayer,
-                conditions: Vec::new(),
-                actions: self.public_actions(&actions),
-            });
+            self.program.rules.push(rule_from_parts(
+                self.player_initializer_rule_name(),
+                false,
+                workshop_rs::Event::EachPlayer,
+                Vec::new(),
+                self.public_actions(&actions),
+            ));
             let action_provenance = self.action_provenance(&actions);
             self.set_rule_provenance(rule_index, None, std::iter::empty(), action_provenance)?;
         }
@@ -1004,13 +1004,13 @@ impl<'a> Lowering<'a> {
         actions: Vec<ActionId>,
     ) -> Result<(), IntegrationError> {
         let rule_index = self.program.rules.len();
-        self.program.rules.push(workshop_rs::Rule {
-            name: name.to_string(),
-            disabled: false,
+        self.program.rules.push(rule_from_parts(
+            name.to_string(),
+            false,
             event,
-            conditions: Vec::new(),
-            actions: self.public_actions(&actions),
-        });
+            Vec::new(),
+            self.public_actions(&actions),
+        ));
         self.set_rule_provenance(
             rule_index,
             None,
@@ -1155,17 +1155,17 @@ impl<'a> Lowering<'a> {
             finish,
         ];
         let rule_index = self.program.rules.len();
-        self.program.rules.push(workshop_rs::Rule {
-            name: "OverPy translation setup - Determine the player's language".to_string(),
-            disabled: false,
-            event: Event::EachPlayer,
-            conditions: vec![
+        self.program.rules.push(rule_from_parts(
+            "OverPy translation setup - Determine the player's language".to_string(),
+            false,
+            Event::EachPlayer,
+            vec![
                 workshop_rs::Condition::new(self.materialize_value(has_spawned)),
                 workshop_rs::Condition::new(self.materialize_value(not_dummy)),
                 workshop_rs::Condition::new(self.materialize_value(initial_language)),
             ],
-            actions: self.public_actions(&actions),
-        });
+            self.public_actions(&actions),
+        ));
         self.set_rule_provenance(
             rule_index,
             None,
@@ -1228,11 +1228,11 @@ impl<'a> Lowering<'a> {
             return Ok(());
         }
         let rule_index = self.program.rules.len();
-        self.program.rules.push(workshop_rs::Rule {
-            name: rule.name.clone(),
-            disabled: rule.disabled,
+        self.program.rules.push(rule_from_parts(
+            rule.name.clone(),
+            rule.disabled,
             event,
-            conditions: conditions
+            conditions
                 .iter()
                 .zip(&condition_exprs)
                 .map(|(value, expr)| {
@@ -1248,8 +1248,8 @@ impl<'a> Lowering<'a> {
                     workshop_rs::Condition::new(condition)
                 })
                 .collect(),
-            actions: self.public_actions(&actions),
-        });
+            self.public_actions(&actions),
+        ));
         let action_provenance = self.action_provenance(&actions);
         self.set_rule_provenance(
             rule_index,
@@ -1339,13 +1339,13 @@ impl<'a> Lowering<'a> {
             return Ok(());
         }
         let rule_index = self.program.rules.len();
-        self.program.rules.push(workshop_rs::Rule {
-            name: self.subroutine_rule_name(name),
-            disabled: false,
+        self.program.rules.push(rule_from_parts(
+            self.subroutine_rule_name(name),
+            false,
             event,
-            conditions: Vec::new(),
-            actions: self.public_actions(&actions),
-        });
+            Vec::new(),
+            self.public_actions(&actions),
+        ));
         let action_provenance = self.action_provenance(&actions);
         self.set_rule_provenance(rule_index, span, std::iter::empty(), action_provenance)?;
         Ok(())
@@ -2996,13 +2996,13 @@ impl<'a> Lowering<'a> {
         let public_actions = self.public_actions(actions);
         let mut program = self.program.clone();
         program.settings = None;
-        program.rules.push(workshop_rs::Rule {
-            name: "action layout".to_string(),
-            disabled: false,
-            event: workshop_rs::Event::Global,
-            conditions: Vec::new(),
-            actions: public_actions.clone(),
-        });
+        program.rules.push(rule_from_parts(
+            "action layout".to_string(),
+            false,
+            workshop_rs::Event::Global,
+            Vec::new(),
+            public_actions.clone(),
+        ));
         workshop_rs::emitter::action_width(
             &program,
             self.compiler.catalog,
@@ -8813,4 +8813,18 @@ fn is_zero_skip(action: &workshop_rs::Action) -> bool {
             if matches!(name.as_str(), "skip" | "skipIf")
                 && matches!(args.last(), Some(workshop_rs::Value::Number(distance)) if *distance == 0.0)
     )
+}
+
+fn rule_from_parts(
+    name: String,
+    disabled: bool,
+    event: workshop_rs::Event,
+    conditions: Vec<workshop_rs::Condition>,
+    actions: Vec<workshop_rs::Action>,
+) -> workshop_rs::Rule {
+    let mut rule = workshop_rs::Rule::new(name, event);
+    rule.disabled = disabled;
+    rule.conditions = conditions;
+    rule.actions = actions;
+    rule
 }
