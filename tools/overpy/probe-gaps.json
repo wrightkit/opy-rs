@@ -30,17 +30,7 @@
       "decision": "open"
     },
     {
-      "id": "catalog-missing-coercion",
-      "status": "different",
-      "functions": [
-        "createDummy"
-      ],
-      "cause": "The catalog gives the slot of Create Dummy Bot no False/True coercion, so the optimizeForSize spelling the reference writes fails canonical validation.",
-      "owner": "workshop-rs catalog",
-      "decision": "open"
-    },
-    {
-      "id": "validation-boolean-slot",
+      "id": "validation-first-of-wrapper",
       "status": "native-rejects",
       "functions": [
         "abilityIconString",
@@ -95,8 +85,8 @@
         "worldVector"
       ],
       "variant": ":in-boolean",
-      "detail": "semantic type",
-      "cause": "validate_canonical_ids rejects a non-Boolean value in a Boolean slot. The reference wraps some of these values in First Of and writes the rest as they are.",
+      "detail": "'firstOf' argument 1",
+      "cause": "The reference wraps a value that cannot stand in a Boolean slot (vectors, heroes, maps, gamemodes, buttons, some lists) in First Of, which canonical validation accepts only for arrays. Boolean parameters themselves accept any value since workshop-rs 0.6.3.",
       "owner": "workshop-rs validation",
       "decision": "open"
     },
@@ -114,8 +104,8 @@
       "variant": "=[]",
       "detail": "semantic type",
       "cause": "validate_canonical_ids rejects an array where a parameter declares Object; the reference writes it.",
-      "owner": "workshop-rs validation",
-      "decision": "open"
+      "owner": "opy-rs",
+      "decision": "approved exception (workshop-rs ADR-0014, opy-rs#372); pinned by compiler::tests::structural_convergence"
     }
   ]
 }

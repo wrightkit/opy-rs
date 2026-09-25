@@ -61,10 +61,12 @@ impl<'a> ActionOptimizer<'a> {
         for (index, arg) in args.iter_mut().enumerate() {
             let boolean = entry.and_then(|entry| entry.param_type(index)) == Some("Boolean")
                 || (kind, name, index) == (Kind::Action, "waitUntil", 0);
-            if boolean && matches!(arg, Value::Null) {
+            if boolean && wraps_in_boolean(arg) {
+                let mut inner = std::mem::replace(arg, Value::Null);
+                self.nested(&mut inner);
                 *arg = Value::Call {
                     name: "firstOf".to_string(),
-                    args: vec![Value::Null],
+                    args: vec![inner],
                 };
             } else {
                 self.nested(arg);
@@ -80,5 +82,69 @@ impl<'a> ActionOptimizer<'a> {
             Value::PlayerVariable { player, .. } => self.nested(player),
             _ => {}
         }
+    }
+}
+
+/// Values the reference wraps in `First Of` where a Boolean is expected: `Null`,
+/// a vector that is not a bare direction, some enum constants, and the results
+/// of the builtins below. The sets are facts observed from the reference's
+/// output by the builtin probe (source-policy.md); the reference writes every
+/// other value, including strings, teams and direction constants, as it is.
+fn wraps_in_boolean(value: &Value) -> bool {
+    const ENUMS: [&str; 5] = ["Hero", "Map", "Color", "Button", "Gamemode"];
+    const CALLS: [&str; 30] = [
+        "abilityIconString",
+        "allHeroes",
+        "allPlayers",
+        "allowedHeroes",
+        "currentMap",
+        "directionFromAngles",
+        "directionTowards",
+        "eventAbility",
+        "getCurrentGamemode",
+        "getEyePosition",
+        "getFacingDirection",
+        "getHero",
+        "getHeroOfDuplication",
+        "getLivingPlayers",
+        "getPayloadPosition",
+        "getPlayersInRadius",
+        "getPlayersInSlot",
+        "getPlayersOnHero",
+        "getPlayersOnObjective",
+        "getPosition",
+        "getThrottle",
+        "getVelocity",
+        "heroIconString",
+        "iconString",
+        "inputBindingString",
+        "localVector",
+        "nearestWalkablePosition",
+        "teamOf",
+        "vectorTowards",
+        "worldVector",
+    ];
+    let direction = |x: f64, y: f64, z: f64| {
+        matches!(
+            [x, y, z],
+            [1.0, 0.0, 0.0]
+                | [-1.0, 0.0, 0.0]
+                | [0.0, 1.0, 0.0]
+                | [0.0, -1.0, 0.0]
+                | [0.0, 0.0, 1.0]
+                | [0.0, 0.0, -1.0]
+        )
+    };
+    match value {
+        Value::Null => true,
+        Value::Enum { value_type, .. } => ENUMS.contains(&value_type.as_str()),
+        Value::Vector { x, y, z } => {
+            !matches!((&**x, &**y, &**z), (Value::Number(x), Value::Number(y), Value::Number(z)) if direction(*x, *y, *z))
+        }
+        Value::Call { name, args } if name == "vector" => {
+            !matches!(args.as_slice(), [Value::Number(x), Value::Number(y), Value::Number(z)] if direction(*x, *y, *z))
+        }
+        Value::Call { name, .. } => CALLS.contains(&name.as_str()),
+        _ => false,
     }
 }
