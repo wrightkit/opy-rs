@@ -126,7 +126,9 @@ python3 -m unittest discover -s tools/overpy/tests
 ```
 
 Oracle-required compatibility tests run separately against the pinned
-reference. A local test count is not sufficient when a change claims
+reference. A change to lowering, optimization or builtin argument handling also
+runs the builtin-call probe (`tools/overpy/probe_builtins.py`, see
+[`tools/overpy/README.md`](tools/overpy/README.md)). A local test count is not sufficient when a change claims
 real-project compatibility; rerun the affected full-project workflow.
 
 ## Delivery

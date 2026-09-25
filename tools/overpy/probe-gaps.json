@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "gaps": [
+    {
+      "id": "reference-binds-mistyped-optional",
+      "status": "native-rejects",
+      "functions": "*",
+      "variant": ":omit-arg",
+      "cause": "Given one argument fewer for an optional or defaulted middle parameter, the reference shifts the remaining arguments left without checking their types and writes a call with an enum in the wrong slot (Players Within Radius(Up, 3, Off, Off), a beam whose colour is None). The native compiler rejects the call, which is the valid outcome.",
+      "owner": "opy-rs binding",
+      "decision": "open"
+    },
+    {
+      "id": "fold-after-coercion",
+      "status": "different",
+      "functions": [
+        "hudText",
+        "index",
+        "max",
+        "min",
+        "replace",
+        "slice"
+      ],
+      "cause": "Lowering rewrites False, True, 0 and an empty array to the parameter's canonical form before optimization, so a fold sees a different literal than the reference, which folds on what was written.",
+      "owner": "opy-rs lowering",
+      "decision": "open"
+    },
+    {
+      "id": "catalog-missing-coercion",
+      "status": "different",
+      "functions": [
+        "createDummy"
+      ],
+      "cause": "The catalog gives the slot of Create Dummy Bot no False/True coercion, so the optimizeForSize spelling the reference writes fails canonical validation.",
+      "owner": "workshop-rs catalog",
+      "decision": "open"
+    },
+    {
+      "id": "validation-rejects-reference-output",
+      "status": "native-rejects",
+      "functions": "*",
+      "cause": "validate_canonical_ids rejects values the reference writes: non-Boolean values in Boolean slots (the reference wraps some of them in First Of, others it leaves as they are) and arrays where Object is declared.",
+      "owner": "workshop-rs validation",
+      "decision": "open"
+    }
+  ]
+}
