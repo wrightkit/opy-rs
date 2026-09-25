@@ -65,6 +65,26 @@ ship only the compact facts required for interoperable output, with this
 attribution record. Changes to the table must be justified by an oracle
 behavior comparison and reviewed against the clean-room boundary.
 
+### Enumerated output facts
+
+Some output facts cannot be discovered by probing the oracle, because the
+input that triggers them must already be known. An enumerated output fact set
+may enter the core only when all of the following hold:
+
+1. its content is fully determined by the pinned output contract, so every
+   converging implementation must contain the same entries;
+2. an owner decision approves that specific set;
+3. the core holds an opy-rs-owned representation, attributed to the pinned
+   identity above, rather than a copied upstream file or format;
+4. every entry is confirmed by an oracle-backed fixture, including a negative
+   case for each whole-word match; and
+5. the set changes only with an oracle pin change and its comparison evidence.
+
+The only approved set is the filtered-word escaping of rule names and the
+`Mode Name` and `Description` settings strings
+([ADR-0007](../adr/0007-filtered-word-escaping.md)). Approval of one set is not
+a precedent for importing any other upstream table.
+
 Observed behavior is an interoperability input, not permission to copy an
 implementation. A test that passes only by importing a reference module or
 reusing its internal representation belongs outside the core boundary.

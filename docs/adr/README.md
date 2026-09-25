@@ -26,6 +26,7 @@ that later implementation still conforms to it.
 - [ADR-0004: Typed semantic behavior and feature-local ownership](0004-typed-semantic-feature-locality.md)
 - [ADR-0005: OPY lowering through canonical Workshop `Program`](0005-opy-canonical-program-lowering.md)
 - [ADR-0006: Tests-first compatibility verification](0006-tests-first-compatibility.md)
+- [ADR-0007: Filtered-word escaping as enumerated output facts](0007-filtered-word-escaping.md)
 
 ## Post-baseline audit (#250)
 
