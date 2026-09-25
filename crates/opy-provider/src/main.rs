@@ -14,21 +14,32 @@ use opy_rs::{CompileDiagnostic, Compiler};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
+use workshop_rs::program::MappedText;
 
-const PROTOCOL_VERSIONS: [&str; 3] = ["1.0", "1.1", "1.2"];
+const PROTOCOL_VERSIONS: [&str; 5] = ["1.0", "1.1", "1.2", "1.3", "1.4"];
 const PROJECT_LOADING_VERSION: &str = "1.1";
 const DIRECTORY_TARGET_VERSION: &str = "1.2";
+const SOURCE_IDENTITY_VERSION: &str = "1.3";
+const ARTIFACT_NEGOTIATION_VERSION: &str = "1.4";
 const SERVER_NAME: &str = "opy-provider";
 const LANGUAGE_ID: &str = "opy";
 const LANGUAGE_EXTENSIONS: [&str; 1] = ["opy"];
 // The payload is canonical Workshop text; the envelope remains opaque to LPP.
 const WORKSHOP_ARTIFACT_FORMAT: &str = "workshop-rs/text-v1";
+const MAPPED_ARTIFACT_FORMAT: &str = "workshop-rs/mapped-text-v1";
+
+/// Whether the negotiated `protocol_version` is `minimum` or later.
+fn version_at_least(protocol_version: &str, minimum: &str) -> bool {
+    let rank = |version: &str| PROTOCOL_VERSIONS.iter().position(|known| *known == version);
+    rank(protocol_version) >= rank(minimum)
+}
 
 #[derive(Debug, Clone, Copy)]
 struct Capabilities {
     check: bool,
     compile: bool,
     project_loading: bool,
+    source_identity: bool,
 }
 
 impl Capabilities {
@@ -37,6 +48,7 @@ impl Capabilities {
             check: true,
             compile: true,
             project_loading: true,
+            source_identity: true,
         }
     }
 
@@ -60,11 +72,11 @@ impl Capabilities {
             "rename": false,
             "editValidation": false,
         });
-        if matches!(
-            protocol_version,
-            PROJECT_LOADING_VERSION | DIRECTORY_TARGET_VERSION
-        ) {
+        if version_at_least(protocol_version, PROJECT_LOADING_VERSION) {
             capabilities["projectLoading"] = json!(self.project_loading);
+        }
+        if version_at_least(protocol_version, SOURCE_IDENTITY_VERSION) {
+            capabilities["sourceIdentity"] = json!(self.source_identity);
         }
         capabilities
     }
@@ -373,9 +385,9 @@ impl Server {
         };
         if matches!(method, "lpp/check" | "lpp/compile")
             && params.get("entry").is_some()
-            && !matches!(
-                self.protocol_version.as_deref(),
-                Some(PROJECT_LOADING_VERSION) | Some(DIRECTORY_TARGET_VERSION)
+            && !version_at_least(
+                self.protocol_version.as_deref().expect("initialized"),
+                PROJECT_LOADING_VERSION,
             )
         {
             return lpp_error(
@@ -431,6 +443,11 @@ impl Server {
     }
 
     fn compile(&mut self, value: Value) -> Result<Value, HandlerError> {
+        let accepted = accepted_artifact_formats(
+            &value,
+            self.protocol_version.as_deref().expect("initialized"),
+        )?;
+        let format = select_artifact_format(accepted.as_deref());
         let params: ProjectParams =
             serde_json::from_value(value).map_err(|_| HandlerError::Standard {
                 code: -32602,
@@ -450,7 +467,7 @@ impl Server {
                         "the OPY compiler requires one document",
                     ));
                 }
-                return compile_document(self, &request);
+                return compile_document(self, &request, format);
             }
         };
         if self.compiler.is_none() {
@@ -466,34 +483,124 @@ impl Server {
             project.filesystem.root(),
         );
         ensure_entry_sources_loaded(&project, &check_outcome)?;
-        let report = self
-            .compiler
-            .as_ref()
-            .expect("compiler initialized")
-            .compile_source_report_with_language(
+        let compiler = self.compiler.as_ref().expect("compiler initialized");
+        let main_path = path_string(project.filesystem.main_path());
+        let (report, mapped) = if format == Some(ArtifactFormat::Mapped) {
+            compiler.compile_source_report_mapped_with_language(
                 project.filesystem.source(),
-                &path_string(project.filesystem.main_path()),
+                &main_path,
+                project.filesystem.root(),
+                &project.locale,
+            )
+        } else {
+            let report = compiler.compile_source_report_with_language(
+                project.filesystem.source(),
+                &main_path,
                 project.filesystem.root(),
                 &project.locale,
             );
+            (report, None)
+        };
         let paths = check_outcome
             .files
             .iter()
             .map(|file| file.path.clone())
             .collect::<Vec<_>>();
         let diagnostics = compile_diagnostics(&project, &paths, &report.compile.diagnostics);
-        let artifact = (report.compile.status == opy_rs::CompileStatus::Success).then(|| {
-            json!({
-                "format": WORKSHOP_ARTIFACT_FORMAT,
-                "content": report.compile.workshop_exact,
+        let artifact = (report.compile.status == opy_rs::CompileStatus::Success)
+            .then(|| {
+                artifact_json(
+                    format,
+                    &report.compile.workshop_exact,
+                    mapped.as_ref(),
+                    &|path| path_to_file_uri(&resolved_project_path(&project, path)),
+                )
             })
-        });
+            .transpose()?;
         let result = json!({
             "diagnostics": diagnostics,
             "artifact": artifact,
             "sourceIdentity": source_identity(&project)?,
         });
         Ok(result)
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ArtifactFormat {
+    Text,
+    Mapped,
+}
+
+/// The `acceptedArtifactFormats` of an `lpp/compile` request; valid only in LPP 1.4 sessions.
+fn accepted_artifact_formats(
+    params: &Value,
+    protocol_version: &str,
+) -> Result<Option<Vec<String>>, HandlerError> {
+    let Some(value) = params.get("acceptedArtifactFormats") else {
+        return Ok(None);
+    };
+    let invalid = || HandlerError::Standard {
+        code: -32602,
+        message: "Invalid params",
+    };
+    if !version_at_least(protocol_version, ARTIFACT_NEGOTIATION_VERSION) {
+        return Err(invalid());
+    }
+    let formats = value
+        .as_array()
+        .filter(|formats| !formats.is_empty())
+        .and_then(|formats| {
+            formats
+                .iter()
+                .map(|format| format.as_str().map(str::to_owned))
+                .collect::<Option<Vec<_>>>()
+        })
+        .ok_or_else(invalid)?;
+    Ok(Some(formats))
+}
+
+/// The first accepted format this provider produces; `None` when none is producible.
+fn select_artifact_format(accepted: Option<&[String]>) -> Option<ArtifactFormat> {
+    let Some(accepted) = accepted else {
+        return Some(ArtifactFormat::Text);
+    };
+    accepted.iter().find_map(|id| match id.as_str() {
+        WORKSHOP_ARTIFACT_FORMAT => Some(ArtifactFormat::Text),
+        MAPPED_ARTIFACT_FORMAT => Some(ArtifactFormat::Mapped),
+        _ => None,
+    })
+}
+
+/// Build the artifact envelope. `uri_for` turns a mapped file path into its document URI.
+fn artifact_json(
+    format: Option<ArtifactFormat>,
+    text: &str,
+    mapped: Option<&MappedText>,
+    uri_for: &dyn Fn(&str) -> String,
+) -> Result<Value, HandlerError> {
+    match (format, mapped) {
+        (Some(ArtifactFormat::Text), _) => Ok(json!({
+            "format": WORKSHOP_ARTIFACT_FORMAT,
+            "content": text,
+        })),
+        (Some(ArtifactFormat::Mapped), Some(mapped)) => {
+            let mut content: Value =
+                serde_json::from_str(&mapped.to_json()).expect("mapped text is JSON");
+            for file in content["files"].as_array_mut().expect("file table") {
+                let uri = uri_for(file["path"].as_str().expect("file path"));
+                file["path"] = json!(uri);
+            }
+            Ok(json!({
+                "format": MAPPED_ARTIFACT_FORMAT,
+                "content": content.to_string(),
+            }))
+        }
+        _ => Err(HandlerError::refusal(
+            "compile.artifactFormatUnsupported",
+            json!({}),
+            "none of the accepted artifact formats can be produced",
+        )),
     }
 }
 
@@ -642,7 +749,7 @@ fn project_target_kind(
 ) -> Result<ProjectTargetKind, HandlerError> {
     match entry.kind.as_deref() {
         None | Some("file") => Ok(ProjectTargetKind::File),
-        Some("directory") if protocol_version == DIRECTORY_TARGET_VERSION => {
+        Some("directory") if version_at_least(protocol_version, DIRECTORY_TARGET_VERSION) => {
             Ok(ProjectTargetKind::Directory)
         }
         Some("directory") => Err(HandlerError::invalid_entry(
@@ -784,7 +891,11 @@ fn check_documents(documents: &BTreeMap<String, Document>) -> Result<Value, Hand
     }))
 }
 
-fn compile_document(server: &mut Server, request: &LoadedDocuments) -> Result<Value, HandlerError> {
+fn compile_document(
+    server: &mut Server,
+    request: &LoadedDocuments,
+    format: Option<ArtifactFormat>,
+) -> Result<Value, HandlerError> {
     let (uri, document) = request.documents.iter().next().expect("one document");
     let path = document_path(document)?;
     let root = path
@@ -821,17 +932,23 @@ fn compile_document(server: &mut Server, request: &LoadedDocuments) -> Result<Va
                 diagnostic,
             ));
     }
+    let compiler = server.compiler.as_ref().expect("compiler initialized");
     let artifact = match outcome.hir.as_ref() {
-        Some(hir) => match server
-            .compiler
-            .as_ref()
-            .expect("compiler initialized")
-            .compile_hir(hir)
-        {
-            Ok(artifact) => Some(json!({
-                "format": WORKSHOP_ARTIFACT_FORMAT,
-                "content": artifact.final_output,
-            })),
+        Some(hir) => match compiler.compile_hir(hir).and_then(|artifact| {
+            let mapped = (format == Some(ArtifactFormat::Mapped))
+                .then(|| compiler.mapped_text(&artifact, hir, "en-US"))
+                .transpose()?;
+            Ok((artifact, mapped))
+        }) {
+            Ok((artifact, mapped)) => Some(artifact_json(
+                format,
+                &artifact.final_output,
+                mapped.as_ref(),
+                &|path| {
+                    supplied_uri_for_path(&request.documents, &root, path)
+                        .unwrap_or_else(|| path_to_file_uri(&resolved_path(&root, path)))
+                },
+            )?),
             Err(error) => {
                 let diagnostic = json!({
                     "range": {

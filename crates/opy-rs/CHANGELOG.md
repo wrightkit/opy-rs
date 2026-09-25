@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.55](https://github.com/wrightkit/opy-rs/compare/v0.1.54...v0.1.55) - 2026-09-24
+
+### Added
+
+- *(compiler)* write skips over nothing as a disabled Abort
+- *(compiler)* compress split dictionary arrays and keep unit weights like pinned OverPy
+- *(compiler)* optimize every lowered value
+- *(compiler)* compare and select bugged current maps like pinned OverPy
+- *(compiler)* merge and split custom strings like pinned OverPy
+- *(compiler)* rewrite self assignments and fold array and string reads
+- *(compiler)* fold literal array reads like pinned OverPy
+- *(compiler)* optimize every source-derived value and fold rounding
+- *(compiler)* allocate reserved-name variables from the top
+- *(compiler)* escape rule names like pinned OverPy
+- *(compiler)* elide identity maps and exclude filters like pinned OverPy
+- *(compiler)* spell empty strings and compact vectors under optimizeForSize
+- *(compiler)* fold terminal conditionals and compact vectors like pinned OverPy
+- *(compiler)* converge operator and size optimization on pinned OverPy
+
+### Fixed
+
+- *(compiler)* match the reference on rounding, bare returns and map checks
+- *(compiler)* keep goto distance exact when the output drops instructions
+- *(compiler)* keep numeric operators unfolded when optimizations are disabled
+- *(compiler)* spell game mode values as the Game Mode value
+- *(compiler)* keep goto out of a loop as a conditional skip
+- *(compiler)* write general team settings before per-hero groups
+- *(parser)* attach else to the enclosing conditional after a nested one
+- *(compiler)* keep HUD text values as written
+- *(compiler)* match pinned OverPy defaults and HUD color replacement
+- *(compiler)* match pinned OverPy manifest defaults, chase forms, and condition operands
+- *(compiler)* format substituted numbers and fold direction vectors like pinned OverPy
+- *(compiler)* render generated rule names through the prefix template
+
+### Other
+
+- *(compat)* decide the semantic gate by structural identity
+- compare rules and variables structurally in the convergence fixtures
+- cover direction constants in the declarations fixture
+- add structural fixtures for strings, arrays, maps, builtins, compression, and settings
+- *(compat)* compare reparsed native output and promote converged fixtures
+- Merge remote-tracking branch 'origin/main' into feat/319-structural-convergence
+- *(compiler)* simplify chase argument replacement
+
 ## [0.1.54](https://github.com/wrightkit/opy-rs/compare/v0.1.53...v0.1.54) - 2026-09-23
 
 ### Other

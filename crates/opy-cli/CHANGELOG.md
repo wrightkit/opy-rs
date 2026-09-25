@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.55](https://github.com/wrightkit/opy-rs/compare/opy-cli-v0.1.54...opy-cli-v0.1.55) - 2026-09-24
+
+### Other
+
+- *(compat)* decide the semantic gate by structural identity
+- *(compat)* compare reparsed native output and promote converged fixtures
+
 ## [0.1.54](https://github.com/wrightkit/opy-rs/compare/opy-cli-v0.1.53...opy-cli-v0.1.54) - 2026-09-23
 
 ### Other
