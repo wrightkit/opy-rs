@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "settings\n{\n\tmain\n\t{\n\t\tMode Name: \"P\u00adoland a\u00adccount Bass \\\"a\u00addmin\\\" a\\\\dmin\"\n\t\tDescription: \"Tri\u00adgger r i \u00adgg er polandia S\u00adHIT bn\u00adet\"\n\t}\n\tmodes\n\t{\n\t\tGeneral\n\t\t{\n\t\t\tHero Limit: Off\n\t\t}\n\t}\n}\n\nvariables {\n    global:\n        0: g\n}\n\nrule (\"settings\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(g, 1);\n    }\n}\n",
+    "workshopExact": "settings\n{\n\tmain\n\t{\n\t\tMode Name: \"P\u00adoland a\u00adccount Bass \\\"a\u00addmin\\\" a\\\\dmin\"\n\t\tDescription: \"Tri\u00adgger r i \u00adgg er polandia S\u00adHIT bn\u00adet\"\n\t}\n\tmodes\n\t{\n\t\tGeneral\n\t\t{\n\t\t\tHero Limit: Off\n\t\t}\n\t}\n}\n\nvariables {\n    global:\n        0: g\n}\n\nrule (\"settings\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(g, 1);\n    }\n}\n\n",
+    "workshopSha256": "079f2c201c87d25fb34e050e751ebd463f2b46ef1d6815510ae29d29f7215a4d"
+  },
+  "fixture": "synthetic/structural-settings-words",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "a5f43126d9d0de973471267c84978d06b5860aaef30ee89c6bfe6e926cd64d61"
+      }
+    ],
+    "sha256": "3a2d82b5f4d5917d8ba511ecb99b5a48a8feef71e414f40be2ae8e6898b22636",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

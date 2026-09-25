@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/structural-settings-words",
+  "category": "compilation",
+  "features": [
+    "structural convergence",
+    "settings string word filter"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": true
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": true
+    }
+  }
+}

@@ -1190,7 +1190,7 @@ impl<'a> Lowering<'a> {
             }
         }
         for rule in &mut self.program.rules {
-            rule.name = escape_rule_name(&rule.name);
+            rule.name = escape_bad_words(&rule.name);
         }
         Ok(())
     }
@@ -8611,10 +8611,10 @@ const FILTERED_RULE_NAME_WORDS: [(&str, &str, bool); 28] = [
     ("s", "witzerland", true),
 ];
 
-/// Rule names lose invisible formatting characters, and the Workshop's
-/// filtered words are split with a soft hyphen, as the pinned OverPy does when
-/// it writes a rule name.
-fn escape_rule_name(name: &str) -> String {
+/// Rule names and the `Mode Name` and `Description` settings strings lose
+/// invisible formatting characters, and the Workshop's filtered words are split
+/// with a soft hyphen, as the pinned OverPy does when it writes them.
+pub(super) fn escape_bad_words(name: &str) -> String {
     let mut text: Vec<char> = name
         .chars()
         .filter(|character| {
