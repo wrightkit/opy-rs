@@ -104,3 +104,70 @@ rule "bnet_x":
 
 rule "Admin Account SHIT":
     g = 34
+
+
+rule "assx":
+    g = 35
+
+rule "blizx":
+    g = 36
+
+rule "blizzaardx":
+    g = 37
+
+rule "blowx":
+    g = 38
+
+rule "bnetx":
+    g = 39
+
+rule "brazilx":
+    g = 40
+
+rule "canadax":
+    g = 41
+
+rule "denmarkx":
+    g = 42
+
+rule "englandx":
+    g = 43
+
+rule "finlandx":
+    g = 44
+
+rule "irelandx":
+    g = 45
+
+rule "netherlandsx":
+    g = 46
+
+rule "norwayx":
+    g = 47
+
+rule "polandx":
+    g = 48
+
+rule "polishx":
+    g = 49
+
+rule "sanctuaryx":
+    g = 50
+
+rule "satanx":
+    g = 51
+
+rule "singaporex":
+    g = 52
+
+rule "swedenx":
+    g = 53
+
+rule "switzerlandx":
+    g = 54
+
+rule "r i gger":
+    g = 55
+
+rule "rigger":
+    g = 56

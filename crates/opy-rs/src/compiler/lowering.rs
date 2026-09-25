@@ -8630,6 +8630,12 @@ pub(super) fn escape_bad_words(name: &str) -> String {
     split_spaced_rigger(&text).into_iter().collect()
 }
 
+/// ECMAScript `\s`, which unlike Unicode White_Space excludes U+0085 and
+/// includes U+FEFF.
+fn is_js_whitespace(character: char) -> bool {
+    matches!(character, '\u{FEFF}') || (character.is_whitespace() && character != '\u{0085}')
+}
+
 fn is_word_character(character: char) -> bool {
     character.is_ascii_alphanumeric() || character == '_'
 }
@@ -8695,7 +8701,7 @@ fn spaced_rigger_match(text: &[char], start: usize) -> Option<(usize, usize)> {
     let mut split = None;
     for (nth, letter) in ['i', 'g', 'g', 'e', 'r'].into_iter().enumerate() {
         // The two `g` are adjacent; whitespace may only precede the others.
-        while nth != 2 && text.get(position).is_some_and(|c| c.is_whitespace()) {
+        while nth != 2 && text.get(position).is_some_and(|c| is_js_whitespace(*c)) {
             position += 1;
         }
         if !text.get(position)?.eq_ignore_ascii_case(&letter) {
@@ -8703,7 +8709,7 @@ fn spaced_rigger_match(text: &[char], start: usize) -> Option<(usize, usize)> {
         }
         position += 1;
         if letter == 'i' {
-            while text.get(position).is_some_and(|c| c.is_whitespace()) {
+            while text.get(position).is_some_and(|c| is_js_whitespace(*c)) {
                 position += 1;
             }
             split = Some(position);
