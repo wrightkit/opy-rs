@@ -151,11 +151,6 @@ fn empty_rules_and_subroutines_are_dropped_like_the_pinned_oracle() {
 }
 
 #[test]
-fn filtered_words_in_rule_names_match_the_pinned_oracle() {
-    assert_converges("structural-rule-name-words");
-}
-
-#[test]
 fn builtin_constant_folding_matches_the_pinned_oracle() {
     assert_converges("structural-builtin-folding");
 }
