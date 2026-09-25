@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.56](https://github.com/wrightkit/opy-rs/compare/opy-cli-v0.1.55...opy-cli-v0.1.56) - 2026-09-25
+
+### Fixed
+
+- *(compiler)* close structural gaps outside the Bastion entrypoints (#366, partial) ([#370](https://github.com/wrightkit/opy-rs/pull/370))
+
 ## [0.1.55](https://github.com/wrightkit/opy-rs/compare/opy-cli-v0.1.54...opy-cli-v0.1.55) - 2026-09-24
 
 ### Other
