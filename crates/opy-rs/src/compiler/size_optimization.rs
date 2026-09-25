@@ -31,6 +31,7 @@ impl<'a> SizeOptimizer<'a> {
             Action::Call { name, args } => {
                 self.indexed_variable_call(name, args);
                 self.chase_call(name, args);
+                Self::throttle_call(name, args);
                 Self::hud_text_call(name, args);
                 Self::beam_call(name, args);
                 Self::progress_bar_call(name, args);
@@ -170,6 +171,20 @@ impl<'a> SizeOptimizer<'a> {
                     Value::Number(number) if *number == 1.0 => *arg = Value::Bool(true),
                     _ => {}
                 }
+            }
+        }
+    }
+
+    /// Throttle limits spell `0` and `1` as `False` and `True`.
+    fn throttle_call(name: &str, args: &mut [Value]) {
+        if name != "startForcingThrottle" {
+            return;
+        }
+        for arg in args.iter_mut().skip(1).take(6) {
+            match arg {
+                Value::Number(number) if *number == 0.0 => *arg = Value::Bool(false),
+                Value::Number(number) if *number == 1.0 => *arg = Value::Bool(true),
+                _ => {}
             }
         }
     }
