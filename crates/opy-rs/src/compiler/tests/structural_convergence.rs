@@ -156,6 +156,11 @@ fn builtin_constant_folding_matches_the_pinned_oracle() {
 }
 
 #[test]
+fn folds_on_the_authored_literal_match_the_pinned_oracle() {
+    assert_converges("structural-authored-literals");
+}
+
+#[test]
 fn action_rewrites_match_the_pinned_oracle() {
     assert_converges("structural-action-rewrites");
 }

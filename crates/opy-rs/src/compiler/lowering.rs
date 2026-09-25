@@ -214,6 +214,8 @@ pub(crate) struct Lowering<'a> {
     deferred_gotos: Vec<(ActionId, String, Option<HirSpan>, usize)>,
     translation_uses: Vec<(String, Option<String>)>,
     optimized_nodes: HashMap<ValueId, bool>,
+    /// Coerced argument values, mapped to the literal the author wrote.
+    authored_values: HashMap<ValueId, ValueId>,
     used_maps: Vec<&'static str>,
 }
 
@@ -390,6 +392,7 @@ impl<'a> Lowering<'a> {
             array_bindings: Vec::new(),
             current_rule_conditions: None,
             optimized_nodes: HashMap::new(),
+            authored_values: HashMap::new(),
             used_maps: used_bugged_maps(hir),
             visible_labels: Vec::new(),
             deferred_gotos: Vec::new(),
@@ -3839,7 +3842,9 @@ impl<'a> Lowering<'a> {
         let Some(value) = replacement else {
             return value_id;
         };
-        self.push_value(value)
+        let coerced = self.push_value(value);
+        self.authored_values.insert(coerced, value_id);
+        coerced
     }
 
     fn normalize_contextual_argument(
@@ -7194,10 +7199,43 @@ impl<'a> Lowering<'a> {
     }
 
     fn materialize_value_inner(&self, id: ValueId) -> workshop_rs::Value {
-        let value = self.materialize_node(id);
-        match self.optimized_nodes.get(&id) {
-            Some(strict) => OperatorOptimizer::new(self.compiler, *strict).node(value),
-            None => value,
+        let Some(strict) = self.optimized_nodes.get(&id) else {
+            return self.materialize_node(id);
+        };
+        // Folds see the literal the author wrote; the parameter's canonical
+        // form is applied to whatever call remains.
+        let Value::Call { name, args } = self.value(id) else {
+            return OperatorOptimizer::new(self.compiler, *strict).node(self.materialize_node(id));
+        };
+        let authored: Vec<workshop_rs::Value> = args
+            .iter()
+            .map(|arg| {
+                self.materialize_value_inner(self.authored_values.get(arg).copied().unwrap_or(*arg))
+            })
+            .collect();
+        let folded =
+            OperatorOptimizer::new(self.compiler, *strict).node(workshop_rs::Value::Call {
+                name: name.clone(),
+                args: authored.clone(),
+            });
+        match folded {
+            workshop_rs::Value::Call {
+                name: folded_name,
+                args: mut folded_args,
+            } if folded_name == *name && folded_args.len() == args.len() => {
+                for (index, arg) in args.iter().enumerate() {
+                    if self.authored_values.contains_key(arg)
+                        && same(&folded_args[index], &authored[index])
+                    {
+                        folded_args[index] = self.materialize_value_inner(*arg);
+                    }
+                }
+                workshop_rs::Value::Call {
+                    name: folded_name,
+                    args: folded_args,
+                }
+            }
+            folded => folded,
         }
     }
 
@@ -7439,9 +7477,20 @@ impl<'a> Lowering<'a> {
                 name: name.clone(),
                 args: args
                     .iter()
-                    .map(|arg| self.materialize_value(*arg))
+                    .map(|arg| self.materialize_value(self.written_empty_array(*arg)))
                     .collect(),
             },
+        }
+    }
+
+    /// An empty array the author wrote keeps its spelling in an action
+    /// argument, where the reference does not read it as an empty string.
+    fn written_empty_array(&self, id: ValueId) -> ValueId {
+        match self.authored_values.get(&id) {
+            Some(&authored) if matches!(self.value(authored), Value::Call { name, args } if name == "emptyArray" && args.is_empty()) => {
+                authored
+            }
+            _ => id,
         }
     }
 

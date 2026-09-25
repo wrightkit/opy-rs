@@ -15,21 +15,6 @@
       "detail": ""
     },
     {
-      "id": "fold-after-coercion",
-      "status": "different",
-      "functions": [
-        "hudText",
-        "index",
-        "max",
-        "min",
-        "replace",
-        "slice"
-      ],
-      "cause": "Lowering rewrites False, True, 0 and an empty array to the parameter's canonical form before optimization, so a fold sees a different literal than the reference, which folds on what was written.",
-      "owner": "opy-rs lowering",
-      "decision": "open (wrightkit/opy-rs#373)"
-    },
-    {
       "id": "validation-array-for-object",
       "status": "native-rejects",
       "functions": [
