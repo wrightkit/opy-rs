@@ -7344,6 +7344,8 @@ impl<'a> Lowering<'a> {
                 if optimization.enabled && optimization.for_size {
                     SizeOptimizer::new(self.compiler).action(&mut action);
                 }
+                ActionOptimizer::new(self.compiler, optimization.enabled)
+                    .wrap_booleans(&mut action);
                 for value in action_values(&mut action) {
                     trim_numbers(value);
                 }

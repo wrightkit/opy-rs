@@ -52,7 +52,14 @@ impl<'a> ActionOptimizer<'a> {
                 _ => {}
             }
         }
-        self.booleans(Kind::Action, name, args);
+    }
+
+    /// Wrap what a Boolean slot cannot hold; the reference does so last, after
+    /// the size replacements have rewritten the argument.
+    pub(super) fn wrap_booleans(&self, action: &mut Action) {
+        if let Action::Call { name, args } = action {
+            self.booleans(Kind::Action, name, args);
+        }
     }
 
     /// A `Null` where a Boolean is expected is wrapped so that it reads as one.

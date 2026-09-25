@@ -193,3 +193,15 @@ fn a_vector_that_folds_to_zero_in_a_vector_position_stays_rejected() {
         "semantic type 'Vector|Player'",
     );
 }
+
+#[test]
+fn an_omitted_optional_argument_does_not_shift_the_rest() {
+    // The reference moves the remaining arguments left and writes a beam whose
+    // colour is `None`; native compilation rejects the mistyped call.
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = "rule \"x\":\n    @Event eachPlayer\n    createBeam(eventPlayer, Beam.GRAPPLE, Vector.UP, Vector.UP, EffectReeval.NONE)\n";
+    match crate::compile(source, "source.opy", dir) {
+        Ok(_) => panic!("the mistyped call must stay rejected"),
+        Err(error) => assert_eq!(error.code, "missing-argument"),
+    }
+}
