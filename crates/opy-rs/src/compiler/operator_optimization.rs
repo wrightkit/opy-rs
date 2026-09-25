@@ -602,6 +602,11 @@ impl<'a> OperatorOptimizer<'a> {
         ) {
             return Rewrite::Changed(Value::String(text.replace(search, replacement)));
         }
+        // The reference wraps a `Null` replacement so that it is kept.
+        let replacement = match replacement {
+            Value::Null => call("updateEveryFrame", vec![Value::Null]),
+            other => other,
+        };
         Rewrite::Same(call("stringReplace", vec![text, search, replacement]))
     }
 

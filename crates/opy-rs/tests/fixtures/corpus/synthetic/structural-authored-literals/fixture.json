@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/structural-authored-literals",
+  "category": "compilation",
+  "features": [
+    "structural convergence",
+    "authored literal folding"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": true
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": true
+    }
+  }
+}
