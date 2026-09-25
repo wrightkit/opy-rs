@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.58](https://github.com/wrightkit/opy-rs/compare/v0.1.57...v0.1.58) - 2026-09-25
+
+### Fixed
+
+- *(compiler)* spell startForcingThrottle limits 0 and 1 as False and True under optimizeForSize ([#382](https://github.com/wrightkit/opy-rs/pull/382))
+
 ## [0.1.57](https://github.com/wrightkit/opy-rs/compare/v0.1.56...v0.1.57) - 2026-09-25
 
 ### Other
