@@ -1,5 +1,7 @@
+use super::action_optimization::ActionOptimizer;
+use super::number_format::trim_numbers;
 use super::operator_optimization::{OperatorOptimizer, same, self_modification};
-use super::size_optimization::{SizeOptimizer, action_values};
+use super::size_optimization::{SizeOptimizer, action_values, is_empty_string};
 use super::string_format::split_all;
 use super::*;
 use crate::hir::OptimizationState;
@@ -1237,10 +1239,10 @@ impl<'a> Lowering<'a> {
                     if optimization.enabled && optimization.for_size {
                         SizeOptimizer::new(self.compiler).condition(&mut condition);
                     }
-                    workshop_rs::Condition::new(
-                        OperatorOptimizer::new(self.compiler, optimization.strict)
-                            .wrap_condition(condition),
-                    )
+                    let mut condition = OperatorOptimizer::new(self.compiler, optimization.strict)
+                        .wrap_condition(condition);
+                    trim_numbers(&mut condition);
+                    workshop_rs::Condition::new(condition)
                 })
                 .collect(),
             actions: self.public_actions(&actions),
@@ -7266,6 +7268,16 @@ impl<'a> Lowering<'a> {
             .filter(|id| {
                 let optimization = self.optimization_state_at(self.action_origins[*id].as_ref());
                 if optimization.enabled {
+                    if let Action::Call { name, args } = &self.actions[*id]
+                        && name == "createHudText"
+                        && args.len() > 3
+                        && args[1..=3].iter().all(|text| {
+                            let text = self.materialize_value(*text);
+                            matches!(text, workshop_rs::Value::Null) || is_empty_string(&text)
+                        })
+                    {
+                        return false;
+                    }
                     let assigns_itself = match &self.actions[*id] {
                         Action::SetGlobalVariable { variable, value } => {
                             matches!(self.value(*value), Value::GlobalVariable(other) if other == variable)
@@ -7328,8 +7340,12 @@ impl<'a> Lowering<'a> {
                         action = modification;
                     }
                 }
+                ActionOptimizer::new(self.compiler, optimization.enabled).action(&mut action);
                 if optimization.enabled && optimization.for_size {
                     SizeOptimizer::new(self.compiler).action(&mut action);
+                }
+                for value in action_values(&mut action) {
+                    trim_numbers(value);
                 }
                 action
             })

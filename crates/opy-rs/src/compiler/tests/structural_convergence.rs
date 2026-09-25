@@ -149,3 +149,23 @@ fn unoptimized_output_matches_the_pinned_oracle() {
 fn empty_rules_and_subroutines_are_dropped_like_the_pinned_oracle() {
     assert_converges("structural-empty-rules");
 }
+
+#[test]
+fn filtered_words_in_rule_names_match_the_pinned_oracle() {
+    assert_converges("structural-rule-name-words");
+}
+
+#[test]
+fn builtin_constant_folding_matches_the_pinned_oracle() {
+    assert_converges("structural-builtin-folding");
+}
+
+#[test]
+fn action_rewrites_match_the_pinned_oracle() {
+    assert_converges("structural-action-rewrites");
+}
+
+#[test]
+fn size_optimization_action_rewrites_match_the_pinned_oracle() {
+    assert_converges("structural-size-rewrites");
+}

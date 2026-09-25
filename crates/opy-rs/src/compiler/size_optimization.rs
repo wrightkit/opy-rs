@@ -5,6 +5,7 @@ use workshop_rs::catalog::{Kind, ParamCoercions};
 use workshop_rs::{Action, ModifyOp, Value};
 
 use super::Compiler;
+use super::operator_optimization::falsy;
 
 pub(super) struct SizeOptimizer<'a> {
     compiler: &'a Compiler,
@@ -31,6 +32,8 @@ impl<'a> SizeOptimizer<'a> {
                 self.indexed_variable_call(name, args);
                 self.chase_call(name, args);
                 Self::hud_text_call(name, args);
+                Self::beam_call(name, args);
+                Self::progress_bar_call(name, args);
                 self.call_arguments(Kind::Action, name, args);
             }
             _ => {}
@@ -129,6 +132,30 @@ impl<'a> SizeOptimizer<'a> {
         }
     }
 
+    /// A grapple beam has no colour.
+    fn beam_call(name: &str, args: &mut [Value]) {
+        if name == "createBeamEffect"
+            && matches!(args.get(1), Some(Value::Enum { value, .. }) if value == "GRAPPLE")
+            && args.len() > 4
+        {
+            args[4] = Value::Null;
+        }
+    }
+
+    /// A progress bar whose value or text is falsy drops the matching colour.
+    fn progress_bar_call(name: &str, args: &mut [Value]) {
+        let colors: [(usize, usize); 2] = match name {
+            "progressBarHud" => [(1, 5), (2, 6)],
+            "createProgressBarInWorldText" => [(1, 6), (2, 7)],
+            _ => return,
+        };
+        for (source, color) in colors {
+            if args.get(source).is_some_and(falsy) && args.len() > color {
+                args[color] = Value::Null;
+            }
+        }
+    }
+
     /// Chase destinations and rates spell `0` and `1` as `False` and `True`.
     fn chase_call(&self, name: &str, args: &mut [Value]) {
         let positions: &[usize] = match name {
@@ -150,10 +177,12 @@ impl<'a> SizeOptimizer<'a> {
     fn call_arguments(&self, kind: Kind, name: &str, args: &mut [Value]) {
         let entry = self.compiler.catalog.entry(kind, name);
         for (index, arg) in args.iter_mut().enumerate() {
-            let coercions = entry
+            let mut coercions = entry
                 .and_then(|entry| entry.param_coercions(index))
                 .copied()
                 .unwrap_or_default();
+            // The reference also writes an empty separator as an empty array.
+            coercions.empty_array_as_string |= (name, index) == ("stringSplit", 1);
             self.argument(coercions, arg);
         }
     }
@@ -326,7 +355,7 @@ fn compact_vector(x: &Value, y: &Value, z: &Value) -> Option<Value> {
     }
 }
 
-fn is_empty_string(value: &Value) -> bool {
+pub(super) fn is_empty_string(value: &Value) -> bool {
     match value {
         Value::String(text) => text.is_empty(),
         Value::Call { name, args } => {
