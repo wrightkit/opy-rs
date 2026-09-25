@@ -26,7 +26,7 @@ ORACLE = TOOLS / "oracle"
 DEFAULT_WORKDIR = ROOT / "target" / "structural-gate"
 DEFAULT_REPORT = ROOT / "target" / "opy-rs-structural-gate-report.json"
 EXCEPTION_KEYS = (
-    "id", "project", "entry", "section", "name", "path",
+    "id", "project", "entry", "section", "name", "path", "native", "reference",
     "upstream", "opyRs", "decision", "pinningTest",
 )
 
@@ -56,6 +56,8 @@ def matches(exception: dict[str, Any], project: str, entry: str, difference: dic
         and exception["section"] == difference["section"]
         and exception["name"] == difference["name"]
         and exception["path"] == difference["path"]
+        and exception["native"] == difference["native"]
+        and exception["reference"] == difference["reference"]
     )
 
 

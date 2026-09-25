@@ -18,7 +18,7 @@ def difference(name: str, path: str) -> dict:
 
 EXCEPTION = {
     "id": "known", "project": "p", "entry": "src/main.opy", "section": "rules",
-    "name": '"Rule"', "path": "Rule.actions",
+    "name": '"Rule"', "path": "Rule.actions", "native": "a", "reference": "b",
     "upstream": "u", "opyRs": "n", "decision": "d", "pinningTest": "t",
 }
 
@@ -34,6 +34,8 @@ class ClassifyTests(unittest.TestCase):
         for project, entry, item in (
             ("p", "src/main.opy", difference('"Rule"', "Rule.conditions")),
             ("p", "src/main.opy", difference('"Other"', "Rule.actions")),
+            ("p", "src/main.opy", {**difference('"Rule"', "Rule.actions"), "native": "c"}),
+            ("p", "src/main.opy", {**difference('"Rule"', "Rule.actions"), "reference": "c"}),
             ("q", "src/main.opy", difference('"Rule"', "Rule.actions")),
             ("p", "src/other.opy", difference('"Rule"', "Rule.actions")),
         ):

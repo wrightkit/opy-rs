@@ -94,7 +94,9 @@ python3 tools/overpy/structural_gate.py --binary target/debug/opy-compat
 A difference is reported by section, item name, and canonical path of the
 first diverging node with both sides' values, never as a text diff. Every
 difference fails unless `exceptions` in `structural-gate.json` records it by
-project, entry, section, item name, and path, together with the upstream
+project, entry, section, item name, path, and the compared `native` and
+`reference` values (so a later change at the same path is not accepted),
+together with the upstream
 behavior, the `opy-rs` behavior, the approving decision, and the pinning test.
 A recorded exception that matches no difference fails the full run as stale.
 Approved exceptions and their decisions are listed in
