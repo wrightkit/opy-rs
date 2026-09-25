@@ -149,3 +149,59 @@ fn unoptimized_output_matches_the_pinned_oracle() {
 fn empty_rules_and_subroutines_are_dropped_like_the_pinned_oracle() {
     assert_converges("structural-empty-rules");
 }
+
+#[test]
+fn builtin_constant_folding_matches_the_pinned_oracle() {
+    assert_converges("structural-builtin-folding");
+}
+
+#[test]
+fn action_rewrites_match_the_pinned_oracle() {
+    assert_converges("structural-action-rewrites");
+}
+
+#[test]
+fn size_optimization_action_rewrites_match_the_pinned_oracle() {
+    assert_converges("structural-size-rewrites");
+}
+
+/// Approved exceptions (workshop-rs ADR-0014, wrightkit/opy-rs#372): the
+/// pinned OverPy writes these programs, native compilation rejects them.
+fn assert_rejected(source: &str, needle: &str) {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let hir = crate::compile(source, "source.opy", dir).expect("source must resolve");
+    let error = Compiler::new()
+        .expect("released workshop contract must load")
+        .compile_hir(&hir)
+        .err()
+        .expect("the exception must stay rejected");
+    assert!(error.to_string().contains(needle), "{error}");
+}
+
+#[test]
+fn an_array_for_an_object_text_parameter_stays_rejected() {
+    assert_rejected(
+        "rule \"x\":\n    @Event global\n    printLog([])\n",
+        "semantic type 'Object'",
+    );
+}
+
+#[test]
+fn a_vector_that_folds_to_zero_in_a_vector_position_stays_rejected() {
+    assert_rejected(
+        "globalvar v\nrule \"x\":\n    @Event global\n    createEffect(getAllPlayers(), Effect.SPHERE, Color.RED, v - v, 1, EffectReeval.VISIBILITY)\n",
+        "semantic type 'Vector|Player'",
+    );
+}
+
+#[test]
+fn an_omitted_optional_argument_does_not_shift_the_rest() {
+    // The reference moves the remaining arguments left and writes a beam whose
+    // colour is `None`; native compilation rejects the mistyped call.
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = "rule \"x\":\n    @Event eachPlayer\n    createBeam(eventPlayer, Beam.GRAPPLE, Vector.UP, Vector.UP, EffectReeval.NONE)\n";
+    match crate::compile(source, "source.opy", dir) {
+        Ok(_) => panic!("the mistyped call must stay rejected"),
+        Err(error) => assert_eq!(error.code, "missing-argument"),
+    }
+}

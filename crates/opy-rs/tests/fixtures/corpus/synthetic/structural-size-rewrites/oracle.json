@@ -1,0 +1,39 @@
+{
+  "compile": {
+    "diagnostics": [
+      {
+        "severity": "info",
+        "text": "The color 'RED' is hard to see. Consider using LIGHT_RED instead. (w_dark_color)\n    | line 10, col 66, at source.opy\nThe color 'RED' is hard to see. Consider using LIGHT_RED instead. (w_dark_color)\n    | line 10, col 77, at source.opy\nWait Until does not consider non-zero numbers as true, which might cause unwanted behavior. It is recommended to explicitly compare to true. (w_wait_until)\n    | line 13, col 15, at source.opy\nWarning: The color 'RED' is hard to see. Consider using LIGHT_RED instead. (w_dark_color)\n    | line 10, col 66, at source.opy\nWarning: The color 'RED' is hard to see. Consider using LIGHT_RED instead. (w_dark_color)\n    | line 10, col 77, at source.opy\nWarning: Wait Until does not consider non-zero numbers as true, which might cause unwanted behavior. It is recommended to explicitly compare to true. (w_wait_until)\n    | line 13, col 15, at source.opy"
+      }
+    ],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: g\n    player:\n        0: p\n}\n\n//Optimize for size enabled\nrule (\"size rewrites\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Create Beam Effect(Event Player, Grapple Beam, Up, Down, Null, None);\n        Create Progress Bar HUD Text(Event Player, 0, Char In String(Empty Array, False), Left, 3, Null, Null, Color, Default Visibility);\n        Create Progress Bar HUD Text(Event Player, Global.g, Global.g, Left, 3, Color(Red), Color(Red), Color, Default Visibility);\n        Set Global Variable(g, String Split(Custom String(\"abc\"), Empty Array));\n        Create HUD Text(Event Player, Null, Global.g, Null, Left, 3, Null, Color(Yellow), Null, Visible To and String, Default Visibility);\n        Wait Until(Add(Left, Right), 3);\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: g\n    player:\n        0: p\n}\n\n//Optimize for size enabled\nrule (\"size rewrites\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Create Beam Effect(Event Player, Grapple Beam, Up, Down, Null, None);\n        Create Progress Bar HUD Text(Event Player, 0, Char In String(Empty Array, False), Left, 3, Null, Null, Color, Default Visibility);\n        Create Progress Bar HUD Text(Event Player, Global.g, Global.g, Left, 3, Color(Red), Color(Red), Color, Default Visibility);\n        Set Global Variable(g, String Split(Custom String(\"abc\"), Empty Array));\n        Create HUD Text(Event Player, Null, Global.g, Null, Left, 3, Null, Color(Yellow), Null, Visible To and String, Default Visibility);\n        Wait Until(Add(Left, Right), 3);\n    }\n}\n\n",
+    "workshopSha256": "d5b1b1f1c901c17e1a49840dd79c5c6523a22c95d578c999738708ffed1c551e"
+  },
+  "fixture": "synthetic/structural-size-rewrites",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "a78e70b5308426426d5586ad291094d640e06635dbc64e37c5062e7f92007ff6"
+      }
+    ],
+    "sha256": "327a8742ce49ff19041791dd097cc0bb620c3792504ce56d019fece9e3e2db33",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "gaps": [
+    {
+      "id": "reference-binds-mistyped-optional",
+      "status": "native-rejects",
+      "functions": [
+        "createBeam",
+        "getPlayersInRadius"
+      ],
+      "variant": ":omit-arg",
+      "cause": "Given one argument fewer for an optional or defaulted middle parameter, the reference shifts the remaining arguments left without checking their types and writes a call with an enum in the wrong slot (Players Within Radius(Up, 3, Off, Off), a beam whose colour is None). The native compiler rejects the call, which is the valid outcome.",
+      "owner": "opy-rs binding",
+      "decision": "approved exception (project owner, wrightkit/opy-rs#366); pinned by compiler::tests::structural_convergence",
+      "detail": ""
+    },
+    {
+      "id": "fold-after-coercion",
+      "status": "different",
+      "functions": [
+        "hudText",
+        "index",
+        "max",
+        "min",
+        "replace",
+        "slice"
+      ],
+      "cause": "Lowering rewrites False, True, 0 and an empty array to the parameter's canonical form before optimization, so a fold sees a different literal than the reference, which folds on what was written.",
+      "owner": "opy-rs lowering",
+      "decision": "open (wrightkit/opy-rs#373)"
+    },
+    {
+      "id": "validation-array-for-object",
+      "status": "native-rejects",
+      "functions": [
+        "bigMessage",
+        "logToInspector",
+        "printLog",
+        "progressBarHud",
+        "setObjectiveDescription",
+        "smallMessage"
+      ],
+      "variant": "=[]",
+      "detail": "semantic type",
+      "cause": "validate_canonical_ids rejects an array where a parameter declares Object; the reference writes it.",
+      "owner": "opy-rs",
+      "decision": "approved exception (workshop-rs ADR-0014, opy-rs#372); pinned by compiler::tests::structural_convergence"
+    }
+  ]
+}

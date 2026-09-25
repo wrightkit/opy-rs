@@ -102,6 +102,26 @@ impl<'a> OperatorOptimizer<'a> {
             ("-", 1) => self.negate(args),
             ("roundToInteger", 2) => Self::round(args),
             ("absoluteValue", 1) => Self::absolute(args),
+            ("sin", 1) => Self::unary("sin", args, f64::sin),
+            ("cos", 1) => Self::unary("cos", args, f64::cos),
+            ("sinDeg", 1) => Self::unary("sinDeg", args, |degrees| {
+                (degrees * (std::f64::consts::PI / 180.0)).sin()
+            }),
+            ("cosDeg", 1) => Self::unary("cosDeg", args, |degrees| {
+                (degrees * (std::f64::consts::PI / 180.0)).cos()
+            }),
+            ("squareRoot", 1) => self.square_root(args),
+            ("min", 2) => Self::extremum("min", args, f64::min),
+            ("max", 2) => Self::extremum("max", args, f64::max),
+            ("magnitude", 1) => Self::magnitude(args),
+            ("distance", 2) => Self::distance(args),
+            ("dotProduct", 2) => Self::dot_product(args),
+            ("directionTowards", 2) => Self::direction_towards(args),
+            ("oppositeTeamOf", 1) => Self::opposite_team(args),
+            ("strContains", 2) => Self::string_contains(args),
+            ("stringSlice", 3) => Self::string_slice(args),
+            ("stringReplace", 3) => Self::string_replace(args),
+            ("indexOfArrayValue", 2) => self.index_of(args),
             ("customString", _) if !args.is_empty() => Self::custom_string(args),
             ("slice", 3) => Self::slice(args),
             ("charAt", 2) => Self::char_at(args),
@@ -458,6 +478,168 @@ impl<'a> OperatorOptimizer<'a> {
         }
     }
 
+    fn unary(name: &str, args: Vec<Value>, apply: fn(f64) -> f64) -> Rewrite {
+        let [number] = one(args);
+        match number {
+            Value::Number(number) => Rewrite::Changed(Value::Number(apply(number))),
+            other => Rewrite::Same(call(name, vec![other])),
+        }
+    }
+
+    fn square_root(&self, args: Vec<Value>) -> Rewrite {
+        let [operand] = one(args);
+        match operand {
+            Value::Number(number) => {
+                let root = number.sqrt();
+                Rewrite::Changed(Value::Number(if root.is_nan() { 0.0 } else { root + 0.0 }))
+            }
+            Value::Call { name, mut args }
+                if name == "dotProduct" && args.len() == 2 && same(&args[0], &args[1]) =>
+            {
+                Rewrite::Changed(call("magnitude", vec![args.swap_remove(0)]))
+            }
+            other => Rewrite::Same(call("squareRoot", vec![other])),
+        }
+    }
+
+    fn extremum(name: &str, args: Vec<Value>, apply: fn(f64, f64) -> f64) -> Rewrite {
+        let [left, right] = two(args);
+        match (&left, &right) {
+            (Value::Number(a), Value::Number(b)) => Rewrite::Changed(Value::Number(apply(*a, *b))),
+            _ => Rewrite::Same(call(name, vec![left, right])),
+        }
+    }
+
+    fn magnitude(args: Vec<Value>) -> Rewrite {
+        let [vector] = one(args);
+        match number_components(&vector) {
+            Some([x, y, z]) => Rewrite::Changed(Value::Number((x * x + y * y + z * z).sqrt())),
+            None => Rewrite::Same(call("magnitude", vec![vector])),
+        }
+    }
+
+    fn distance(args: Vec<Value>) -> Rewrite {
+        let [left, right] = two(args);
+        if let (Some(a), Some(b)) = (number_components(&left), number_components(&right)) {
+            let squares: f64 = (0..3).map(|axis| (a[axis] - b[axis]).powi(2)).sum();
+            return Rewrite::Changed(Value::Number(squares.sqrt()));
+        }
+        if zero_vector(&left) {
+            return Rewrite::Changed(call("magnitude", vec![right]));
+        }
+        if zero_vector(&right) {
+            return Rewrite::Changed(call("magnitude", vec![left]));
+        }
+        Rewrite::Same(call("distance", vec![left, right]))
+    }
+
+    fn dot_product(args: Vec<Value>) -> Rewrite {
+        let [left, right] = two(args);
+        match (number_components(&left), number_components(&right)) {
+            (Some(a), Some(b)) => {
+                Rewrite::Changed(Value::Number(a[0] * b[0] + a[1] * b[1] + a[2] * b[2]))
+            }
+            _ => Rewrite::Same(call("dotProduct", vec![left, right])),
+        }
+    }
+
+    fn direction_towards(args: Vec<Value>) -> Rewrite {
+        let [start, end] = two(args);
+        let (Some(a), Some(b)) = (number_components(&start), number_components(&end)) else {
+            return Rewrite::Same(call("directionTowards", vec![start, end]));
+        };
+        let offset = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+        let length = (offset[0] * offset[0] + offset[1] * offset[1] + offset[2] * offset[2]).sqrt();
+        Rewrite::Changed(if length == 0.0 {
+            vector([0.0, 0.0, 0.0])
+        } else {
+            vector(offset.map(|component| component / length))
+        })
+    }
+
+    fn opposite_team(args: Vec<Value>) -> Rewrite {
+        let [team] = one(args);
+        let opposite = match &team {
+            Value::Call { name, args } if name == "team" && args.len() == 1 => {
+                opposite_of(&args[0]).map(|member| call("team", vec![member]))
+            }
+            other => opposite_of(other),
+        };
+        match opposite {
+            Some(opposite) => Rewrite::Changed(opposite),
+            None => Rewrite::Same(call("oppositeTeamOf", vec![team])),
+        }
+    }
+
+    fn string_contains(args: Vec<Value>) -> Rewrite {
+        let [text, search] = two(args);
+        match (literal_text(&text), literal_text(&search)) {
+            (Some(text), Some(search)) => Rewrite::Changed(Value::Bool(text.contains(search))),
+            _ => Rewrite::Same(call("strContains", vec![text, search])),
+        }
+    }
+
+    fn string_slice(args: Vec<Value>) -> Rewrite {
+        let [text, start, length] = three(args);
+        if let (Some(literal), Value::Number(start), Value::Number(length)) =
+            (literal_text(&text), &start, &length)
+        {
+            let units: Vec<u16> = literal.encode_utf16().collect();
+            let from = (start.max(0.0).trunc() as usize).min(units.len());
+            let to = ((start.max(0.0) + length.max(0.0)).trunc() as usize).min(units.len());
+            let slice = String::from_utf16_lossy(&units[from..to.max(from)]);
+            return Rewrite::Changed(Value::String(slice));
+        }
+        Rewrite::Same(call("stringSlice", vec![text, start, length]))
+    }
+
+    fn string_replace(args: Vec<Value>) -> Rewrite {
+        let [text, search, replacement] = three(args);
+        if let (Some(text), Some(search), Some(replacement)) = (
+            literal_text(&text),
+            literal_text(&search),
+            literal_text(&replacement),
+        ) {
+            return Rewrite::Changed(Value::String(text.replace(search, replacement)));
+        }
+        Rewrite::Same(call("stringReplace", vec![text, search, replacement]))
+    }
+
+    /// The position of a literal in a literal array, or `-1`; a search that
+    /// cannot be decided keeps the array only up to its first equal element.
+    fn index_of(&self, args: Vec<Value>) -> Rewrite {
+        let [array, needle] = two(args);
+        let mut elements = match literal_array(array.clone()) {
+            Value::Array(elements) => elements,
+            Value::Call { name, args } if name == "emptyArray" && args.is_empty() => Vec::new(),
+            _ => return Rewrite::Same(call("indexOfArrayValue", vec![array, needle])),
+        };
+        if elements.is_empty() {
+            return Rewrite::Changed(Value::Number(-1.0));
+        }
+        let needle_literal = self.constant(&needle);
+        let mut all_literal = true;
+        let mut kept = elements.len();
+        for (position, element) in elements.iter().enumerate() {
+            all_literal &= self.constant(element);
+            if same(element, &needle) {
+                if needle_literal && all_literal {
+                    return Rewrite::Changed(Value::Number(position as f64));
+                }
+                kept = position + 1;
+                break;
+            }
+        }
+        elements.truncate(kept);
+        if needle_literal && all_literal {
+            return Rewrite::Changed(Value::Number(-1.0));
+        }
+        Rewrite::Same(call(
+            "indexOfArrayValue",
+            vec![Value::Array(elements), needle],
+        ))
+    }
+
     /// Nested strings merge into their parent, and constant arguments become
     /// text.
     fn custom_string(args: Vec<Value>) -> Rewrite {
@@ -718,6 +900,22 @@ impl<'a> OperatorOptimizer<'a> {
         }
     }
 
+    /// A value whose identity the reference can tell at compile time: numbers,
+    /// enum constants, vectors and colours of them, and text. Booleans, `Null`
+    /// and arrays are not.
+    fn constant(&self, value: &Value) -> bool {
+        match value {
+            Value::Number(_) | Value::Enum { .. } => true,
+            Value::Vector { x, y, z } => self.constant(x) && self.constant(y) && self.constant(z),
+            Value::String(_) => !self.strict,
+            Value::Call { name, args } if name == "customString" => args.len() == 1 && !self.strict,
+            Value::Call { name, args } if matches!(name.as_str(), "vector" | "customColor") => {
+                args.iter().all(|arg| self.constant(arg))
+            }
+            _ => false,
+        }
+    }
+
     fn literal(&self, value: &Value) -> bool {
         match value {
             Value::Number(_) | Value::Bool(_) | Value::Null | Value::Enum { .. } => true,
@@ -770,6 +968,35 @@ fn three(args: Vec<Value>) -> [Value; 3] {
     args.try_into().expect("operator arity")
 }
 
+/// The text of a string literal that carries no format arguments.
+fn literal_text(value: &Value) -> Option<&str> {
+    match value {
+        Value::String(text) => Some(text),
+        Value::Call { name, args } if name == "customString" && args.len() == 1 => match &args[0] {
+            Value::String(text) => Some(text),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// The team on the other side of a team constant.
+fn opposite_of(team: &Value) -> Option<Value> {
+    let Value::Enum { value_type, value } = team else {
+        return None;
+    };
+    let value = match value.as_str() {
+        "TEAM_1" => "TEAM_2",
+        "TEAM_2" => "TEAM_1",
+        "ALL" => "ALL",
+        _ => return None,
+    };
+    (value_type == "Team").then(|| Value::Enum {
+        value_type: value_type.clone(),
+        value: value.to_string(),
+    })
+}
+
 fn is_number(value: &Value, expected: f64) -> bool {
     matches!(value, Value::Number(number) if *number == expected)
 }
@@ -780,6 +1007,10 @@ fn zero_vector(value: &Value) -> bool {
 
 fn number_components(value: &Value) -> Option<[f64; 3]> {
     match value {
+        Value::Call { name, args } if name == "vector" => match args.as_slice() {
+            [Value::Number(x), Value::Number(y), Value::Number(z)] => Some([*x, *y, *z]),
+            _ => None,
+        },
         Value::Vector { x, y, z } => match (&**x, &**y, &**z) {
             (Value::Number(x), Value::Number(y), Value::Number(z)) => Some([*x, *y, *z]),
             _ => None,
@@ -839,7 +1070,7 @@ fn vector_fold(left: &Value, right: &Value, apply: fn(f64, f64) -> f64) -> Optio
     ]))
 }
 
-fn falsy(value: &Value) -> bool {
+pub(super) fn falsy(value: &Value) -> bool {
     match value {
         Value::Null | Value::Bool(false) => true,
         Value::Number(number) => *number == 0.0,
@@ -1057,6 +1288,10 @@ pub(super) fn self_modification(action: &Action) -> Option<Action> {
 /// Array literals are written as the `Array` call.
 fn array_call(value: Value) -> Value {
     match value {
+        Value::Array(elements) if elements.is_empty() => Value::Call {
+            name: "emptyArray".to_string(),
+            args: elements,
+        },
         Value::Array(elements) => Value::Call {
             name: "array".to_string(),
             args: elements,

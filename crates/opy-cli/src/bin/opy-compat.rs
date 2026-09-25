@@ -4,6 +4,9 @@
 //! separate from `opy-cli compile`: pinned oracle input must never become part
 //! of the supported compiler API or report schema.
 
+#[path = "opy-compat/probe.rs"]
+mod probe;
+
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -65,6 +68,20 @@ impl ExpectedDomain for CompatibilityExpectedDomain<'_> {
 }
 
 fn main() -> ExitCode {
+    let mut arguments = std::env::args().skip(1);
+    match arguments.next().as_deref() {
+        Some("probe-generate") => return finish(probe::generate().map(|()| true)),
+        Some("probe-compare") => {
+            let (Some(probes), Some(references)) = (arguments.next(), arguments.next()) else {
+                eprintln!("opy-compat: probe-compare <probes.json> <references.json>");
+                return ExitCode::from(2);
+            };
+            return finish(
+                probe::compare(&PathBuf::from(probes), &PathBuf::from(references)).map(|()| true),
+            );
+        }
+        _ => {}
+    }
     match run() {
         Ok(result) => {
             println!(
@@ -76,6 +93,17 @@ fn main() -> ExitCode {
         Err(error) => {
             eprintln!("opy-compat: {error}");
             ExitCode::from(1)
+        }
+    }
+}
+
+fn finish(result: Result<bool, String>) -> ExitCode {
+    match result {
+        Ok(true) => ExitCode::SUCCESS,
+        Ok(false) => ExitCode::from(1),
+        Err(error) => {
+            eprintln!("opy-compat: {error}");
+            ExitCode::from(2)
         }
     }
 }

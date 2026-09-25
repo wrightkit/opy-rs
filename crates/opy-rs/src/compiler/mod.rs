@@ -17,11 +17,13 @@ use workshop_rs::program::SourceMap;
 
 pub mod reconstruct;
 
+mod action_optimization;
 mod backend;
 mod blizzard_global;
 mod hooks;
 mod integration;
 mod lowering;
+mod number_format;
 mod operator_optimization;
 mod settings;
 mod size_optimization;

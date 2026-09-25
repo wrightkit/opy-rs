@@ -49,6 +49,30 @@ Use `run_oracle.py --update` only when intentionally accepting a changed
 result from the pinned reference. Snapshot changes must be reviewed with the
 fixture input and concrete attribution/reproducibility data.
 
+## Builtin-call probe
+
+`probe_builtins.py` compares every catalog-backed manifest function with the
+pinned oracle. For each function it compiles the base call, each trailing or
+single omission of a defaulted argument, each argument position replaced by
+each small literal the position accepts, and the call as a Boolean argument
+and as the replacement of `.replace`, in default and `#!optimizeForSize`
+modes. The oracle compiles them all in one process; the native compiler
+compiles the same programs, and both outputs are parsed by `workshop-rs` and
+compared structurally.
+
+```sh
+cargo build --locked -p opy-cli --features compatibility --bin opy-compat
+python3 tools/overpy/probe_builtins.py --binary target/debug/opy-compat
+```
+
+`--functions a,b` probes only those functions. `probe-gaps.json` records the
+differences that remain, each with its cause and owner; a difference outside
+it, or a recorded gap that matches nothing, fails the run. The report lists
+the manifest functions without a valid sample call, which are the special-
+lowering entries and those whose arguments are ids created by another call.
+A probe the oracle rejects and the native compiler accepts is diagnostics
+parity and is only counted.
+
 `run_native.py` writes producer results and reports under `target/`. The
 comparison stages are compile status, diagnostics, exact/normalized output,
 failure frontier, semantic WIR, source-visible projections, diagnostic code,
