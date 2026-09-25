@@ -209,8 +209,12 @@ fn convert_settings_node(node: crate::hir::SettingsNode) -> workshop_rs::setting
             children,
             span,
         } => TargetNode::Group {
+            children: children
+                .into_iter()
+                .map(|child| escape_main_string(&name, child))
+                .map(convert_settings_node)
+                .collect(),
             name,
-            children: children.into_iter().map(convert_settings_node).collect(),
             span: span.map(convert_settings_span),
         },
         SourceNode::Number { name, value, span } => TargetNode::Number {
@@ -252,6 +256,24 @@ fn convert_settings_node(node: crate::hir::SettingsNode) -> workshop_rs::setting
                 .collect(),
             span: span.map(convert_settings_span),
         },
+    }
+}
+
+/// `main.modeName` and `main.description` are the settings strings the pinned
+/// OverPy escapes for filtered words.
+fn escape_main_string(group: &str, node: crate::hir::SettingsNode) -> crate::hir::SettingsNode {
+    use crate::hir::SettingsNode;
+    match node {
+        SettingsNode::String { name, value, span }
+            if group == "main" && matches!(name.as_str(), "modeName" | "description") =>
+        {
+            SettingsNode::String {
+                value: super::lowering::escape_bad_words(&value),
+                name,
+                span,
+            }
+        }
+        node => node,
     }
 }
 

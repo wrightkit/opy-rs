@@ -1190,7 +1190,7 @@ impl<'a> Lowering<'a> {
             }
         }
         for rule in &mut self.program.rules {
-            rule.name = escape_rule_name(&rule.name);
+            rule.name = escape_bad_words(&rule.name);
         }
         Ok(())
     }
@@ -8577,11 +8577,45 @@ fn modify_catalog_name_from_str(op: &str) -> Option<&'static str> {
     }
 }
 
-/// Rule names lose invisible formatting characters, and the Workshop's
-/// filtered word `rigger` is split with a soft hyphen, as the pinned OverPy
-/// does when it writes a rule name.
-fn escape_rule_name(name: &str) -> String {
-    let stripped: Vec<char> = name
+/// Words the Workshop refuses in a rule name. Each entry is the text before the
+/// soft hyphen, the text after it, and whether the word must stand alone.
+/// The pinned OverPy applies them in this order, each over the whole name.
+const FILTERED_RULE_NAME_WORDS: [(&str, &str, bool); 28] = [
+    ("1", "488", false),
+    ("a", "ccount", false),
+    ("a", "dmin", false),
+    ("a", "ss", true),
+    ("b", "attlenet", false),
+    ("b", "liz", true),
+    ("b", "lizzaard", true),
+    ("b", "lizzard", false),
+    ("b", "low", true),
+    ("bn", "et", true),
+    ("b", "razil", true),
+    ("c", "anada", true),
+    ("d", "enmark", true),
+    ("e", "ngland", true),
+    ("f", "inland", true),
+    ("f", "uck", false),
+    ("g", "oddamn", false),
+    ("i", "reland", true),
+    ("n", "etherlands", true),
+    ("n", "orway", true),
+    ("p", "oland", true),
+    ("p", "olish", true),
+    ("s", "anctuary", true),
+    ("s", "atan", true),
+    ("s", "ingapore", true),
+    ("s", "hit", false),
+    ("s", "weden", true),
+    ("s", "witzerland", true),
+];
+
+/// Rule names and the `Mode Name` and `Description` settings strings lose
+/// invisible formatting characters, and the Workshop's filtered words are split
+/// with a soft hyphen, as the pinned OverPy does when it writes them.
+pub(super) fn escape_bad_words(name: &str) -> String {
+    let mut text: Vec<char> = name
         .chars()
         .filter(|character| {
             !matches!(
@@ -8590,57 +8624,99 @@ fn escape_rule_name(name: &str) -> String {
             )
         })
         .collect();
-    let mut escaped = String::with_capacity(name.len());
-    let mut index = 0;
-    while index < stripped.len() {
-        escaped.push(stripped[index]);
-        if matches!(stripped[index], 'a' | 'A')
-            && stripped[index + 1..]
-                .iter()
-                .take(4)
-                .collect::<String>()
-                .eq_ignore_ascii_case("dmin")
-        {
-            escaped.push('\u{00AD}');
-        }
-        if matches!(stripped[index], 'r' | 'R') {
-            if let Some(split) = filtered_word_split(&stripped, index) {
-                escaped.extend(&stripped[index + 1..split]);
-                escaped.push('\u{00AD}');
-                index = split;
-                continue;
-            }
-        }
-        index += 1;
+    for (head, tail, standalone) in FILTERED_RULE_NAME_WORDS {
+        text = split_filtered_word(&text, head, tail, standalone);
     }
-    escaped
+    split_spaced_rigger(&text).into_iter().collect()
 }
 
-/// Where the soft hyphen goes when `r i gg e r` (whitespace allowed between
-/// the letters, ending at a word boundary) starts at `start`.
-fn filtered_word_split(text: &[char], start: usize) -> Option<usize> {
+/// ECMAScript `\s`, which unlike Unicode White_Space excludes U+0085 and
+/// includes U+FEFF.
+fn is_js_whitespace(character: char) -> bool {
+    matches!(character, '\u{FEFF}') || (character.is_whitespace() && character != '\u{0085}')
+}
+
+fn is_word_character(character: char) -> bool {
+    character.is_ascii_alphanumeric() || character == '_'
+}
+
+/// Puts a soft hyphen between `head` and `tail` in every case-insensitive
+/// occurrence of `head` + `tail`, left to right without overlap.
+fn split_filtered_word(text: &[char], head: &str, tail: &str, standalone: bool) -> Vec<char> {
+    let word: Vec<char> = head.chars().chain(tail.chars()).collect();
+    let head_length = head.chars().count();
+    let mut result = Vec::with_capacity(text.len() + 1);
+    let mut index = 0;
+    while index < text.len() {
+        let end = index + word.len();
+        let matches = end <= text.len()
+            && text[index..end]
+                .iter()
+                .zip(&word)
+                .all(|(found, expected)| found.eq_ignore_ascii_case(expected))
+            && (!standalone
+                || (!index
+                    .checked_sub(1)
+                    .is_some_and(|before| is_word_character(text[before]))
+                    && !text.get(end).is_some_and(|after| is_word_character(*after))));
+        if matches {
+            result.extend(&text[index..index + head_length]);
+            result.push('\u{00AD}');
+            result.extend(&text[index + head_length..end]);
+            index = end;
+        } else {
+            result.push(text[index]);
+            index += 1;
+        }
+    }
+    result
+}
+
+/// The last word is `r i gg e r` with optional whitespace between the letters
+/// except the two `g`,
+/// ending at a word boundary; the soft hyphen follows the `i` and its whitespace.
+fn split_spaced_rigger(text: &[char]) -> Vec<char> {
+    let mut result = Vec::with_capacity(text.len() + 1);
+    let mut index = 0;
+    while index < text.len() {
+        if matches!(text[index], 'r' | 'R')
+            && let Some((split, end)) = spaced_rigger_match(text, index)
+        {
+            result.extend(&text[index..split]);
+            result.push('\u{00AD}');
+            result.extend(&text[split..end]);
+            index = end;
+        } else {
+            result.push(text[index]);
+            index += 1;
+        }
+    }
+    result
+}
+
+/// Where the soft hyphen goes and where the match ends when `r i gg e r`
+/// starts at `start`.
+fn spaced_rigger_match(text: &[char], start: usize) -> Option<(usize, usize)> {
     let mut position = start + 1;
     let mut split = None;
-    for letter in ['i', 'g', 'g', 'e', 'r'] {
-        while text.get(position).is_some_and(|c| c.is_whitespace()) {
+    for (nth, letter) in ['i', 'g', 'g', 'e', 'r'].into_iter().enumerate() {
+        // The two `g` are adjacent; whitespace may only precede the others.
+        while nth != 2 && text.get(position).is_some_and(|c| is_js_whitespace(*c)) {
             position += 1;
         }
         if !text.get(position)?.eq_ignore_ascii_case(&letter) {
             return None;
         }
-        if letter == 'i' {
-            let mut after = position + 1;
-            while text.get(after).is_some_and(|c| c.is_whitespace()) {
-                after += 1;
-            }
-            split = Some(after);
-        }
         position += 1;
+        if letter == 'i' {
+            while text.get(position).is_some_and(|c| is_js_whitespace(*c)) {
+                position += 1;
+            }
+            split = Some(position);
+        }
     }
-    let boundary = text
-        .get(position)
-        .is_none_or(|c| !(c.is_alphanumeric() || *c == '_'));
-    boundary.then_some(split?)
+    let boundary = text.get(position).is_none_or(|c| !is_word_character(*c));
+    boundary.then_some((split?, position))
 }
 
 const BUGGED_MAPS: [&str; 4] = ["COLOSSEO", "ESPERANCA", "SAMOA", "THRONE_OF_ANUBIS"];
