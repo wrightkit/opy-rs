@@ -315,3 +315,18 @@ fn nested_switch_break_matches_upstream_noop_elision() {
         .expect("nested switch break must follow the pinned upstream lowering");
     assert!(artifact.wir.rules.is_empty());
 }
+
+#[test]
+fn size_optimization_spells_zero_and_one_as_false_and_true_where_the_parameter_allows() {
+    let source = "#!optimizeForSize\nrule \"r\":\n    @Event eachPlayer\n    eventPlayer.startForcingThrottle(0, 1, 0, 0.5, 0, 1)\n";
+    let hir = crate::compile(source, "source.opy", Path::new(".")).unwrap();
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+
+    assert!(
+        artifact.emitted.contains(
+            "Start Forcing Throttle(Event Player, False, True, False, 0.5, False, True);"
+        ),
+        "{}",
+        artifact.emitted
+    );
+}
