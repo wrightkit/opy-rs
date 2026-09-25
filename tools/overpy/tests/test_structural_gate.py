@@ -40,6 +40,14 @@ class ClassifyTests(unittest.TestCase):
             _, unrecorded, used = structural_gate.classify(project, entry, [item], [EXCEPTION])
             self.assertEqual((unrecorded, used), ([item], set()))
 
+    def test_a_recorded_difference_does_not_hide_a_second_one_in_the_same_rule(self):
+        second = difference('"Rule"', "Rule.conditions")
+        recorded, unrecorded, _ = structural_gate.classify(
+            "p", "src/main.opy",
+            [difference('"Rule"', "Rule.actions"), second], [EXCEPTION],
+        )
+        self.assertEqual((len(recorded), unrecorded), (1, [second]))
+
     def test_the_report_names_the_rule_and_path(self):
         text = structural_gate.describe(difference('"Rule"', "Rule.conditions.[1]Condition"))
         self.assertIn('rules[3] "Rule": Rule.conditions.[1]Condition', text)
