@@ -73,12 +73,28 @@ jobs:
           --results target/opy-rs-compiler-results
           --report target/opy-rs-compiler-report.json
 
+      - name: Install pinned OverPy oracle
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.10.0
+
+      - name: Install oracle dependencies
+        run: pnpm install --dir tools/overpy/oracle --frozen-lockfile
+
+      - name: Run structural convergence gate for pinned real projects
+        run: >-
+          python3 -B tools/overpy/structural_gate.py
+          --binary target/debug/opy-compat
+          --report target/opy-rs-structural-gate-report.json
+
       - name: Upload compiler compatibility report
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: opy-rs-compiler-compatibility-report
-          path: target/opy-rs-compiler-report.json
+          path: |
+            target/opy-rs-compiler-report.json
+            target/opy-rs-structural-gate-report.json
           if-no-files-found: ignore
 
   macro-runtime-ports:

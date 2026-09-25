@@ -73,6 +73,35 @@ lowering entries and those whose arguments are ids created by another call.
 A probe the oracle rejects and the native compiler accepts is diagnostics
 parity and is only counted.
 
+## Structural convergence gate
+
+`structural_gate.py` enforces the structural compatibility contract for real
+projects. `structural-gate.json` pins each project by repository and full
+commit SHA (never a ref) and lists its entry files. The gate fetches the
+commit into `target/structural-gate/`, compiles each entry with the pinned
+OverPy oracle and with `opy-rs`, parses both outputs with `workshop-rs`, and
+compares the canonical programs. Projects whose license does not allow
+redistribution, such as Bastion, are fetched at test time and never vendored;
+redistributable projects stay in the corpus, where the semantic-WIR stage
+applies the same comparison.
+
+```sh
+pnpm install --dir tools/overpy/oracle
+cargo build --locked -p opy-cli --features compatibility --bin opy-compat
+python3 tools/overpy/structural_gate.py --binary target/debug/opy-compat
+```
+
+A difference is reported by section, item name, and canonical path of the
+first diverging node with both sides' values, never as a text diff. Every
+difference fails unless `exceptions` in `structural-gate.json` records it by
+project, entry, section, item name, path, and the compared `native` and
+`reference` values (so a later change at the same path is not accepted),
+together with the upstream
+behavior, the `opy-rs` behavior, the approving decision, and the pinning test.
+A recorded exception that matches no difference fails the full run as stale.
+Approved exceptions and their decisions are listed in
+[`language-core.md`](../../docs/architecture/language-core.md#approved-exceptions).
+
 `run_native.py` writes producer results and reports under `target/`. The
 comparison stages are compile status, diagnostics, exact/normalized output,
 failure frontier, semantic WIR, source-visible projections, diagnostic code,

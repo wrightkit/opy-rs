@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "projects": [
+    {
+      "id": "bastion",
+      "repository": "https://github.com/OWBastion/Bastion.git",
+      "commit": "f693704f6ce657ccb73cbc8632568ec897f7aa20",
+      "license": "Apache-2.0 with additional non-commercial terms; fetched at test time, never vendored",
+      "entries": ["src/main.opy", "src/externalMain.opy"]
+    }
+  ],
+  "exceptions": []
+}

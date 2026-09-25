@@ -6,6 +6,8 @@
 
 #[path = "opy-compat/probe.rs"]
 mod probe;
+#[path = "opy-compat/structural.rs"]
+mod structural;
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -42,6 +44,15 @@ struct SemanticWIRComparison {
     input_sha256: String,
     reference_input_sha256: String,
     equivalent: bool,
+    differences: Vec<structural::Difference>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ProjectComparison {
+    schema_version: u32,
+    equivalent: bool,
+    differences: Vec<structural::Difference>,
 }
 
 struct CompatibilityExpectedDomain<'a> {
@@ -79,6 +90,21 @@ fn main() -> ExitCode {
             return finish(
                 probe::compare(&PathBuf::from(probes), &PathBuf::from(references)).map(|()| true),
             );
+        }
+        Some("project-compare") => {
+            return match project_compare(arguments) {
+                Ok(result) => {
+                    println!(
+                        "{}",
+                        serde_json::to_string(&result).expect("comparison serializes")
+                    );
+                    ExitCode::SUCCESS
+                }
+                Err(error) => {
+                    eprintln!("opy-compat: {error}");
+                    ExitCode::from(2)
+                }
+            };
         }
         _ => {}
     }
@@ -123,35 +149,9 @@ fn run() -> Result<CompatibilityResult, String> {
         .as_str()
         .ok_or_else(|| "oracle compile.workshop is missing".to_string())?;
 
-    let compiler =
-        Compiler::new().map_err(|error| format!("cannot initialize compiler: {error}"))?;
-    let artifact = compiler
-        .compile_source_with_locale(
-            &source_text,
-            &args.source.to_string_lossy(),
-            &args.root,
-            &Locale::new("en-US"),
-        )
-        .map_err(|error| error.to_string())?;
-    let catalog = Catalog::builtin().map_err(|error| error.to_string())?;
-    let context = CompatibilityExpectedDomain { catalog: &catalog };
-    let reference_wir = workshop_rs::parser::parse_with_context(
-        &strip_workshop_comments(reference_workshop),
-        &catalog,
-        &Locale::new("en-US"),
-        &context,
-    )
-    .map_err(|error| error.to_string())?;
-
-    // Both sides are compared as Workshop text parsed by the same parser, so
-    // representation choices in the in-memory program do not count.
-    let native_wir = workshop_rs::parser::parse_with_context(
-        &strip_workshop_comments(&artifact.emitted),
-        &catalog,
-        &Locale::new("en-US"),
-        &context,
-    )
-    .map_err(|error| error.to_string())?;
+    let (native_wir, reference_wir) =
+        compile_and_parse(&args.source, &args.root, &source_text, reference_workshop)?;
+    let differences = structural::differences(&native_wir, &reference_wir);
 
     Ok(CompatibilityResult {
         schema_version: 1,
@@ -160,9 +160,77 @@ fn run() -> Result<CompatibilityResult, String> {
             algorithm: ALGORITHM,
             input_sha256: args.input_sha256,
             reference_input_sha256: reference_input_sha256.to_string(),
-            equivalent: structurally_identical(&native_wir, &reference_wir),
+            equivalent: differences.is_empty(),
+            differences,
         },
     })
+}
+
+/// `project-compare --source <entry> --root <dir> --reference <workshop>`:
+/// compile a project natively and compare it with an already compiled
+/// reference output.
+fn project_compare<I: Iterator<Item = String>>(mut args: I) -> Result<ProjectComparison, String> {
+    let (mut source, mut root, mut reference) = (None, None, None);
+    while let Some(argument) = args.next() {
+        let target = match argument.as_str() {
+            "--source" => &mut source,
+            "--root" => &mut root,
+            "--reference" => &mut reference,
+            other => return Err(format!("unknown argument {other}")),
+        };
+        *target = Some(PathBuf::from(
+            args.next()
+                .ok_or_else(|| format!("missing value for {argument}"))?,
+        ));
+    }
+    let (Some(source), Some(root), Some(reference)) = (source, root, reference) else {
+        return Err("project-compare needs --source, --root and --reference".to_string());
+    };
+    let read = |path: &PathBuf| {
+        std::fs::read_to_string(path)
+            .map_err(|error| format!("cannot read '{}': {error}", path.display()))
+    };
+    let (native, reference) =
+        compile_and_parse(&source, &root, &read(&source)?, &read(&reference)?)?;
+    let differences = structural::differences(&native, &reference);
+    Ok(ProjectComparison {
+        schema_version: 1,
+        equivalent: differences.is_empty(),
+        differences,
+    })
+}
+
+/// Compile `source_text` natively and parse both it and the reference output
+/// with the same parser, so representation choices in the in-memory program do
+/// not count.
+fn compile_and_parse(
+    source: &std::path::Path,
+    root: &std::path::Path,
+    source_text: &str,
+    reference_workshop: &str,
+) -> Result<(workshop_rs::Program, workshop_rs::Program), String> {
+    let compiler =
+        Compiler::new().map_err(|error| format!("cannot initialize compiler: {error}"))?;
+    let artifact = compiler
+        .compile_source_with_locale(
+            source_text,
+            &source.to_string_lossy(),
+            root,
+            &Locale::new("en-US"),
+        )
+        .map_err(|error| error.to_string())?;
+    let catalog = Catalog::builtin().map_err(|error| error.to_string())?;
+    let context = CompatibilityExpectedDomain { catalog: &catalog };
+    let parse = |text: &str| {
+        workshop_rs::parser::parse_with_context(
+            &strip_workshop_comments(text),
+            &catalog,
+            &Locale::new("en-US"),
+            &context,
+        )
+        .map_err(|error| error.to_string())
+    };
+    Ok((parse(&artifact.emitted)?, parse(reference_workshop)?))
 }
 
 fn strip_workshop_comments(source: &str) -> String {
@@ -240,29 +308,7 @@ where
     })
 }
 
-/// Structural identity of two parsed programs: settings, variables,
-/// subroutines, and rules must be identical. Only source provenance, which
-/// the public program keeps private, is ignored. The semantic
-/// `roundtrip::equivalent` is deliberately not used: it treats structurally
-/// different but behaviorally equal programs as the same.
+/// Structural identity of two parsed programs; see [`structural`].
 fn structurally_identical(native: &workshop_rs::Program, reference: &workshop_rs::Program) -> bool {
-    fn shape(program: &workshop_rs::Program) -> String {
-        let dump = format!(
-            "{:#?}\n{:#?}\n{:#?}\n{:#?}\n{:#?}",
-            program.settings,
-            program.global_variables,
-            program.player_variables,
-            program.subroutines,
-            program.rules
-        );
-        // Source positions are presentation, not structure.
-        dump.lines()
-            .filter(|line| {
-                let line = line.trim_start();
-                !(line.starts_with("line: ") || line.starts_with("col: "))
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
-    }
-    shape(native) == shape(reference)
+    structural::differences(native, reference).is_empty()
 }
