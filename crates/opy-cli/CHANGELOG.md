@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.57](https://github.com/wrightkit/opy-rs/compare/opy-cli-v0.1.56...opy-cli-v0.1.57) - 2026-09-25
+
+### Other
+
+- *(compat)* gate real projects on structural convergence with pinned OverPy ([#379](https://github.com/wrightkit/opy-rs/pull/379))
+
 ## [0.1.56](https://github.com/wrightkit/opy-rs/compare/opy-cli-v0.1.55...opy-cli-v0.1.56) - 2026-09-25
 
 ### Fixed
