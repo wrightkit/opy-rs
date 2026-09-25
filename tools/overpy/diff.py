@@ -714,6 +714,7 @@ def compare_compiler_fixture(
                     inputSha256=semantic.get("inputSha256"),
                     referenceInputSha256=semantic.get("referenceInputSha256"),
                     equivalent=semantic.get("equivalent"),
+                    differences=semantic.get("differences", []),
                     expectedEquivalent=expected_equivalent,
                     referenceError=reference_error,
                 )
