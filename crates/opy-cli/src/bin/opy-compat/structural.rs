@@ -89,18 +89,20 @@ fn compare(
         if native_item == reference_item {
             continue;
         }
-        let (path, native_line, reference_line) = diverge(
+        let item_name = reference_item.or(native_item).and_then(|item| name(item));
+        for (path, native, reference) in diverge(
             native_item.map_or("", String::as_str),
             reference_item.map_or("", String::as_str),
-        );
-        found.push(Difference {
-            section,
-            index,
-            name: reference_item.or(native_item).and_then(|item| name(item)),
-            path,
-            native: native_line,
-            reference: reference_line,
-        });
+        ) {
+            found.push(Difference {
+                section,
+                index,
+                name: item_name.clone(),
+                path,
+                native,
+                reference,
+            });
+        }
     }
 }
 
@@ -114,27 +116,29 @@ fn name(dump: &str) -> Option<String> {
     })
 }
 
-/// First diverging line of two dumps, with the path of the enclosing nodes.
-fn diverge(native: &str, reference: &str) -> (String, String, String) {
+/// Every diverging line of two dumps, each with the path of its enclosing
+/// nodes, so a recorded difference cannot hide a later one in the same item.
+/// Lines are aligned by position; a shifted tail is reported line by line.
+fn diverge(native: &str, reference: &str) -> Vec<(String, String, String)> {
     let native: Vec<&str> = native.lines().collect();
     let reference: Vec<&str> = reference.lines().collect();
-    let at = native
-        .iter()
-        .zip(&reference)
-        .position(|(left, right)| left != right)
-        .unwrap_or_else(|| native.len().min(reference.len()));
-    let shown = |lines: &[&str]| {
+    let shown = |lines: &[&str], at: usize| {
         lines
             .get(at)
             .map_or("<absent>", |line| line.trim())
             .to_string()
     };
-    let anchor = if at < reference.len() {
-        &reference
-    } else {
-        &native
-    };
-    (path(anchor, at), shown(&native), shown(&reference))
+    (0..native.len().max(reference.len()))
+        .filter(|&at| native.get(at) != reference.get(at))
+        .map(|at| {
+            let anchor = if at < reference.len() {
+                &reference
+            } else {
+                &native
+            };
+            (path(anchor, at), shown(&native, at), shown(&reference, at))
+        })
+        .collect()
 }
 
 struct Frame {
@@ -212,10 +216,21 @@ mod tests {
             "Is Game In Progress == True && Global.A == 1;",
         );
         let found = differences(&parse(&merged), &parse(TWO_CONDITIONS));
-        assert_eq!(found.len(), 1);
+        assert!(!found.is_empty());
         assert_eq!((found[0].section, found[0].index), ("rules", 0));
         assert_eq!(found[0].name.as_deref(), Some("\"R\""));
         assert!(found[0].path.contains("conditions"), "{}", found[0].path);
+    }
+
+    #[test]
+    fn a_second_difference_in_the_same_rule_is_still_reported() {
+        let two = TWO_CONDITIONS
+            .replace("Global.A == 1", "Global.A == 2")
+            .replace("Wait(1,", "Wait(2,");
+        let found = differences(&parse(&two), &parse(TWO_CONDITIONS));
+        assert_eq!(found.len(), 2, "{found:?}");
+        assert!(found.iter().all(|difference| difference.index == 0));
+        assert_ne!(found[0].path, found[1].path);
     }
 
     #[test]
