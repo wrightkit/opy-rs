@@ -30,6 +30,91 @@ const LITERALS: [&str; 12] = [
     "[]",
 ];
 
+/// Workshop setting calls the manifest does not list, with and without the
+/// trailing sort order: (function, variant, call).
+const SETTING_CALLS: [(&str, &str, &str); 16] = [
+    (
+        "createWorkshopSettingBool",
+        "base",
+        "createWorkshopSettingBool(\"C\", \"N\", true)",
+    ),
+    (
+        "createWorkshopSettingBool",
+        "sort-order",
+        "createWorkshopSettingBool(\"C\", \"N\", true, 5)",
+    ),
+    (
+        "createWorkshopSettingInt",
+        "base",
+        "createWorkshopSettingInt(\"C\", \"N\", 1, 0, 10)",
+    ),
+    (
+        "createWorkshopSettingInt",
+        "sort-order",
+        "createWorkshopSettingInt(\"C\", \"N\", 1, 0, 10, 5)",
+    ),
+    (
+        "createWorkshopSettingFloat",
+        "base",
+        "createWorkshopSettingFloat(\"C\", \"N\", 1, 0, 10)",
+    ),
+    (
+        "createWorkshopSettingFloat",
+        "sort-order",
+        "createWorkshopSettingFloat(\"C\", \"N\", 1, 0, 10, 5)",
+    ),
+    (
+        "createWorkshopSettingEnum",
+        "base",
+        "createWorkshopSettingEnum(\"C\", \"N\", 0, [\"a\", \"b\"])",
+    ),
+    (
+        "createWorkshopSettingEnum",
+        "sort-order",
+        "createWorkshopSettingEnum(\"C\", \"N\", 0, [\"a\", \"b\"], 5)",
+    ),
+    (
+        "createWorkshopSettingHero",
+        "base",
+        "createWorkshopSettingHero(\"C\", \"N\", Hero.ANA)",
+    ),
+    (
+        "createWorkshopSettingHero",
+        "sort-order",
+        "createWorkshopSettingHero(\"C\", \"N\", Hero.ANA, 5)",
+    ),
+    (
+        "createWorkshopSetting",
+        "bool",
+        "createWorkshopSetting(bool, \"C\", \"N\", true)",
+    ),
+    (
+        "createWorkshopSetting",
+        "bool-sort-order",
+        "createWorkshopSetting(bool, \"C\", \"N\", true, 5)",
+    ),
+    (
+        "createWorkshopSetting",
+        "int",
+        "createWorkshopSetting(int[0:10], \"C\", \"N\", 1)",
+    ),
+    (
+        "createWorkshopSetting",
+        "int-sort-order",
+        "createWorkshopSetting(int[0:10], \"C\", \"N\", 1, 5)",
+    ),
+    (
+        "createWorkshopSetting",
+        "float",
+        "createWorkshopSetting(float[0:10], \"C\", \"N\", 1)",
+    ),
+    (
+        "createWorkshopSetting",
+        "float-sort-order",
+        "createWorkshopSetting(float[0:10], \"C\", \"N\", 1, 5)",
+    ),
+];
+
 #[derive(Debug, Serialize, Deserialize)]
 struct Probe {
     id: String,
@@ -78,6 +163,14 @@ pub(super) fn generate() -> Result<(), String> {
                     source: source(prefix, &statement),
                 });
             }
+        }
+    }
+    for (function, variant, call) in SETTING_CALLS {
+        for (mode, prefix) in [("default", ""), ("size", "#!optimizeForSize\n")] {
+            probes.push(Probe {
+                id: format!("{mode}:{function}:{variant}"),
+                source: source(prefix, &format!("g = {call}")),
+            });
         }
     }
     println!(
