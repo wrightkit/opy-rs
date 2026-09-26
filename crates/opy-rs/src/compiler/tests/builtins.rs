@@ -491,3 +491,39 @@ rule "r":
         .expect("getAmmo's omitted clip must lower");
     assert!(artifact.emitted.contains("Ammo(Event Player, 0)"));
 }
+
+fn emitted(source: &str) -> String {
+    let hir = crate::compile(source, "source.opy", Path::new(".")).expect("source must resolve");
+    Compiler::new()
+        .expect("released Workshop contract must load")
+        .compile_hir(&hir)
+        .expect("source must lower")
+        .emitted
+}
+
+#[test]
+fn start_rule_takes_a_declared_subroutine_like_async() {
+    let out = emitted(
+        "subroutine sub\nrule \"r\":\n    @Event global\n    startRule(sub, AsyncBehavior.RESTART)\n",
+    );
+    assert!(out.contains("Start Rule(sub, Restart Rule)"), "{out}");
+}
+
+#[test]
+fn create_projectile_defaults_owner_position_and_direction_to_null() {
+    let out = emitted(
+        "rule \"r\":\n    @Event global\n    createProjectile(Projectile.ORB, damage=5, speed=3)\n",
+    );
+    assert!(
+        out.contains("Create Projectile(Orb Projectile, Null, Null, Null, To World"),
+        "{out}"
+    );
+}
+
+#[test]
+fn declare_round_victory_accepts_its_reference_keyword() {
+    let out = emitted(
+        "rule \"r\":\n    @Event global\n    declareRoundVictory(roundWinningTeam=Team.1)\n",
+    );
+    assert!(out.contains("Declare Round Victory"), "{out}");
+}

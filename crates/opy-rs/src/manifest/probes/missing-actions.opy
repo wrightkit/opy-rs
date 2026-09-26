@@ -8,6 +8,7 @@ rule "missing actions":
     declareDraw()
     declareRoundDraw()
     declareRoundVictory(Team.1)
+    declareRoundVictory(roundWinningTeam=Team.2)
     destroyAllProgressBarInWorldTexts()
     destroyDummy(Team.1, 1)
     enableGamemodeCompletion()

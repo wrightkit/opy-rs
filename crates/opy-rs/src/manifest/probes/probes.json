@@ -361,8 +361,8 @@
     {
       "expect": "success",
       "id": "missing-actions",
-      "outputSha256": "6966358c78b8fe1f0a893c901a58a7928c604f5160b32715dfad0d7e3330553d",
-      "sha256": "12c512000c556ef616bbb3b6c1cef9d2a6e419cf294f558218242b483c74202a",
+      "outputSha256": "43ac2d338b6206f6e2f51ea643dc892ff05cf4b539b280c1d0195e146ffd1a3d",
+      "sha256": "31b55160c3c8340a91531d8a4c26b0fe48c8312898d7bd1ed21f9528a5b0859e",
       "source": "missing-actions.opy"
     }
   ]

@@ -742,7 +742,7 @@ impl Lowerer {
                         span: Some(span.into()),
                     };
                 }
-                if name == "async" {
+                if matches!(name, "async" | "startRule") {
                     let lowered = args
                         .iter()
                         .enumerate()

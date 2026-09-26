@@ -6546,7 +6546,7 @@
       "params": [
         {
           "domain": "Team",
-          "name": "team"
+          "name": "roundWinningTeam"
         }
       ]
     },
@@ -6697,7 +6697,7 @@
         },
         {
           "domain": "StartRuleBehavior",
-          "name": "behavior"
+          "name": "ifAlreadyExecuting"
         }
       ]
     },
@@ -6714,12 +6714,21 @@
           "name": "type"
         },
         {
+          "default": {
+            "null": true
+          },
           "name": "player"
         },
         {
+          "default": {
+            "null": true
+          },
           "name": "startPosition"
         },
         {
+          "default": {
+            "null": true
+          },
           "name": "direction"
         },
         {
