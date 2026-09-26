@@ -225,3 +225,60 @@ rule "real player helpers":
         .compile_source(source, "real-player-callables.opy", Path::new("."))
         .expect("real player callable forms must lower");
 }
+
+#[test]
+fn pinned_value_functions_fold_literals_like_the_reference() {
+    let source = r#"globalvar result
+rule "folds":
+    @Event global
+    result = strLen("abc")
+    result = acos(2)
+    result = asin(-5)
+    result = acosDeg(0.5)
+    result = crossProduct(vect(1, 0, 0), vect(0, 1, 0))
+    result = normalize(vect(0, 0, 5))
+    result = angleDifference(10, 350)
+"#;
+    let emitted = Compiler::new()
+        .unwrap()
+        .compile_source_artifact(source, "folds.opy", Path::new("."))
+        .expect("literal value functions must compile")
+        .emitted;
+
+    for expected in [
+        "Set Global Variable(result, 3);",
+        "Set Global Variable(result, 0);",
+        "Set Global Variable(result, -1.570796326794896);",
+        "Set Global Variable(result, 0.018277045187202);",
+        "Set Global Variable(result, Forward);",
+        "Set Global Variable(result, Angle Difference(10, 350));",
+    ] {
+        assert!(emitted.contains(expected), "missing {expected}\n{emitted}");
+    }
+}
+
+#[test]
+fn event_direction_flags_and_hero_setting_lower_to_their_canonical_calls() {
+    let source = r#"globalvar result
+globalvar heroSetting = createWorkshopSettingHero("cat", "hero", Hero.ANA)
+rule "event values":
+    @Event playerDealtDamage
+    result = eventDirection
+    result = eventWasEnvironment
+    result = eventWasHealthPack
+"#;
+    let emitted = Compiler::new()
+        .unwrap()
+        .compile_source_artifact(source, "event-values.opy", Path::new("."))
+        .expect("bare event values and the hero setting must compile")
+        .emitted;
+
+    for expected in [
+        "Workshop Setting Hero(Custom String(\"cat\"), Custom String(\"hero\"), Ana, 0)",
+        "Set Global Variable(result, Event Direction);",
+        "Set Global Variable(result, Event Was Environment);",
+        "Set Global Variable(result, Event Was Health Pack);",
+    ] {
+        assert!(emitted.contains(expected), "missing {expected}\n{emitted}");
+    }
+}

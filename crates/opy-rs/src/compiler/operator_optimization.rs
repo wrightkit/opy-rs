@@ -110,6 +110,28 @@ impl<'a> OperatorOptimizer<'a> {
             ("cosDeg", 1) => Self::unary("cosDeg", args, |degrees| {
                 (degrees * (std::f64::consts::PI / 180.0)).cos()
             }),
+            ("tan", 1) => Self::unary("tan", args, f64::tan),
+            ("tanDeg", 1) => Self::unary("tanDeg", args, |degrees| {
+                (degrees * (std::f64::consts::PI / 180.0)).tan()
+            }),
+            // The reference clamps the inverse trigonometric argument and
+            // converts the Degrees forms' radian result with the degree-to-
+            // radian factor rather than the radian-to-degree one.
+            ("acos", 1) => Self::unary("acos", args, |value| value.clamp(-1.0, 1.0).acos()),
+            ("acosDeg", 1) => Self::unary("acosDeg", args, |value| {
+                value.clamp(-1.0, 1.0).acos() * (std::f64::consts::PI / 180.0)
+            }),
+            ("asin", 1) => Self::unary("asin", args, |value| value.clamp(-1.0, 1.0).asin()),
+            ("asinDeg", 1) => Self::unary("asinDeg", args, |value| {
+                value.clamp(-1.0, 1.0).asin() * (std::f64::consts::PI / 180.0)
+            }),
+            ("atan2", 2) => Self::binary("atan2", args, f64::atan2),
+            ("atan2Deg", 2) => Self::binary("atan2Deg", args, |numerator, denominator| {
+                numerator.atan2(denominator) * (std::f64::consts::PI / 180.0)
+            }),
+            ("crossProduct", 2) => Self::cross_product(args),
+            ("normalize", 1) => Self::normalize(args),
+            ("strLen", 1) => Self::string_length(args),
             ("squareRoot", 1) => self.square_root(args),
             ("min", 2) => Self::extremum("min", args, f64::min),
             ("max", 2) => Self::extremum("max", args, f64::max),
@@ -483,6 +505,62 @@ impl<'a> OperatorOptimizer<'a> {
         match number {
             Value::Number(number) => Rewrite::Changed(Value::Number(apply(number))),
             other => Rewrite::Same(call(name, vec![other])),
+        }
+    }
+
+    fn binary(name: &str, args: Vec<Value>, apply: fn(f64, f64) -> f64) -> Rewrite {
+        match two(args) {
+            [Value::Number(left), Value::Number(right)] => {
+                Rewrite::Changed(Value::Number(apply(left, right)))
+            }
+            [left, right] => Rewrite::Same(call(name, vec![left, right])),
+        }
+    }
+
+    fn cross_product(args: Vec<Value>) -> Rewrite {
+        let [left, right] = two(args);
+        match (number_components(&left), number_components(&right)) {
+            (Some(a), Some(b)) => Rewrite::Changed(vector([
+                a[1] * b[2] - a[2] * b[1] + 0.0,
+                a[2] * b[0] - a[0] * b[2] + 0.0,
+                a[0] * b[1] - a[1] * b[0] + 0.0,
+            ])),
+            _ => Rewrite::Same(call("crossProduct", vec![left, right])),
+        }
+    }
+
+    fn normalize(args: Vec<Value>) -> Rewrite {
+        let [operand] = one(args);
+        let Some(components) = number_components(&operand) else {
+            return Rewrite::Same(call("normalize", vec![operand]));
+        };
+        let length = components
+            .iter()
+            .map(|part| part * part)
+            .sum::<f64>()
+            .sqrt();
+        Rewrite::Changed(vector(if length == 0.0 {
+            [0.0; 3]
+        } else {
+            components.map(|part| part / length + 0.0)
+        }))
+    }
+
+    fn string_length(args: Vec<Value>) -> Rewrite {
+        let [text] = one(args);
+        let literal = match &text {
+            Value::String(text) => Some(text),
+            Value::Call { name, args } if name == "customString" && args.len() == 1 => {
+                match &args[0] {
+                    Value::String(text) => Some(text),
+                    _ => None,
+                }
+            }
+            _ => None,
+        };
+        match literal {
+            Some(text) => Rewrite::Changed(Value::Number(text.chars().count() as f64)),
+            None => Rewrite::Same(call("strLen", vec![text])),
         }
     }
 

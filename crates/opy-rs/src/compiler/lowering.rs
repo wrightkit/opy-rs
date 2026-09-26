@@ -5937,12 +5937,22 @@ impl<'a> Lowering<'a> {
                         | "createWorkshopSettingEnum"
                         | "createWorkshopSettingInt"
                         | "createWorkshopSettingFloat"
+                        | "createWorkshopSettingHero"
                 ) {
                     let mut lowered = args
                         .iter()
                         .map(|arg| self.lower_value(arg))
                         .collect::<Result<Vec<_>, _>>()?;
-                    if name == "createWorkshopSettingFloat" && lowered.len() == 5 {
+                    let sort_order_index = if name == "createWorkshopSettingHero" {
+                        3
+                    } else {
+                        5
+                    };
+                    if matches!(
+                        name.as_str(),
+                        "createWorkshopSettingFloat" | "createWorkshopSettingHero"
+                    ) && lowered.len() == sort_order_index
+                    {
                         lowered.push(self.push_number(0.0, "0"));
                     }
                     Value::Call {

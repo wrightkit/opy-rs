@@ -350,6 +350,13 @@
       "outputSha256": "95a6871fb42eb4ada1dfafc15630490d17a887ef44054d83a00122d475015549",
       "sha256": "b151031d68fc1db3243f131aca08791d5df6ecc040dc9be13a3b65e4b0f6e17a",
       "source": "missing-member-actions.opy"
+    },
+    {
+      "expect": "success",
+      "id": "missing-values",
+      "outputSha256": "5f288cdbc11f2de42854b7f009e7465191a45095d674e11a3f859fdbe8004ce9",
+      "sha256": "3c9126c90ab59c18bb4c58e2b345398534041b21493cf24f907dd5406d1fc386",
+      "source": "missing-values.opy"
     }
   ]
 }

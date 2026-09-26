@@ -6,7 +6,7 @@ use workshop_rs::{Action, Value};
 
 use super::Compiler;
 use super::operator_optimization::falsy;
-use super::size_optimization::is_empty_string;
+use super::size_optimization::{action_values, is_empty_string};
 
 pub(super) struct ActionOptimizer<'a> {
     compiler: &'a Compiler,
@@ -59,6 +59,10 @@ impl<'a> ActionOptimizer<'a> {
     pub(super) fn wrap_booleans(&self, action: &mut Action) {
         if let Action::Call { name, args } = action {
             self.booleans(Kind::Action, name, args);
+        } else {
+            for value in action_values(action) {
+                self.nested(value);
+            }
         }
     }
 
@@ -99,24 +103,33 @@ impl<'a> ActionOptimizer<'a> {
 /// other value, including strings, teams and direction constants, as it is.
 fn wraps_in_boolean(value: &Value) -> bool {
     const ENUMS: [&str; 5] = ["Hero", "Map", "Color", "Button", "Gamemode"];
-    const CALLS: [&str; 30] = [
+    const CALLS: [&str; 43] = [
         "abilityIconString",
         "allHeroes",
         "allPlayers",
         "allowedHeroes",
+        "crossProduct",
         "currentMap",
         "directionFromAngles",
         "directionTowards",
         "eventAbility",
+        "eventDirection",
+        "getClosestPlayer",
+        "getControlScoringTeam",
         "getCurrentGamemode",
+        "getDeadPlayers",
         "getEyePosition",
         "getFacingDirection",
+        "getFarthestPlayer",
+        "getFlagCarrier",
+        "getFlagPosition",
         "getHero",
         "getHeroOfDuplication",
         "getLivingPlayers",
         "getPayloadPosition",
         "getPlayersInRadius",
         "getPlayersInSlot",
+        "getPlayersNotOnObjective",
         "getPlayersOnHero",
         "getPlayersOnObjective",
         "getPosition",
@@ -127,6 +140,10 @@ fn wraps_in_boolean(value: &Value) -> bool {
         "inputBindingString",
         "localVector",
         "nearestWalkablePosition",
+        "normalize",
+        "raycastHitNormal",
+        "raycastHitPlayer",
+        "raycastHitPosition",
         "teamOf",
         "vectorTowards",
         "worldVector",

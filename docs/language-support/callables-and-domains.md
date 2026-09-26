@@ -16,6 +16,9 @@ canonical Workshop model.
 | `random.randint`, `random.uniform`, `random.choice`, `random.shuffle` | ✅ Supported | Argument domains and copied-array behavior follow OverPy. |
 | `_`, `__`, `___` translation functions | ✅ Supported | Literal, contextual, dynamic and formatted translation values use the project translation catalog; `___` preserves the unresolved translation array. |
 | Pinned built-in macro helpers (`buttonToString`, `getReal*`, `getSign`, `lerp`, HUD helpers, `timeToString`) | ✅ Supported | The pinned source-language forms, literal and typed arguments, defaults, aliases, receiver rules, and contextual values lower through the native callable boundary. |
+| Pinned value functions (`raycastHit*`, `acos`/`asin`/`atan2`/`tan` and their `Deg` forms, `angleDifference`, `crossProduct`, `normalize`, `strLen`, `getClosestPlayer`, `getFarthestPlayer`, `getDeadPlayers`, `getNumberOf*`, flag, objective, control-point and match-state queries, `teamScore`, and similar) | ✅ Supported | Each name resolves to its canonical Workshop value with the pinned argument order, team and hero domains and defaults. Literal arguments fold as the pinned reference folds them, including the clamped inverse trigonometric arguments and the radian-scaled `Deg` results. |
+| `eventDirection`, `eventWasEnvironment`, `eventWasHealthPack` | ✅ Supported | Bare event values written without call parentheses, like `eventDamage`. |
+| `createWorkshopSettingHero(category, name, default[, sortOrder])` | ✅ Supported | Declared with the other `createWorkshopSetting*` forms; the omitted sort order is `0`. |
 
 ## Member functions and properties
 
