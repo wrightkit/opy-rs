@@ -983,7 +983,7 @@
     {
       "catalogId": "startHealingOverTime",
       "evidence": [
-        "builtin-surface"
+        "start-hot-signature"
       ],
       "id": "startHoT",
       "kind": "memberAction",
@@ -995,7 +995,7 @@
           "name": "duration"
         },
         {
-          "name": "healing"
+          "name": "healingPerSecond"
         }
       ],
       "receiver": "Player"
@@ -2991,26 +2991,6 @@
       "id": "getAllowedHeroes",
       "kind": "memberValue",
       "params": [],
-      "receiver": "Player"
-    },
-    {
-      "catalogId": "startHealingOverTime",
-      "evidence": [
-        "builtin-surface"
-      ],
-      "id": "startHoT",
-      "kind": "memberAction",
-      "params": [
-        {
-          "name": "healer"
-        },
-        {
-          "name": "rate"
-        },
-        {
-          "name": "duration"
-        }
-      ],
       "receiver": "Player"
     },
     {
