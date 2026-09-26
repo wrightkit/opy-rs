@@ -531,6 +531,15 @@ impl<'a> OperatorOptimizer<'a> {
 
     fn normalize(args: Vec<Value>) -> Rewrite {
         let [operand] = one(args);
+        if let Value::Call { name, args } = &operand
+            && name == "vectorTowards"
+            && args.len() == 2
+        {
+            let Value::Call { args, .. } = operand else {
+                unreachable!()
+            };
+            return Rewrite::Changed(call("directionTowards", args));
+        }
         let Some(components) = number_components(&operand) else {
             return Rewrite::Same(call("normalize", vec![operand]));
         };

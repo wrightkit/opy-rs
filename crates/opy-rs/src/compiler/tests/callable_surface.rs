@@ -282,3 +282,24 @@ rule "event values":
         assert!(emitted.contains(expected), "missing {expected}\n{emitted}");
     }
 }
+
+#[test]
+fn normalized_vector_towards_becomes_direction_towards() {
+    let source = r#"globalvar result
+rule "normalize":
+    @Event eachPlayer
+    result = normalize(vectorTowards(eventPlayer.getPosition(), vect(1, 2, 3)))
+"#;
+    let emitted = Compiler::new()
+        .unwrap()
+        .compile_source_artifact(source, "normalize.opy", Path::new("."))
+        .expect("normalize of vectorTowards must compile")
+        .emitted;
+
+    assert!(
+        emitted.contains(
+            "Set Global Variable(result, Direction Towards(Position Of(Event Player), Vector(1, 2, 3)));"
+        ),
+        "{emitted}"
+    );
+}

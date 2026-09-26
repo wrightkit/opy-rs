@@ -51,6 +51,7 @@ rule "missing values":
     result = isTeamOnDefense(Team.1)
     result = isTeamOnOffense(Team.2)
     result = normalize(vect(3, 4, 0))
+    result = normalize(vectorTowards(eventPlayer.getPosition(), vect(1, 2, 3)))
     result = strLen("abc")
     result = tan(0.5)
     result = tanDeg(45)

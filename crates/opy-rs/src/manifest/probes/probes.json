@@ -354,8 +354,8 @@
     {
       "expect": "success",
       "id": "missing-values",
-      "outputSha256": "5f288cdbc11f2de42854b7f009e7465191a45095d674e11a3f859fdbe8004ce9",
-      "sha256": "3c9126c90ab59c18bb4c58e2b345398534041b21493cf24f907dd5406d1fc386",
+      "outputSha256": "4be366b4352ebe4ca0b479287385dfb188b36f830a6f8f51f4a0cf0f6af54d7d",
+      "sha256": "5b69c61321ca05c3a9fbc2c12d225dbce749b7a05d82ad1b2f11852f4d5ac208",
       "source": "missing-values.opy"
     }
   ]
