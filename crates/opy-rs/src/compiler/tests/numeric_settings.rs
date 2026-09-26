@@ -194,6 +194,10 @@ fn omitted_setting_sort_order_lowers_to_zero() {
             "Workshop Setting Combo(Custom String(\"C\"), Custom String(\"N\"), 0, Array(Custom String(\"a\"), Custom String(\"b\")), 0)",
         ),
         (
+            "createWorkshopSettingHero(\"C\", \"N\", Hero.ANA)",
+            "Workshop Setting Hero(Custom String(\"C\"), Custom String(\"N\"), Ana, 0)",
+        ),
+        (
             "createWorkshopSetting(int[0:10], \"C\", \"N\", 1)",
             "Workshop Setting Integer(Custom String(\"C\"), Custom String(\"N\"), 1, 0, 10, 0)",
         ),

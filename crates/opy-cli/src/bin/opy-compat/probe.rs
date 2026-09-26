@@ -32,7 +32,7 @@ const LITERALS: [&str; 12] = [
 
 /// Workshop setting calls the manifest does not list, with and without the
 /// trailing sort order: (function, variant, call).
-const SETTING_CALLS: [(&str, &str, &str); 14] = [
+const SETTING_CALLS: [(&str, &str, &str); 16] = [
     (
         "createWorkshopSettingBool",
         "base",
@@ -72,6 +72,16 @@ const SETTING_CALLS: [(&str, &str, &str); 14] = [
         "createWorkshopSettingEnum",
         "sort-order",
         "createWorkshopSettingEnum(\"C\", \"N\", 0, [\"a\", \"b\"], 5)",
+    ),
+    (
+        "createWorkshopSettingHero",
+        "base",
+        "createWorkshopSettingHero(\"C\", \"N\", Hero.ANA)",
+    ),
+    (
+        "createWorkshopSettingHero",
+        "sort-order",
+        "createWorkshopSettingHero(\"C\", \"N\", Hero.ANA, 5)",
     ),
     (
         "createWorkshopSetting",
