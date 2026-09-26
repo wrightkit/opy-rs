@@ -4695,7 +4695,7 @@ impl<'a> Lowering<'a> {
                 )
             })?
         };
-        let mut args = self.normalize_catalog_argument_domains(catalog_id, args);
+        let mut args = self.normalize_contextual_arguments(catalog_id, args);
         self.apply_replacements(catalog_id, &mut args, span);
         self.optimize_wait_duration(catalog_id, &mut args, span);
         Ok(self.push_call_action_with_spans(catalog_id, &args, spans))
@@ -4727,47 +4727,6 @@ impl<'a> Lowering<'a> {
             }
             _ => {}
         }
-    }
-
-    fn normalize_catalog_argument_domains(
-        &mut self,
-        catalog_id: &str,
-        mut args: Vec<ValueId>,
-    ) -> Vec<ValueId> {
-        if self
-            .compiler
-            .catalog
-            .entry(Kind::Action, catalog_id)
-            .is_none()
-        {
-            return args;
-        }
-        let mut index = 0;
-        while index < args.len() {
-            args[index] = self.normalize_contextual_argument(catalog_id, index, args[index]);
-            let Some(domain) = self
-                .compiler
-                .catalog
-                .entry(Kind::Action, catalog_id)
-                .and_then(|entry| entry.param_domain(index))
-                .map(str::to_string)
-            else {
-                index += 1;
-                continue;
-            };
-            let Some(Value::Enum { value_type, value }) = self.values.get(args[index]) else {
-                index += 1;
-                continue;
-            };
-            if value_type == "Team" && domain == "Color" {
-                args[index] = self.push_value(Value::Enum {
-                    value_type: domain,
-                    value: value.clone(),
-                });
-            }
-            index += 1;
-        }
-        args
     }
 
     fn lower_hud_text(
