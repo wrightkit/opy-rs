@@ -5937,6 +5937,7 @@ impl<'a> Lowering<'a> {
                         | "createWorkshopSettingEnum"
                         | "createWorkshopSettingInt"
                         | "createWorkshopSettingFloat"
+                        | "createWorkshopSettingHero"
                 ) {
                     let mut lowered = args
                         .iter()
@@ -8727,6 +8728,7 @@ fn workshop_setting_call(name: &str) -> (&str, usize) {
         "createWorkshopSettingBool" => ("workshopSettingToggle", 3),
         "createWorkshopSettingEnum" => ("workshopSettingCombo", 4),
         "createWorkshopSettingInt" => ("workshopSettingInteger", 5),
+        "createWorkshopSettingHero" => (name, 3),
         _ => (name, 5),
     }
 }

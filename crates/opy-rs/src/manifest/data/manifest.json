@@ -5029,6 +5029,695 @@
       ]
     },
     {
+      "catalogId": "raycastHitNormal",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "raycastHitNormal",
+      "kind": "value",
+      "params": [
+        {
+          "name": "startPos"
+        },
+        {
+          "name": "endPos"
+        },
+        {
+          "name": "playersToInclude"
+        },
+        {
+          "name": "playersToExclude"
+        },
+        {
+          "name": "includePlayerOwnedObjects"
+        }
+      ]
+    },
+    {
+      "catalogId": "raycastHitPlayer",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "raycastHitPlayer",
+      "kind": "value",
+      "params": [
+        {
+          "name": "startPos"
+        },
+        {
+          "name": "endPos"
+        },
+        {
+          "name": "playersToInclude"
+        },
+        {
+          "name": "playersToExclude"
+        },
+        {
+          "name": "includePlayerOwnedObjects"
+        }
+      ]
+    },
+    {
+      "catalogId": "raycastHitPosition",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "raycastHitPosition",
+      "kind": "value",
+      "params": [
+        {
+          "name": "startPos"
+        },
+        {
+          "name": "endPos"
+        },
+        {
+          "name": "playersToInclude"
+        },
+        {
+          "name": "playersToExclude"
+        },
+        {
+          "name": "includePlayerOwnedObjects"
+        }
+      ]
+    },
+    {
+      "catalogId": "acos",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "acos",
+      "kind": "value",
+      "params": [
+        {
+          "name": "value"
+        }
+      ]
+    },
+    {
+      "catalogId": "acosDeg",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "acosDeg",
+      "kind": "value",
+      "params": [
+        {
+          "name": "value"
+        }
+      ]
+    },
+    {
+      "catalogId": "asin",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "asin",
+      "kind": "value",
+      "params": [
+        {
+          "name": "value"
+        }
+      ]
+    },
+    {
+      "catalogId": "asinDeg",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "asinDeg",
+      "kind": "value",
+      "params": [
+        {
+          "name": "value"
+        }
+      ]
+    },
+    {
+      "catalogId": "angleDifference",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "angleDifference",
+      "kind": "value",
+      "params": [
+        {
+          "name": "angle"
+        },
+        {
+          "name": "angle"
+        }
+      ]
+    },
+    {
+      "catalogId": "atan2",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "atan2",
+      "kind": "value",
+      "params": [
+        {
+          "name": "numerator"
+        },
+        {
+          "name": "denominator"
+        }
+      ]
+    },
+    {
+      "catalogId": "atan2Deg",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "atan2Deg",
+      "kind": "value",
+      "params": [
+        {
+          "name": "numerator"
+        },
+        {
+          "name": "denominator"
+        }
+      ]
+    },
+    {
+      "catalogId": "crossProduct",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "crossProduct",
+      "kind": "value",
+      "params": [
+        {
+          "name": "value"
+        },
+        {
+          "name": "value"
+        }
+      ]
+    },
+    {
+      "catalogId": "eventDirection",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "eventDirection",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "eventWasEnvironment",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "eventWasEnvironment",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "eventWasHealthPack",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "eventWasHealthPack",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "getCapturePercentage",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "getCapturePercentage",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "getControlScoringTeam",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "getControlScoringTeam",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "getCurrentObjective",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "getCurrentObjective",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "getLastAssistId",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "getLastAssistId",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "getMatchRound",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "getMatchRound",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "getNumberOfAssistIds",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "getNumberOfAssistIds",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "getNumberOfDamageModificationIds",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "getNumberOfDamageModificationIds",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "getNumberOfDamageOverTimeIds",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "getNumberOfDamageOverTimeIds",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "getNumberOfEntityIds",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "getNumberOfEntityIds",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "getNumberOfHealingModificationIds",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "getNumberOfHealingModificationIds",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "getNumberOfHealingOverTimeIds",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "getNumberOfHealingOverTimeIds",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "getNumberOfTextIds",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "getNumberOfTextIds",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "isControlPointLocked",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "isControlPointLocked",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "isInSuddenDeath",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "isInSuddenDeath",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "isMatchComplete",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "isMatchComplete",
+      "kind": "value",
+      "params": []
+    },
+    {
+      "catalogId": "getClosestPlayer",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "getClosestPlayer",
+      "kind": "value",
+      "params": [
+        {
+          "name": "center"
+        },
+        {
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
+      "catalogId": "getFarthestPlayer",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "getFarthestPlayer",
+      "kind": "value",
+      "params": [
+        {
+          "name": "center"
+        },
+        {
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
+      "catalogId": "getControlScorePercentage",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "getControlScorePercentage",
+      "kind": "value",
+      "params": [
+        {
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
+      "catalogId": "getFlagCarrier",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "getFlagCarrier",
+      "kind": "value",
+      "params": [
+        {
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
+      "catalogId": "getFlagPosition",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "getFlagPosition",
+      "kind": "value",
+      "params": [
+        {
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
+      "catalogId": "isFlagAtBase",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "isFlagAtBase",
+      "kind": "value",
+      "params": [
+        {
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
+      "catalogId": "isFlagBeingCarried",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "isFlagBeingCarried",
+      "kind": "value",
+      "params": [
+        {
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
+      "catalogId": "isTeamOnDefense",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "isTeamOnDefense",
+      "kind": "value",
+      "params": [
+        {
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
+      "catalogId": "isTeamOnOffense",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "isTeamOnOffense",
+      "kind": "value",
+      "params": [
+        {
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
+      "catalogId": "teamScore",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "teamScore",
+      "kind": "value",
+      "params": [
+        {
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
+      "catalogId": "getDeadPlayers",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "getDeadPlayers",
+      "kind": "value",
+      "params": [
+        {
+          "default": "ALL",
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
+      "catalogId": "getNumberOfDeadPlayers",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "getNumberOfDeadPlayers",
+      "kind": "value",
+      "params": [
+        {
+          "default": "ALL",
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
+      "catalogId": "getNumberOfLivingPlayers",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "getNumberOfLivingPlayers",
+      "kind": "value",
+      "params": [
+        {
+          "default": "ALL",
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
+      "catalogId": "getNumberOfPlayersOnObjective",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "getNumberOfPlayersOnObjective",
+      "kind": "value",
+      "params": [
+        {
+          "default": "ALL",
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
+      "catalogId": "getPlayersNotOnObjective",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "getPlayersNotOnObjective",
+      "kind": "value",
+      "params": [
+        {
+          "default": "ALL",
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
+      "catalogId": "getNumberOfHeroes",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "getNumberOfHeroes",
+      "kind": "value",
+      "params": [
+        {
+          "domain": "Hero",
+          "name": "hero"
+        },
+        {
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
+      "catalogId": "horizontalAngleTowards",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "horizontalAngleTowards",
+      "kind": "value",
+      "params": [
+        {
+          "name": "player"
+        },
+        {
+          "name": "position"
+        }
+      ]
+    },
+    {
+      "catalogId": "verticalAngleTowards",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "verticalAngleTowards",
+      "kind": "value",
+      "params": [
+        {
+          "name": "player"
+        },
+        {
+          "name": "position"
+        }
+      ]
+    },
+    {
+      "catalogId": "isObjectiveComplete",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "isObjectiveComplete",
+      "kind": "value",
+      "params": [
+        {
+          "name": "number"
+        }
+      ]
+    },
+    {
+      "catalogId": "normalize",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "normalize",
+      "kind": "value",
+      "params": [
+        {
+          "name": "vector"
+        }
+      ]
+    },
+    {
+      "catalogId": "strLen",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "strLen",
+      "kind": "value",
+      "params": [
+        {
+          "name": "string"
+        }
+      ]
+    },
+    {
+      "catalogId": "tan",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "tan",
+      "kind": "value",
+      "params": [
+        {
+          "name": "angle"
+        }
+      ]
+    },
+    {
+      "catalogId": "tanDeg",
+      "evidence": [
+        "missing-values"
+      ],
+      "id": "tanDeg",
+      "kind": "value",
+      "params": [
+        {
+          "name": "angle"
+        }
+      ]
+    },
+    {
       "catalogId": "getPayloadProgressPercentage",
       "evidence": [
         "builtin-surface"
