@@ -6,6 +6,8 @@
       "status": "native-rejects",
       "functions": [
         "createBeam",
+        "createHomingProjectile",
+        "createProjectileEffect",
         "getPlayersInRadius"
       ],
       "variant": ":omit-arg",

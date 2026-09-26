@@ -364,6 +364,13 @@
       "outputSha256": "a9b80d7f57b61fdb490c15b63c635f7e5e6dd44658e9603ca630cc27b850a785",
       "sha256": "399aa9fea314fec321d49b3cea47af7a5d8dfb84cd52b432325bf1130f38bdbe",
       "source": "start-hot-signature.opy"
+    },
+    {
+      "expect": "success",
+      "id": "missing-actions",
+      "outputSha256": "43ac2d338b6206f6e2f51ea643dc892ff05cf4b539b280c1d0195e146ffd1a3d",
+      "sha256": "31b55160c3c8340a91531d8a4c26b0fe48c8312898d7bd1ed21f9528a5b0859e",
+      "source": "missing-actions.opy"
     }
   ]
 }

@@ -1,0 +1,31 @@
+globalvar g
+subroutine sub
+
+rule "missing actions":
+    @Event eachPlayer
+    addToTeamScore(Team.1, 2)
+    setTeamScore(Team.2, 3)
+    declareDraw()
+    declareRoundDraw()
+    declareRoundVictory(Team.1)
+    declareRoundVictory(roundWinningTeam=Team.2)
+    destroyAllProgressBarInWorldTexts()
+    destroyDummy(Team.1, 1)
+    enableGamemodeCompletion()
+    enableInspector()
+    enableScoring()
+    goToAssembleHeroes()
+    returnToLobby()
+    startGamemode()
+    stopAllAssists()
+    stopAllDamageModifications()
+    stopAllHealingModifications()
+    stopAssist(g)
+    stopForcingSpawn(Team.1)
+    startRule(sub, AsyncBehavior.RESTART)
+    createProjectile(Projectile.ORB, eventPlayer, vect(0, 0, 0), vect(0, 0, 1), Relativity.TO_WORLD, ModifyHealth.DAMAGE, Team.ALL, 10, 1, 0, DynamicEffect.BAD_EXPLOSION, DynamicEffect.EXPLOSION_SOUND, 0, 20, 5, 0, 0, 0)
+    createProjectile(Projectile.ORB, eventPlayer, vect(0, 0, 0), vect(0, 0, 1), damage=5, speed=3)
+    createHomingProjectile(Projectile.ORB, eventPlayer, vect(0, 0, 0), vect(0, 0, 1), Relativity.TO_WORLD, ModifyHealth.DAMAGE, Team.ALL, 10, 1, 0, DynamicEffect.BAD_EXPLOSION, DynamicEffect.EXPLOSION_SOUND, 0, 20, 5, 0, eventPlayer, 1)
+    createHomingProjectile(Projectile.ORB, damage=5, speed=3, homingTarget=eventPlayer)
+    createProjectileEffect(getAllPlayers(), Projectile.ORB, getAllPlayers(), vect(0, 0, 0), vect(0, 0, 1))
+    createProjectileEffect(getAllPlayers(), Projectile.ORB, getAllPlayers(), eventPlayer, vect(0, 0, 1), 2, ProjectileEffectReeval.VISIBILITY)
