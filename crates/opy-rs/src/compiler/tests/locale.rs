@@ -70,3 +70,47 @@ fn forward_compilation_reparses_in_every_pinned_workshop_locale() {
         }
     }
 }
+
+const NATIVE_IDENTITY_SOURCE: &str = r#"playervar v
+
+rule "native identities":
+    @Event eachPlayer
+    eventPlayer.setAllowedHeroes([Hero.ANA])
+    eventPlayer.startForcingHero(Hero.ANA)
+    eventPlayer.startForcingThrottle(1, 1, 1, 1, 1, 1)
+    eventPlayer.stopForcingThrottle()
+    stopChasingVariable(eventPlayer.v)
+    if eventPlayer.isFiringSecondaryFire():
+        return
+"#;
+
+#[test]
+fn forward_compilation_emits_native_identities_at_the_workshop_boundary() {
+    let compiler = Compiler::new().expect("released Workshop contract must load");
+    let catalog = Catalog::builtin().expect("canonical catalog must load");
+    let locale = Locale::new("en-US");
+
+    let artifact = compiler
+        .compile_source_with_locale(
+            NATIVE_IDENTITY_SOURCE,
+            "native.opy",
+            Path::new("."),
+            &locale,
+        )
+        .expect("source must compile");
+
+    for native in [
+        "Set Player Allowed Heroes(",
+        "Start Forcing Player To Be Hero(",
+        "Stop Forcing Throttle(",
+        "Stop Chasing Player Variable(",
+        "Is Firing Secondary(",
+    ] {
+        assert!(artifact.emitted.contains(native), "missing {native}");
+    }
+    for retired in ["Set Allowed Heroes", "Stop Forcing Hero"] {
+        assert!(!artifact.emitted.contains(retired), "retired {retired}");
+    }
+    parser::parse(&artifact.emitted, &catalog, &locale)
+        .expect("native output must parse under the canonical catalog");
+}
