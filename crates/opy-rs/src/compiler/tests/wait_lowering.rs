@@ -37,12 +37,12 @@ fn optimized_wait_forms_match_the_pinned_oracle() {
     assert_eq!(
         artifact
             .emitted
-            .matches("Wait(0, Ignore Condition);")
+            .matches("Wait(False, Ignore Condition);")
             .count(),
         2
     );
-    assert!(artifact.emitted.contains("Wait(1, Ignore Condition);"));
-    assert!(artifact.emitted.contains("Wait(1, Abort When False);"));
+    assert!(artifact.emitted.contains("Wait(True, Ignore Condition);"));
+    assert!(artifact.emitted.contains("Wait(True, Abort When False);"));
 }
 
 #[test]
@@ -97,7 +97,7 @@ fn included_size_optimization_applies_to_following_rules() {
     assert_eq!(
         artifact
             .emitted
-            .matches("Wait(0, Ignore Condition);")
+            .matches("Wait(False, Ignore Condition);")
             .count(),
         2
     );

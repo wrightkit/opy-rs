@@ -11,7 +11,7 @@ use crate::hir::{self, Expr, RuleEntry, Span as HirSpan, Stmt, SwitchArm, defaul
 use crate::manifest::{FunctionKind, Manifest};
 use serde::Serialize;
 use workshop_rs::Program;
-use workshop_rs::catalog::{Catalog, CatalogIdentity, Kind, Locale, ParamCoercions};
+use workshop_rs::catalog::{Catalog, CatalogIdentity, Kind, Locale};
 use workshop_rs::program::MappedText;
 use workshop_rs::program::SourceMap;
 

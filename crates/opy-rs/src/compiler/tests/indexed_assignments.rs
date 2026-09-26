@@ -85,7 +85,7 @@ rule "delete nested player value":
 }
 
 #[test]
-fn indexed_assignment_indices_use_catalog_numeric_coercions() {
+fn indexed_assignment_indices_keep_the_authored_boolean_spelling() {
     let source = r#"
 globalvar values = [0]
 globalvar nested = [[0]]
@@ -101,17 +101,17 @@ rule "boolean indices":
     assert!(
         artifact
             .emitted
-            .contains("Set Global Variable At Index(values, 1, 1);")
+            .contains("Set Global Variable At Index(values, True, 1);")
     );
     assert!(
         artifact
             .emitted
-            .contains("Modify Global Variable At Index(values, 0, Add, 1);")
+            .contains("Modify Global Variable At Index(values, False, Add, 1);")
     );
     assert!(
         artifact
             .emitted
-            .contains("Set Global Variable At Index(nested, 1,")
+            .contains("Set Global Variable At Index(nested, True,")
     );
 }
 

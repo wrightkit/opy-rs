@@ -3783,70 +3783,6 @@ impl<'a> Lowering<'a> {
         self.normalize_contextual_arguments(call_id, values)
     }
 
-    fn contextual_coercions(&self, call_id: &str, arg_index: usize) -> Option<ParamCoercions> {
-        [Kind::Action, Kind::Value].into_iter().find_map(|kind| {
-            self.compiler
-                .catalog
-                .entry(kind, call_id)
-                .and_then(|entry| entry.param_coercions(arg_index))
-                .copied()
-        })
-    }
-
-    fn normalize_value_with_coercions(
-        &mut self,
-        coercions: ParamCoercions,
-        value_id: ValueId,
-    ) -> ValueId {
-        let Some(node) = self.values.get(value_id) else {
-            return value_id;
-        };
-        let replacement = match node {
-            Value::Bool(false) if coercions.false_as_number => Some(Value::Number(0.0)),
-            Value::Bool(true) if coercions.true_as_number => Some(Value::Number(1.0)),
-            Value::Number(value) if coercions.zero_as_null && *value == 0.0 => Some(Value::Null),
-            Value::Vector { x, y, z }
-                if coercions.null_vector_as_null
-                    && self.value_is_number(*x, 0.0)
-                    && self.value_is_number(*y, 0.0)
-                    && self.value_is_number(*z, 0.0) =>
-            {
-                Some(Value::Null)
-            }
-            Value::Call { name, args }
-                if coercions.null_vector_as_null
-                    && name == "vector"
-                    && args.len() == 3
-                    && args.iter().all(|value| self.value_is_number(*value, 0.0)) =>
-            {
-                Some(Value::Null)
-            }
-            Value::Call { name, args }
-                if coercions.empty_array_as_string && name == "emptyArray" && args.is_empty() =>
-            {
-                Some(Value::String(String::new()))
-            }
-            Value::Call { name, args }
-                if coercions.empty_array_as_string
-                    && name == "customString"
-                    && args.len() == 1
-                    && self.value_is_empty_string(args[0]) =>
-            {
-                Some(Value::String(String::new()))
-            }
-            Value::Array(elements) if coercions.empty_array_as_string && elements.is_empty() => {
-                Some(Value::String(String::new()))
-            }
-            _ => None,
-        };
-        let Some(value) = replacement else {
-            return value_id;
-        };
-        let coerced = self.push_value(value);
-        self.authored_values.insert(coerced, value_id);
-        coerced
-    }
-
     fn normalize_contextual_argument(
         &mut self,
         call_id: &str,
@@ -3872,58 +3808,7 @@ impl<'a> Lowering<'a> {
                 });
             }
         }
-        let Some(coercions) = self.contextual_coercions(call_id, arg_index) else {
-            return value_id;
-        };
-        self.normalize_value_with_coercions(coercions, value_id)
-    }
-
-    #[allow(unreachable_patterns)]
-    fn normalize_modify_value(&mut self, op: ModifyOp, value_id: ValueId) -> ValueId {
-        let coercions = match op {
-            ModifyOp::Add
-            | ModifyOp::Subtract
-            | ModifyOp::Modulo
-            | ModifyOp::Min
-            | ModifyOp::Max
-            | ModifyOp::RemoveFromArrayByIndex => ParamCoercions {
-                false_as_number: true,
-                true_as_number: true,
-                ..Default::default()
-            },
-            ModifyOp::AppendToArray | ModifyOp::RemoveFromArrayByValue => ParamCoercions {
-                zero_as_null: true,
-                ..Default::default()
-            },
-            ModifyOp::Multiply | ModifyOp::Divide | ModifyOp::RaiseToPower => {
-                return value_id;
-            }
-            _ => return value_id,
-        };
-        self.normalize_value_with_coercions(coercions, value_id)
-    }
-
-    fn modify_op_from_value(&self, value_id: ValueId) -> Option<ModifyOp> {
-        let Value::Call { name, args } = self.values.get(value_id)? else {
-            return None;
-        };
-        if !args.is_empty() {
-            return None;
-        }
-        match name.as_str() {
-            "add" => Some(ModifyOp::Add),
-            "subtract" => Some(ModifyOp::Subtract),
-            "multiply" => Some(ModifyOp::Multiply),
-            "divide" => Some(ModifyOp::Divide),
-            "modulo" => Some(ModifyOp::Modulo),
-            "min" => Some(ModifyOp::Min),
-            "max" => Some(ModifyOp::Max),
-            "raiseToPower" => Some(ModifyOp::RaiseToPower),
-            "appendToArray" => Some(ModifyOp::AppendToArray),
-            "removeFromArray" | "removeFromArrayByValue" => Some(ModifyOp::RemoveFromArrayByValue),
-            "removeFromArrayByIndex" => Some(ModifyOp::RemoveFromArrayByIndex),
-            _ => None,
-        }
+        value_id
     }
 
     fn normalize_contextual_arguments(
@@ -3934,18 +3819,6 @@ impl<'a> Lowering<'a> {
         let mut index = 0;
         while index < args.len() {
             args[index] = self.normalize_contextual_argument(call_id, index, args[index]);
-            if matches!(
-                call_id,
-                "modifyGlobalVariableAtIndex" | "modifyPlayerVariableAtIndex"
-            ) && index == 3
-            {
-                if let Some(op) = args
-                    .get(2)
-                    .and_then(|value_id| self.modify_op_from_value(*value_id))
-                {
-                    args[index] = self.normalize_modify_value(op, args[index]);
-                }
-            }
             index += 1;
         }
         args
@@ -4141,7 +4014,6 @@ impl<'a> Lowering<'a> {
         let index = self.lower_value(indices[0])?;
         if indices.len() == 1 {
             let op = ModifyOp::RemoveFromArrayByIndex;
-            let index = self.normalize_modify_value(op, index);
             return Ok(if action_name == "modifyGlobalVariableAtIndex" {
                 let variable = match self.values.get(root_value) {
                     Some(Value::GlobalVariable(variable)) => variable.clone(),
@@ -4255,7 +4127,7 @@ impl<'a> Lowering<'a> {
                         if left_name == name {
                             if let Some(modify_op) = modify_op_from_str(op) {
                                 let right = self.lower_value(right)?;
-                                let val = self.normalize_modify_value(modify_op, right);
+                                let val = right;
                                 return Ok(self.push_action(Action::ModifyGlobalVariable {
                                     variable: self.global_names[variable].clone(),
                                     op: modify_op,
@@ -4294,7 +4166,7 @@ impl<'a> Lowering<'a> {
                         if left_name == name && left_player.as_ref() == player.as_ref() {
                             if let Some(modify_op) = modify_op_from_str(op) {
                                 let right = self.lower_value(right)?;
-                                let val = self.normalize_modify_value(modify_op, right);
+                                let val = right;
                                     return Ok(self.push_action(Action::ModifyPlayerVariable {
                                         player: player_val,
                                         variable: self.player_names[variable].clone(),
@@ -4340,13 +4212,13 @@ impl<'a> Lowering<'a> {
                         {
                             if left_arr.as_ref() == array.as_ref()
                                 && left_idx.as_ref() == index.as_ref()
+                                && modify_op_from_str(op).is_some()
                             {
-                                if let Some(modify_op) = modify_op_from_str(op) {
                                     let op_id = modify_catalog_name_from_str(op)
                                         .expect("known modify operator has a catalog name");
                                     let op_node = self.push_call(op_id, Vec::new());
                                     let right = self.lower_value(right)?;
-                                    let right_val = self.normalize_modify_value(modify_op, right);
+                                    let right_val = right;
                                     let args = self.normalize_contextual_arguments(
                                         "modifyGlobalVariableAtIndex",
                                         vec![var_node, index_val, op_node, right_val],
@@ -4355,7 +4227,6 @@ impl<'a> Lowering<'a> {
                                         "modifyGlobalVariableAtIndex",
                                         &args,
                                     ));
-                                }
                             }
                         }
                     }
@@ -4393,13 +4264,13 @@ impl<'a> Lowering<'a> {
                         {
                             if left_arr.as_ref() == array.as_ref()
                                 && left_idx.as_ref() == index.as_ref()
+                                && modify_op_from_str(op).is_some()
                             {
-                                if let Some(modify_op) = modify_op_from_str(op) {
                                     let op_id = modify_catalog_name_from_str(op)
                                         .expect("known modify operator has a catalog name");
                                     let op_node = self.push_call(op_id, Vec::new());
                                     let right = self.lower_value(right)?;
-                                    let right_val = self.normalize_modify_value(modify_op, right);
+                                    let right_val = right;
                                     let args = self.normalize_contextual_arguments(
                                         "modifyPlayerVariableAtIndex",
                                         vec![var_node, index_val, op_node, right_val],
@@ -4412,7 +4283,6 @@ impl<'a> Lowering<'a> {
                                         "modifyPlayerVariableAtIndex",
                                         &args,
                                     ));
-                                }
                             }
                         }
                     }
@@ -5025,7 +4895,6 @@ impl<'a> Lowering<'a> {
             };
             let value_span = value.span().copied();
             let value = self.lower_value(value)?;
-            let value = self.normalize_modify_value(op, value);
             return match receiver {
                 Expr::GlobalVar {
                     name,
