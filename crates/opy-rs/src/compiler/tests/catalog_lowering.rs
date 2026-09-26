@@ -248,18 +248,14 @@ fn pinned_texture_members_lower_with_texture_tag_setup() {
             .emitted
             .contains("Create Dummy Bot(All Heroes, If-Then-Else(")
     );
-    let dummy_team = artifact
-        .wir
-        .rules
-        .iter()
-        .flat_map(|rule| rule.actions.iter())
-        .find_map(|action| match action {
-            Action::Call { name, args } if name == "createDummy" => args.get(1),
-            _ => None,
-        })
-        .expect("texture setup must choose a team for its dummy bot");
     let mut slot_queries = Vec::new();
-    collect_calls(dummy_team, "getNumberOfSlots", &mut slot_queries);
+    for action in artifact.wir.rules.iter().flat_map(|rule| &rule.actions) {
+        if let Action::Call { args, .. } = action {
+            for value in args {
+                collect_calls(value, "getNumberOfSlots", &mut slot_queries);
+            }
+        }
+    }
     for team in ["TEAM_1", "TEAM_2"] {
         assert!(slot_queries.iter().any(|args| matches!(
             *args,

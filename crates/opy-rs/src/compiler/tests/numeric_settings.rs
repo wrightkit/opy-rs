@@ -183,15 +183,15 @@ fn omitted_setting_sort_order_lowers_to_zero() {
     for (call, function) in [
         (
             "createWorkshopSettingBool(\"C\", \"N\", true)",
-            "createWorkshopSettingBool",
+            "workshopSettingToggle",
         ),
         (
             "createWorkshopSettingInt(\"C\", \"N\", 1, 0, 10)",
-            "createWorkshopSettingInt",
+            "workshopSettingInteger",
         ),
         (
             "createWorkshopSettingEnum(\"C\", \"N\", 0, [\"a\", \"b\"])",
-            "createWorkshopSettingEnum",
+            "workshopSettingCombo",
         ),
         (
             "createWorkshopSettingHero(\"C\", \"N\", Hero.ANA)",
@@ -199,7 +199,7 @@ fn omitted_setting_sort_order_lowers_to_zero() {
         ),
         (
             "createWorkshopSetting(int[0:10], \"C\", \"N\", 1)",
-            "createWorkshopSettingInt",
+            "workshopSettingInteger",
         ),
     ] {
         let source = format!("globalvar g\n\nrule \"p\":\n    @Event global\n    g = {call}\n");

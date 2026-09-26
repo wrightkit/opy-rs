@@ -169,7 +169,7 @@ rule "indexed receiver mutations":
                 ] if variable == "values"
                     && index == "getSlot"
                     && operation == "appendToArray"
-                    && value == "getCurrentMap"
+                    && value == "currentMap"
             )
     }));
     assert!(calls.iter().any(|(name, args)| {
