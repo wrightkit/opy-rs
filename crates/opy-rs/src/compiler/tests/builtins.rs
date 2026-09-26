@@ -306,6 +306,30 @@ rule "builtin surface":
 }
 
 #[test]
+fn start_hot_keyword_arguments_bind_like_positional_arguments() {
+    let source = include_str!("../../manifest/probes/start-hot-signature.opy");
+    let hir = crate::compile(source, "start-hot-signature.opy", Path::new("."))
+        .expect("pinned startHoT positional and keyword forms must resolve natively");
+    let artifact = Compiler::new()
+        .expect("released Workshop contract must load")
+        .compile_hir(&hir)
+        .expect("pinned startHoT positional and keyword forms must lower natively");
+
+    assert_eq!(artifact.wir.rules.len(), 2);
+    assert_eq!(artifact.wir.rules[0].actions.len(), 1);
+    assert_eq!(artifact.wir.rules[1].actions.len(), 1);
+    let mut positional = artifact.wir.clone();
+    positional.rules.truncate(1);
+    let mut keyword = artifact.wir;
+    keyword.rules.remove(0);
+    keyword.rules[0].name = positional.rules[0].name.clone();
+    assert!(
+        workshop_rs::roundtrip::equivalent(&positional, &keyword),
+        "keyword arguments must bind to the same Workshop arguments as positional calls"
+    );
+}
+
+#[test]
 fn stop_chasing_variable_dispatches_by_variable_kind() {
     let source = "globalvar g\nplayervar p\nrule \"r\":\n    @Event eachPlayer\n    stopChasingVariable(g)\n    stopChasingVariable(eventPlayer.p)\n";
     let hir = crate::compile(source, "stop-chasing.opy", Path::new(".")).unwrap();
