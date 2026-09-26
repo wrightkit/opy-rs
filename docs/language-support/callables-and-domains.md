@@ -27,6 +27,7 @@ canonical Workshop model.
 | `array[index]`, `array.slice(start, count)` | ✅ Supported | Indexing and slicing retain their distinct argument contracts. |
 | `string.format(...)` | ✅ Supported | Constant and dynamic indexed/sequential placeholder forms lower to canonical custom strings, including chunked forms beyond three dynamic values. |
 | Player members such as `setStatusEffect`, `setMoveSpeed`, `getPosition` and `teleport` | ✅ Supported | Receiver and enum arguments are checked before canonical lowering. |
+| Player state, score, communication, chat, scoreboard, HUD, nameplate, spectate, throttle, team and assist members such as `getScore`, `isCrouching`, `isCommunicating(Comms.*)`, `isInViewAngle`, `setScore`, `disableVoiceChat(team, match, group)`, `enableGamemodeHud`, `enableGamemodeInWorldUi`, `startTransformingThrottle`, `moveToTeam(team[, slot])`, `startGrantingAssistFor(targets[, AssistReeval])`, `detach`, and `string.strIndex(character)` | ✅ Supported | Each resolves through the manifest with the pinned OverPy receiver, argument order, defaults and enum domains; the OverPy spellings `enableGamemodeHud` and `enableGamemodeInWorldUi` lower to the catalog `enableGameModeHud` and `enableGameModeInworldUI`. |
 | `vector.x`, `vector.y`, `vector.z` | ✅ Supported | Property access returns the corresponding numeric component. |
 | Member macros using `self` | ✅ Supported | Class-qualified member macros expand `self` to the call receiver while preserving argument and statement boundaries. |
 

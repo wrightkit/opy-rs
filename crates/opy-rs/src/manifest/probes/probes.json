@@ -336,6 +336,20 @@
       "outputSha256": "7b2ecd50c29af45d2747cd3bb15afbfbcd896887e145a25f6d66232112c0aecb",
       "sha256": "74fbae25f9bac410a94815eb40f76b70d8082db3d37a881f236568a6e3be008d",
       "source": "rule-condition.opy"
+    },
+    {
+      "expect": "success",
+      "id": "missing-member-values",
+      "outputSha256": "30b6132638e707d7a7293ae8307188acd0669b04c388c2faf9386dc8d1355437",
+      "sha256": "beeccadafd6a6150e9df29fbb8d7c0e0912e5e3f086ae6f25508c343f892c0dc",
+      "source": "missing-member-values.opy"
+    },
+    {
+      "expect": "success",
+      "id": "missing-member-actions",
+      "outputSha256": "95a6871fb42eb4ada1dfafc15630490d17a887ef44054d83a00122d475015549",
+      "sha256": "b151031d68fc1db3243f131aca08791d5df6ecc040dc9be13a3b65e4b0f6e17a",
+      "source": "missing-member-actions.opy"
     }
   ]
 }

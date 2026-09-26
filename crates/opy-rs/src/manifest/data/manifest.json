@@ -3095,6 +3095,197 @@
       "receiver": "Player"
     },
     {
+      "catalogId": "getHorizontalSpeed",
+      "evidence": [
+        "missing-member-values"
+      ],
+      "id": "getHorizontalSpeed",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getVerticalSpeed",
+      "evidence": [
+        "missing-member-values"
+      ],
+      "id": "getVerticalSpeed",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getNumberOfDeaths",
+      "evidence": [
+        "missing-member-values"
+      ],
+      "id": "getNumberOfDeaths",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getNumberOfElims",
+      "evidence": [
+        "missing-member-values"
+      ],
+      "id": "getNumberOfElims",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getNumberOfFinalBlows",
+      "evidence": [
+        "missing-member-values"
+      ],
+      "id": "getNumberOfFinalBlows",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getScore",
+      "evidence": [
+        "missing-member-values"
+      ],
+      "id": "getScore",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "isCommunicatingAnything",
+      "evidence": [
+        "missing-member-values"
+      ],
+      "id": "isCommunicatingAnything",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "isCommunicatingSpray",
+      "evidence": [
+        "missing-member-values"
+      ],
+      "id": "isCommunicatingSpray",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "isCommunicatingVoiceline",
+      "evidence": [
+        "missing-member-values"
+      ],
+      "id": "isCommunicatingVoiceline",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "isCrouching",
+      "evidence": [
+        "missing-member-values"
+      ],
+      "id": "isCrouching",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "isOnFire",
+      "evidence": [
+        "missing-member-values"
+      ],
+      "id": "isOnFire",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "isOnWall",
+      "evidence": [
+        "missing-member-values"
+      ],
+      "id": "isOnWall",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "isStanding",
+      "evidence": [
+        "missing-member-values"
+      ],
+      "id": "isStanding",
+      "kind": "memberValue",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "getPlayerClosestToReticle",
+      "evidence": [
+        "missing-member-values"
+      ],
+      "id": "getPlayerClosestToReticle",
+      "kind": "memberValue",
+      "params": [
+        {
+          "domain": "Team",
+          "name": "team"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "isCommunicating",
+      "evidence": [
+        "missing-member-values"
+      ],
+      "id": "isCommunicating",
+      "kind": "memberValue",
+      "params": [
+        {
+          "domain": "Comms",
+          "name": "type"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "isInViewAngle",
+      "evidence": [
+        "missing-member-values"
+      ],
+      "id": "isInViewAngle",
+      "kind": "memberValue",
+      "params": [
+        {
+          "name": "location"
+        },
+        {
+          "name": "viewAngle"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "strIndex",
+      "evidence": [
+        "missing-member-values"
+      ],
+      "id": "strIndex",
+      "kind": "memberValue",
+      "params": [
+        {
+          "name": "character"
+        }
+      ],
+      "receiver": "Any"
+    },
+    {
       "catalogId": "hasSpawned",
       "evidence": [
         "receiver-calls"
@@ -3226,6 +3417,311 @@
         {
           "default": 0,
           "name": "facing"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "detach",
+      "evidence": [
+        "missing-member-actions"
+      ],
+      "id": "detach",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "disableDeathSpectateAllPlayers",
+      "evidence": [
+        "missing-member-actions"
+      ],
+      "id": "disableDeathSpectateAllPlayers",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "disableDeathSpectateTargetHud",
+      "evidence": [
+        "missing-member-actions"
+      ],
+      "id": "disableDeathSpectateTargetHud",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "disableScoreboard",
+      "evidence": [
+        "missing-member-actions"
+      ],
+      "id": "disableScoreboard",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "disableTextChat",
+      "evidence": [
+        "missing-member-actions"
+      ],
+      "id": "disableTextChat",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "enableDeathSpectateAllPlayers",
+      "evidence": [
+        "missing-member-actions"
+      ],
+      "id": "enableDeathSpectateAllPlayers",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "enableDeathSpectateTargetHud",
+      "evidence": [
+        "missing-member-actions"
+      ],
+      "id": "enableDeathSpectateTargetHud",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "enableKillFeed",
+      "evidence": [
+        "missing-member-actions"
+      ],
+      "id": "enableKillFeed",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "enableMessages",
+      "evidence": [
+        "missing-member-actions"
+      ],
+      "id": "enableMessages",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "enableScoreboard",
+      "evidence": [
+        "missing-member-actions"
+      ],
+      "id": "enableScoreboard",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "enableTextChat",
+      "evidence": [
+        "missing-member-actions"
+      ],
+      "id": "enableTextChat",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "enableVoiceChat",
+      "evidence": [
+        "missing-member-actions"
+      ],
+      "id": "enableVoiceChat",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "resetHeroAvailability",
+      "evidence": [
+        "missing-member-actions"
+      ],
+      "id": "resetHeroAvailability",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "stopAllHealingOverTime",
+      "evidence": [
+        "missing-member-actions"
+      ],
+      "id": "stopAllHealingOverTime",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "stopTransformingThrottle",
+      "evidence": [
+        "missing-member-actions"
+      ],
+      "id": "stopTransformingThrottle",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "enableGameModeHud",
+      "evidence": [
+        "missing-member-actions"
+      ],
+      "id": "enableGamemodeHud",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "enableGameModeInworldUI",
+      "evidence": [
+        "missing-member-actions"
+      ],
+      "id": "enableGamemodeInWorldUi",
+      "kind": "memberAction",
+      "params": [],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "disableNameplatesFor",
+      "evidence": [
+        "missing-member-actions"
+      ],
+      "id": "disableNameplatesFor",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "viewingPlayers"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "enableNameplatesFor",
+      "evidence": [
+        "missing-member-actions"
+      ],
+      "id": "enableNameplatesFor",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "viewingPlayers"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "disableVoiceChat",
+      "evidence": [
+        "missing-member-actions"
+      ],
+      "id": "disableVoiceChat",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "teamVoiceChat"
+        },
+        {
+          "name": "matchVoiceChat"
+        },
+        {
+          "name": "groupVoiceChat"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setJumpVerticalSpeed",
+      "evidence": [
+        "missing-member-actions"
+      ],
+      "id": "setJumpVerticalSpeed",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "jumpVerticalSpeedPercent"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "setScore",
+      "evidence": [
+        "missing-member-actions"
+      ],
+      "id": "setScore",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "score"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "startTransformingThrottle",
+      "evidence": [
+        "missing-member-actions"
+      ],
+      "id": "startTransformingThrottle",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "xAxisScalar"
+        },
+        {
+          "name": "yAxisScalar"
+        },
+        {
+          "domain": "Vector",
+          "name": "relativeDirection"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "moveToTeam",
+      "evidence": [
+        "missing-member-actions"
+      ],
+      "id": "moveToTeam",
+      "kind": "memberAction",
+      "params": [
+        {
+          "domain": "Team",
+          "name": "team"
+        },
+        {
+          "default": -1,
+          "name": "slot"
+        }
+      ],
+      "receiver": "Player"
+    },
+    {
+      "catalogId": "startGrantingAssistFor",
+      "evidence": [
+        "missing-member-actions"
+      ],
+      "id": "startGrantingAssistFor",
+      "kind": "memberAction",
+      "params": [
+        {
+          "name": "targets"
+        },
+        {
+          "default": "ASSISTERS_AND_TARGETS",
+          "domain": "AssistReeval",
+          "name": "reevaluation"
         }
       ],
       "receiver": "Player"
