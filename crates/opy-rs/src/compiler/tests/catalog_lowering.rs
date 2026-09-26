@@ -118,19 +118,17 @@ fn bastion_condition_folding_matches_pinned_reference_contract() {
     assert!(
         artifact
             .emitted
-            .contains("Set Global Variable At Index(values, 1, Null);")
+            .contains("Set Global Variable At Index(values, True, Null);")
     );
     assert!(
         artifact
             .emitted
-            .contains("Set Status(Event Player, Null, Invincible, 0);")
+            .contains("Set Status(Event Player, Null, Invincible, False);")
     );
-    assert!(
-        artifact
-            .emitted
-            .contains("Create Effect(Null, Ring, Color(Red), Vector(0, 1, 0), 0, Visible To);")
-    );
-    assert!(artifact.emitted.contains("Wait(0, Ignore Condition);"));
+    assert!(artifact.emitted.contains(
+        "Create Effect(Null, Ring, Color(Red), Vector(False, True, False), False, Visible To);"
+    ));
+    assert!(artifact.emitted.contains("Wait(False, Ignore Condition);"));
     assert!(
         artifact
             .emitted

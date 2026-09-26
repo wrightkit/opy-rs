@@ -128,7 +128,7 @@ fn aggressive_size_optimization_lowers_a_tail_comparison_to_skip_if() {
     assert!(
         artifact
             .emitted
-            .contains("Skip If(Not(Compare(Global.g, ==, 1)), 1);")
+            .contains("Skip If(Not(Compare(Global.g, ==, 1)), True);")
     );
     assert!(!artifact.emitted.contains("If(Compare(Global.g, ==, 1));"));
 }

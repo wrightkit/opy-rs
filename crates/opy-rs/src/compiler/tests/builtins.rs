@@ -383,8 +383,11 @@ fn create_dummy_uses_the_reference_facing_default() {
         .expect("released Workshop contract must load")
         .compile_hir(&hir)
         .expect("createDummy's facing default must lower");
-    assert!(artifact.emitted.contains("Create Dummy Bot"));
-    assert!(artifact.emitted.contains("Null"));
+    assert!(
+        artifact
+            .emitted
+            .contains("-1, Vector(0, 0, 0), Vector(0, 0, 0));")
+    );
 }
 
 #[test]

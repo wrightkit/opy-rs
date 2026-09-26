@@ -4,8 +4,13 @@
 use workshop_rs::catalog::{Kind, ParamCoercions};
 use workshop_rs::{Action, ModifyOp, Value};
 
+use self::literal_flags::{
+    LITERAL_FLAGS, NULL_VECTOR_BY_NULL, ONE_BY_TRUE, ZERO_BY_FALSE, ZERO_BY_NULL,
+};
 use super::Compiler;
 use super::operator_optimization::falsy;
+
+mod literal_flags;
 
 pub(super) struct SizeOptimizer<'a> {
     compiler: &'a Compiler,
@@ -23,15 +28,19 @@ impl<'a> SizeOptimizer<'a> {
             }
             Action::ModifyGlobalVariable { op, value, .. }
             | Action::ModifyPlayerVariable { op, value, .. } => self.modified(*op, value),
-            Action::ForGlobalVariable { step, .. } | Action::ForPlayerVariable { step, .. } => {
-                if matches!(step, Value::Number(one) if *one == 1.0) {
-                    *step = Value::Bool(true);
+            Action::ForGlobalVariable { stop, step, .. }
+            | Action::ForPlayerVariable { stop, step, .. } => {
+                for bound in [stop, step] {
+                    match bound {
+                        Value::Number(zero) if *zero == 0.0 => *bound = Value::Bool(false),
+                        Value::Number(one) if *one == 1.0 => *bound = Value::Bool(true),
+                        _ => {}
+                    }
                 }
             }
             Action::Call { name, args } => {
                 self.indexed_variable_call(name, args);
                 self.chase_call(name, args);
-                Self::throttle_call(name, args);
                 Self::hud_text_call(name, args);
                 Self::beam_call(name, args);
                 Self::progress_bar_call(name, args);
@@ -160,7 +169,6 @@ impl<'a> SizeOptimizer<'a> {
     /// Chase destinations and rates spell `0` and `1` as `False` and `True`.
     fn chase_call(&self, name: &str, args: &mut [Value]) {
         let positions: &[usize] = match name {
-            "chaseAtRate" | "chaseOverTime" => &[1, 2],
             "chasePlayerVariableAtRate" | "chasePlayerVariableOverTime" => &[2, 3],
             _ => return,
         };
@@ -175,20 +183,6 @@ impl<'a> SizeOptimizer<'a> {
         }
     }
 
-    /// Throttle limits spell `0` and `1` as `False` and `True`.
-    fn throttle_call(name: &str, args: &mut [Value]) {
-        if name != "startForcingThrottle" {
-            return;
-        }
-        for arg in args.iter_mut().skip(1).take(6) {
-            match arg {
-                Value::Number(number) if *number == 0.0 => *arg = Value::Bool(false),
-                Value::Number(number) if *number == 1.0 => *arg = Value::Bool(true),
-                _ => {}
-            }
-        }
-    }
-
     fn call_arguments(&self, kind: Kind, name: &str, args: &mut [Value]) {
         let entry = self.compiler.catalog.entry(kind, name);
         for (index, arg) in args.iter_mut().enumerate() {
@@ -198,15 +192,36 @@ impl<'a> SizeOptimizer<'a> {
                 .unwrap_or_default();
             // The reference also writes an empty separator as an empty array.
             coercions.empty_array_as_string |= (name, index) == ("stringSplit", 1);
-            self.argument(coercions, arg);
+            self.argument(name, index, coercions, arg);
         }
     }
 
-    fn argument(&self, coercions: ParamCoercions, value: &mut Value) {
-        if is_empty_string(value) {
+    /// Where OverPy replaces a literal is a per-parameter fact of its own
+    /// argument tables, not the catalog's broader acceptance coercions.
+    fn argument(&self, name: &str, index: usize, coercions: ParamCoercions, value: &mut Value) {
+        // OverPy reads every element of an array, and every substitution of a
+        // custom string, from the parameter of its first repeated position.
+        let index = match name {
+            "array" => 0,
+            "customString" => 1,
+            _ => index,
+        };
+        let flags = LITERAL_FLAGS
+            .iter()
+            .find(|(candidate, position, _)| *candidate == name && *position == index)
+            .map_or(0, |(_, _, flags)| *flags);
+        if let Value::Number(number) = value {
+            if *number == 0.0 && flags & ZERO_BY_FALSE != 0 {
+                *value = Value::Bool(false);
+            } else if *number == 0.0 && flags & ZERO_BY_NULL != 0 {
+                *value = Value::Null;
+            } else if *number == 1.0 && flags & ONE_BY_TRUE != 0 {
+                *value = Value::Bool(true);
+            }
+        } else if is_empty_string(value) {
             *value = self.empty_string(coercions.empty_array_as_string);
         } else if is_zero_vector(value) {
-            *value = if coercions.null_vector_as_null {
+            *value = if flags & NULL_VECTOR_BY_NULL != 0 {
                 Value::Null
             } else {
                 self.zero_vector_sum()
@@ -243,11 +258,13 @@ impl<'a> SizeOptimizer<'a> {
     fn nested(&self, value: &mut Value) {
         match value {
             Value::Call { name, args } if name == "vector" && args.len() == 3 => {
-                for arg in args.iter_mut() {
-                    self.nested(arg);
-                }
                 if let Some(form) = compact_vector(&args[0], &args[1], &args[2]) {
                     *value = form;
+                    return self.nested(value);
+                }
+                self.call_arguments(Kind::Value, "vector", args);
+                for arg in args.iter_mut() {
+                    self.nested(arg);
                 }
             }
             Value::Call { name, args } => {
@@ -266,16 +283,18 @@ impl<'a> SizeOptimizer<'a> {
                     .copied()
                     .unwrap_or_default();
                 for element in elements {
-                    self.argument(coercions, element);
+                    self.argument("array", 0, coercions, element);
                     self.nested(element);
                 }
             }
             Value::Vector { x, y, z } => {
-                self.nested(x);
-                self.nested(y);
-                self.nested(z);
                 if let Some(form) = compact_vector(x, y, z) {
                     *value = form;
+                    return self.nested(value);
+                }
+                for (index, component) in [&mut **x, &mut **y, &mut **z].into_iter().enumerate() {
+                    self.argument("vector", index, ParamCoercions::default(), component);
+                    self.nested(component);
                 }
             }
             Value::PlayerVariable { player, .. } => self.nested(player),
@@ -394,18 +413,20 @@ fn is_zero_vector(value: &Value) -> bool {
 }
 
 fn modify_op_of(value: &Value) -> Option<ModifyOp> {
-    let Value::Enum { value, .. } = value else {
-        return None;
+    let operation = match value {
+        Value::Enum { value, .. } => value.as_str(),
+        Value::Call { name, args } if args.is_empty() => name.as_str(),
+        _ => return None,
     };
-    Some(match value.as_str() {
-        "ADD" => ModifyOp::Add,
-        "SUBTRACT" => ModifyOp::Subtract,
-        "MODULO" => ModifyOp::Modulo,
-        "MAX" => ModifyOp::Max,
-        "MIN" => ModifyOp::Min,
-        "REMOVE_FROM_ARRAY_BY_INDEX" => ModifyOp::RemoveFromArrayByIndex,
-        "APPEND_TO_ARRAY" => ModifyOp::AppendToArray,
-        "REMOVE_FROM_ARRAY_BY_VALUE" => ModifyOp::RemoveFromArrayByValue,
+    Some(match operation {
+        "ADD" | "add" => ModifyOp::Add,
+        "SUBTRACT" | "subtract" => ModifyOp::Subtract,
+        "MODULO" | "modulo" => ModifyOp::Modulo,
+        "MAX" | "max" => ModifyOp::Max,
+        "MIN" | "min" => ModifyOp::Min,
+        "REMOVE_FROM_ARRAY_BY_INDEX" | "removeFromArrayByIndex" => ModifyOp::RemoveFromArrayByIndex,
+        "APPEND_TO_ARRAY" | "appendToArray" => ModifyOp::AppendToArray,
+        "REMOVE_FROM_ARRAY_BY_VALUE" | "removeFromArrayByValue" => ModifyOp::RemoveFromArrayByValue,
         _ => return None,
     })
 }
@@ -432,5 +453,28 @@ pub(super) fn action_values(action: &mut Action) -> Vec<&mut Value> {
         } => vec![player, start, stop, step],
         Action::Call { args, .. } => args.iter_mut().collect(),
         _ => Vec::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::literal_flags::LITERAL_FLAGS;
+    use workshop_rs::catalog::{Catalog, Kind};
+
+    /// A name that is not a catalog entry is a table row that can never apply.
+    #[test]
+    fn literal_flag_names_resolve_to_catalog_entries() {
+        let catalog = Catalog::builtin().unwrap();
+        let unresolved: Vec<&str> = LITERAL_FLAGS
+            .iter()
+            .map(|(name, _, _)| *name)
+            .filter(|name| {
+                *name != "array"
+                    && [Kind::Action, Kind::Value]
+                        .into_iter()
+                        .all(|kind| catalog.entry(kind, name).is_none())
+            })
+            .collect();
+        assert_eq!(unresolved, Vec::<&str>::new());
     }
 }
