@@ -5942,17 +5942,13 @@ impl<'a> Lowering<'a> {
                         .iter()
                         .map(|arg| self.lower_value(arg))
                         .collect::<Result<Vec<_>, _>>()?;
-                    if name == "createWorkshopSettingFloat" && lowered.len() == 5 {
+                    // The sort order is the last parameter; OverPy writes 0 when omitted.
+                    let (canonical, arity_without_sort_order) = workshop_setting_call(name);
+                    if lowered.len() == arity_without_sort_order {
                         lowered.push(self.push_number(0.0, "0"));
                     }
                     Value::Call {
-                        name: match name.as_str() {
-                            "createWorkshopSettingBool" => "workshopSettingToggle",
-                            "createWorkshopSettingEnum" => "workshopSettingCombo",
-                            "createWorkshopSettingInt" => "workshopSettingInteger",
-                            _ => name,
-                        }
-                        .to_string(),
+                        name: canonical.to_string(),
                         args: self.value_args(&lowered),
                     }
                 } else if matches!(name.as_str(), "all" | "any") {
@@ -7048,7 +7044,7 @@ impl<'a> Lowering<'a> {
             lowered.push(self.lower_value(maximum)?);
         }
         lowered.push(self.lower_value(sort_order)?);
-        Ok(self.push_call(catalog_name, lowered))
+        Ok(self.push_call(workshop_setting_call(catalog_name).0, lowered))
     }
 
     fn push_action(&mut self, action: Action) -> ActionId {
@@ -8724,6 +8720,17 @@ fn split_filtered_word(text: &[char], head: &str, tail: &str, standalone: bool) 
 /// The last word is `r i gg e r` with optional whitespace between the letters
 /// except the two `g`,
 /// ending at a word boundary; the soft hyphen follows the `i` and its whitespace.
+/// The canonical Workshop value for an OverPy setting function, and its
+/// parameter count without the trailing sort order.
+fn workshop_setting_call(name: &str) -> (&str, usize) {
+    match name {
+        "createWorkshopSettingBool" => ("workshopSettingToggle", 3),
+        "createWorkshopSettingEnum" => ("workshopSettingCombo", 4),
+        "createWorkshopSettingInt" => ("workshopSettingInteger", 5),
+        _ => (name, 5),
+    }
+}
+
 fn split_spaced_rigger(text: &[char]) -> Vec<char> {
     let mut result = Vec::with_capacity(text.len() + 1);
     let mut index = 0;

@@ -176,3 +176,36 @@ fn find_initializer(program: &crate::hir::Program) -> &Expr {
         })
         .expect("global initializer must exist")
 }
+
+#[test]
+fn omitted_setting_sort_order_lowers_to_zero() {
+    let compiler = Compiler::new().expect("released Workshop contract must load");
+    for (call, expected) in [
+        (
+            "createWorkshopSettingBool(\"C\", \"N\", true)",
+            "Workshop Setting Toggle(Custom String(\"C\"), Custom String(\"N\"), True, 0)",
+        ),
+        (
+            "createWorkshopSettingInt(\"C\", \"N\", 1, 0, 10)",
+            "Workshop Setting Integer(Custom String(\"C\"), Custom String(\"N\"), 1, 0, 10, 0)",
+        ),
+        (
+            "createWorkshopSettingEnum(\"C\", \"N\", 0, [\"a\", \"b\"])",
+            "Workshop Setting Combo(Custom String(\"C\"), Custom String(\"N\"), 0, Array(Custom String(\"a\"), Custom String(\"b\")), 0)",
+        ),
+        (
+            "createWorkshopSetting(int[0:10], \"C\", \"N\", 1)",
+            "Workshop Setting Integer(Custom String(\"C\"), Custom String(\"N\"), 1, 0, 10, 0)",
+        ),
+    ] {
+        let source = format!("globalvar g\n\nrule \"p\":\n    @Event global\n    g = {call}\n");
+        let artifact = compiler
+            .compile_source_with_locale(&source, "sort.opy", Path::new("."), &Locale::new("en-US"))
+            .unwrap_or_else(|error| panic!("{call} must compile: {error}"));
+        assert!(
+            artifact.emitted.contains(expected),
+            "{call} emitted:\n{}",
+            artifact.emitted
+        );
+    }
+}
