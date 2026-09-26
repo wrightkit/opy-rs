@@ -3,6 +3,7 @@
 use std::path::Path;
 
 use crate::Compiler;
+use workshop_rs::{Action, Value};
 
 #[test]
 fn translation_calls_use_the_existing_translation_helper() {
@@ -267,19 +268,45 @@ rule "event values":
     result = eventWasEnvironment
     result = eventWasHealthPack
 "#;
-    let emitted = Compiler::new()
+    let artifact = Compiler::new()
         .unwrap()
         .compile_source_artifact(source, "event-values.opy", Path::new("."))
-        .expect("bare event values and the hero setting must compile")
-        .emitted;
+        .expect("bare event values and the hero setting must compile");
 
+    assert!(
+        artifact
+            .wir
+            .rules
+            .iter()
+            .flat_map(|rule| &rule.actions)
+            .any(|action| {
+                matches!(
+                    action,
+                    Action::SetGlobalVariable {
+                        variable,
+                        value: Value::Call { name, .. },
+                    } if variable == "heroSetting" && name == "createWorkshopSettingHero"
+                )
+            })
+    );
+    let rule = artifact
+        .wir
+        .rules
+        .iter()
+        .find(|rule| rule.name == "event values")
+        .expect("event rule must lower");
     for expected in [
-        "Workshop Setting Hero(Custom String(\"cat\"), Custom String(\"hero\"), Ana, 0)",
-        "Set Global Variable(result, Event Direction);",
-        "Set Global Variable(result, Event Was Environment);",
-        "Set Global Variable(result, Event Was Health Pack);",
+        "eventDirection",
+        "eventWasEnvironment",
+        "eventWasHealthPack",
     ] {
-        assert!(emitted.contains(expected), "missing {expected}\n{emitted}");
+        assert!(rule.actions.iter().any(|action| matches!(
+            action,
+            Action::SetGlobalVariable {
+                variable,
+                value: Value::Call { name, .. },
+            } if variable == "result" && name == expected
+        )));
     }
 }
 

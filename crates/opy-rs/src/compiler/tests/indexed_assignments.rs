@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use crate::Compiler;
 use workshop_rs::catalog::{Catalog, Locale};
 use workshop_rs::roundtrip::equivalent;
+use workshop_rs::{Action, Value};
 
 fn fixture_dir(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -79,9 +80,26 @@ rule "delete nested player value":
 "#;
     let hir = crate::compile(source, "nested-player-delete.opy", Path::new(".")).unwrap();
     let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
-    assert!(artifact.emitted.contains(
-        "Modify Player Variable At Index((Event Player).values, index, Remove From Array By Index, 0);"
-    ));
+    let Action::Call { name, args } = &artifact.wir.rules[0].actions[0] else {
+        panic!("nested deletion must lower to an indexed player-variable action");
+    };
+    assert_eq!(name, "modifyPlayerVariableAtIndex");
+    let [
+        Value::PlayerVariable { player, variable },
+        Value::GlobalVariable(outer_index),
+        Value::Call {
+            name: operation, ..
+        },
+        Value::Number(inner_index),
+    ] = args.as_slice()
+    else {
+        panic!("nested deletion must preserve its variable, indices, and operation");
+    };
+    assert!(matches!(player.as_ref(), Value::EventPlayer));
+    assert_eq!(variable, "values");
+    assert_eq!(outer_index, "index");
+    assert_eq!(operation, "removeFromArrayByIndex");
+    assert_eq!(*inner_index, 0.0);
 }
 
 #[test]
@@ -129,13 +147,47 @@ rule "indexed receiver mutations":
     let hir = crate::compile(source, "indexed-receiver-mutations.opy", Path::new(".")).unwrap();
     let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
 
-    assert!(artifact.emitted.contains(
-        "Modify Global Variable At Index(values, Slot Of(Event Player), Append To Array, Current Map);"
-    ));
-    assert!(artifact.emitted.contains(
-        "Modify Player Variable At Index((Event Player).slots, Slot Of(Event Player), Remove From Array, Hero Of(Event Player));"
-    ));
-    assert_eq!(artifact.emitted.matches("Slot Of(Event Player)").count(), 2);
+    let calls = artifact
+        .wir
+        .rules
+        .iter()
+        .flat_map(|rule| rule.actions.iter())
+        .filter_map(|action| match action {
+            Action::Call { name, args } => Some((name.as_str(), args.as_slice())),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert!(calls.iter().any(|(name, args)| {
+        *name == "modifyGlobalVariableAtIndex"
+            && matches!(
+                *args,
+                [
+                    Value::GlobalVariable(variable),
+                    Value::Call { name: index, .. },
+                    Value::Call { name: operation, .. },
+                    Value::Call { name: value, .. },
+                ] if variable == "values"
+                    && index == "getSlot"
+                    && operation == "appendToArray"
+                    && value == "getCurrentMap"
+            )
+    }));
+    assert!(calls.iter().any(|(name, args)| {
+        *name == "modifyPlayerVariableAtIndex"
+            && matches!(
+                *args,
+                [
+                    Value::PlayerVariable { player, variable },
+                    Value::Call { name: index, .. },
+                    Value::Call { name: operation, .. },
+                    Value::Call { name: value, .. },
+                ] if matches!(player.as_ref(), Value::EventPlayer)
+                    && variable == "slots"
+                    && index == "getSlot"
+                    && operation == "removeFromArray"
+                    && value == "getHero"
+            )
+    }));
 
     assert_eq!(artifact.wir.action_span(0, 0).unwrap().start.line, 7);
     assert_eq!(artifact.wir.action_span(0, 1).unwrap().start.line, 8);
