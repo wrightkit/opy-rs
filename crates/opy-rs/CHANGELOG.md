@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.59](https://github.com/wrightkit/opy-rs/compare/v0.1.58...v0.1.59) - 2026-09-26
+
+### Added
+
+- *(opy)* resolve the 53 missing OverPy values ([#393](https://github.com/wrightkit/opy-rs/pull/393))
+- *(manifest)* resolve the 42 missing OverPy member functions ([#389](https://github.com/wrightkit/opy-rs/pull/389))
+
+### Fixed
+
+- *(compiler)* apply OverPy's per-parameter False/True substitutions under optimizeForSize ([#398](https://github.com/wrightkit/opy-rs/pull/398))
+- *(manifest)* correct startHoT signature
+- *(compiler)* append the omitted sort order to createWorkshopSetting* like OverPy ([#395](https://github.com/wrightkit/opy-rs/pull/395))
+
+### Other
+
+- *(compiler)* cover native Workshop identities at the emission boundary ([#400](https://github.com/wrightkit/opy-rs/pull/400))
+- *(manifest)* exercise startHoT keyword binding
+- Merge origin/main into fix/396-start-hot
+
 ## [0.1.58](https://github.com/wrightkit/opy-rs/compare/v0.1.57...v0.1.58) - 2026-09-25
 
 ### Fixed
