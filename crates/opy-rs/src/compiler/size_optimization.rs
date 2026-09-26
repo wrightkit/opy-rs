@@ -4,13 +4,11 @@
 use workshop_rs::catalog::{Kind, ParamCoercions};
 use workshop_rs::{Action, ModifyOp, Value};
 
-use self::literal_flags::{
-    LITERAL_FLAGS, NULL_VECTOR_BY_NULL, ONE_BY_TRUE, ZERO_BY_FALSE, ZERO_BY_NULL,
-};
+use self::literal_slots::{Slot, slot};
 use super::Compiler;
 use super::operator_optimization::falsy;
 
-mod literal_flags;
+mod literal_slots;
 
 pub(super) struct SizeOptimizer<'a> {
     compiler: &'a Compiler,
@@ -206,22 +204,18 @@ impl<'a> SizeOptimizer<'a> {
             "customString" => 1,
             _ => index,
         };
-        let flags = LITERAL_FLAGS
-            .iter()
-            .find(|(candidate, position, _)| *candidate == name && *position == index)
-            .map_or(0, |(_, _, flags)| *flags);
+        let slot = slot(name, index);
         if let Value::Number(number) = value {
-            if *number == 0.0 && flags & ZERO_BY_FALSE != 0 {
-                *value = Value::Bool(false);
-            } else if *number == 0.0 && flags & ZERO_BY_NULL != 0 {
-                *value = Value::Null;
-            } else if *number == 1.0 && flags & ONE_BY_TRUE != 0 {
-                *value = Value::Bool(true);
+            match (slot, *number) {
+                (Some(Slot::Boolean | Slot::FalseOnly), 0.0) => *value = Value::Bool(false),
+                (Some(Slot::ZeroAsNull), 0.0) => *value = Value::Null,
+                (Some(Slot::Boolean | Slot::TrueOnly), 1.0) => *value = Value::Bool(true),
+                _ => {}
             }
         } else if is_empty_string(value) {
             *value = self.empty_string(coercions.empty_array_as_string);
         } else if is_zero_vector(value) {
-            *value = if flags & NULL_VECTOR_BY_NULL != 0 {
+            *value = if slot == Some(Slot::ZeroVectorAsNull) {
                 Value::Null
             } else {
                 self.zero_vector_sum()
@@ -453,28 +447,5 @@ pub(super) fn action_values(action: &mut Action) -> Vec<&mut Value> {
         } => vec![player, start, stop, step],
         Action::Call { args, .. } => args.iter_mut().collect(),
         _ => Vec::new(),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::literal_flags::LITERAL_FLAGS;
-    use workshop_rs::catalog::{Catalog, Kind};
-
-    /// A name that is not a catalog entry is a table row that can never apply.
-    #[test]
-    fn literal_flag_names_resolve_to_catalog_entries() {
-        let catalog = Catalog::builtin().unwrap();
-        let unresolved: Vec<&str> = LITERAL_FLAGS
-            .iter()
-            .map(|(name, _, _)| *name)
-            .filter(|name| {
-                *name != "array"
-                    && [Kind::Action, Kind::Value]
-                        .into_iter()
-                        .all(|kind| catalog.entry(kind, name).is_none())
-            })
-            .collect();
-        assert_eq!(unresolved, Vec::<&str>::new());
     }
 }
