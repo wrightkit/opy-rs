@@ -256,14 +256,18 @@ impl Lowerer {
                 debug_source: None,
                 span: Some(span.into()),
             },
-            "eventAbility" | "eventDamage" | "eventHealing" | "eventWasCriticalHit" => {
-                HirExpr::Call {
-                    name: name.to_string(),
-                    args: Vec::new(),
-                    debug_source: None,
-                    span: Some(span.into()),
-                }
-            }
+            "eventAbility"
+            | "eventDamage"
+            | "eventDirection"
+            | "eventHealing"
+            | "eventWasCriticalHit"
+            | "eventWasEnvironment"
+            | "eventWasHealthPack" => HirExpr::Call {
+                name: name.to_string(),
+                args: Vec::new(),
+                debug_source: None,
+                span: Some(span.into()),
+            },
             _ if self.global_visible(name) => HirExpr::GlobalVar {
                 name: name.to_string(),
                 span: Some(span.into()),
@@ -644,6 +648,7 @@ impl Lowerer {
                 | "createWorkshopSettingEnum"
                 | "createWorkshopSettingInt"
                 | "createWorkshopSettingFloat"
+                | "createWorkshopSettingHero"
         ) {
             return HirExpr::Call {
                 name: name.to_string(),
