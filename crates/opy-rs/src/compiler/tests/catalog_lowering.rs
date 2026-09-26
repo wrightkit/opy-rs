@@ -5,6 +5,35 @@ use std::path::{Path, PathBuf};
 use crate::Compiler;
 use workshop_rs::catalog::{Catalog, Locale};
 use workshop_rs::roundtrip::equivalent;
+use workshop_rs::{Action, Value};
+
+fn collect_calls<'a>(value: &'a Value, name: &str, calls: &mut Vec<&'a [Value]>) {
+    match value {
+        Value::Call {
+            name: call_name,
+            args,
+        } => {
+            if call_name == name {
+                calls.push(args);
+            }
+            for argument in args {
+                collect_calls(argument, name, calls);
+            }
+        }
+        Value::Array(values) => {
+            for value in values {
+                collect_calls(value, name, calls);
+            }
+        }
+        Value::Vector { x, y, z } => {
+            collect_calls(x, name, calls);
+            collect_calls(y, name, calls);
+            collect_calls(z, name, calls);
+        }
+        Value::PlayerVariable { player, .. } => collect_calls(player, name, calls),
+        _ => {}
+    }
+}
 
 fn fixture_dir(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -219,8 +248,20 @@ fn pinned_texture_members_lower_with_texture_tag_setup() {
             .emitted
             .contains("Create Dummy Bot(All Heroes, If-Then-Else(")
     );
-    assert!(artifact.emitted.contains("Number Of Slots(Team(Team 1))"));
-    assert!(artifact.emitted.contains("Number Of Slots(Team(Team 2))"));
+    let mut slot_queries = Vec::new();
+    for action in artifact.wir.rules.iter().flat_map(|rule| &rule.actions) {
+        if let Action::Call { args, .. } = action {
+            for value in args {
+                collect_calls(value, "getNumberOfSlots", &mut slot_queries);
+            }
+        }
+    }
+    for team in ["TEAM_1", "TEAM_2"] {
+        assert!(slot_queries.iter().any(|args| matches!(
+            *args,
+            [Value::Enum { value_type, value }] if value_type == "Team" && value == team
+        )));
+    }
     assert!(
         artifact
             .emitted

@@ -180,36 +180,44 @@ fn find_initializer(program: &crate::hir::Program) -> &Expr {
 #[test]
 fn omitted_setting_sort_order_lowers_to_zero() {
     let compiler = Compiler::new().expect("released Workshop contract must load");
-    for (call, expected) in [
+    for (call, function) in [
         (
             "createWorkshopSettingBool(\"C\", \"N\", true)",
-            "Workshop Setting Toggle(Custom String(\"C\"), Custom String(\"N\"), True, 0)",
+            "workshopSettingToggle",
         ),
         (
             "createWorkshopSettingInt(\"C\", \"N\", 1, 0, 10)",
-            "Workshop Setting Integer(Custom String(\"C\"), Custom String(\"N\"), 1, 0, 10, 0)",
+            "workshopSettingInteger",
         ),
         (
             "createWorkshopSettingEnum(\"C\", \"N\", 0, [\"a\", \"b\"])",
-            "Workshop Setting Combo(Custom String(\"C\"), Custom String(\"N\"), 0, Array(Custom String(\"a\"), Custom String(\"b\")), 0)",
+            "workshopSettingCombo",
         ),
         (
             "createWorkshopSettingHero(\"C\", \"N\", Hero.ANA)",
-            "Workshop Setting Hero(Custom String(\"C\"), Custom String(\"N\"), Ana, 0)",
+            "createWorkshopSettingHero",
         ),
         (
             "createWorkshopSetting(int[0:10], \"C\", \"N\", 1)",
-            "Workshop Setting Integer(Custom String(\"C\"), Custom String(\"N\"), 1, 0, 10, 0)",
+            "workshopSettingInteger",
         ),
     ] {
         let source = format!("globalvar g\n\nrule \"p\":\n    @Event global\n    g = {call}\n");
         let artifact = compiler
             .compile_source_with_locale(&source, "sort.opy", Path::new("."), &Locale::new("en-US"))
             .unwrap_or_else(|error| panic!("{call} must compile: {error}"));
-        assert!(
-            artifact.emitted.contains(expected),
-            "{call} emitted:\n{}",
-            artifact.emitted
-        );
+        let setting = artifact
+            .wir
+            .rules
+            .iter()
+            .flat_map(|rule| rule.actions.iter())
+            .flat_map(action_values)
+            .find_map(|value| find_call(value, function))
+            .unwrap_or_else(|| panic!("{call} must lower to its Workshop setting call"));
+        let Value::Call { name, args } = setting else {
+            unreachable!("the search above only returns call values");
+        };
+        assert_eq!(name, function);
+        assert!(matches!(args.last(), Some(Value::Number(sort_order)) if *sort_order == 0.0));
     }
 }

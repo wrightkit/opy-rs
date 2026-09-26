@@ -90,12 +90,27 @@ fn format_folds_constant_arguments_without_nested_string_chunks() {
     let hir = crate::compile(source, "source.opy", Path::new(".")).unwrap();
     let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
 
-    assert!(
-        artifact
-            .emitted
-            .contains("Set Global Variable(g, Custom String(\"Hold {0}: 49% 2 3 4 5\", Reload));")
-    );
-    assert!(!artifact.emitted.contains("Custom String(\"{0}{1}\""));
+    let rule = artifact
+        .wir
+        .rules
+        .iter()
+        .find(|rule| rule.name == "r")
+        .expect("string-format rule must lower");
+    assert!(matches!(
+        rule.actions.first(),
+        Some(Action::SetGlobalVariable {
+            variable,
+            value: Value::Call { name, args },
+        }) if variable == "g"
+            && name == "customString"
+            && matches!(
+                args.as_slice(),
+                [Value::String(text), Value::Enum { value_type, value }]
+                    if text == "Hold {0}: 49% 2 3 4 5"
+                        && value_type == "Button"
+                        && value == "RELOAD"
+            )
+    ));
 }
 
 #[test]

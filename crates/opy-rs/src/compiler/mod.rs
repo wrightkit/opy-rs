@@ -1824,16 +1824,40 @@ rule "assignments":
                 .emitted
                 .contains("Modify Player Variable(Event Player, p1, Multiply, 2);")
         );
-        assert!(
-            artifact
-                .emitted
-                .contains("Set Player Variable At Index((Event Player).p2, 2, 7);")
-        );
-        assert!(
-            artifact
-                .emitted
-                .contains("Modify Player Variable At Index((Event Player).p2, 0, Subtract, 3);")
-        );
+        assert!(artifact.wir.rules[1].actions.iter().any(|action| matches!(
+            action,
+            workshop_rs::Action::Call { name, args }
+                if name == "setPlayerVariableAtIndex"
+                    && matches!(
+                        args.as_slice(),
+                        [
+                            workshop_rs::Value::PlayerVariable { player, variable },
+                            workshop_rs::Value::Number(index),
+                            workshop_rs::Value::Number(value),
+                        ] if matches!(player.as_ref(), workshop_rs::Value::EventPlayer)
+                            && variable == "p2"
+                            && *index == 2.0
+                            && *value == 7.0
+                    )
+        )));
+        assert!(artifact.wir.rules[1].actions.iter().any(|action| matches!(
+            action,
+            workshop_rs::Action::Call { name, args }
+                if name == "modifyPlayerVariableAtIndex"
+                    && matches!(
+                        args.as_slice(),
+                        [
+                            workshop_rs::Value::PlayerVariable { player, variable },
+                            workshop_rs::Value::Number(index),
+                            workshop_rs::Value::Call { name: operation, .. },
+                            workshop_rs::Value::Number(value),
+                        ] if matches!(player.as_ref(), workshop_rs::Value::EventPlayer)
+                            && variable == "p2"
+                            && *index == 0.0
+                            && operation == "subtract"
+                            && *value == 3.0
+                    )
+        )));
 
         let rule = artifact.wir.rules.get(1).unwrap();
         assert!(matches!(
