@@ -742,7 +742,7 @@ impl Lowerer {
                         span: Some(span.into()),
                     };
                 }
-                if name == "async" {
+                if matches!(name, "async" | "startRule") {
                     let lowered = args
                         .iter()
                         .enumerate()
@@ -1009,6 +1009,9 @@ impl Lowerer {
                             debug_source: None,
                             span: None,
                         });
+                    }
+                    Some(ParamDefault::Null { .. }) => {
+                        bound.push(HirExpr::Null { span: None });
                     }
                     Some(ParamDefault::EnumMember(member)) => {
                         let domain = param.domain.clone().unwrap_or_default();

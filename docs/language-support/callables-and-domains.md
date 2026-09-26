@@ -10,6 +10,9 @@ canonical Workshop model.
 | --- | --- | --- |
 | `abs(value)`, `len(value)`, `range(...)` | ✅ Supported | `range` supports its documented one-, two- and three-argument forms. |
 | `wait(duration[, reevaluation])` | ✅ Supported | The omitted reevaluation uses the OverPy default. |
+| Game-flow, scoring, dummy, assist and modification actions (`addToTeamScore`, `setTeamScore`, `declareDraw`, `declareRoundDraw`, `declareRoundVictory`, `destroyAllProgressBarInWorldTexts`, `destroyDummy`, `enableGamemodeCompletion`, `enableInspector`, `enableScoring`, `goToAssembleHeroes`, `returnToLobby`, `startGamemode`, `stopAllAssists`, `stopAllDamageModifications`, `stopAllHealingModifications`, `stopAssist`, `stopForcingSpawn`) | ✅ Supported | Each lowers to its canonical Workshop action; `addToTeamScore(team, 0)` is dropped when optimization is enabled, as in OverPy. |
+| `startRule(subroutine, behavior)` | ✅ Supported | Takes a declared subroutine and an `AsyncBehavior` value, both required, and lowers like `async`. |
+| `createProjectile`, `createHomingProjectile`, `createProjectileEffect` | ✅ Supported | Full OverPy argument lists with `Projectile`, `Relativity`, `ModifyHealth`, `DynamicEffect` and `ProjectileEffectReeval` domains; defaults follow OverPy (`Null` owner, position and direction and infinite lifetime for the projectile forms), and required arguments after defaulted ones are passed by keyword. |
 | `raiseToPower(base, exponent)` | ✅ Supported | Numeric arguments are lowered through the Workshop value model. |
 | `sorted(array[, key])` | ✅ Supported | The supported key form uses contextual element/index binders. |
 | `all(array)`, `any(array)` | ✅ Supported | The array form is supported. |

@@ -6483,6 +6483,439 @@
         }
       ],
       "receiver": "Any"
+    },
+    {
+      "catalogId": "addToTeamScore",
+      "evidence": [
+        "missing-actions"
+      ],
+      "id": "addToTeamScore",
+      "kind": "action",
+      "params": [
+        {
+          "domain": "Team",
+          "name": "team"
+        },
+        {
+          "name": "score"
+        }
+      ]
+    },
+    {
+      "catalogId": "setTeamScore",
+      "evidence": [
+        "missing-actions"
+      ],
+      "id": "setTeamScore",
+      "kind": "action",
+      "params": [
+        {
+          "domain": "Team",
+          "name": "team"
+        },
+        {
+          "name": "score"
+        }
+      ]
+    },
+    {
+      "catalogId": "declareDraw",
+      "evidence": [
+        "missing-actions"
+      ],
+      "id": "declareDraw",
+      "kind": "action",
+      "params": []
+    },
+    {
+      "catalogId": "declareRoundDraw",
+      "evidence": [
+        "missing-actions"
+      ],
+      "id": "declareRoundDraw",
+      "kind": "action",
+      "params": []
+    },
+    {
+      "catalogId": "declareRoundVictory",
+      "evidence": [
+        "missing-actions"
+      ],
+      "id": "declareRoundVictory",
+      "kind": "action",
+      "params": [
+        {
+          "domain": "Team",
+          "name": "roundWinningTeam"
+        }
+      ]
+    },
+    {
+      "catalogId": "destroyAllProgressBarInWorldText",
+      "evidence": [
+        "missing-actions"
+      ],
+      "id": "destroyAllProgressBarInWorldTexts",
+      "kind": "action",
+      "params": []
+    },
+    {
+      "catalogId": "destroyDummy",
+      "evidence": [
+        "missing-actions"
+      ],
+      "id": "destroyDummy",
+      "kind": "action",
+      "params": [
+        {
+          "domain": "Team",
+          "name": "team"
+        },
+        {
+          "name": "slot"
+        }
+      ]
+    },
+    {
+      "catalogId": "enableGamemodeCompletion",
+      "evidence": [
+        "missing-actions"
+      ],
+      "id": "enableGamemodeCompletion",
+      "kind": "action",
+      "params": []
+    },
+    {
+      "catalogId": "enableInspectorRecording",
+      "evidence": [
+        "missing-actions"
+      ],
+      "id": "enableInspector",
+      "kind": "action",
+      "params": []
+    },
+    {
+      "catalogId": "enableScoring",
+      "evidence": [
+        "missing-actions"
+      ],
+      "id": "enableScoring",
+      "kind": "action",
+      "params": []
+    },
+    {
+      "catalogId": "goToAssembleHeroes",
+      "evidence": [
+        "missing-actions"
+      ],
+      "id": "goToAssembleHeroes",
+      "kind": "action",
+      "params": []
+    },
+    {
+      "catalogId": "returnToLobby",
+      "evidence": [
+        "missing-actions"
+      ],
+      "id": "returnToLobby",
+      "kind": "action",
+      "params": []
+    },
+    {
+      "catalogId": "startGameMode",
+      "evidence": [
+        "missing-actions"
+      ],
+      "id": "startGamemode",
+      "kind": "action",
+      "params": []
+    },
+    {
+      "catalogId": "stopAllAssists",
+      "evidence": [
+        "missing-actions"
+      ],
+      "id": "stopAllAssists",
+      "kind": "action",
+      "params": []
+    },
+    {
+      "catalogId": "stopAllDamageModifications",
+      "evidence": [
+        "missing-actions"
+      ],
+      "id": "stopAllDamageModifications",
+      "kind": "action",
+      "params": []
+    },
+    {
+      "catalogId": "stopAllHealingModifications",
+      "evidence": [
+        "missing-actions"
+      ],
+      "id": "stopAllHealingModifications",
+      "kind": "action",
+      "params": []
+    },
+    {
+      "catalogId": "stopAssist",
+      "evidence": [
+        "missing-actions"
+      ],
+      "id": "stopAssist",
+      "kind": "action",
+      "params": [
+        {
+          "name": "assistId"
+        }
+      ]
+    },
+    {
+      "catalogId": "stopForcingSpawn",
+      "evidence": [
+        "missing-actions"
+      ],
+      "id": "stopForcingSpawn",
+      "kind": "action",
+      "params": [
+        {
+          "domain": "Team",
+          "name": "team"
+        }
+      ]
+    },
+    {
+      "catalogLink": "special-lowering",
+      "evidence": [
+        "missing-actions"
+      ],
+      "id": "startRule",
+      "kind": "action",
+      "params": [
+        {
+          "name": "subroutine"
+        },
+        {
+          "domain": "StartRuleBehavior",
+          "name": "ifAlreadyExecuting"
+        }
+      ]
+    },
+    {
+      "catalogId": "createProjectile",
+      "evidence": [
+        "missing-actions"
+      ],
+      "id": "createProjectile",
+      "kind": "action",
+      "params": [
+        {
+          "domain": "Projectile",
+          "name": "type"
+        },
+        {
+          "default": {
+            "null": true
+          },
+          "name": "player"
+        },
+        {
+          "default": {
+            "null": true
+          },
+          "name": "startPosition"
+        },
+        {
+          "default": {
+            "null": true
+          },
+          "name": "direction"
+        },
+        {
+          "default": "TO_WORLD",
+          "domain": "Relativity",
+          "name": "relativity"
+        },
+        {
+          "default": "DAMAGE",
+          "domain": "ModifyHealth",
+          "name": "modifyHealthType"
+        },
+        {
+          "default": "ALL",
+          "domain": "Team",
+          "name": "affectedTeam"
+        },
+        {
+          "name": "damage"
+        },
+        {
+          "default": 1,
+          "name": "damageScalar"
+        },
+        {
+          "default": 0,
+          "name": "explosionRadius"
+        },
+        {
+          "default": "BAD_EXPLOSION",
+          "domain": "DynamicEffect",
+          "name": "explosionEffect"
+        },
+        {
+          "default": "EXPLOSION_SOUND",
+          "domain": "DynamicEffect",
+          "name": "explosionSound"
+        },
+        {
+          "default": 0,
+          "name": "oversize"
+        },
+        {
+          "name": "speed"
+        },
+        {
+          "default": 999999999999,
+          "name": "lifetime"
+        },
+        {
+          "default": 0,
+          "name": "impulseStrength"
+        },
+        {
+          "default": 0,
+          "name": "ricochetCount"
+        },
+        {
+          "default": 0,
+          "name": "gravity"
+        }
+      ]
+    },
+    {
+      "catalogId": "createHomingProjectile",
+      "evidence": [
+        "missing-actions"
+      ],
+      "id": "createHomingProjectile",
+      "kind": "action",
+      "params": [
+        {
+          "domain": "Projectile",
+          "name": "type"
+        },
+        {
+          "default": {
+            "null": true
+          },
+          "name": "player"
+        },
+        {
+          "default": {
+            "null": true
+          },
+          "name": "startPosition"
+        },
+        {
+          "default": {
+            "null": true
+          },
+          "name": "direction"
+        },
+        {
+          "default": "TO_WORLD",
+          "domain": "Relativity",
+          "name": "relativity"
+        },
+        {
+          "default": "DAMAGE",
+          "domain": "ModifyHealth",
+          "name": "modifyHealthType"
+        },
+        {
+          "default": "ALL",
+          "domain": "Team",
+          "name": "affectedTeam"
+        },
+        {
+          "name": "damage"
+        },
+        {
+          "default": 1,
+          "name": "damageScalar"
+        },
+        {
+          "default": 0,
+          "name": "explosionRadius"
+        },
+        {
+          "default": "BAD_EXPLOSION",
+          "domain": "DynamicEffect",
+          "name": "explosionEffect"
+        },
+        {
+          "default": "EXPLOSION_SOUND",
+          "domain": "DynamicEffect",
+          "name": "explosionSound"
+        },
+        {
+          "default": 0,
+          "name": "oversize"
+        },
+        {
+          "name": "speed"
+        },
+        {
+          "default": 999999999999,
+          "name": "lifetime"
+        },
+        {
+          "default": 0,
+          "name": "impulseStrength"
+        },
+        {
+          "name": "homingTarget"
+        },
+        {
+          "default": 1,
+          "name": "homingStrength"
+        }
+      ]
+    },
+    {
+      "catalogId": "createProjectileEffect",
+      "evidence": [
+        "missing-actions"
+      ],
+      "id": "createProjectileEffect",
+      "kind": "action",
+      "params": [
+        {
+          "name": "visibleTo"
+        },
+        {
+          "domain": "Projectile",
+          "name": "type"
+        },
+        {
+          "name": "friendlyTo"
+        },
+        {
+          "name": "position"
+        },
+        {
+          "name": "direction"
+        },
+        {
+          "default": 0,
+          "name": "oversize"
+        },
+        {
+          "default": "VISIBILITY_FRIENDLINESS_POSITION_DIRECTION_AND_SIZE",
+          "domain": "ProjectileEffectReeval",
+          "name": "reevaluation"
+        }
+      ]
     }
   ],
   "provenance": {
