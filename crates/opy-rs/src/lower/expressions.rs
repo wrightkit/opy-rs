@@ -1010,6 +1010,9 @@ impl Lowerer {
                             span: None,
                         });
                     }
+                    Some(ParamDefault::Null { .. }) => {
+                        bound.push(HirExpr::Null { span: None });
+                    }
                     Some(ParamDefault::EnumMember(member)) => {
                         let domain = param.domain.clone().unwrap_or_default();
                         bound.push(HirExpr::Enum {

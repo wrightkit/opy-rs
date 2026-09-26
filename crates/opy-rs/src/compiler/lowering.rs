@@ -1217,7 +1217,7 @@ impl<'a> Lowering<'a> {
         let optimization = self.optimization_state_at(rule.span.as_ref());
         if optimization.enabled
             && !rule.delimiter
-            && !self.has_meaningful_rule_action(&actions, &event)
+            && !self.has_meaningful_rule_action(&self.useful_actions(&actions), &event)
         {
             return Ok(());
         }
@@ -4729,17 +4729,21 @@ impl<'a> Lowering<'a> {
         if !matches!(function.kind, FunctionKind::Action) {
             return Err(self.unsupported(format!("'{name}' is not a generic OPY action"), span));
         }
-        if function.id == "async" {
+        if matches!(function.id.as_str(), "async" | "startRule") {
             let [subroutine, behavior] = args else {
-                return Err(
-                    self.unsupported("async requires a subroutine and an AsyncBehavior", span)
-                );
+                return Err(self.unsupported(
+                    format!(
+                        "{} requires a subroutine and a start-rule behavior",
+                        function.id
+                    ),
+                    span,
+                ));
             };
             let subroutine_name = match subroutine {
                 Expr::Call { name, args, .. } if args.is_empty() => name,
                 _ => {
                     return Err(self.unsupported(
-                        "async requires a declared subroutine",
+                        format!("{} requires a declared subroutine", function.id),
                         subroutine.span().copied(),
                     ));
                 }
@@ -7323,6 +7327,12 @@ impl<'a> Lowering<'a> {
                             let text = self.materialize_value(*text);
                             matches!(text, workshop_rs::Value::Null) || is_empty_string(&text)
                         })
+                    {
+                        return false;
+                    }
+                    if let Action::Call { name, args } = &self.actions[*id]
+                        && name == "addToTeamScore"
+                        && args.get(1).is_some_and(|score| self.value_is_number(*score, 0.0))
                     {
                         return false;
                     }
