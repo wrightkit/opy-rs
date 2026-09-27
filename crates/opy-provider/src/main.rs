@@ -1070,17 +1070,7 @@ fn document_lsp_position(
         .map(|document| document.text.clone())
         .or_else(|| std::fs::read_to_string(&resolved).ok())
         .unwrap_or_default();
-    let character = source
-        .lines()
-        .nth(line.saturating_sub(1) as usize)
-        .map(|text| {
-            text.chars()
-                .take(col.saturating_sub(1) as usize)
-                .map(char::len_utf16)
-                .sum::<usize>() as u32
-        })
-        .unwrap_or_else(|| col.saturating_sub(1));
-    json!({ "line": line.saturating_sub(1), "character": character })
+    lsp_position(&source, line, col)
 }
 
 fn check_result(project: &LoadedProject, outcome: &CheckOutcome) -> Value {
@@ -1209,17 +1199,21 @@ fn diagnostic_range(project: &LoadedProject, location: Option<&SourceLocation>) 
         });
     };
     json!({
-        "start": lsp_position(project, &location.path, location.start.line, location.start.col),
-        "end": lsp_position(project, &location.path, location.end.line, location.end.col),
+        "start": project_lsp_position(project, &location.path, location.start.line, location.start.col),
+        "end": project_lsp_position(project, &location.path, location.end.line, location.end.col),
     })
 }
 
-fn lsp_position(project: &LoadedProject, path: &str, line: u32, col: u32) -> Value {
+fn project_lsp_position(project: &LoadedProject, path: &str, line: u32, col: u32) -> Value {
     let source = if path == path_string(project.filesystem.main_path()) {
         project.filesystem.source().to_owned()
     } else {
         std::fs::read_to_string(resolved_project_path(project, path)).unwrap_or_default()
     };
+    lsp_position(&source, line, col)
+}
+
+fn lsp_position(source: &str, line: u32, col: u32) -> Value {
     let character = source
         .lines()
         .nth(line.saturating_sub(1) as usize)
