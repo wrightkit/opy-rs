@@ -595,6 +595,12 @@ struct Jsonc<'a> {
     file: u32,
 }
 
+enum ScalarValue {
+    String(String),
+    Bool(bool),
+    Number(f64),
+}
+
 impl Jsonc<'_> {
     fn here(&self) -> Position {
         Position::new(self.line, self.col)
@@ -759,125 +765,92 @@ impl Jsonc<'_> {
     fn parse_value(&mut self) -> OpyResult<(cst::SettingsNode, Position)> {
         let start = self.here();
         let ch = self.peek();
-        let node = match ch {
+        let saved = (self.pos, self.line, self.col);
+        let scalar = match ch {
             Some('"') | Some('\'') => {
-                let saved = (self.pos, self.line, self.col);
                 let value = self.parse_string_expression().ok_or_else(|| {
                     self.error(
                         "settings-invalid",
                         "unterminated string in settings value".to_string(),
                     )
                 })?;
-                self.skip_inline_whitespace();
-                if self.is_expression_continuation() {
-                    self.pos = saved.0;
-                    self.line = saved.1;
-                    self.col = saved.2;
-                    cst::SettingsNode::Raw {
-                        name: String::new(),
-                        value: self.parse_expression_value(),
-                        span: Span::new(self.file, start, self.here()),
-                    }
-                } else {
-                    cst::SettingsNode::String {
-                        name: String::new(),
-                        value,
-                        span: Span::new(self.file, start, self.here()),
-                    }
-                }
+                Some(ScalarValue::String(value))
             }
             Some('t') => {
-                let saved = (self.pos, self.line, self.col);
                 self.expect_word("true")?;
-                self.skip_inline_whitespace();
-                if self.is_expression_continuation() {
-                    self.pos = saved.0;
-                    self.line = saved.1;
-                    self.col = saved.2;
-                    cst::SettingsNode::Raw {
-                        name: String::new(),
-                        value: self.parse_expression_value(),
-                        span: Span::new(self.file, start, self.here()),
-                    }
-                } else {
-                    cst::SettingsNode::Bool {
-                        name: String::new(),
-                        value: true,
-                        span: Span::new(self.file, start, self.here()),
-                    }
-                }
+                Some(ScalarValue::Bool(true))
             }
             Some('f') => {
-                let saved = (self.pos, self.line, self.col);
                 self.expect_word("false")?;
-                self.skip_inline_whitespace();
-                if self.is_expression_continuation() {
-                    self.pos = saved.0;
-                    self.line = saved.1;
-                    self.col = saved.2;
-                    cst::SettingsNode::Raw {
-                        name: String::new(),
-                        value: self.parse_expression_value(),
-                        span: Span::new(self.file, start, self.here()),
-                    }
-                } else {
-                    cst::SettingsNode::Bool {
-                        name: String::new(),
-                        value: false,
-                        span: Span::new(self.file, start, self.here()),
-                    }
-                }
+                Some(ScalarValue::Bool(false))
             }
             Some(c) if c.is_ascii_digit() || c == '-' => {
-                let saved = (self.pos, self.line, self.col);
-                let value = self.parse_number()?;
-                self.skip_inline_whitespace();
-                if self.is_expression_continuation() {
-                    self.pos = saved.0;
-                    self.line = saved.1;
-                    self.col = saved.2;
+                Some(ScalarValue::Number(self.parse_number()?))
+            }
+            _ => None,
+        };
+        let node = if let Some(scalar) = scalar {
+            self.skip_inline_whitespace();
+            if self.is_expression_continuation() {
+                self.pos = saved.0;
+                self.line = saved.1;
+                self.col = saved.2;
+                cst::SettingsNode::Raw {
+                    name: String::new(),
+                    value: self.parse_expression_value(),
+                    span: Span::new(self.file, start, self.here()),
+                }
+            } else {
+                let span = Span::new(self.file, start, self.here());
+                match scalar {
+                    ScalarValue::String(value) => cst::SettingsNode::String {
+                        name: String::new(),
+                        value,
+                        span,
+                    },
+                    ScalarValue::Bool(value) => cst::SettingsNode::Bool {
+                        name: String::new(),
+                        value,
+                        span,
+                    },
+                    ScalarValue::Number(value) => cst::SettingsNode::Number {
+                        name: String::new(),
+                        value,
+                        span,
+                    },
+                }
+            }
+        } else {
+            match ch {
+                Some('[') => {
+                    let elements = self.parse_list()?;
+                    cst::SettingsNode::List {
+                        name: String::new(),
+                        elements,
+                        span: Span::new(self.file, start, self.here()),
+                    }
+                }
+                Some('{') => {
+                    let (children, _) = self.parse_object()?;
+                    cst::SettingsNode::Group {
+                        name: String::new(),
+                        children,
+                        span: Span::new(self.file, start, self.here()),
+                    }
+                }
+                _ => {
                     let value = self.parse_expression_value();
+                    if value.trim().is_empty() {
+                        return Err(self.error(
+                            "settings-invalid",
+                            "expected a value in settings block".to_string(),
+                        ));
+                    }
                     cst::SettingsNode::Raw {
                         name: String::new(),
                         value,
                         span: Span::new(self.file, start, self.here()),
                     }
-                } else {
-                    cst::SettingsNode::Number {
-                        name: String::new(),
-                        value,
-                        span: Span::new(self.file, start, self.here()),
-                    }
-                }
-            }
-            Some('[') => {
-                let elements = self.parse_list()?;
-                cst::SettingsNode::List {
-                    name: String::new(),
-                    elements,
-                    span: Span::new(self.file, start, self.here()),
-                }
-            }
-            Some('{') => {
-                let (children, _) = self.parse_object()?;
-                cst::SettingsNode::Group {
-                    name: String::new(),
-                    children,
-                    span: Span::new(self.file, start, self.here()),
-                }
-            }
-            _ => {
-                let value = self.parse_expression_value();
-                if value.trim().is_empty() {
-                    return Err(self.error(
-                        "settings-invalid",
-                        "expected a value in settings block".to_string(),
-                    ));
-                }
-                cst::SettingsNode::Raw {
-                    name: String::new(),
-                    value,
-                    span: Span::new(self.file, start, self.here()),
                 }
             }
         };
