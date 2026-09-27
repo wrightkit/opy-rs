@@ -30,11 +30,7 @@ impl<'a> SizeOptimizer<'a> {
             Action::ForGlobalVariable { stop, step, .. }
             | Action::ForPlayerVariable { stop, step, .. } => {
                 for bound in [stop, step] {
-                    match bound {
-                        Value::Number(zero) if *zero == 0.0 => *bound = Value::Bool(false),
-                        Value::Number(one) if *one == 1.0 => *bound = Value::Bool(true),
-                        _ => {}
-                    }
+                    boolean_number(bound);
                 }
             }
             Action::Call { name, args } => {
@@ -88,11 +84,7 @@ impl<'a> SizeOptimizer<'a> {
             | ModifyOp::Max
             | ModifyOp::Min
             | ModifyOp::RemoveFromArrayByIndex => {
-                if *number == 0.0 {
-                    *value = Value::Bool(false);
-                } else if *number == 1.0 {
-                    *value = Value::Bool(true);
-                }
+                boolean_number(value);
             }
             ModifyOp::AppendToArray | ModifyOp::RemoveFromArrayByValue if *number == 0.0 => {
                 *value = Value::Null;
@@ -108,11 +100,7 @@ impl<'a> SizeOptimizer<'a> {
             _ => return,
         };
         if let Some(index) = args.get_mut(index) {
-            match index {
-                Value::Number(number) if *number == 0.0 => *index = Value::Bool(false),
-                Value::Number(number) if *number == 1.0 => *index = Value::Bool(true),
-                _ => {}
-            }
+            boolean_number(index);
         }
         let is_modify = name.starts_with("modify");
         let op = if is_modify {
@@ -172,12 +160,8 @@ impl<'a> SizeOptimizer<'a> {
             _ => return,
         };
         for position in positions {
-            if let Some(arg @ Value::Number(_)) = args.get_mut(*position) {
-                match arg {
-                    Value::Number(number) if *number == 0.0 => *arg = Value::Bool(false),
-                    Value::Number(number) if *number == 1.0 => *arg = Value::Bool(true),
-                    _ => {}
-                }
+            if let Some(arg) = args.get_mut(*position) {
+                boolean_number(arg);
             }
         }
     }
@@ -328,6 +312,17 @@ fn number_of(value: &Value) -> Option<f64> {
     match value {
         Value::Number(number) => Some(*number),
         _ => None,
+    }
+}
+
+fn boolean_number(value: &mut Value) {
+    let boolean = match value {
+        Value::Number(number) if *number == 0.0 => Some(false),
+        Value::Number(number) if *number == 1.0 => Some(true),
+        _ => None,
+    };
+    if let Some(boolean) = boolean {
+        *value = Value::Bool(boolean);
     }
 }
 
