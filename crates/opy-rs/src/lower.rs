@@ -82,6 +82,29 @@ struct Lowerer {
     errors: Vec<OpyError>,
 }
 
+impl Lowerer {
+    fn new(manifest: &'static Manifest, catalog: Catalog) -> Self {
+        Self {
+            global_declarations: HashMap::new(),
+            player_declarations: HashMap::new(),
+            subroutine_declarations: HashMap::new(),
+            subroutine_definitions: Vec::new(),
+            constant_declarations: HashMap::new(),
+            macro_declarations: HashMap::new(),
+            enums: HashMap::new(),
+            enum_declarations: HashMap::new(),
+            locals: Vec::new(),
+            current_order: 0,
+            allow_dict_literal: false,
+            manifest,
+            catalog,
+            texture_used: false,
+            setup_tags: false,
+            errors: Vec::new(),
+        }
+    }
+}
+
 mod declarations;
 mod expressions;
 pub(crate) mod policy;
@@ -122,27 +145,11 @@ pub fn lower_with_preprocessing(
             ));
         }
     };
-    let mut lowerer = Lowerer {
-        global_declarations: HashMap::new(),
-        player_declarations: HashMap::new(),
-        subroutine_declarations: HashMap::new(),
-        subroutine_definitions: Vec::new(),
-        constant_declarations: HashMap::new(),
-        macro_declarations: HashMap::new(),
-        enums: HashMap::new(),
-        enum_declarations: HashMap::new(),
-        locals: Vec::new(),
-        current_order: 0,
-        allow_dict_literal: false,
-        manifest,
-        catalog,
-        texture_used: false,
-        setup_tags: preprocessing
-            .directives
-            .iter()
-            .any(|directive| matches!(directive.name.as_str(), "setupTags" | "setupTx")),
-        errors: Vec::new(),
-    };
+    let mut lowerer = Lowerer::new(manifest, catalog);
+    lowerer.setup_tags = preprocessing
+        .directives
+        .iter()
+        .any(|directive| matches!(directive.name.as_str(), "setupTags" | "setupTx"));
     lowerer.collect_symbols(program);
 
     let mut declarations = Vec::new();
@@ -452,24 +459,9 @@ pub(crate) fn lower_settings_expression(
             format!("cannot load the Workshop catalog: {error}"),
         )
     })?;
-    let mut lowerer = Lowerer {
-        global_declarations: HashMap::new(),
-        player_declarations: HashMap::new(),
-        subroutine_declarations: HashMap::new(),
-        subroutine_definitions: Vec::new(),
-        constant_declarations: HashMap::new(),
-        macro_declarations: HashMap::new(),
-        enums: HashMap::new(),
-        enum_declarations: HashMap::new(),
-        locals: Vec::new(),
-        current_order: program.top_level.len(),
-        allow_dict_literal: true,
-        manifest,
-        catalog,
-        texture_used: false,
-        setup_tags: false,
-        errors: Vec::new(),
-    };
+    let mut lowerer = Lowerer::new(manifest, catalog);
+    lowerer.current_order = program.top_level.len();
+    lowerer.allow_dict_literal = true;
     lowerer.collect_symbols(program);
     let lowered = lowerer.lower_expr(&expression, &[], CallPosition::Value);
     lowerer.errors.into_iter().next().map_or(Ok(lowered), Err)
