@@ -1102,6 +1102,18 @@ fn top_allocate_reserved_names<'a>(
     }
 }
 
+fn allocate_named_indices<'a>(
+    names: impl Iterator<Item = &'a str>,
+    entries: &mut [(Option<u32>, Option<HirSpan>)],
+    pre_reserved: &HashSet<u32>,
+    kind: &str,
+) -> Result<Vec<u32>, IntegrationError> {
+    let mut reserved = pre_reserved.clone();
+    reserved.extend(entries.iter().filter_map(|(index, _)| *index));
+    top_allocate_reserved_names(names, entries, &mut reserved);
+    allocate_indices(entries, pre_reserved, kind)
+}
+
 fn allocate_indices(
     entries: &[(Option<u32>, Option<HirSpan>)],
     pre_reserved: &HashSet<u32>,

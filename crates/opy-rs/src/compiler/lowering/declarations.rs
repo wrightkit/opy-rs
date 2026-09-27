@@ -131,31 +131,30 @@ impl<'a> Lowering<'a> {
             global_reserved.insert(index);
         }
         let empty = HashSet::new();
-        let mut explicit_globals = global_reserved.clone();
-        explicit_globals.extend(globals.iter().filter_map(|(index, _)| *index));
-        let mut explicit_players = implicit_player_reserved.clone();
-        explicit_players.extend(players.iter().filter_map(|(index, _)| *index));
-        let global_names =
+        let global_indices = allocate_named_indices(
             self.hir
                 .declarations
                 .iter()
                 .filter_map(|declaration| match declaration {
                     hir::Declaration::GlobalVariable { name, .. } => Some(name.as_str()),
                     _ => None,
-                });
-        top_allocate_reserved_names(global_names, &mut globals, &mut explicit_globals);
-        let player_names =
+                }),
+            &mut globals,
+            &global_reserved,
+            "global variable",
+        )?;
+        let player_indices = allocate_named_indices(
             self.hir
                 .declarations
                 .iter()
                 .filter_map(|declaration| match declaration {
                     hir::Declaration::PlayerVariable { name, .. } => Some(name.as_str()),
                     _ => None,
-                });
-        top_allocate_reserved_names(player_names, &mut players, &mut explicit_players);
-        let global_indices = allocate_indices(&globals, &global_reserved, "global variable")?;
-        let player_indices =
-            allocate_indices(&players, &implicit_player_reserved, "player variable")?;
+                }),
+            &mut players,
+            &implicit_player_reserved,
+            "player variable",
+        )?;
         let subroutine_indices = allocate_indices(&subroutines, &empty, "subroutine")?;
         let mut global_index = 0;
         let mut player_index = 0;
@@ -165,9 +164,9 @@ impl<'a> Lowering<'a> {
         // initializer action order), then merged with the implicit default
         // variables and created in Workshop index order so the emitted
         // variable tables are reference-compatible.
-        let mut declared_globals: Vec<(&str, u32, Option<HirSpan>, Option<HirSpan>)> = Vec::new();
+        let mut planned_globals: Vec<(String, u32, Option<HirSpan>, Option<HirSpan>)> = Vec::new();
         let mut global_initializers = Vec::new();
-        let mut declared_players: Vec<(&str, u32, Option<HirSpan>, Option<HirSpan>)> = Vec::new();
+        let mut planned_players: Vec<(String, u32, Option<HirSpan>, Option<HirSpan>)> = Vec::new();
         let mut player_initializers = Vec::new();
         let mut declared_subroutines: Vec<(&str, u32, Option<HirSpan>, Option<HirSpan>)> =
             Vec::new();
@@ -183,9 +182,9 @@ impl<'a> Lowering<'a> {
                 } => {
                     let assigned = global_indices[global_index];
                     global_index += 1;
-                    if declared_globals
+                    if planned_globals
                         .iter()
-                        .any(|(existing, ..)| *existing == name)
+                        .any(|(existing, ..)| existing == name)
                     {
                         return Err(IntegrationError::new(
                             "symbol-collision",
@@ -193,7 +192,7 @@ impl<'a> Lowering<'a> {
                             *span,
                         ));
                     }
-                    declared_globals.push((name, assigned, *span, *name_span));
+                    planned_globals.push((name.clone(), assigned, *span, *name_span));
                     if let Some(init) = initializer {
                         if !is_zero_initializer(init) {
                             global_initializers.push((name, init, *span, *name_span));
@@ -209,9 +208,9 @@ impl<'a> Lowering<'a> {
                 } => {
                     let assigned = player_indices[player_index];
                     player_index += 1;
-                    if declared_players
+                    if planned_players
                         .iter()
-                        .any(|(existing, ..)| *existing == name)
+                        .any(|(existing, ..)| existing == name)
                     {
                         return Err(IntegrationError::new(
                             "symbol-collision",
@@ -219,7 +218,7 @@ impl<'a> Lowering<'a> {
                             *span,
                         ));
                     }
-                    declared_players.push((name, assigned, *span, *name_span));
+                    planned_players.push((name.clone(), assigned, *span, *name_span));
                     if let Some(init) = initializer {
                         if !is_zero_initializer(init) {
                             player_initializers.push((name, init, *span, *name_span));
@@ -259,11 +258,6 @@ impl<'a> Lowering<'a> {
             }
         }
 
-        let mut planned_globals: Vec<(String, u32, Option<HirSpan>, Option<HirSpan>)> =
-            declared_globals
-                .into_iter()
-                .map(|(name, index, span, name_span)| (name.to_string(), index, span, name_span))
-                .collect();
         planned_globals.extend(implicit_globals.iter().map(|(name, span)| {
             (
                 name.clone(),
@@ -283,7 +277,6 @@ impl<'a> Lowering<'a> {
         }
         planned_globals.sort_by_key(|(_, index, ..)| *index);
         for (name, assigned, span, name_span) in planned_globals {
-            let _ = (span, name_span);
             let id = self.global_names.len();
             self.global_names.push(name.clone());
             self.globals.insert(name.clone(), id);
@@ -301,11 +294,6 @@ impl<'a> Lowering<'a> {
                 })?;
         }
 
-        let mut planned_players: Vec<(String, u32, Option<HirSpan>, Option<HirSpan>)> =
-            declared_players
-                .into_iter()
-                .map(|(name, index, span, name_span)| (name.to_string(), index, span, name_span))
-                .collect();
         planned_players.extend(
             implicit_players
                 .iter()
@@ -313,7 +301,6 @@ impl<'a> Lowering<'a> {
         );
         planned_players.sort_by_key(|(_, index, ..)| *index);
         for (name, assigned, span, name_span) in planned_players {
-            let _ = (span, name_span);
             let id = self.player_names.len();
             self.player_names.push(name.clone());
             self.players.insert(name, id);
@@ -336,7 +323,6 @@ impl<'a> Lowering<'a> {
 
         declared_subroutines.sort_by_key(|(_, index, ..)| *index);
         for (name, assigned, span, name_span) in declared_subroutines {
-            let _ = (span, name_span);
             let id = self.subroutine_names.len();
             self.subroutine_names.push(name.to_string());
             self.subroutines.insert(name.to_string(), id);
