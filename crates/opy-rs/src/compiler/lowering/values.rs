@@ -719,14 +719,9 @@ impl<'a> Lowering<'a> {
                     let conditions = self.current_rule_conditions.clone().ok_or_else(|| {
                         self.unsupported("ruleCondition is only valid inside a rule", span)
                     })?;
-                    let Some((first, rest)) = conditions.split_first() else {
-                        return Ok(self.push_value(Value::Bool(true)));
-                    };
-                    let mut combined = *first;
-                    for condition in rest {
-                        combined = self.push_call("and", vec![combined, *condition]);
-                    }
-                    return Ok(combined);
+                    return Ok(self
+                        .combine_conditions(conditions)
+                        .unwrap_or_else(|| self.push_value(Value::Bool(true))));
                 }
                 if name == "vect" && args.len() == 3 {
                     let x = self.lower_value(&args[0])?;

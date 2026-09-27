@@ -1170,6 +1170,18 @@ impl<'a> Lowering<'a> {
         })
     }
 
+    fn combine_conditions(
+        &mut self,
+        conditions: impl IntoIterator<Item = ValueId>,
+    ) -> Option<ValueId> {
+        let mut conditions = conditions.into_iter();
+        let mut combined = conditions.next()?;
+        for condition in conditions {
+            combined = self.push_call("and", vec![combined, condition]);
+        }
+        Some(combined)
+    }
+
     fn normalize_contextual_argument(
         &mut self,
         call_id: &str,

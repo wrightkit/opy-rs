@@ -1132,15 +1132,8 @@ impl<'a> Lowering<'a> {
         &mut self,
         conditions: &[&Expr],
     ) -> Result<Option<ValueId>, IntegrationError> {
-        let mut lowered = None;
-        for expression in conditions {
-            let value = self.lower_value(expression)?;
-            lowered = Some(match lowered {
-                Some(left) => self.push_call("and", vec![left, value]),
-                None => value,
-            });
-        }
-        Ok(lowered)
+        let values = self.lower_values(conditions.iter().copied())?;
+        Ok(self.combine_conditions(values))
     }
 
     fn lower_loop_sequence_with_break_target(
