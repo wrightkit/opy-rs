@@ -2001,13 +2001,6 @@ fn is_zero_initializer(expr: &hir::Expr) -> bool {
     )
 }
 
-fn has_directive(hir: &hir::Program, name: &str) -> bool {
-    hir.preprocessing
-        .directives
-        .iter()
-        .any(|directive| directive.name == name)
-}
-
 fn directive_value<'a>(hir: &'a hir::Program, name: &str) -> Option<&'a str> {
     hir.preprocessing
         .directives
