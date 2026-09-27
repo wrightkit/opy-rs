@@ -476,15 +476,13 @@ fn prefixed_rule_name(name: &str, prefix: Option<&str>, delimiter: bool) -> Stri
     }
 }
 
-fn strip_rule_name_formatting(text: &str) -> String {
-    text.chars()
-        .filter(|character| {
-            !matches!(
-                character,
-                '\u{200B}' | '\u{200E}' | '\u{200F}' | '\u{FEFF}' | '\u{061C}'
-            )
-        })
-        .collect()
+pub(crate) fn strip_rule_name_formatting(text: &str) -> impl Iterator<Item = char> + '_ {
+    text.chars().filter(|character| {
+        !matches!(
+            character,
+            '\u{200B}' | '\u{200E}' | '\u{200F}' | '\u{FEFF}' | '\u{061C}'
+        )
+    })
 }
 
 #[derive(Clone, Debug)]
@@ -531,15 +529,15 @@ fn render_rule_name(
         .as_ref()
         .map(|value| value.value.as_str())
     else {
-        return Ok(strip_rule_name_formatting(&prefixed_rule_name(
-            name, prefix, delimiter,
-        )));
+        return Ok(
+            strip_rule_name_formatting(&prefixed_rule_name(name, prefix, delimiter)).collect(),
+        );
     };
     let (file, path) = rule_file_parts(span.file, files);
     let prefix = prefix.unwrap_or_default();
     let values = rule_template_values(name, prefix, &file, &path, delimiter);
     evaluate_template(template, &values)
-        .map(|name| strip_rule_name_formatting(&name))
+        .map(|name| strip_rule_name_formatting(&name).collect())
         .map_err(|message| {
             OpyError::at(
                 "rule-prefix-template-invalid",
@@ -561,7 +559,7 @@ pub(crate) fn render_generated_rule_name(name: &str, preprocessing: &Preprocessi
     };
     let values = rule_template_values(name, "", "", "", false);
     evaluate_template(template, &values)
-        .map(|rendered| strip_rule_name_formatting(&rendered))
+        .map(|rendered| strip_rule_name_formatting(&rendered).collect())
         .unwrap_or_else(|_| name.to_string())
 }
 

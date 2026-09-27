@@ -1663,15 +1663,7 @@ const FILTERED_RULE_NAME_WORDS: [(&str, &str, bool); 28] = [
 /// invisible formatting characters, and the Workshop's filtered words are split
 /// with a soft hyphen, as the pinned OverPy does when it writes them.
 pub(super) fn escape_bad_words(name: &str) -> String {
-    let mut text: Vec<char> = name
-        .chars()
-        .filter(|character| {
-            !matches!(
-                character,
-                '\u{200B}' | '\u{200E}' | '\u{200F}' | '\u{FEFF}' | '\u{061C}'
-            )
-        })
-        .collect();
+    let mut text: Vec<char> = crate::lower::strip_rule_name_formatting(name).collect();
     for (head, tail, standalone) in FILTERED_RULE_NAME_WORDS {
         text = split_filtered_word(&text, head, tail, standalone);
     }
