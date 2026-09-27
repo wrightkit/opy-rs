@@ -189,7 +189,7 @@ pub(crate) fn validate_program(program: &Program) -> Result<(), HirError> {
                 check_unique(name, "global variable", *span, &mut tables.globals)?;
                 tables.globals.push(name);
                 if let Some(initializer) = initializer {
-                    validate_expr(initializer, program, &tables)?;
+                    validate_exprs(std::iter::once(initializer.as_ref()), program, &tables)?;
                 }
             }
             Declaration::PlayerVariable {
@@ -202,7 +202,7 @@ pub(crate) fn validate_program(program: &Program) -> Result<(), HirError> {
                 check_unique(name, "player variable", *span, &mut tables.players)?;
                 tables.players.push(name);
                 if let Some(initializer) = initializer {
-                    validate_expr(initializer, program, &tables)?;
+                    validate_exprs(std::iter::once(initializer.as_ref()), program, &tables)?;
                 }
             }
             Declaration::Subroutine { name, span, .. } => {
@@ -214,7 +214,7 @@ pub(crate) fn validate_program(program: &Program) -> Result<(), HirError> {
                 check_name(name, "constant", *span)?;
                 check_unique(name, "constant", *span, &mut tables.constants)?;
                 tables.constants.push(name);
-                validate_expr(value, program, &tables)?;
+                validate_exprs(std::iter::once(value.as_ref()), program, &tables)?;
             }
             Declaration::Macro {
                 name,
@@ -360,18 +360,10 @@ fn validate_rule(rule: &Rule, program: &Program, tables: &NameTables<'_>) -> Res
             rule.event.span,
         ));
     }
-    validate_expr_vec(&rule.event.args, program, tables)?;
+    validate_exprs(&rule.event.args, program, tables)?;
     check_span(rule.event.span, program.files.len())?;
-    validate_expr_vec(&rule.conditions, program, tables)?;
+    validate_exprs(&rule.conditions, program, tables)?;
     validate_stmts(&rule.actions, program, tables)
-}
-
-fn validate_expr_vec(
-    expressions: &[Expr],
-    program: &Program,
-    tables: &NameTables<'_>,
-) -> Result<(), HirError> {
-    validate_exprs(expressions, program, tables)
 }
 
 fn validate_stmts(
@@ -397,10 +389,6 @@ fn validate_stmts(
         .chain(expressions.errors)
         .next()
         .map_or(Ok(()), Err)
-}
-
-fn validate_expr(expr: &Expr, program: &Program, tables: &NameTables<'_>) -> Result<(), HirError> {
-    validate_exprs(std::iter::once(expr), program, tables)
 }
 
 fn validate_exprs<'expr>(
