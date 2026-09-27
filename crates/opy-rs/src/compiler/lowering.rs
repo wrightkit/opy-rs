@@ -557,7 +557,7 @@ impl<'a> Lowering<'a> {
             }
         }));
         let translation_helper_index = self.translation_helper_index(&helper_reserved)?;
-        let mut global_reserved = implicit_reserved.clone();
+        let mut global_reserved = implicit_reserved;
         if let Some(index) = translation_helper_index {
             helper_reserved.insert(index);
             global_reserved.insert(index);
