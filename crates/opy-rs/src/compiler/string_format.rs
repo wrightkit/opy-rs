@@ -53,16 +53,16 @@ pub(super) fn tokens(value: &Value) -> Option<Vec<Token>> {
 }
 
 /// Splices nested strings and turns constant arguments into text.
-pub(super) fn merge(tokens: Vec<Token>) -> (Vec<Token>, bool) {
+pub(super) fn merge(parts: Vec<Token>) -> (Vec<Token>, bool) {
     let mut changed = false;
     let mut merged: Vec<Token> = Vec::new();
-    let mut pending: std::collections::VecDeque<Token> = tokens.into();
+    let mut pending: std::collections::VecDeque<Token> = parts.into();
     while let Some(token) = pending.pop_front() {
         let Token::Argument(argument) = token else {
             push_text(&mut merged, token);
             continue;
         };
-        if let Some(inner) = tokens_of(&argument) {
+        if let Some(inner) = tokens(&argument) {
             changed = true;
             for token in inner.into_iter().rev() {
                 pending.push_front(token);
@@ -83,10 +83,6 @@ pub(super) fn merge(tokens: Vec<Token>) -> (Vec<Token>, bool) {
         }
     }
     (merged, changed)
-}
-
-fn tokens_of(value: &Value) -> Option<Vec<Token>> {
-    tokens(value)
 }
 
 fn push_text(tokens: &mut Vec<Token>, token: Token) {
