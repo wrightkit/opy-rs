@@ -1226,7 +1226,7 @@ impl<'a> Lowering<'a> {
             .map(|arg| {
                 let mut stack = Vec::new();
                 crate::compile_time::evaluate(arg, &self.constants, &HashMap::new(), &mut stack)
-                    .and_then(compile_time_value_text)
+                    .and_then(crate::compile_time::display)
             })
             .collect::<Vec<_>>();
         let dynamic_indexes = values
@@ -2243,19 +2243,6 @@ fn split_format_chunks(text: &str, arg_count: usize) -> Option<Vec<(String, Vec<
     }
     chunks.push((current, indices));
     Some(chunks)
-}
-
-fn compile_time_value_text(value: crate::compile_time::Value) -> Option<String> {
-    match value {
-        crate::compile_time::Value::Number(value) if value.is_finite() => {
-            Some(crate::compile_time::workshop_number_text(value))
-        }
-        crate::compile_time::Value::Number(_)
-        | crate::compile_time::Value::Array(_)
-        | crate::compile_time::Value::Object(_) => None,
-        crate::compile_time::Value::String(value) => Some(value),
-        crate::compile_time::Value::Bool(value) => Some(value.to_string()),
-    }
 }
 
 fn debug_expr_text(expr: &Expr) -> String {

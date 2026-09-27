@@ -64,7 +64,7 @@ pub(crate) fn evaluate(
                 .map(|arg| evaluate(arg, constants, bindings, stack))
                 .collect::<Option<Vec<_>>>()?;
             let mut result = text.clone();
-            for (index, value) in values.iter().enumerate() {
+            for (index, value) in values.into_iter().enumerate() {
                 result = result.replace(&format!("{{{index}}}"), &display(value)?);
             }
             Some(Value::String(result))
@@ -197,10 +197,10 @@ fn evaluate_index(collection: Value, index: Value) -> Option<Value> {
     }
 }
 
-fn display(value: &Value) -> Option<String> {
+pub(crate) fn display(value: Value) -> Option<String> {
     match value {
-        Value::Number(value) if value.is_finite() => Some(workshop_number_text(*value)),
-        Value::String(value) => Some(value.clone()),
+        Value::Number(value) if value.is_finite() => Some(workshop_number_text(value)),
+        Value::String(value) => Some(value),
         Value::Bool(value) => Some(value.to_string()),
         _ => None,
     }
@@ -219,7 +219,7 @@ pub(crate) fn round_half_up(value: f64) -> f64 {
     }
 }
 
-pub(crate) fn workshop_number_text(value: f64) -> String {
+fn workshop_number_text(value: f64) -> String {
     let rounded = (value * 100.0).round() / 100.0;
     if rounded.fract() == 0.0 {
         format!("{}", rounded as i64)
