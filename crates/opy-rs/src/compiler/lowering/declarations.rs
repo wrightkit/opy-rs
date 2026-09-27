@@ -440,16 +440,8 @@ impl<'a> Lowering<'a> {
                 self.mark_action_argument_origins(action, [init_expr.span().copied()]);
                 actions.push(action);
             }
-            let rule_index = self.program.rules.len();
-            self.program.rules.push(rule_from_parts(
-                self.global_initializer_rule_name(),
-                false,
-                workshop_rs::Event::Global,
-                Vec::new(),
-                self.public_actions(&actions),
-            ));
-            let action_provenance = self.action_provenance(&actions);
-            self.set_rule_provenance(rule_index, None, std::iter::empty(), action_provenance)?;
+            let name = self.global_initializer_rule_name();
+            self.push_generated_rule(&name, Event::Global, actions)?;
         }
 
         if uses_player_translation_var || !player_initializers.is_empty() {
@@ -485,16 +477,8 @@ impl<'a> Lowering<'a> {
                 self.mark_action_argument_origins(action, [None, init_expr.span().copied()]);
                 actions.push(action);
             }
-            let rule_index = self.program.rules.len();
-            self.program.rules.push(rule_from_parts(
-                self.player_initializer_rule_name(),
-                false,
-                workshop_rs::Event::EachPlayer,
-                Vec::new(),
-                self.public_actions(&actions),
-            ));
-            let action_provenance = self.action_provenance(&actions);
-            self.set_rule_provenance(rule_index, None, std::iter::empty(), action_provenance)?;
+            let name = self.player_initializer_rule_name();
+            self.push_generated_rule(&name, Event::EachPlayer, actions)?;
         }
 
         Ok(())
