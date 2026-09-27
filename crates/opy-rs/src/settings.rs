@@ -52,14 +52,7 @@ pub struct SettingsBlock {
 /// matching respects `"`/`'` strings, `\` escapes, and nesting; an
 /// unterminated block is `settings-invalid`.
 pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
-    let mut scanner = Cursor {
-        text,
-        pos: 0,
-        char_pos: 0,
-        line: 1,
-        col: 1,
-        file: file_id,
-    };
+    let mut scanner = Cursor::new(text, file_id, Position::new(1, 1));
     let mut blocks = Vec::new();
     let mut in_block_comment = false;
     let mut string_quote = None;
@@ -291,14 +284,7 @@ pub fn sanitize_for_lex(text: &str, block: &SettingsBlock) -> String {
 /// in objects and arrays. Rejections (`settings-invalid`): duplicate keys,
 /// non-object root, missing `gamemodes` group, malformed values.
 pub fn parse_block(block: &SettingsBlock) -> OpyResult<cst::Settings> {
-    let mut parser = Cursor {
-        text: &block.text,
-        pos: 0,
-        char_pos: 0,
-        line: block.text_start.line,
-        col: block.text_start.col,
-        file: block.content_file,
-    };
+    let mut parser = Cursor::new(&block.text, block.content_file, block.text_start);
     parser.skip_whitespace();
     let children = if block.external_path.is_some() {
         let (children, _) = parser.parse_object()?;
@@ -526,6 +512,17 @@ struct Cursor<'a> {
 }
 
 impl Cursor<'_> {
+    fn new(text: &str, file: u32, origin: Position) -> Cursor<'_> {
+        Cursor {
+            text,
+            pos: 0,
+            char_pos: 0,
+            line: origin.line,
+            col: origin.col,
+            file,
+        }
+    }
+
     fn peek(&self) -> Option<char> {
         self.peek_at(0)
     }
