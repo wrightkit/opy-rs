@@ -6,7 +6,7 @@ use workshop_rs::{Action, ModifyOp, Value};
 
 use self::literal_slots::{Slot, slot};
 use super::Compiler;
-use super::operator_optimization::falsy;
+use super::operator_optimization::{falsy, literal_text, number_components};
 use super::value_walk::for_each_child;
 
 mod literal_slots;
@@ -377,26 +377,11 @@ fn compact_vector(x: &Value, y: &Value, z: &Value) -> Option<Value> {
 }
 
 pub(super) fn is_empty_string(value: &Value) -> bool {
-    match value {
-        Value::String(text) => text.is_empty(),
-        Value::Call { name, args } => {
-            name == "customString"
-                && args.len() == 1
-                && matches!(&args[0], Value::String(text) if text.is_empty())
-        }
-        _ => false,
-    }
+    literal_text(value).is_some_and(str::is_empty)
 }
 
 fn is_zero_vector(value: &Value) -> bool {
-    let is_zero = |value: &Value| matches!(value, Value::Number(number) if *number == 0.0);
-    match value {
-        Value::Vector { x, y, z } => is_zero(x) && is_zero(y) && is_zero(z),
-        Value::Call { name, args } => {
-            name == "vector" && args.len() == 3 && args.iter().all(is_zero)
-        }
-        _ => false,
-    }
+    number_components(value) == Some([0.0; 3])
 }
 
 fn modify_op_of(value: &Value) -> Option<ModifyOp> {

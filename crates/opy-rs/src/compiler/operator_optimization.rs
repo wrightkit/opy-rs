@@ -524,17 +524,7 @@ impl<'a> OperatorOptimizer<'a> {
 
     fn string_length(args: Vec<Value>) -> Rewrite {
         let [text] = one(args);
-        let literal = match &text {
-            Value::String(text) => Some(text),
-            Value::Call { name, args } if name == "customString" && args.len() == 1 => {
-                match &args[0] {
-                    Value::String(text) => Some(text),
-                    _ => None,
-                }
-            }
-            _ => None,
-        };
-        match literal {
+        match literal_text(&text) {
             Some(text) => Rewrite::Changed(Value::Number(text.chars().count() as f64)),
             None => Rewrite::Same(call("strLen", vec![text])),
         }
@@ -739,17 +729,7 @@ impl<'a> OperatorOptimizer<'a> {
 
     fn char_at(args: Vec<Value>) -> Rewrite {
         let [text, index] = two(args);
-        let literal = match &text {
-            Value::String(text) => Some(text.as_str()),
-            Value::Call { name, args } if name == "customString" && args.len() == 1 => {
-                match &args[0] {
-                    Value::String(text) => Some(text.as_str()),
-                    _ => None,
-                }
-            }
-            _ => None,
-        };
-        if let (Some(text), Value::Number(index)) = (literal, &index) {
+        if let (Some(text), Value::Number(index)) = (literal_text(&text), &index) {
             let position = index.max(0.0) as usize;
             let character = text
                 .chars()
@@ -1024,7 +1004,7 @@ fn three(args: Vec<Value>) -> [Value; 3] {
 }
 
 /// The text of a string literal that carries no format arguments.
-fn literal_text(value: &Value) -> Option<&str> {
+pub(super) fn literal_text(value: &Value) -> Option<&str> {
     match value {
         Value::String(text) => Some(text),
         Value::Call { name, args } if name == "customString" && args.len() == 1 => match &args[0] {
@@ -1060,7 +1040,7 @@ fn zero_vector(value: &Value) -> bool {
     number_components(value).is_some_and(|components| components == [0.0, 0.0, 0.0])
 }
 
-fn number_components(value: &Value) -> Option<[f64; 3]> {
+pub(super) fn number_components(value: &Value) -> Option<[f64; 3]> {
     match value {
         Value::Call { name, args } if name == "vector" => match args.as_slice() {
             [Value::Number(x), Value::Number(y), Value::Number(z)] => Some([*x, *y, *z]),
