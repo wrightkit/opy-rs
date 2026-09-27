@@ -48,74 +48,6 @@ impl<'a> Lowering<'a> {
 
     pub(in crate::compiler) fn lower_declarations(&mut self) -> Result<(), IntegrationError> {
         let (implicit_globals, implicit_players) = implicit_default_variables(self.hir);
-        for declaration in &self.hir.declarations {
-            if let hir::Declaration::GlobalVariable {
-                name,
-                index: Some(index),
-                span,
-                ..
-            } = declaration
-            {
-                for (implicit_name, implicit_span) in &implicit_globals {
-                    if default_var_index(implicit_name) == Some(*index) {
-                        return Err(IntegrationError::new(
-                            "index-collision",
-                            format!(
-                                "duplicate use of index {index} for global variables '{implicit_name}' and '{name}'"
-                            ),
-                            implicit_span.or(*span),
-                        ));
-                    }
-                }
-            }
-            if let hir::Declaration::PlayerVariable {
-                name,
-                index: Some(index),
-                span,
-                ..
-            } = declaration
-            {
-                for (implicit_name, implicit_span) in &implicit_players {
-                    if implicit_player_index(implicit_name) == *index {
-                        return Err(IntegrationError::new(
-                            "index-collision",
-                            format!(
-                                "duplicate use of index {index} for player variables '{implicit_name}' and '{name}'"
-                            ),
-                            implicit_span.or(*span),
-                        ));
-                    }
-                }
-            }
-        }
-
-        let globals = self
-            .hir
-            .declarations
-            .iter()
-            .filter_map(|declaration| match declaration {
-                hir::Declaration::GlobalVariable { index, span, .. } => Some((*index, *span)),
-                _ => None,
-            })
-            .collect::<Vec<_>>();
-        let players = self
-            .hir
-            .declarations
-            .iter()
-            .filter_map(|declaration| match declaration {
-                hir::Declaration::PlayerVariable { index, span, .. } => Some((*index, *span)),
-                _ => None,
-            })
-            .collect::<Vec<_>>();
-        let subroutines = self
-            .hir
-            .declarations
-            .iter()
-            .filter_map(|declaration| match declaration {
-                hir::Declaration::Subroutine { index, span, .. } => Some((*index, *span)),
-                _ => None,
-            })
-            .collect::<Vec<_>>();
         let implicit_reserved = implicit_globals
             .keys()
             .map(|name| default_var_index(name).expect("implicit default variable names resolve"))
@@ -125,14 +57,55 @@ impl<'a> Lowering<'a> {
             .map(|name| implicit_player_index(name))
             .collect::<HashSet<_>>();
         let mut helper_reserved = implicit_reserved.clone();
-        helper_reserved.extend(self.hir.declarations.iter().filter_map(|declaration| {
+        let mut globals = Vec::new();
+        let mut players = Vec::new();
+        let mut subroutines = Vec::new();
+        for declaration in &self.hir.declarations {
             match declaration {
                 hir::Declaration::GlobalVariable {
-                    index: Some(index), ..
-                } => Some(*index),
-                _ => None,
+                    name, index, span, ..
+                } => {
+                    if let Some(index) = index {
+                        for (implicit_name, implicit_span) in &implicit_globals {
+                            if default_var_index(implicit_name) == Some(*index) {
+                                return Err(IntegrationError::new(
+                                    "index-collision",
+                                    format!(
+                                        "duplicate use of index {index} for global variables '{implicit_name}' and '{name}'"
+                                    ),
+                                    implicit_span.or(*span),
+                                ));
+                            }
+                        }
+                        helper_reserved.insert(*index);
+                    }
+                    globals.push((*index, *span));
+                }
+                hir::Declaration::PlayerVariable {
+                    name, index, span, ..
+                } => {
+                    if let Some(index) = index {
+                        for (implicit_name, implicit_span) in &implicit_players {
+                            if implicit_player_index(implicit_name) == *index {
+                                return Err(IntegrationError::new(
+                                    "index-collision",
+                                    format!(
+                                        "duplicate use of index {index} for player variables '{implicit_name}' and '{name}'"
+                                    ),
+                                    implicit_span.or(*span),
+                                ));
+                            }
+                        }
+                    }
+                    players.push((*index, *span));
+                }
+                hir::Declaration::Subroutine { index, span, .. } => {
+                    subroutines.push((*index, *span));
+                }
+                hir::Declaration::Constant { .. } | hir::Declaration::Macro { .. } => {}
             }
-        }));
+        }
+
         let translation_helper_index = self.translation_helper_index(&helper_reserved)?;
         let mut global_reserved = implicit_reserved;
         if let Some(index) = translation_helper_index {
@@ -158,8 +131,6 @@ impl<'a> Lowering<'a> {
             global_reserved.insert(index);
         }
         let empty = HashSet::new();
-        let mut globals = globals;
-        let mut players = players;
         let mut explicit_globals = global_reserved.clone();
         explicit_globals.extend(globals.iter().filter_map(|(index, _)| *index));
         let mut explicit_players = implicit_player_reserved.clone();
