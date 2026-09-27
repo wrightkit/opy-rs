@@ -52,19 +52,20 @@ pub struct SettingsBlock {
 /// matching respects `"`/`'` strings, `\` escapes, and nesting; an
 /// unterminated block is `settings-invalid`.
 pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
-    let mut scanner = Scanner {
+    let mut scanner = Cursor {
         text,
         pos: 0,
         char_pos: 0,
         line: 1,
         col: 1,
+        file: file_id,
     };
     let mut blocks = Vec::new();
     let mut in_block_comment = false;
     let mut string_quote = None;
     let mut escaped = false;
     let mut seen_first_construct = false;
-    while let Some(ch) = scanner.peek(0) {
+    while let Some(ch) = scanner.peek() {
         if let Some(quote) = string_quote {
             if escaped {
                 escaped = false;
@@ -73,33 +74,33 @@ pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
             } else if ch == quote {
                 string_quote = None;
             }
-            scanner.advance(1);
+            scanner.advance_by(1);
             continue;
         }
         if in_block_comment {
-            if ch == '*' && scanner.peek(1) == Some('/') {
+            if ch == '*' && scanner.peek_at(1) == Some('/') {
                 in_block_comment = false;
-                scanner.advance(2);
+                scanner.advance_by(2);
             } else {
-                scanner.advance(1);
+                scanner.advance_by(1);
             }
             continue;
         }
         if matches!(ch, '"' | '\'') {
             string_quote = Some(ch);
-            scanner.advance(1);
+            scanner.advance_by(1);
             continue;
         }
         if ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n' {
-            scanner.advance(1);
+            scanner.advance_by(1);
             continue;
         }
         if ch == '#' {
             scanner.skip_to_eol();
             continue;
         }
-        if ch == '/' && scanner.peek(1) == Some('*') {
-            scanner.advance(2);
+        if ch == '/' && scanner.peek_at(1) == Some('*') {
+            scanner.advance_by(2);
             in_block_comment = true;
             continue;
         }
@@ -126,7 +127,7 @@ pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
             continue;
         }
         seen_first_construct = true;
-        scanner.advance(1);
+        scanner.advance_by(1);
     }
     Ok(blocks)
 }
@@ -134,32 +135,32 @@ pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
 /// Match the braces of one `settings { ... }` block, returning the extracted
 /// block. `scanner` is positioned just past the `settings` keyword.
 fn match_block(
-    scanner: &mut Scanner<'_>,
+    scanner: &mut Cursor<'_>,
     keyword_start: Position,
     keyword_offset: usize,
     keyword_span: Span,
 ) -> OpyResult<SettingsBlock> {
-    scanner.skip_whitespace();
-    if scanner.peek(0) != Some('{') {
-        let Some(quote) = scanner.peek(0).filter(|ch| matches!(ch, '"' | '\'')) else {
+    scanner.skip_horizontal_whitespace();
+    if scanner.peek() != Some('{') {
+        let Some(quote) = scanner.peek().filter(|ch| matches!(ch, '"' | '\'')) else {
             return Err(OpyError::at(
                 "settings-invalid",
                 "settings block must be a `settings { ... }` block or `settings \"file\"`",
                 keyword_span,
             ));
         };
-        scanner.advance(1);
+        scanner.advance_by(1);
         let mut path = String::new();
         let mut escaped = false;
         loop {
-            let Some(ch) = scanner.peek(0) else {
+            let Some(ch) = scanner.peek() else {
                 return Err(OpyError::at(
                     "settings-invalid",
                     "unterminated external settings path",
                     keyword_span,
                 ));
             };
-            scanner.advance(1);
+            scanner.advance_by(1);
             if escaped {
                 path.push(match ch {
                     'n' => '\n',
@@ -182,11 +183,11 @@ fn match_block(
                 path.push(ch);
             }
         }
-        scanner.skip_whitespace();
-        if scanner.peek(0) == Some('#') {
+        scanner.skip_horizontal_whitespace();
+        if scanner.peek() == Some('#') {
             scanner.skip_to_eol();
         }
-        if !matches!(scanner.peek(0), None | Some('\n')) {
+        if !matches!(scanner.peek(), None | Some('\n')) {
             return Err(OpyError::at(
                 "settings-invalid",
                 "external settings declaration has unexpected trailing content",
@@ -211,7 +212,7 @@ fn match_block(
     let mut text_start_offset = None;
     let mut text_start = None;
     loop {
-        let Some(ch) = scanner.peek(0) else {
+        let Some(ch) = scanner.peek() else {
             return Err(OpyError::at(
                 "settings-invalid",
                 "unterminated settings block (missing closing brace)".to_string(),
@@ -226,7 +227,7 @@ fn match_block(
             } else if ch == quote {
                 string_quote = None;
             }
-            scanner.advance(1);
+            scanner.advance_by(1);
             continue;
         }
         match ch {
@@ -265,7 +266,7 @@ fn match_block(
             }
             _ => {}
         }
-        scanner.advance(1);
+        scanner.advance_by(1);
     }
 }
 
@@ -290,9 +291,10 @@ pub fn sanitize_for_lex(text: &str, block: &SettingsBlock) -> String {
 /// in objects and arrays. Rejections (`settings-invalid`): duplicate keys,
 /// non-object root, missing `gamemodes` group, malformed values.
 pub fn parse_block(block: &SettingsBlock) -> OpyResult<cst::Settings> {
-    let mut parser = Jsonc {
+    let mut parser = Cursor {
         text: &block.text,
         pos: 0,
+        char_pos: 0,
         line: block.text_start.line,
         col: block.text_start.col,
         file: block.content_file,
@@ -514,16 +516,21 @@ fn display_value(value: &crate::compile_time::Value) -> Result<String, String> {
         _ => Err("settings list can only contain primitive values".to_string()),
     }
 }
-struct Scanner<'a> {
+struct Cursor<'a> {
     text: &'a str,
     pos: usize,
     char_pos: usize,
     line: u32,
     col: u32,
+    file: u32,
 }
 
-impl Scanner<'_> {
-    fn peek(&self, ahead: usize) -> Option<char> {
+impl Cursor<'_> {
+    fn peek(&self) -> Option<char> {
+        self.peek_at(0)
+    }
+
+    fn peek_at(&self, ahead: usize) -> Option<char> {
         self.text[self.pos..].chars().nth(ahead)
     }
 
@@ -545,83 +552,60 @@ impl Scanner<'_> {
         Position::new(line, col)
     }
 
-    fn advance(&mut self, n: usize) {
-        for _ in 0..n {
-            let Some(ch) = self.peek(0) else {
-                return;
-            };
-            if ch == '\n' {
-                self.line += 1;
-                self.col = 1;
-            } else {
-                self.col += 1;
-            }
-            self.pos += ch.len_utf8();
-            self.char_pos += 1;
-        }
-    }
-
-    fn skip_to_eol(&mut self) {
-        while self.peek(0).is_some_and(|ch| ch != '\n') {
-            self.advance(1);
-        }
-    }
-
-    fn skip_whitespace(&mut self) {
-        while matches!(self.peek(0), Some(' ' | '\t' | '\r')) {
-            self.advance(1);
-        }
-    }
-
-    fn read_word(&mut self) -> String {
-        let mut word = String::new();
-        while let Some(ch) = self.peek(0) {
-            if !is_ident_continue(ch) {
-                break;
-            }
-            word.push(ch);
-            self.advance(1);
-        }
-        word
-    }
-}
-
-/// A JSONC parser over the block text.
-struct Jsonc<'a> {
-    text: &'a str,
-    pos: usize,
-    line: u32,
-    col: u32,
-    file: u32,
-}
-
-enum ScalarValue {
-    String(String),
-    Bool(bool),
-    Number(f64),
-}
-
-impl Jsonc<'_> {
-    fn here(&self) -> Position {
-        Position::new(self.line, self.col)
-    }
-
-    fn peek(&self) -> Option<char> {
-        self.text[self.pos..].chars().next()
-    }
-
     fn advance(&mut self) -> Option<char> {
         let ch = self.peek()?;
-        self.pos += ch.len_utf8();
         if ch == '\n' {
             self.line += 1;
             self.col = 1;
         } else {
             self.col += 1;
         }
+        self.pos += ch.len_utf8();
+        self.char_pos += 1;
         Some(ch)
     }
 
+    fn advance_by(&mut self, n: usize) {
+        for _ in 0..n {
+            if self.advance().is_none() {
+                return;
+            }
+        }
+    }
+
+    fn skip_to_eol(&mut self) {
+        while self.peek().is_some_and(|ch| ch != '\n') {
+            self.advance_by(1);
+        }
+    }
+
+    fn skip_horizontal_whitespace(&mut self) {
+        while matches!(self.peek(), Some(' ' | '\t' | '\r')) {
+            self.advance_by(1);
+        }
+    }
+
+    fn read_word(&mut self) -> String {
+        let mut word = String::new();
+        while let Some(ch) = self.peek() {
+            if !is_ident_continue(ch) {
+                break;
+            }
+            word.push(ch);
+            self.advance_by(1);
+        }
+        word
+    }
+}
+
+/// Primitive JSONC values before classification as typed settings nodes.
+enum ScalarValue {
+    String(String),
+    Bool(bool),
+    Number(f64),
+}
+
+impl Cursor<'_> {
     fn skip_whitespace(&mut self) {
         loop {
             while let Some(ch) = self.peek() {
@@ -765,7 +749,7 @@ impl Jsonc<'_> {
     fn parse_value(&mut self) -> OpyResult<(cst::SettingsNode, Position)> {
         let start = self.here();
         let ch = self.peek();
-        let saved = (self.pos, self.line, self.col);
+        let saved = (self.pos, self.char_pos, self.line, self.col);
         let scalar = match ch {
             Some('"') | Some('\'') => {
                 let value = self.parse_string_expression().ok_or_else(|| {
@@ -793,8 +777,9 @@ impl Jsonc<'_> {
             self.skip_inline_whitespace();
             if self.is_expression_continuation() {
                 self.pos = saved.0;
-                self.line = saved.1;
-                self.col = saved.2;
+                self.char_pos = saved.1;
+                self.line = saved.2;
+                self.col = saved.3;
                 cst::SettingsNode::Raw {
                     name: String::new(),
                     value: self.parse_expression_value(),
@@ -1028,12 +1013,13 @@ impl Jsonc<'_> {
     fn parse_string_expression(&mut self) -> Option<String> {
         let mut value = self.parse_string_value()?;
         loop {
-            let saved = (self.pos, self.line, self.col);
+            let saved = (self.pos, self.char_pos, self.line, self.col);
             self.skip_whitespace();
             if self.peek() != Some('"') && self.peek() != Some('\'') {
                 self.pos = saved.0;
-                self.line = saved.1;
-                self.col = saved.2;
+                self.char_pos = saved.1;
+                self.line = saved.2;
+                self.col = saved.3;
                 break;
             }
             let next = self.parse_string_value()?;
