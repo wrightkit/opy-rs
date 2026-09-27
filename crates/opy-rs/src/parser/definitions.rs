@@ -1,5 +1,15 @@
 use super::*;
 
+#[derive(Default)]
+struct DirectiveState {
+    event: Option<Event>,
+    conditions: Vec<Expr>,
+    annotations: Vec<Annotation>,
+    disabled: bool,
+    delimiter: bool,
+    new_page: Option<String>,
+}
+
 impl Parser<'_> {
     pub(super) fn parse_rule(
         &mut self,
@@ -43,12 +53,7 @@ impl Parser<'_> {
         // directives and actions. The rule itself is still top-level, so any
         // indentation greater than its column belongs to this rule.
         let body_indent = line_indent + 1;
-        let mut event = None;
-        let mut conditions = Vec::new();
-        let mut annotations = Vec::new();
-        let mut disabled = false;
-        let mut delimiter = false;
-        let mut new_page = None;
+        let mut directives = DirectiveState::default();
         let mut actions = Vec::new();
         loop {
             self.skip_newlines();
@@ -56,15 +61,7 @@ impl Parser<'_> {
                 break;
             }
             if self.peek_kind() == TokenKind::At {
-                if !self.parse_directive(
-                    &mut event,
-                    &mut conditions,
-                    &mut annotations,
-                    &mut disabled,
-                    &mut delimiter,
-                    &mut new_page,
-                    false,
-                ) {
+                if !self.parse_directive(&mut directives, false) {
                     self.recover_line();
                 }
                 continue;
@@ -78,33 +75,31 @@ impl Parser<'_> {
             name,
             span: Span::new(start.span.file, start.span.start, name_token_span.end),
             name_span,
-            disabled,
-            delimiter,
-            new_page,
-            annotations,
+            disabled: directives.disabled,
+            delimiter: directives.delimiter,
+            new_page: directives.new_page,
+            annotations: directives.annotations,
             rule_prefix,
-            event: event.unwrap_or_else(|| Event {
+            event: directives.event.unwrap_or_else(|| Event {
                 name: "global".to_string(),
                 args: Vec::new(),
                 span: start.span,
             }),
-            conditions,
+            conditions: directives.conditions,
             actions,
         }));
         true
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub(super) fn parse_directive(
-        &mut self,
-        event: &mut Option<Event>,
-        conditions: &mut Vec<Expr>,
-        annotations: &mut Vec<Annotation>,
-        disabled: &mut bool,
-        delimiter: &mut bool,
-        new_page: &mut Option<String>,
-        subroutine: bool,
-    ) -> bool {
+    fn parse_directive(&mut self, directives: &mut DirectiveState, subroutine: bool) -> bool {
+        let DirectiveState {
+            event,
+            conditions,
+            annotations,
+            disabled,
+            delimiter,
+            new_page,
+        } = directives;
         let at = self.advance();
         let name = match self.expect_ident("a directive name after '@'") {
             Ok(name) => name,
@@ -348,36 +343,23 @@ impl Parser<'_> {
             Some(indent) => indent,
             None => return false,
         };
-        let mut annotations = Vec::new();
-        let mut event = None;
-        let mut conditions = Vec::new();
-        let mut disabled = false;
-        let mut delimiter = false;
-        let mut new_page = None;
+        let mut directives = DirectiveState::default();
         loop {
             self.skip_newlines();
             if self.peek_kind() != TokenKind::At {
                 break;
             }
-            if !self.parse_directive(
-                &mut event,
-                &mut conditions,
-                &mut annotations,
-                &mut disabled,
-                &mut delimiter,
-                &mut new_page,
-                true,
-            ) {
+            if !self.parse_directive(&mut directives, true) {
                 self.recover_line();
                 return false;
             }
         }
-        if event.is_some() || !conditions.is_empty() {
+        if directives.event.is_some() || !directives.conditions.is_empty() {
             self.error_at_current("subroutines cannot have events or conditions".to_string());
             return false;
         }
-        let _ = (disabled, delimiter, new_page);
-        let presentation_name = annotations
+        let presentation_name = directives
+            .annotations
             .iter()
             .find(|annotation| annotation.name == "Name")
             .and_then(|annotation| annotation.args.first())
@@ -390,7 +372,7 @@ impl Parser<'_> {
             span,
             name_span,
             body,
-            annotations,
+            annotations: directives.annotations,
             rule_prefix,
         });
         true
