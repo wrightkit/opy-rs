@@ -5,6 +5,7 @@ use workshop_rs::catalog::{Catalog, Locale};
 use workshop_rs::program::{Action, Event, EventTarget, EventTeam, ModifyOp, Rule, Value};
 use workshop_rs::source::Span;
 
+use crate::lexer::is_identifier;
 use crate::manifest::{Function, FunctionKind, Manifest};
 
 /// A structured reconstruction diagnostic naming one non-representable
@@ -123,16 +124,6 @@ const RESERVED_NAMES: &[&str] = &[
     "or",
     "not",
 ];
-
-/// Whether `name` is a valid OPY identifier (the lexer's identifier rule).
-fn is_opy_identifier(name: &str) -> bool {
-    let mut chars = name.chars();
-    let Some(first) = chars.next() else {
-        return false;
-    };
-    (first.is_ascii_alphabetic() || first == '_')
-        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
-}
 
 /// Binary operator spellings the OPY frontend lowers to `Value::Call`s with
 /// the same name (source operators, not Workshop spellings like `add`).
@@ -268,7 +259,7 @@ impl<'a> Emitter<'a> {
     }
 
     fn check_variable_name(&mut self, name: &str, span: Option<Span>, kind: &str) {
-        if !is_opy_identifier(name) {
+        if !is_identifier(name) {
             self.issue(
                 "unsupported-name",
                 format!(
