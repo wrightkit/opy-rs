@@ -1412,52 +1412,21 @@ impl<'a> Lowering<'a> {
         is_vector: bool,
     ) -> Result<ValueId, IntegrationError> {
         let text = self.lower_value(text)?;
-        let null = self.push_value(Value::Null);
-        let separator = self.push_call("firstOf", vec![null]);
-        let split = self.push_call("stringSplit", vec![text, separator]);
-        let alphabet = if has_directive(self.hir, "useVariableForCompressionAlphabet") {
-            let variable = *self
-                .globals
-                .get(COMPRESSION_ALPHABET_NAME)
-                .expect("compression alphabet variable is created");
-            self.push_value(Value::GlobalVariable(self.global_names[variable].clone()))
+        let (decoded, alphabet, variable_alphabet) = self.lower_compression_source(text);
+        let (width, min_decimal_place, offset) = if is_vector {
+            (3, -2.0, 5000.0)
         } else {
-            self.lower_custom_string(compression_alphabet())
+            (4, -3.0, 50000.0)
         };
-        let decoded = if has_directive(self.hir, "useVariableForCompressionAlphabet") {
-            split
-        } else {
-            let current = self.push_call("currentArrayElement", Vec::new());
-            let alphabet = self.push_call("appendToArray", vec![current, alphabet]);
-            self.push_call("mappedArray", vec![split, alphabet])
-        };
-        let width = if is_vector { 3 } else { 4 };
-        let min_decimal_place = if is_vector { -2.0 } else { -3.0 };
-        let offset = if is_vector { 5000.0 } else { 50000.0 };
-        let component = |this: &mut Self, component_offset: usize| {
-            let current = this.push_call("currentArrayElement", Vec::new());
-            let mut terms = Vec::with_capacity(width);
-            for index in 0..width {
-                let position = this.push_number((index + component_offset) as f64);
-                let character = this.push_call("charAt", vec![current, position]);
-                let formula_alphabet =
-                    if has_directive(this.hir, "useVariableForCompressionAlphabet") {
-                        alphabet
-                    } else {
-                        this.push_call("lastOf", vec![current])
-                    };
-                let digit = this.push_call("strIndex", vec![formula_alphabet, character]);
-                let power = 100_f64.powf(index as f64 + min_decimal_place / 2.0);
-                let power = this.push_number(power);
-                terms.push(this.push_call("multiply", vec![power, digit]));
-            }
-            let mut value = terms
-                .first()
-                .copied()
-                .unwrap_or_else(|| this.push_number(0.0));
-            for term in terms.into_iter().skip(1) {
-                value = this.push_call("add", vec![value, term]);
-            }
+        let component = |this: &mut Self, component_offset| {
+            let value = this.lower_compressed_component(
+                alphabet,
+                variable_alphabet,
+                width,
+                min_decimal_place,
+                component_offset,
+                None,
+            );
             let offset = this.push_number(offset);
             this.push_call("subtract", vec![value, offset])
         };
@@ -1471,6 +1440,68 @@ impl<'a> Lowering<'a> {
             let number = component(self, 0);
             Ok(self.push_call("mappedArray", vec![decoded, number]))
         }
+    }
+
+    fn lower_compression_source(&mut self, text: ValueId) -> (ValueId, ValueId, bool) {
+        let variable_alphabet = has_directive(self.hir, "useVariableForCompressionAlphabet");
+        let null = self.push_value(Value::Null);
+        let separator = self.push_call("firstOf", vec![null]);
+        let split = self.push_call("stringSplit", vec![text, separator]);
+        let alphabet = if variable_alphabet {
+            let variable = *self
+                .globals
+                .get(COMPRESSION_ALPHABET_NAME)
+                .expect("compression alphabet variable is created");
+            self.push_value(Value::GlobalVariable(self.global_names[variable].clone()))
+        } else {
+            self.lower_custom_string(compression_alphabet())
+        };
+        let decoded = if variable_alphabet {
+            split
+        } else {
+            let current = self.push_call("currentArrayElement", Vec::new());
+            let alphabet = self.push_call("appendToArray", vec![current, alphabet]);
+            self.push_call("mappedArray", vec![split, alphabet])
+        };
+        (decoded, alphabet, variable_alphabet)
+    }
+
+    fn lower_compressed_component(
+        &mut self,
+        alphabet: ValueId,
+        variable_alphabet: bool,
+        width: usize,
+        min_decimal_place: f64,
+        component_offset: usize,
+        optimized_strict: Option<bool>,
+    ) -> ValueId {
+        let current = self.push_call("currentArrayElement", Vec::new());
+        let mut terms = Vec::with_capacity(width);
+        for index in 0..width {
+            let position = self.push_number((index + component_offset) as f64);
+            let character = self.push_call("charAt", vec![current, position]);
+            let formula_alphabet = if variable_alphabet {
+                alphabet
+            } else {
+                self.push_call("lastOf", vec![current])
+            };
+            let digit = self.push_call("strIndex", vec![formula_alphabet, character]);
+            let power = 100_f64.powf(index as f64 + min_decimal_place / 2.0);
+            let power = self.push_number(power);
+            let weighted = self.push_call("multiply", vec![power, digit]);
+            if let Some(strict) = optimized_strict {
+                self.optimized_nodes.insert(weighted, strict);
+            }
+            terms.push(weighted);
+        }
+        let mut value = terms
+            .first()
+            .copied()
+            .unwrap_or_else(|| self.push_number(0.0));
+        for term in terms.into_iter().skip(1) {
+            value = self.push_call("add", vec![value, term]);
+        }
+        value
     }
 
     fn lower_compressed_mode(
@@ -1617,61 +1648,20 @@ impl<'a> Lowering<'a> {
             return Ok(self.lower_custom_string(compressed));
         }
         let compressed_string = self.lower_custom_string(compressed);
-        let null = self.push_value(Value::Null);
-        let separator = self.push_call("firstOf", vec![null]);
-        let split = self.push_call("stringSplit", vec![compressed_string, separator]);
-        let alphabet_value = if has_directive(self.hir, "useVariableForCompressionAlphabet") {
-            let variable = *self
-                .globals
-                .get(COMPRESSION_ALPHABET_NAME)
-                .expect("compression alphabet variable is created");
-            self.push_value(Value::GlobalVariable(self.global_names[variable].clone()))
-        } else {
-            self.lower_custom_string(compression_alphabet())
-        };
-        let decoded = if has_directive(self.hir, "useVariableForCompressionAlphabet") {
-            split
-        } else {
-            let current = self.push_call("currentArrayElement", Vec::new());
-            let alphabet = self.push_call("appendToArray", vec![current, alphabet_value]);
-            self.push_call("mappedArray", vec![split, alphabet])
-        };
+        let (decoded, alphabet, variable_alphabet) =
+            self.lower_compression_source(compressed_string);
         let width = ((max_decimal_place - min_decimal_place + 1) / 2) as usize;
         let optimization = self.optimization_state_at(span.as_ref());
-        let component = |this: &mut Self, component_offset: usize| {
-            let current = this.push_call("currentArrayElement", Vec::new());
-            let mut terms = Vec::with_capacity(width);
-            for index in 0..width {
-                let position = this.push_number((index + component_offset) as f64);
-                let character = this.push_call("charAt", vec![current, position]);
-                let formula_alphabet =
-                    if has_directive(this.hir, "useVariableForCompressionAlphabet") {
-                        alphabet_value
-                    } else {
-                        this.push_call("lastOf", vec![current])
-                    };
-                let digit = this.push_call("strIndex", vec![formula_alphabet, character]);
-                let power = 100_f64.powf(index as f64 + f64::from(min_decimal_place) / 2.0);
-                let power = this.push_number(power);
-                let weighted = this.push_call("multiply", vec![power, digit]);
-                if optimization.enabled {
-                    this.optimized_nodes.insert(weighted, optimization.strict);
-                }
-                terms.push(weighted);
-            }
-            let mut value = terms
-                .first()
-                .copied()
-                .unwrap_or_else(|| this.push_number(0.0));
-            for term in terms.into_iter().skip(1) {
-                value = this.push_call("add", vec![value, term]);
-            }
-            if is_vector || compression_offset == 0.0 {
-                value
-            } else {
-                let offset = this.push_number(compression_offset);
-                this.push_call("add", vec![value, offset])
-            }
+        let optimized_strict = optimization.enabled.then_some(optimization.strict);
+        let component = |this: &mut Self, component_offset| {
+            this.lower_compressed_component(
+                alphabet,
+                variable_alphabet,
+                width,
+                f64::from(min_decimal_place),
+                component_offset,
+                optimized_strict,
+            )
         };
         let value = if is_vector {
             let x = component(self, 0);
@@ -1688,6 +1678,12 @@ impl<'a> Lowering<'a> {
             self.push_call("mappedArray", vec![decoded, value])
         } else {
             let number = component(self, 0);
+            let number = if compression_offset == 0.0 {
+                number
+            } else {
+                let offset = self.push_number(compression_offset);
+                self.push_call("add", vec![number, offset])
+            };
             self.push_call("mappedArray", vec![decoded, number])
         };
         Ok(value)
