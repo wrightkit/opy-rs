@@ -73,6 +73,15 @@ pub struct CheckOutcome {
 }
 
 impl CheckOutcome {
+    fn failure(diagnostics: Vec<Diagnostic>, files: Vec<FileRecord>) -> Self {
+        Self {
+            diagnostics,
+            model: None,
+            files,
+            post_compile_hook: None,
+        }
+    }
+
     /// Whether the project checked clean.
     pub fn is_clean(&self) -> bool {
         self.diagnostics
@@ -109,12 +118,7 @@ pub fn check_with_overlay(
                 .map(|warning| Diagnostic::from_warning(warning, &files))
                 .collect::<Vec<_>>();
             diagnostics.push(Diagnostic::from_error(error, &files));
-            return CheckOutcome {
-                diagnostics,
-                model: None,
-                files,
-                post_compile_hook: None,
-            };
+            return CheckOutcome::failure(diagnostics, files);
         }
     };
     let parsed = crate::parser::parse_with_options(
@@ -133,12 +137,7 @@ pub fn check_with_overlay(
                 .iter()
                 .map(|error| Diagnostic::from_error(error.clone(), &files)),
         );
-        return CheckOutcome {
-            diagnostics,
-            model: None,
-            files,
-            post_compile_hook: None,
-        };
+        return CheckOutcome::failure(diagnostics, files);
     };
     // Parse the extracted settings block into the CST; expression values are
     // resolved after ordinary CST-to-HIR lowering so they use the shared OPY
@@ -151,12 +150,7 @@ pub fn check_with_overlay(
                     .map(|warning| Diagnostic::from_warning(warning, &files))
                     .collect::<Vec<_>>();
                 diagnostics.push(Diagnostic::from_error(error, &files));
-                return CheckOutcome {
-                    diagnostics,
-                    model: None,
-                    files,
-                    post_compile_hook: None,
-                };
+                return CheckOutcome::failure(diagnostics, files);
             }
         }
     }
@@ -191,12 +185,7 @@ pub fn check_with_overlay(
             if let Err(error) = crate::settings::resolve_hir_settings(&mut hir, &program) {
                 let mut diagnostics = frontend_warnings;
                 diagnostics.push(Diagnostic::from_error(error, &files));
-                return CheckOutcome {
-                    diagnostics,
-                    model: None,
-                    files,
-                    post_compile_hook: None,
-                };
+                return CheckOutcome::failure(diagnostics, files);
             }
             CheckOutcome {
                 diagnostics: frontend_warnings,
@@ -214,12 +203,7 @@ pub fn check_with_overlay(
                 .map(|warning| Diagnostic::from_warning(warning, &files))
                 .collect::<Vec<_>>();
             diagnostics.push(Diagnostic::from_error(error, &files));
-            CheckOutcome {
-                diagnostics,
-                model: None,
-                files,
-                post_compile_hook: None,
-            }
+            CheckOutcome::failure(diagnostics, files)
         }
     }
 }
