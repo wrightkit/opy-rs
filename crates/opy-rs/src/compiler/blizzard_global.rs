@@ -1211,16 +1211,13 @@ pub(crate) fn spaces(width: i32) -> String {
         return String::new();
     }
     let width = width as usize;
-    let coins = SPACES
-        .iter()
-        .map(|(width, _)| *width as usize)
-        .collect::<Vec<_>>();
     let mut cost = vec![usize::MAX; width + 1];
     let mut previous = vec![None; width + 1];
     cost[0] = 0;
     for current in 1..=width {
-        for (index, coin) in coins.iter().enumerate() {
-            if *coin <= current && cost[current - coin] != usize::MAX {
+        for (index, (coin, _)) in SPACES.iter().enumerate() {
+            let coin = *coin as usize;
+            if coin <= current && cost[current - coin] != usize::MAX {
                 let candidate = cost[current - coin] + 1;
                 if candidate < cost[current] {
                     cost[current] = candidate;
@@ -1236,7 +1233,7 @@ pub(crate) fn spaces(width: i32) -> String {
     let mut remaining = width;
     while remaining > 0 {
         let index = previous[remaining].expect("reachable Blizzard Global width");
-        let coin = coins[index];
+        let coin = SPACES[index].0 as usize;
         result.push_str(SPACES[index].1);
         remaining -= coin;
     }
