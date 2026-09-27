@@ -493,6 +493,31 @@ enum TemplateValue {
     Bool(bool),
 }
 
+fn rule_template_values(
+    name: &str,
+    prefix: &str,
+    file: &str,
+    path: &str,
+    delimiter: bool,
+) -> [(&'static str, TemplateValue); 14] {
+    [
+        ("$rule", TemplateValue::String(name.to_string())),
+        ("$prefix", TemplateValue::String(prefix.to_string())),
+        ("$file", TemplateValue::String(file.to_string())),
+        ("$path", TemplateValue::String(path.to_string())),
+        ("$isDelimiter", TemplateValue::Bool(delimiter)),
+        ("$prefixTitle", TemplateValue::String(title_case(prefix))),
+        ("$prefixUpper", TemplateValue::String(prefix.to_uppercase())),
+        ("$prefixLower", TemplateValue::String(prefix.to_lowercase())),
+        ("$fileTitle", TemplateValue::String(title_case(file))),
+        ("$fileUpper", TemplateValue::String(file.to_uppercase())),
+        ("$fileLower", TemplateValue::String(file.to_lowercase())),
+        ("$pathTitle", TemplateValue::String(title_case(path))),
+        ("$pathUpper", TemplateValue::String(path.to_uppercase())),
+        ("$pathLower", TemplateValue::String(path.to_lowercase())),
+    ]
+}
+
 fn render_rule_name(
     name: &str,
     prefix: Option<&str>,
@@ -512,22 +537,7 @@ fn render_rule_name(
     };
     let (file, path) = rule_file_parts(span.file, files);
     let prefix = prefix.unwrap_or_default();
-    let values = [
-        ("$rule", TemplateValue::String(name.to_string())),
-        ("$prefix", TemplateValue::String(prefix.to_string())),
-        ("$file", TemplateValue::String(file.clone())),
-        ("$path", TemplateValue::String(path.clone())),
-        ("$isDelimiter", TemplateValue::Bool(delimiter)),
-        ("$prefixTitle", TemplateValue::String(title_case(prefix))),
-        ("$prefixUpper", TemplateValue::String(prefix.to_uppercase())),
-        ("$prefixLower", TemplateValue::String(prefix.to_lowercase())),
-        ("$fileTitle", TemplateValue::String(title_case(&file))),
-        ("$fileUpper", TemplateValue::String(file.to_uppercase())),
-        ("$fileLower", TemplateValue::String(file.to_lowercase())),
-        ("$pathTitle", TemplateValue::String(title_case(&path))),
-        ("$pathUpper", TemplateValue::String(path.to_uppercase())),
-        ("$pathLower", TemplateValue::String(path.to_lowercase())),
-    ];
+    let values = rule_template_values(name, prefix, &file, &path, delimiter);
     evaluate_template(template, &values)
         .map(|name| strip_rule_name_formatting(&name))
         .map_err(|message| {
@@ -549,22 +559,7 @@ pub(crate) fn render_generated_rule_name(name: &str, preprocessing: &Preprocessi
     else {
         return name.to_string();
     };
-    let values = [
-        ("$rule", TemplateValue::String(name.to_string())),
-        ("$prefix", TemplateValue::String(String::new())),
-        ("$file", TemplateValue::String(String::new())),
-        ("$path", TemplateValue::String(String::new())),
-        ("$isDelimiter", TemplateValue::Bool(false)),
-        ("$prefixTitle", TemplateValue::String(String::new())),
-        ("$prefixUpper", TemplateValue::String(String::new())),
-        ("$prefixLower", TemplateValue::String(String::new())),
-        ("$fileTitle", TemplateValue::String(String::new())),
-        ("$fileUpper", TemplateValue::String(String::new())),
-        ("$fileLower", TemplateValue::String(String::new())),
-        ("$pathTitle", TemplateValue::String(String::new())),
-        ("$pathUpper", TemplateValue::String(String::new())),
-        ("$pathLower", TemplateValue::String(String::new())),
-    ];
+    let values = rule_template_values(name, "", "", "", false);
     evaluate_template(template, &values)
         .map(|rendered| strip_rule_name_formatting(&rendered))
         .unwrap_or_else(|_| name.to_string())
