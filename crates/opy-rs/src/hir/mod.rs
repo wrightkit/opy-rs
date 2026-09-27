@@ -13,6 +13,7 @@ pub mod dump;
 pub mod error;
 pub mod types;
 mod validate;
+pub(crate) mod visit;
 
 pub use error::HirError;
 pub use types::{

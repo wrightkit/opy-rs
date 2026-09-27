@@ -498,9 +498,9 @@ impl SemanticModel {
             });
         }
 
-        let mut sites: Vec<(SymbolKind, String, Span)> = Vec::new();
-        for decl in &self.hir.declarations {
-            match decl {
+        let mut collector = ReferenceSiteCollector { sites: Vec::new() };
+        for declaration in &self.hir.declarations {
+            match declaration {
                 Declaration::GlobalVariable {
                     initializer: Some(initializer),
                     ..
@@ -508,44 +508,37 @@ impl SemanticModel {
                 | Declaration::PlayerVariable {
                     initializer: Some(initializer),
                     ..
-                } => Self::collect_expr(initializer, &mut sites),
-                Declaration::Constant { value, .. } => Self::collect_expr(value, &mut sites),
-                Declaration::Macro { body, .. } => {
-                    for stmt in body {
-                        Self::collect_stmt(stmt, &mut sites);
-                    }
+                } => hir::visit::Visitor::visit_expr(&mut collector, initializer),
+                Declaration::Constant { value, .. } => {
+                    hir::visit::Visitor::visit_expr(&mut collector, value)
                 }
+                Declaration::Macro { body, .. } => hir::visit::walk_stmts(&mut collector, body),
                 _ => {}
             }
         }
         for entry in &self.hir.rules {
             match entry {
                 RuleEntry::Rule(rule) => {
-                    for arg in &rule.event.args {
-                        Self::collect_expr(arg, &mut sites);
+                    for argument in &rule.event.args {
+                        hir::visit::Visitor::visit_expr(&mut collector, argument);
                     }
                     for condition in &rule.conditions {
-                        Self::collect_expr(condition, &mut sites);
+                        hir::visit::Visitor::visit_expr(&mut collector, condition);
                     }
-                    for stmt in &rule.actions {
-                        Self::collect_stmt(stmt, &mut sites);
-                    }
+                    hir::visit::walk_stmts(&mut collector, &rule.actions);
                 }
                 RuleEntry::SubroutineDef { body, .. } => {
-                    for stmt in body {
-                        Self::collect_stmt(stmt, &mut sites);
-                    }
+                    hir::visit::walk_stmts(&mut collector, body)
                 }
             }
         }
-        for (kind, name, span) in sites {
+        for (kind, name, span) in collector.sites {
             self.attach_reference(kind, &name, span);
         }
     }
 
     /// Record a reference site for the first symbol of `kind` named `name`.
-    /// A call site is offered to both the `subroutine` and the `def` binding
-    /// kinds so both bindings of a defined subroutine collect their uses.
+    /// A call site is offered to both `subroutine` and `def` bindings.
     fn attach_reference(&mut self, kind: SymbolKind, name: &str, span: Span) {
         let Some(location) = resolve_span(span, &self.hir.files) else {
             return;
@@ -558,33 +551,28 @@ impl SemanticModel {
             self.symbols[index].references.push(location);
         }
     }
+}
 
-    fn collect_expr(expr: &HirExpr, sites: &mut Vec<(SymbolKind, String, Span)>) {
-        match expr {
-            HirExpr::Number { .. }
-            | HirExpr::String { .. }
-            | HirExpr::Bool { .. }
-            | HirExpr::Null { .. }
-            | HirExpr::Enum { .. }
-            | HirExpr::EventPlayer { .. }
-            | HirExpr::HostPlayer { .. }
-            | HirExpr::MacroParam { .. }
-            | HirExpr::StringModifier { .. }
-            | HirExpr::Local { .. } => {}
-            HirExpr::Type { args, .. } => {
-                for arg in args {
-                    Self::collect_expr(arg, sites);
-                }
+struct ReferenceSiteCollector {
+    sites: Vec<(SymbolKind, String, Span)>,
+}
+
+impl hir::visit::Visitor for ReferenceSiteCollector {
+    fn visit_expr(&mut self, expression: &HirExpr) {
+        match expression {
+            HirExpr::GlobalVar {
+                name,
+                span: Some(span),
+            } => {
+                self.sites
+                    .push((SymbolKind::Global, name.clone(), to_frontend_span(*span)));
             }
-            HirExpr::GlobalVar { name, span } | HirExpr::Constant { name, span } => {
-                let kind = if matches!(expr, HirExpr::GlobalVar { .. }) {
-                    SymbolKind::Global
-                } else {
-                    SymbolKind::Constant
-                };
-                if let Some(span) = span {
-                    sites.push((kind, name.clone(), to_frontend_span(*span)));
-                }
+            HirExpr::Constant {
+                name,
+                span: Some(span),
+            } => {
+                self.sites
+                    .push((SymbolKind::Constant, name.clone(), to_frontend_span(*span)));
             }
             HirExpr::PlayerVar {
                 name,
@@ -593,190 +581,58 @@ impl SemanticModel {
                 ..
             } => {
                 if let Some(span) = member_span.as_ref().or(span.as_ref()) {
-                    sites.push((SymbolKind::Player, name.clone(), to_frontend_span(*span)));
+                    self.sites
+                        .push((SymbolKind::Player, name.clone(), to_frontend_span(*span)));
                 }
-            }
-            HirExpr::Member { receiver, .. } => Self::collect_expr(receiver, sites),
-            HirExpr::Array { elements, .. } => {
-                for element in elements {
-                    Self::collect_expr(element, sites);
-                }
-            }
-            HirExpr::Dict { entries, .. } => {
-                for entry in entries {
-                    Self::collect_expr(&entry.key, sites);
-                    Self::collect_expr(&entry.value, sites);
-                }
-            }
-            HirExpr::Comprehension {
-                element,
-                iterable,
-                condition,
-                ..
-            } => {
-                Self::collect_expr(iterable, sites);
-                Self::collect_expr(element, sites);
-                if let Some(condition) = condition {
-                    Self::collect_expr(condition, sites);
-                }
-            }
-            HirExpr::Lambda { body, .. } => Self::collect_expr(body, sites),
-            HirExpr::Vector { x, y, z, .. } => {
-                Self::collect_expr(x, sites);
-                Self::collect_expr(y, sites);
-                Self::collect_expr(z, sites);
             }
             HirExpr::Call {
-                name, span, args, ..
-            } => {
-                // A call may name a declared subroutine (with arguments) or
-                // nothing user-declared (a builtin); unresolved names never
-                // reach the model. Offer both subroutine binding kinds.
-                if let Some(span) = span {
-                    sites.push((
-                        SymbolKind::Subroutine,
-                        name.clone(),
-                        to_frontend_span(*span),
-                    ));
-                    sites.push((SymbolKind::Def, name.clone(), to_frontend_span(*span)));
-                }
-                for arg in args {
-                    Self::collect_expr(arg, sites);
-                }
-            }
-            HirExpr::MacroCall { name, span, args } => {
-                if let Some(span) = span {
-                    sites.push((SymbolKind::Macro, name.clone(), to_frontend_span(*span)));
-                }
-                for arg in args {
-                    Self::collect_expr(arg, sites);
-                }
-            }
-            HirExpr::ReceiverCall { receiver, args, .. } => {
-                // The receiver may be a call (e.g. getPlayersInRadius(...).x)
-                // whose name binds a symbol; the call span of the outer node
-                // is attributed to the member name, not the receiver.
-                Self::collect_expr(receiver, sites);
-                for arg in args {
-                    Self::collect_expr(arg, sites);
-                }
-            }
-            HirExpr::Binary { left, right, .. } => {
-                Self::collect_expr(left, sites);
-                Self::collect_expr(right, sites);
-            }
-            HirExpr::Conditional {
-                then_value,
-                condition,
-                else_value,
+                name,
+                span: Some(span),
                 ..
             } => {
-                Self::collect_expr(then_value, sites);
-                Self::collect_expr(condition, sites);
-                Self::collect_expr(else_value, sites);
+                let span = to_frontend_span(*span);
+                self.sites
+                    .push((SymbolKind::Subroutine, name.clone(), span));
+                self.sites.push((SymbolKind::Def, name.clone(), span));
             }
-            HirExpr::Unary { operand, .. } => Self::collect_expr(operand, sites),
-            HirExpr::Index { array, index, .. } => {
-                Self::collect_expr(array, sites);
-                Self::collect_expr(index, sites);
+            HirExpr::MacroCall {
+                name,
+                span: Some(span),
+                ..
+            } => {
+                self.sites
+                    .push((SymbolKind::Macro, name.clone(), to_frontend_span(*span)));
             }
-            HirExpr::Format { args, .. } => {
-                for arg in args {
-                    Self::collect_expr(arg, sites);
-                }
-            }
+            _ => {}
+        }
+        hir::visit::walk_expr(self, expression);
+    }
+
+    fn visit_comprehension(
+        &mut self,
+        element: &HirExpr,
+        iterable: &HirExpr,
+        condition: Option<&HirExpr>,
+    ) {
+        hir::visit::Visitor::visit_expr(self, iterable);
+        hir::visit::Visitor::visit_expr(self, element);
+        if let Some(condition) = condition {
+            hir::visit::Visitor::visit_expr(self, condition);
         }
     }
 
-    fn collect_stmt(stmt: &HirStmt, sites: &mut Vec<(SymbolKind, String, Span)>) {
-        match stmt {
-            HirStmt::Expr { expr, .. } => Self::collect_expr(expr, sites),
-            HirStmt::Assign { target, value, .. } => {
-                Self::collect_expr(target, sites);
-                Self::collect_expr(value, sites);
-            }
-            HirStmt::Delete { target, .. } => Self::collect_expr(target, sites),
-            HirStmt::If {
-                branches, r#else, ..
-            } => {
-                for branch in branches {
-                    Self::collect_expr(&branch.condition, sites);
-                    for stmt in &branch.body {
-                        Self::collect_stmt(stmt, sites);
-                    }
-                }
-                if let Some(r#else) = r#else {
-                    for stmt in r#else {
-                        Self::collect_stmt(stmt, sites);
-                    }
-                }
-            }
-            HirStmt::For {
-                variable,
-                iterable,
-                body,
-                ..
-            } => {
-                Self::collect_expr(variable, sites);
-                Self::collect_expr(iterable, sites);
-                for stmt in body {
-                    Self::collect_stmt(stmt, sites);
-                }
-            }
-            HirStmt::While {
-                condition, body, ..
-            } => {
-                Self::collect_expr(condition, sites);
-                for stmt in body {
-                    Self::collect_stmt(stmt, sites);
-                }
-            }
-            HirStmt::DoWhile {
-                condition, body, ..
-            } => {
-                Self::collect_expr(condition, sites);
-                for stmt in body {
-                    Self::collect_stmt(stmt, sites);
-                }
-            }
-            HirStmt::Switch { value, arms, .. } => {
-                Self::collect_expr(value, sites);
-                for arm in arms {
-                    match arm {
-                        hir::SwitchArm::Case { value, body, .. } => {
-                            Self::collect_expr(value, sites);
-                            for stmt in body {
-                                Self::collect_stmt(stmt, sites);
-                            }
-                        }
-                        hir::SwitchArm::Default { body, .. } => {
-                            for stmt in body {
-                                Self::collect_stmt(stmt, sites);
-                            }
-                        }
-                    }
-                }
-            }
-            HirStmt::Break { .. } => {}
-            HirStmt::Return { .. } => {}
-            HirStmt::Continue { .. } | HirStmt::Label { .. } => {}
-            HirStmt::Goto { offset, .. } => {
-                if let Some(offset) = offset {
-                    Self::collect_expr(offset, sites);
-                }
-            }
-            HirStmt::CallSubroutine { name, span } => {
-                if let Some(span) = span {
-                    sites.push((
-                        SymbolKind::Subroutine,
-                        name.clone(),
-                        to_frontend_span(*span),
-                    ));
-                    sites.push((SymbolKind::Def, name.clone(), to_frontend_span(*span)));
-                }
-            }
-            HirStmt::Pass { .. } => {}
+    fn visit_stmt(&mut self, statement: &HirStmt) {
+        if let HirStmt::CallSubroutine {
+            name,
+            span: Some(span),
+        } = statement
+        {
+            let span = to_frontend_span(*span);
+            self.sites
+                .push((SymbolKind::Subroutine, name.clone(), span));
+            self.sites.push((SymbolKind::Def, name.clone(), span));
         }
+        hir::visit::walk_stmt(self, statement);
     }
 }
 
