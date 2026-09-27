@@ -162,12 +162,7 @@ fn emit_debug_element_counts(
                 (report.rules.get(rule_index), rule_counts.get(rule_index))
             {
                 if *rule_count > 1 {
-                    let suffix = if *rule_count == 1 {
-                        "element"
-                    } else {
-                        "elements"
-                    };
-                    annotated.push_str(&format!("//{} {suffix}\n", rule_count));
+                    annotated.push_str(&format!("//{rule_count} elements\n"));
                 }
                 conditions.clear();
                 collect_element_nodes(
