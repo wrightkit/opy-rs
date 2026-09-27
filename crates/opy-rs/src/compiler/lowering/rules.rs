@@ -1128,6 +1128,21 @@ impl<'a> Lowering<'a> {
         self.lower_loop_sequence_with_break_target(statements, &[], 0, BreakTarget::Loop)
     }
 
+    fn lower_condition_chain(
+        &mut self,
+        conditions: &[&Expr],
+    ) -> Result<Option<ValueId>, IntegrationError> {
+        let mut lowered = None;
+        for expression in conditions {
+            let value = self.lower_value(expression)?;
+            lowered = Some(match lowered {
+                Some(left) => self.push_call("and", vec![left, value]),
+                None => value,
+            });
+        }
+        Ok(lowered)
+    }
+
     fn lower_loop_sequence_with_break_target(
         &mut self,
         statements: &[Stmt],
@@ -1152,12 +1167,7 @@ impl<'a> Lowering<'a> {
                     + self.canonical_action_width(after, statement.span().copied())?;
                 if distance > 0 {
                     let mut args = Vec::with_capacity(conditions.len() + 1);
-                    if let Some((first, rest)) = conditions.split_first() {
-                        let mut condition = self.lower_value(first)?;
-                        for expression in rest {
-                            let right = self.lower_value(expression)?;
-                            condition = self.push_call("and", vec![condition, right]);
-                        }
+                    if let Some(condition) = self.lower_condition_chain(&conditions)? {
                         args.push(condition);
                     }
                     let distance = self.push_number(distance as f64);
@@ -1233,12 +1243,7 @@ impl<'a> Lowering<'a> {
                     let distance =
                         self.canonical_action_width(&middle, statement.span().copied())?;
                     let mut args = Vec::with_capacity(conditions.len() + 1);
-                    if let Some((first, rest)) = conditions.split_first() {
-                        let mut condition = self.lower_value(first)?;
-                        for expression in rest {
-                            let right = self.lower_value(expression)?;
-                            condition = self.push_call("and", vec![condition, right]);
-                        }
+                    if let Some(condition) = self.lower_condition_chain(&conditions)? {
                         args.push(condition);
                     }
                     args.push(self.push_number(distance as f64));
@@ -1342,15 +1347,7 @@ impl<'a> Lowering<'a> {
         for (index, statement) in statements.iter().enumerate() {
             if let Some(conditions) = pure_continue_conditions(statement) {
                 let tail = self.lower_do_while_body(&statements[index + 1..])?;
-                let mut condition = None;
-                for expression in conditions {
-                    let value = self.lower_value(expression)?;
-                    condition = Some(match condition {
-                        Some(left) => self.push_call("and", vec![left, value]),
-                        None => value,
-                    });
-                }
-                let action = if let Some(condition) = condition {
+                let action = if let Some(condition) = self.lower_condition_chain(&conditions)? {
                     self.push_call_action("loopIf", &[condition])
                 } else {
                     self.push_call_action("loop", &[])
