@@ -909,12 +909,11 @@ impl Jsonc<'_> {
                     depth += 1;
                     value.push(self.advance().expect("peeked character exists"));
                 }
-                ']' if depth == 0 => break,
+                ']' | ',' | '}' if depth == 0 => break,
                 ')' | ']' => {
                     depth = depth.saturating_sub(1);
                     value.push(self.advance().expect("peeked character exists"));
                 }
-                ',' | '}' if depth == 0 => break,
                 _ => value.push(self.advance().expect("peeked character exists")),
             }
         }

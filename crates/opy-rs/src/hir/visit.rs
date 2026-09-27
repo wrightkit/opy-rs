@@ -77,7 +77,10 @@ pub(crate) fn walk_expr<V: Visitor + ?Sized>(visitor: &mut V, expression: &Expr)
             ..
         } => visitor.visit_comprehension(element, iterable, condition.as_deref()),
         Expr::Lambda { body, .. } => visitor.visit_expr(body),
-        Expr::Type { args, .. } | Expr::Call { args, .. } | Expr::MacroCall { args, .. } => {
+        Expr::Type { args, .. }
+        | Expr::Call { args, .. }
+        | Expr::MacroCall { args, .. }
+        | Expr::Format { args, .. } => {
             for argument in args {
                 visitor.visit_expr(argument);
             }
@@ -119,11 +122,6 @@ pub(crate) fn walk_expr<V: Visitor + ?Sized>(visitor: &mut V, expression: &Expr)
             visitor.visit_expr(else_value);
         }
         Expr::Unary { operand, .. } => visitor.visit_expr(operand),
-        Expr::Format { args, .. } => {
-            for argument in args {
-                visitor.visit_expr(argument);
-            }
-        }
         Expr::Number { .. }
         | Expr::String { .. }
         | Expr::Bool { .. }

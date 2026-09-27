@@ -28,32 +28,33 @@ impl HirError {
     /// Stable machine-readable code for this error.
     pub fn code(&self) -> &'static str {
         match self {
-            HirError::Malformed { code, .. } => code,
+            HirError::Malformed { code, .. } | HirError::Invalid { code, .. } => code,
             HirError::IncompatibleProtocol { .. } => "incompatible-protocol",
             HirError::UnsupportedNode { .. } => "unsupported-node",
-            HirError::Invalid { code, .. } => code,
         }
     }
 
     /// Human-readable message.
     pub fn message(&self) -> String {
         match self {
-            HirError::Malformed { message, .. } => message.clone(),
+            HirError::Malformed { message, .. } | HirError::Invalid { message, .. } => {
+                message.clone()
+            }
             HirError::IncompatibleProtocol { expected, received } => {
                 format!("incompatible protocol: expected {expected}, received {received}")
             }
             HirError::UnsupportedNode { kind, .. } => {
                 format!("unsupported node kind '{kind}'")
             }
-            HirError::Invalid { message, .. } => message.clone(),
         }
     }
 
     /// The offending source span, when known.
     pub fn span(&self) -> Option<&Span> {
         match self {
-            HirError::UnsupportedNode { span, .. } => span.as_ref(),
-            HirError::Invalid { span, .. } => span.as_ref(),
+            HirError::UnsupportedNode { span, .. } | HirError::Invalid { span, .. } => {
+                span.as_ref()
+            }
             _ => None,
         }
     }

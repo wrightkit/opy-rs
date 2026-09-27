@@ -470,7 +470,7 @@ impl Parser<'_> {
                     span: token.span,
                 })
             }
-            TokenKind::String => self.parse_string_literal(),
+            TokenKind::String => Ok(self.parse_string_literal()),
             TokenKind::Ident => {
                 let token = self.advance();
                 if token.text == "lambda" {
@@ -608,7 +608,7 @@ impl Parser<'_> {
     /// delimiter group. Outside a group, a newline remains a statement
     /// boundary, matching the bounded implicit-concatenation surface used by
     /// the OverPy examples.
-    pub(super) fn parse_string_literal(&mut self) -> Result<Expr, ()> {
+    pub(super) fn parse_string_literal(&mut self) -> Expr {
         let first = self.advance();
         let mut value = first.text.clone();
         let mut end = first.span.end;
@@ -625,10 +625,10 @@ impl Parser<'_> {
             value.push_str(&next.text);
             end = next.span.end;
         }
-        Ok(Expr::String {
+        Expr::String {
             value,
             span: Span::new(first.span.file, first.span.start, end),
-        })
+        }
     }
 
     /// Return whether the current parser position is inside `()`, `[]`, or

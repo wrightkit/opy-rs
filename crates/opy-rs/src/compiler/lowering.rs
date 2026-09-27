@@ -336,7 +336,6 @@ fn contains_loop_continue(statement: &Stmt) -> bool {
                     .as_ref()
                     .is_some_and(|body| body.iter().any(contains_loop_continue))
         }
-        Stmt::For { .. } | Stmt::While { .. } | Stmt::DoWhile { .. } => false,
         Stmt::Switch { arms, .. } => arms.iter().any(|arm| match arm {
             SwitchArm::Case { body, .. } | SwitchArm::Default { body, .. } => {
                 body.iter().any(contains_loop_continue)
@@ -367,11 +366,8 @@ fn switch_body_is_noop(statements: &[Stmt]) -> bool {
 }
 
 impl<'a> Lowering<'a> {
-    pub(super) fn new(
-        compiler: &'a Compiler,
-        hir: &'a hir::Program,
-    ) -> Result<Self, IntegrationError> {
-        Ok(Self {
+    pub(super) fn new(compiler: &'a Compiler, hir: &'a hir::Program) -> Self {
+        Self {
             compiler,
             hir,
             program: Program::default(),
@@ -394,7 +390,7 @@ impl<'a> Lowering<'a> {
             visible_labels: Vec::new(),
             deferred_gotos: Vec::new(),
             translation_uses: Vec::new(),
-        })
+        }
     }
 
     pub(super) fn copy_files(&mut self) -> Result<(), IntegrationError> {
@@ -1252,8 +1248,8 @@ impl<'a> Lowering<'a> {
                     | Action::Else
                     | Action::While { .. }
                     | Action::End,
-                ) => false,
-                Some(Action::CallSubroutine { .. }) => true,
+                )
+                | None => false,
                 Some(Action::Call { name, .. }) => match name.as_str() {
                     "abort" | "abortIf" | "break" | "continue" | "loop" | "loopIf" | "return"
                     | "skip" | "skipIf" => false,
@@ -1261,7 +1257,6 @@ impl<'a> Lowering<'a> {
                     _ => true,
                 },
                 Some(_) => true,
-                None => false,
             })
     }
 
@@ -2982,9 +2977,8 @@ impl<'a> Lowering<'a> {
                 let locale = match language.as_str() {
                     "de" => "de-DE",
                     "en" => "en-US",
-                    "es" => "es-MX",
+                    "es" | "es_mx" => "es-MX",
                     "es_es" => "es-ES",
-                    "es_mx" => "es-MX",
                     "fr" => "fr-FR",
                     "it" => "it-IT",
                     "ja" => "ja-JP",
@@ -3951,7 +3945,7 @@ impl<'a> Lowering<'a> {
             return Ok(self.push_call_action(action_name, &args));
         }
 
-        let outer_array = self.lower_indexed_read(root_value, indices[0], index)?;
+        let outer_array = self.lower_indexed_read(root_value, indices[0], index);
         if indices.len() == 4 {
             let replacement = self.rebuild_deleted_array(outer_array, &indices[1..])?;
             let action_name = if action_name == "modifyGlobalVariableAtIndex" {
@@ -3964,7 +3958,7 @@ impl<'a> Lowering<'a> {
             return Ok(self.push_call_action(action_name, &args));
         }
         let inner_index = self.lower_value(indices[1])?;
-        let row = self.lower_indexed_read(outer_array, indices[1], inner_index)?;
+        let row = self.lower_indexed_read(outer_array, indices[1], inner_index);
         let leaf_index = self.lower_value(indices[2])?;
         let current_index = self.push_call("currentArrayIndex", Vec::new());
         let condition = self.push_call("!=", vec![current_index, leaf_index]);
@@ -4211,7 +4205,7 @@ impl<'a> Lowering<'a> {
         };
 
         let outer_index = self.lower_value(indices[0])?;
-        let outer_array = self.lower_indexed_read(root_value, indices[0], outer_index)?;
+        let outer_array = self.lower_indexed_read(root_value, indices[0], outer_index);
         let replacement = self.rebuild_indexed_value(outer_array, &indices[1..], target, value)?;
         let args = self.normalize_contextual_arguments(
             action_name,
@@ -4239,14 +4233,14 @@ impl<'a> Lowering<'a> {
                 && left.as_ref() == target
                 && let Some((_, call_name)) = modify_operator(op)
             {
-                let current = self.lower_indexed_read(array, index, index_value)?;
+                let current = self.lower_indexed_read(array, index, index_value);
                 let right = self.lower_value(right)?;
                 self.push_call(call_name, vec![current, right])
             } else {
                 self.lower_value(value)?
             }
         } else {
-            let child = self.lower_indexed_read(array, index, index_value)?;
+            let child = self.lower_indexed_read(array, index, index_value);
             self.rebuild_indexed_value(child, &indices[1..], target, value)?
         };
         Ok(self.replace_array_element(array, index_value, replacement))
@@ -4257,11 +4251,11 @@ impl<'a> Lowering<'a> {
         array: ValueId,
         index: &Expr,
         index_value: ValueId,
-    ) -> Result<ValueId, IntegrationError> {
+    ) -> ValueId {
         if matches!(index, Expr::Number { value, .. } if *value == 0.0) {
-            Ok(self.push_call("firstOf", vec![array]))
+            self.push_call("firstOf", vec![array])
         } else {
-            Ok(self.push_call("valueInArray", vec![array, index_value]))
+            self.push_call("valueInArray", vec![array, index_value])
         }
     }
 
@@ -4293,7 +4287,7 @@ impl<'a> Lowering<'a> {
             let condition = self.push_call("!=", vec![current_index, index]);
             return Ok(self.push_call("filteredArray", vec![array, condition]));
         }
-        let child = self.lower_indexed_read(array, indices[0], index)?;
+        let child = self.lower_indexed_read(array, indices[0], index);
         let replacement = self.rebuild_deleted_array(child, &indices[1..])?;
         Ok(self.replace_array_element_for_delete(array, indices[0], index, replacement))
     }
@@ -4885,8 +4879,8 @@ impl<'a> Lowering<'a> {
                         return Ok(self.push_value(Value::Bool(value)));
                     }
                     crate::compile_time::Value::Array(_)
-                    | crate::compile_time::Value::Object(_) => {}
-                    crate::compile_time::Value::Number(_) => {}
+                    | crate::compile_time::Value::Object(_)
+                    | crate::compile_time::Value::Number(_) => {}
                 }
             }
         }
@@ -5117,7 +5111,7 @@ impl<'a> Lowering<'a> {
                     }
                 }
                 if op == "==" && self.optimization_state_at(span.as_ref()).enabled {
-                    if let Some(value) = self.lower_current_map_equality(left, right)? {
+                    if let Some(value) = self.lower_current_map_equality(left, right) {
                         return Ok(value);
                     }
                 }
@@ -6103,11 +6097,7 @@ impl<'a> Lowering<'a> {
 
     /// `getCurrentMap() == Map.X`: the maps whose value comparison the
     /// Workshop gets wrong are compared as text instead.
-    fn lower_current_map_equality(
-        &mut self,
-        left: &Expr,
-        right: &Expr,
-    ) -> Result<Option<ValueId>, IntegrationError> {
+    fn lower_current_map_equality(&mut self, left: &Expr, right: &Expr) -> Option<ValueId> {
         let is_current_map = |expr: &Expr| matches!(expr, Expr::Call { name, args, .. } if name == "getCurrentMap" && args.is_empty());
         let map_of = |expr: &Expr| match expr {
             Expr::Enum {
@@ -6118,7 +6108,7 @@ impl<'a> Lowering<'a> {
         let map = match (map_of(left), map_of(right)) {
             (Some(map), None) if is_current_map(right) => map,
             (None, Some(map)) if is_current_map(left) => map,
-            _ => return Ok(None),
+            _ => return None,
         };
         let current = self.push_call("currentMap", Vec::new());
         let map_value = self.push_value(Value::Enum {
@@ -6126,13 +6116,13 @@ impl<'a> Lowering<'a> {
             value: map.clone(),
         });
         if !TEXT_COMPARED_MAPS.contains(&map.as_str()) {
-            return Ok(Some(self.push_call("==", vec![current, map_value])));
+            return Some(self.push_call("==", vec![current, map_value]));
         }
         let format = self.push_value(Value::String("{0}".to_string()));
         let current_text = self.push_call("customString", vec![format, current]);
         let format = self.push_value(Value::String("{0}".to_string()));
         let map_text = self.push_call("customString", vec![format, map_value]);
-        Ok(Some(self.push_call("==", vec![current_text, map_text])))
+        Some(self.push_call("==", vec![current_text, map_text]))
     }
 
     /// A bare `getCurrentMap()` selects the used map from the bugged ones by
@@ -7601,10 +7591,11 @@ fn compile_time_value_text(value: crate::compile_time::Value) -> Option<String> 
         crate::compile_time::Value::Number(value) if value.is_finite() => {
             Some(crate::compile_time::workshop_number_text(value))
         }
-        crate::compile_time::Value::Number(_) => None,
+        crate::compile_time::Value::Number(_)
+        | crate::compile_time::Value::Array(_)
+        | crate::compile_time::Value::Object(_) => None,
         crate::compile_time::Value::String(value) => Some(value),
         crate::compile_time::Value::Bool(value) => Some(value.to_string()),
-        crate::compile_time::Value::Array(_) | crate::compile_time::Value::Object(_) => None,
     }
 }
 

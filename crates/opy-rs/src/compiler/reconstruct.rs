@@ -614,8 +614,8 @@ impl<'a> Emitter<'a> {
             self.out.push_str(":\n");
             match &rule.event {
                 Event::Global => self.out.push_str("    @Event global\n"),
-                Event::EachPlayer => self.out.push_str("    @Event eachPlayer\n"),
-                Event::EachPlayerWithFilters {
+                Event::EachPlayer
+                | Event::EachPlayerWithFilters {
                     team: EventTeam::All,
                     target: EventTarget::All,
                 } => self.out.push_str("    @Event eachPlayer\n"),

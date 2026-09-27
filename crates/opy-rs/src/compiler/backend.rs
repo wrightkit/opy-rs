@@ -253,8 +253,9 @@ impl MacroExpander {
             Stmt::Break { .. }
             | Stmt::Return { .. }
             | Stmt::CallSubroutine { .. }
-            | Stmt::Pass { .. } => statement.clone(),
-            Stmt::Continue { .. } | Stmt::Label { .. } => statement.clone(),
+            | Stmt::Pass { .. }
+            | Stmt::Continue { .. }
+            | Stmt::Label { .. } => statement.clone(),
         })
     }
 

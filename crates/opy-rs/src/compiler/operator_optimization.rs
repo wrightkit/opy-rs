@@ -1206,7 +1206,9 @@ pub(super) fn same(left: &Value, right: &Value) -> bool {
     match (left, right) {
         (Value::Number(a), Value::Number(b)) => a == b,
         (Value::String(a), Value::String(b))
-        | (Value::LocalizedString(a), Value::LocalizedString(b)) => a == b,
+        | (Value::LocalizedString(a), Value::LocalizedString(b))
+        | (Value::GlobalVariable(a), Value::GlobalVariable(b))
+        | (Value::Subroutine(a), Value::Subroutine(b)) => a == b,
         (Value::Bool(a), Value::Bool(b)) => a == b,
         (Value::Null, Value::Null) | (Value::EventPlayer, Value::EventPlayer) => true,
         (Value::Array(a), Value::Array(b)) => {
@@ -1234,8 +1236,6 @@ pub(super) fn same(left: &Value, right: &Value) -> bool {
                 value: bv,
             },
         ) => at == bt && av == bv,
-        (Value::GlobalVariable(a), Value::GlobalVariable(b))
-        | (Value::Subroutine(a), Value::Subroutine(b)) => a == b,
         (
             Value::PlayerVariable {
                 player: ap,

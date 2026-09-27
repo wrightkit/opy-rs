@@ -672,10 +672,7 @@ impl Lowerer {
                             "invalid-iterable",
                             format!("for-loop iterable '{name}' must be a range(...) call"),
                         ),
-                        CallPosition::LambdaArgument => {
-                            ("unknown-value", format!("unknown value '{name}'"))
-                        }
-                        CallPosition::MacroBody => {
+                        CallPosition::LambdaArgument | CallPosition::MacroBody => {
                             ("unknown-value", format!("unknown value '{name}'"))
                         }
                     };

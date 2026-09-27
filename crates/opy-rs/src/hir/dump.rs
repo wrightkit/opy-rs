@@ -527,7 +527,9 @@ fn render_expr(expr: &Expr, out: &mut String) {
             out.push(modifier.chars().next().unwrap_or_default());
             out.push_str(&format!("{:?}", value));
         }
-        Expr::Local { name, .. } => out.push_str(name),
+        Expr::Local { name, .. } | Expr::GlobalVar { name, .. } | Expr::Constant { name, .. } => {
+            out.push_str(name)
+        }
         Expr::Vector { x, y, z, .. } => {
             out.push_str("vect(");
             render_expr(x, out);
@@ -544,7 +546,6 @@ fn render_expr(expr: &Expr, out: &mut String) {
             out.push('.');
             out.push_str(value);
         }
-        Expr::GlobalVar { name, .. } => out.push_str(name),
         Expr::PlayerVar { player, name, .. } => {
             render_expr(player, out);
             out.push('.');
@@ -559,7 +560,6 @@ fn render_expr(expr: &Expr, out: &mut String) {
         }
         Expr::EventPlayer { .. } => out.push_str("eventPlayer"),
         Expr::HostPlayer { .. } => out.push_str("hostPlayer"),
-        Expr::Constant { name, .. } => out.push_str(name),
         Expr::Call { name, args, .. } => {
             out.push_str(name);
             out.push('(');

@@ -39,25 +39,25 @@ pub(super) fn slot(name: &str, index: usize) -> Option<Slot> {
 
 fn is_boolean_slot(name: &str, index: usize) -> bool {
     match name {
-        // Waits, skips and arithmetic.
+        // Waits, skips, arithmetic, player statistics and abilities.
         "wait"
         | "skip"
         | "setMatchTime"
         | "getObjectivePosition"
         | "getPlayersInSlot"
-        | "isObjectiveComplete" => index == 0,
-        "skipIf" | "charAt" | "valueInArray" | "addToScore" | "addToTeamScore" | "setScore"
-        | "setTeamScore" | "destroyDummy" | "getAmmo" | "getMaxAmmo" => index == 1,
-        "max" | "min" | "randomInteger" => index <= 1,
-        "subtract" => index == 0,
-        "slice" => matches!(index, 1 | 2),
-        "vector" => index <= 2,
-        // Chase destinations and rates.
-        "chaseAtRate" | "chaseOverTime" => matches!(index, 1 | 2),
-        // Player stats and abilities.
-        "setAbilityCharge" | "setAbilityCooldown" | "setAbilityResource" => index == 2,
-        "setAmmo" | "setMaxAmmo" => matches!(index, 1 | 2),
-        "setGravity"
+        | "isObjectiveComplete"
+        | "subtract" => index == 0,
+        "skipIf"
+        | "charAt"
+        | "valueInArray"
+        | "addToScore"
+        | "addToTeamScore"
+        | "setScore"
+        | "setTeamScore"
+        | "destroyDummy"
+        | "getAmmo"
+        | "getMaxAmmo"
+        | "setGravity"
         | "setMoveSpeed"
         | "setProjectileGravity"
         | "setProjectileSpeed"
@@ -67,13 +67,20 @@ fn is_boolean_slot(name: &str, index: usize) -> bool {
         | "startModifyingVoicelinePitch"
         | "startScalingBarriers"
         | "startScalingSize" => index == 1,
-        "setStatusEffect" => index == 3,
+        "max" | "min" | "randomInteger" => index <= 1,
+        "slice" => matches!(index, 1 | 2),
+        "vector" => index <= 2,
+        // Chase destinations and rates.
+        "chaseAtRate" | "chaseOverTime" => matches!(index, 1 | 2),
+        "setAbilityCharge" | "setAbilityCooldown" | "setAbilityResource" | "createDummyBot" => {
+            index == 2
+        }
+        "setAmmo" | "setMaxAmmo" => matches!(index, 1 | 2),
+        "setStatusEffect" | "createInWorldText" => index == 3,
         "startForcingThrottle" => (1..=6).contains(&index),
-        // Effects, HUD and dummies.
-        "createDummyBot" => index == 2,
+        // Effects and HUD.
         "createEffect" => index == 4,
         "createHudText" => index == 5,
-        "createInWorldText" => index == 3,
         _ => false,
     }
 }

@@ -889,19 +889,13 @@ fn context_player_expr(name: &str, span: Option<Span>) -> Option<HirExpr> {
         "eventPlayer" => Some(HirExpr::EventPlayer {
             span: span.map(Into::into),
         }),
-        "localPlayer" => Some(HirExpr::Call {
+        "localPlayer" | "attacker" | "victim" | "healer" | "healee" => Some(HirExpr::Call {
             name: name.to_string(),
             args: Vec::new(),
             debug_source: None,
             span: span.map(Into::into),
         }),
         "hostPlayer" => Some(HirExpr::HostPlayer {
-            span: span.map(Into::into),
-        }),
-        "attacker" | "victim" | "healer" | "healee" => Some(HirExpr::Call {
-            name: name.to_string(),
-            args: Vec::new(),
-            debug_source: None,
             span: span.map(Into::into),
         }),
         _ => None,

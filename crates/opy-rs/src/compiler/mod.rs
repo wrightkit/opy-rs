@@ -238,8 +238,7 @@ fn emit_debug_element_counts(
 fn debug_value_count(node: &workshop_rs::actions::ElementCountNode) -> usize {
     let children = node.children.iter().map(debug_value_count).sum::<usize>();
     match node.name.as_str() {
-        "number" | "global variable" => 2,
-        "localized string" => 2,
+        "number" | "global variable" | "localized string" => 2,
         "customString" => 1 + 4usize.saturating_sub(node.children.len()) + children,
         "Team" | "Color" => 1 + children.max(1),
         "array" | "evalOnce" => 2 + children,
@@ -496,7 +495,7 @@ impl Compiler {
         }
         reject_unlowered_directives(hir)?;
         let expanded_hir = expand_macros(hir)?;
-        let mut lowering = Lowering::new(self, &expanded_hir)?;
+        let mut lowering = Lowering::new(self, &expanded_hir);
         lowering.copy_files()?;
         lowering.lower_declarations()?;
         lowering.lower_rules()?;
@@ -564,7 +563,7 @@ impl Compiler {
     ) -> Result<MappedText, IntegrationError> {
         let locale = Locale::new(language);
         let expanded = expand_macros_attributed(hir)?;
-        let mut lowering = Lowering::new(self, &expanded)?;
+        let mut lowering = Lowering::new(self, &expanded);
         lowering.copy_files()?;
         lowering.lower_declarations()?;
         lowering.lower_rules()?;
@@ -836,8 +835,6 @@ fn workshop_error_span(error: &workshop_rs::WorkshopError) -> Option<workshop_rs
         workshop_rs::WorkshopError::Unknown { span, .. }
         | workshop_rs::WorkshopError::Malformed { span, .. }
         | workshop_rs::WorkshopError::Unsupported { span, .. } => *span,
-        workshop_rs::WorkshopError::Catalog(_)
-        | workshop_rs::WorkshopError::MissingMapping { .. } => None,
         _ => None,
     }
 }

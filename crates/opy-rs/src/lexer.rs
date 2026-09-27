@@ -149,7 +149,7 @@ impl Lexer {
                         ));
                     }
                 }
-                '#' => self.lex_hash()?,
+                '#' => self.lex_hash(),
                 '/' if self.peek(1) == Some('*') => self.skip_block_comment()?,
                 '"' | '\'' => self.lex_string(ch)?,
                 c if c.is_ascii_digit() => self.lex_number()?,
@@ -221,7 +221,7 @@ impl Lexer {
     }
 
     /// `#` starts a `#!` directive (captured as one token) or a comment.
-    fn lex_hash(&mut self) -> OpyResult<()> {
+    fn lex_hash(&mut self) {
         if self.peek(1) == Some('!') {
             let start = self.here(2);
             self.advance();
@@ -249,7 +249,6 @@ impl Lexer {
                 self.advance();
             }
         }
-        Ok(())
     }
 
     fn skip_block_comment(&mut self) -> OpyResult<()> {

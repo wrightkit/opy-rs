@@ -26,8 +26,9 @@ pub(crate) enum EngineError {
 impl fmt::Display for EngineError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            EngineError::Exception { message, .. } => f.write_str(message),
-            EngineError::Internal(message) => f.write_str(message),
+            EngineError::Exception { message, .. } | EngineError::Internal(message) => {
+                f.write_str(message)
+            }
         }
     }
 }
