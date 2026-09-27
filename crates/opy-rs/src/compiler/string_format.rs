@@ -6,6 +6,7 @@
 use workshop_rs::Value;
 
 use super::operator_optimization::same;
+use super::value_walk::for_each_child;
 
 const MAX_LENGTH: usize = 128;
 const MAX_ARGS: usize = 3;
@@ -119,17 +120,7 @@ pub(super) fn unsplit(tokens: Vec<Token>) -> Value {
 
 /// Splits every custom string in the tree into strings the Workshop accepts.
 pub(super) fn split_all(value: &mut Value) {
-    match value {
-        Value::Call { args, .. } => args.iter_mut().for_each(split_all),
-        Value::Array(elements) => elements.iter_mut().for_each(split_all),
-        Value::Vector { x, y, z } => {
-            split_all(x);
-            split_all(y);
-            split_all(z);
-        }
-        Value::PlayerVariable { player, .. } => split_all(player),
-        _ => {}
-    }
+    for_each_child(value, split_all);
     if let Some(tokens) = tokens(value) {
         *value = split(tokens);
     }

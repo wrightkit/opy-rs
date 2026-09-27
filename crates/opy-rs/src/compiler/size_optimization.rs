@@ -7,6 +7,7 @@ use workshop_rs::{Action, ModifyOp, Value};
 use self::literal_slots::{Slot, slot};
 use super::Compiler;
 use super::operator_optimization::falsy;
+use super::value_walk::for_each_child;
 
 mod literal_slots;
 
@@ -257,16 +258,10 @@ impl<'a> SizeOptimizer<'a> {
                     return self.nested(value);
                 }
                 self.call_arguments(Kind::Value, "vector", args);
-                for arg in args.iter_mut() {
-                    self.nested(arg);
-                }
             }
             Value::Call { name, args } => {
                 self.compared(name, args);
                 self.call_arguments(Kind::Value, name, args);
-                for arg in args {
-                    self.nested(arg);
-                }
             }
             Value::Array(elements) => {
                 let coercions = self
@@ -278,7 +273,6 @@ impl<'a> SizeOptimizer<'a> {
                     .unwrap_or_default();
                 for element in elements {
                     self.argument("array", 0, coercions, element);
-                    self.nested(element);
                 }
             }
             Value::Vector { x, y, z } => {
@@ -288,12 +282,11 @@ impl<'a> SizeOptimizer<'a> {
                 }
                 for (index, component) in [&mut **x, &mut **y, &mut **z].into_iter().enumerate() {
                     self.argument("vector", index, ParamCoercions::default(), component);
-                    self.nested(component);
                 }
             }
-            Value::PlayerVariable { player, .. } => self.nested(player),
             _ => {}
         }
+        for_each_child(value, |child| self.nested(child));
     }
 
     fn compared(&self, name: &str, args: &mut [Value]) {

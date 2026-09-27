@@ -3,15 +3,14 @@
 
 use workshop_rs::Value;
 
+use super::value_walk::for_each_child;
+
 /// Cut every number in a value to what the reference writes for it.
 pub(super) fn trim_numbers(value: &mut Value) {
-    match value {
-        Value::Number(number) => *number = trimmed(*number),
-        Value::Array(values) => values.iter_mut().for_each(trim_numbers),
-        Value::Vector { x, y, z } => [x, y, z].into_iter().for_each(|v| trim_numbers(v)),
-        Value::PlayerVariable { player, .. } => trim_numbers(player),
-        Value::Call { args, .. } => args.iter_mut().for_each(trim_numbers),
-        _ => {}
+    if let Value::Number(number) = value {
+        *number = trimmed(*number);
+    } else {
+        for_each_child(value, trim_numbers);
     }
 }
 

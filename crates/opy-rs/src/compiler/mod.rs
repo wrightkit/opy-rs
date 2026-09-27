@@ -28,6 +28,7 @@ mod operator_optimization;
 mod settings;
 mod size_optimization;
 mod string_format;
+mod value_walk;
 
 pub(crate) use backend::MacroExpander;
 pub(super) use backend::{expand_macros, expand_macros_attributed, reject_unlowered_directives};
