@@ -90,8 +90,7 @@ impl<'a> OperatorOptimizer<'a> {
             (">", 2) => Self::ordering(">", args, |a, b| a > b, false),
             (">=", 2) => Self::ordering(">=", args, |a, b| a >= b, true),
             ("not", 1) => self.not(args),
-            ("and", 2) => self.and(args),
-            ("or", 2) => self.or(args),
+            ("and", 2) | ("or", 2) => self.logical(args, &name),
             ("ifThenElse", 3) => self.if_then_else(args),
             ("add", 2) => self.add(args),
             ("subtract", 2) => self.subtract(args),
@@ -250,56 +249,32 @@ impl<'a> OperatorOptimizer<'a> {
         Rewrite::Same(not(operand))
     }
 
-    fn and(&self, args: Vec<Value>) -> Rewrite {
+    fn logical(&self, args: Vec<Value>, name: &str) -> Rewrite {
+        let conjunction = name == "and";
+        let opposite = if conjunction { "or" } else { "and" };
         let [left, right] = two(args);
         if falsy(&left) {
-            return Rewrite::Changed(left);
+            return Rewrite::Changed(if conjunction { left } else { right });
         }
         if !self.strict && falsy(&right) {
-            return Rewrite::Changed(right);
+            return Rewrite::Changed(if conjunction { right } else { left });
         }
         if self.truthy(&left) {
-            return Rewrite::Changed(right);
+            return Rewrite::Changed(if conjunction { right } else { left });
         }
         if !self.strict && self.truthy(&right) {
-            return Rewrite::Changed(left);
+            return Rewrite::Changed(if conjunction { left } else { right });
         }
         if same(&left, &right) {
             return Rewrite::Changed(left);
         }
         if !self.strict && (negates(&right, &left) || negates(&left, &right)) {
-            return Rewrite::Changed(Value::Bool(false));
+            return Rewrite::Changed(Value::Bool(!conjunction));
         }
         if let (Some(a), Some(b)) = (negated(&left), negated(&right)) {
-            return Rewrite::Changed(not(call("or", vec![a.clone(), b.clone()])));
+            return Rewrite::Changed(not(call(opposite, vec![a.clone(), b.clone()])));
         }
-        Rewrite::Same(call("and", vec![left, right]))
-    }
-
-    fn or(&self, args: Vec<Value>) -> Rewrite {
-        let [left, right] = two(args);
-        if falsy(&left) {
-            return Rewrite::Changed(right);
-        }
-        if !self.strict && falsy(&right) {
-            return Rewrite::Changed(left);
-        }
-        if self.truthy(&left) {
-            return Rewrite::Changed(left);
-        }
-        if !self.strict && self.truthy(&right) {
-            return Rewrite::Changed(right);
-        }
-        if same(&left, &right) {
-            return Rewrite::Changed(left);
-        }
-        if !self.strict && (negates(&right, &left) || negates(&left, &right)) {
-            return Rewrite::Changed(Value::Bool(true));
-        }
-        if let (Some(a), Some(b)) = (negated(&left), negated(&right)) {
-            return Rewrite::Changed(not(call("and", vec![a.clone(), b.clone()])));
-        }
-        Rewrite::Same(call("or", vec![left, right]))
+        Rewrite::Same(call(name, vec![left, right]))
     }
 
     fn if_then_else(&self, args: Vec<Value>) -> Rewrite {
