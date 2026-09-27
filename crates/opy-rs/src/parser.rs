@@ -30,15 +30,7 @@ pub fn parse(tokens: &[Token]) -> ParseOutput {
 
 /// Parse with the global redeclaration policy observed by the pinned oracle.
 pub fn parse_with_options(tokens: &[Token], allow_macro_redeclaration: bool) -> ParseOutput {
-    let mut parser = Parser {
-        tokens,
-        pos: 0,
-        errors: Vec::new(),
-        allow_macro_redeclaration,
-        last_statement_continued: false,
-        last_colon_body_continued: false,
-        open_if_indents: Vec::new(),
-    };
+    let mut parser = Parser::new(tokens, allow_macro_redeclaration);
     let program = parser.parse_program();
     if parser.errors.is_empty() {
         ParseOutput {
@@ -67,6 +59,20 @@ struct Parser<'a> {
     last_colon_body_continued: bool,
     /// Columns of the `if` statements whose branches are being parsed.
     open_if_indents: Vec<u32>,
+}
+
+impl<'a> Parser<'a> {
+    fn new(tokens: &'a [Token], allow_macro_redeclaration: bool) -> Self {
+        Self {
+            tokens,
+            pos: 0,
+            errors: Vec::new(),
+            allow_macro_redeclaration,
+            last_statement_continued: false,
+            last_colon_body_continued: false,
+            open_if_indents: Vec::new(),
+        }
+    }
 }
 
 fn is_identifier(text: &str) -> bool {
@@ -338,15 +344,7 @@ pub(crate) fn parse_expression_fragment(
     for token in &mut tokens {
         token.span = shift_span(token.span, origin);
     }
-    let mut parser = Parser {
-        tokens: &tokens,
-        pos: 0,
-        allow_macro_redeclaration: false,
-        errors: Vec::new(),
-        last_statement_continued: false,
-        last_colon_body_continued: false,
-        open_if_indents: Vec::new(),
-    };
+    let mut parser = Parser::new(&tokens, false);
     let expression = parser.parse_expr().map_err(|()| {
         parser.errors.first().cloned().unwrap_or_else(|| {
             OpyError::at(
