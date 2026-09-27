@@ -336,15 +336,6 @@ impl Lowerer {
 /// Whether `compressed()` accepts these elements: only numbers, or only
 /// vectors of numbers.
 fn is_compressible(values: &[HirExpr]) -> bool {
-    fn number(expr: &HirExpr) -> Option<f64> {
-        match expr {
-            HirExpr::Number { value, .. } => Some(*value),
-            HirExpr::Null { .. } => Some(0.0),
-            HirExpr::Unary { op, operand, .. } if op == "-" => number(operand).map(|v| -v),
-            HirExpr::Unary { op, operand, .. } if op == "+" => number(operand),
-            _ => None,
-        }
-    }
     if values.is_empty() {
         return false;
     }
@@ -356,12 +347,12 @@ fn is_compressible(values: &[HirExpr]) -> bool {
             let HirExpr::Vector { x, y, z, .. } = value else {
                 return false;
             };
-            [x, y, z]
-                .into_iter()
-                .all(|component| number(component).is_some_and(|v| v.abs() < 4999.0))
+            [x, y, z].into_iter().all(|component| {
+                crate::hir::visit::literal_number(component).is_some_and(|v| v.abs() < 4999.0)
+            })
         });
     }
     values
         .iter()
-        .all(|value| number(value).is_some_and(|v| v.abs() < 49999.0))
+        .all(|value| crate::hir::visit::literal_number(value).is_some_and(|v| v.abs() < 49999.0))
 }

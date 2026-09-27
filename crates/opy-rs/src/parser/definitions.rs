@@ -349,15 +349,10 @@ impl Parser<'_> {
         // The name token follows the `def` keyword. `span` covers the
         // definition (`def name`), and `name_span` is the exact identifier
         // occurrence (rename targets, not the keyword).
-        let name_token = self.peek().clone();
+        let name_span = self.peek().span;
         let name = match self.expect_ident("a subroutine name after `def`") {
             Ok(name) => name,
             Err(()) => return false,
-        };
-        let name_span = if name_token.kind == TokenKind::Ident {
-            name_token.span
-        } else {
-            start.span
         };
         let params = match self.parse_param_list() {
             Some(params) => params,
@@ -416,11 +411,7 @@ impl Parser<'_> {
             .and_then(|annotation| annotation.args.first())
             .map(|arg| unquote_annotation_arg(&arg.text));
         let body = self.parse_block(body_indent);
-        let span = if name_token.kind == TokenKind::Ident {
-            Span::new(start.span.file, start.span.start, name_token.span.end)
-        } else {
-            start.span
-        };
+        let span = Span::new(start.span.file, start.span.start, name_span.end);
         rules.push(RuleEntry::SubroutineDef {
             name,
             presentation_name,

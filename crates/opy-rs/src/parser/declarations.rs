@@ -5,15 +5,10 @@ impl Parser<'_> {
         let start = self.advance();
         // The name token follows the keyword; its span is the exact declared
         // identifier occurrence (rename targets, not the keyword/statement).
-        let name_token = self.peek().clone();
+        let name_span = self.peek().span;
         let name = match self.expect_ident("a variable name after the keyword") {
             Ok(name) => name,
             Err(()) => return false,
-        };
-        let name_span = if name_token.kind == TokenKind::Ident {
-            name_token.span
-        } else {
-            start.span
         };
         let mut index = None;
         let mut initializer = None;
@@ -74,15 +69,10 @@ impl Parser<'_> {
         let start = self.advance();
         // The name token follows the `subroutine` keyword; its span is the
         // exact declared identifier occurrence.
-        let name_token = self.peek().clone();
+        let name_span = self.peek().span;
         let name = match self.expect_ident("a subroutine name") {
             Ok(name) => name,
             Err(()) => return false,
-        };
-        let name_span = if name_token.kind == TokenKind::Ident {
-            name_token.span
-        } else {
-            start.span
         };
         let end = self
             .tokens
@@ -165,7 +155,7 @@ impl Parser<'_> {
 
     pub(super) fn parse_macro(&mut self, declarations: &mut Vec<Decl>) -> bool {
         let start = self.advance();
-        let name_token = self.peek().clone();
+        let name_span = self.peek().span;
         let mut name = match self.expect_ident("a macro name") {
             Ok(name) => name,
             Err(()) => return false,
@@ -228,7 +218,7 @@ impl Parser<'_> {
             self.errors.push(OpyError::at(
                 "macro-redeclaration",
                 format!("macro '{name}' is already defined"),
-                name_token.span,
+                name_span,
             ));
         }
         declarations.push(Decl::Macro {

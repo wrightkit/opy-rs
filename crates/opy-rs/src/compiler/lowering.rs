@@ -852,7 +852,7 @@ impl<'a> Lowering<'a> {
                     .globals
                     .get(COMPRESSION_ALPHABET_NAME)
                     .expect("compression alphabet variable is created");
-                let value = self.lower_custom_string(compression_alphabet(), None)?;
+                let value = self.lower_custom_string(compression_alphabet());
                 let action = self.push_action(Action::SetGlobalVariable {
                     variable: self.global_names[variable].clone(),
                     value,
@@ -926,10 +926,7 @@ impl<'a> Lowering<'a> {
                     .get("__languageIndex__")
                     .expect("translation player variable is created");
                 let player = self.push_value(Value::EventPlayer);
-                let value = self.push_number(
-                    if no_tl_err { 0.1 } else { 1.1 },
-                    if no_tl_err { "0.1" } else { "1.1" },
-                );
+                let value = self.push_number(if no_tl_err { 0.1 } else { 1.1 });
                 actions.push(self.push_action(Action::SetPlayerVariable {
                     player,
                     variable: self.player_names[variable].clone(),
@@ -1024,10 +1021,7 @@ impl<'a> Lowering<'a> {
             player,
             variable: self.player_names[variable].clone(),
         });
-        let initial = self.push_number(
-            if no_tl_err { 0.1 } else { 1.1 },
-            if no_tl_err { "0.1" } else { "1.1" },
-        );
+        let initial = self.push_number(if no_tl_err { 0.1 } else { 1.1 });
         let has_spawned = self.push_call("hasSpawned", vec![player]);
         let is_dummy = self.push_call("isDummy", vec![player]);
         let false_value = self.push_value(Value::Bool(false));
@@ -1041,12 +1035,12 @@ impl<'a> Lowering<'a> {
             op: ModifyOp::AppendToArray,
             value: facing,
         });
-        let ten = self.push_number(10.0, "10");
+        let ten = self.push_number(10.0);
         let direction_index = self.translation_language_index(translations)?;
         let horizontal = self.push_call("multiply", vec![ten, direction_index]);
-        let vertical = self.push_number(5.0, "5");
+        let vertical = self.push_number(5.0);
         let direction = self.push_call("directionFromAngles", vec![horizontal, vertical]);
-        let turn_rate = self.push_number(999_999_999_999.0, "999999999999");
+        let turn_rate = self.push_number(999_999_999_999.0);
         let to_world = self.push_value(Value::Enum {
             value_type: "Relativity".to_string(),
             value: "TO_WORLD".to_string(),
@@ -1061,7 +1055,7 @@ impl<'a> Lowering<'a> {
         );
 
         let horizontal_angle = self.push_call("getHorizontalFacingAngle", vec![player]);
-        let one_hundred = self.push_number(100.0, "100");
+        let one_hundred = self.push_number(100.0);
         let horizontal_times_hundred =
             self.push_call("multiply", vec![horizontal_angle, one_hundred]);
         let nearest = self.push_value(Value::Enum {
@@ -1070,26 +1064,26 @@ impl<'a> Lowering<'a> {
         });
         let rounded_horizontal =
             self.push_call("roundToInteger", vec![horizontal_times_hundred, nearest]);
-        let thousand = self.push_number(1000.0, "1000");
+        let thousand = self.push_number(1000.0);
         let modulo = self.push_call("modulo", vec![rounded_horizontal, thousand]);
-        let zero = self.push_number(0.0, "0");
+        let zero = self.push_number(0.0);
         let modulo_zero = self.push_call("not", vec![modulo]);
         let vertical_angle = self.push_call("getVerticalFacingAngle", vec![player]);
         let vertical_difference = self.push_call("subtract", vec![vertical_angle, vertical]);
         let vertical_delta = self.push_call("absoluteValue", vec![vertical_difference]);
-        let tolerance = self.push_number(0.01, "0.01");
+        let tolerance = self.push_number(0.01);
         let vertical_close = self.push_call("<", vec![vertical_delta, tolerance]);
         let wait_condition = self.push_call("and", vec![modulo_zero, vertical_close]);
-        let timeout = self.push_number(15.0, "15");
+        let timeout = self.push_number(15.0);
         let wait = self.push_call_action("waitUntil", &[wait_condition, timeout]);
 
-        let ten_for_angle = self.push_number(10.0, "10");
+        let ten_for_angle = self.push_number(10.0);
         let horizontal_divided = self.push_call("divide", vec![horizontal_angle, ten_for_angle]);
         let rounded_angle = self.push_call("roundToInteger", vec![horizontal_divided, nearest]);
         let vertical_difference = self.push_call("subtract", vec![vertical_angle, vertical]);
         let vertical_delta = self.push_call("absoluteValue", vec![vertical_difference]);
         let vertical_match = self.push_call("<", vec![vertical_delta, tolerance]);
-        let one = self.push_number(1.0, "1");
+        let one = self.push_number(1.0);
         let matched_language = self.push_call("multiply", vec![vertical_match, rounded_angle]);
         let language_value = self.push_call("max", vec![one, matched_language]);
         let set_index = self.push_call_action(
@@ -1675,7 +1669,7 @@ impl<'a> Lowering<'a> {
                             self.push_call("not", vec![condition])
                         };
                         let distance = self.canonical_action_width(&body, *span)?;
-                        let distance = self.push_number(distance as f64, &distance.to_string());
+                        let distance = self.push_number(distance as f64);
                         let skip = self.push_call_action("skipIf", &[condition, distance]);
                         self.mark_action_origins(std::slice::from_ref(&skip), *span);
                         actions.push(skip);
@@ -1692,7 +1686,7 @@ impl<'a> Lowering<'a> {
                     .any(|labels| labels.iter().any(|candidate| candidate == label))
             {
                 let condition = self.lower_value(condition)?;
-                let placeholder = self.push_number(0.0, "0");
+                let placeholder = self.push_number(0.0);
                 let skip = self.push_call_action("skipIf", &[condition, placeholder]);
                 self.mark_action_origins(std::slice::from_ref(&skip), span);
                 actions.push(skip);
@@ -1731,7 +1725,7 @@ impl<'a> Lowering<'a> {
                         index += 1;
                         continue;
                     }
-                    let placeholder = self.push_number(0.0, "0");
+                    let placeholder = self.push_number(0.0);
                     let action = self.push_call_action("skip", &[placeholder]);
                     self.mark_action_origins(std::slice::from_ref(&action), *span);
                     let position = actions.len();
@@ -1771,7 +1765,7 @@ impl<'a> Lowering<'a> {
                         .unsupported("backward goto is not representable in canonical WIR", span));
                 }
                 let width = self.canonical_action_width(&actions[position + 1..target], span)?;
-                self.push_number(width as f64, &width.to_string())
+                self.push_number(width as f64)
             };
             let Some(Action::Call { args, .. }) = self.actions.get_mut(action) else {
                 unreachable!("goto placeholder must be a call action")
@@ -1883,7 +1877,7 @@ impl<'a> Lowering<'a> {
             // including the structural markers that the jump must cross.
             // Instructions dropped from the output must not widen the jump.
             let width = self.useful_actions(&actions[position + 1..target]).len();
-            let distance = self.push_number(width as f64, &width.to_string());
+            let distance = self.push_number(width as f64);
             let Some(Action::Call { args, .. }) = self.actions.get_mut(action) else {
                 unreachable!("deferred goto placeholder must be a call action")
             };
@@ -2057,7 +2051,7 @@ impl<'a> Lowering<'a> {
                     } else if name == "pass" && args.is_empty() {
                         Ok(Vec::new())
                     } else if name == "debug" && args.len() == 1 {
-                        Ok(vec![self.lower_debug(&args[0], *span, debug_source.as_deref())?])
+                        Ok(vec![self.lower_debug(&args[0], debug_source.as_deref())?])
                     } else if name == "print" && args.len() == 1 {
                         Ok(vec![self.lower_print(&args[0], *span)?])
                     } else if name == "createCasedProgressBarIwt" {
@@ -2270,21 +2264,7 @@ impl<'a> Lowering<'a> {
     }
 
     fn lower_loop_body(&mut self, statements: &[Stmt]) -> Result<Vec<ActionId>, IntegrationError> {
-        self.lower_loop_sequence(statements, &[], 0)
-    }
-
-    fn lower_loop_sequence(
-        &mut self,
-        statements: &[Stmt],
-        after: &[ActionId],
-        structural_after: usize,
-    ) -> Result<Vec<ActionId>, IntegrationError> {
-        self.lower_loop_sequence_with_break_target(
-            statements,
-            after,
-            structural_after,
-            BreakTarget::Loop,
-        )
+        self.lower_loop_sequence_with_break_target(statements, &[], 0, BreakTarget::Loop)
     }
 
     fn lower_loop_sequence_with_break_target(
@@ -2319,7 +2299,7 @@ impl<'a> Lowering<'a> {
                         }
                         args.push(condition);
                     }
-                    let distance = self.push_number(distance as f64, &distance.to_string());
+                    let distance = self.push_number(distance as f64);
                     args.push(distance);
                     let skip = self.push_call_action(
                         if conditions.is_empty() {
@@ -2400,7 +2380,7 @@ impl<'a> Lowering<'a> {
                         }
                         args.push(condition);
                     }
-                    args.push(self.push_number(distance as f64, &distance.to_string()));
+                    args.push(self.push_number(distance as f64));
                     let skip = self.push_call_action(
                         if conditions.is_empty() {
                             "skip"
@@ -2426,7 +2406,7 @@ impl<'a> Lowering<'a> {
                     .any(|labels| labels.iter().any(|candidate| candidate == label))
             {
                 let condition = self.lower_value(condition)?;
-                let placeholder = self.push_number(0.0, "0");
+                let placeholder = self.push_number(0.0);
                 let skip = self.push_call_action("skipIf", &[condition, placeholder]);
                 self.mark_action_origins(std::slice::from_ref(&skip), span);
                 actions.push(skip);
@@ -2583,7 +2563,7 @@ impl<'a> Lowering<'a> {
                 } else {
                     unreachable!("break shape was checked above")
                 };
-                let distance = self.push_number(distance as f64, &distance.to_string());
+                let distance = self.push_number(distance as f64);
                 let mut args = args;
                 args.push(distance);
                 let skip = self.push_call_action(name, &args);
@@ -2614,21 +2594,17 @@ impl<'a> Lowering<'a> {
                 iterable.span().copied(),
             ));
         }
-        let span = iterable.span().copied();
-        let number = |this: &mut Self, value: f64| -> Result<ValueId, IntegrationError> {
-            let _ = span;
-            Ok(this.push_number(value, &value.to_string()))
-        };
+        let number = |this: &mut Self, value: f64| this.push_number(value);
         match args.as_slice() {
             [stop] => Ok((
-                number(self, 0.0)?,
+                number(self, 0.0),
                 self.lower_value(stop)?,
-                number(self, 1.0)?,
+                number(self, 1.0),
             )),
             [start, stop] => Ok((
                 self.lower_value(start)?,
                 self.lower_value(stop)?,
-                number(self, 1.0)?,
+                number(self, 1.0),
             )),
             [start, stop, step] => Ok((
                 self.lower_value(start)?,
@@ -2740,16 +2716,15 @@ impl<'a> Lowering<'a> {
             });
         let use_shared_exit = break_arms.len() > 1 && has_later_reachable_actions;
 
-        let case_values = self.lower_array(case_values, span)?;
-        let _ = span;
+        let case_values = self.lower_array(case_values);
         if !use_shared_exit {
             let default_offset = legacy_default_offset.unwrap_or(legacy_offset);
             let offset_values = std::iter::once(default_offset)
                 .chain(legacy_case_offsets)
-                .map(|value| self.push_number(value as f64, &value.to_string()))
+                .map(|value| self.push_number(value as f64))
                 .collect();
-            let offsets = self.lower_array(offset_values, span)?;
-            let skip = self.lower_switch_selector(selector, case_values, offsets, span)?;
+            let offsets = self.lower_array(offset_values);
+            let skip = self.lower_switch_selector(selector, case_values, offsets);
             let true_value = self.push_value(Value::Bool(true));
             let mut branch_body = vec![skip];
             let else_body = if let Some((break_index, (break_at, _))) = first_break {
@@ -2777,7 +2752,7 @@ impl<'a> Lowering<'a> {
         }
 
         let offsets = self.push_value(Value::Array(Vec::new()));
-        let skip = self.lower_switch_selector(selector, case_values, offsets, span)?;
+        let skip = self.lower_switch_selector(selector, case_values, offsets);
         let mut arm_offsets = vec![None; lowered_arms.len()];
         let (switch, switch_end) =
             self.lower_switch_level(&lowered_arms, 0, Some(skip), 0, &mut arm_offsets, span)?;
@@ -2795,9 +2770,9 @@ impl<'a> Lowering<'a> {
                     .filter(|(_, (value, _, _))| value.is_some())
                     .map(|(index, _)| arm_offsets[index].unwrap()),
             )
-            .map(|value| self.push_number(value as f64, &value.to_string()))
+            .map(|value| self.push_number(value as f64))
             .collect();
-        let offset_values = self.lower_array(offset_values, span)?;
+        let offset_values = self.lower_array(offset_values);
         let offset_value = self.value(offset_values).clone();
         let Some(node) = self.values.get_mut(offsets) else {
             unreachable!("switch offset placeholder must exist")
@@ -2823,13 +2798,12 @@ impl<'a> Lowering<'a> {
         selector: ValueId,
         case_values: ValueId,
         offsets: ValueId,
-        _span: Option<HirSpan>,
-    ) -> Result<ActionId, IntegrationError> {
-        let one = self.push_number(1.0, "1");
+    ) -> ActionId {
+        let one = self.push_number(1.0);
         let index = self.push_call("indexOfArrayValue", vec![case_values, selector]);
         let case_offset = self.push_call("add", vec![one, index]);
         let skip_condition = self.push_call("valueInArray", vec![offsets, case_offset]);
-        Ok(self.push_call_action("skip", &[skip_condition]))
+        self.push_call_action("skip", &[skip_condition])
     }
 
     fn lower_switch_level(
@@ -2984,22 +2958,17 @@ impl<'a> Lowering<'a> {
         })
     }
 
-    fn lower_array(
-        &mut self,
-        elements: Vec<ValueId>,
-        span: Option<HirSpan>,
-    ) -> Result<ValueId, IntegrationError> {
+    fn lower_array(&mut self, elements: Vec<ValueId>) -> ValueId {
         let name = if elements.is_empty() {
             "emptyArray"
         } else {
             "array"
         };
         let elements = self.normalize_contextual_arguments(name, elements);
-        let _ = span;
-        Ok(self.push_value(Value::Call {
+        self.push_value(Value::Call {
             name: name.to_string(),
             args: self.value_args(&elements),
-        }))
+        })
     }
 
     fn lower_translation_helper(
@@ -3146,8 +3115,7 @@ impl<'a> Lowering<'a> {
         let raw_string = format!("{tl_err_prefix}{}", localized.join("\u{ec48}"));
         let replacement_mode = raw_string.chars().count() > 128 || format_args.len() > 3;
         if replacement_mode {
-            for (index, replacement) in format_args.iter().enumerate() {
-                let _ = replacement;
+            for index in 0..format_args.len() {
                 let marker = format_number_marker(index);
                 for value in &mut localized {
                     *value = value.replace(&format!("{{{index}}}"), &marker);
@@ -3178,10 +3146,7 @@ impl<'a> Lowering<'a> {
         let custom = if replacement_mode {
             let mut value = self.push_call("customString", vec![text]);
             for (index, arg) in format_args.iter().enumerate() {
-                let marker = self.push_number(
-                    format_number_marker_value(index),
-                    &format_number_marker(index),
-                );
+                let marker = self.push_number(format_number_marker_value(index));
                 let marker = self.push_call("updateEveryFrame", vec![marker]);
                 let replacement = self.lower_value(arg)?;
                 value = self.push_call("stringReplace", vec![value, marker, replacement]);
@@ -3320,7 +3285,6 @@ impl<'a> Lowering<'a> {
     fn lower_debug(
         &mut self,
         expr: &Expr,
-        _span: Option<HirSpan>,
         debug_source: Option<&str>,
     ) -> Result<ActionId, IntegrationError> {
         let argument_span = expr.span().copied();
@@ -3352,7 +3316,7 @@ impl<'a> Lowering<'a> {
             value_type: "HudPosition".to_string(),
             value: "LEFT".to_string(),
         });
-        let sort_order = self.push_number(-9999.0, "-9999");
+        let sort_order = self.push_number(-9999.0);
         let color = self.push_value(Value::Enum {
             value_type: "Color".to_string(),
             value: "WHITE".to_string(),
@@ -3425,7 +3389,7 @@ impl<'a> Lowering<'a> {
             value_type: "HudPosition".to_string(),
             value: "LEFT".to_string(),
         });
-        let sort_order = self.push_number(-9999.0, "-9999");
+        let sort_order = self.push_number(-9999.0);
         let color = if empty_string {
             self.push_value(Value::Null)
         } else {
@@ -3490,7 +3454,7 @@ impl<'a> Lowering<'a> {
         let is_single = call!(
             "==",
             call!("countOf", call!("currentArrayElement")),
-            self.push_number(1.0, "1")
+            self.push_number(1.0)
         );
         let is_empty = call!("==", call!("currentArrayElement"), call!("emptyArray"));
         let not_null = call!(
@@ -3512,7 +3476,7 @@ impl<'a> Lowering<'a> {
             call!(
                 "subtract",
                 call!("countOf", call!("currentArrayElement")),
-                self.push_number(1.0, "1"),
+                self.push_number(1.0),
             ),
         );
         let element_text = call!(
@@ -3549,11 +3513,11 @@ impl<'a> Lowering<'a> {
                 call!("not", call!("countOf", call!("currentArrayElement"))),
                 call!("!=", call!("currentArrayElement"), call!("emptyArray"),),
             ),
-            self.push_number(3.0, "3"),
+            self.push_number(3.0),
             call!(
                 "multiply",
                 call!("countOf", call!("currentArrayElement")),
-                self.push_number(3.0, "3"),
+                self.push_number(3.0),
             ),
         );
         let x = call!(
@@ -3564,12 +3528,12 @@ impl<'a> Lowering<'a> {
         let x_input = call!("mappedArray", mapped_input, x);
         let x_length = |this: &mut Self| {
             let current = this.push_call("currentArrayElement", Vec::new());
-            let index = this.push_number(1.0, "1");
+            let index = this.push_number(1.0);
             this.push_call("valueInArray", vec![current, index])
         };
         let x_value = |this: &mut Self, index: f64| {
             let current = this.push_call("currentArrayElement", Vec::new());
-            let index_value = this.push_number(index, &index.to_string());
+            let index_value = this.push_number(index);
             this.push_call("valueInArray", vec![current, index_value])
         };
         let first = call!("firstOf", call!("currentArrayElement"));
@@ -3629,9 +3593,8 @@ impl<'a> Lowering<'a> {
         let end_length_for_slice = x_length(self);
         let start = self.push_number(
             (placeholder_text.chars().count() as isize - 4 - 3 * max_length as isize) as f64,
-            "",
         );
-        let end = self.push_number((max_length * 3 + 4) as f64, "");
+        let end = self.push_number((max_length * 3 + 4) as f64);
         let slice = call!(
             "stringSlice",
             placeholder,
@@ -3646,15 +3609,15 @@ impl<'a> Lowering<'a> {
             call!(
                 ">",
                 length_for_compare,
-                self.push_number((max_length * 3) as f64, ""),
+                self.push_number((max_length * 3) as f64),
             ),
             call!(
                 "customString",
                 self.push_value(Value::String("+{0}".to_string())),
                 call!(
                     "subtract",
-                    call!("divide", length_for_divide, self.push_number(3.0, "3")),
-                    self.push_number(max_length as f64, ""),
+                    call!("divide", length_for_divide, self.push_number(3.0)),
+                    self.push_number(max_length as f64),
                 ),
             ),
             call!("emptyArray"),
@@ -3672,11 +3635,7 @@ impl<'a> Lowering<'a> {
             formatted_array,
             call!(
                 "stringSplit",
-                call!(
-                    "valueInArray",
-                    current_for_split,
-                    self.push_number(2.0, "2")
-                ),
+                call!("valueInArray", current_for_split, self.push_number(2.0)),
                 call!("emptyArray"),
             ),
         );
@@ -3783,14 +3742,9 @@ impl<'a> Lowering<'a> {
         args
     }
 
-    fn lower_custom_string(
-        &mut self,
-        value: String,
-        span: Option<HirSpan>,
-    ) -> Result<ValueId, IntegrationError> {
-        let _ = span;
+    fn lower_custom_string(&mut self, value: String) -> ValueId {
         let text = self.push_value(Value::String(value));
-        Ok(self.push_call("customString", vec![text]))
+        self.push_call("customString", vec![text])
     }
 
     fn fold_format_constants<'b>(
@@ -3856,8 +3810,7 @@ impl<'a> Lowering<'a> {
         (output, dynamic_args)
     }
 
-    fn push_number(&mut self, value: f64, text: &str) -> ValueId {
-        let _ = text;
+    fn push_number(&mut self, value: f64) -> ValueId {
         self.push_value(Value::Number(value))
     }
 
@@ -3920,12 +3873,7 @@ impl<'a> Lowering<'a> {
             return Err(self.unsupported("Cannot delete index of 4d array", span));
         }
         indices.reverse();
-        if indices.len() >= 3
-            && (expr_contains_random(root)
-                || indices[..indices.len() - 1]
-                    .iter()
-                    .any(|index| expr_contains_random(index)))
-        {
+        if hir::visit::has_random_nested_delete(root, &indices) {
             return Err(self.unsupported(
                 "Cannot delete from nested array with a random outer or middle index",
                 span,
@@ -4005,7 +3953,7 @@ impl<'a> Lowering<'a> {
 
         let outer_array = self.lower_indexed_read(root_value, indices[0], index)?;
         if indices.len() == 4 {
-            let replacement = self.rebuild_deleted_array(outer_array, &indices[1..], span)?;
+            let replacement = self.rebuild_deleted_array(outer_array, &indices[1..])?;
             let action_name = if action_name == "modifyGlobalVariableAtIndex" {
                 "setGlobalVariableAtIndex"
             } else {
@@ -4021,21 +3969,21 @@ impl<'a> Lowering<'a> {
         let current_index = self.push_call("currentArrayIndex", Vec::new());
         let condition = self.push_call("!=", vec![current_index, leaf_index]);
         let filtered = self.push_call("filteredArray", vec![row, condition]);
-        let replacement = if let Some(number) = literal_number(indices[1]) {
-            let middle = self.lower_array(vec![filtered], span)?;
-            let maximum = self.push_number(999_999_999_999.0, "999999999999");
-            let suffix_start = self.push_number(number + 1.0, &(number + 1.0).to_string());
+        let replacement = if let Some(number) = hir::visit::literal_number(indices[1]) {
+            let middle = self.lower_array(vec![filtered]);
+            let maximum = self.push_number(999_999_999_999.0);
+            let suffix_start = self.push_number(number + 1.0);
             let suffix = self.push_call("slice", vec![outer_array, suffix_start, maximum]);
             if number == 0.0 {
                 self.push_call("appendToArray", vec![middle, suffix])
             } else {
-                let zero = self.push_number(0.0, "0");
+                let zero = self.push_number(0.0);
                 let prefix = self.push_call("slice", vec![outer_array, zero, inner_index]);
                 let with_replacement = self.push_call("appendToArray", vec![prefix, middle]);
                 self.push_call("appendToArray", vec![with_replacement, suffix])
             }
         } else {
-            self.replace_array_element(outer_array, inner_index, filtered, span)?
+            self.replace_array_element(outer_array, inner_index, filtered)
         };
         let action_name = if action_name == "modifyGlobalVariableAtIndex" {
             "setGlobalVariableAtIndex"
@@ -4060,7 +4008,7 @@ impl<'a> Lowering<'a> {
             }
             if indices.len() > 1 {
                 indices.reverse();
-                return self.lower_nested_indexed_assign(root, &indices, target, value, span);
+                return self.lower_nested_indexed_assign(root, &indices, target, value);
             }
         }
         match target {
@@ -4225,7 +4173,6 @@ impl<'a> Lowering<'a> {
         indices: &[&Expr],
         target: &Expr,
         value: &Expr,
-        span: Option<HirSpan>,
     ) -> Result<ActionId, IntegrationError> {
         let (action_name, root_value) = match root {
             Expr::GlobalVar {
@@ -4265,8 +4212,7 @@ impl<'a> Lowering<'a> {
 
         let outer_index = self.lower_value(indices[0])?;
         let outer_array = self.lower_indexed_read(root_value, indices[0], outer_index)?;
-        let replacement =
-            self.rebuild_indexed_value(outer_array, &indices[1..], target, value, span)?;
+        let replacement = self.rebuild_indexed_value(outer_array, &indices[1..], target, value)?;
         let args = self.normalize_contextual_arguments(
             action_name,
             vec![root_value, outer_index, replacement],
@@ -4280,7 +4226,6 @@ impl<'a> Lowering<'a> {
         indices: &[&Expr],
         target: &Expr,
         value: &Expr,
-        span: Option<HirSpan>,
     ) -> Result<ValueId, IntegrationError> {
         let index = indices
             .first()
@@ -4302,9 +4247,9 @@ impl<'a> Lowering<'a> {
             }
         } else {
             let child = self.lower_indexed_read(array, index, index_value)?;
-            self.rebuild_indexed_value(child, &indices[1..], target, value, span)?
+            self.rebuild_indexed_value(child, &indices[1..], target, value)?
         };
-        self.replace_array_element(array, index_value, replacement, span)
+        Ok(self.replace_array_element(array, index_value, replacement))
     }
 
     fn lower_indexed_read(
@@ -4325,24 +4270,22 @@ impl<'a> Lowering<'a> {
         array: ValueId,
         index: ValueId,
         replacement: ValueId,
-        span: Option<HirSpan>,
-    ) -> Result<ValueId, IntegrationError> {
-        let zero = self.push_number(0.0, "0");
-        let one = self.push_number(1.0, "1");
+    ) -> ValueId {
+        let zero = self.push_number(0.0);
+        let one = self.push_number(1.0);
         let end = self.push_call("add", vec![index, one]);
-        let maximum = self.push_number(999_999_999_999.0, "999999999999");
+        let maximum = self.push_number(999_999_999_999.0);
         let prefix = self.push_call("slice", vec![array, zero, index]);
-        let middle = self.lower_array(vec![replacement], span)?;
+        let middle = self.lower_array(vec![replacement]);
         let suffix = self.push_call("slice", vec![array, end, maximum]);
         let with_replacement = self.push_call("appendToArray", vec![prefix, middle]);
-        Ok(self.push_call("appendToArray", vec![with_replacement, suffix]))
+        self.push_call("appendToArray", vec![with_replacement, suffix])
     }
 
     fn rebuild_deleted_array(
         &mut self,
         array: ValueId,
         indices: &[&Expr],
-        span: Option<HirSpan>,
     ) -> Result<ValueId, IntegrationError> {
         let index = self.lower_value(indices[0])?;
         if indices.len() == 1 {
@@ -4351,8 +4294,8 @@ impl<'a> Lowering<'a> {
             return Ok(self.push_call("filteredArray", vec![array, condition]));
         }
         let child = self.lower_indexed_read(array, indices[0], index)?;
-        let replacement = self.rebuild_deleted_array(child, &indices[1..], span)?;
-        self.replace_array_element_for_delete(array, indices[0], index, replacement, span)
+        let replacement = self.rebuild_deleted_array(child, &indices[1..])?;
+        Ok(self.replace_array_element_for_delete(array, indices[0], index, replacement))
     }
 
     fn replace_array_element_for_delete(
@@ -4361,22 +4304,21 @@ impl<'a> Lowering<'a> {
         index_expr: &Expr,
         index: ValueId,
         replacement: ValueId,
-        span: Option<HirSpan>,
-    ) -> Result<ValueId, IntegrationError> {
-        if let Some(number) = literal_number(index_expr) {
-            let middle = self.lower_array(vec![replacement], span)?;
-            let maximum = self.push_number(999_999_999_999.0, "999999999999");
-            let suffix_start = self.push_number(number + 1.0, &(number + 1.0).to_string());
+    ) -> ValueId {
+        if let Some(number) = hir::visit::literal_number(index_expr) {
+            let middle = self.lower_array(vec![replacement]);
+            let maximum = self.push_number(999_999_999_999.0);
+            let suffix_start = self.push_number(number + 1.0);
             let suffix = self.push_call("slice", vec![array, suffix_start, maximum]);
             if number == 0.0 {
-                return Ok(self.push_call("appendToArray", vec![middle, suffix]));
+                return self.push_call("appendToArray", vec![middle, suffix]);
             }
-            let zero = self.push_number(0.0, "0");
+            let zero = self.push_number(0.0);
             let prefix = self.push_call("slice", vec![array, zero, index]);
             let with_replacement = self.push_call("appendToArray", vec![prefix, middle]);
-            return Ok(self.push_call("appendToArray", vec![with_replacement, suffix]));
+            return self.push_call("appendToArray", vec![with_replacement, suffix]);
         }
-        self.replace_array_element(array, index, replacement, span)
+        self.replace_array_element(array, index, replacement)
     }
 
     fn lower_cased_progress_bar(
@@ -4414,7 +4356,7 @@ impl<'a> Lowering<'a> {
             ));
         }
         let text_count = text_count_value as usize;
-        if args.iter().any(expr_contains_random) {
+        if args.iter().any(hir::visit::contains_random) {
             return Err(self.unsupported(
                 "Cannot use random functions in createCasedProgressBarIwt",
                 span,
@@ -4452,8 +4394,8 @@ impl<'a> Lowering<'a> {
             .unwrap_or_else(|| vec![String::new(); text_count]);
         let mut actions = Vec::with_capacity(text_count);
         for (index, text) in texts.into_iter().enumerate() {
-            let value = self.push_number(index as f64, &index.to_string());
-            let text = self.lower_custom_string(text, span)?;
+            let value = self.push_number(index as f64);
+            let text = self.lower_custom_string(text);
             let values = self.normalize_contextual_arguments(
                 "createProgressBarInWorldText",
                 vec![
@@ -4564,7 +4506,7 @@ impl<'a> Lowering<'a> {
             let mut lowered = self.lower_values(args)?;
             let mut zero_vector = Vec::with_capacity(3);
             for value in [0.0, 0.0, 0.0] {
-                zero_vector.push(self.push_number(value, "0"));
+                zero_vector.push(self.push_number(value));
             }
             lowered.push(self.push_call("vector", zero_vector));
             let args = self.normalize_contextual_arguments("createDummyBot", lowered);
@@ -4934,10 +4876,10 @@ impl<'a> Lowering<'a> {
             {
                 match value {
                     crate::compile_time::Value::Number(value) if value.is_finite() => {
-                        return Ok(self.push_number(value, &computed_number_text(value)));
+                        return Ok(self.push_number(value));
                     }
                     crate::compile_time::Value::String(value) => {
-                        return self.lower_custom_string(value, span);
+                        return Ok(self.lower_custom_string(value));
                     }
                     crate::compile_time::Value::Bool(value) => {
                         return Ok(self.push_value(Value::Bool(value)));
@@ -4951,7 +4893,7 @@ impl<'a> Lowering<'a> {
         let value = match expr {
             Expr::Number { value, .. } => Value::Number(*value),
             Expr::String { value, .. } => {
-                return self.lower_custom_string(value.clone(), span);
+                return Ok(self.lower_custom_string(value.clone()));
             }
             Expr::Bool { value, .. } => Value::Bool(*value),
             Expr::Null { .. } => Value::Null,
@@ -5034,7 +4976,7 @@ impl<'a> Lowering<'a> {
             }
             Expr::Array { elements, .. } => {
                 let elements = self.lower_values(elements)?;
-                return self.lower_array(elements, span);
+                return Ok(self.lower_array(elements));
             }
             Expr::Vector { x, y, z, .. } => {
                 let x = self.lower_value(x)?;
@@ -5095,7 +5037,7 @@ impl<'a> Lowering<'a> {
                 let (format_text, dynamic_args) = self.fold_format_constants(text, args);
                 if dynamic_args.is_empty() {
                     let value = format_text;
-                    return self.lower_custom_string(value, span);
+                    return Ok(self.lower_custom_string(value));
                 }
                 if dynamic_args.len() <= 3 {
                     let text_node = self.push_value(Value::String(format_text));
@@ -5315,7 +5257,7 @@ impl<'a> Lowering<'a> {
                         name.as_str(),
                         "getRealFarthestPlayer" | "getRealFarthestPlayers"
                     ) {
-                        let negative_one = self.push_number(-1.0, "-1");
+                        let negative_one = self.push_number(-1.0);
                         self.push_call("multiply", vec![negative_one, distance])
                     } else {
                         distance
@@ -5383,7 +5325,7 @@ impl<'a> Lowering<'a> {
                     let [text] = args.as_slice() else {
                         return Err(self.unsupported(format!("{name} requires one string"), span));
                     };
-                    return self.lower_decompression(text, name == "decompressVectors", span);
+                    return self.lower_decompression(text, name == "decompressVectors");
                 }
                 if name == "strVisualLength" {
                     let [Expr::String { value, .. }] = args.as_slice() else {
@@ -5392,7 +5334,7 @@ impl<'a> Lowering<'a> {
                         );
                     };
                     let width = value.chars().map(blizzard_global::width).sum::<i32>();
-                    return Ok(self.push_number(width as f64, ""));
+                    return Ok(self.push_number(width as f64));
                 }
                 if name == "spacesForLength" {
                     let [Expr::Number { value, .. }] = args.as_slice() else {
@@ -5406,7 +5348,7 @@ impl<'a> Lowering<'a> {
                             span,
                         ));
                     }
-                    return self.lower_custom_string(blizzard_global::spaces(*value as i32), span);
+                    return Ok(self.lower_custom_string(blizzard_global::spaces(*value as i32)));
                 }
                 if name == "spacesForString" {
                     let [Expr::String { value, .. }] = args.as_slice() else {
@@ -5444,10 +5386,9 @@ impl<'a> Lowering<'a> {
                             self.unsupported("spacesForString requires one literal string", span)
                         );
                     };
-                    return self.lower_custom_string(
-                        blizzard_global::spaces(value.chars().map(blizzard_global::width).sum()),
-                        span,
-                    );
+                    return Ok(self.lower_custom_string(blizzard_global::spaces(
+                        value.chars().map(blizzard_global::width).sum(),
+                    )));
                 }
                 if name == "hsl" {
                     let (hue, saturation, lightness, alpha) = match args.as_slice() {
@@ -5466,32 +5407,32 @@ impl<'a> Lowering<'a> {
                     let lightness = self.lower_value(lightness)?;
                     let alpha = match alpha {
                         Some(alpha) => self.lower_value(alpha)?,
-                        None => self.push_number(255.0, "255"),
+                        None => self.push_number(255.0),
                     };
-                    let one = self.push_number(1.0, "1");
-                    let thirty = self.push_number(30.0, "30");
+                    let one = self.push_number(1.0);
+                    let thirty = self.push_number(30.0);
                     let hue_thirtieths = self.push_call("divide", vec![hue, thirty]);
                     let lightness_complement = self.push_call("subtract", vec![one, lightness]);
                     let lightness_limit =
                         self.push_call("min", vec![lightness, lightness_complement]);
                     let channel = |this: &mut Self, offset: f64| {
-                        let offset = this.push_number(offset, "");
+                        let offset = this.push_number(offset);
                         let phase = this.push_call("add", vec![offset, hue_thirtieths]);
-                        let twelve = this.push_number(12.0, "12");
+                        let twelve = this.push_number(12.0);
                         let phase = this.push_call("modulo", vec![phase, twelve]);
-                        let three = this.push_number(3.0, "3");
+                        let three = this.push_number(3.0);
                         let lower = this.push_call("subtract", vec![phase, three]);
-                        let nine = this.push_number(9.0, "9");
+                        let nine = this.push_number(9.0);
                         let upper = this.push_call("subtract", vec![nine, phase]);
                         let clamped = this.push_call("min", vec![lower, upper]);
-                        let negative_one = this.push_number(-1.0, "-1");
+                        let negative_one = this.push_number(-1.0);
                         let clamped = this.push_call("max", vec![clamped, negative_one]);
                         let saturation_limit =
                             this.push_call("multiply", vec![saturation, lightness_limit]);
                         let adjustment =
                             this.push_call("multiply", vec![saturation_limit, clamped]);
                         let value = this.push_call("subtract", vec![lightness, adjustment]);
-                        let scale = this.push_number(255.0, "255");
+                        let scale = this.push_number(255.0);
                         this.push_call("multiply", vec![scale, value])
                     };
                     let red = channel(self, 0.0);
@@ -5504,8 +5445,8 @@ impl<'a> Lowering<'a> {
                         return Err(self.unsupported("timeToString requires one argument", span));
                     };
                     let time = self.lower_value(time)?;
-                    let three_thousand_six_hundred = self.push_number(3600.0, "3600");
-                    let sixty = self.push_number(60.0, "60");
+                    let three_thousand_six_hundred = self.push_number(3600.0);
+                    let sixty = self.push_number(60.0);
                     let hour_value =
                         self.push_call("divide", vec![time, three_thousand_six_hundred]);
                     let down = self.push_value(Value::Enum {
@@ -5518,9 +5459,9 @@ impl<'a> Lowering<'a> {
                     let minute_value = self.push_call("divide", vec![minute_remainder, sixty]);
                     let minute = self.push_call("roundToInteger", vec![minute_value, down]);
                     let second = self.push_call("modulo", vec![time, sixty]);
-                    let hundred = self.push_number(100.0, "100");
-                    let first_digit = self.push_number(1.0, "1");
-                    let two = self.push_number(2.0, "2");
+                    let hundred = self.push_number(100.0);
+                    let first_digit = self.push_number(1.0);
+                    let two = self.push_number(2.0);
                     let minute_with_padding = self.push_call("add", vec![minute, hundred]);
                     let padding_template = self.push_value(Value::String("{0}".to_string()));
                     let minute_with_padding =
@@ -5530,7 +5471,7 @@ impl<'a> Lowering<'a> {
                     let second_with_padding = self.push_call("add", vec![second, hundred]);
                     let second_with_padding =
                         self.push_call("customString", vec![padding_template, second_with_padding]);
-                    let all_digits = self.push_number(9999.0, "9999");
+                    let all_digits = self.push_number(9999.0);
                     let second_text = self.push_call(
                         "stringSlice",
                         vec![second_with_padding, first_digit, all_digits],
@@ -5552,10 +5493,10 @@ impl<'a> Lowering<'a> {
                         return Err(self.unsupported("getSign requires one argument", span));
                     };
                     let number = self.lower_value(number)?;
-                    let zero = self.push_number(0.0, "0");
+                    let zero = self.push_number(0.0);
                     let positive = self.push_call(">", vec![number, zero]);
-                    let one = self.push_number(1.0, "1");
-                    let negative_one = self.push_number(-1.0, "-1");
+                    let one = self.push_number(1.0);
+                    let negative_one = self.push_number(-1.0);
                     let sign = self.push_call("ifThenElse", vec![positive, one, negative_one]);
                     let is_zero = self.push_call("==", vec![number, zero]);
                     return Ok(self.push_call("ifThenElse", vec![is_zero, zero, sign]));
@@ -5567,7 +5508,7 @@ impl<'a> Lowering<'a> {
                     let start = self.lower_value(start)?;
                     let end = self.lower_value(end)?;
                     let t = self.lower_value(t)?;
-                    let one = self.push_number(1.0, "1");
+                    let one = self.push_number(1.0);
                     let weight = self.push_call("subtract", vec![one, t]);
                     let start_part = self.push_call("multiply", vec![start, weight]);
                     let end_part = self.push_call("multiply", vec![end, t]);
@@ -5582,18 +5523,18 @@ impl<'a> Lowering<'a> {
                         }
                     };
                     let number = self.lower_value(number)?;
-                    let exponent = self.push_number(0.0001, "0.0001");
+                    let exponent = self.push_number(0.0001);
                     let powered = self.push_call("raiseToPower", vec![number, exponent]);
-                    let one = self.push_number(1.0, "1");
+                    let one = self.push_number(1.0);
                     let delta = self.push_call("subtract", vec![powered, one]);
-                    let scale = self.push_number(10000.0, "10000");
+                    let scale = self.push_number(10000.0);
                     let approximation = self.push_call("multiply", vec![scale, delta]);
                     if let Some(base) = base {
                         let base = self.lower_value(base)?;
                         let base_powered = self.push_call("raiseToPower", vec![base, exponent]);
-                        let base_one = self.push_number(1.0, "1");
+                        let base_one = self.push_number(1.0);
                         let base_delta = self.push_call("subtract", vec![base_powered, base_one]);
-                        let base_scale = self.push_number(10000.0, "10000");
+                        let base_scale = self.push_number(10000.0);
                         let base_log = self.push_call("multiply", vec![base_scale, base_delta]);
                         return Ok(self.push_call("divide", vec![approximation, base_log]));
                     }
@@ -5650,7 +5591,7 @@ impl<'a> Lowering<'a> {
                     // The sort order is the last parameter; OverPy writes 0 when omitted.
                     let (canonical, arity_without_sort_order) = workshop_setting_call(name);
                     if lowered.len() == arity_without_sort_order {
-                        lowered.push(self.push_number(0.0, "0"));
+                        lowered.push(self.push_number(0.0));
                     }
                     Value::Call {
                         name: canonical.to_string(),
@@ -6131,7 +6072,7 @@ impl<'a> Lowering<'a> {
                         ));
                     }
                 };
-                return self.lower_custom_string(value, *span);
+                return Ok(self.lower_custom_string(value));
             }
             _ => {
                 return Err(self.unsupported(
@@ -6227,8 +6168,8 @@ impl<'a> Lowering<'a> {
         args: &mut [ValueId],
         span: Option<HirSpan>,
     ) {
-        for (index, value) in args.iter_mut().enumerate() {
-            *value = self.apply_replacement(*value, call_id, index, span);
+        for value in args {
+            *value = self.apply_replacement(*value, call_id, span);
         }
     }
 
@@ -6236,7 +6177,6 @@ impl<'a> Lowering<'a> {
         &mut self,
         value_id: ValueId,
         call_id: &str,
-        _arg_index: usize,
         span: Option<HirSpan>,
     ) -> ValueId {
         let optimization = self.optimization_state_at(span.as_ref());
@@ -6322,7 +6262,6 @@ impl<'a> Lowering<'a> {
         &mut self,
         text: &Expr,
         is_vector: bool,
-        span: Option<HirSpan>,
     ) -> Result<ValueId, IntegrationError> {
         let text = self.lower_value(text)?;
         let null = self.push_value(Value::Null);
@@ -6335,7 +6274,7 @@ impl<'a> Lowering<'a> {
                 .expect("compression alphabet variable is created");
             self.push_value(Value::GlobalVariable(self.global_names[variable].clone()))
         } else {
-            self.lower_custom_string(compression_alphabet(), span)?
+            self.lower_custom_string(compression_alphabet())
         };
         let decoded = if has_directive(self.hir, "useVariableForCompressionAlphabet") {
             split
@@ -6351,7 +6290,7 @@ impl<'a> Lowering<'a> {
             let current = this.push_call("currentArrayElement", Vec::new());
             let mut terms = Vec::with_capacity(width);
             for index in 0..width {
-                let position = this.push_number((index + component_offset) as f64, "");
+                let position = this.push_number((index + component_offset) as f64);
                 let character = this.push_call("charAt", vec![current, position]);
                 let formula_alphabet =
                     if has_directive(this.hir, "useVariableForCompressionAlphabet") {
@@ -6361,17 +6300,17 @@ impl<'a> Lowering<'a> {
                     };
                 let digit = this.push_call("strIndex", vec![formula_alphabet, character]);
                 let power = 100_f64.powf(index as f64 + min_decimal_place / 2.0);
-                let power = this.push_number(power, "");
+                let power = this.push_number(power);
                 terms.push(this.push_call("multiply", vec![power, digit]));
             }
             let mut value = terms
                 .first()
                 .copied()
-                .unwrap_or_else(|| this.push_number(0.0, ""));
+                .unwrap_or_else(|| this.push_number(0.0));
             for term in terms.into_iter().skip(1) {
                 value = this.push_call("add", vec![value, term]);
             }
-            let offset = this.push_number(offset, "");
+            let offset = this.push_number(offset);
             this.push_call("subtract", vec![value, offset])
         };
         if is_vector {
@@ -6408,13 +6347,13 @@ impl<'a> Lowering<'a> {
                 Expr::Null { .. } => Some(vec![0.0]),
                 Expr::Number { value, .. } => Some(vec![*value]),
                 Expr::Unary { op, operand, .. } if matches!(op.as_str(), "+" | "-") => {
-                    literal_number(operand)
+                    hir::visit::literal_number(operand)
                         .map(|value| vec![if op == "-" { -value } else { value }])
                 }
                 Expr::Vector { x, y, z, .. } => Some(vec![
-                    literal_number(x)?,
-                    literal_number(y)?,
-                    literal_number(z)?,
+                    hir::visit::literal_number(x)?,
+                    hir::visit::literal_number(y)?,
+                    hir::visit::literal_number(z)?,
                 ]),
                 _ => None,
             })
@@ -6527,9 +6466,9 @@ impl<'a> Lowering<'a> {
                 .join("0")
         };
         if !decode {
-            return self.lower_custom_string(compressed, span);
+            return Ok(self.lower_custom_string(compressed));
         }
-        let compressed_string = self.lower_custom_string(compressed, span)?;
+        let compressed_string = self.lower_custom_string(compressed);
         let null = self.push_value(Value::Null);
         let separator = self.push_call("firstOf", vec![null]);
         let split = self.push_call("stringSplit", vec![compressed_string, separator]);
@@ -6540,7 +6479,7 @@ impl<'a> Lowering<'a> {
                 .expect("compression alphabet variable is created");
             self.push_value(Value::GlobalVariable(self.global_names[variable].clone()))
         } else {
-            self.lower_custom_string(compression_alphabet(), span)?
+            self.lower_custom_string(compression_alphabet())
         };
         let decoded = if has_directive(self.hir, "useVariableForCompressionAlphabet") {
             split
@@ -6555,7 +6494,7 @@ impl<'a> Lowering<'a> {
             let current = this.push_call("currentArrayElement", Vec::new());
             let mut terms = Vec::with_capacity(width);
             for index in 0..width {
-                let position = this.push_number((index + component_offset) as f64, "");
+                let position = this.push_number((index + component_offset) as f64);
                 let character = this.push_call("charAt", vec![current, position]);
                 let formula_alphabet =
                     if has_directive(this.hir, "useVariableForCompressionAlphabet") {
@@ -6565,7 +6504,7 @@ impl<'a> Lowering<'a> {
                     };
                 let digit = this.push_call("strIndex", vec![formula_alphabet, character]);
                 let power = 100_f64.powf(index as f64 + f64::from(min_decimal_place) / 2.0);
-                let power = this.push_number(power, "");
+                let power = this.push_number(power);
                 let weighted = this.push_call("multiply", vec![power, digit]);
                 if optimization.enabled {
                     this.optimized_nodes.insert(weighted, optimization.strict);
@@ -6575,14 +6514,14 @@ impl<'a> Lowering<'a> {
             let mut value = terms
                 .first()
                 .copied()
-                .unwrap_or_else(|| this.push_number(0.0, ""));
+                .unwrap_or_else(|| this.push_number(0.0));
             for term in terms.into_iter().skip(1) {
                 value = this.push_call("add", vec![value, term]);
             }
             if is_vector || compression_offset == 0.0 {
                 value
             } else {
-                let offset = this.push_number(compression_offset, "");
+                let offset = this.push_number(compression_offset);
                 this.push_call("add", vec![value, offset])
             }
         };
@@ -6594,7 +6533,7 @@ impl<'a> Lowering<'a> {
             let value = if compression_offset == 0.0 {
                 vector
             } else {
-                let offset = self.push_number(-compression_offset, "");
+                let offset = self.push_number(-compression_offset);
                 let offset = self.push_call("vector", vec![offset, offset, offset]);
                 self.push_call("subtract", vec![vector, offset])
             };
@@ -6828,10 +6767,7 @@ impl<'a> Lowering<'a> {
     }
 
     fn push_while_actions(&mut self, condition: ValueId, body: Vec<ActionId>) -> Vec<ActionId> {
-        let mut result = vec![self.push_action(Action::While { condition })];
-        result.extend(body);
-        result.push(self.push_action(Action::End));
-        result
+        self.push_loop_actions(Action::While { condition }, body)
     }
 
     fn push_for_global_actions(
@@ -6842,15 +6778,15 @@ impl<'a> Lowering<'a> {
         step: ValueId,
         body: Vec<ActionId>,
     ) -> Vec<ActionId> {
-        let mut result = vec![self.push_action(Action::ForGlobalVariable {
-            variable: self.global_names[variable].clone(),
-            start,
-            stop,
-            step,
-        })];
-        result.extend(body);
-        result.push(self.push_action(Action::End));
-        result
+        self.push_loop_actions(
+            Action::ForGlobalVariable {
+                variable: self.global_names[variable].clone(),
+                start,
+                stop,
+                step,
+            },
+            body,
+        )
     }
 
     fn push_for_player_actions(
@@ -6862,13 +6798,20 @@ impl<'a> Lowering<'a> {
         step: ValueId,
         body: Vec<ActionId>,
     ) -> Vec<ActionId> {
-        let mut result = vec![self.push_action(Action::ForPlayerVariable {
-            player,
-            variable: self.player_names[variable].clone(),
-            start,
-            stop,
-            step,
-        })];
+        self.push_loop_actions(
+            Action::ForPlayerVariable {
+                player,
+                variable: self.player_names[variable].clone(),
+                start,
+                stop,
+                step,
+            },
+            body,
+        )
+    }
+
+    fn push_loop_actions(&mut self, start: Action, body: Vec<ActionId>) -> Vec<ActionId> {
+        let mut result = vec![self.push_action(start)];
         result.extend(body);
         result.push(self.push_action(Action::End));
         result
@@ -7408,84 +7351,6 @@ fn directive_value<'a>(hir: &'a hir::Program, name: &str) -> Option<&'a str> {
         .and_then(|directive| directive.value.as_deref())
 }
 
-fn literal_number(expr: &hir::Expr) -> Option<f64> {
-    match expr {
-        hir::Expr::Null { .. } => Some(0.0),
-        hir::Expr::Number { value, .. } => Some(*value),
-        hir::Expr::Unary { op, operand, .. } if op == "+" => literal_number(operand),
-        hir::Expr::Unary { op, operand, .. } if op == "-" => {
-            literal_number(operand).map(|value| -value)
-        }
-        _ => None,
-    }
-}
-
-fn expr_contains_random(expr: &hir::Expr) -> bool {
-    match expr {
-        hir::Expr::Call { name, args, .. } | hir::Expr::MacroCall { name, args, .. } => {
-            name.starts_with("random.") || args.iter().any(expr_contains_random)
-        }
-        hir::Expr::Array { elements, .. } => elements.iter().any(expr_contains_random),
-        hir::Expr::Dict { entries, .. } => entries
-            .iter()
-            .any(|entry| expr_contains_random(&entry.key) || expr_contains_random(&entry.value)),
-        hir::Expr::Comprehension {
-            element,
-            iterable,
-            condition,
-            ..
-        } => {
-            expr_contains_random(element)
-                || expr_contains_random(iterable)
-                || condition.as_deref().is_some_and(expr_contains_random)
-        }
-        hir::Expr::Lambda { body, .. } | hir::Expr::Unary { operand: body, .. } => {
-            expr_contains_random(body)
-        }
-        hir::Expr::Vector { x, y, z, .. } => {
-            expr_contains_random(x) || expr_contains_random(y) || expr_contains_random(z)
-        }
-        hir::Expr::PlayerVar { player, .. }
-        | hir::Expr::Member {
-            receiver: player, ..
-        } => expr_contains_random(player),
-        hir::Expr::ReceiverCall { receiver, args, .. } => {
-            expr_contains_random(receiver) || args.iter().any(expr_contains_random)
-        }
-        hir::Expr::Type { args, .. } | hir::Expr::Format { args, .. } => {
-            args.iter().any(expr_contains_random)
-        }
-        hir::Expr::Binary { left, right, .. } => {
-            expr_contains_random(left) || expr_contains_random(right)
-        }
-        hir::Expr::Conditional {
-            then_value,
-            condition,
-            else_value,
-            ..
-        } => {
-            expr_contains_random(then_value)
-                || expr_contains_random(condition)
-                || expr_contains_random(else_value)
-        }
-        hir::Expr::Index { array, index, .. } => {
-            expr_contains_random(array) || expr_contains_random(index)
-        }
-        hir::Expr::Number { .. }
-        | hir::Expr::String { .. }
-        | hir::Expr::Bool { .. }
-        | hir::Expr::Null { .. }
-        | hir::Expr::StringModifier { .. }
-        | hir::Expr::Local { .. }
-        | hir::Expr::Enum { .. }
-        | hir::Expr::GlobalVar { .. }
-        | hir::Expr::HostPlayer { .. }
-        | hir::Expr::EventPlayer { .. }
-        | hir::Expr::Constant { .. }
-        | hir::Expr::MacroParam { .. } => false,
-    }
-}
-
 fn compression_alphabet_chars() -> Vec<char> {
     (1..=47)
         .chain(std::iter::once(50))
@@ -7658,10 +7523,6 @@ fn case_sensitive_character(character: char) -> char {
         'z' => 'ẓ',
         _ => character,
     }
-}
-
-fn computed_number_text(value: f64) -> String {
-    workshop_rs::format::format_number(value)
 }
 
 fn canonical_format_text(text: &str) -> String {

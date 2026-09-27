@@ -1,5 +1,48 @@
 use super::types::{Expr, Stmt, SwitchArm};
 
+pub(crate) fn contains_random(expression: &Expr) -> bool {
+    struct RandomFinder(bool);
+
+    impl Visitor for RandomFinder {
+        fn visit_expr(&mut self, expression: &Expr) {
+            if self.0 {
+                return;
+            }
+            if matches!(
+                expression,
+                Expr::Call { name, .. } | Expr::MacroCall { name, .. }
+                    if name.starts_with("random.")
+            ) {
+                self.0 = true;
+            } else {
+                walk_expr(self, expression);
+            }
+        }
+    }
+
+    let mut finder = RandomFinder(false);
+    Visitor::visit_expr(&mut finder, expression);
+    finder.0
+}
+
+pub(crate) fn literal_number(expression: &Expr) -> Option<f64> {
+    match expression {
+        Expr::Null { .. } => Some(0.0),
+        Expr::Number { value, .. } => Some(*value),
+        Expr::Unary { op, operand, .. } if op == "+" => literal_number(operand),
+        Expr::Unary { op, operand, .. } if op == "-" => literal_number(operand).map(|value| -value),
+        _ => None,
+    }
+}
+
+pub(crate) fn has_random_nested_delete(root: &Expr, indices: &[&Expr]) -> bool {
+    indices.len() >= 3
+        && (contains_random(root)
+            || indices[..indices.len() - 1]
+                .iter()
+                .any(|index| contains_random(index)))
+}
+
 pub(crate) trait Visitor {
     fn visit_expr(&mut self, expression: &Expr) {
         walk_expr(self, expression);
