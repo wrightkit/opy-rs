@@ -1,5 +1,110 @@
 use super::*;
 
+use super::super::blizzard_global;
+
+fn is_cased_color_tag(text: &[char], index: usize) -> Option<usize> {
+    let remaining = text[index..].iter().collect::<String>();
+    let is_tag = remaining
+        .get(..3)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("<fg"))
+        || remaining
+            .get(..5)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("</fg>"));
+    if !is_tag {
+        return None;
+    }
+    remaining
+        .find('>')
+        .map(|offset| index + remaining[..=offset].chars().count())
+}
+
+fn cased_line(text: &str, text_count: usize) -> Vec<String> {
+    let characters = text.chars().collect::<Vec<_>>();
+    let mut text_without_tags = String::new();
+    let mut plain_index = 0;
+    while plain_index < characters.len() {
+        if let Some(end) = is_cased_color_tag(&characters, plain_index) {
+            plain_index = end;
+        } else {
+            text_without_tags.push(characters[plain_index]);
+            plain_index += 1;
+        }
+    }
+    let mut text_width = 0;
+    let mut found_lowercase = false;
+    for character in text_without_tags.chars() {
+        if let Some(glyph) = blizzard_global::cased_glyph(character) {
+            found_lowercase = true;
+            if !matches!(character, 'i' | 'j' | 'l') {
+                text_width = (glyph.lower_xmin - text_width).max(0);
+                break;
+            }
+        } else {
+            text_width += blizzard_global::width(character);
+        }
+    }
+    if !found_lowercase {
+        return vec![text.to_string(); text_count];
+    }
+
+    let mut outputs = vec![String::new(); text_count];
+    let mut widths = vec![0; text_count];
+    let mut text_index = 0;
+    let mut last_character = None;
+    let mut index = 0;
+    while index < characters.len() {
+        if let Some(end) = is_cased_color_tag(&characters, index) {
+            let tag = characters[index..end].iter().collect::<String>();
+            for output in &mut outputs {
+                output.push_str(&tag);
+            }
+            text_index = (text_index + 1) % text_count;
+            index = end;
+            continue;
+        }
+        let character = characters[index];
+        if let Some(glyph) = blizzard_global::cased_glyph(character) {
+            text_index = (text_index + 1) % text_count;
+            let padding = (text_width - widths[text_index] - glyph.lower_xmin + glyph.xmin).max(0);
+            outputs[text_index].push_str(&blizzard_global::spaces(padding));
+            widths[text_index] += padding;
+            outputs[text_index].push_str(glyph.lower);
+            widths[text_index] += glyph.lower_width;
+            last_character = Some(character);
+        } else if character != ' ' {
+            if outputs[text_index].is_empty()
+                || last_character
+                    .and_then(blizzard_global::cased_glyph)
+                    .is_some()
+                || last_character == Some(' ')
+            {
+                text_index = (text_index + 1) % text_count;
+                let padding = (text_width - widths[text_index]).max(0);
+                outputs[text_index].push_str(&blizzard_global::spaces(padding));
+                widths[text_index] += padding;
+            }
+            outputs[text_index].push(character);
+            widths[text_index] += blizzard_global::width(character);
+            last_character = Some(character);
+        } else {
+            last_character = Some(character);
+        }
+        text_width += blizzard_global::cased_glyph(character)
+            .map_or_else(|| blizzard_global::width(character), |glyph| glyph.width);
+        index += 1;
+    }
+    let maximum = widths
+        .iter()
+        .copied()
+        .max()
+        .unwrap_or_default()
+        .max(text_width);
+    for (output, width) in outputs.iter_mut().zip(widths) {
+        output.push_str(&blizzard_global::spaces(maximum - width));
+    }
+    outputs
+}
+
 impl<'a> Lowering<'a> {
     pub(super) fn lower_cased_progress_bar(
         &mut self,
