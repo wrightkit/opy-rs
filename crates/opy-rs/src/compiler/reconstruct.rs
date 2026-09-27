@@ -1307,46 +1307,15 @@ impl<'a> Emitter<'a> {
             );
             return;
         }
-        let Some(entry) = self.manifest.resolve_function(name) else {
-            match self.manifest.resolve_member(name) {
-                Some(entry) if entry.kind.is_action() => {
-                    self.emit_member_call(entry, args, indent, span, argument_spans);
+        let (entry, member) =
+            match Self::resolve_call_entry(self.manifest, name, FunctionKind::Action) {
+                Ok(call) => call,
+                Err(message) => {
+                    self.issue("unsupported-action-call", message, span);
+                    return;
                 }
-                Some(_) => {
-                    self.issue(
-                        "unsupported-action-call",
-                        format!(
-                            "member value '{name}' cannot be emitted as an action on \
-                             the reconstruction surface"
-                        ),
-                        span,
-                    );
-                }
-                None => {
-                    self.issue(
-                        "unsupported-action-call",
-                        format!(
-                            "action call '{name}' has no OPY source form on the \
-                             reconstruction surface"
-                        ),
-                        span,
-                    );
-                }
-            }
-            return;
-        };
-        if !entry.kind.is_action() {
-            self.issue(
-                "unsupported-action-call",
-                format!(
-                    "value function '{name}' cannot be emitted as an action on \
-                     the reconstruction surface"
-                ),
-                span,
-            );
-            return;
-        }
-        if args.is_empty() && self.subroutine_names.contains(name) {
+            };
+        if !member && args.is_empty() && self.subroutine_names.contains(name) {
             self.issue(
                 "unsupported-action-call",
                 format!(
@@ -1358,8 +1327,58 @@ impl<'a> Emitter<'a> {
             return;
         }
         self.out.push_str(indent);
-        self.emit_manifest_call(entry, args, false, span, argument_spans);
+        self.emit_manifest_call(entry, args, member, span, argument_spans);
         self.out.push('\n');
+    }
+
+    fn resolve_call_entry<'manifest>(
+        manifest: &'manifest Manifest,
+        name: &str,
+        expected: FunctionKind,
+    ) -> Result<(&'manifest Function, bool), String> {
+        let expected_action = expected.is_action();
+        let (entry, member) = match manifest.resolve_function(name) {
+            Some(entry) => (entry, false),
+            None => match manifest.resolve_member(name) {
+                Some(entry) => (entry, true),
+                None => {
+                    let message = if expected_action {
+                        format!(
+                            "action call '{name}' has no OPY source form on the \
+                             reconstruction surface"
+                        )
+                    } else {
+                        format!(
+                            "value call '{name}' has no OPY source form on the \
+                             reconstruction surface"
+                        )
+                    };
+                    return Err(message);
+                }
+            },
+        };
+        if expected_action != entry.kind.is_action() {
+            let message = match (expected_action, member) {
+                (true, true) => format!(
+                    "member value '{name}' cannot be emitted as an action on \
+                     the reconstruction surface"
+                ),
+                (true, false) => format!(
+                    "value function '{name}' cannot be emitted as an action on \
+                     the reconstruction surface"
+                ),
+                (false, true) => format!(
+                    "member action '{name}' cannot be emitted as a value on \
+                     the reconstruction surface"
+                ),
+                (false, false) => format!(
+                    "action function '{name}' cannot be emitted as a value on \
+                     the reconstruction surface"
+                ),
+            };
+            return Err(message);
+        }
+        Ok((entry, member))
     }
 
     /// Emit a manifest function call with explicit full-arity arguments, no
@@ -1476,20 +1495,6 @@ impl<'a> Emitter<'a> {
             self.emit_value(arg, argument_span);
         }
         self.out.push(')');
-    }
-
-    /// A member call: `receiver.name(args...)`.
-    fn emit_member_call(
-        &mut self,
-        entry: &Function,
-        args: &[Value],
-        indent: &str,
-        span: Option<Span>,
-        argument_spans: &[Option<Span>],
-    ) {
-        self.out.push_str(indent);
-        self.emit_manifest_call(entry, args, true, span, argument_spans);
-        self.out.push('\n');
     }
 
     /// Validate a provided argument against its manifest parameter: enum
@@ -1791,46 +1796,15 @@ impl<'a> Emitter<'a> {
             );
             return;
         }
-        let Some(entry) = self.manifest.resolve_function(name) else {
-            match self.manifest.resolve_member(name) {
-                Some(entry) if entry.kind.is_value() => {
-                    self.emit_manifest_call(entry, args, true, span, &[]);
+        let (entry, member) =
+            match Self::resolve_call_entry(self.manifest, name, FunctionKind::Value) {
+                Ok(call) => call,
+                Err(message) => {
+                    self.issue("unsupported-value-call", message, span);
+                    return;
                 }
-                Some(_) => {
-                    self.issue(
-                        "unsupported-value-call",
-                        format!(
-                            "member action '{name}' cannot be emitted as a value on \
-                             the reconstruction surface"
-                        ),
-                        span,
-                    );
-                }
-                None => {
-                    self.issue(
-                        "unsupported-value-call",
-                        format!(
-                            "value call '{name}' has no OPY source form on the \
-                             reconstruction surface"
-                        ),
-                        span,
-                    );
-                }
-            }
-            return;
-        };
-        if !entry.kind.is_value() {
-            self.issue(
-                "unsupported-value-call",
-                format!(
-                    "action function '{name}' cannot be emitted as a value on the \
-                     reconstruction surface"
-                ),
-                span,
-            );
-            return;
-        }
-        if crate::lower::policy::function_context(&entry.id).is_some() {
+            };
+        if !member && crate::lower::policy::function_context(&entry.id).is_some() {
             self.issue(
                 "unsupported-value-call",
                 format!(
@@ -1841,7 +1815,7 @@ impl<'a> Emitter<'a> {
             );
             return;
         }
-        self.emit_manifest_call(entry, args, false, span, &[]);
+        self.emit_manifest_call(entry, args, member, span, &[]);
     }
 
     fn emit_string_literal(&mut self, value: &str) {
