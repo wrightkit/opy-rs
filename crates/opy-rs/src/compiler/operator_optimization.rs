@@ -101,7 +101,7 @@ impl<'a> OperatorOptimizer<'a> {
             ("raiseToPower", 2) => self.power(args),
             ("-", 1) => self.negate(args),
             ("roundToInteger", 2) => Self::round(args),
-            ("absoluteValue", 1) => Self::absolute(args),
+            ("absoluteValue", 1) => Self::unary("absoluteValue", args, f64::abs),
             ("sin", 1) => Self::unary("sin", args, f64::sin),
             ("cos", 1) => Self::unary("cos", args, f64::cos),
             ("sinDeg", 1) => Self::unary("sinDeg", args, |degrees| {
@@ -492,14 +492,6 @@ impl<'a> OperatorOptimizer<'a> {
         Rewrite::Same(call("roundToInteger", vec![number, direction]))
     }
 
-    fn absolute(args: Vec<Value>) -> Rewrite {
-        let [number] = one(args);
-        match number {
-            Value::Number(number) => Rewrite::Changed(Value::Number(number.abs())),
-            other => Rewrite::Same(call("absoluteValue", vec![other])),
-        }
-    }
-
     fn unary(name: &str, args: Vec<Value>, apply: fn(f64) -> f64) -> Rewrite {
         let [number] = one(args);
         match number {
@@ -590,11 +582,7 @@ impl<'a> OperatorOptimizer<'a> {
     }
 
     fn extremum(name: &str, args: Vec<Value>, apply: fn(f64, f64) -> f64) -> Rewrite {
-        let [left, right] = two(args);
-        match (&left, &right) {
-            (Value::Number(a), Value::Number(b)) => Rewrite::Changed(Value::Number(apply(*a, *b))),
-            _ => Rewrite::Same(call(name, vec![left, right])),
-        }
+        Self::binary(name, args, apply)
     }
 
     fn magnitude(args: Vec<Value>) -> Rewrite {
