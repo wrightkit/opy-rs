@@ -51,8 +51,7 @@ impl<'a> Lowering<'a> {
         if elide_noop_switch && !rule.disabled {
             return Ok(());
         }
-        let rule_index = self.program.rules.len();
-        self.program.rules.push(rule_from_parts(
+        let value = rule_from_parts(
             rule.name.clone(),
             rule.disabled,
             event,
@@ -73,13 +72,12 @@ impl<'a> Lowering<'a> {
                 })
                 .collect(),
             self.public_actions(&actions),
-        ));
-        let action_provenance = self.action_provenance(&actions);
-        self.set_rule_provenance(
-            rule_index,
+        );
+        self.append_rule(
+            value,
+            &actions,
             rule.span,
             condition_exprs.iter().map(|expr| expr.span().copied()),
-            action_provenance,
         )?;
         Ok(())
     }
@@ -161,16 +159,14 @@ impl<'a> Lowering<'a> {
         {
             return Ok(());
         }
-        let rule_index = self.program.rules.len();
-        self.program.rules.push(rule_from_parts(
+        let value = rule_from_parts(
             self.subroutine_rule_name(name),
             false,
             event,
             Vec::new(),
             self.public_actions(&actions),
-        ));
-        let action_provenance = self.action_provenance(&actions);
-        self.set_rule_provenance(rule_index, span, std::iter::empty(), action_provenance)?;
+        );
+        self.append_rule(value, &actions, span, std::iter::empty())?;
         Ok(())
     }
 

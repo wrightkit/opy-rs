@@ -909,28 +909,28 @@ impl<'a> Lowering<'a> {
         }
     }
 
-    fn set_rule_provenance<C, A>(
+    fn append_rule(
         &mut self,
-        rule: usize,
+        rule_value: workshop_rs::Rule,
+        actions: &[ActionId],
         span: Option<HirSpan>,
-        conditions: C,
-        actions: A,
-    ) -> Result<(), IntegrationError>
-    where
-        C: IntoIterator<Item = Option<HirSpan>>,
-        A: IntoIterator<Item = (Option<HirSpan>, Vec<Option<HirSpan>>)>,
-    {
+        condition_spans: impl IntoIterator<Item = Option<HirSpan>>,
+    ) -> Result<(), IntegrationError> {
+        let rule_index = self.program.rules.len();
+        self.program.rules.push(rule_value);
         self.program
-            .set_rule_span(rule, self.workshop_span(span)?)
+            .set_rule_span(rule_index, self.workshop_span(span)?)
             .map_err(|error| IntegrationError::new("provenance", error.to_string(), span))?;
-        for (index, span) in conditions.into_iter().enumerate() {
+        for (index, span) in condition_spans.into_iter().enumerate() {
             self.program
-                .set_condition_span(rule, index, self.workshop_span(span)?)
+                .set_condition_span(rule_index, index, self.workshop_span(span)?)
                 .map_err(|error| IntegrationError::new("provenance", error.to_string(), span))?;
         }
-        for (index, (span, argument_spans)) in actions.into_iter().enumerate() {
+        for (index, (span, argument_spans)) in
+            self.action_provenance(actions).into_iter().enumerate()
+        {
             self.program
-                .set_action_span(rule, index, self.workshop_span(span)?)
+                .set_action_span(rule_index, index, self.workshop_span(span)?)
                 .map_err(|error| IntegrationError::new("provenance", error.to_string(), span))?;
             for (argument, span) in argument_spans.into_iter().enumerate() {
                 let Some(span) = span else {
@@ -938,7 +938,7 @@ impl<'a> Lowering<'a> {
                 };
                 self.program
                     .set_action_argument_span(
-                        rule,
+                        rule_index,
                         index,
                         argument,
                         self.workshop_span(Some(span))?,

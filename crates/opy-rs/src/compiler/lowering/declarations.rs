@@ -490,20 +490,14 @@ impl<'a> Lowering<'a> {
         event: Event,
         actions: Vec<ActionId>,
     ) -> Result<(), IntegrationError> {
-        let rule_index = self.program.rules.len();
-        self.program.rules.push(rule_from_parts(
+        let rule = rule_from_parts(
             name.to_string(),
             false,
             event,
             Vec::new(),
             self.public_actions(&actions),
-        ));
-        self.set_rule_provenance(
-            rule_index,
-            None,
-            std::iter::empty(),
-            self.action_provenance(&actions),
-        )
+        );
+        self.append_rule(rule, &actions, None, std::iter::empty())
     }
 
     pub(super) fn translation_player_options(&self) -> (bool, bool, bool) {
@@ -638,8 +632,7 @@ impl<'a> Lowering<'a> {
             set_facing,
             finish,
         ];
-        let rule_index = self.program.rules.len();
-        self.program.rules.push(rule_from_parts(
+        let rule = rule_from_parts(
             "OverPy translation setup - Determine the player's language".to_string(),
             false,
             Event::EachPlayer,
@@ -649,13 +642,8 @@ impl<'a> Lowering<'a> {
                 workshop_rs::Condition::new(self.materialize_value(initial_language)),
             ],
             self.public_actions(&actions),
-        ));
-        self.set_rule_provenance(
-            rule_index,
-            None,
-            [None, None, None],
-            self.action_provenance(&actions),
-        )?;
+        );
+        self.append_rule(rule, &actions, None, [None, None, None])?;
         Ok(())
     }
 }
