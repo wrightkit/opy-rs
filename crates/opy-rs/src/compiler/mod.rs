@@ -575,10 +575,7 @@ impl Compiler {
             )?;
         map.apply(&mut reparsed)
             .map_err(|error| IntegrationError::new("source-map-shape", error.to_string(), None))?;
-        Ok(MappedText {
-            text: artifact.final_output.clone(),
-            map,
-        })
+        Ok(MappedText::new(artifact.final_output.clone(), map))
     }
 
     /// Compile source using the default `en-US` catalog locale.
@@ -841,6 +838,7 @@ fn workshop_error_span(error: &workshop_rs::WorkshopError) -> Option<workshop_rs
         | workshop_rs::WorkshopError::Unsupported { span, .. } => *span,
         workshop_rs::WorkshopError::Catalog(_)
         | workshop_rs::WorkshopError::MissingMapping { .. } => None,
+        _ => None,
     }
 }
 
