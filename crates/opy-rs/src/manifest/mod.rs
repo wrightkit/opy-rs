@@ -348,23 +348,34 @@ impl Manifest {
                 probes_file.schema_version
             )));
         }
+        let ManifestFile {
+            schema_version,
+            reference,
+            functions,
+            aliases,
+            provenance,
+        } = file;
         let mut manifest = Manifest {
-            schema_version: file.schema_version,
-            reference: file.reference.clone(),
-            functions: Vec::new(),
-            aliases: Vec::new(),
-            provenance: file.provenance.clone(),
+            schema_version,
+            reference,
+            functions: Vec::with_capacity(functions.len()),
+            aliases: Vec::with_capacity(aliases.len()),
+            provenance,
             probes: probes_file.probes,
             by_function: HashMap::new(),
             by_member: HashMap::new(),
             alias_by_source: HashMap::new(),
             domain_identities: HashSet::new(),
         };
-        manifest.validate(file)?;
+        manifest.validate(functions, aliases)?;
         Ok(manifest)
     }
 
-    fn validate(&mut self, file: ManifestFile) -> Result<(), ManifestError> {
+    fn validate(
+        &mut self,
+        functions: Vec<Function>,
+        aliases: Vec<Alias>,
+    ) -> Result<(), ManifestError> {
         // Probe ids must be unique and must record the accept probes the
         // entries reference.
         let mut probes: HashMap<&str, &Probe> = HashMap::new();
@@ -377,7 +388,7 @@ impl Manifest {
         // Functions: unique ids, member-only receiver/kind combinations,
         // declared enum domains, declared enum-default members, and probe
         // evidence that records acceptance.
-        for function in &file.functions {
+        for function in functions {
             if self.by_function.contains_key(&function.id) {
                 return Err(ManifestError(format!(
                     "duplicate function id '{}'",
@@ -465,7 +476,7 @@ impl Manifest {
                     )));
                 }
             }
-            crate::lower::policy::validate(function).map_err(ManifestError)?;
+            crate::lower::policy::validate(&function).map_err(ManifestError)?;
             if let Some(contextual) = crate::lower::policy::contextual_domain(&function.id) {
                 for option in contextual.options {
                     self.domain_identities.insert(option.domain.to_string());
@@ -479,12 +490,12 @@ impl Manifest {
                 self.by_function
                     .insert(function.id.clone(), self.functions.len());
             }
-            self.functions.push(function.clone());
+            self.functions.push(function);
         }
 
         // Aliases: unique sources, declared targets of the matching class,
         // no collision with declared function ids.
-        for alias in &file.aliases {
+        for alias in aliases {
             if self.alias_by_source.contains_key(&alias.source) {
                 return Err(ManifestError(format!(
                     "duplicate alias source '{}'",
@@ -520,7 +531,7 @@ impl Manifest {
             self.check_evidence(&alias.source, &alias.evidence, &probes)?;
             self.alias_by_source
                 .insert(alias.source.clone(), self.aliases.len());
-            self.aliases.push(alias.clone());
+            self.aliases.push(alias);
         }
 
         Ok(())

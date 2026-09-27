@@ -214,8 +214,6 @@ pub(crate) struct Lowering<'a> {
     deferred_gotos: Vec<(ActionId, String, Option<HirSpan>, usize)>,
     translation_uses: Vec<(String, Option<String>)>,
     optimized_nodes: HashMap<ValueId, bool>,
-    /// Coerced argument values, mapped to the literal the author wrote.
-    authored_values: HashMap<ValueId, ValueId>,
     used_maps: Vec<&'static str>,
 }
 
@@ -392,7 +390,6 @@ impl<'a> Lowering<'a> {
             array_bindings: Vec::new(),
             current_rule_conditions: None,
             optimized_nodes: HashMap::new(),
-            authored_values: HashMap::new(),
             used_maps: used_bugged_maps(hir),
             visible_labels: Vec::new(),
             deferred_gotos: Vec::new(),
@@ -429,49 +426,14 @@ impl<'a> Lowering<'a> {
         &self,
         reserved: &HashSet<u32>,
     ) -> Result<Option<u32>, IntegrationError> {
-        if self.hir.preprocessing.translations.is_none() {
+        let Some(translations) = self.hir.preprocessing.translations.as_ref() else {
             return Ok(None);
-        }
-        (0..=127)
-            .rev()
-            .find(|index| !reserved.contains(index))
-            .map(Some)
-            .ok_or_else(|| {
-                IntegrationError::new(
-                    "index-exhausted",
-                    "no available global variable index remains for translations",
-                    self.hir
-                        .preprocessing
-                        .translations
-                        .as_ref()
-                        .and_then(|value| value.span),
-                )
-            })
-    }
-
-    fn compression_alphabet_index(
-        &self,
-        reserved: &HashSet<u32>,
-    ) -> Result<Option<u32>, IntegrationError> {
-        if !has_directive(self.hir, "useVariableForCompressionAlphabet") {
-            return Ok(None);
-        }
-        (0..=127)
-            .rev()
-            .find(|index| !reserved.contains(index))
-            .map(Some)
-            .ok_or_else(|| {
-                IntegrationError::new(
-                    "index-exhausted",
-                    "no available global variable index remains for the compression alphabet",
-                    self.hir
-                        .preprocessing
-                        .directives
-                        .iter()
-                        .find(|directive| directive.name == "useVariableForCompressionAlphabet")
-                        .and_then(|directive| directive.span),
-                )
-            })
+        };
+        self.free_global_index(
+            reserved,
+            translations.span,
+            "no available global variable index remains for translations",
+        )
     }
 
     fn helper_global_index(
@@ -480,25 +442,29 @@ impl<'a> Lowering<'a> {
         directive: &str,
         message: &str,
     ) -> Result<Option<u32>, IntegrationError> {
-        if !has_directive(self.hir, directive) {
+        let Some(source) = self
+            .hir
+            .preprocessing
+            .directives
+            .iter()
+            .find(|item| item.name == directive)
+        else {
             return Ok(None);
-        }
+        };
+        self.free_global_index(reserved, source.span, message)
+    }
+
+    fn free_global_index(
+        &self,
+        reserved: &HashSet<u32>,
+        span: Option<HirSpan>,
+        message: &str,
+    ) -> Result<Option<u32>, IntegrationError> {
         (0..=127)
             .rev()
             .find(|index| !reserved.contains(index))
             .map(Some)
-            .ok_or_else(|| {
-                IntegrationError::new(
-                    "index-exhausted",
-                    message,
-                    self.hir
-                        .preprocessing
-                        .directives
-                        .iter()
-                        .find(|item| item.name == directive)
-                        .and_then(|item| item.span),
-                )
-            })
+            .ok_or_else(|| IntegrationError::new("index-exhausted", message, span))
     }
 
     pub(super) fn lower_declarations(&mut self) -> Result<(), IntegrationError> {
@@ -594,7 +560,11 @@ impl<'a> Lowering<'a> {
             helper_reserved.insert(index);
             global_reserved.insert(index);
         }
-        let compression_alphabet_index = self.compression_alphabet_index(&helper_reserved)?;
+        let compression_alphabet_index = self.helper_global_index(
+            &helper_reserved,
+            "useVariableForCompressionAlphabet",
+            "no available global variable index remains for the compression alphabet",
+        )?;
         if let Some(index) = compression_alphabet_index {
             helper_reserved.insert(index);
             global_reserved.insert(index);
@@ -1205,10 +1175,8 @@ impl<'a> Lowering<'a> {
         for expr in &rule.conditions {
             Self::split_rule_condition(expr, &mut condition_exprs);
         }
-        let conditions = condition_exprs
-            .iter()
-            .map(|expr| self.lower_condition(expr))
-            .collect::<Result<Vec<_>, _>>()?;
+        let conditions = condition_exprs.iter().copied();
+        let conditions = self.lower_values(conditions)?;
         let previous_conditions = self.current_rule_conditions.replace(conditions.clone());
         let lowered_actions = self.lower_actions(&rule.actions, None);
         self.current_rule_conditions = previous_conditions;
@@ -3221,12 +3189,7 @@ impl<'a> Lowering<'a> {
             value
         } else {
             let mut custom_args = vec![text];
-            custom_args.extend(
-                format_args
-                    .iter()
-                    .map(|arg| self.lower_value(arg))
-                    .collect::<Result<Vec<_>, _>>()?,
-            );
+            custom_args.extend(self.lower_values(format_args.iter().copied())?);
             self.push_call("customString", custom_args)
         };
         let helper_id = *self.globals.get(TRANSLATION_HELPER_NAME).ok_or_else(|| {
@@ -3495,7 +3458,7 @@ impl<'a> Lowering<'a> {
                 visibility,
             ],
         );
-        self.apply_replacements("createHudText", &mut args, span);
+        self.apply_replacements_to_values("createHudText", &mut args, span);
         Ok(self.push_call_action_with_spans(
             "createHudText",
             &args,
@@ -3779,10 +3742,6 @@ impl<'a> Lowering<'a> {
         })
     }
 
-    fn normalize_contextual_values(&mut self, call_id: &str, values: Vec<ValueId>) -> Vec<ValueId> {
-        self.normalize_contextual_arguments(call_id, values)
-    }
-
     fn normalize_contextual_argument(
         &mut self,
         call_id: &str,
@@ -3943,10 +3902,6 @@ impl<'a> Lowering<'a> {
 
     fn value_is_empty_string(&self, id: ValueId) -> bool {
         matches!(self.values.get(id), Some(Value::String(value)) if value.is_empty())
-    }
-
-    fn lower_condition(&mut self, expr: &Expr) -> Result<ValueId, IntegrationError> {
-        self.lower_value(expr)
     }
 
     fn lower_delete(
@@ -4119,23 +4074,15 @@ impl<'a> Lowering<'a> {
                 if let Expr::Binary {
                     op, left, right, ..
                 } = value
+                    && matches!(left.as_ref(), Expr::GlobalVar { name: left_name, .. } if left_name == name)
+                    && let Some((modify_op, _)) = modify_operator(op)
                 {
-                    if let Expr::GlobalVar {
-                        name: left_name, ..
-                    } = left.as_ref()
-                    {
-                        if left_name == name {
-                            if let Some(modify_op) = modify_op_from_str(op) {
-                                let right = self.lower_value(right)?;
-                                let val = right;
-                                return Ok(self.push_action(Action::ModifyGlobalVariable {
-                                    variable: self.global_names[variable].clone(),
-                                    op: modify_op,
-                                    value: val,
-                                }));
-                            }
-                        }
-                    }
+                    let value = self.lower_value(right)?;
+                    return Ok(self.push_action(Action::ModifyGlobalVariable {
+                        variable: self.global_names[variable].clone(),
+                        op: modify_op,
+                        value,
+                    }));
                 }
                 let val = self.lower_value(value)?;
                 Ok(self.push_action(Action::SetGlobalVariable {
@@ -4156,26 +4103,16 @@ impl<'a> Lowering<'a> {
                 if let Expr::Binary {
                     op, left, right, ..
                 } = value
+                    && matches!(left.as_ref(), Expr::PlayerVar { player: left_player, name: left_name, .. } if left_name == name && left_player.as_ref() == player.as_ref())
+                    && let Some((modify_op, _)) = modify_operator(op)
                 {
-                    if let Expr::PlayerVar {
-                        player: left_player,
-                        name: left_name,
-                        ..
-                    } = left.as_ref()
-                    {
-                        if left_name == name && left_player.as_ref() == player.as_ref() {
-                            if let Some(modify_op) = modify_op_from_str(op) {
-                                let right = self.lower_value(right)?;
-                                let val = right;
-                                    return Ok(self.push_action(Action::ModifyPlayerVariable {
-                                        player: player_val,
-                                        variable: self.player_names[variable].clone(),
-                                        op: modify_op,
-                                        value: val,
-                                    }));
-                            }
-                        }
-                    }
+                    let value = self.lower_value(right)?;
+                    return Ok(self.push_action(Action::ModifyPlayerVariable {
+                        player: player_val,
+                        variable: self.player_names[variable].clone(),
+                        op: modify_op,
+                        value,
+                    }));
                 }
                 let val = self.lower_value(value)?;
                 Ok(self.push_action(Action::SetPlayerVariable {
@@ -4200,42 +4137,13 @@ impl<'a> Lowering<'a> {
                         self.global_names[variable].clone(),
                     ));
                     let index_val = self.lower_value(index)?;
-                    if let Expr::Binary {
-                        op, left, right, ..
-                    } = value
-                    {
-                        if let Expr::Index {
-                            array: left_arr,
-                            index: left_idx,
-                            ..
-                        } = left.as_ref()
-                        {
-                            if left_arr.as_ref() == array.as_ref()
-                                && left_idx.as_ref() == index.as_ref()
-                                && modify_op_from_str(op).is_some()
-                            {
-                                    let op_id = modify_catalog_name_from_str(op)
-                                        .expect("known modify operator has a catalog name");
-                                    let op_node = self.push_call(op_id, Vec::new());
-                                    let right = self.lower_value(right)?;
-                                    let right_val = right;
-                                    let args = self.normalize_contextual_arguments(
-                                        "modifyGlobalVariableAtIndex",
-                                        vec![var_node, index_val, op_node, right_val],
-                                    );
-                                    return Ok(self.push_call_action(
-                                        "modifyGlobalVariableAtIndex",
-                                        &args,
-                                    ));
-                            }
-                        }
-                    }
-                    let val = self.lower_value(value)?;
-                    let args = self.normalize_contextual_arguments(
-                        "setGlobalVariableAtIndex",
-                        vec![var_node, index_val, val],
-                    );
-                    Ok(self.push_call_action("setGlobalVariableAtIndex", &args))
+                    self.lower_indexed_assignment(
+                        target,
+                        var_node,
+                        index_val,
+                        value,
+                        ("setGlobalVariableAtIndex", "modifyGlobalVariableAtIndex"),
+                    )
                 }
                 Expr::PlayerVar {
                     player,
@@ -4252,49 +4160,13 @@ impl<'a> Lowering<'a> {
                         variable: self.player_names[variable].clone(),
                     });
                     let index_val = self.lower_value(index)?;
-                    if let Expr::Binary {
-                        op, left, right, ..
-                    } = value
-                    {
-                        if let Expr::Index {
-                            array: left_arr,
-                            index: left_idx,
-                            ..
-                        } = left.as_ref()
-                        {
-                            if left_arr.as_ref() == array.as_ref()
-                                && left_idx.as_ref() == index.as_ref()
-                                && modify_op_from_str(op).is_some()
-                            {
-                                    let op_id = modify_catalog_name_from_str(op)
-                                        .expect("known modify operator has a catalog name");
-                                    let op_node = self.push_call(op_id, Vec::new());
-                                    let right = self.lower_value(right)?;
-                                    let right_val = right;
-                                    let args = self.normalize_contextual_arguments(
-                                        "modifyPlayerVariableAtIndex",
-                                        vec![var_node, index_val, op_node, right_val],
-                                    );
-                                    // The canonical signature takes the
-                                    // player-variable value node (which
-                                    // carries the player) as its first
-                                    // argument.
-                                    return Ok(self.push_call_action(
-                                        "modifyPlayerVariableAtIndex",
-                                        &args,
-                                    ));
-                            }
-                        }
-                    }
-                    let val = self.lower_value(value)?;
-                    let args = self.normalize_contextual_arguments(
-                        "setPlayerVariableAtIndex",
-                        vec![var_node, index_val, val],
-                    );
-                    // The canonical signature takes the player-variable
-                    // value node (which carries the player) as its first
-                    // argument.
-                    Ok(self.push_call_action("setPlayerVariableAtIndex", &args))
+                    self.lower_indexed_assignment(
+                        target,
+                        var_node,
+                        index_val,
+                        value,
+                        ("setPlayerVariableAtIndex", "modifyPlayerVariableAtIndex"),
+                    )
                 }
                 _ => Err(self.unsupported(
                     "indexing assignment is only representable for global or player variables",
@@ -4306,6 +4178,45 @@ impl<'a> Lowering<'a> {
                 span,
             )),
         }
+    }
+
+    fn lower_indexed_assignment(
+        &mut self,
+        target: &Expr,
+        variable: ValueId,
+        index_value: ValueId,
+        value: &Expr,
+        actions: (&str, &str),
+    ) -> Result<ActionId, IntegrationError> {
+        let Expr::Index { array, index, .. } = target else {
+            unreachable!("indexed assignment target was matched before lowering")
+        };
+        let (set_action, modify_action) = actions;
+        if let Expr::Binary {
+            op, left, right, ..
+        } = value
+            && let Expr::Index {
+                array: left_array,
+                index: left_index,
+                ..
+            } = left.as_ref()
+            && left_array.as_ref() == array.as_ref()
+            && left_index.as_ref() == index.as_ref()
+            && let Some((_, call_name)) = modify_operator(op)
+        {
+            let operator = self.push_call(call_name, Vec::new());
+            let value = self.lower_value(right)?;
+            let args = self.normalize_contextual_arguments(
+                modify_action,
+                vec![variable, index_value, operator, value],
+            );
+            return Ok(self.push_call_action(modify_action, &args));
+        }
+
+        let value = self.lower_value(value)?;
+        let args =
+            self.normalize_contextual_arguments(set_action, vec![variable, index_value, value]);
+        Ok(self.push_call_action(set_action, &args))
     }
 
     fn lower_nested_indexed_assign(
@@ -4381,7 +4292,7 @@ impl<'a> Lowering<'a> {
                 op, left, right, ..
             } = value
                 && left.as_ref() == target
-                && let Some(call_name) = modify_catalog_name_from_str(op)
+                && let Some((_, call_name)) = modify_operator(op)
             {
                 let current = self.lower_indexed_read(array, index, index_value)?;
                 let right = self.lower_value(right)?;
@@ -4585,10 +4496,7 @@ impl<'a> Lowering<'a> {
                 .iter()
                 .map(|expr| expr.span().copied())
                 .collect::<Vec<_>>();
-            let args = args
-                .iter()
-                .map(|expr| self.lower_value(expr))
-                .collect::<Result<Vec<_>, _>>()?;
+            let args = self.lower_values(args)?;
             return Ok(self.push_call_action_with_spans(name, &args, spans));
         }
         let function = self
@@ -4653,10 +4561,7 @@ impl<'a> Lowering<'a> {
                 .iter()
                 .map(|expr| expr.span().copied())
                 .chain(std::iter::once(None));
-            let mut lowered = args
-                .iter()
-                .map(|expr| self.lower_value(expr))
-                .collect::<Result<Vec<_>, _>>()?;
+            let mut lowered = self.lower_values(args)?;
             let mut zero_vector = Vec::with_capacity(3);
             for value in [0.0, 0.0, 0.0] {
                 zero_vector.push(self.push_number(value, "0"));
@@ -4669,10 +4574,7 @@ impl<'a> Lowering<'a> {
             .iter()
             .map(|expr| expr.span().copied())
             .collect::<Vec<_>>();
-        let args = args
-            .iter()
-            .map(|expr| self.lower_value(expr))
-            .collect::<Result<Vec<_>, _>>()?;
+        let args = self.lower_values(args)?;
         let catalog_id = if matches!(function.id.as_str(), "stopChasingVariable" | "stopChasing") {
             match args.first().map(|value| self.value(*value)) {
                 Some(Value::GlobalVariable(_)) => "stopChasingGlobalVariable",
@@ -4696,7 +4598,7 @@ impl<'a> Lowering<'a> {
             })?
         };
         let mut args = self.normalize_contextual_arguments(catalog_id, args);
-        self.apply_replacements(catalog_id, &mut args, span);
+        self.apply_replacements_to_values(catalog_id, &mut args, span);
         self.optimize_wait_duration(catalog_id, &mut args, span);
         Ok(self.push_call_action_with_spans(catalog_id, &args, spans))
     }
@@ -4990,14 +4892,20 @@ impl<'a> Lowering<'a> {
             .collect::<Vec<_>>();
         let mut lowered = Vec::with_capacity(args.len() + 1);
         lowered.push(self.lower_value(receiver)?);
-        lowered.extend(
-            args.iter()
-                .map(|arg| self.lower_value(arg))
-                .collect::<Result<Vec<_>, _>>()?,
-        );
+        lowered.extend(self.lower_values(args.iter())?);
         let mut args = self.normalize_contextual_arguments(catalog_id, lowered);
-        self.apply_replacements(catalog_id, &mut args, span);
+        self.apply_replacements_to_values(catalog_id, &mut args, span);
         Ok(self.push_call_action_with_spans(catalog_id.clone(), &args, argument_spans))
+    }
+
+    fn lower_values<'expr>(
+        &mut self,
+        expressions: impl IntoIterator<Item = &'expr Expr>,
+    ) -> Result<Vec<ValueId>, IntegrationError> {
+        expressions
+            .into_iter()
+            .map(|expr| self.lower_value(expr))
+            .collect()
     }
 
     fn lower_value(&mut self, expr: &Expr) -> Result<ValueId, IntegrationError> {
@@ -5125,10 +5033,7 @@ impl<'a> Lowering<'a> {
                 }
             }
             Expr::Array { elements, .. } => {
-                let elements = elements
-                    .iter()
-                    .map(|element| self.lower_value(element))
-                    .collect::<Result<Vec<_>, _>>()?;
+                let elements = self.lower_values(elements)?;
                 return self.lower_array(elements, span);
             }
             Expr::Vector { x, y, z, .. } => {
@@ -5210,16 +5115,15 @@ impl<'a> Lowering<'a> {
                             span,
                         )
                     })?;
-                    let lowered_args = dynamic_args
-                        .iter()
-                        .map(|arg| self.lower_value(arg))
-                        .collect::<Result<Vec<_>, _>>()?;
+                    let lowered_args = dynamic_args.iter().copied();
+                    let lowered_args = self.lower_values(lowered_args)?;
                     let mut parts = Vec::with_capacity(chunks.len());
                     for (chunk, indices) in chunks {
                         let text = self.push_value(Value::String(chunk));
                         let mut call_args = vec![text];
                         call_args.extend(indices.into_iter().map(|index| lowered_args[index]));
-                        let call_args = self.normalize_contextual_values("customString", call_args);
+                        let call_args =
+                            self.normalize_contextual_arguments("customString", call_args);
                         parts.push(self.push_value(Value::Call {
                             name: "customString".to_string(),
                             args: call_args,
@@ -5404,9 +5308,6 @@ impl<'a> Lowering<'a> {
                 if name == "createWorkshopSetting" {
                     return self.lower_workshop_setting(args, span);
                 }
-                if matches!(name.as_str(), "_" | "__" | "___") {
-                    return self.lower_translation(name, args, span);
-                }
                 if name == "buttonToString" {
                     let [button] = args.as_slice() else {
                         return Err(self.unsupported("buttonToString requires one button", span));
@@ -5453,10 +5354,7 @@ impl<'a> Lowering<'a> {
                     };
                 }
                 if name == "getRealPlayersInRadius" {
-                    let lowered = args
-                        .iter()
-                        .map(|arg| self.lower_value(arg))
-                        .collect::<Result<Vec<_>, _>>()?;
+                    let lowered = self.lower_values(args)?;
                     let players = self.push_call("getPlayersInRadius", lowered);
                     let current = self.push_call("currentArrayElement", Vec::new());
                     let alive = self.push_call("isAlive", vec![current]);
@@ -5771,10 +5669,7 @@ impl<'a> Lowering<'a> {
                         | "createWorkshopSettingFloat"
                         | "createWorkshopSettingHero"
                 ) {
-                    let mut lowered = args
-                        .iter()
-                        .map(|arg| self.lower_value(arg))
-                        .collect::<Result<Vec<_>, _>>()?;
+                    let mut lowered = self.lower_values(args)?;
                     // The sort order is the last parameter; OverPy writes 0 when omitted.
                     let (canonical, arity_without_sort_order) = workshop_setting_call(name);
                     if lowered.len() == arity_without_sort_order {
@@ -5900,10 +5795,7 @@ impl<'a> Lowering<'a> {
                     if function.id == "getAllPlayers" {
                         return Ok(self.lower_all_players());
                     }
-                    let lowered_args = args
-                        .iter()
-                        .map(|arg| self.lower_value(arg))
-                        .collect::<Result<Vec<_>, _>>()?;
+                    let lowered_args = self.lower_values(args)?;
                     Value::Call {
                         name: catalog_id.clone(),
                         args: self.value_args(&lowered_args),
@@ -6110,10 +6002,7 @@ impl<'a> Lowering<'a> {
                             span,
                         )
                     })?;
-                    let lowered_args = receiver_args
-                        .iter()
-                        .map(|arg| self.lower_value(arg))
-                        .collect::<Result<Vec<_>, _>>()?;
+                    let lowered_args = self.lower_values(receiver_args)?;
                     return Ok(self.push_value(Value::Call {
                         name: catalog_id,
                         args: self.value_args(&lowered_args),
@@ -6164,11 +6053,7 @@ impl<'a> Lowering<'a> {
                     })?;
                     let mut lowered = Vec::with_capacity(args.len() + 1);
                     lowered.push(self.lower_value(receiver)?);
-                    lowered.extend(
-                        args.iter()
-                            .map(|arg| self.lower_value(arg))
-                            .collect::<Result<Vec<_>, _>>()?,
-                    );
+                    lowered.extend(self.lower_values(args)?);
                     Value::Call {
                         name: catalog_id.clone(),
                         args: self.value_args(&lowered),
@@ -6287,7 +6172,7 @@ impl<'a> Lowering<'a> {
         };
         let name = name.clone();
         let args = args.clone();
-        let mut args = self.normalize_contextual_values(&name, args);
+        let mut args = self.normalize_contextual_arguments(&name, args);
         self.apply_replacements_to_values(&name, &mut args, span);
         if let Some(Value::Call {
             args: target_args, ..
@@ -6368,10 +6253,6 @@ impl<'a> Lowering<'a> {
         for (index, value) in args.iter_mut().enumerate() {
             *value = self.apply_replacement(*value, call_id, index, span);
         }
-    }
-
-    fn apply_replacements(&mut self, call_id: &str, args: &mut [ValueId], span: Option<HirSpan>) {
-        self.apply_replacements_to_values(call_id, args, span);
     }
 
     fn apply_replacement(
@@ -7028,43 +6909,10 @@ impl<'a> Lowering<'a> {
     }
 
     fn materialize_value_inner(&self, id: ValueId) -> workshop_rs::Value {
-        let Some(strict) = self.optimized_nodes.get(&id) else {
-            return self.materialize_node(id);
-        };
-        // Folds see the literal the author wrote; the parameter's canonical
-        // form is applied to whatever call remains.
-        let Value::Call { name, args } = self.value(id) else {
-            return OperatorOptimizer::new(self.compiler, *strict).node(self.materialize_node(id));
-        };
-        let authored: Vec<workshop_rs::Value> = args
-            .iter()
-            .map(|arg| {
-                self.materialize_value_inner(self.authored_values.get(arg).copied().unwrap_or(*arg))
-            })
-            .collect();
-        let folded =
-            OperatorOptimizer::new(self.compiler, *strict).node(workshop_rs::Value::Call {
-                name: name.clone(),
-                args: authored.clone(),
-            });
-        match folded {
-            workshop_rs::Value::Call {
-                name: folded_name,
-                args: mut folded_args,
-            } if folded_name == *name && folded_args.len() == args.len() => {
-                for (index, arg) in args.iter().enumerate() {
-                    if self.authored_values.contains_key(arg)
-                        && same(&folded_args[index], &authored[index])
-                    {
-                        folded_args[index] = self.materialize_value_inner(*arg);
-                    }
-                }
-                workshop_rs::Value::Call {
-                    name: folded_name,
-                    args: folded_args,
-                }
-            }
-            folded => folded,
+        let value = self.materialize_node(id);
+        match self.optimized_nodes.get(&id) {
+            Some(strict) => OperatorOptimizer::new(self.compiler, *strict).node(value),
+            None => value,
         }
     }
 
@@ -7312,20 +7160,9 @@ impl<'a> Lowering<'a> {
                 name: name.clone(),
                 args: args
                     .iter()
-                    .map(|arg| self.materialize_value(self.written_empty_array(*arg)))
+                    .map(|arg| self.materialize_value(*arg))
                     .collect(),
             },
-        }
-    }
-
-    /// An empty array the author wrote keeps its spelling in an action
-    /// argument, where the reference does not read it as an empty string.
-    fn written_empty_array(&self, id: ValueId) -> ValueId {
-        match self.authored_values.get(&id) {
-            Some(&authored) if matches!(self.value(authored), Value::Call { name, args } if name == "emptyArray" && args.is_empty()) => {
-                authored
-            }
-            _ => id,
         }
     }
 
@@ -8119,38 +7956,39 @@ fn fullwidth(value: &str) -> String {
 fn case_sensitive(value: &str) -> String {
     let mut output = value.replace('æ', "\u{04d5}").replace("nj", "\u{01cc}");
     output = output.replace(" a ", " ａ ");
-    output
-        .chars()
-        .map(|character| match character {
-            'a' => 'ạ',
-            'b' => 'ḅ',
-            'c' => 'ƈ',
-            'd' => 'ḍ',
-            'e' => 'ẹ',
-            'f' => 'ƒ',
-            'g' => 'ǥ',
-            'h' => '\u{04bb}',
-            'i' => 'і',
-            'j' => 'ј',
-            'k' => 'ḳ',
-            'l' => 'I',
-            'm' => 'ṃ',
-            'n' => 'ṇ',
-            'o' => 'ο',
-            'p' => 'ṗ',
-            'q' => 'ǫ',
-            'r' => 'ṛ',
-            's' => 'ѕ',
-            't' => 'ṭ',
-            'u' => 'υ',
-            'v' => 'ν',
-            'w' => 'ẉ',
-            'x' => '\u{04b3}',
-            'y' => 'ỵ',
-            'z' => 'ẓ',
-            _ => character,
-        })
-        .collect()
+    output.chars().map(case_sensitive_character).collect()
+}
+
+fn case_sensitive_character(character: char) -> char {
+    match character {
+        'a' => 'ạ',
+        'b' => 'ḅ',
+        'c' => 'ƈ',
+        'd' => 'ḍ',
+        'e' => 'ẹ',
+        'f' => 'ƒ',
+        'g' => 'ǥ',
+        'h' => 'һ',
+        'i' => 'і',
+        'j' => 'ј',
+        'k' => 'ḳ',
+        'l' => 'I',
+        'm' => 'ṃ',
+        'n' => 'ṇ',
+        'o' => 'ο',
+        'p' => 'ṗ',
+        'q' => 'ǫ',
+        'r' => 'ṛ',
+        's' => 'ѕ',
+        't' => 'ṭ',
+        'u' => 'υ',
+        'v' => 'ν',
+        'w' => 'ẉ',
+        'x' => 'ҳ',
+        'y' => 'ỵ',
+        'z' => 'ẓ',
+        _ => character,
+    }
 }
 
 fn computed_number_text(value: f64) -> String {
@@ -8392,37 +8230,7 @@ fn debug_expr_text(expr: &Expr) -> String {
 }
 
 fn canonical_debug_text(text: &str) -> String {
-    text.chars()
-        .map(|character| match character {
-            'a' => 'ạ',
-            'b' => 'ḅ',
-            'c' => 'ƈ',
-            'd' => 'ḍ',
-            'e' => 'ẹ',
-            'f' => 'ƒ',
-            'g' => 'ǥ',
-            'h' => 'һ',
-            'i' => 'і',
-            'j' => 'ј',
-            'k' => 'ḳ',
-            'l' => 'I',
-            'm' => 'ṃ',
-            'n' => 'ṇ',
-            'o' => 'ο',
-            'p' => 'ṗ',
-            'q' => 'ǫ',
-            'r' => 'ṛ',
-            's' => 'ѕ',
-            't' => 'ṭ',
-            'u' => 'υ',
-            'v' => 'ν',
-            'w' => 'ẉ',
-            'x' => 'ҳ',
-            'y' => 'ỵ',
-            'z' => 'ẓ',
-            _ => character,
-        })
-        .collect()
+    text.chars().map(case_sensitive_character).collect()
 }
 
 fn negated_comparison(op: &str) -> Option<&'static str> {
@@ -8437,28 +8245,16 @@ fn negated_comparison(op: &str) -> Option<&'static str> {
     })
 }
 
-fn modify_op_from_str(op: &str) -> Option<ModifyOp> {
-    match op {
-        "+" => Some(ModifyOp::Add),
-        "-" => Some(ModifyOp::Subtract),
-        "*" => Some(ModifyOp::Multiply),
-        "/" => Some(ModifyOp::Divide),
-        "%" => Some(ModifyOp::Modulo),
-        "**" => Some(ModifyOp::RaiseToPower),
-        _ => None,
-    }
-}
-
-fn modify_catalog_name_from_str(op: &str) -> Option<&'static str> {
-    match op {
-        "+" => Some("add"),
-        "-" => Some("subtract"),
-        "*" => Some("multiply"),
-        "/" => Some("divide"),
-        "%" => Some("modulo"),
-        "**" => Some("raiseToPower"),
-        _ => None,
-    }
+fn modify_operator(op: &str) -> Option<(ModifyOp, &'static str)> {
+    Some(match op {
+        "+" => (ModifyOp::Add, "add"),
+        "-" => (ModifyOp::Subtract, "subtract"),
+        "*" => (ModifyOp::Multiply, "multiply"),
+        "/" => (ModifyOp::Divide, "divide"),
+        "%" => (ModifyOp::Modulo, "modulo"),
+        "**" => (ModifyOp::RaiseToPower, "raiseToPower"),
+        _ => return None,
+    })
 }
 
 /// Words the Workshop refuses in a rule name. Each entry is the text before the

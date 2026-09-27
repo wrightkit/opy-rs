@@ -170,19 +170,7 @@ impl Parser<'_> {
                 }
                 .to_string();
                 self.advance();
-                let rhs = self.parse_expr()?;
-                let end = rhs.span().end;
-                let value = Expr::Binary {
-                    op,
-                    left: Box::new(expr.clone()),
-                    right: Box::new(rhs),
-                    span: Span::new(start.file, start.start, end),
-                };
-                Ok(Stmt::Assign {
-                    target: expr,
-                    value,
-                    span: Span::new(start.file, start.start, end),
-                })
+                self.finish_augmented_assignment(expr, start, op)
             }
             TokenKind::Ident
                 if matches!(self.peek().text.as_str(), "min" | "max")
@@ -190,19 +178,7 @@ impl Parser<'_> {
             {
                 let op = self.advance().text;
                 self.advance();
-                let rhs = self.parse_expr()?;
-                let end = rhs.span().end;
-                let value = Expr::Binary {
-                    op,
-                    left: Box::new(expr.clone()),
-                    right: Box::new(rhs),
-                    span: Span::new(start.file, start.start, end),
-                };
-                Ok(Stmt::Assign {
-                    target: expr,
-                    value,
-                    span: Span::new(start.file, start.start, end),
-                })
+                self.finish_augmented_assignment(expr, start, op)
             }
             TokenKind::Increment | TokenKind::Decrement => {
                 let operator = self.advance();
@@ -242,6 +218,27 @@ impl Parser<'_> {
                 })
             }
         }
+    }
+
+    fn finish_augmented_assignment(
+        &mut self,
+        target: Expr,
+        start: Span,
+        op: String,
+    ) -> Result<Stmt, ()> {
+        let rhs = self.parse_expr()?;
+        let end = rhs.span().end;
+        let span = Span::new(start.file, start.start, end);
+        Ok(Stmt::Assign {
+            target: target.clone(),
+            value: Expr::Binary {
+                op,
+                left: Box::new(target),
+                right: Box::new(rhs),
+                span,
+            },
+            span,
+        })
     }
 
     pub(super) fn parse_if(&mut self) -> Result<Stmt, ()> {

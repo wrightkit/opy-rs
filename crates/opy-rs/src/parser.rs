@@ -363,20 +363,10 @@ pub(crate) fn parse_expression_fragment(
 }
 
 fn shift_span(span: Span, origin: Position) -> Span {
-    fn shift(position: Position, origin: Position) -> Position {
-        Position::new(
-            origin.line + position.line.saturating_sub(1),
-            if position.line == 1 {
-                origin.col + position.col.saturating_sub(1)
-            } else {
-                position.col
-            },
-        )
-    }
     Span::new(
         span.file,
-        shift(span.start, origin),
-        shift(span.end, origin),
+        crate::diag::shift_position(span.start, origin),
+        crate::diag::shift_position(span.end, origin),
     )
 }
 

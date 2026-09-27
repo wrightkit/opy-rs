@@ -431,24 +431,11 @@ fn raw_arg_text(tokens: &[Token]) -> String {
 }
 
 pub(super) fn shift_expansion_spans(tokens: &mut [Token], origin: Span) {
-    fn shift(
-        position: crate::diag::Position,
-        origin: crate::diag::Position,
-    ) -> crate::diag::Position {
-        crate::diag::Position::new(
-            origin.line + position.line.saturating_sub(1),
-            if position.line == 1 {
-                origin.col + position.col.saturating_sub(1)
-            } else {
-                position.col
-            },
-        )
-    }
     for token in tokens {
         token.span = Span::new(
             origin.file,
-            shift(token.span.start, origin.start),
-            shift(token.span.end, origin.start),
+            crate::diag::shift_position(token.span.start, origin.start),
+            crate::diag::shift_position(token.span.end, origin.start),
         );
     }
 }

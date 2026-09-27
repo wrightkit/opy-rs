@@ -79,7 +79,7 @@ fn expand_macros_with(
             hir::Declaration::GlobalVariable { initializer, .. }
             | hir::Declaration::PlayerVariable { initializer, .. } => {
                 if let Some(initializer) = initializer {
-                    **initializer = expander.expand_expr(initializer, &bindings)?;
+                    **initializer = expander.expand_expr(initializer, &bindings, None)?;
                 }
             }
             _ => {}
@@ -89,15 +89,15 @@ fn expand_macros_with(
         match entry {
             RuleEntry::Rule(rule) => {
                 for argument in &mut rule.event.args {
-                    *argument = expander.expand_expr(argument, &bindings)?;
+                    *argument = expander.expand_expr(argument, &bindings, None)?;
                 }
                 for condition in &mut rule.conditions {
-                    *condition = expander.expand_expr(condition, &bindings)?;
+                    *condition = expander.expand_expr(condition, &bindings, None)?;
                 }
-                rule.actions = expander.expand_stmts(&rule.actions, &bindings)?;
+                rule.actions = expander.expand_stmts(&rule.actions, &bindings, None)?;
             }
             RuleEntry::SubroutineDef { body, .. } => {
-                *body = expander.expand_stmts(body, &bindings)?;
+                *body = expander.expand_stmts(body, &bindings, None)?;
             }
         }
     }
@@ -109,6 +109,7 @@ impl MacroExpander {
         &mut self,
         statements: &[Stmt],
         bindings: &MacroBindings,
+        site: Option<HirSpan>,
     ) -> Result<Vec<Stmt>, IntegrationError> {
         let mut expanded = Vec::new();
         for statement in statements {
@@ -116,13 +117,13 @@ impl MacroExpander {
                 if let Expr::MacroCall { name, args, span } = expr.as_ref() {
                     let args = args
                         .iter()
-                        .map(|arg| self.expand_expr(arg, bindings))
+                        .map(|arg| self.expand_expr(arg, bindings, site))
                         .collect::<Result<Vec<_>, _>>()?;
-                    expanded.extend(self.expand_macro_body(name, &args, *span)?);
+                    expanded.extend(self.expand_macro_body(name, &args, *span, site)?);
                     continue;
                 }
             }
-            expanded.push(self.expand_stmt(statement, bindings)?);
+            expanded.push(self.expand_stmt(statement, bindings, site)?);
         }
         Ok(expanded)
     }
@@ -131,10 +132,24 @@ impl MacroExpander {
         &mut self,
         statement: &Stmt,
         bindings: &MacroBindings,
+        site: Option<HirSpan>,
+    ) -> Result<Stmt, IntegrationError> {
+        let mut expanded = self.expand_stmt_inner(statement, bindings, site)?;
+        if let Some(site) = site {
+            set_stmt_span(&mut expanded, site);
+        }
+        Ok(expanded)
+    }
+
+    fn expand_stmt_inner(
+        &mut self,
+        statement: &Stmt,
+        bindings: &MacroBindings,
+        site: Option<HirSpan>,
     ) -> Result<Stmt, IntegrationError> {
         Ok(match statement {
             Stmt::Expr { expr, span } => Stmt::Expr {
-                expr: Box::new(self.expand_expr(expr, bindings)?),
+                expr: Box::new(self.expand_expr(expr, bindings, site)?),
                 span: *span,
             },
             Stmt::Assign {
@@ -142,8 +157,8 @@ impl MacroExpander {
                 value,
                 span,
             } => Stmt::Assign {
-                target: Box::new(self.expand_expr(target, bindings)?),
-                value: Box::new(self.expand_expr(value, bindings)?),
+                target: Box::new(self.expand_expr(target, bindings, site)?),
+                value: Box::new(self.expand_expr(value, bindings, site)?),
                 span: *span,
             },
             Stmt::If {
@@ -155,14 +170,18 @@ impl MacroExpander {
                     .iter()
                     .map(|branch| {
                         Ok(hir::types::IfBranch {
-                            condition: Box::new(self.expand_expr(&branch.condition, bindings)?),
-                            body: self.expand_stmts(&branch.body, bindings)?,
+                            condition: Box::new(self.expand_expr(
+                                &branch.condition,
+                                bindings,
+                                site,
+                            )?),
+                            body: self.expand_stmts(&branch.body, bindings, site)?,
                         })
                     })
                     .collect::<Result<Vec<_>, IntegrationError>>()?,
                 r#else: r#else
                     .as_ref()
-                    .map(|body| self.expand_stmts(body, bindings))
+                    .map(|body| self.expand_stmts(body, bindings, site))
                     .transpose()?,
                 span: *span,
             },
@@ -172,9 +191,9 @@ impl MacroExpander {
                 body,
                 span,
             } => Stmt::For {
-                variable: Box::new(self.expand_expr(variable, bindings)?),
-                iterable: Box::new(self.expand_expr(iterable, bindings)?),
-                body: self.expand_stmts(body, bindings)?,
+                variable: Box::new(self.expand_expr(variable, bindings, site)?),
+                iterable: Box::new(self.expand_expr(iterable, bindings, site)?),
+                body: self.expand_stmts(body, bindings, site)?,
                 span: *span,
             },
             Stmt::While {
@@ -182,8 +201,8 @@ impl MacroExpander {
                 body,
                 span,
             } => Stmt::While {
-                condition: Box::new(self.expand_expr(condition, bindings)?),
-                body: self.expand_stmts(body, bindings)?,
+                condition: Box::new(self.expand_expr(condition, bindings, site)?),
+                body: self.expand_stmts(body, bindings, site)?,
                 span: *span,
             },
             Stmt::DoWhile {
@@ -191,30 +210,30 @@ impl MacroExpander {
                 body,
                 span,
             } => Stmt::DoWhile {
-                condition: Box::new(self.expand_expr(condition, bindings)?),
-                body: self.expand_stmts(body, bindings)?,
+                condition: Box::new(self.expand_expr(condition, bindings, site)?),
+                body: self.expand_stmts(body, bindings, site)?,
                 span: *span,
             },
             Stmt::Switch { value, arms, span } => Stmt::Switch {
-                value: Box::new(self.expand_expr(value, bindings)?),
+                value: Box::new(self.expand_expr(value, bindings, site)?),
                 arms: arms
                     .iter()
                     .map(|arm| match arm {
                         SwitchArm::Case { value, body, span } => Ok(SwitchArm::Case {
-                            value: Box::new(self.expand_expr(value, bindings)?),
-                            body: self.expand_stmts(body, bindings)?,
-                            span: *span,
+                            value: Box::new(self.expand_expr(value, bindings, site)?),
+                            body: self.expand_stmts(body, bindings, site)?,
+                            span: site.or(*span),
                         }),
                         SwitchArm::Default { body, span } => Ok(SwitchArm::Default {
-                            body: self.expand_stmts(body, bindings)?,
-                            span: *span,
+                            body: self.expand_stmts(body, bindings, site)?,
+                            span: site.or(*span),
                         }),
                     })
                     .collect::<Result<Vec<_>, IntegrationError>>()?,
                 span: *span,
             },
             Stmt::Delete { target, span } => Stmt::Delete {
-                target: Box::new(self.expand_expr(target, bindings)?),
+                target: Box::new(self.expand_expr(target, bindings, site)?),
                 span: *span,
             },
             Stmt::Goto {
@@ -226,7 +245,7 @@ impl MacroExpander {
                 label: label.clone(),
                 offset: offset
                     .as_ref()
-                    .map(|offset| self.expand_expr(offset, bindings).map(Box::new))
+                    .map(|offset| self.expand_expr(offset, bindings, site).map(Box::new))
                     .transpose()?,
                 rule_start: *rule_start,
                 span: *span,
@@ -243,21 +262,42 @@ impl MacroExpander {
         &mut self,
         expression: &Expr,
         bindings: &MacroBindings,
+        site: Option<HirSpan>,
+    ) -> Result<Expr, IntegrationError> {
+        let mut expanded = self.expand_expr_inner(expression, bindings, site)?;
+        if let Some(site) = site {
+            set_expr_span(&mut expanded, site);
+        }
+        Ok(expanded)
+    }
+
+    fn expand_expr_inner(
+        &mut self,
+        expression: &Expr,
+        bindings: &MacroBindings,
+        site: Option<HirSpan>,
     ) -> Result<Expr, IntegrationError> {
         match expression {
-            Expr::MacroParam { name, span } => bindings.get(name).cloned().ok_or_else(|| {
-                IntegrationError::new(
-                    "unsupported-integration-surface",
-                    format!("macro parameter '{name}' has no expansion binding"),
-                    *span,
-                )
-            }),
+            Expr::MacroParam { name, span } => {
+                let value = bindings.get(name).ok_or_else(|| {
+                    IntegrationError::new(
+                        "unsupported-integration-surface",
+                        format!("macro parameter '{name}' has no expansion binding"),
+                        *span,
+                    )
+                })?;
+                if site.is_some() {
+                    self.expand_expr(value, bindings, site)
+                } else {
+                    Ok(value.clone())
+                }
+            }
             Expr::MacroCall { name, args, span } => {
                 let args = args
                     .iter()
-                    .map(|arg| self.expand_expr(arg, bindings))
+                    .map(|arg| self.expand_expr(arg, bindings, site))
                     .collect::<Result<Vec<_>, _>>()?;
-                let body = self.expand_macro_body(name, &args, *span)?;
+                let body = self.expand_macro_body(name, &args, *span, site)?;
                 if body.len() != 1 {
                     return Err(IntegrationError::new(
                         "macro-invalid",
@@ -277,7 +317,7 @@ impl MacroExpander {
             Expr::Array { elements, span } => Ok(Expr::Array {
                 elements: elements
                     .iter()
-                    .map(|element| self.expand_expr(element, bindings))
+                    .map(|element| self.expand_expr(element, bindings, site))
                     .collect::<Result<Vec<_>, _>>()?,
                 span: *span,
             }),
@@ -286,9 +326,9 @@ impl MacroExpander {
                     .iter()
                     .map(|entry| {
                         Ok(hir::DictEntry {
-                            key: Box::new(self.expand_expr(&entry.key, bindings)?),
-                            value: Box::new(self.expand_expr(&entry.value, bindings)?),
-                            span: entry.span,
+                            key: Box::new(self.expand_expr(&entry.key, bindings, site)?),
+                            value: Box::new(self.expand_expr(&entry.value, bindings, site)?),
+                            span: site.or(entry.span),
                         })
                     })
                     .collect::<Result<Vec<_>, IntegrationError>>()?,
@@ -304,15 +344,15 @@ impl MacroExpander {
                 condition,
                 span,
             } => Ok(Expr::Comprehension {
-                element: Box::new(self.expand_expr(element, bindings)?),
+                element: Box::new(self.expand_expr(element, bindings, site)?),
                 variable: variable.clone(),
-                variable_span: *variable_span,
+                variable_span: site.or(*variable_span),
                 index: index.clone(),
-                index_span: *index_span,
-                iterable: Box::new(self.expand_expr(iterable, bindings)?),
+                index_span: site.or(*index_span),
+                iterable: Box::new(self.expand_expr(iterable, bindings, site)?),
                 condition: condition
                     .as_ref()
-                    .map(|condition| self.expand_expr(condition, bindings).map(Box::new))
+                    .map(|condition| self.expand_expr(condition, bindings, site).map(Box::new))
                     .transpose()?,
                 span: *span,
             }),
@@ -323,22 +363,22 @@ impl MacroExpander {
                 span,
             } => Ok(Expr::Lambda {
                 params: params.clone(),
-                param_spans: param_spans.clone(),
-                body: Box::new(self.expand_expr(body, bindings)?),
+                param_spans: param_spans.iter().map(|span| site.or(*span)).collect(),
+                body: Box::new(self.expand_expr(body, bindings, site)?),
                 span: *span,
             }),
             Expr::Type { name, args, span } => Ok(Expr::Type {
                 name: name.clone(),
                 args: args
                     .iter()
-                    .map(|arg| self.expand_expr(arg, bindings))
+                    .map(|arg| self.expand_expr(arg, bindings, site))
                     .collect::<Result<Vec<_>, _>>()?,
                 span: *span,
             }),
             Expr::Vector { x, y, z, span } => Ok(Expr::Vector {
-                x: Box::new(self.expand_expr(x, bindings)?),
-                y: Box::new(self.expand_expr(y, bindings)?),
-                z: Box::new(self.expand_expr(z, bindings)?),
+                x: Box::new(self.expand_expr(x, bindings, site)?),
+                y: Box::new(self.expand_expr(y, bindings, site)?),
+                z: Box::new(self.expand_expr(z, bindings, site)?),
                 span: *span,
             }),
             Expr::PlayerVar {
@@ -347,9 +387,9 @@ impl MacroExpander {
                 member_span,
                 span,
             } => Ok(Expr::PlayerVar {
-                player: Box::new(self.expand_expr(player, bindings)?),
+                player: Box::new(self.expand_expr(player, bindings, site)?),
                 name: name.clone(),
-                member_span: *member_span,
+                member_span: site.or(*member_span),
                 span: *span,
             }),
             Expr::Member {
@@ -358,9 +398,9 @@ impl MacroExpander {
                 member_span,
                 span,
             } => Ok(Expr::Member {
-                receiver: Box::new(self.expand_expr(receiver, bindings)?),
+                receiver: Box::new(self.expand_expr(receiver, bindings, site)?),
                 member: member.clone(),
-                member_span: *member_span,
+                member_span: site.or(*member_span),
                 span: *span,
             }),
             Expr::Call {
@@ -372,7 +412,7 @@ impl MacroExpander {
                 name: name.clone(),
                 args: args
                     .iter()
-                    .map(|arg| self.expand_expr(arg, bindings))
+                    .map(|arg| self.expand_expr(arg, bindings, site))
                     .collect::<Result<Vec<_>, _>>()?,
                 debug_source: debug_source.clone(),
                 span: *span,
@@ -383,11 +423,11 @@ impl MacroExpander {
                 args,
                 span,
             } => Ok(Expr::ReceiverCall {
-                receiver: Box::new(self.expand_expr(receiver, bindings)?),
+                receiver: Box::new(self.expand_expr(receiver, bindings, site)?),
                 name: name.clone(),
                 args: args
                     .iter()
-                    .map(|arg| self.expand_expr(arg, bindings))
+                    .map(|arg| self.expand_expr(arg, bindings, site))
                     .collect::<Result<Vec<_>, _>>()?,
                 span: *span,
             }),
@@ -398,8 +438,8 @@ impl MacroExpander {
                 span,
             } => Ok(Expr::Binary {
                 op: op.clone(),
-                left: Box::new(self.expand_expr(left, bindings)?),
-                right: Box::new(self.expand_expr(right, bindings)?),
+                left: Box::new(self.expand_expr(left, bindings, site)?),
+                right: Box::new(self.expand_expr(right, bindings, site)?),
                 span: *span,
             }),
             Expr::Conditional {
@@ -408,26 +448,26 @@ impl MacroExpander {
                 else_value,
                 span,
             } => Ok(Expr::Conditional {
-                then_value: Box::new(self.expand_expr(then_value, bindings)?),
-                condition: Box::new(self.expand_expr(condition, bindings)?),
-                else_value: Box::new(self.expand_expr(else_value, bindings)?),
+                then_value: Box::new(self.expand_expr(then_value, bindings, site)?),
+                condition: Box::new(self.expand_expr(condition, bindings, site)?),
+                else_value: Box::new(self.expand_expr(else_value, bindings, site)?),
                 span: *span,
             }),
             Expr::Unary { op, operand, span } => Ok(Expr::Unary {
                 op: op.clone(),
-                operand: Box::new(self.expand_expr(operand, bindings)?),
+                operand: Box::new(self.expand_expr(operand, bindings, site)?),
                 span: *span,
             }),
             Expr::Index { array, index, span } => Ok(Expr::Index {
-                array: Box::new(self.expand_expr(array, bindings)?),
-                index: Box::new(self.expand_expr(index, bindings)?),
+                array: Box::new(self.expand_expr(array, bindings, site)?),
+                index: Box::new(self.expand_expr(index, bindings, site)?),
                 span: *span,
             }),
             Expr::Format { text, args, span } => Ok(Expr::Format {
                 text: text.clone(),
                 args: args
                     .iter()
-                    .map(|arg| self.expand_expr(arg, bindings))
+                    .map(|arg| self.expand_expr(arg, bindings, site))
                     .collect::<Result<Vec<_>, _>>()?,
                 span: *span,
             }),
@@ -440,6 +480,7 @@ impl MacroExpander {
         name: &str,
         args: &[Expr],
         span: Option<HirSpan>,
+        parent_site: Option<HirSpan>,
     ) -> Result<Vec<Stmt>, IntegrationError> {
         let Some((params, body)) = self.macros.get(name).cloned() else {
             return Err(IntegrationError::new(
@@ -471,113 +512,34 @@ impl MacroExpander {
             bindings.insert(param, arg.clone());
         }
         self.stack.push(name.to_string());
-        let result = self.expand_stmts(&body, &bindings);
+        let site = parent_site.or_else(|| self.attribute_to_site.then_some(span).flatten());
+        let result = self.expand_stmts(&body, &bindings, site);
         self.stack.pop();
-        let mut result = result?;
-        if let Some(site) = span.filter(|_| self.attribute_to_site) {
-            relocate_stmts(&mut result, site);
-        }
-        Ok(result)
+        result
     }
 }
 
-/// Attribute every span of macro-expanded code to the invocation `site`, so
-/// source attribution never points into the macro definition.
-fn relocate_stmts(statements: &mut [Stmt], site: HirSpan) {
-    for statement in statements {
-        relocate_stmt(statement, site);
-    }
-}
-
-fn relocate_stmt(statement: &mut Stmt, site: HirSpan) {
-    let at = Some(site);
+fn set_stmt_span(statement: &mut Stmt, site: HirSpan) {
     match statement {
-        Stmt::Expr { expr, span } | Stmt::Delete { target: expr, span } => {
-            relocate_expr(expr, site);
-            *span = at;
-        }
-        Stmt::Assign {
-            target,
-            value,
-            span,
-        } => {
-            relocate_expr(target, site);
-            relocate_expr(value, site);
-            *span = at;
-        }
-        Stmt::If {
-            branches,
-            r#else,
-            span,
-        } => {
-            for branch in branches {
-                relocate_expr(&mut branch.condition, site);
-                relocate_stmts(&mut branch.body, site);
-            }
-            if let Some(body) = r#else {
-                relocate_stmts(body, site);
-            }
-            *span = at;
-        }
-        Stmt::For {
-            variable,
-            iterable,
-            body,
-            span,
-        } => {
-            relocate_expr(variable, site);
-            relocate_expr(iterable, site);
-            relocate_stmts(body, site);
-            *span = at;
-        }
-        Stmt::While {
-            condition,
-            body,
-            span,
-        }
-        | Stmt::DoWhile {
-            condition,
-            body,
-            span,
-        } => {
-            relocate_expr(condition, site);
-            relocate_stmts(body, site);
-            *span = at;
-        }
-        Stmt::Switch { value, arms, span } => {
-            relocate_expr(value, site);
-            for arm in arms {
-                match arm {
-                    SwitchArm::Case { value, body, span } => {
-                        relocate_expr(value, site);
-                        relocate_stmts(body, site);
-                        *span = at;
-                    }
-                    SwitchArm::Default { body, span } => {
-                        relocate_stmts(body, site);
-                        *span = at;
-                    }
-                }
-            }
-            *span = at;
-        }
-        Stmt::Goto { offset, span, .. } => {
-            if let Some(offset) = offset {
-                relocate_expr(offset, site);
-            }
-            *span = at;
-        }
-        Stmt::Break { span }
+        Stmt::Expr { span, .. }
+        | Stmt::Assign { span, .. }
+        | Stmt::If { span, .. }
+        | Stmt::For { span, .. }
+        | Stmt::While { span, .. }
+        | Stmt::DoWhile { span, .. }
+        | Stmt::Switch { span, .. }
+        | Stmt::Delete { span, .. }
+        | Stmt::Goto { span, .. }
+        | Stmt::Break { span }
         | Stmt::Return { span }
         | Stmt::Continue { span }
         | Stmt::Label { span, .. }
         | Stmt::CallSubroutine { span, .. }
-        | Stmt::Pass { span } => *span = at,
+        | Stmt::Pass { span } => *span = Some(site),
     }
 }
 
-fn relocate_expr(expression: &mut Expr, site: HirSpan) {
-    let at = Some(site);
+fn set_expr_span(expression: &mut Expr, site: HirSpan) {
     match expression {
         Expr::Number { span, .. }
         | Expr::String { span, .. }
@@ -590,116 +552,22 @@ fn relocate_expr(expression: &mut Expr, site: HirSpan) {
         | Expr::HostPlayer { span }
         | Expr::EventPlayer { span }
         | Expr::Constant { span, .. }
-        | Expr::MacroParam { span, .. } => *span = at,
-        Expr::Array {
-            elements: args,
-            span,
-        }
-        | Expr::Call { args, span, .. }
-        | Expr::MacroCall { args, span, .. }
-        | Expr::Type { args, span, .. }
-        | Expr::Format { args, span, .. } => {
-            for arg in args {
-                relocate_expr(arg, site);
-            }
-            *span = at;
-        }
-        Expr::Dict { entries, span } => {
-            for entry in entries {
-                relocate_expr(&mut entry.key, site);
-                relocate_expr(&mut entry.value, site);
-                entry.span = at;
-            }
-            *span = at;
-        }
-        Expr::Comprehension {
-            element,
-            variable_span,
-            index_span,
-            iterable,
-            condition,
-            span,
-            ..
-        } => {
-            relocate_expr(element, site);
-            relocate_expr(iterable, site);
-            if let Some(condition) = condition {
-                relocate_expr(condition, site);
-            }
-            *variable_span = at;
-            *index_span = at;
-            *span = at;
-        }
-        Expr::Lambda {
-            param_spans,
-            body,
-            span,
-            ..
-        } => {
-            relocate_expr(body, site);
-            param_spans.iter_mut().for_each(|param| *param = at);
-            *span = at;
-        }
-        Expr::Vector { x, y, z, span } => {
-            for component in [x, y, z] {
-                relocate_expr(component, site);
-            }
-            *span = at;
-        }
-        Expr::PlayerVar {
-            player: receiver,
-            member_span,
-            span,
-            ..
-        }
-        | Expr::Member {
-            receiver,
-            member_span,
-            span,
-            ..
-        } => {
-            relocate_expr(receiver, site);
-            *member_span = at;
-            *span = at;
-        }
-        Expr::ReceiverCall {
-            receiver,
-            args,
-            span,
-            ..
-        } => {
-            relocate_expr(receiver, site);
-            for arg in args {
-                relocate_expr(arg, site);
-            }
-            *span = at;
-        }
-        Expr::Binary {
-            left, right, span, ..
-        } => {
-            relocate_expr(left, site);
-            relocate_expr(right, site);
-            *span = at;
-        }
-        Expr::Conditional {
-            then_value,
-            condition,
-            else_value,
-            span,
-        } => {
-            for part in [then_value, condition, else_value] {
-                relocate_expr(part, site);
-            }
-            *span = at;
-        }
-        Expr::Unary { operand, span, .. } => {
-            relocate_expr(operand, site);
-            *span = at;
-        }
-        Expr::Index { array, index, span } => {
-            relocate_expr(array, site);
-            relocate_expr(index, site);
-            *span = at;
-        }
+        | Expr::MacroParam { span, .. }
+        | Expr::Array { span, .. }
+        | Expr::Dict { span, .. }
+        | Expr::Comprehension { span, .. }
+        | Expr::Lambda { span, .. }
+        | Expr::Type { span, .. }
+        | Expr::Vector { span, .. }
+        | Expr::PlayerVar { span, .. }
+        | Expr::Member { span, .. }
+        | Expr::Call { span, .. }
+        | Expr::ReceiverCall { span, .. }
+        | Expr::Binary { span, .. }
+        | Expr::Conditional { span, .. }
+        | Expr::Unary { span, .. }
+        | Expr::Index { span, .. }
+        | Expr::Format { span, .. }
+        | Expr::MacroCall { span, .. } => *span = Some(site),
     }
 }

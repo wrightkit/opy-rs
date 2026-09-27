@@ -14,7 +14,7 @@ use std::process::ExitCode;
 
 use clap::{CommandFactory, Parser, error::ErrorKind};
 use clap_complete::{generate, shells};
-use opy_rs::tooling::{CheckOutcome, Diagnostic as OpyDiagnostic, check};
+use opy_rs::tooling::{CheckOutcome, Diagnostic as OpyDiagnostic, SourceLocation, check};
 use opy_rs::{CompileDiagnostic, CompileStatus, Compiler};
 use opy_rs::{FilesystemProject, LANGUAGE_NAME, LANGUAGE_VERSION};
 use serde::Serialize;
@@ -240,17 +240,7 @@ fn diagnostic_view(diagnostic: &OpyDiagnostic) -> DiagnosticView {
         },
         code: diagnostic.code.clone(),
         message: diagnostic.message.clone(),
-        span: diagnostic.span.as_ref().map(|span| SpanView {
-            path: span.path.clone(),
-            start: PositionView {
-                line: span.start.line,
-                col: span.start.col,
-            },
-            end: PositionView {
-                line: span.end.line,
-                col: span.end.col,
-            },
-        }),
+        span: diagnostic.span.as_ref().map(diagnostic_span_view),
     }
 }
 
@@ -262,17 +252,21 @@ fn compile_diagnostic_view(diagnostic: &CompileDiagnostic) -> DiagnosticView {
         },
         code: diagnostic.code.clone(),
         message: diagnostic.message.clone(),
-        span: diagnostic.span.as_ref().map(|span| SpanView {
-            path: span.path.clone(),
-            start: PositionView {
-                line: span.start.line,
-                col: span.start.col,
-            },
-            end: PositionView {
-                line: span.end.line,
-                col: span.end.col,
-            },
-        }),
+        span: diagnostic.span.as_ref().map(diagnostic_span_view),
+    }
+}
+
+fn diagnostic_span_view(span: &SourceLocation) -> SpanView {
+    SpanView {
+        path: span.path.clone(),
+        start: PositionView {
+            line: span.start.line,
+            col: span.start.col,
+        },
+        end: PositionView {
+            line: span.end.line,
+            col: span.end.col,
+        },
     }
 }
 

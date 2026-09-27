@@ -395,23 +395,10 @@ fn can_merge_without_separator(previous: TokenKind, current: TokenKind) -> bool 
 }
 
 fn shift_settings_span(span: Span, origin: crate::diag::Position) -> Span {
-    fn shift(
-        position: crate::diag::Position,
-        origin: crate::diag::Position,
-    ) -> crate::diag::Position {
-        crate::diag::Position::new(
-            origin.line + position.line.saturating_sub(1),
-            if position.line == 1 {
-                origin.col + position.col.saturating_sub(1)
-            } else {
-                position.col
-            },
-        )
-    }
     Span::new(
         span.file,
-        shift(span.start, origin),
-        shift(span.end, origin),
+        crate::diag::shift_position(span.start, origin),
+        crate::diag::shift_position(span.end, origin),
     )
 }
 

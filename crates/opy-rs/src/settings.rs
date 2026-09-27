@@ -402,17 +402,16 @@ fn resolve_hir_node(
                 Position::new(span.start.line, span.start.col),
             )
             .map_err(|error| settings_expression_error(diag_span, error.message))?;
-            let expression =
-                expander
-                    .expand_expr(&expression, &HashMap::new())
-                    .map_err(|error| {
-                        let error_span = error
-                            .diagnostic
-                            .span
-                            .map(hir_span_to_diag_span)
-                            .unwrap_or(diag_span);
-                        OpyError::at(error.diagnostic.code, error.diagnostic.message, error_span)
-                    })?;
+            let expression = expander
+                .expand_expr(&expression, &HashMap::new(), None)
+                .map_err(|error| {
+                    let error_span = error
+                        .diagnostic
+                        .span
+                        .map(hir_span_to_diag_span)
+                        .unwrap_or(diag_span);
+                    OpyError::at(error.diagnostic.code, error.diagnostic.message, error_span)
+                })?;
             let mut stack = Vec::new();
             let value =
                 crate::compile_time::evaluate(&expression, constants, &HashMap::new(), &mut stack)
