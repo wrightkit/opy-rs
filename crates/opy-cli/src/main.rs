@@ -20,9 +20,7 @@ use opy_rs::{FilesystemProject, LANGUAGE_NAME, LANGUAGE_VERSION};
 use serde::Serialize;
 
 use crate::cli::{CheckArgs, Cli, Command, CompileArgs, FileArgs, OutputFormatArg};
-use crate::present::{
-    CheckView, DiagnosticSeverity, DiagnosticView, PositionView, Presentation, SpanView,
-};
+use crate::present::{CheckView, DiagnosticView, PositionView, Presentation, SpanView};
 
 fn main() -> ExitCode {
     let cli = match Cli::try_parse() {
@@ -234,10 +232,7 @@ fn check_view(outcome: &CheckOutcome) -> CheckView {
 
 fn diagnostic_view(diagnostic: &OpyDiagnostic) -> DiagnosticView {
     DiagnosticView {
-        severity: match diagnostic.severity {
-            opy_rs::tooling::DiagnosticSeverity::Error => DiagnosticSeverity::Error,
-            opy_rs::tooling::DiagnosticSeverity::Warning => DiagnosticSeverity::Warning,
-        },
+        severity: diagnostic.severity.into(),
         code: diagnostic.code.clone(),
         message: diagnostic.message.clone(),
         span: diagnostic.span.as_ref().map(diagnostic_span_view),
@@ -246,10 +241,7 @@ fn diagnostic_view(diagnostic: &OpyDiagnostic) -> DiagnosticView {
 
 fn compile_diagnostic_view(diagnostic: &CompileDiagnostic) -> DiagnosticView {
     DiagnosticView {
-        severity: match diagnostic.severity {
-            opy_rs::tooling::DiagnosticSeverity::Error => DiagnosticSeverity::Error,
-            opy_rs::tooling::DiagnosticSeverity::Warning => DiagnosticSeverity::Warning,
-        },
+        severity: diagnostic.severity.into(),
         code: diagnostic.code.clone(),
         message: diagnostic.message.clone(),
         span: diagnostic.span.as_ref().map(diagnostic_span_view),

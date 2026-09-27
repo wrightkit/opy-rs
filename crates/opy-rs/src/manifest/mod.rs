@@ -573,25 +573,24 @@ impl Manifest {
             .map_err(Clone::clone)
     }
 
+    fn resolve_alias(&self, name: &str, kind: AliasKind) -> Option<&str> {
+        let alias = &self.aliases[*self.alias_by_source.get(name)?];
+        (alias.kind == kind).then_some(alias.target.as_str())
+    }
+
     /// A generic (non-member) function by source name, alias-aware.
     pub fn resolve_function(&self, name: &str) -> Option<&Function> {
         self.function(name).or_else(|| {
-            let alias = self.alias_by_source.get(name)?;
-            let alias = &self.aliases[*alias];
-            (alias.kind == AliasKind::FunctionAlias)
-                .then(|| self.function(&alias.target))
-                .flatten()
+            self.resolve_alias(name, AliasKind::FunctionAlias)
+                .and_then(|target| self.function(target))
         })
     }
 
     /// A member function by source name, alias-aware.
     pub fn resolve_member(&self, name: &str) -> Option<&Function> {
         self.member(name).or_else(|| {
-            let alias = self.alias_by_source.get(name)?;
-            let alias = &self.aliases[*alias];
-            (alias.kind == AliasKind::MemberAlias)
-                .then(|| self.member(&alias.target))
-                .flatten()
+            self.resolve_alias(name, AliasKind::MemberAlias)
+                .and_then(|target| self.member(target))
         })
     }
 

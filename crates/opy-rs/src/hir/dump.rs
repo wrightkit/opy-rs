@@ -91,51 +91,33 @@ fn dump_declaration(declaration: &Declaration, out: &mut String, level: usize) {
             span,
             initializer,
             ..
-        } => {
-            out.push_str(&format!(
-                "{}globalVariable {} (index {}){}",
-                indent(level),
-                name,
-                index.map_or("-".to_string(), |i| i.to_string()),
-                span_suffix(span.as_ref()),
-            ));
-            if let Some(initializer) = initializer {
-                out.push_str(" = ");
-                render_expr(initializer, out);
-            }
-            out.push('\n');
-        }
+        } => dump_indexed_declaration(
+            "globalVariable",
+            name,
+            *index,
+            span.as_ref(),
+            initializer.as_deref(),
+            out,
+            level,
+        ),
         Declaration::PlayerVariable {
             name,
             index,
             span,
             initializer,
             ..
-        } => {
-            out.push_str(&format!(
-                "{}playerVariable {} (index {}){}",
-                indent(level),
-                name,
-                index.map_or("-".to_string(), |i| i.to_string()),
-                span_suffix(span.as_ref()),
-            ));
-            if let Some(initializer) = initializer {
-                out.push_str(" = ");
-                render_expr(initializer, out);
-            }
-            out.push('\n');
-        }
+        } => dump_indexed_declaration(
+            "playerVariable",
+            name,
+            *index,
+            span.as_ref(),
+            initializer.as_deref(),
+            out,
+            level,
+        ),
         Declaration::Subroutine {
             name, index, span, ..
-        } => {
-            out.push_str(&format!(
-                "{}subroutine {} (index {}){}\n",
-                indent(level),
-                name,
-                index.map_or("-".to_string(), |i| i.to_string()),
-                span_suffix(span.as_ref()),
-            ));
-        }
+        } => dump_indexed_declaration("subroutine", name, *index, span.as_ref(), None, out, level),
         Declaration::Constant { name, span, value } => {
             out.push_str(&format!(
                 "{}constant {}{} = ",
@@ -166,6 +148,30 @@ fn dump_declaration(declaration: &Declaration, out: &mut String, level: usize) {
             dump_stmts(body, out, level + 1);
         }
     }
+}
+
+fn dump_indexed_declaration(
+    kind: &str,
+    name: &str,
+    index: Option<u32>,
+    span: Option<&Span>,
+    initializer: Option<&Expr>,
+    out: &mut String,
+    level: usize,
+) {
+    out.push_str(&format!(
+        "{}{} {} (index {}){}",
+        indent(level),
+        kind,
+        name,
+        index.map_or("-".to_string(), |index| index.to_string()),
+        span_suffix(span),
+    ));
+    if let Some(initializer) = initializer {
+        out.push_str(" = ");
+        render_expr(initializer, out);
+    }
+    out.push('\n');
 }
 
 fn dump_rule(rule: &Rule, out: &mut String, level: usize) {
@@ -563,12 +569,7 @@ fn render_expr(expr: &Expr, out: &mut String) {
         Expr::Call { name, args, .. } => {
             out.push_str(name);
             out.push('(');
-            for (index, arg) in args.iter().enumerate() {
-                if index > 0 {
-                    out.push_str(", ");
-                }
-                render_expr(arg, out);
-            }
+            render_call_args(args, out);
             out.push(')');
         }
         Expr::ReceiverCall {
@@ -581,24 +582,14 @@ fn render_expr(expr: &Expr, out: &mut String) {
             out.push('.');
             out.push_str(name);
             out.push('(');
-            for (index, arg) in args.iter().enumerate() {
-                if index > 0 {
-                    out.push_str(", ");
-                }
-                render_expr(arg, out);
-            }
+            render_call_args(args, out);
             out.push(')');
         }
         Expr::MacroCall { name, args, .. } => {
             out.push('$');
             out.push_str(name);
             out.push('(');
-            for (index, arg) in args.iter().enumerate() {
-                if index > 0 {
-                    out.push_str(", ");
-                }
-                render_expr(arg, out);
-            }
+            render_call_args(args, out);
             out.push(')');
         }
         Expr::MacroParam { name, .. } => {
@@ -668,6 +659,15 @@ fn render_expr(expr: &Expr, out: &mut String) {
             }
             out.push(')');
         }
+    }
+}
+
+fn render_call_args(args: &[Expr], out: &mut String) {
+    for (index, arg) in args.iter().enumerate() {
+        if index > 0 {
+            out.push_str(", ");
+        }
+        render_expr(arg, out);
     }
 }
 

@@ -12,7 +12,7 @@ use crate::cst::{
     RuleEntry, Stmt, SwitchArm, TopLevel,
 };
 use crate::diag::{OpyError, Position, Span};
-use crate::lexer::{Token, TokenKind};
+use crate::lexer::{Token, TokenKind, is_identifier};
 
 /// The outcome of a parse.
 #[derive(Debug, Default)]
@@ -75,15 +75,22 @@ impl<'a> Parser<'a> {
     }
 }
 
-fn is_identifier(text: &str) -> bool {
-    !text.is_empty()
-        && text.chars().enumerate().all(|(index, ch)| {
-            if index == 0 {
-                ch.is_ascii_alphabetic() || ch == '_'
-            } else {
-                ch.is_ascii_alphanumeric() || ch == '_'
-            }
-        })
+fn is_binary_operator(kind: TokenKind) -> bool {
+    matches!(
+        kind,
+        TokenKind::Plus
+            | TokenKind::Minus
+            | TokenKind::Star
+            | TokenKind::Slash
+            | TokenKind::Percent
+            | TokenKind::DoubleStar
+            | TokenKind::Eq
+            | TokenKind::Ne
+            | TokenKind::Lt
+            | TokenKind::Le
+            | TokenKind::Gt
+            | TokenKind::Ge
+    )
 }
 
 fn unquote_annotation_arg(text: &str) -> String {
@@ -137,50 +144,26 @@ impl Parser<'_> {
                     | TokenKind::Comma
                     | TokenKind::Colon
                     | TokenKind::Assign
-                    | TokenKind::Plus
-                    | TokenKind::Minus
-                    | TokenKind::Star
-                    | TokenKind::Slash
-                    | TokenKind::Percent
-                    | TokenKind::DoubleStar
-                    | TokenKind::Eq
-                    | TokenKind::Ne
-                    | TokenKind::Lt
-                    | TokenKind::Le
-                    | TokenKind::Gt
-                    | TokenKind::Ge
-            ) || (token.kind == TokenKind::Ident
-                && matches!(token.text.as_str(), "and" | "or" | "in" | "not" | "if"))
+            ) || is_binary_operator(token.kind)
+                || (token.kind == TokenKind::Ident
+                    && matches!(token.text.as_str(), "and" | "or" | "in" | "not" | "if"))
         });
         let mut next = self.pos;
         while self.tokens[next].kind == TokenKind::Newline {
             next += 1;
         }
         let inside_delimiter_group = self.inside_delimiter_group();
-        let next_allows_continuation = matches!(
-            self.tokens[next].kind,
-            TokenKind::Plus
-                | TokenKind::Minus
-                | TokenKind::Star
-                | TokenKind::Slash
-                | TokenKind::Percent
-                | TokenKind::DoubleStar
-                | TokenKind::Eq
-                | TokenKind::Ne
-                | TokenKind::Lt
-                | TokenKind::Le
-                | TokenKind::Gt
-                | TokenKind::Ge
-        ) || (inside_delimiter_group
-            && matches!(
-                self.tokens[next].kind,
-                TokenKind::LParen
-                    | TokenKind::LBracket
-                    | TokenKind::Dot
-                    | TokenKind::RParen
-                    | TokenKind::RBracket
-                    | TokenKind::RBrace
-            ))
+        let next_allows_continuation = is_binary_operator(self.tokens[next].kind)
+            || (inside_delimiter_group
+                && matches!(
+                    self.tokens[next].kind,
+                    TokenKind::LParen
+                        | TokenKind::LBracket
+                        | TokenKind::Dot
+                        | TokenKind::RParen
+                        | TokenKind::RBracket
+                        | TokenKind::RBrace
+                ))
             || (self.tokens[next].kind == TokenKind::Ident
                 && matches!(
                     self.tokens[next].text.as_str(),

@@ -165,7 +165,7 @@ impl Lexer {
                 ';' => self.single(TokenKind::Semicolon),
                 '.' => self.single(TokenKind::Dot),
                 '@' => self.single(TokenKind::At),
-                '=' => self.two(TokenKind::Assign, TokenKind::Eq, '='),
+                '=' => self.lex_two(TokenKind::Assign, TokenKind::Eq, '='),
                 '+' => {
                     if self.peek(1) == Some('+') {
                         self.lex_duplicate(TokenKind::Increment, "++");
@@ -187,12 +187,7 @@ impl Lexer {
                             self.advance();
                             self.advance();
                             self.advance();
-                            let end = self.here(0);
-                            self.tokens.push(Token::new(
-                                TokenKind::DoubleStarAssign,
-                                "**=",
-                                Span::new(self.file_id, start.start, end.start),
-                            ));
+                            self.push_token(TokenKind::DoubleStarAssign, "**=", start);
                         } else {
                             self.advance();
                             self.single(TokenKind::DoubleStar)
@@ -203,9 +198,9 @@ impl Lexer {
                 }
                 '/' => self.lex_two(TokenKind::Slash, TokenKind::SlashAssign, '='),
                 '%' => self.lex_two(TokenKind::Percent, TokenKind::PercentAssign, '='),
-                '<' => self.two(TokenKind::Lt, TokenKind::Le, '='),
-                '>' => self.two(TokenKind::Gt, TokenKind::Ge, '='),
-                '!' => self.two(TokenKind::LexBang, TokenKind::Ne, '='),
+                '<' => self.lex_two(TokenKind::Lt, TokenKind::Le, '='),
+                '>' => self.lex_two(TokenKind::Gt, TokenKind::Ge, '='),
+                '!' => self.lex_two(TokenKind::LexBang, TokenKind::Ne, '='),
                 other => {
                     return Err(OpyError::at(
                         "lex-error",
@@ -216,7 +211,7 @@ impl Lexer {
             }
         }
         let here = self.here(0);
-        self.tokens.push(Token::new(TokenKind::Eof, "", here));
+        self.push_token(TokenKind::Eof, "", here);
         Ok(self.tokens)
     }
 
@@ -238,12 +233,7 @@ impl Lexer {
                 text.push(self.chars[self.pos]);
                 self.advance();
             }
-            let end = self.here(0);
-            self.tokens.push(Token::new(
-                TokenKind::Directive,
-                text,
-                Span::new(self.file_id, start.start, end.start),
-            ));
+            self.push_token(TokenKind::Directive, text, start);
         } else {
             while self.pos < self.chars.len() && self.chars[self.pos] != '\n' {
                 self.advance();
@@ -285,12 +275,7 @@ impl Lexer {
             let ch = self.chars[self.pos];
             if ch == quote {
                 self.advance();
-                let end = self.here(0);
-                let mut token = Token::new(
-                    TokenKind::String,
-                    value,
-                    Span::new(self.file_id, start.start, end.start),
-                );
+                let mut token = self.make_token(TokenKind::String, value, start);
                 token.raw = Some(raw);
                 self.tokens.push(token);
                 return Ok(());
@@ -439,12 +424,7 @@ impl Lexer {
                     Span::new(self.file_id, start.start, self.here(0).start),
                 ));
             }
-            let end = self.here(0);
-            self.tokens.push(Token::new(
-                TokenKind::Number,
-                text,
-                Span::new(self.file_id, start.start, end.start),
-            ));
+            self.push_token(TokenKind::Number, text, start);
             return Ok(());
         }
         while self.pos < self.chars.len() && self.chars[self.pos].is_ascii_digit() {
@@ -488,12 +468,7 @@ impl Lexer {
                 }
             }
         }
-        let end = self.here(0);
-        self.tokens.push(Token::new(
-            TokenKind::Number,
-            text,
-            Span::new(self.file_id, start.start, end.start),
-        ));
+        self.push_token(TokenKind::Number, text, start);
         Ok(())
     }
 
@@ -504,86 +479,50 @@ impl Lexer {
             text.push(self.chars[self.pos]);
             self.advance();
         }
-        let end = self.here(0);
-        self.tokens.push(Token::new(
-            TokenKind::Ident,
-            text,
-            Span::new(self.file_id, start.start, end.start),
-        ));
+        self.push_token(TokenKind::Ident, text, start);
     }
 
     fn single(&mut self, kind: TokenKind) {
         let start = self.here(1);
         let text = self.chars[self.pos].to_string();
         self.advance();
-        let end = self.here(0);
-        self.tokens.push(Token::new(
-            kind,
-            text,
-            Span::new(self.file_id, start.start, end.start),
-        ));
+        self.push_token(kind, text, start);
     }
 
     /// Two-char operator where the second char may be `=`.
     fn lex_two(&mut self, plain: TokenKind, assign: TokenKind, second: char) {
         let start = self.here(1);
-        if self.peek(1) == Some(second) {
+        let (kind, text) = if self.peek(1) == Some(second) {
             self.advance();
             let text = format!("{}{}", self.chars[self.pos - 1], second);
             self.advance();
-            let end = self.here(0);
-            self.tokens.push(Token::new(
-                assign,
-                text,
-                Span::new(self.file_id, start.start, end.start),
-            ));
+            (assign, text)
         } else {
             let text = self.chars[self.pos].to_string();
             self.advance();
-            let end = self.here(0);
-            self.tokens.push(Token::new(
-                plain,
-                text,
-                Span::new(self.file_id, start.start, end.start),
-            ));
-        }
+            (plain, text)
+        };
+        self.push_token(kind, text, start);
     }
 
     fn lex_duplicate(&mut self, kind: TokenKind, text: &str) {
         let start = self.here(1);
         self.advance();
         self.advance();
-        let end = self.here(0);
-        self.tokens.push(Token::new(
-            kind,
-            text,
-            Span::new(self.file_id, start.start, end.start),
-        ));
+        self.push_token(kind, text, start);
     }
 
-    /// Two-char operator with a fixed second char (e.g. `==`, `<=`).
-    fn two(&mut self, plain: TokenKind, combined: TokenKind, second: char) {
-        let start = self.here(1);
-        let text = self.chars[self.pos].to_string();
-        if self.peek(1) == Some(second) {
-            self.advance();
-            let combined_text = format!("{}{}", text, second);
-            self.advance();
-            let end = self.here(0);
-            self.tokens.push(Token::new(
-                combined,
-                combined_text,
-                Span::new(self.file_id, start.start, end.start),
-            ));
-        } else {
-            self.advance();
-            let end = self.here(0);
-            self.tokens.push(Token::new(
-                plain,
-                text,
-                Span::new(self.file_id, start.start, end.start),
-            ));
-        }
+    fn make_token(&self, kind: TokenKind, text: impl Into<String>, start: Span) -> Token {
+        Token::new(
+            kind,
+            text,
+            Span::new(self.file_id, start.start, self.here(0).start),
+        )
+    }
+
+    fn push_token(&mut self, kind: TokenKind, text: impl Into<String>, start: Span) {
+        let token = self.make_token(kind, text, start);
+        self.tokens.push(token);
     }
 
     fn here(&self, width: usize) -> Span {
@@ -604,11 +543,16 @@ impl Lexer {
     }
 }
 
-fn is_ident_start(c: char) -> bool {
+pub(crate) fn is_identifier(text: &str) -> bool {
+    let mut characters = text.chars();
+    characters.next().is_some_and(is_ident_start) && characters.all(is_ident_continue)
+}
+
+pub(crate) fn is_ident_start(c: char) -> bool {
     c.is_ascii_alphabetic() || c == '_'
 }
 
-fn is_ident_continue(c: char) -> bool {
+pub(crate) fn is_ident_continue(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '_'
 }
 

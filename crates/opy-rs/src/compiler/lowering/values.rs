@@ -82,16 +82,12 @@ impl<'a> Lowering<'a> {
                 ));
             }
             Expr::GlobalVar { name, .. } => {
-                let id = *self.globals.get(name).ok_or_else(|| {
-                    self.unsupported(format!("unknown global variable '{name}'"), span)
-                })?;
+                let id = self.global_variable_id(name, span)?;
                 Value::GlobalVariable(self.global_names[id].clone())
             }
             Expr::PlayerVar { player, name, .. } => {
                 let player = self.lower_value(player)?;
-                let id = *self.players.get(name).ok_or_else(|| {
-                    self.unsupported(format!("unknown player variable '{name}'"), span)
-                })?;
+                let id = self.player_variable_id(name, span)?;
                 Value::PlayerVariable {
                     player,
                     variable: self.player_names[id].clone(),

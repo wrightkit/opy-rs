@@ -241,92 +241,75 @@ type LoweredSwitchBody = (Vec<ActionId>, Option<SwitchBreak>);
 type LoweredSwitchArm<'a> = (Option<&'a Expr>, Vec<ActionId>, Option<SwitchBreak>);
 
 fn pure_continue_conditions(statement: &Stmt) -> Option<Vec<&Expr>> {
-    match statement {
-        Stmt::Continue { .. } => Some(Vec::new()),
-        Stmt::If {
-            branches,
-            r#else: None,
-            ..
-        } if branches.len() == 1 && branches[0].body.len() == 1 => {
-            let mut conditions = pure_continue_conditions(&branches[0].body[0])?;
-            conditions.insert(0, &branches[0].condition);
-            Some(conditions)
-        }
-        _ => None,
+    if matches!(statement, Stmt::Continue { .. }) {
+        return Some(Vec::new());
     }
+    let (condition, body, _) = single_if_statement(statement)?;
+    let mut conditions = pure_continue_conditions(body)?;
+    conditions.insert(0, condition);
+    Some(conditions)
 }
 
 fn pure_goto_conditions(statement: &Stmt) -> Option<(Vec<&Expr>, &str)> {
-    match statement {
-        Stmt::Goto {
-            label: Some(label),
-            offset: None,
-            rule_start: false,
-            ..
-        } => Some((Vec::new(), label.as_str())),
-        Stmt::If {
-            branches,
-            r#else: None,
-            ..
-        } if branches.len() == 1 && branches[0].body.len() == 1 => {
-            let (mut conditions, label) = pure_goto_conditions(&branches[0].body[0])?;
-            conditions.insert(0, &branches[0].condition);
-            Some((conditions, label))
-        }
-        _ => None,
+    if let Stmt::Goto {
+        label: Some(label),
+        offset: None,
+        rule_start: false,
+        ..
+    } = statement
+    {
+        return Some((Vec::new(), label.as_str()));
     }
+    let (condition, body, _) = single_if_statement(statement)?;
+    let (mut conditions, label) = pure_goto_conditions(body)?;
+    conditions.insert(0, condition);
+    Some((conditions, label))
+}
+
+fn single_if_statement(statement: &Stmt) -> Option<(&Expr, &Stmt, Option<HirSpan>)> {
+    let Stmt::If {
+        branches,
+        r#else: None,
+        span,
+    } = statement
+    else {
+        return None;
+    };
+    let [branch] = branches.as_slice() else {
+        return None;
+    };
+    let [body] = branch.body.as_slice() else {
+        return None;
+    };
+    Some((&branch.condition, body, *span))
 }
 
 fn direct_conditional_goto(statement: &Stmt) -> Option<(&Expr, &str, Option<HirSpan>)> {
-    let Stmt::If {
-        branches,
-        r#else: None,
-        span,
-    } = statement
+    let (condition, body, span) = single_if_statement(statement)?;
+    let Stmt::Goto {
+        label: Some(label),
+        offset: None,
+        rule_start: false,
+        ..
+    } = body
     else {
         return None;
     };
-    let [branch] = branches.as_slice() else {
-        return None;
-    };
-    let [
-        Stmt::Goto {
-            label: Some(label),
-            offset: None,
-            rule_start: false,
-            ..
-        },
-    ] = branch.body.as_slice()
-    else {
-        return None;
-    };
-    Some((&branch.condition, label.as_str(), *span))
+    Some((condition, label.as_str(), span))
 }
 
 fn direct_conditional_dynamic_goto(statement: &Stmt) -> Option<(&Expr, &Expr, Option<HirSpan>)> {
-    let Stmt::If {
-        branches,
-        r#else: None,
-        span,
-    } = statement
+    let (condition, body, span) = single_if_statement(statement)?;
+    let Stmt::Goto {
+        label: None,
+        offset: Some(offset),
+        rule_start: false,
+        ..
+    } = body
     else {
         return None;
     };
-    let [branch] = branches.as_slice() else {
-        return None;
-    };
-    let [
-        Stmt::Goto {
-            label: None,
-            offset: Some(offset),
-            rule_start: false,
-            ..
-        },
-    ] = branch.body.as_slice()
-    else {
-        return None;
-    };
-    Some((&branch.condition, offset, *span))
+    Some((condition, offset, span))
 }
 
 fn contains_loop_continue(statement: &Stmt) -> bool {
@@ -1791,6 +1774,28 @@ impl<'a> Lowering<'a> {
 
     fn unsupported(&self, message: impl Into<String>, span: Option<HirSpan>) -> IntegrationError {
         IntegrationError::new("unsupported-integration-surface", message, span)
+    }
+
+    fn global_variable_id(
+        &self,
+        name: &str,
+        span: Option<HirSpan>,
+    ) -> Result<GlobalVarId, IntegrationError> {
+        self.globals
+            .get(name)
+            .copied()
+            .ok_or_else(|| self.unsupported(format!("unknown global variable '{name}'"), span))
+    }
+
+    fn player_variable_id(
+        &self,
+        name: &str,
+        span: Option<HirSpan>,
+    ) -> Result<PlayerVarId, IntegrationError> {
+        self.players
+            .get(name)
+            .copied()
+            .ok_or_else(|| self.unsupported(format!("unknown player variable '{name}'"), span))
     }
 }
 

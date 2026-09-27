@@ -383,9 +383,7 @@ impl<'a> Lowering<'a> {
                     name,
                     span: target_span,
                 } => {
-                    let variable = *self.globals.get(name).ok_or_else(|| {
-                        self.unsupported(format!("unknown global variable '{name}'"), *target_span)
-                    })?;
+                    let variable = self.global_variable_id(name, *target_span)?;
                     let action = self.push_action(Action::ModifyGlobalVariable {
                         variable: self.global_names[variable].clone(),
                         op,
@@ -400,9 +398,7 @@ impl<'a> Lowering<'a> {
                     span: target_span,
                     ..
                 } => {
-                    let variable = *self.players.get(name).ok_or_else(|| {
-                        self.unsupported(format!("unknown player variable '{name}'"), *target_span)
-                    })?;
+                    let variable = self.player_variable_id(name, *target_span)?;
                     let player_span = player.span().copied();
                     let player = self.lower_value(player)?;
                     let action = self.push_action(Action::ModifyPlayerVariable {
@@ -429,12 +425,7 @@ impl<'a> Lowering<'a> {
                             name,
                             span: array_span,
                         } => {
-                            let variable = *self.globals.get(name).ok_or_else(|| {
-                                self.unsupported(
-                                    format!("unknown global variable '{name}'"),
-                                    *array_span,
-                                )
-                            })?;
+                            let variable = self.global_variable_id(name, *array_span)?;
                             let variable = self.push_value(Value::GlobalVariable(
                                 self.global_names[variable].clone(),
                             ));
@@ -456,12 +447,7 @@ impl<'a> Lowering<'a> {
                             span: array_span,
                             ..
                         } => {
-                            let variable = *self.players.get(name).ok_or_else(|| {
-                                self.unsupported(
-                                    format!("unknown player variable '{name}'"),
-                                    *array_span,
-                                )
-                            })?;
+                            let variable = self.player_variable_id(name, *array_span)?;
                             let player = self.lower_value(player)?;
                             let variable = self.push_value(Value::PlayerVariable {
                                 player,

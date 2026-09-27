@@ -540,18 +540,7 @@ impl<'a> Lowering<'a> {
                     }
                 }
             }
-            if let Some((condition, label, span)) = direct_conditional_goto(statement)
-                && self
-                    .visible_labels
-                    .iter()
-                    .any(|labels| labels.iter().any(|candidate| candidate == label))
-            {
-                let condition = self.lower_value(condition)?;
-                let placeholder = self.push_number(0.0);
-                let skip = self.push_call_action("skipIf", &[condition, placeholder]);
-                self.mark_action_origins(std::slice::from_ref(&skip), span);
-                actions.push(skip);
-                self.deferred_gotos.push((skip, label.to_string(), span, 1));
+            if self.lower_conditional_label_jump(statement, &mut actions)? {
                 index += 1;
                 continue;
             }
@@ -798,12 +787,7 @@ impl<'a> Lowering<'a> {
                         name,
                         span: target_span,
                     } => {
-                        let variable_id = *self.globals.get(name).ok_or_else(|| {
-                            self.unsupported(
-                                format!("unknown global variable '{name}'"),
-                                *target_span,
-                            )
-                        })?;
+                        let variable_id = self.global_variable_id(name, *target_span)?;
                         Ok(self.push_for_global_actions(variable_id, start, stop, step, body))
                     }
                     Expr::PlayerVar {
@@ -812,12 +796,7 @@ impl<'a> Lowering<'a> {
                         span: target_span,
                         ..
                     } => {
-                        let variable_id = *self.players.get(name).ok_or_else(|| {
-                            self.unsupported(
-                                format!("unknown player variable '{name}'"),
-                                *target_span,
-                            )
-                        })?;
+                        let variable_id = self.player_variable_id(name, *target_span)?;
                         let player = self.lower_value(player)?;
                         Ok(self.push_for_player_actions(
                             player, variable_id, start, stop, step, body,
@@ -1124,6 +1103,30 @@ impl<'a> Lowering<'a> {
         }
     }
 
+    fn lower_conditional_label_jump(
+        &mut self,
+        statement: &Stmt,
+        actions: &mut Vec<ActionId>,
+    ) -> Result<bool, IntegrationError> {
+        let Some((condition, label, span)) = direct_conditional_goto(statement) else {
+            return Ok(false);
+        };
+        if !self
+            .visible_labels
+            .iter()
+            .any(|labels| labels.iter().any(|candidate| candidate == label))
+        {
+            return Ok(false);
+        }
+        let condition = self.lower_value(condition)?;
+        let placeholder = self.push_number(0.0);
+        let skip = self.push_call_action("skipIf", &[condition, placeholder]);
+        self.mark_action_origins(std::slice::from_ref(&skip), span);
+        actions.push(skip);
+        self.deferred_gotos.push((skip, label.to_string(), span, 1));
+        Ok(true)
+    }
+
     fn lower_loop_body(&mut self, statements: &[Stmt]) -> Result<Vec<ActionId>, IntegrationError> {
         self.lower_loop_sequence_with_break_target(statements, &[], 0, BreakTarget::Loop)
     }
@@ -1134,6 +1137,29 @@ impl<'a> Lowering<'a> {
     ) -> Result<Option<ValueId>, IntegrationError> {
         let values = self.lower_values(conditions.iter().copied())?;
         Ok(self.combine_conditions(values))
+    }
+
+    fn lower_skip_with_distance(
+        &mut self,
+        conditions: &[&Expr],
+        distance: usize,
+        span: Option<HirSpan>,
+    ) -> Result<ActionId, IntegrationError> {
+        let mut args = Vec::with_capacity(conditions.len() + 1);
+        if let Some(condition) = self.lower_condition_chain(conditions)? {
+            args.push(condition);
+        }
+        args.push(self.push_number(distance as f64));
+        let skip = self.push_call_action(
+            if conditions.is_empty() {
+                "skip"
+            } else {
+                "skipIf"
+            },
+            &args,
+        );
+        self.mark_action_origins(std::slice::from_ref(&skip), span);
+        Ok(skip)
     }
 
     fn lower_loop_sequence_with_break_target(
@@ -1159,24 +1185,11 @@ impl<'a> Lowering<'a> {
                     + structural_after
                     + self.canonical_action_width(after, statement.span().copied())?;
                 if distance > 0 {
-                    let mut args = Vec::with_capacity(conditions.len() + 1);
-                    if let Some(condition) = self.lower_condition_chain(&conditions)? {
-                        args.push(condition);
-                    }
-                    let distance = self.push_number(distance as f64);
-                    args.push(distance);
-                    let skip = self.push_call_action(
-                        if conditions.is_empty() {
-                            "skip"
-                        } else {
-                            "skipIf"
-                        },
-                        &args,
-                    );
-                    self.mark_action_origins(
-                        std::slice::from_ref(&skip),
+                    let skip = self.lower_skip_with_distance(
+                        &conditions,
+                        distance,
                         statement.span().copied(),
-                    );
+                    )?;
                     actions.push(skip);
                 }
                 actions.extend(tail);
@@ -1235,41 +1248,18 @@ impl<'a> Lowering<'a> {
                     )?;
                     let distance =
                         self.canonical_action_width(&middle, statement.span().copied())?;
-                    let mut args = Vec::with_capacity(conditions.len() + 1);
-                    if let Some(condition) = self.lower_condition_chain(&conditions)? {
-                        args.push(condition);
-                    }
-                    args.push(self.push_number(distance as f64));
-                    let skip = self.push_call_action(
-                        if conditions.is_empty() {
-                            "skip"
-                        } else {
-                            "skipIf"
-                        },
-                        &args,
-                    );
-                    self.mark_action_origins(
-                        std::slice::from_ref(&skip),
+                    let skip = self.lower_skip_with_distance(
+                        &conditions,
+                        distance,
                         statement.span().copied(),
-                    );
+                    )?;
                     actions.push(skip);
                     actions.extend(middle);
                     actions.extend(suffix);
                     return Ok(actions);
                 }
             }
-            if let Some((condition, label, span)) = direct_conditional_goto(statement)
-                && self
-                    .visible_labels
-                    .iter()
-                    .any(|labels| labels.iter().any(|candidate| candidate == label))
-            {
-                let condition = self.lower_value(condition)?;
-                let placeholder = self.push_number(0.0);
-                let skip = self.push_call_action("skipIf", &[condition, placeholder]);
-                self.mark_action_origins(std::slice::from_ref(&skip), span);
-                actions.push(skip);
-                self.deferred_gotos.push((skip, label.to_string(), span, 1));
+            if self.lower_conditional_label_jump(statement, &mut actions)? {
                 index += 1;
                 continue;
             }

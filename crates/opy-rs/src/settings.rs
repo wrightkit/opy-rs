@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use crate::cst;
 use crate::diag::{OpyError, OpyResult, Position, Span};
 use crate::hir;
+use crate::lexer::{is_ident_continue, is_ident_start};
 
 /// A project `settings { ... }` block.
 #[derive(Debug, Clone)]
@@ -59,15 +60,7 @@ pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
     let mut escaped = false;
     let mut seen_first_construct = false;
     while let Some(ch) = scanner.peek() {
-        if let Some(quote) = string_quote {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == quote {
-                string_quote = None;
-            }
-            scanner.advance_by(1);
+        if scanner.advance_quoted(&mut string_quote, &mut escaped, ch) {
             continue;
         }
         if in_block_comment {
@@ -212,15 +205,7 @@ fn match_block(
                 keyword_span,
             ));
         };
-        if let Some(quote) = string_quote {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == quote {
-                string_quote = None;
-            }
-            scanner.advance_by(1);
+        if scanner.advance_quoted(&mut string_quote, &mut escaped, ch) {
             continue;
         }
         match ch {
@@ -568,6 +553,21 @@ impl Cursor<'_> {
                 return;
             }
         }
+    }
+
+    fn advance_quoted(&mut self, quote: &mut Option<char>, escaped: &mut bool, ch: char) -> bool {
+        let Some(quote_char) = *quote else {
+            return false;
+        };
+        if *escaped {
+            *escaped = false;
+        } else if ch == '\\' {
+            *escaped = true;
+        } else if ch == quote_char {
+            *quote = None;
+        }
+        self.advance_by(1);
+        true
     }
 
     fn skip_to_eol(&mut self) {
@@ -1091,14 +1091,6 @@ fn build_node(
             span,
         },
     }
-}
-
-fn is_ident_start(c: char) -> bool {
-    c.is_ascii_alphabetic() || c == '_'
-}
-
-fn is_ident_continue(c: char) -> bool {
-    c.is_ascii_alphanumeric() || c == '_'
 }
 
 #[cfg(test)]

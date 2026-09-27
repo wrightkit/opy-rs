@@ -187,12 +187,7 @@ impl Parser<'_> {
                     self.error_at_current("@Slot and @Hero cannot be used together".to_string());
                     return false;
                 }
-                let end = args.last().map_or(at.span.end, |arg| arg.span.end);
-                annotations.push(Annotation {
-                    name,
-                    args,
-                    span: Span::new(at.span.file, at.span.start, end),
-                });
+                annotations.push(annotation(name, args, at.span));
                 true
             }
             "Name" => {
@@ -203,12 +198,7 @@ impl Parser<'_> {
                     );
                     return false;
                 }
-                let end = args.last().map_or(at.span.end, |arg| arg.span.end);
-                annotations.push(Annotation {
-                    name,
-                    args,
-                    span: Span::new(at.span.file, at.span.start, end),
-                });
+                annotations.push(annotation(name, args, at.span));
                 true
             }
             "SuppressWarnings" => {
@@ -219,12 +209,7 @@ impl Parser<'_> {
                     );
                     return false;
                 }
-                let end = args.last().map_or(at.span.end, |arg| arg.span.end);
-                annotations.push(Annotation {
-                    name,
-                    args,
-                    span: Span::new(at.span.file, at.span.start, end),
-                });
+                annotations.push(annotation(name, args, at.span));
                 true
             }
             "Disabled" => {
@@ -232,11 +217,7 @@ impl Parser<'_> {
                     return false;
                 }
                 *disabled = true;
-                annotations.push(Annotation {
-                    name,
-                    args: Vec::new(),
-                    span: at.span,
-                });
+                annotations.push(annotation(name, Vec::new(), at.span));
                 true
             }
             "Delimiter" => {
@@ -244,11 +225,7 @@ impl Parser<'_> {
                     return false;
                 }
                 *delimiter = true;
-                annotations.push(Annotation {
-                    name,
-                    args: Vec::new(),
-                    span: at.span,
-                });
+                annotations.push(annotation(name, Vec::new(), at.span));
                 true
             }
             "NewPage" => {
@@ -263,13 +240,8 @@ impl Parser<'_> {
                     );
                     return false;
                 }
-                let end = args.last().map_or(at.span.end, |arg| arg.span.end);
                 *new_page = args.first().map(|arg| unquote_annotation_arg(&arg.text));
-                annotations.push(Annotation {
-                    name,
-                    args,
-                    span: Span::new(at.span.file, at.span.start, end),
-                });
+                annotations.push(annotation(name, args, at.span));
                 true
             }
             other => {
@@ -422,5 +394,14 @@ impl Parser<'_> {
             rule_prefix,
         });
         true
+    }
+}
+
+fn annotation(name: String, args: Vec<AnnotationArg>, directive_span: Span) -> Annotation {
+    let end = args.last().map_or(directive_span.end, |arg| arg.span.end);
+    Annotation {
+        name,
+        args,
+        span: Span::new(directive_span.file, directive_span.start, end),
     }
 }

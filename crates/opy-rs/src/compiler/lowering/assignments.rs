@@ -28,9 +28,7 @@ impl<'a> Lowering<'a> {
                 name,
                 span: target_span,
             } => {
-                let variable = *self.globals.get(name).ok_or_else(|| {
-                    self.unsupported(format!("unknown global variable '{name}'"), *target_span)
-                })?;
+                let variable = self.global_variable_id(name, *target_span)?;
                 let root_value =
                     self.push_value(Value::GlobalVariable(self.global_names[variable].clone()));
                 (root_value, "modifyGlobalVariableAtIndex")
@@ -41,9 +39,7 @@ impl<'a> Lowering<'a> {
                 span: target_span,
                 ..
             } => {
-                let variable = *self.players.get(name).ok_or_else(|| {
-                    self.unsupported(format!("unknown player variable '{name}'"), *target_span)
-                })?;
+                let variable = self.player_variable_id(name, *target_span)?;
                 let player = self.lower_value(player)?;
                 let value = self.push_value(Value::PlayerVariable {
                     player,
@@ -160,9 +156,7 @@ impl<'a> Lowering<'a> {
                 name,
                 span: target_span,
             } => {
-                let variable = *self.globals.get(name).ok_or_else(|| {
-                    self.unsupported(format!("unknown global variable '{name}'"), *target_span)
-                })?;
+                let variable = self.global_variable_id(name, *target_span)?;
                 if let Expr::Binary {
                     op, left, right, ..
                 } = value
@@ -188,9 +182,7 @@ impl<'a> Lowering<'a> {
                 span: target_span,
                 ..
             } => {
-                let variable = *self.players.get(name).ok_or_else(|| {
-                    self.unsupported(format!("unknown player variable '{name}'"), *target_span)
-                })?;
+                let variable = self.player_variable_id(name, *target_span)?;
                 let player_val = self.lower_value(player)?;
                 if let Expr::Binary {
                     op, left, right, ..
@@ -222,9 +214,7 @@ impl<'a> Lowering<'a> {
                     name,
                     span: arr_span,
                 } => {
-                    let variable = *self.globals.get(name).ok_or_else(|| {
-                        self.unsupported(format!("unknown global variable '{name}'"), *arr_span)
-                    })?;
+                    let variable = self.global_variable_id(name, *arr_span)?;
                     let var_node = self.push_value(Value::GlobalVariable(
                         self.global_names[variable].clone(),
                     ));
@@ -244,9 +234,7 @@ impl<'a> Lowering<'a> {
                     ..
                 } => {
                     let player_val = self.lower_value(player)?;
-                    let variable = *self.players.get(name).ok_or_else(|| {
-                        self.unsupported(format!("unknown player variable '{name}'"), *arr_span)
-                    })?;
+                    let variable = self.player_variable_id(name, *arr_span)?;
                     let var_node = self.push_value(Value::PlayerVariable {
                         player: player_val,
                         variable: self.player_names[variable].clone(),
@@ -323,9 +311,7 @@ impl<'a> Lowering<'a> {
                 name,
                 span: target_span,
             } => {
-                let variable = *self.globals.get(name).ok_or_else(|| {
-                    self.unsupported(format!("unknown global variable '{name}'"), *target_span)
-                })?;
+                let variable = self.global_variable_id(name, *target_span)?;
                 let root_value =
                     self.push_value(Value::GlobalVariable(self.global_names[variable].clone()));
                 ("setGlobalVariableAtIndex", root_value)
@@ -337,9 +323,7 @@ impl<'a> Lowering<'a> {
                 ..
             } => {
                 let player_value = self.lower_value(player)?;
-                let variable = *self.players.get(name).ok_or_else(|| {
-                    self.unsupported(format!("unknown player variable '{name}'"), *target_span)
-                })?;
+                let variable = self.player_variable_id(name, *target_span)?;
                 let root_value = self.push_value(Value::PlayerVariable {
                     player: player_value,
                     variable: self.player_names[variable].clone(),

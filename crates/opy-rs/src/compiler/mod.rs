@@ -711,14 +711,13 @@ impl Compiler {
                     match self.mapped_text(&artifact, &hir, &locale.to_string()) {
                         Ok(text) => Some(text),
                         Err(error) => {
-                            let mut diagnostics = frontend_diagnostics;
-                            diagnostics.push(compile_diagnostic(error, &hir.files));
                             return (
-                                CompileReport::failure(
+                                integration_failure_report(
                                     compiler,
                                     catalog,
-                                    CompileFailureClass::Integration,
-                                    diagnostics,
+                                    frontend_diagnostics,
+                                    error,
+                                    &hir.files,
                                 ),
                                 None,
                             );
@@ -732,34 +731,28 @@ impl Compiler {
                         CompileReport::success(compiler, catalog, artifact, frontend_diagnostics),
                         mapped,
                     ),
-                    Err(error) => {
-                        let mut diagnostics = frontend_diagnostics;
-                        diagnostics.push(compile_diagnostic(error, &hir.files));
-                        (
-                            CompileReport::failure(
-                                compiler,
-                                catalog,
-                                CompileFailureClass::Integration,
-                                diagnostics,
-                            ),
-                            None,
-                        )
-                    }
+                    Err(error) => (
+                        integration_failure_report(
+                            compiler,
+                            catalog,
+                            frontend_diagnostics,
+                            error,
+                            &hir.files,
+                        ),
+                        None,
+                    ),
                 }
             }
-            Err(error) => {
-                let mut diagnostics = frontend_diagnostics;
-                diagnostics.push(compile_diagnostic(error, &hir.files));
-                (
-                    CompileReport::failure(
-                        compiler,
-                        catalog,
-                        CompileFailureClass::Integration,
-                        diagnostics,
-                    ),
-                    None,
-                )
-            }
+            Err(error) => (
+                integration_failure_report(
+                    compiler,
+                    catalog,
+                    frontend_diagnostics,
+                    error,
+                    &hir.files,
+                ),
+                None,
+            ),
         }
     }
 
@@ -909,6 +902,22 @@ fn compile_diagnostic(error: IntegrationError, files: &[hir::SourceFile]) -> Com
             .and_then(|span| source_location_from_hir(span, files)),
         script: diagnostic.script.map(|script| *script),
     }
+}
+
+fn integration_failure_report(
+    compiler: CompilerIdentity,
+    catalog: CatalogIdentity,
+    mut diagnostics: Vec<CompileDiagnostic>,
+    error: IntegrationError,
+    files: &[hir::SourceFile],
+) -> CompileReport {
+    diagnostics.push(compile_diagnostic(error, files));
+    CompileReport::failure(
+        compiler,
+        catalog,
+        CompileFailureClass::Integration,
+        diagnostics,
+    )
 }
 
 fn compile_frontend_diagnostic(diagnostic: &crate::tooling::Diagnostic) -> CompileDiagnostic {

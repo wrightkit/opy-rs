@@ -71,13 +71,7 @@ impl Parser<'_> {
             self.advance();
             self.skip_expression_newlines();
             let right = self.parse_and()?;
-            let span = Span::new(left.span().file, left.span().start, right.span().end);
-            left = Expr::Binary {
-                op: "or".to_string(),
-                left: Box::new(left),
-                right: Box::new(right),
-                span,
-            };
+            left = binary("or", left, right);
         }
         Ok(left)
     }
@@ -93,13 +87,7 @@ impl Parser<'_> {
             self.advance();
             self.skip_expression_newlines();
             let right = self.parse_not()?;
-            let span = Span::new(left.span().file, left.span().start, right.span().end);
-            left = Expr::Binary {
-                op: "and".to_string(),
-                left: Box::new(left),
-                right: Box::new(right),
-                span,
-            };
+            left = binary("and", left, right);
         }
         Ok(left)
     }
@@ -142,13 +130,7 @@ impl Parser<'_> {
             }
             self.skip_expression_newlines();
             let right = self.parse_additive()?;
-            let span = Span::new(left.span().file, left.span().start, right.span().end);
-            left = Expr::Binary {
-                op: op.to_string(),
-                left: Box::new(left),
-                right: Box::new(right),
-                span,
-            };
+            left = binary(op, left, right);
         }
         Ok(left)
     }
@@ -169,13 +151,7 @@ impl Parser<'_> {
                     operand: Box::new(operand),
                 };
                 let right = self.parse_multiplicative_tail(unary)?;
-                let span = Span::new(left.span().file, left.span().start, right.span().end);
-                left = Expr::Binary {
-                    op: "-".to_string(),
-                    left: Box::new(left),
-                    right: Box::new(right),
-                    span,
-                };
+                left = binary("-", left, right);
                 continue;
             }
             let op = match self.peek_kind() {
@@ -186,13 +162,7 @@ impl Parser<'_> {
             self.advance();
             self.skip_expression_newlines();
             let right = self.parse_multiplicative()?;
-            let span = Span::new(left.span().file, left.span().start, right.span().end);
-            left = Expr::Binary {
-                op: op.to_string(),
-                left: Box::new(left),
-                right: Box::new(right),
-                span,
-            };
+            left = binary(op, left, right);
         }
         Ok(left)
     }
@@ -215,13 +185,7 @@ impl Parser<'_> {
             self.advance();
             self.skip_expression_newlines();
             let right = self.parse_unary()?;
-            let span = Span::new(left.span().file, left.span().start, right.span().end);
-            left = Expr::Binary {
-                op: op.to_string(),
-                left: Box::new(left),
-                right: Box::new(right),
-                span,
-            };
+            left = binary(op, left, right);
         }
         Ok(left)
     }
@@ -257,13 +221,7 @@ impl Parser<'_> {
             self.advance();
             self.skip_expression_newlines();
             let exponent = self.parse_unary()?;
-            let span = Span::new(base.span().file, base.span().start, exponent.span().end);
-            return Ok(Expr::Binary {
-                op: "**".to_string(),
-                left: Box::new(base),
-                right: Box::new(exponent),
-                span,
-            });
+            return Ok(binary("**", base, exponent));
         }
         Ok(base)
     }
@@ -365,6 +323,16 @@ impl Parser<'_> {
         Ok(base)
     }
 
+    fn has_more_delimited_items(&mut self, closing: TokenKind) -> bool {
+        self.skip_newlines();
+        if self.peek_kind() != TokenKind::Comma {
+            return false;
+        }
+        self.advance();
+        self.skip_newlines();
+        self.peek_kind() != closing
+    }
+
     /// `@Event name(args)`: positional expressions only (keyword arguments
     /// are a call-argument form, not an event form).
     pub(super) fn parse_event_args(&mut self, args: &mut Vec<Expr>) -> Result<(), ()> {
@@ -381,14 +349,7 @@ impl Parser<'_> {
                 return Err(());
             }
             args.push(expr);
-            self.skip_newlines();
-            if self.peek_kind() == TokenKind::Comma {
-                self.advance();
-                self.skip_newlines();
-                if self.peek_kind() == TokenKind::RParen {
-                    break;
-                }
-            } else {
+            if !self.has_more_delimited_items(TokenKind::RParen) {
                 break;
             }
         }
@@ -435,14 +396,7 @@ impl Parser<'_> {
                 }
                 Err(()) => return Err(()),
             }
-            self.skip_newlines();
-            if self.peek_kind() == TokenKind::Comma {
-                self.advance();
-                self.skip_newlines();
-                if self.peek_kind() == TokenKind::RParen {
-                    break;
-                }
-            } else {
+            if !self.has_more_delimited_items(TokenKind::RParen) {
                 break;
             }
         }
@@ -573,17 +527,10 @@ impl Parser<'_> {
                 }
                 elements.push(first);
                 loop {
-                    self.skip_newlines();
-                    if self.peek_kind() == TokenKind::Comma {
-                        self.advance();
-                        self.skip_newlines();
-                        if self.peek_kind() == TokenKind::RBracket {
-                            break;
-                        }
-                        elements.push(self.parse_expr()?);
-                    } else {
+                    if !self.has_more_delimited_items(TokenKind::RBracket) {
                         break;
                     }
+                    elements.push(self.parse_expr()?);
                 }
                 let end = match self.expect(TokenKind::RBracket, "']'") {
                     Ok(token) => token.span.end,
@@ -666,14 +613,7 @@ impl Parser<'_> {
             let value = self.parse_expr()?;
             let span = Span::new(key.span().file, key.span().start, value.span().end);
             entries.push(DictEntry { key, value, span });
-            self.skip_newlines();
-            if self.peek_kind() == TokenKind::Comma {
-                self.advance();
-                self.skip_newlines();
-                if self.peek_kind() == TokenKind::RBrace {
-                    break;
-                }
-            } else {
+            if !self.has_more_delimited_items(TokenKind::RBrace) {
                 break;
             }
         }
@@ -865,6 +805,16 @@ impl Parser<'_> {
             }
         }
         None
+    }
+}
+
+fn binary(op: &str, left: Expr, right: Expr) -> Expr {
+    let span = Span::new(left.span().file, left.span().start, right.span().end);
+    Expr::Binary {
+        op: op.to_string(),
+        left: Box::new(left),
+        right: Box::new(right),
+        span,
     }
 }
 

@@ -690,19 +690,13 @@ impl<'a> Emitter<'a> {
                 );
                 continue;
             };
-            if let Some(previous_position) = previous {
-                if variable_position <= previous_position {
-                    self.issue(
-                        "unsupported-init-rule",
-                        format!(
-                            "initializer rule Sets '{variable}' out of global table order; \
-                             the frontend synthesizes initializers in declaration order"
-                        ),
-                        span,
-                    );
-                }
-            }
-            previous = Some(variable_position);
+            self.record_initializer_position(
+                &mut previous,
+                variable_position,
+                variable,
+                "global",
+                span,
+            );
             initializers.insert(
                 variable_position,
                 (
@@ -754,19 +748,13 @@ impl<'a> Emitter<'a> {
                 );
                 continue;
             };
-            if let Some(previous_position) = previous {
-                if variable_position <= previous_position {
-                    self.issue(
-                        "unsupported-init-rule",
-                        format!(
-                            "initializer rule Sets '{variable}' out of player table order; \
-                             the frontend synthesizes initializers in declaration order"
-                        ),
-                        span,
-                    );
-                }
-            }
-            previous = Some(variable_position);
+            self.record_initializer_position(
+                &mut previous,
+                variable_position,
+                variable,
+                "player",
+                span,
+            );
             initializers.insert(
                 variable_position,
                 (
@@ -777,6 +765,27 @@ impl<'a> Emitter<'a> {
             );
         }
         initializers
+    }
+
+    fn record_initializer_position(
+        &mut self,
+        previous: &mut Option<usize>,
+        position: usize,
+        variable: &str,
+        table: &str,
+        span: Option<Span>,
+    ) {
+        if previous.is_some_and(|previous| position <= previous) {
+            self.issue(
+                "unsupported-init-rule",
+                format!(
+                    "initializer rule Sets '{variable}' out of {table} table order; \
+                     the frontend synthesizes initializers in declaration order"
+                ),
+                span,
+            );
+        }
+        *previous = Some(position);
     }
 
     /// A declaration initializer: same value emission, but zero literals are
