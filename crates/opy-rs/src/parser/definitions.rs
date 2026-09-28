@@ -39,14 +39,11 @@ impl Parser<'_> {
                     .max(name_token_span.start.col + 1),
             ),
         );
+        let line_indent = start.span.start.col;
         if self
-            .expect(TokenKind::Colon, "':' after the rule name")
+            .expect_block_indent(line_indent, "':' after the rule name")
             .is_err()
         {
-            return false;
-        }
-        let line_indent = start.span.start.col;
-        if self.block_indent(line_indent).is_none() {
             return false;
         }
         // OverPy accepts a small amount of indentation drift between rule
@@ -332,16 +329,10 @@ impl Parser<'_> {
             );
             return false;
         }
-        if self
-            .expect(TokenKind::Colon, "':' after the subroutine signature")
-            .is_err()
-        {
+        let Ok(body_indent) =
+            self.expect_block_indent(start.span.start.col, "':' after the subroutine signature")
+        else {
             return false;
-        }
-        let line_indent = start.span.start.col;
-        let body_indent = match self.block_indent(line_indent) {
-            Some(indent) => indent,
-            None => return false,
         };
         let mut directives = DirectiveState::default();
         loop {

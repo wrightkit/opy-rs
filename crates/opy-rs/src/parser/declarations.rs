@@ -92,16 +92,10 @@ impl Parser<'_> {
             Ok(name) => name,
             Err(()) => return false,
         };
-        if self
-            .expect(TokenKind::Colon, "':' after the enum name")
-            .is_err()
-        {
+        let Ok(body_indent) =
+            self.expect_block_indent(start.span.start.col, "':' after the enum name")
+        else {
             return false;
-        }
-        let line_indent = start.span.start.col;
-        let body_indent = match self.block_indent(line_indent) {
-            Some(indent) => indent,
-            None => return false,
         };
         let mut members = Vec::new();
         loop {
@@ -198,16 +192,10 @@ impl Parser<'_> {
         if qualified {
             args.insert(0, "self".to_string());
         }
-        if self
-            .expect(TokenKind::Colon, "':' after the macro signature")
-            .is_err()
-        {
+        let Ok(body_indent) =
+            self.expect_block_indent(start.span.start.col, "':' after the macro signature")
+        else {
             return false;
-        }
-        let line_indent = start.span.start.col;
-        let body_indent = match self.block_indent(line_indent) {
-            Some(indent) => indent,
-            None => return false,
         };
         let body = self.parse_block(body_indent);
         if !self.allow_macro_redeclaration

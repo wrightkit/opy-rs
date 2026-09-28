@@ -298,6 +298,15 @@ impl Parser<'_> {
         Some(indent)
     }
 
+    pub(super) fn expect_block_indent(
+        &mut self,
+        line_indent: u32,
+        colon_context: &str,
+    ) -> Result<u32, ()> {
+        self.expect(TokenKind::Colon, colon_context)?;
+        self.block_indent(line_indent).ok_or(())
+    }
+
     fn expect_statement_end(&mut self, what: &str) -> Result<(), ()> {
         let continued_line = self
             .tokens
