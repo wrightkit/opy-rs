@@ -1056,9 +1056,7 @@ impl<'a> Lowering<'a> {
                 }
             }
             Stmt::Delete { target, .. } => {
-                let mut indices = Vec::new();
-                let _ = indexed_target_parts(target, &mut indices);
-                indices.reverse();
+                let (_, indices) = hir::visit::indexed_expr_parts(target);
                 for action in actions {
                     let spans = match self.actions.get(*action) {
                         Some(Action::SetGlobalVariable { .. })

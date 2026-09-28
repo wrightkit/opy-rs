@@ -1235,20 +1235,6 @@ fn literal_key_matches(left: &hir::Expr, right: &hir::Expr) -> bool {
     }
 }
 
-fn indexed_target_parts<'a>(
-    target: &'a hir::Expr,
-    indices: &mut Vec<&'a hir::Expr>,
-) -> Option<&'a hir::Expr> {
-    match target {
-        hir::Expr::Index { array, index, .. } => {
-            indices.push(index);
-            indexed_target_parts(array, indices)
-        }
-        hir::Expr::GlobalVar { .. } | hir::Expr::PlayerVar { .. } => Some(target),
-        _ => None,
-    }
-}
-
 fn is_literal_key(expr: &hir::Expr) -> bool {
     matches!(
         expr,

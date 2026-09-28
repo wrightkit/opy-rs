@@ -6,17 +6,16 @@ impl<'a> Lowering<'a> {
         target: &Expr,
         span: Option<HirSpan>,
     ) -> Result<ActionId, IntegrationError> {
-        let mut indices = Vec::new();
-        let Some(root) = indexed_target_parts(target, &mut indices) else {
+        let (root, indices) = hir::visit::indexed_expr_parts(target);
+        if !matches!(root, Expr::GlobalVar { .. } | Expr::PlayerVar { .. }) {
             return Err(self.unsupported(
                 "delete statements require an indexed global or player variable",
                 span,
             ));
-        };
+        }
         if indices.len() > 4 {
             return Err(self.unsupported("Cannot delete index of 4d array", span));
         }
-        indices.reverse();
         if hir::visit::has_random_nested_delete(root, &indices) {
             return Err(self.unsupported(
                 "Cannot delete from nested array with a random outer or middle index",
@@ -141,13 +140,12 @@ impl<'a> Lowering<'a> {
         value: &Expr,
         span: Option<HirSpan>,
     ) -> Result<ActionId, IntegrationError> {
-        let mut indices = Vec::new();
-        if let Some(root) = indexed_target_parts(target, &mut indices) {
+        let (root, indices) = hir::visit::indexed_expr_parts(target);
+        if matches!(root, Expr::GlobalVar { .. } | Expr::PlayerVar { .. }) {
             if indices.len() > 3 {
                 return Err(self.unsupported("Cannot assign to 4d array", target.span().copied()));
             }
             if indices.len() > 1 {
-                indices.reverse();
                 return self.lower_nested_indexed_assign(root, &indices, target, value);
             }
         }

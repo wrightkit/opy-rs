@@ -25,6 +25,17 @@ pub(crate) fn contains_random(expression: &Expr) -> bool {
     finder.0
 }
 
+pub(crate) fn indexed_expr_parts(expression: &Expr) -> (&Expr, Vec<&Expr>) {
+    let mut indices = Vec::new();
+    let mut root = expression;
+    while let Expr::Index { array, index, .. } = root {
+        indices.push(index.as_ref());
+        root = array;
+    }
+    indices.reverse();
+    (root, indices)
+}
+
 pub(crate) fn literal_number(expression: &Expr) -> Option<f64> {
     match expression {
         Expr::Null { .. } => Some(0.0),

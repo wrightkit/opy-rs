@@ -923,17 +923,6 @@ fn indexed_expr_depth(expr: &Expr) -> usize {
     }
 }
 
-fn has_random_nested_delete(target: &HirExpr) -> bool {
-    let mut indices = Vec::new();
-    let mut root = target;
-    while let HirExpr::Index { array, index, .. } = root {
-        indices.push(index.as_ref());
-        root = array.as_ref();
-    }
-    indices.reverse();
-    crate::hir::visit::has_random_nested_delete(root, &indices)
-}
-
 impl From<Span> for HirSpan {
     fn from(span: Span) -> HirSpan {
         HirSpan {
