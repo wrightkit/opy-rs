@@ -197,6 +197,14 @@ impl<'a> Emitter<'a> {
         });
     }
 
+    fn report_disabled_rule(&mut self, rule_index: usize, name: &str) {
+        self.issue(
+            "unsupported-disabled-rule",
+            format!("rule '{name}' is disabled; the OPY surface cannot express it"),
+            self.program.rule_span(rule_index),
+        );
+    }
+
     // ---- table validation ----
 
     fn validate_tables(&mut self) {
@@ -556,14 +564,7 @@ impl<'a> Emitter<'a> {
         // Subroutine bodies.
         for (rule_index, rule) in &layout.sub_rules {
             if rule.disabled {
-                self.issue(
-                    "unsupported-disabled-rule",
-                    format!(
-                        "rule '{}' is disabled; the OPY surface cannot express it",
-                        rule.name
-                    ),
-                    self.program.rule_span(*rule_index),
-                );
+                self.report_disabled_rule(*rule_index, &rule.name);
                 continue;
             }
             let Event::Subroutine(subroutine_name) = &rule.event else {
@@ -587,14 +588,7 @@ impl<'a> Emitter<'a> {
         // Rules.
         for (rule_index, rule) in &layout.normal_rules {
             if rule.disabled {
-                self.issue(
-                    "unsupported-disabled-rule",
-                    format!(
-                        "rule '{}' is disabled; the OPY surface cannot express it",
-                        rule.name
-                    ),
-                    self.program.rule_span(*rule_index),
-                );
+                self.report_disabled_rule(*rule_index, &rule.name);
                 continue;
             }
             if rule.actions.is_empty() {
