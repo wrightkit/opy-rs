@@ -1540,12 +1540,10 @@ impl<'a> Lowering<'a> {
         else {
             return Err(self.unsupported("compressed requires literal numbers or vectors", span));
         };
-        let is_vector = numbers.first().is_some_and(|value| value.len() == 3);
-        if numbers.iter().any(|value| (value.len() == 3) != is_vector) {
+        let Some((is_vector, limit)) = crate::lower::compressed_component_mode(&numbers) else {
             return Err(self.unsupported("compressed cannot mix numbers and vectors", span));
-        }
+        };
         let flattened = numbers.iter().flatten().copied().collect::<Vec<_>>();
-        let limit = if is_vector { 4999.0 } else { 49999.0 };
         if flattened.iter().any(|value| value.abs() >= limit) {
             return Err(self.unsupported("compressed values exceed the supported magnitude", span));
         }

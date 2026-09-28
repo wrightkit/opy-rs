@@ -112,6 +112,13 @@ mod special_forms;
 mod statements;
 mod textures;
 
+pub(crate) fn compressed_component_mode(values: &[Vec<f64>]) -> Option<(bool, f64)> {
+    let component_count = values.first()?.len();
+    let is_vector = component_count == 3;
+    (matches!(component_count, 1 | 3) && values.iter().all(|value| value.len() == component_count))
+        .then_some((is_vector, if is_vector { 4999.0 } else { 49999.0 }))
+}
+
 /// Lower a parsed program into the Opy HIR contract.
 pub fn lower(
     program: &cst::Program,

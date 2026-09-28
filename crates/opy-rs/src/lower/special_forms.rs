@@ -35,17 +35,10 @@ fn is_compressible_column(values: &[&Expr]) -> bool {
 }
 
 fn is_compressible_components(values: &[Vec<f64>]) -> bool {
-    let Some(first) = values.first() else {
+    let Some((_, limit)) = crate::lower::compressed_component_mode(values) else {
         return false;
     };
-    let limit = match first.len() {
-        1 => 49999.0,
-        3 => 4999.0,
-        _ => return false,
-    };
-    values.iter().all(|components| {
-        components.len() == first.len() && components.iter().all(|value| value.abs() < limit)
-    })
+    values.iter().flatten().all(|value| value.abs() < limit)
 }
 
 impl Lowerer {
