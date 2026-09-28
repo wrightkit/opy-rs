@@ -23,6 +23,7 @@ use super::types::{
     Declaration, Expr, PROTOCOL_MAJOR, PROTOCOL_NAME, Position, Program, Rule, RuleEntry, Settings,
     SettingsNode, Span, Stmt, SwitchArm, default_var_index,
 };
+use super::visit::{self, Visitor};
 
 /// Declaration `kind` values understood by this consumer.
 const DECLARATION_KINDS: &[&str] = &[
@@ -188,7 +189,7 @@ pub(crate) fn validate_program(program: &Program) -> Result<(), HirError> {
                 check_unique(name, "global variable", *span, &mut tables.globals)?;
                 tables.globals.push(name);
                 if let Some(initializer) = initializer {
-                    validate_expr(initializer, program, &tables)?;
+                    validate_exprs(std::iter::once(initializer.as_ref()), program, &tables)?;
                 }
             }
             Declaration::PlayerVariable {
@@ -201,7 +202,7 @@ pub(crate) fn validate_program(program: &Program) -> Result<(), HirError> {
                 check_unique(name, "player variable", *span, &mut tables.players)?;
                 tables.players.push(name);
                 if let Some(initializer) = initializer {
-                    validate_expr(initializer, program, &tables)?;
+                    validate_exprs(std::iter::once(initializer.as_ref()), program, &tables)?;
                 }
             }
             Declaration::Subroutine { name, span, .. } => {
@@ -213,7 +214,7 @@ pub(crate) fn validate_program(program: &Program) -> Result<(), HirError> {
                 check_name(name, "constant", *span)?;
                 check_unique(name, "constant", *span, &mut tables.constants)?;
                 tables.constants.push(name);
-                validate_expr(value, program, &tables)?;
+                validate_exprs(std::iter::once(value.as_ref()), program, &tables)?;
             }
             Declaration::Macro {
                 name,
@@ -232,9 +233,7 @@ pub(crate) fn validate_program(program: &Program) -> Result<(), HirError> {
                         ));
                     }
                 }
-                validate_stmts(body, program, &tables, |statement| {
-                    statement.span().copied()
-                })?;
+                validate_stmts(body, program, &tables)?;
             }
         }
     }
@@ -272,9 +271,7 @@ pub(crate) fn validate_program(program: &Program) -> Result<(), HirError> {
                 if !source_name.is_empty() {
                     check_name(source_name, "subroutine source", *span)?;
                 }
-                validate_stmts(body, program, &tables, |statement| {
-                    statement.span().copied()
-                })?;
+                validate_stmts(body, program, &tables)?;
             }
         }
     }
@@ -363,42 +360,129 @@ fn validate_rule(rule: &Rule, program: &Program, tables: &NameTables<'_>) -> Res
             rule.event.span,
         ));
     }
-    validate_expr_vec(&rule.event.args, program, tables)?;
+    validate_exprs(&rule.event.args, program, tables)?;
     check_span(rule.event.span, program.files.len())?;
-    validate_expr_vec(&rule.conditions, program, tables)?;
-    validate_stmts(&rule.actions, program, tables, |statement| {
-        statement.span().copied()
-    })
+    validate_exprs(&rule.conditions, program, tables)?;
+    validate_stmts(&rule.actions, program, tables)
 }
 
-/// Validate a list of owned expressions (used for event args and rule
-/// conditions).
-fn validate_expr_vec(
-    exprs: &[Expr],
-    program: &Program,
-    tables: &NameTables<'_>,
-) -> Result<(), HirError> {
-    let refs: Vec<&Expr> = exprs.iter().collect();
-    validate_exprs(&refs, program, tables)
-}
-
-/// Validate a statement list: every span, every nested expression and its
-/// references, subroutine-call targets, and for-loop variables.
 fn validate_stmts(
     statements: &[Stmt],
     program: &Program,
     tables: &NameTables<'_>,
-    span_of: impl Fn(&Stmt) -> Option<Span>,
 ) -> Result<(), HirError> {
-    let mut errors = Vec::new();
-    for_each_stmt(statements, &mut |statement| {
-        if let Err(error) = check_span(span_of(statement), program.files.len()) {
-            errors.push(error);
+    let mut validator = StatementValidator {
+        expressions: ExpressionValidator {
+            program,
+            tables,
+            errors: Vec::new(),
+        },
+        errors: Vec::new(),
+    };
+    visit::walk_stmts(&mut validator, statements);
+    let StatementValidator {
+        expressions,
+        errors,
+    } = validator;
+    expressions
+        .errors
+        .into_iter()
+        .chain(errors)
+        .next()
+        .map_or(Ok(()), Err)
+}
+
+fn validate_exprs<'expr>(
+    expressions: impl IntoIterator<Item = &'expr Expr>,
+    program: &Program,
+    tables: &NameTables<'_>,
+) -> Result<(), HirError> {
+    let mut validator = ExpressionValidator {
+        program,
+        tables,
+        errors: Vec::new(),
+    };
+    for expression in expressions {
+        Visitor::visit_expr(&mut validator, expression);
+    }
+    validator.errors.into_iter().next().map_or(Ok(()), Err)
+}
+
+struct ExpressionValidator<'program, 'tables, 'names> {
+    program: &'program Program,
+    tables: &'tables NameTables<'names>,
+    errors: Vec<HirError>,
+}
+
+impl Visitor for ExpressionValidator<'_, '_, '_> {
+    fn visit_expr(&mut self, expression: &Expr) {
+        if let Err(error) = check_span(expression.span().copied(), self.program.files.len()) {
+            self.errors.push(error);
+        }
+        match expression {
+            Expr::GlobalVar { name, span }
+                if !self.tables.globals.contains(&name.as_str())
+                    && default_var_index(name).is_none() =>
+            {
+                self.errors.push(invalid(
+                    "unresolved-reference",
+                    format!("reference to unknown global variable '{name}'"),
+                    *span,
+                ));
+            }
+            Expr::PlayerVar {
+                player, name, span, ..
+            } if !self.tables.players.contains(&name.as_str())
+                && !is_implicit_player_variable(player, name) =>
+            {
+                self.errors.push(invalid(
+                    "unresolved-reference",
+                    format!("reference to unknown player variable '{name}'"),
+                    *span,
+                ));
+            }
+            Expr::Constant { name, span } if !self.tables.constants.contains(&name.as_str()) => {
+                self.errors.push(invalid(
+                    "unresolved-reference",
+                    format!("reference to unknown constant '{name}'"),
+                    *span,
+                ));
+            }
+            _ => {}
+        }
+        visit::walk_expr(self, expression);
+    }
+
+    fn visit_comprehension(&mut self, element: &Expr, iterable: &Expr, condition: Option<&Expr>) {
+        Visitor::visit_expr(self, iterable);
+        Visitor::visit_expr(self, element);
+        if let Some(condition) = condition {
+            Visitor::visit_expr(self, condition);
+        }
+    }
+}
+
+struct StatementValidator<'program, 'tables, 'names> {
+    expressions: ExpressionValidator<'program, 'tables, 'names>,
+    errors: Vec<HirError>,
+}
+
+impl Visitor for StatementValidator<'_, '_, '_> {
+    fn visit_expr(&mut self, expression: &Expr) {
+        Visitor::visit_expr(&mut self.expressions, expression);
+    }
+
+    fn visit_stmt(&mut self, statement: &Stmt) {
+        if let Err(error) = check_span(
+            statement.span().copied(),
+            self.expressions.program.files.len(),
+        ) {
+            self.errors.push(error);
         }
         match statement {
             Stmt::CallSubroutine { name, span } => {
-                let known = tables.subroutines.contains(&name.as_str())
-                    || program.rules.iter().any(|entry| {
+                let known = self.expressions.tables.subroutines.contains(&name.as_str())
+                    || self.expressions.program.rules.iter().any(|entry| {
                         matches!(
                             entry,
                             RuleEntry::SubroutineDef {
@@ -409,7 +493,7 @@ fn validate_stmts(
                         )
                     });
                 if !known {
-                    errors.push(invalid(
+                    self.errors.push(invalid(
                         "unresolved-reference",
                         format!("call to unknown subroutine '{name}'"),
                         *span,
@@ -418,22 +502,22 @@ fn validate_stmts(
             }
             Stmt::For { variable, span, .. } => match variable.as_ref() {
                 Expr::GlobalVar { name, .. }
-                    if tables.globals.contains(&name.as_str())
+                    if self.expressions.tables.globals.contains(&name.as_str())
                         || default_var_index(name).is_some() => {}
-                Expr::GlobalVar { name, .. } => errors.push(invalid(
+                Expr::GlobalVar { name, .. } => self.errors.push(invalid(
                     "unresolved-reference",
                     format!("for-loop variable '{name}' is not a declared global variable"),
                     *span,
                 )),
                 Expr::PlayerVar { name, player, .. }
-                    if tables.players.contains(&name.as_str())
+                    if self.expressions.tables.players.contains(&name.as_str())
                         || is_implicit_player_variable(player, name) => {}
-                Expr::PlayerVar { name, .. } => errors.push(invalid(
+                Expr::PlayerVar { name, .. } => self.errors.push(invalid(
                     "unresolved-reference",
                     format!("for-loop variable '{name}' is not a declared player variable"),
                     *span,
                 )),
-                other => errors.push(invalid(
+                other => self.errors.push(invalid(
                     "invalid-structure",
                     format!(
                         "for-loop variable must be a global variable reference, got '{}'",
@@ -444,7 +528,7 @@ fn validate_stmts(
             },
             Stmt::Switch { arms, .. } => {
                 if arms.is_empty() {
-                    errors.push(invalid(
+                    self.errors.push(invalid(
                         "invalid-structure",
                         "a switch must contain at least one arm",
                         None,
@@ -453,18 +537,16 @@ fn validate_stmts(
                 let mut defaults = 0;
                 for arm in arms {
                     let arm_span = match arm {
-                        SwitchArm::Case { span, body, .. } | SwitchArm::Default { span, body } => {
-                            let _ = body;
-                            span
-                        }
+                        SwitchArm::Case { span, .. } | SwitchArm::Default { span, .. } => span,
                     };
-                    if let Err(error) = check_span(*arm_span, program.files.len()) {
-                        errors.push(error);
+                    if let Err(error) = check_span(*arm_span, self.expressions.program.files.len())
+                    {
+                        self.errors.push(error);
                     }
                     if matches!(arm, SwitchArm::Default { .. }) {
                         defaults += 1;
                         if defaults > 1 {
-                            errors.push(invalid(
+                            self.errors.push(invalid(
                                 "invalid-structure",
                                 "a switch may contain at most one default arm",
                                 *arm_span,
@@ -475,7 +557,7 @@ fn validate_stmts(
             }
             Stmt::Delete { target, span } => {
                 if !matches!(target.as_ref(), Expr::Index { .. }) {
-                    errors.push(invalid(
+                    self.errors.push(invalid(
                         "invalid-structure",
                         "a delete statement must target an array index",
                         *span,
@@ -487,12 +569,11 @@ fn validate_stmts(
                 offset,
                 rule_start,
                 span,
-                ..
             } => {
                 let target_count =
                     u8::from(label.is_some()) + u8::from(offset.is_some()) + u8::from(*rule_start);
                 if target_count != 1 {
-                    errors.push(invalid(
+                    self.errors.push(invalid(
                         "invalid-structure",
                         "a goto must contain exactly one label, offset, or RULE_START target",
                         *span,
@@ -500,152 +581,23 @@ fn validate_stmts(
                 }
                 if let Some(label) = label {
                     if let Err(error) = check_name(label, "label", *span) {
-                        errors.push(error);
+                        self.errors.push(error);
                     }
                 }
             }
             Stmt::Label { name, span } => {
                 if let Err(error) = check_name(name, "label", *span) {
-                    errors.push(error);
+                    self.errors.push(error);
                 }
             }
             _ => {}
         }
-    });
-    validate_exprs(&statement_exprs(statements), program, tables)?;
-    errors.into_iter().next().map_or(Ok(()), Err)
-}
-
-/// Validate a single expression, including its children.
-fn validate_expr(expr: &Expr, program: &Program, tables: &NameTables<'_>) -> Result<(), HirError> {
-    validate_exprs(&[expr], program, tables)
-}
-
-/// Validate every expression in a list, including spans and references.
-fn validate_exprs(
-    exprs: &[&Expr],
-    program: &Program,
-    tables: &NameTables<'_>,
-) -> Result<(), HirError> {
-    let mut errors = Vec::new();
-    for expr in exprs {
-        for_each_expr(expr, &mut |node| {
-            if let Err(error) = check_span(node.span().copied(), program.files.len()) {
-                errors.push(error);
-            }
-            match node {
-                Expr::GlobalVar { name, span }
-                    if !tables.globals.contains(&name.as_str())
-                        && default_var_index(name).is_none() =>
-                {
-                    errors.push(invalid(
-                        "unresolved-reference",
-                        format!("reference to unknown global variable '{name}'"),
-                        *span,
-                    ));
-                }
-                Expr::PlayerVar {
-                    player, name, span, ..
-                } if !tables.players.contains(&name.as_str())
-                    && !is_implicit_player_variable(player, name) =>
-                {
-                    errors.push(invalid(
-                        "unresolved-reference",
-                        format!("reference to unknown player variable '{name}'"),
-                        *span,
-                    ));
-                }
-                Expr::Constant { name, span } if !tables.constants.contains(&name.as_str()) => {
-                    errors.push(invalid(
-                        "unresolved-reference",
-                        format!("reference to unknown constant '{name}'"),
-                        *span,
-                    ));
-                }
-                _ => {}
-            }
-        });
+        visit::walk_stmt(self, statement);
     }
-    errors.into_iter().next().map_or(Ok(()), Err)
 }
 
 fn is_implicit_player_variable(_player: &Expr, name: &str) -> bool {
     default_var_index(name).is_some()
-}
-
-/// The expressions directly contained in a statement list (used to feed
-/// `validate_exprs`; nested bodies are covered by `for_each_stmt`).
-fn statement_exprs(statements: &[Stmt]) -> Vec<&Expr> {
-    let mut exprs = Vec::new();
-    for statement in statements {
-        match statement {
-            Stmt::Expr { expr, .. } => exprs.push(expr.as_ref()),
-            Stmt::Assign { target, value, .. } => {
-                exprs.push(target.as_ref());
-                exprs.push(value.as_ref());
-            }
-            Stmt::Delete { target, .. } => exprs.push(target.as_ref()),
-            Stmt::If {
-                branches, r#else, ..
-            } => {
-                for branch in branches {
-                    exprs.push(branch.condition.as_ref());
-                    exprs.extend(statement_exprs(&branch.body));
-                }
-                if let Some(else_body) = r#else {
-                    exprs.extend(statement_exprs(else_body));
-                }
-            }
-            Stmt::For {
-                variable,
-                iterable,
-                body,
-                ..
-            } => {
-                exprs.push(variable.as_ref());
-                exprs.push(iterable.as_ref());
-                exprs.extend(statement_exprs(body));
-            }
-            Stmt::While {
-                condition, body, ..
-            } => {
-                exprs.push(condition.as_ref());
-                exprs.extend(statement_exprs(body));
-            }
-            Stmt::DoWhile {
-                condition, body, ..
-            } => {
-                exprs.push(condition.as_ref());
-                exprs.extend(statement_exprs(body));
-            }
-            Stmt::Switch { value, arms, .. } => {
-                exprs.push(value.as_ref());
-                for arm in arms {
-                    match arm {
-                        SwitchArm::Case { value, body, .. } => {
-                            exprs.push(value.as_ref());
-                            exprs.extend(statement_exprs(body));
-                        }
-                        SwitchArm::Default { body, .. } => {
-                            exprs.extend(statement_exprs(body));
-                        }
-                    }
-                }
-            }
-            Stmt::Goto { offset, .. } => {
-                if let Some(offset) = offset {
-                    exprs.push(offset.as_ref());
-                }
-            }
-            Stmt::Break { .. }
-            | Stmt::Return { .. }
-            | Stmt::Continue { .. }
-            | Stmt::Label { .. }
-            | Stmt::CallSubroutine { .. }
-            | Stmt::Pass { .. } => {}
-        }
-    }
-    exprs
 }
 
 fn check_name(name: &str, what: &str, span: Option<Span>) -> Result<(), HirError> {
@@ -707,132 +659,6 @@ fn check_span(span: Option<Span>, files: usize) -> Result<(), HirError> {
 
 fn valid_position(position: &Position) -> bool {
     position.line >= 1 && position.col >= 1
-}
-
-/// Visit every statement in a tree (including nested bodies).
-fn for_each_stmt<'a>(statements: &'a [Stmt], f: &mut impl FnMut(&'a Stmt)) {
-    for statement in statements {
-        f(statement);
-        match statement {
-            Stmt::If {
-                branches, r#else, ..
-            } => {
-                for branch in branches {
-                    for_each_stmt(&branch.body, f);
-                }
-                if let Some(else_body) = r#else {
-                    for_each_stmt(else_body, f);
-                }
-            }
-            Stmt::For { body, .. } | Stmt::While { body, .. } | Stmt::DoWhile { body, .. } => {
-                for_each_stmt(body, f)
-            }
-            Stmt::Switch { arms, .. } => {
-                for arm in arms {
-                    match arm {
-                        SwitchArm::Case { body, .. } | SwitchArm::Default { body, .. } => {
-                            for_each_stmt(body, f);
-                        }
-                    }
-                }
-            }
-            Stmt::Expr { .. }
-            | Stmt::Assign { .. }
-            | Stmt::Delete { .. }
-            | Stmt::Break { .. }
-            | Stmt::Return { .. }
-            | Stmt::Continue { .. }
-            | Stmt::Goto { .. }
-            | Stmt::Label { .. }
-            | Stmt::CallSubroutine { .. }
-            | Stmt::Pass { .. } => {}
-        }
-    }
-}
-
-/// Visit every expression in a list (including nested children).
-fn for_each_expr<'a>(expr: &'a Expr, f: &mut impl FnMut(&'a Expr)) {
-    f(expr);
-    match expr {
-        Expr::Array { elements, .. } => {
-            for element in elements {
-                for_each_expr(element, f);
-            }
-        }
-        Expr::Dict { entries, .. } => {
-            for entry in entries {
-                for_each_expr(&entry.key, f);
-                for_each_expr(&entry.value, f);
-            }
-        }
-        Expr::Comprehension {
-            element,
-            iterable,
-            condition,
-            ..
-        } => {
-            for_each_expr(iterable, f);
-            for_each_expr(element, f);
-            if let Some(condition) = condition {
-                for_each_expr(condition, f);
-            }
-        }
-        Expr::Lambda { body, .. } => for_each_expr(body, f),
-        Expr::Vector { x, y, z, .. } => {
-            for_each_expr(x, f);
-            for_each_expr(y, f);
-            for_each_expr(z, f);
-        }
-        Expr::PlayerVar { player, .. } => for_each_expr(player, f),
-        Expr::Member { receiver, .. } => for_each_expr(receiver, f),
-        Expr::Call { args, .. } | Expr::MacroCall { args, .. } | Expr::Format { args, .. } => {
-            for arg in args {
-                for_each_expr(arg, f);
-            }
-        }
-        Expr::ReceiverCall { receiver, args, .. } => {
-            for_each_expr(receiver, f);
-            for arg in args {
-                for_each_expr(arg, f);
-            }
-        }
-        Expr::Binary { left, right, .. } => {
-            for_each_expr(left, f);
-            for_each_expr(right, f);
-        }
-        Expr::Conditional {
-            then_value,
-            condition,
-            else_value,
-            ..
-        } => {
-            for_each_expr(then_value, f);
-            for_each_expr(condition, f);
-            for_each_expr(else_value, f);
-        }
-        Expr::Unary { operand, .. } => for_each_expr(operand, f),
-        Expr::Index { array, index, .. } => {
-            for_each_expr(array, f);
-            for_each_expr(index, f);
-        }
-        Expr::Type { args, .. } => {
-            for arg in args {
-                for_each_expr(arg, f);
-            }
-        }
-        Expr::Number { .. }
-        | Expr::String { .. }
-        | Expr::Bool { .. }
-        | Expr::Null { .. }
-        | Expr::Enum { .. }
-        | Expr::GlobalVar { .. }
-        | Expr::EventPlayer { .. }
-        | Expr::HostPlayer { .. }
-        | Expr::Constant { .. }
-        | Expr::MacroParam { .. }
-        | Expr::StringModifier { .. }
-        | Expr::Local { .. } => {}
-    }
 }
 
 fn check_declaration(value: &Value) -> Result<(), HirError> {
@@ -1002,9 +828,6 @@ fn check_expr(value: &Value) -> Result<(), HirError> {
                 check_expr(entry_value)?;
             }
         }
-    }
-    if let Some(condition) = object.get("condition") {
-        check_expr(condition)?;
     }
     if let Some(body) = object.get("body") {
         check_expr(body)?;

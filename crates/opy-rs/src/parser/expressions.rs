@@ -61,45 +61,29 @@ impl Parser<'_> {
     }
 
     pub(super) fn parse_or(&mut self) -> Result<Expr, ()> {
-        self.skip_expression_newlines();
-        let mut left = self.parse_and()?;
-        loop {
-            self.skip_expression_newlines();
-            if !self.is_ident("or") {
-                break;
-            }
-            self.advance();
-            self.skip_expression_newlines();
-            let right = self.parse_and()?;
-            let span = Span::new(left.span().file, left.span().start, right.span().end);
-            left = Expr::Binary {
-                op: "or".to_string(),
-                left: Box::new(left),
-                right: Box::new(right),
-                span,
-            };
-        }
-        Ok(left)
+        self.parse_ident_chain("or", |parser| parser.parse_and())
     }
 
     pub(super) fn parse_and(&mut self) -> Result<Expr, ()> {
+        self.parse_ident_chain("and", |parser| parser.parse_not())
+    }
+
+    fn parse_ident_chain(
+        &mut self,
+        operator: &str,
+        mut parse_next: impl FnMut(&mut Self) -> Result<Expr, ()>,
+    ) -> Result<Expr, ()> {
         self.skip_expression_newlines();
-        let mut left = self.parse_not()?;
+        let mut left = parse_next(self)?;
         loop {
             self.skip_expression_newlines();
-            if !self.is_ident("and") {
+            if !self.is_ident(operator) {
                 break;
             }
             self.advance();
             self.skip_expression_newlines();
-            let right = self.parse_not()?;
-            let span = Span::new(left.span().file, left.span().start, right.span().end);
-            left = Expr::Binary {
-                op: "and".to_string(),
-                left: Box::new(left),
-                right: Box::new(right),
-                span,
-            };
+            let right = parse_next(self)?;
+            left = binary(operator, left, right);
         }
         Ok(left)
     }
@@ -142,13 +126,7 @@ impl Parser<'_> {
             }
             self.skip_expression_newlines();
             let right = self.parse_additive()?;
-            let span = Span::new(left.span().file, left.span().start, right.span().end);
-            left = Expr::Binary {
-                op: op.to_string(),
-                left: Box::new(left),
-                right: Box::new(right),
-                span,
-            };
+            left = binary(op, left, right);
         }
         Ok(left)
     }
@@ -169,13 +147,7 @@ impl Parser<'_> {
                     operand: Box::new(operand),
                 };
                 let right = self.parse_multiplicative_tail(unary)?;
-                let span = Span::new(left.span().file, left.span().start, right.span().end);
-                left = Expr::Binary {
-                    op: "-".to_string(),
-                    left: Box::new(left),
-                    right: Box::new(right),
-                    span,
-                };
+                left = binary("-", left, right);
                 continue;
             }
             let op = match self.peek_kind() {
@@ -186,13 +158,7 @@ impl Parser<'_> {
             self.advance();
             self.skip_expression_newlines();
             let right = self.parse_multiplicative()?;
-            let span = Span::new(left.span().file, left.span().start, right.span().end);
-            left = Expr::Binary {
-                op: op.to_string(),
-                left: Box::new(left),
-                right: Box::new(right),
-                span,
-            };
+            left = binary(op, left, right);
         }
         Ok(left)
     }
@@ -215,13 +181,7 @@ impl Parser<'_> {
             self.advance();
             self.skip_expression_newlines();
             let right = self.parse_unary()?;
-            let span = Span::new(left.span().file, left.span().start, right.span().end);
-            left = Expr::Binary {
-                op: op.to_string(),
-                left: Box::new(left),
-                right: Box::new(right),
-                span,
-            };
+            left = binary(op, left, right);
         }
         Ok(left)
     }
@@ -257,13 +217,7 @@ impl Parser<'_> {
             self.advance();
             self.skip_expression_newlines();
             let exponent = self.parse_unary()?;
-            let span = Span::new(base.span().file, base.span().start, exponent.span().end);
-            return Ok(Expr::Binary {
-                op: "**".to_string(),
-                left: Box::new(base),
-                right: Box::new(exponent),
-                span,
-            });
+            return Ok(binary("**", base, exponent));
         }
         Ok(base)
     }
@@ -365,88 +319,79 @@ impl Parser<'_> {
         Ok(base)
     }
 
+    fn has_more_delimited_items(&mut self, closing: TokenKind) -> bool {
+        self.skip_newlines();
+        if self.peek_kind() != TokenKind::Comma {
+            return false;
+        }
+        self.advance();
+        self.skip_newlines();
+        self.peek_kind() != closing
+    }
+
+    fn parse_delimited_items<T>(
+        &mut self,
+        items: &mut Vec<T>,
+        first_item_parsed: bool,
+        closing: TokenKind,
+        closing_text: &str,
+        mut parse_item: impl FnMut(&mut Self) -> Result<T, ()>,
+    ) -> Result<Token, ()> {
+        self.skip_newlines();
+        if !first_item_parsed && self.peek_kind() == closing {
+            return Ok(self.advance());
+        }
+        if !first_item_parsed {
+            items.push(parse_item(self)?);
+        }
+        while self.has_more_delimited_items(closing) {
+            items.push(parse_item(self)?);
+        }
+        self.expect(closing, closing_text)
+    }
+
     /// `@Event name(args)`: positional expressions only (keyword arguments
     /// are a call-argument form, not an event form).
     pub(super) fn parse_event_args(&mut self, args: &mut Vec<Expr>) -> Result<(), ()> {
         self.expect(TokenKind::LParen, "'('")?;
-        self.skip_newlines();
-        if self.peek_kind() == TokenKind::RParen {
-            self.advance();
-            return Ok(());
-        }
-        loop {
-            let expr = self.parse_expr()?;
-            if self.peek_kind() == TokenKind::Assign {
-                self.error_at_current("keyword arguments are not valid in @Event".to_string());
+        self.parse_delimited_items(args, false, TokenKind::RParen, "')'", |parser| {
+            let expr = parser.parse_expr()?;
+            if parser.peek_kind() == TokenKind::Assign {
+                parser.error_at_current("keyword arguments are not valid in @Event".to_string());
                 return Err(());
             }
-            args.push(expr);
-            self.skip_newlines();
-            if self.peek_kind() == TokenKind::Comma {
-                self.advance();
-                self.skip_newlines();
-                if self.peek_kind() == TokenKind::RParen {
-                    break;
-                }
-            } else {
-                break;
-            }
-        }
-        self.expect(TokenKind::RParen, "')'")?;
+            Ok(expr)
+        })?;
         Ok(())
     }
 
     pub(super) fn parse_call_args(&mut self, args: &mut Vec<CallArg>) -> Result<(), ()> {
         self.expect(TokenKind::LParen, "'('")?;
-        self.skip_newlines();
-        if self.peek_kind() == TokenKind::RParen {
-            self.advance();
-            return Ok(());
-        }
-        loop {
-            match self.parse_expr() {
-                Ok(expr) => {
-                    // A keyword argument is `name = expr` (issue #110): a
-                    // bare identifier immediately followed by `=`. Anything
-                    // else (`expr = ...`) is not a call argument form and is
-                    // rejected like the pinned reference rejects it.
-                    if self.peek_kind() == TokenKind::Assign {
-                        let Expr::Name { name, span } = expr else {
-                            self.error_at_current(
-                                "expected a keyword name before '=' in this call".to_string(),
-                            );
-                            return Err(());
-                        };
-                        self.advance();
-                        let value = match self.parse_expr() {
-                            Ok(value) => value,
-                            Err(()) => return Err(()),
-                        };
-                        args.push(CallArg {
-                            keyword: Some((name, span)),
-                            value,
-                        });
-                    } else {
-                        args.push(CallArg {
-                            keyword: None,
-                            value: expr,
-                        });
-                    }
-                }
-                Err(()) => return Err(()),
-            }
-            self.skip_newlines();
-            if self.peek_kind() == TokenKind::Comma {
-                self.advance();
-                self.skip_newlines();
-                if self.peek_kind() == TokenKind::RParen {
-                    break;
-                }
+        self.parse_delimited_items(args, false, TokenKind::RParen, "')'", |parser| {
+            let expr = parser.parse_expr()?;
+            // A keyword argument is `name = expr` (issue #110): a bare
+            // identifier immediately followed by `=`. Anything else is
+            // rejected like the pinned reference rejects it.
+            if parser.peek_kind() == TokenKind::Assign {
+                let Expr::Name { name, span } = expr else {
+                    parser.error_at_current(
+                        "expected a keyword name before '=' in this call".to_string(),
+                    );
+                    return Err(());
+                };
+                parser.advance();
+                let value = parser.parse_expr()?;
+                Ok(CallArg {
+                    keyword: Some((name, span)),
+                    value,
+                })
             } else {
-                break;
+                Ok(CallArg {
+                    keyword: None,
+                    value: expr,
+                })
             }
-        }
-        self.expect(TokenKind::RParen, "')'")?;
+        })?;
         Ok(())
     }
 
@@ -470,7 +415,7 @@ impl Parser<'_> {
                     span: token.span,
                 })
             }
-            TokenKind::String => self.parse_string_literal(),
+            TokenKind::String => Ok(self.parse_string_literal()),
             TokenKind::Ident => {
                 let token = self.advance();
                 if token.text == "lambda" {
@@ -572,23 +517,16 @@ impl Parser<'_> {
                     });
                 }
                 elements.push(first);
-                loop {
-                    self.skip_newlines();
-                    if self.peek_kind() == TokenKind::Comma {
-                        self.advance();
-                        self.skip_newlines();
-                        if self.peek_kind() == TokenKind::RBracket {
-                            break;
-                        }
-                        elements.push(self.parse_expr()?);
-                    } else {
-                        break;
-                    }
-                }
-                let end = match self.expect(TokenKind::RBracket, "']'") {
-                    Ok(token) => token.span.end,
-                    Err(()) => return Err(()),
-                };
+                let end = self
+                    .parse_delimited_items(
+                        &mut elements,
+                        true,
+                        TokenKind::RBracket,
+                        "']'",
+                        Self::parse_expr,
+                    )?
+                    .span
+                    .end;
                 Ok(Expr::Array {
                     elements,
                     span: Span::new(open.span.file, open.span.start, end),
@@ -608,7 +546,7 @@ impl Parser<'_> {
     /// delimiter group. Outside a group, a newline remains a statement
     /// boundary, matching the bounded implicit-concatenation surface used by
     /// the OverPy examples.
-    pub(super) fn parse_string_literal(&mut self) -> Result<Expr, ()> {
+    pub(super) fn parse_string_literal(&mut self) -> Expr {
         let first = self.advance();
         let mut value = first.text.clone();
         let mut end = first.span.end;
@@ -625,10 +563,10 @@ impl Parser<'_> {
             value.push_str(&next.text);
             end = next.span.end;
         }
-        Ok(Expr::String {
+        Expr::String {
             value,
             span: Span::new(first.span.file, first.span.start, end),
-        })
+        }
     }
 
     /// Return whether the current parser position is inside `()`, `[]`, or
@@ -652,32 +590,16 @@ impl Parser<'_> {
     pub(super) fn parse_dict(&mut self) -> Result<Expr, ()> {
         let open = self.advance();
         let mut entries = Vec::new();
-        self.skip_newlines();
-        if self.peek_kind() == TokenKind::RBrace {
-            let end = self.advance().span.end;
-            return Ok(Expr::Dict {
-                entries,
-                span: Span::new(open.span.file, open.span.start, end),
-            });
-        }
-        loop {
-            let key = self.parse_expr()?;
-            self.expect(TokenKind::Colon, "':' in a dictionary entry")?;
-            let value = self.parse_expr()?;
-            let span = Span::new(key.span().file, key.span().start, value.span().end);
-            entries.push(DictEntry { key, value, span });
-            self.skip_newlines();
-            if self.peek_kind() == TokenKind::Comma {
-                self.advance();
-                self.skip_newlines();
-                if self.peek_kind() == TokenKind::RBrace {
-                    break;
-                }
-            } else {
-                break;
-            }
-        }
-        let end = self.expect(TokenKind::RBrace, "'}'")?.span.end;
+        let end = self
+            .parse_delimited_items(&mut entries, false, TokenKind::RBrace, "'}'", |parser| {
+                let key = parser.parse_expr()?;
+                parser.expect(TokenKind::Colon, "':' in a dictionary entry")?;
+                let value = parser.parse_expr()?;
+                let span = Span::new(key.span().file, key.span().start, value.span().end);
+                Ok(DictEntry { key, value, span })
+            })?
+            .span
+            .end;
         Ok(Expr::Dict {
             entries,
             span: Span::new(open.span.file, open.span.start, end),
@@ -865,6 +787,16 @@ impl Parser<'_> {
             }
         }
         None
+    }
+}
+
+fn binary(op: &str, left: Expr, right: Expr) -> Expr {
+    let span = Span::new(left.span().file, left.span().start, right.span().end);
+    Expr::Binary {
+        op: op.to_string(),
+        left: Box::new(left),
+        right: Box::new(right),
+        span,
     }
 }
 

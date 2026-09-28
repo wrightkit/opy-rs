@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use crate::cst;
 use crate::diag::{OpyError, OpyResult, Position, Span};
 use crate::hir;
+use crate::lexer::{decode_string_escape, is_ident_continue, is_ident_start};
 
 /// A project `settings { ... }` block.
 #[derive(Debug, Clone)]
@@ -52,54 +53,40 @@ pub struct SettingsBlock {
 /// matching respects `"`/`'` strings, `\` escapes, and nesting; an
 /// unterminated block is `settings-invalid`.
 pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
-    let mut scanner = Scanner {
-        text,
-        pos: 0,
-        char_pos: 0,
-        line: 1,
-        col: 1,
-    };
+    let mut scanner = Cursor::new(text, file_id, Position::new(1, 1));
     let mut blocks = Vec::new();
     let mut in_block_comment = false;
     let mut string_quote = None;
     let mut escaped = false;
     let mut seen_first_construct = false;
-    while let Some(ch) = scanner.peek(0) {
-        if let Some(quote) = string_quote {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == quote {
-                string_quote = None;
-            }
-            scanner.advance(1);
+    while let Some(ch) = scanner.peek() {
+        if scanner.advance_quoted(&mut string_quote, &mut escaped, ch) {
             continue;
         }
         if in_block_comment {
-            if ch == '*' && scanner.peek(1) == Some('/') {
+            if ch == '*' && scanner.peek_at(1) == Some('/') {
                 in_block_comment = false;
-                scanner.advance(2);
+                scanner.advance_by(2);
             } else {
-                scanner.advance(1);
+                scanner.advance_by(1);
             }
             continue;
         }
         if matches!(ch, '"' | '\'') {
             string_quote = Some(ch);
-            scanner.advance(1);
+            scanner.advance_by(1);
             continue;
         }
         if ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n' {
-            scanner.advance(1);
+            scanner.advance_by(1);
             continue;
         }
         if ch == '#' {
             scanner.skip_to_eol();
             continue;
         }
-        if ch == '/' && scanner.peek(1) == Some('*') {
-            scanner.advance(2);
+        if ch == '/' && scanner.peek_at(1) == Some('*') {
+            scanner.advance_by(2);
             in_block_comment = true;
             continue;
         }
@@ -126,7 +113,7 @@ pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
             continue;
         }
         seen_first_construct = true;
-        scanner.advance(1);
+        scanner.advance_by(1);
     }
     Ok(blocks)
 }
@@ -134,39 +121,34 @@ pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
 /// Match the braces of one `settings { ... }` block, returning the extracted
 /// block. `scanner` is positioned just past the `settings` keyword.
 fn match_block(
-    scanner: &mut Scanner<'_>,
+    scanner: &mut Cursor<'_>,
     keyword_start: Position,
     keyword_offset: usize,
     keyword_span: Span,
 ) -> OpyResult<SettingsBlock> {
-    scanner.skip_whitespace();
-    if scanner.peek(0) != Some('{') {
-        let Some(quote) = scanner.peek(0).filter(|ch| matches!(ch, '"' | '\'')) else {
+    scanner.skip_horizontal_whitespace();
+    if scanner.peek() != Some('{') {
+        let Some(quote) = scanner.peek().filter(|ch| matches!(ch, '"' | '\'')) else {
             return Err(OpyError::at(
                 "settings-invalid",
                 "settings block must be a `settings { ... }` block or `settings \"file\"`",
                 keyword_span,
             ));
         };
-        scanner.advance(1);
+        scanner.advance_by(1);
         let mut path = String::new();
         let mut escaped = false;
         loop {
-            let Some(ch) = scanner.peek(0) else {
+            let Some(ch) = scanner.peek() else {
                 return Err(OpyError::at(
                     "settings-invalid",
                     "unterminated external settings path",
                     keyword_span,
                 ));
             };
-            scanner.advance(1);
+            scanner.advance_by(1);
             if escaped {
-                path.push(match ch {
-                    'n' => '\n',
-                    'r' => '\r',
-                    't' => '\t',
-                    other => other,
-                });
+                path.push(decode_string_escape(ch));
                 escaped = false;
             } else if ch == '\\' {
                 escaped = true;
@@ -182,11 +164,11 @@ fn match_block(
                 path.push(ch);
             }
         }
-        scanner.skip_whitespace();
-        if scanner.peek(0) == Some('#') {
+        scanner.skip_horizontal_whitespace();
+        if scanner.peek() == Some('#') {
             scanner.skip_to_eol();
         }
-        if !matches!(scanner.peek(0), None | Some('\n')) {
+        if !matches!(scanner.peek(), None | Some('\n')) {
             return Err(OpyError::at(
                 "settings-invalid",
                 "external settings declaration has unexpected trailing content",
@@ -211,22 +193,14 @@ fn match_block(
     let mut text_start_offset = None;
     let mut text_start = None;
     loop {
-        let Some(ch) = scanner.peek(0) else {
+        let Some(ch) = scanner.peek() else {
             return Err(OpyError::at(
                 "settings-invalid",
                 "unterminated settings block (missing closing brace)".to_string(),
                 keyword_span,
             ));
         };
-        if let Some(quote) = string_quote {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == quote {
-                string_quote = None;
-            }
-            scanner.advance(1);
+        if scanner.advance_quoted(&mut string_quote, &mut escaped, ch) {
             continue;
         }
         match ch {
@@ -265,7 +239,7 @@ fn match_block(
             }
             _ => {}
         }
-        scanner.advance(1);
+        scanner.advance_by(1);
     }
 }
 
@@ -290,13 +264,7 @@ pub fn sanitize_for_lex(text: &str, block: &SettingsBlock) -> String {
 /// in objects and arrays. Rejections (`settings-invalid`): duplicate keys,
 /// non-object root, missing `gamemodes` group, malformed values.
 pub fn parse_block(block: &SettingsBlock) -> OpyResult<cst::Settings> {
-    let mut parser = Jsonc {
-        text: &block.text,
-        pos: 0,
-        line: block.text_start.line,
-        col: block.text_start.col,
-        file: block.content_file,
-    };
+    let mut parser = Cursor::new(&block.text, block.content_file, block.text_start);
     parser.skip_whitespace();
     let children = if block.external_path.is_some() {
         let (children, _) = parser.parse_object()?;
@@ -342,24 +310,18 @@ pub(crate) fn resolve_hir_settings(
         .declarations
         .iter()
         .filter_map(|declaration| match declaration {
-            hir::Declaration::Constant { name, value, .. } => {
-                Some((name.clone(), value.as_ref().clone()))
-            }
+            hir::Declaration::Constant { name, value, .. } => Some((name.clone(), value.as_ref())),
             _ => None,
         })
         .collect::<HashMap<_, _>>();
-    let constant_refs = constants
-        .iter()
-        .map(|(name, value)| (name.clone(), value))
-        .collect::<HashMap<_, _>>();
-    let mut expander = crate::compiler::MacroExpander::from_program(program);
+    let mut expander = crate::compiler::MacroExpander::from_declarations(&program.declarations);
     let Some(settings) = program.settings.take() else {
         return Ok(());
     };
     let children = settings
         .children
         .into_iter()
-        .map(|node| resolve_hir_node(node, cst_program, &constant_refs, &mut expander))
+        .map(|node| resolve_hir_node(node, cst_program, &constants, &mut expander))
         .collect::<OpyResult<Vec<_>>>()?;
     program.settings = Some(hir::Settings {
         span: settings.span,
@@ -372,7 +334,7 @@ fn resolve_hir_node(
     node: hir::SettingsNode,
     cst_program: &cst::Program,
     constants: &HashMap<String, &hir::Expr>,
-    expander: &mut crate::compiler::MacroExpander,
+    expander: &mut crate::compiler::MacroExpander<'_>,
 ) -> OpyResult<hir::SettingsNode> {
     match node {
         hir::SettingsNode::Group {
@@ -402,17 +364,16 @@ fn resolve_hir_node(
                 Position::new(span.start.line, span.start.col),
             )
             .map_err(|error| settings_expression_error(diag_span, error.message))?;
-            let expression =
-                expander
-                    .expand_expr(&expression, &HashMap::new())
-                    .map_err(|error| {
-                        let error_span = error
-                            .diagnostic
-                            .span
-                            .map(hir_span_to_diag_span)
-                            .unwrap_or(diag_span);
-                        OpyError::at(error.diagnostic.code, error.diagnostic.message, error_span)
-                    })?;
+            let expression = expander
+                .expand_expr(&expression, &HashMap::new(), None)
+                .map_err(|error| {
+                    let error_span = error
+                        .diagnostic
+                        .span
+                        .map(hir_span_to_diag_span)
+                        .unwrap_or(diag_span);
+                    OpyError::at(error.diagnostic.code, error.diagnostic.message, error_span)
+                })?;
             let mut stack = Vec::new();
             let value =
                 crate::compile_time::evaluate(&expression, constants, &HashMap::new(), &mut stack)
@@ -515,16 +476,32 @@ fn display_value(value: &crate::compile_time::Value) -> Result<String, String> {
         _ => Err("settings list can only contain primitive values".to_string()),
     }
 }
-struct Scanner<'a> {
+struct Cursor<'a> {
     text: &'a str,
     pos: usize,
     char_pos: usize,
     line: u32,
     col: u32,
+    file: u32,
 }
 
-impl Scanner<'_> {
-    fn peek(&self, ahead: usize) -> Option<char> {
+impl Cursor<'_> {
+    fn new(text: &str, file: u32, origin: Position) -> Cursor<'_> {
+        Cursor {
+            text,
+            pos: 0,
+            char_pos: 0,
+            line: origin.line,
+            col: origin.col,
+            file,
+        }
+    }
+
+    fn peek(&self) -> Option<char> {
+        self.peek_at(0)
+    }
+
+    fn peek_at(&self, ahead: usize) -> Option<char> {
         self.text[self.pos..].chars().nth(ahead)
     }
 
@@ -546,77 +523,75 @@ impl Scanner<'_> {
         Position::new(line, col)
     }
 
-    fn advance(&mut self, n: usize) {
-        for _ in 0..n {
-            let Some(ch) = self.peek(0) else {
-                return;
-            };
-            if ch == '\n' {
-                self.line += 1;
-                self.col = 1;
-            } else {
-                self.col += 1;
-            }
-            self.pos += ch.len_utf8();
-            self.char_pos += 1;
-        }
-    }
-
-    fn skip_to_eol(&mut self) {
-        while self.peek(0).is_some_and(|ch| ch != '\n') {
-            self.advance(1);
-        }
-    }
-
-    fn skip_whitespace(&mut self) {
-        while matches!(self.peek(0), Some(' ' | '\t' | '\r')) {
-            self.advance(1);
-        }
-    }
-
-    fn read_word(&mut self) -> String {
-        let mut word = String::new();
-        while let Some(ch) = self.peek(0) {
-            if !is_ident_continue(ch) {
-                break;
-            }
-            word.push(ch);
-            self.advance(1);
-        }
-        word
-    }
-}
-
-/// A JSONC parser over the block text.
-struct Jsonc<'a> {
-    text: &'a str,
-    pos: usize,
-    line: u32,
-    col: u32,
-    file: u32,
-}
-
-impl Jsonc<'_> {
-    fn here(&self) -> Position {
-        Position::new(self.line, self.col)
-    }
-
-    fn peek(&self) -> Option<char> {
-        self.text[self.pos..].chars().next()
-    }
-
     fn advance(&mut self) -> Option<char> {
         let ch = self.peek()?;
-        self.pos += ch.len_utf8();
         if ch == '\n' {
             self.line += 1;
             self.col = 1;
         } else {
             self.col += 1;
         }
+        self.pos += ch.len_utf8();
+        self.char_pos += 1;
         Some(ch)
     }
 
+    fn advance_by(&mut self, n: usize) {
+        for _ in 0..n {
+            if self.advance().is_none() {
+                return;
+            }
+        }
+    }
+
+    fn advance_quoted(&mut self, quote: &mut Option<char>, escaped: &mut bool, ch: char) -> bool {
+        let Some(quote_char) = *quote else {
+            return false;
+        };
+        if *escaped {
+            *escaped = false;
+        } else if ch == '\\' {
+            *escaped = true;
+        } else if ch == quote_char {
+            *quote = None;
+        }
+        self.advance_by(1);
+        true
+    }
+
+    fn skip_to_eol(&mut self) {
+        while self.peek().is_some_and(|ch| ch != '\n') {
+            self.advance_by(1);
+        }
+    }
+
+    fn skip_horizontal_whitespace(&mut self) {
+        while matches!(self.peek(), Some(' ' | '\t' | '\r')) {
+            self.advance_by(1);
+        }
+    }
+
+    fn read_word(&mut self) -> String {
+        let mut word = String::new();
+        while let Some(ch) = self.peek() {
+            if !is_ident_continue(ch) {
+                break;
+            }
+            word.push(ch);
+            self.advance_by(1);
+        }
+        word
+    }
+}
+
+/// Primitive JSONC values before classification as typed settings nodes.
+enum ScalarValue {
+    String(String),
+    Bool(bool),
+    Number(f64),
+}
+
+impl Cursor<'_> {
     fn skip_whitespace(&mut self) {
         loop {
             while let Some(ch) = self.peek() {
@@ -760,125 +735,93 @@ impl Jsonc<'_> {
     fn parse_value(&mut self) -> OpyResult<(cst::SettingsNode, Position)> {
         let start = self.here();
         let ch = self.peek();
-        let node = match ch {
+        let saved = (self.pos, self.char_pos, self.line, self.col);
+        let scalar = match ch {
             Some('"') | Some('\'') => {
-                let saved = (self.pos, self.line, self.col);
                 let value = self.parse_string_expression().ok_or_else(|| {
                     self.error(
                         "settings-invalid",
                         "unterminated string in settings value".to_string(),
                     )
                 })?;
-                self.skip_inline_whitespace();
-                if self.is_expression_continuation() {
-                    self.pos = saved.0;
-                    self.line = saved.1;
-                    self.col = saved.2;
-                    cst::SettingsNode::Raw {
-                        name: String::new(),
-                        value: self.parse_expression_value(),
-                        span: Span::new(self.file, start, self.here()),
-                    }
-                } else {
-                    cst::SettingsNode::String {
-                        name: String::new(),
-                        value,
-                        span: Span::new(self.file, start, self.here()),
-                    }
-                }
+                Some(ScalarValue::String(value))
             }
             Some('t') => {
-                let saved = (self.pos, self.line, self.col);
                 self.expect_word("true")?;
-                self.skip_inline_whitespace();
-                if self.is_expression_continuation() {
-                    self.pos = saved.0;
-                    self.line = saved.1;
-                    self.col = saved.2;
-                    cst::SettingsNode::Raw {
-                        name: String::new(),
-                        value: self.parse_expression_value(),
-                        span: Span::new(self.file, start, self.here()),
-                    }
-                } else {
-                    cst::SettingsNode::Bool {
-                        name: String::new(),
-                        value: true,
-                        span: Span::new(self.file, start, self.here()),
-                    }
-                }
+                Some(ScalarValue::Bool(true))
             }
             Some('f') => {
-                let saved = (self.pos, self.line, self.col);
                 self.expect_word("false")?;
-                self.skip_inline_whitespace();
-                if self.is_expression_continuation() {
-                    self.pos = saved.0;
-                    self.line = saved.1;
-                    self.col = saved.2;
-                    cst::SettingsNode::Raw {
-                        name: String::new(),
-                        value: self.parse_expression_value(),
-                        span: Span::new(self.file, start, self.here()),
-                    }
-                } else {
-                    cst::SettingsNode::Bool {
-                        name: String::new(),
-                        value: false,
-                        span: Span::new(self.file, start, self.here()),
-                    }
-                }
+                Some(ScalarValue::Bool(false))
             }
             Some(c) if c.is_ascii_digit() || c == '-' => {
-                let saved = (self.pos, self.line, self.col);
-                let value = self.parse_number()?;
-                self.skip_inline_whitespace();
-                if self.is_expression_continuation() {
-                    self.pos = saved.0;
-                    self.line = saved.1;
-                    self.col = saved.2;
+                Some(ScalarValue::Number(self.parse_number()?))
+            }
+            _ => None,
+        };
+        let node = if let Some(scalar) = scalar {
+            self.skip_inline_whitespace();
+            if self.is_expression_continuation() {
+                self.pos = saved.0;
+                self.char_pos = saved.1;
+                self.line = saved.2;
+                self.col = saved.3;
+                cst::SettingsNode::Raw {
+                    name: String::new(),
+                    value: self.parse_expression_value(),
+                    span: Span::new(self.file, start, self.here()),
+                }
+            } else {
+                let span = Span::new(self.file, start, self.here());
+                match scalar {
+                    ScalarValue::String(value) => cst::SettingsNode::String {
+                        name: String::new(),
+                        value,
+                        span,
+                    },
+                    ScalarValue::Bool(value) => cst::SettingsNode::Bool {
+                        name: String::new(),
+                        value,
+                        span,
+                    },
+                    ScalarValue::Number(value) => cst::SettingsNode::Number {
+                        name: String::new(),
+                        value,
+                        span,
+                    },
+                }
+            }
+        } else {
+            match ch {
+                Some('[') => {
+                    let elements = self.parse_list()?;
+                    cst::SettingsNode::List {
+                        name: String::new(),
+                        elements,
+                        span: Span::new(self.file, start, self.here()),
+                    }
+                }
+                Some('{') => {
+                    let (children, _) = self.parse_object()?;
+                    cst::SettingsNode::Group {
+                        name: String::new(),
+                        children,
+                        span: Span::new(self.file, start, self.here()),
+                    }
+                }
+                _ => {
                     let value = self.parse_expression_value();
+                    if value.trim().is_empty() {
+                        return Err(self.error(
+                            "settings-invalid",
+                            "expected a value in settings block".to_string(),
+                        ));
+                    }
                     cst::SettingsNode::Raw {
                         name: String::new(),
                         value,
                         span: Span::new(self.file, start, self.here()),
                     }
-                } else {
-                    cst::SettingsNode::Number {
-                        name: String::new(),
-                        value,
-                        span: Span::new(self.file, start, self.here()),
-                    }
-                }
-            }
-            Some('[') => {
-                let elements = self.parse_list()?;
-                cst::SettingsNode::List {
-                    name: String::new(),
-                    elements,
-                    span: Span::new(self.file, start, self.here()),
-                }
-            }
-            Some('{') => {
-                let (children, _) = self.parse_object()?;
-                cst::SettingsNode::Group {
-                    name: String::new(),
-                    children,
-                    span: Span::new(self.file, start, self.here()),
-                }
-            }
-            _ => {
-                let value = self.parse_expression_value();
-                if value.trim().is_empty() {
-                    return Err(self.error(
-                        "settings-invalid",
-                        "expected a value in settings block".to_string(),
-                    ));
-                }
-                cst::SettingsNode::Raw {
-                    name: String::new(),
-                    value,
-                    span: Span::new(self.file, start, self.here()),
                 }
             }
         };
@@ -910,12 +853,11 @@ impl Jsonc<'_> {
                     depth += 1;
                     value.push(self.advance().expect("peeked character exists"));
                 }
-                ']' if depth == 0 => break,
+                ']' | ',' | '}' if depth == 0 => break,
                 ')' | ']' => {
                     depth = depth.saturating_sub(1);
                     value.push(self.advance().expect("peeked character exists"));
                 }
-                ',' | '}' if depth == 0 => break,
                 _ => value.push(self.advance().expect("peeked character exists")),
             }
         }
@@ -1039,12 +981,7 @@ impl Jsonc<'_> {
             }
             if ch == '\\' {
                 let escaped = self.advance()?;
-                match escaped {
-                    'n' => value.push('\n'),
-                    't' => value.push('\t'),
-                    'r' => value.push('\r'),
-                    other => value.push(other),
-                }
+                value.push(decode_string_escape(escaped));
             } else {
                 value.push(ch);
             }
@@ -1057,12 +994,13 @@ impl Jsonc<'_> {
     fn parse_string_expression(&mut self) -> Option<String> {
         let mut value = self.parse_string_value()?;
         loop {
-            let saved = (self.pos, self.line, self.col);
+            let saved = (self.pos, self.char_pos, self.line, self.col);
             self.skip_whitespace();
             if self.peek() != Some('"') && self.peek() != Some('\'') {
                 self.pos = saved.0;
-                self.line = saved.1;
-                self.col = saved.2;
+                self.char_pos = saved.1;
+                self.line = saved.2;
+                self.col = saved.3;
                 break;
             }
             let next = self.parse_string_value()?;
@@ -1137,14 +1075,6 @@ fn build_node(
             span,
         },
     }
-}
-
-fn is_ident_start(c: char) -> bool {
-    c.is_ascii_alphabetic() || c == '_'
-}
-
-fn is_ident_continue(c: char) -> bool {
-    c.is_ascii_alphanumeric() || c == '_'
 }
 
 #[cfg(test)]

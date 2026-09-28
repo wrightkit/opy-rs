@@ -1,11 +1,22 @@
 use std::io::{IsTerminal, Write};
 
+use opy_rs::tooling::DiagnosticSeverity as OpyDiagnosticSeverity;
+
 use crate::cli::{ColorArg, RendererArg};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum DiagnosticSeverity {
     Error,
     Warning,
+}
+
+impl From<OpyDiagnosticSeverity> for DiagnosticSeverity {
+    fn from(value: OpyDiagnosticSeverity) -> Self {
+        match value {
+            OpyDiagnosticSeverity::Error => Self::Error,
+            OpyDiagnosticSeverity::Warning => Self::Warning,
+        }
+    }
 }
 
 impl DiagnosticSeverity {

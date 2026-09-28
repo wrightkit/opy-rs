@@ -6,6 +6,7 @@
 use workshop_rs::Value;
 
 use super::operator_optimization::same;
+use super::value_walk::for_each_child;
 
 const MAX_LENGTH: usize = 128;
 const MAX_ARGS: usize = 3;
@@ -52,16 +53,16 @@ pub(super) fn tokens(value: &Value) -> Option<Vec<Token>> {
 }
 
 /// Splices nested strings and turns constant arguments into text.
-pub(super) fn merge(tokens: Vec<Token>) -> (Vec<Token>, bool) {
+pub(super) fn merge(parts: Vec<Token>) -> (Vec<Token>, bool) {
     let mut changed = false;
     let mut merged: Vec<Token> = Vec::new();
-    let mut pending: std::collections::VecDeque<Token> = tokens.into();
+    let mut pending: std::collections::VecDeque<Token> = parts.into();
     while let Some(token) = pending.pop_front() {
         let Token::Argument(argument) = token else {
             push_text(&mut merged, token);
             continue;
         };
-        if let Some(inner) = tokens_of(&argument) {
+        if let Some(inner) = tokens(&argument) {
             changed = true;
             for token in inner.into_iter().rev() {
                 pending.push_front(token);
@@ -82,10 +83,6 @@ pub(super) fn merge(tokens: Vec<Token>) -> (Vec<Token>, bool) {
         }
     }
     (merged, changed)
-}
-
-fn tokens_of(value: &Value) -> Option<Vec<Token>> {
-    tokens(value)
 }
 
 fn push_text(tokens: &mut Vec<Token>, token: Token) {
@@ -119,17 +116,7 @@ pub(super) fn unsplit(tokens: Vec<Token>) -> Value {
 
 /// Splits every custom string in the tree into strings the Workshop accepts.
 pub(super) fn split_all(value: &mut Value) {
-    match value {
-        Value::Call { args, .. } => args.iter_mut().for_each(split_all),
-        Value::Array(elements) => elements.iter_mut().for_each(split_all),
-        Value::Vector { x, y, z } => {
-            split_all(x);
-            split_all(y);
-            split_all(z);
-        }
-        Value::PlayerVariable { player, .. } => split_all(player),
-        _ => {}
-    }
+    for_each_child(value, split_all);
     if let Some(tokens) = tokens(value) {
         *value = split(tokens);
     }

@@ -12,7 +12,7 @@ use crate::cst::{
     RuleEntry, Stmt, SwitchArm, TopLevel,
 };
 use crate::diag::{OpyError, Position, Span};
-use crate::lexer::{Token, TokenKind};
+use crate::lexer::{Token, TokenKind, decode_string_escape, is_identifier};
 
 /// The outcome of a parse.
 #[derive(Debug, Default)]
@@ -30,15 +30,7 @@ pub fn parse(tokens: &[Token]) -> ParseOutput {
 
 /// Parse with the global redeclaration policy observed by the pinned oracle.
 pub fn parse_with_options(tokens: &[Token], allow_macro_redeclaration: bool) -> ParseOutput {
-    let mut parser = Parser {
-        tokens,
-        pos: 0,
-        errors: Vec::new(),
-        allow_macro_redeclaration,
-        last_statement_continued: false,
-        last_colon_body_continued: false,
-        open_if_indents: Vec::new(),
-    };
+    let mut parser = Parser::new(tokens, allow_macro_redeclaration);
     let program = parser.parse_program();
     if parser.errors.is_empty() {
         ParseOutput {
@@ -69,15 +61,36 @@ struct Parser<'a> {
     open_if_indents: Vec<u32>,
 }
 
-fn is_identifier(text: &str) -> bool {
-    !text.is_empty()
-        && text.chars().enumerate().all(|(index, ch)| {
-            if index == 0 {
-                ch.is_ascii_alphabetic() || ch == '_'
-            } else {
-                ch.is_ascii_alphanumeric() || ch == '_'
-            }
-        })
+impl<'a> Parser<'a> {
+    fn new(tokens: &'a [Token], allow_macro_redeclaration: bool) -> Self {
+        Self {
+            tokens,
+            pos: 0,
+            errors: Vec::new(),
+            allow_macro_redeclaration,
+            last_statement_continued: false,
+            last_colon_body_continued: false,
+            open_if_indents: Vec::new(),
+        }
+    }
+}
+
+fn is_binary_operator(kind: TokenKind) -> bool {
+    matches!(
+        kind,
+        TokenKind::Plus
+            | TokenKind::Minus
+            | TokenKind::Star
+            | TokenKind::Slash
+            | TokenKind::Percent
+            | TokenKind::DoubleStar
+            | TokenKind::Eq
+            | TokenKind::Ne
+            | TokenKind::Lt
+            | TokenKind::Le
+            | TokenKind::Gt
+            | TokenKind::Ge
+    )
 }
 
 fn unquote_annotation_arg(text: &str) -> String {
@@ -131,50 +144,26 @@ impl Parser<'_> {
                     | TokenKind::Comma
                     | TokenKind::Colon
                     | TokenKind::Assign
-                    | TokenKind::Plus
-                    | TokenKind::Minus
-                    | TokenKind::Star
-                    | TokenKind::Slash
-                    | TokenKind::Percent
-                    | TokenKind::DoubleStar
-                    | TokenKind::Eq
-                    | TokenKind::Ne
-                    | TokenKind::Lt
-                    | TokenKind::Le
-                    | TokenKind::Gt
-                    | TokenKind::Ge
-            ) || (token.kind == TokenKind::Ident
-                && matches!(token.text.as_str(), "and" | "or" | "in" | "not" | "if"))
+            ) || is_binary_operator(token.kind)
+                || (token.kind == TokenKind::Ident
+                    && matches!(token.text.as_str(), "and" | "or" | "in" | "not" | "if"))
         });
         let mut next = self.pos;
         while self.tokens[next].kind == TokenKind::Newline {
             next += 1;
         }
         let inside_delimiter_group = self.inside_delimiter_group();
-        let next_allows_continuation = matches!(
-            self.tokens[next].kind,
-            TokenKind::Plus
-                | TokenKind::Minus
-                | TokenKind::Star
-                | TokenKind::Slash
-                | TokenKind::Percent
-                | TokenKind::DoubleStar
-                | TokenKind::Eq
-                | TokenKind::Ne
-                | TokenKind::Lt
-                | TokenKind::Le
-                | TokenKind::Gt
-                | TokenKind::Ge
-        ) || (inside_delimiter_group
-            && matches!(
-                self.tokens[next].kind,
-                TokenKind::LParen
-                    | TokenKind::LBracket
-                    | TokenKind::Dot
-                    | TokenKind::RParen
-                    | TokenKind::RBracket
-                    | TokenKind::RBrace
-            ))
+        let next_allows_continuation = is_binary_operator(self.tokens[next].kind)
+            || (inside_delimiter_group
+                && matches!(
+                    self.tokens[next].kind,
+                    TokenKind::LParen
+                        | TokenKind::LBracket
+                        | TokenKind::Dot
+                        | TokenKind::RParen
+                        | TokenKind::RBracket
+                        | TokenKind::RBrace
+                ))
             || (self.tokens[next].kind == TokenKind::Ident
                 && matches!(
                     self.tokens[next].text.as_str(),
@@ -309,6 +298,15 @@ impl Parser<'_> {
         Some(indent)
     }
 
+    pub(super) fn expect_block_indent(
+        &mut self,
+        line_indent: u32,
+        colon_context: &str,
+    ) -> Result<u32, ()> {
+        self.expect(TokenKind::Colon, colon_context)?;
+        self.block_indent(line_indent).ok_or(())
+    }
+
     fn expect_statement_end(&mut self, what: &str) -> Result<(), ()> {
         let continued_line = self
             .tokens
@@ -338,15 +336,7 @@ pub(crate) fn parse_expression_fragment(
     for token in &mut tokens {
         token.span = shift_span(token.span, origin);
     }
-    let mut parser = Parser {
-        tokens: &tokens,
-        pos: 0,
-        allow_macro_redeclaration: false,
-        errors: Vec::new(),
-        last_statement_continued: false,
-        last_colon_body_continued: false,
-        open_if_indents: Vec::new(),
-    };
+    let mut parser = Parser::new(&tokens, false);
     let expression = parser.parse_expr().map_err(|()| {
         parser.errors.first().cloned().unwrap_or_else(|| {
             OpyError::at(
@@ -363,33 +353,11 @@ pub(crate) fn parse_expression_fragment(
 }
 
 fn shift_span(span: Span, origin: Position) -> Span {
-    fn shift(position: Position, origin: Position) -> Position {
-        Position::new(
-            origin.line + position.line.saturating_sub(1),
-            if position.line == 1 {
-                origin.col + position.col.saturating_sub(1)
-            } else {
-                position.col
-            },
-        )
-    }
     Span::new(
         span.file,
-        shift(span.start, origin),
-        shift(span.end, origin),
+        crate::diag::shift_position(span.start, origin),
+        crate::diag::shift_position(span.end, origin),
     )
-}
-
-fn decode_string_escape(character: char) -> char {
-    match character {
-        'n' => '\n',
-        't' => '\t',
-        'r' => '\r',
-        '\\' => '\\',
-        '"' => '"',
-        '\'' => '\'',
-        other => other,
-    }
 }
 
 fn is_string_modifier(text: &str) -> bool {

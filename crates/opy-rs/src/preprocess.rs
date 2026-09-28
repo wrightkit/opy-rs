@@ -156,6 +156,16 @@ pub struct PreprocessOutcome {
     pub warnings: Vec<PreprocessWarning>,
 }
 
+impl PreprocessOutcome {
+    fn failure(error: OpyError, pre: Preprocessor) -> Self {
+        Self {
+            result: Err(error),
+            files: pre.files,
+            warnings: pre.warnings,
+        }
+    }
+}
+
 /// Preprocess with open-document overlays while retaining the file registry
 /// registered so far on failure.
 pub fn preprocess_with_overlay_outcome(
@@ -199,15 +209,14 @@ pub fn preprocess_with_overlay_outcome(
             crate::diag::Position::new(1, 1),
             crate::diag::Position::new(1, first_line.chars().count() as u32 + 1),
         );
-        return PreprocessOutcome {
-            result: Err(OpyError::at(
+        return PreprocessOutcome::failure(
+            OpyError::at(
                 "main-file-invalid",
                 "`#!mainFile` expects one quoted path on the first line",
                 span,
-            )),
-            files: pre.files,
-            warnings: pre.warnings,
-        };
+            ),
+            pre,
+        );
     }
     if let Some((main_file, span)) = first_main_file_directive(main_text) {
         let candidate = pre.root.join(&main_file);
@@ -230,28 +239,26 @@ pub fn preprocess_with_overlay_outcome(
             }
             None => {
                 let Some(canonical) = canonical else {
-                    return PreprocessOutcome {
-                        result: Err(OpyError::at(
+                    return PreprocessOutcome::failure(
+                        OpyError::at(
                             "main-file-not-found",
                             format!("cannot find main file '{main_file}'"),
                             span,
-                        )),
-                        files: pre.files,
-                        warnings: pre.warnings,
-                    };
+                        ),
+                        pre,
+                    );
                 };
                 let text = match std::fs::read_to_string(&canonical) {
                     Ok(text) => text,
                     Err(error) => {
-                        return PreprocessOutcome {
-                            result: Err(OpyError::at(
+                        return PreprocessOutcome::failure(
+                            OpyError::at(
                                 "main-file-not-found",
                                 format!("cannot read main file '{main_file}': {error}"),
                                 span,
-                            )),
-                            files: pre.files,
-                            warnings: pre.warnings,
-                        };
+                            ),
+                            pre,
+                        );
                     }
                 };
                 let new_root = canonical
@@ -287,24 +294,12 @@ pub fn preprocess_with_overlay_outcome(
     // the owning file's lexed text, so the lexer never sees its braces (#86).
     let settings = match crate::settings::find_blocks(source_text, source_file_id) {
         Ok(mut blocks) => blocks.pop(),
-        Err(error) => {
-            return PreprocessOutcome {
-                result: Err(error),
-                files: pre.files,
-                warnings: pre.warnings,
-            };
-        }
+        Err(error) => return PreprocessOutcome::failure(error, pre),
     };
     let settings = match settings {
         Some(block) => match pre.resolve_settings_source(block) {
             Ok(block) => Some(block),
-            Err(error) => {
-                return PreprocessOutcome {
-                    result: Err(error),
-                    files: pre.files,
-                    warnings: pre.warnings,
-                };
-            }
+            Err(error) => return PreprocessOutcome::failure(error, pre),
         },
         None => None,
     };
@@ -323,27 +318,13 @@ pub fn preprocess_with_overlay_outcome(
     };
     let mut tokens = match tokens {
         Ok(tokens) => tokens,
-        Err(error) => {
-            return PreprocessOutcome {
-                result: Err(error),
-                files: pre.files,
-                warnings: pre.warnings,
-            };
-        }
+        Err(error) => return PreprocessOutcome::failure(error, pre),
     };
     if let Err(error) = pre.process_directives(&mut tokens, false, settings) {
-        return PreprocessOutcome {
-            result: Err(error),
-            files: pre.files,
-            warnings: pre.warnings,
-        };
+        return PreprocessOutcome::failure(error, pre);
     }
     if let Err(error) = pre.load_translation_catalog() {
-        return PreprocessOutcome {
-            result: Err(error),
-            files: pre.files,
-            warnings: pre.warnings,
-        };
+        return PreprocessOutcome::failure(error, pre);
     }
     let result = Ok((
         Preprocessed {
@@ -395,23 +376,10 @@ fn can_merge_without_separator(previous: TokenKind, current: TokenKind) -> bool 
 }
 
 fn shift_settings_span(span: Span, origin: crate::diag::Position) -> Span {
-    fn shift(
-        position: crate::diag::Position,
-        origin: crate::diag::Position,
-    ) -> crate::diag::Position {
-        crate::diag::Position::new(
-            origin.line + position.line.saturating_sub(1),
-            if position.line == 1 {
-                origin.col + position.col.saturating_sub(1)
-            } else {
-                position.col
-            },
-        )
-    }
     Span::new(
         span.file,
-        shift(span.start, origin),
-        shift(span.end, origin),
+        crate::diag::shift_position(span.start, origin),
+        crate::diag::shift_position(span.end, origin),
     )
 }
 
@@ -572,6 +540,11 @@ impl Preprocessor {
 }
 
 fn parse_po(text: &str, language: &str, span: Option<Span>) -> OpyResult<Vec<TranslationEntry>> {
+    let span = span.unwrap_or(Span::new(
+        0,
+        crate::diag::Position::new(1, 1),
+        crate::diag::Position::new(1, 1),
+    ));
     let mut header_language = None;
     let mut entries = Vec::new();
     let mut current: Option<(Option<String>, String, String)> = None;
@@ -601,26 +574,14 @@ fn parse_po(text: &str, language: &str, span: Option<Span>) -> OpyResult<Vec<Tra
                 OpyError::at(
                     "translations-invalid",
                     format!("malformed PO string: {error}"),
-                    span.unwrap_or_else(|| {
-                        Span::new(
-                            0,
-                            crate::diag::Position::new(1, 1),
-                            crate::diag::Position::new(1, 1),
-                        )
-                    }),
+                    span,
                 )
             })?;
             let Some((context, msgid, msgstr)) = current.as_mut() else {
                 return Err(OpyError::at(
                     "translations-invalid",
                     "PO continuation has no preceding field",
-                    span.unwrap_or_else(|| {
-                        Span::new(
-                            0,
-                            crate::diag::Position::new(1, 1),
-                            crate::diag::Position::new(1, 1),
-                        )
-                    }),
+                    span,
                 ));
             };
             match field {
@@ -631,13 +592,7 @@ fn parse_po(text: &str, language: &str, span: Option<Span>) -> OpyResult<Vec<Tra
                     return Err(OpyError::at(
                         "translations-invalid",
                         "PO continuation has no recognized field",
-                        span.unwrap_or_else(|| {
-                            Span::new(
-                                0,
-                                crate::diag::Position::new(1, 1),
-                                crate::diag::Position::new(1, 1),
-                            )
-                        }),
+                        span,
                     ));
                 }
             }
@@ -650,30 +605,14 @@ fn parse_po(text: &str, language: &str, span: Option<Span>) -> OpyResult<Vec<Tra
             }
             continue;
         }
-        let (name, value) = trimmed.split_once(' ').ok_or_else(|| {
-            OpyError::at(
-                "translations-invalid",
-                "malformed PO entry",
-                span.unwrap_or_else(|| {
-                    Span::new(
-                        0,
-                        crate::diag::Position::new(1, 1),
-                        crate::diag::Position::new(1, 1),
-                    )
-                }),
-            )
-        })?;
+        let (name, value) = trimmed
+            .split_once(' ')
+            .ok_or_else(|| OpyError::at("translations-invalid", "malformed PO entry", span))?;
         let value = serde_json::from_str::<String>(value).map_err(|error| {
             OpyError::at(
                 "translations-invalid",
                 format!("malformed PO string: {error}"),
-                span.unwrap_or_else(|| {
-                    Span::new(
-                        0,
-                        crate::diag::Position::new(1, 1),
-                        crate::diag::Position::new(1, 1),
-                    )
-                }),
+                span,
             )
         })?;
         match name {
@@ -705,13 +644,7 @@ fn parse_po(text: &str, language: &str, span: Option<Span>) -> OpyResult<Vec<Tra
                 return Err(OpyError::at(
                     "translations-invalid",
                     format!("unsupported PO field '{name}'"),
-                    span.unwrap_or_else(|| {
-                        Span::new(
-                            0,
-                            crate::diag::Position::new(1, 1),
-                            crate::diag::Position::new(1, 1),
-                        )
-                    }),
+                    span,
                 ));
             }
         }
@@ -733,13 +666,7 @@ fn parse_po(text: &str, language: &str, span: Option<Span>) -> OpyResult<Vec<Tra
         return Err(OpyError::at(
             "translations-invalid",
             format!("PO language header does not match '{language}'"),
-            span.unwrap_or_else(|| {
-                Span::new(
-                    0,
-                    crate::diag::Position::new(1, 1),
-                    crate::diag::Position::new(1, 1),
-                )
-            }),
+            span,
         ));
     }
     Ok(entries)

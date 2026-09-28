@@ -13,6 +13,7 @@ pub mod dump;
 pub mod error;
 pub mod types;
 mod validate;
+pub(crate) mod visit;
 
 pub use error::HirError;
 pub use types::{
@@ -78,6 +79,34 @@ mod tests {
         });
         let error = check_envelope(&v1).expect_err("v1 payload must not enter the v2 parser");
         assert_eq!(error.code(), "incompatible-protocol");
+    }
+
+    #[test]
+    fn expression_errors_precede_invalid_statement_structure() {
+        let payload = json!({
+            "protocol": { "name": "wright/opy-hir", "version": "2.0.0" },
+            "generator": { "name": "test", "version": "0", "frontend": "test" },
+            "files": [],
+            "rules": [{
+                "name": "test",
+                "event": { "name": "Ongoing - Global", "args": [] },
+                "conditions": [],
+                "actions": [{
+                    "kind": "delete",
+                    "target": { "kind": "globalVar", "name": "missing" }
+                }]
+            }]
+        });
+
+        let program: super::Program = serde_json::from_value(payload.clone()).unwrap();
+        assert_eq!(
+            program.validate().unwrap_err().code(),
+            "unresolved-reference"
+        );
+        assert_eq!(
+            parse_value(payload).unwrap_err().code(),
+            "unresolved-reference"
+        );
     }
 
     #[test]

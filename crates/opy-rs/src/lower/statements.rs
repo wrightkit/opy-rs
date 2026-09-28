@@ -240,7 +240,8 @@ impl Lowerer {
                     );
                 }
                 let target = self.lower_expr(target, macro_params, CallPosition::Value);
-                if has_random_nested_delete(&target) {
+                let (root, indices) = crate::hir::visit::indexed_expr_parts(&target);
+                if crate::hir::visit::has_random_nested_delete(root, &indices) {
                     self.error_at(
                         "random-indexed-delete",
                         "Cannot delete from nested array with a random outer or middle index"

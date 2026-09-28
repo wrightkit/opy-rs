@@ -1211,16 +1211,13 @@ pub(crate) fn spaces(width: i32) -> String {
         return String::new();
     }
     let width = width as usize;
-    let coins = SPACES
-        .iter()
-        .map(|(width, _)| *width as usize)
-        .collect::<Vec<_>>();
     let mut cost = vec![usize::MAX; width + 1];
     let mut previous = vec![None; width + 1];
     cost[0] = 0;
     for current in 1..=width {
-        for (index, coin) in coins.iter().enumerate() {
-            if *coin <= current && cost[current - coin] != usize::MAX {
+        for (index, (coin, _)) in SPACES.iter().enumerate() {
+            let coin = *coin as usize;
+            if coin <= current && cost[current - coin] != usize::MAX {
                 let candidate = cost[current - coin] + 1;
                 if candidate < cost[current] {
                     cost[current] = candidate;
@@ -1236,7 +1233,7 @@ pub(crate) fn spaces(width: i32) -> String {
     let mut remaining = width;
     while remaining > 0 {
         let index = previous[remaining].expect("reachable Blizzard Global width");
-        let coin = coins[index];
+        let coin = SPACES[index].0 as usize;
         result.push_str(SPACES[index].1);
         remaining -= coin;
     }
@@ -1244,189 +1241,40 @@ pub(crate) fn spaces(width: i32) -> String {
 }
 
 pub(crate) fn cased_glyph(character: char) -> Option<CasedGlyph> {
-    Some(match character {
-        'a' => CasedGlyph {
-            lower: "ａ",
-            width: 285,
-            xmin: 21,
-            lower_width: 512,
-            lower_xmin: 130,
-        },
-        'b' => CasedGlyph {
-            lower: "ｂ",
-            width: 285,
-            xmin: 28,
-            lower_width: 512,
-            lower_xmin: 136,
-        },
-        'c' => CasedGlyph {
-            lower: "ｃ",
-            width: 256,
-            xmin: 16,
-            lower_width: 512,
-            lower_xmin: 142,
-        },
-        'd' => CasedGlyph {
-            lower: "ｄ",
-            width: 285,
-            xmin: 13,
-            lower_width: 512,
-            lower_xmin: 136,
-        },
-        'e' => CasedGlyph {
-            lower: "ｅ",
-            width: 285,
-            xmin: 20,
-            lower_width: 512,
-            lower_xmin: 135,
-        },
-        'f' => CasedGlyph {
-            lower: "ｆ",
-            width: 142,
-            xmin: 9,
-            lower_width: 512,
-            lower_xmin: 195,
-        },
-        'g' => CasedGlyph {
-            lower: "ｇ",
-            width: 285,
-            xmin: 15,
-            lower_width: 512,
-            lower_xmin: 138,
-        },
-        'h' => CasedGlyph {
-            lower: "ｈ",
-            width: 285,
-            xmin: 36,
-            lower_width: 512,
-            lower_xmin: 150,
-        },
-        'i' => CasedGlyph {
-            lower: "і",
-            width: 114,
-            xmin: 34,
-            lower_width: 115,
-            lower_xmin: 36,
-        },
-        'j' => CasedGlyph {
-            lower: "ј",
-            width: 114,
-            xmin: -9,
-            lower_width: 115,
-            lower_xmin: -9,
-        },
-        'k' => CasedGlyph {
-            lower: "ｋ",
-            width: 256,
-            xmin: 30,
-            lower_width: 512,
-            lower_xmin: 142,
-        },
-        'l' => CasedGlyph {
-            lower: "I",
-            width: 114,
-            xmin: 35,
-            lower_width: 142,
-            lower_xmin: 51,
-        },
-        'm' => CasedGlyph {
-            lower: "ｍ",
-            width: 426,
-            xmin: 36,
-            lower_width: 512,
-            lower_xmin: 79,
-        },
-        'n' => CasedGlyph {
-            lower: "ｎ",
-            width: 285,
-            xmin: 36,
-            lower_width: 512,
-            lower_xmin: 149,
-        },
-        'o' => CasedGlyph {
-            lower: "ｏ",
-            width: 285,
-            xmin: 18,
-            lower_width: 512,
-            lower_xmin: 135,
-        },
-        'p' => CasedGlyph {
-            lower: "ｐ",
-            width: 285,
-            xmin: 28,
-            lower_width: 512,
-            lower_xmin: 136,
-        },
-        'q' => CasedGlyph {
-            lower: "ｑ",
-            width: 285,
-            xmin: 13,
-            lower_width: 512,
-            lower_xmin: 136,
-        },
-        'r' => CasedGlyph {
-            lower: "ｒ",
-            width: 170,
-            xmin: 35,
-            lower_width: 512,
-            lower_xmin: 191,
-        },
-        's' => CasedGlyph {
-            lower: "ｓ",
-            width: 256,
-            xmin: 17,
-            lower_width: 512,
-            lower_xmin: 147,
-        },
-        't' => CasedGlyph {
-            lower: "ｔ",
-            width: 142,
-            xmin: 7,
-            lower_width: 512,
-            lower_xmin: 195,
-        },
-        'u' => CasedGlyph {
-            lower: "ｕ",
-            width: 285,
-            xmin: 33,
-            lower_width: 512,
-            lower_xmin: 149,
-        },
-        'v' => CasedGlyph {
-            lower: "ｖ",
-            width: 256,
-            xmin: 5,
-            lower_width: 512,
-            lower_xmin: 134,
-        },
-        'w' => CasedGlyph {
-            lower: "ｗ",
-            width: 370,
-            xmin: 3,
-            lower_width: 512,
-            lower_xmin: 76,
-        },
-        'x' => CasedGlyph {
-            lower: "ｘ",
-            width: 256,
-            xmin: 9,
-            lower_width: 512,
-            lower_xmin: 139,
-        },
-        'y' => CasedGlyph {
-            lower: "ｙ",
-            width: 256,
-            xmin: 10,
-            lower_width: 512,
-            lower_xmin: 139,
-        },
-        'z' => CasedGlyph {
-            lower: "ｚ",
-            width: 256,
-            xmin: 16,
-            lower_width: 512,
-            lower_xmin: 147,
-        },
+    let (lower, width, xmin, lower_width, lower_xmin) = match character {
+        'a' => ("ａ", 285, 21, 512, 130),
+        'b' => ("ｂ", 285, 28, 512, 136),
+        'c' => ("ｃ", 256, 16, 512, 142),
+        'd' => ("ｄ", 285, 13, 512, 136),
+        'e' => ("ｅ", 285, 20, 512, 135),
+        'f' => ("ｆ", 142, 9, 512, 195),
+        'g' => ("ｇ", 285, 15, 512, 138),
+        'h' => ("ｈ", 285, 36, 512, 150),
+        'i' => ("і", 114, 34, 115, 36),
+        'j' => ("ј", 114, -9, 115, -9),
+        'k' => ("ｋ", 256, 30, 512, 142),
+        'l' => ("I", 114, 35, 142, 51),
+        'm' => ("ｍ", 426, 36, 512, 79),
+        'n' => ("ｎ", 285, 36, 512, 149),
+        'o' => ("ｏ", 285, 18, 512, 135),
+        'p' => ("ｐ", 285, 28, 512, 136),
+        'q' => ("ｑ", 285, 13, 512, 136),
+        'r' => ("ｒ", 170, 35, 512, 191),
+        's' => ("ｓ", 256, 17, 512, 147),
+        't' => ("ｔ", 142, 7, 512, 195),
+        'u' => ("ｕ", 285, 33, 512, 149),
+        'v' => ("ｖ", 256, 5, 512, 134),
+        'w' => ("ｗ", 370, 3, 512, 76),
+        'x' => ("ｘ", 256, 9, 512, 139),
+        'y' => ("ｙ", 256, 10, 512, 139),
+        'z' => ("ｚ", 256, 16, 512, 147),
         _ => return None,
+    };
+    Some(CasedGlyph {
+        lower,
+        width,
+        xmin,
+        lower_width,
+        lower_xmin,
     })
 }

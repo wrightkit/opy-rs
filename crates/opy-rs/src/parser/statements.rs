@@ -170,19 +170,7 @@ impl Parser<'_> {
                 }
                 .to_string();
                 self.advance();
-                let rhs = self.parse_expr()?;
-                let end = rhs.span().end;
-                let value = Expr::Binary {
-                    op,
-                    left: Box::new(expr.clone()),
-                    right: Box::new(rhs),
-                    span: Span::new(start.file, start.start, end),
-                };
-                Ok(Stmt::Assign {
-                    target: expr,
-                    value,
-                    span: Span::new(start.file, start.start, end),
-                })
+                self.finish_augmented_assignment(expr, start, op)
             }
             TokenKind::Ident
                 if matches!(self.peek().text.as_str(), "min" | "max")
@@ -190,19 +178,7 @@ impl Parser<'_> {
             {
                 let op = self.advance().text;
                 self.advance();
-                let rhs = self.parse_expr()?;
-                let end = rhs.span().end;
-                let value = Expr::Binary {
-                    op,
-                    left: Box::new(expr.clone()),
-                    right: Box::new(rhs),
-                    span: Span::new(start.file, start.start, end),
-                };
-                Ok(Stmt::Assign {
-                    target: expr,
-                    value,
-                    span: Span::new(start.file, start.start, end),
-                })
+                self.finish_augmented_assignment(expr, start, op)
             }
             TokenKind::Increment | TokenKind::Decrement => {
                 let operator = self.advance();
@@ -244,6 +220,27 @@ impl Parser<'_> {
         }
     }
 
+    fn finish_augmented_assignment(
+        &mut self,
+        target: Expr,
+        start: Span,
+        op: String,
+    ) -> Result<Stmt, ()> {
+        let rhs = self.parse_expr()?;
+        let end = rhs.span().end;
+        let span = Span::new(start.file, start.start, end);
+        Ok(Stmt::Assign {
+            target: target.clone(),
+            value: Expr::Binary {
+                op,
+                left: Box::new(target),
+                right: Box::new(rhs),
+                span,
+            },
+            span,
+        })
+    }
+
     pub(super) fn parse_if(&mut self) -> Result<Stmt, ()> {
         let indent = self.peek().span.start.col;
         self.open_if_indents.push(indent);
@@ -256,13 +253,7 @@ impl Parser<'_> {
         let start = self.advance();
         let line_indent = start.span.start.col;
         let condition = self.parse_expr()?;
-        if self
-            .expect(TokenKind::Colon, "':' after the if condition")
-            .is_err()
-        {
-            return Err(());
-        }
-        let body = self.parse_colon_body(line_indent)?;
+        let body = self.expect_colon_body(line_indent, "':' after the if condition")?;
         let continued_inline_body = self.last_colon_body_continued;
         if continued_inline_body {
             self.errors.push(OpyError::at(
@@ -291,33 +282,25 @@ impl Parser<'_> {
                     Ok(expr) => expr,
                     Err(()) => return Err(()),
                 };
-                if self
-                    .expect(TokenKind::Colon, "':' after the elif condition")
-                    .is_err()
-                {
-                    return Err(());
-                }
-                let body = self.parse_colon_body(branch_start.span.start.col)?;
+                let body = self.expect_colon_body(
+                    branch_start.span.start.col,
+                    "':' after the elif condition",
+                )?;
                 branches.push(IfBranch { condition, body });
             } else if self.is_ident("else") {
                 let branch_start = self.advance();
                 if self.is_ident("if") {
                     self.advance();
                     let condition = self.parse_expr()?;
-                    if self
-                        .expect(TokenKind::Colon, "':' after the else-if condition")
-                        .is_err()
-                    {
-                        return Err(());
-                    }
-                    let body = self.parse_colon_body(branch_start.span.start.col)?;
+                    let body = self.expect_colon_body(
+                        branch_start.span.start.col,
+                        "':' after the else-if condition",
+                    )?;
                     branches.push(IfBranch { condition, body });
                     continue;
                 }
-                if self.expect(TokenKind::Colon, "':' after `else`").is_err() {
-                    return Err(());
-                }
-                let body = self.parse_colon_body(branch_start.span.start.col)?;
+                let body =
+                    self.expect_colon_body(branch_start.span.start.col, "':' after `else`")?;
                 r#else = Some(body);
                 break;
             } else {
@@ -354,6 +337,15 @@ impl Parser<'_> {
         }
     }
 
+    fn expect_colon_body(
+        &mut self,
+        line_indent: u32,
+        colon_context: &str,
+    ) -> Result<Vec<Stmt>, ()> {
+        self.expect(TokenKind::Colon, colon_context)?;
+        self.parse_colon_body(line_indent)
+    }
+
     pub(super) fn parse_for(&mut self) -> Result<Stmt, ()> {
         let start = self.advance();
         let variable = self.parse_postfix()?;
@@ -363,14 +355,8 @@ impl Parser<'_> {
         }
         self.advance();
         let iterable = self.parse_expr()?;
-        if self
-            .expect(TokenKind::Colon, "':' after the for header")
-            .is_err()
-        {
-            return Err(());
-        }
-        let line_indent = start.span.start.col;
-        let body_indent = self.block_indent(line_indent).ok_or(())?;
+        let body_indent =
+            self.expect_block_indent(start.span.start.col, "':' after the for header")?;
         let body = self.parse_block(body_indent);
         Ok(Stmt::For {
             variable,
@@ -383,14 +369,8 @@ impl Parser<'_> {
     pub(super) fn parse_while(&mut self) -> Result<Stmt, ()> {
         let start = self.advance();
         let condition = self.parse_expr()?;
-        if self
-            .expect(TokenKind::Colon, "':' after the while condition")
-            .is_err()
-        {
-            return Err(());
-        }
-        let line_indent = start.span.start.col;
-        let body_indent = self.block_indent(line_indent).ok_or(())?;
+        let body_indent =
+            self.expect_block_indent(start.span.start.col, "':' after the while condition")?;
         let body = self.parse_block(body_indent);
         Ok(Stmt::While {
             condition,
@@ -401,10 +381,7 @@ impl Parser<'_> {
 
     pub(super) fn parse_do_while(&mut self) -> Result<Stmt, ()> {
         let start = self.advance();
-        if self.expect(TokenKind::Colon, "':' after `do`").is_err() {
-            return Err(());
-        }
-        let body_indent = self.block_indent(start.span.start.col).ok_or(())?;
+        let body_indent = self.expect_block_indent(start.span.start.col, "':' after `do`")?;
         let body = self.parse_block(body_indent);
         if !self.is_ident("while") {
             self.error_at_current("expected `while` after the do block".to_string());
@@ -426,13 +403,8 @@ impl Parser<'_> {
     pub(super) fn parse_switch(&mut self) -> Result<Stmt, ()> {
         let start = self.advance();
         let value = self.parse_expr()?;
-        if self
-            .expect(TokenKind::Colon, "':' after the switch value")
-            .is_err()
-        {
-            return Err(());
-        }
-        let body_indent = self.block_indent(start.span.start.col).ok_or(())?;
+        let body_indent =
+            self.expect_block_indent(start.span.start.col, "':' after the switch value")?;
         let mut arms = Vec::new();
         loop {
             self.skip_newlines();
@@ -447,13 +419,8 @@ impl Parser<'_> {
             if self.is_ident("case") {
                 let case_start = self.advance();
                 let case_value = self.parse_expr()?;
-                if self
-                    .expect(TokenKind::Colon, "':' after the case value")
-                    .is_err()
-                {
-                    return Err(());
-                }
-                let case_body_indent = self.block_indent(body_indent).ok_or(())?;
+                let case_body_indent =
+                    self.expect_block_indent(body_indent, "':' after the case value")?;
                 let body = self.parse_block(case_body_indent);
                 arms.push(SwitchArm::Case {
                     value: case_value,
@@ -462,13 +429,8 @@ impl Parser<'_> {
                 });
             } else if self.is_ident("default") {
                 let default_start = self.advance();
-                if self
-                    .expect(TokenKind::Colon, "':' after `default`")
-                    .is_err()
-                {
-                    return Err(());
-                }
-                let default_body_indent = self.block_indent(body_indent).ok_or(())?;
+                let default_body_indent =
+                    self.expect_block_indent(body_indent, "':' after `default`")?;
                 arms.push(SwitchArm::Default {
                     body: self.parse_block(default_body_indent),
                     span: default_start.span,

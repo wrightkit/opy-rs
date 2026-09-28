@@ -6,7 +6,8 @@ use workshop_rs::{Action, ModifyOp, Value};
 
 use self::literal_slots::{Slot, slot};
 use super::Compiler;
-use super::operator_optimization::falsy;
+use super::operator_optimization::{falsy, literal_text, number_components};
+use super::value_walk::for_each_child;
 
 mod literal_slots;
 
@@ -29,11 +30,7 @@ impl<'a> SizeOptimizer<'a> {
             Action::ForGlobalVariable { stop, step, .. }
             | Action::ForPlayerVariable { stop, step, .. } => {
                 for bound in [stop, step] {
-                    match bound {
-                        Value::Number(zero) if *zero == 0.0 => *bound = Value::Bool(false),
-                        Value::Number(one) if *one == 1.0 => *bound = Value::Bool(true),
-                        _ => {}
-                    }
+                    boolean_number(bound);
                 }
             }
             Action::Call { name, args } => {
@@ -87,11 +84,7 @@ impl<'a> SizeOptimizer<'a> {
             | ModifyOp::Max
             | ModifyOp::Min
             | ModifyOp::RemoveFromArrayByIndex => {
-                if *number == 0.0 {
-                    *value = Value::Bool(false);
-                } else if *number == 1.0 {
-                    *value = Value::Bool(true);
-                }
+                boolean_number(value);
             }
             ModifyOp::AppendToArray | ModifyOp::RemoveFromArrayByValue if *number == 0.0 => {
                 *value = Value::Null;
@@ -107,11 +100,7 @@ impl<'a> SizeOptimizer<'a> {
             _ => return,
         };
         if let Some(index) = args.get_mut(index) {
-            match index {
-                Value::Number(number) if *number == 0.0 => *index = Value::Bool(false),
-                Value::Number(number) if *number == 1.0 => *index = Value::Bool(true),
-                _ => {}
-            }
+            boolean_number(index);
         }
         let is_modify = name.starts_with("modify");
         let op = if is_modify {
@@ -171,12 +160,8 @@ impl<'a> SizeOptimizer<'a> {
             _ => return,
         };
         for position in positions {
-            if let Some(arg @ Value::Number(_)) = args.get_mut(*position) {
-                match arg {
-                    Value::Number(number) if *number == 0.0 => *arg = Value::Bool(false),
-                    Value::Number(number) if *number == 1.0 => *arg = Value::Bool(true),
-                    _ => {}
-                }
+            if let Some(arg) = args.get_mut(*position) {
+                boolean_number(arg);
             }
         }
     }
@@ -257,16 +242,10 @@ impl<'a> SizeOptimizer<'a> {
                     return self.nested(value);
                 }
                 self.call_arguments(Kind::Value, "vector", args);
-                for arg in args.iter_mut() {
-                    self.nested(arg);
-                }
             }
             Value::Call { name, args } => {
                 self.compared(name, args);
                 self.call_arguments(Kind::Value, name, args);
-                for arg in args {
-                    self.nested(arg);
-                }
             }
             Value::Array(elements) => {
                 let coercions = self
@@ -278,7 +257,6 @@ impl<'a> SizeOptimizer<'a> {
                     .unwrap_or_default();
                 for element in elements {
                     self.argument("array", 0, coercions, element);
-                    self.nested(element);
                 }
             }
             Value::Vector { x, y, z } => {
@@ -288,12 +266,11 @@ impl<'a> SizeOptimizer<'a> {
                 }
                 for (index, component) in [&mut **x, &mut **y, &mut **z].into_iter().enumerate() {
                     self.argument("vector", index, ParamCoercions::default(), component);
-                    self.nested(component);
                 }
             }
-            Value::PlayerVariable { player, .. } => self.nested(player),
             _ => {}
         }
+        for_each_child(value, |child| self.nested(child));
     }
 
     fn compared(&self, name: &str, args: &mut [Value]) {
@@ -335,6 +312,17 @@ fn number_of(value: &Value) -> Option<f64> {
     match value {
         Value::Number(number) => Some(*number),
         _ => None,
+    }
+}
+
+fn boolean_number(value: &mut Value) {
+    let boolean = match value {
+        Value::Number(number) if *number == 0.0 => Some(false),
+        Value::Number(number) if *number == 1.0 => Some(true),
+        _ => None,
+    };
+    if let Some(boolean) = boolean {
+        *value = Value::Bool(boolean);
     }
 }
 
@@ -384,26 +372,11 @@ fn compact_vector(x: &Value, y: &Value, z: &Value) -> Option<Value> {
 }
 
 pub(super) fn is_empty_string(value: &Value) -> bool {
-    match value {
-        Value::String(text) => text.is_empty(),
-        Value::Call { name, args } => {
-            name == "customString"
-                && args.len() == 1
-                && matches!(&args[0], Value::String(text) if text.is_empty())
-        }
-        _ => false,
-    }
+    literal_text(value).is_some_and(str::is_empty)
 }
 
 fn is_zero_vector(value: &Value) -> bool {
-    let is_zero = |value: &Value| matches!(value, Value::Number(number) if *number == 0.0);
-    match value {
-        Value::Vector { x, y, z } => is_zero(x) && is_zero(y) && is_zero(z),
-        Value::Call { name, args } => {
-            name == "vector" && args.len() == 3 && args.iter().all(is_zero)
-        }
-        _ => false,
-    }
+    number_components(value) == Some([0.0; 3])
 }
 
 fn modify_op_of(value: &Value) -> Option<ModifyOp> {

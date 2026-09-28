@@ -40,6 +40,17 @@ impl Position {
     }
 }
 
+pub(crate) fn shift_position(position: Position, origin: Position) -> Position {
+    Position::new(
+        origin.line + position.line.saturating_sub(1),
+        if position.line == 1 {
+            origin.col + position.col.saturating_sub(1)
+        } else {
+            position.col
+        },
+    )
+}
+
 impl Span {
     pub fn new(file: u32, start: Position, end: Position) -> Span {
         Span { file, start, end }

@@ -82,12 +82,42 @@ struct Lowerer {
     errors: Vec<OpyError>,
 }
 
+impl Lowerer {
+    fn new(manifest: &'static Manifest, catalog: Catalog) -> Self {
+        Self {
+            global_declarations: HashMap::new(),
+            player_declarations: HashMap::new(),
+            subroutine_declarations: HashMap::new(),
+            subroutine_definitions: Vec::new(),
+            constant_declarations: HashMap::new(),
+            macro_declarations: HashMap::new(),
+            enums: HashMap::new(),
+            enum_declarations: HashMap::new(),
+            locals: Vec::new(),
+            current_order: 0,
+            allow_dict_literal: false,
+            manifest,
+            catalog,
+            texture_used: false,
+            setup_tags: false,
+            errors: Vec::new(),
+        }
+    }
+}
+
 mod declarations;
 mod expressions;
 pub(crate) mod policy;
 mod special_forms;
 mod statements;
 mod textures;
+
+pub(crate) fn compressed_component_mode(values: &[Vec<f64>]) -> Option<(bool, f64)> {
+    let component_count = values.first()?.len();
+    let is_vector = component_count == 3;
+    (matches!(component_count, 1 | 3) && values.iter().all(|value| value.len() == component_count))
+        .then_some((is_vector, if is_vector { 4999.0 } else { 49999.0 }))
+}
 
 /// Lower a parsed program into the Opy HIR contract.
 pub fn lower(
@@ -122,27 +152,11 @@ pub fn lower_with_preprocessing(
             ));
         }
     };
-    let mut lowerer = Lowerer {
-        global_declarations: HashMap::new(),
-        player_declarations: HashMap::new(),
-        subroutine_declarations: HashMap::new(),
-        subroutine_definitions: Vec::new(),
-        constant_declarations: HashMap::new(),
-        macro_declarations: HashMap::new(),
-        enums: HashMap::new(),
-        enum_declarations: HashMap::new(),
-        locals: Vec::new(),
-        current_order: 0,
-        allow_dict_literal: false,
-        manifest,
-        catalog,
-        texture_used: false,
-        setup_tags: preprocessing
-            .directives
-            .iter()
-            .any(|directive| matches!(directive.name.as_str(), "setupTags" | "setupTx")),
-        errors: Vec::new(),
-    };
+    let mut lowerer = Lowerer::new(manifest, catalog);
+    lowerer.setup_tags = preprocessing
+        .directives
+        .iter()
+        .any(|directive| matches!(directive.name.as_str(), "setupTags" | "setupTx"));
     lowerer.collect_symbols(program);
 
     let mut declarations = Vec::new();
@@ -256,172 +270,145 @@ fn texture_setup_rule() -> RuleEntry {
         },
         conditions: Vec::new(),
         actions: vec![
-            HirStmt::Expr {
-                expr: Box::new(HirExpr::Call {
-                    name: "createDummy".to_string(),
-                    args: vec![
-                        HirExpr::Call {
-                            name: "getAllHeroes".to_string(),
-                            args: Vec::new(),
-                            debug_source: None,
-                            span: None,
-                        },
-                        texture_dummy_team(),
-                        HirExpr::Bool {
-                            value: false,
-                            span: None,
-                        },
-                        HirExpr::Null { span: None },
-                        HirExpr::Null { span: None },
-                    ],
-                    debug_source: None,
+            synthetic_statement(synthetic_call(
+                "createDummy",
+                vec![
+                    synthetic_call("getAllHeroes", Vec::new()),
+                    texture_dummy_team(),
+                    synthetic_boolean(false),
+                    HirExpr::Null { span: None },
+                    HirExpr::Null { span: None },
+                ],
+            )),
+            synthetic_statement(synthetic_method(
+                texture_dummy_player(),
+                "startForcingName",
+                vec![texture_marker('\u{303c}')],
+            )),
+            texture_state_assignment(synthetic_method(
+                texture_dummy_first_value(),
+                "split",
+                vec![HirExpr::Array {
+                    elements: Vec::new(),
                     span: None,
-                }),
-                span: None,
-            },
-            HirStmt::Expr {
-                expr: Box::new(HirExpr::ReceiverCall {
-                    receiver: Box::new(texture_dummy_player()),
-                    name: "startForcingName".to_string(),
-                    args: vec![texture_marker('\u{303c}')],
-                    span: None,
-                }),
-                span: None,
-            },
-            HirStmt::Assign {
-                target: Box::new(HirExpr::GlobalVar {
-                    name: "__holygrail__".to_string(),
-                    span: None,
-                }),
-                value: Box::new(HirExpr::ReceiverCall {
-                    receiver: Box::new(texture_dummy_first_value()),
-                    name: "split".to_string(),
-                    args: vec![HirExpr::Array {
-                        elements: Vec::new(),
-                        span: None,
-                    }],
-                    span: None,
-                }),
-                span: None,
-            },
-            HirStmt::Expr {
-                expr: Box::new(HirExpr::ReceiverCall {
-                    receiver: Box::new(texture_dummy_player()),
-                    name: "startForcingName".to_string(),
-                    args: vec![texture_marker('\u{840}')],
-                    span: None,
-                }),
-                span: None,
-            },
-            HirStmt::Assign {
-                target: Box::new(HirExpr::GlobalVar {
-                    name: "__holygrail__".to_string(),
-                    span: None,
-                }),
-                value: Box::new(HirExpr::ReceiverCall {
-                    receiver: Box::new(HirExpr::ReceiverCall {
-                        receiver: Box::new(texture_marker('\u{303c}')),
-                        name: "replace".to_string(),
-                        args: vec![
-                            HirExpr::GlobalVar {
-                                name: "__holygrail__".to_string(),
-                                span: None,
-                            },
-                            texture_dummy_first_value(),
-                        ],
-                        span: None,
-                    }),
-                    name: "substring".to_string(),
-                    args: vec![
-                        HirExpr::Number {
-                            value: 126.0,
-                            text: "126".to_string(),
-                            span: None,
-                        },
-                        HirExpr::Bool {
-                            value: true,
-                            span: None,
-                        },
-                    ],
-                    span: None,
-                }),
-                span: None,
-            },
-            HirStmt::Expr {
-                expr: Box::new(HirExpr::Call {
-                    name: "destroyAllDummies".to_string(),
-                    args: Vec::new(),
-                    debug_source: None,
-                    span: None,
-                }),
-                span: None,
-            },
+                }],
+            )),
+            synthetic_statement(synthetic_method(
+                texture_dummy_player(),
+                "startForcingName",
+                vec![texture_marker('\u{840}')],
+            )),
+            texture_state_assignment(synthetic_method(
+                synthetic_method(
+                    texture_marker('\u{303c}'),
+                    "replace",
+                    vec![texture_state_variable(), texture_dummy_first_value()],
+                ),
+                "substring",
+                vec![synthetic_number(126.0), synthetic_boolean(true)],
+            )),
+            synthetic_statement(synthetic_call("destroyAllDummies", Vec::new())),
         ],
     })
 }
 
-fn texture_dummy_player() -> HirExpr {
+fn synthetic_call(name: &str, args: Vec<HirExpr>) -> HirExpr {
     HirExpr::Call {
-        name: "lastCreatedEntity".to_string(),
-        args: Vec::new(),
+        name: name.to_string(),
+        args,
         debug_source: None,
         span: None,
     }
 }
 
-fn texture_dummy_first_value() -> HirExpr {
-    HirExpr::Index {
-        array: Box::new(texture_dummy_player()),
-        index: Box::new(HirExpr::Number {
-            value: 0.0,
-            text: "0".to_string(),
-            span: None,
-        }),
+fn synthetic_method(receiver: HirExpr, name: &str, args: Vec<HirExpr>) -> HirExpr {
+    HirExpr::ReceiverCall {
+        receiver: Box::new(receiver),
+        name: name.to_string(),
+        args,
         span: None,
     }
 }
 
-fn texture_dummy_team() -> HirExpr {
-    HirExpr::Conditional {
-        then_value: Box::new(HirExpr::Enum {
-            value_type: "Team".to_string(),
-            value: "TEAM_1".to_string(),
-            span: None,
-        }),
-        condition: Box::new(HirExpr::Call {
-            name: "getNumberOfSlots".to_string(),
-            args: vec![HirExpr::Enum {
-                value_type: "Team".to_string(),
-                value: "TEAM_1".to_string(),
-                span: None,
-            }],
-            debug_source: None,
-            span: None,
-        }),
-        else_value: Box::new(HirExpr::Conditional {
-            then_value: Box::new(HirExpr::Enum {
-                value_type: "Team".to_string(),
-                value: "TEAM_2".to_string(),
-                span: None,
-            }),
-            condition: Box::new(HirExpr::Call {
-                name: "getNumberOfSlots".to_string(),
-                args: vec![HirExpr::Enum {
-                    value_type: "Team".to_string(),
-                    value: "TEAM_2".to_string(),
-                    span: None,
-                }],
-                debug_source: None,
-                span: None,
-            }),
-            else_value: Box::new(HirExpr::Bool {
-                value: true,
-                span: None,
-            }),
-            span: None,
-        }),
+fn synthetic_enum(value_type: &str, value: &str) -> HirExpr {
+    HirExpr::Enum {
+        value_type: value_type.to_string(),
+        value: value.to_string(),
         span: None,
     }
+}
+
+fn synthetic_number(value: f64) -> HirExpr {
+    HirExpr::Number {
+        value,
+        text: value.to_string(),
+        span: None,
+    }
+}
+
+fn synthetic_boolean(value: bool) -> HirExpr {
+    HirExpr::Bool { value, span: None }
+}
+
+fn synthetic_index(array: HirExpr, index: HirExpr) -> HirExpr {
+    HirExpr::Index {
+        array: Box::new(array),
+        index: Box::new(index),
+        span: None,
+    }
+}
+
+fn synthetic_conditional(then_value: HirExpr, condition: HirExpr, else_value: HirExpr) -> HirExpr {
+    HirExpr::Conditional {
+        then_value: Box::new(then_value),
+        condition: Box::new(condition),
+        else_value: Box::new(else_value),
+        span: None,
+    }
+}
+
+fn synthetic_statement(expr: HirExpr) -> HirStmt {
+    HirStmt::Expr {
+        expr: Box::new(expr),
+        span: None,
+    }
+}
+
+fn texture_state_variable() -> HirExpr {
+    HirExpr::GlobalVar {
+        name: "__holygrail__".to_string(),
+        span: None,
+    }
+}
+
+fn texture_state_assignment(value: HirExpr) -> HirStmt {
+    HirStmt::Assign {
+        target: Box::new(texture_state_variable()),
+        value: Box::new(value),
+        span: None,
+    }
+}
+
+fn texture_dummy_player() -> HirExpr {
+    synthetic_call("lastCreatedEntity", Vec::new())
+}
+
+fn texture_dummy_first_value() -> HirExpr {
+    synthetic_index(texture_dummy_player(), synthetic_number(0.0))
+}
+
+fn texture_dummy_team() -> HirExpr {
+    let team_1 = synthetic_enum("Team", "TEAM_1");
+    let team_2 = synthetic_enum("Team", "TEAM_2");
+    synthetic_conditional(
+        team_1.clone(),
+        synthetic_call("getNumberOfSlots", vec![team_1]),
+        synthetic_conditional(
+            team_2.clone(),
+            synthetic_call("getNumberOfSlots", vec![team_2]),
+            synthetic_boolean(true),
+        ),
+    )
 }
 
 fn texture_marker(suffix: char) -> HirExpr {
@@ -452,24 +439,9 @@ pub(crate) fn lower_settings_expression(
             format!("cannot load the Workshop catalog: {error}"),
         )
     })?;
-    let mut lowerer = Lowerer {
-        global_declarations: HashMap::new(),
-        player_declarations: HashMap::new(),
-        subroutine_declarations: HashMap::new(),
-        subroutine_definitions: Vec::new(),
-        constant_declarations: HashMap::new(),
-        macro_declarations: HashMap::new(),
-        enums: HashMap::new(),
-        enum_declarations: HashMap::new(),
-        locals: Vec::new(),
-        current_order: program.top_level.len(),
-        allow_dict_literal: true,
-        manifest,
-        catalog,
-        texture_used: false,
-        setup_tags: false,
-        errors: Vec::new(),
-    };
+    let mut lowerer = Lowerer::new(manifest, catalog);
+    lowerer.current_order = program.top_level.len();
+    lowerer.allow_dict_literal = true;
     lowerer.collect_symbols(program);
     let lowered = lowerer.lower_expr(&expression, &[], CallPosition::Value);
     lowerer.errors.into_iter().next().map_or(Ok(lowered), Err)
@@ -484,21 +456,44 @@ fn prefixed_rule_name(name: &str, prefix: Option<&str>, delimiter: bool) -> Stri
     }
 }
 
-fn strip_rule_name_formatting(text: &str) -> String {
-    text.chars()
-        .filter(|character| {
-            !matches!(
-                character,
-                '\u{200B}' | '\u{200E}' | '\u{200F}' | '\u{FEFF}' | '\u{061C}'
-            )
-        })
-        .collect()
+pub(crate) fn strip_rule_name_formatting(text: &str) -> impl Iterator<Item = char> + '_ {
+    text.chars().filter(|character| {
+        !matches!(
+            character,
+            '\u{200B}' | '\u{200E}' | '\u{200F}' | '\u{FEFF}' | '\u{061C}'
+        )
+    })
 }
 
 #[derive(Clone, Debug)]
 enum TemplateValue {
     String(String),
     Bool(bool),
+}
+
+fn rule_template_values(
+    name: &str,
+    prefix: &str,
+    file: &str,
+    path: &str,
+    delimiter: bool,
+) -> [(&'static str, TemplateValue); 14] {
+    [
+        ("$rule", TemplateValue::String(name.to_string())),
+        ("$prefix", TemplateValue::String(prefix.to_string())),
+        ("$file", TemplateValue::String(file.to_string())),
+        ("$path", TemplateValue::String(path.to_string())),
+        ("$isDelimiter", TemplateValue::Bool(delimiter)),
+        ("$prefixTitle", TemplateValue::String(title_case(prefix))),
+        ("$prefixUpper", TemplateValue::String(prefix.to_uppercase())),
+        ("$prefixLower", TemplateValue::String(prefix.to_lowercase())),
+        ("$fileTitle", TemplateValue::String(title_case(file))),
+        ("$fileUpper", TemplateValue::String(file.to_uppercase())),
+        ("$fileLower", TemplateValue::String(file.to_lowercase())),
+        ("$pathTitle", TemplateValue::String(title_case(path))),
+        ("$pathUpper", TemplateValue::String(path.to_uppercase())),
+        ("$pathLower", TemplateValue::String(path.to_lowercase())),
+    ]
 }
 
 fn render_rule_name(
@@ -514,30 +509,15 @@ fn render_rule_name(
         .as_ref()
         .map(|value| value.value.as_str())
     else {
-        return Ok(strip_rule_name_formatting(&prefixed_rule_name(
-            name, prefix, delimiter,
-        )));
+        return Ok(
+            strip_rule_name_formatting(&prefixed_rule_name(name, prefix, delimiter)).collect(),
+        );
     };
     let (file, path) = rule_file_parts(span.file, files);
     let prefix = prefix.unwrap_or_default();
-    let values = [
-        ("$rule", TemplateValue::String(name.to_string())),
-        ("$prefix", TemplateValue::String(prefix.to_string())),
-        ("$file", TemplateValue::String(file.clone())),
-        ("$path", TemplateValue::String(path.clone())),
-        ("$isDelimiter", TemplateValue::Bool(delimiter)),
-        ("$prefixTitle", TemplateValue::String(title_case(prefix))),
-        ("$prefixUpper", TemplateValue::String(prefix.to_uppercase())),
-        ("$prefixLower", TemplateValue::String(prefix.to_lowercase())),
-        ("$fileTitle", TemplateValue::String(title_case(&file))),
-        ("$fileUpper", TemplateValue::String(file.to_uppercase())),
-        ("$fileLower", TemplateValue::String(file.to_lowercase())),
-        ("$pathTitle", TemplateValue::String(title_case(&path))),
-        ("$pathUpper", TemplateValue::String(path.to_uppercase())),
-        ("$pathLower", TemplateValue::String(path.to_lowercase())),
-    ];
+    let values = rule_template_values(name, prefix, &file, &path, delimiter);
     evaluate_template(template, &values)
-        .map(|name| strip_rule_name_formatting(&name))
+        .map(|name| strip_rule_name_formatting(&name).collect())
         .map_err(|message| {
             OpyError::at(
                 "rule-prefix-template-invalid",
@@ -557,24 +537,9 @@ pub(crate) fn render_generated_rule_name(name: &str, preprocessing: &Preprocessi
     else {
         return name.to_string();
     };
-    let values = [
-        ("$rule", TemplateValue::String(name.to_string())),
-        ("$prefix", TemplateValue::String(String::new())),
-        ("$file", TemplateValue::String(String::new())),
-        ("$path", TemplateValue::String(String::new())),
-        ("$isDelimiter", TemplateValue::Bool(false)),
-        ("$prefixTitle", TemplateValue::String(String::new())),
-        ("$prefixUpper", TemplateValue::String(String::new())),
-        ("$prefixLower", TemplateValue::String(String::new())),
-        ("$fileTitle", TemplateValue::String(String::new())),
-        ("$fileUpper", TemplateValue::String(String::new())),
-        ("$fileLower", TemplateValue::String(String::new())),
-        ("$pathTitle", TemplateValue::String(String::new())),
-        ("$pathUpper", TemplateValue::String(String::new())),
-        ("$pathLower", TemplateValue::String(String::new())),
-    ];
+    let values = rule_template_values(name, "", "", "", false);
     evaluate_template(template, &values)
-        .map(|rendered| strip_rule_name_formatting(&rendered))
+        .map(|rendered| strip_rule_name_formatting(&rendered).collect())
         .unwrap_or_else(|_| name.to_string())
 }
 
@@ -889,19 +854,13 @@ fn context_player_expr(name: &str, span: Option<Span>) -> Option<HirExpr> {
         "eventPlayer" => Some(HirExpr::EventPlayer {
             span: span.map(Into::into),
         }),
-        "localPlayer" => Some(HirExpr::Call {
+        "localPlayer" | "attacker" | "victim" | "healer" | "healee" => Some(HirExpr::Call {
             name: name.to_string(),
             args: Vec::new(),
             debug_source: None,
             span: span.map(Into::into),
         }),
         "hostPlayer" => Some(HirExpr::HostPlayer {
-            span: span.map(Into::into),
-        }),
-        "attacker" | "victim" | "healer" | "healee" => Some(HirExpr::Call {
-            name: name.to_string(),
-            args: Vec::new(),
-            debug_source: None,
             span: span.map(Into::into),
         }),
         _ => None,
@@ -934,89 +893,6 @@ fn indexed_expr_depth(expr: &Expr) -> usize {
     match expr {
         Expr::Index { array, .. } => 1 + indexed_expr_depth(array),
         _ => 0,
-    }
-}
-
-fn has_random_nested_delete(target: &HirExpr) -> bool {
-    let mut indices = Vec::new();
-    let mut root = target;
-    while let HirExpr::Index { array, index, .. } = root {
-        indices.push(index.as_ref());
-        root = array.as_ref();
-    }
-    indices.reverse();
-    indices.len() >= 3
-        && (hir_expr_contains_random(root)
-            || indices[..indices.len() - 1]
-                .iter()
-                .any(|index| hir_expr_contains_random(index)))
-}
-
-fn hir_expr_contains_random(expr: &HirExpr) -> bool {
-    match expr {
-        HirExpr::Call { name, args, .. } | HirExpr::MacroCall { name, args, .. } => {
-            name.starts_with("random.") || args.iter().any(hir_expr_contains_random)
-        }
-        HirExpr::Array { elements, .. } => elements.iter().any(hir_expr_contains_random),
-        HirExpr::Dict { entries, .. } => entries.iter().any(|entry| {
-            hir_expr_contains_random(&entry.key) || hir_expr_contains_random(&entry.value)
-        }),
-        HirExpr::Comprehension {
-            element,
-            iterable,
-            condition,
-            ..
-        } => {
-            hir_expr_contains_random(element)
-                || hir_expr_contains_random(iterable)
-                || condition.as_deref().is_some_and(hir_expr_contains_random)
-        }
-        HirExpr::Lambda { body, .. } | HirExpr::Unary { operand: body, .. } => {
-            hir_expr_contains_random(body)
-        }
-        HirExpr::Vector { x, y, z, .. } => {
-            hir_expr_contains_random(x)
-                || hir_expr_contains_random(y)
-                || hir_expr_contains_random(z)
-        }
-        HirExpr::PlayerVar { player, .. }
-        | HirExpr::Member {
-            receiver: player, ..
-        } => hir_expr_contains_random(player),
-        HirExpr::ReceiverCall { receiver, args, .. } => {
-            hir_expr_contains_random(receiver) || args.iter().any(hir_expr_contains_random)
-        }
-        HirExpr::Type { args, .. } | HirExpr::Format { args, .. } => {
-            args.iter().any(hir_expr_contains_random)
-        }
-        HirExpr::Binary { left, right, .. } => {
-            hir_expr_contains_random(left) || hir_expr_contains_random(right)
-        }
-        HirExpr::Conditional {
-            then_value,
-            condition,
-            else_value,
-            ..
-        } => {
-            hir_expr_contains_random(then_value)
-                || hir_expr_contains_random(condition)
-                || hir_expr_contains_random(else_value)
-        }
-        HirExpr::Index { array, index, .. } => {
-            hir_expr_contains_random(array) || hir_expr_contains_random(index)
-        }
-        HirExpr::Number { .. }
-        | HirExpr::String { .. }
-        | HirExpr::Bool { .. }
-        | HirExpr::Null { .. }
-        | HirExpr::StringModifier { .. }
-        | HirExpr::Local { .. }
-        | HirExpr::Enum { .. }
-        | HirExpr::GlobalVar { .. }
-        | HirExpr::HostPlayer { .. }
-        | HirExpr::EventPlayer { .. }
-        | HirExpr::Constant { .. }
-        | HirExpr::MacroParam { .. } => false,
     }
 }
 

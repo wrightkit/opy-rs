@@ -1,5 +1,15 @@
 use super::*;
 
+#[derive(Default)]
+struct DirectiveState {
+    event: Option<Event>,
+    conditions: Vec<Expr>,
+    annotations: Vec<Annotation>,
+    disabled: bool,
+    delimiter: bool,
+    new_page: Option<String>,
+}
+
 impl Parser<'_> {
     pub(super) fn parse_rule(
         &mut self,
@@ -29,26 +39,18 @@ impl Parser<'_> {
                     .max(name_token_span.start.col + 1),
             ),
         );
+        let line_indent = start.span.start.col;
         if self
-            .expect(TokenKind::Colon, "':' after the rule name")
+            .expect_block_indent(line_indent, "':' after the rule name")
             .is_err()
         {
-            return false;
-        }
-        let line_indent = start.span.start.col;
-        if self.block_indent(line_indent).is_none() {
             return false;
         }
         // OverPy accepts a small amount of indentation drift between rule
         // directives and actions. The rule itself is still top-level, so any
         // indentation greater than its column belongs to this rule.
         let body_indent = line_indent + 1;
-        let mut event = None;
-        let mut conditions = Vec::new();
-        let mut annotations = Vec::new();
-        let mut disabled = false;
-        let mut delimiter = false;
-        let mut new_page = None;
+        let mut directives = DirectiveState::default();
         let mut actions = Vec::new();
         loop {
             self.skip_newlines();
@@ -56,15 +58,7 @@ impl Parser<'_> {
                 break;
             }
             if self.peek_kind() == TokenKind::At {
-                if !self.parse_directive(
-                    &mut event,
-                    &mut conditions,
-                    &mut annotations,
-                    &mut disabled,
-                    &mut delimiter,
-                    &mut new_page,
-                    false,
-                ) {
+                if !self.parse_directive(&mut directives, false) {
                     self.recover_line();
                 }
                 continue;
@@ -78,33 +72,31 @@ impl Parser<'_> {
             name,
             span: Span::new(start.span.file, start.span.start, name_token_span.end),
             name_span,
-            disabled,
-            delimiter,
-            new_page,
-            annotations,
+            disabled: directives.disabled,
+            delimiter: directives.delimiter,
+            new_page: directives.new_page,
+            annotations: directives.annotations,
             rule_prefix,
-            event: event.unwrap_or_else(|| Event {
+            event: directives.event.unwrap_or_else(|| Event {
                 name: "global".to_string(),
                 args: Vec::new(),
                 span: start.span,
             }),
-            conditions,
+            conditions: directives.conditions,
             actions,
         }));
         true
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub(super) fn parse_directive(
-        &mut self,
-        event: &mut Option<Event>,
-        conditions: &mut Vec<Expr>,
-        annotations: &mut Vec<Annotation>,
-        disabled: &mut bool,
-        delimiter: &mut bool,
-        new_page: &mut Option<String>,
-        subroutine: bool,
-    ) -> bool {
+    fn parse_directive(&mut self, directives: &mut DirectiveState, subroutine: bool) -> bool {
+        let DirectiveState {
+            event,
+            conditions,
+            annotations,
+            disabled,
+            delimiter,
+            new_page,
+        } = directives;
         let at = self.advance();
         let name = match self.expect_ident("a directive name after '@'") {
             Ok(name) => name,
@@ -187,12 +179,7 @@ impl Parser<'_> {
                     self.error_at_current("@Slot and @Hero cannot be used together".to_string());
                     return false;
                 }
-                let end = args.last().map_or(at.span.end, |arg| arg.span.end);
-                annotations.push(Annotation {
-                    name,
-                    args,
-                    span: Span::new(at.span.file, at.span.start, end),
-                });
+                annotations.push(annotation(name, args, at.span));
                 true
             }
             "Name" => {
@@ -203,12 +190,7 @@ impl Parser<'_> {
                     );
                     return false;
                 }
-                let end = args.last().map_or(at.span.end, |arg| arg.span.end);
-                annotations.push(Annotation {
-                    name,
-                    args,
-                    span: Span::new(at.span.file, at.span.start, end),
-                });
+                annotations.push(annotation(name, args, at.span));
                 true
             }
             "SuppressWarnings" => {
@@ -219,12 +201,7 @@ impl Parser<'_> {
                     );
                     return false;
                 }
-                let end = args.last().map_or(at.span.end, |arg| arg.span.end);
-                annotations.push(Annotation {
-                    name,
-                    args,
-                    span: Span::new(at.span.file, at.span.start, end),
-                });
+                annotations.push(annotation(name, args, at.span));
                 true
             }
             "Disabled" => {
@@ -232,11 +209,7 @@ impl Parser<'_> {
                     return false;
                 }
                 *disabled = true;
-                annotations.push(Annotation {
-                    name,
-                    args: Vec::new(),
-                    span: at.span,
-                });
+                annotations.push(annotation(name, Vec::new(), at.span));
                 true
             }
             "Delimiter" => {
@@ -244,11 +217,7 @@ impl Parser<'_> {
                     return false;
                 }
                 *delimiter = true;
-                annotations.push(Annotation {
-                    name,
-                    args: Vec::new(),
-                    span: at.span,
-                });
+                annotations.push(annotation(name, Vec::new(), at.span));
                 true
             }
             "NewPage" => {
@@ -263,13 +232,8 @@ impl Parser<'_> {
                     );
                     return false;
                 }
-                let end = args.last().map_or(at.span.end, |arg| arg.span.end);
                 *new_page = args.first().map(|arg| unquote_annotation_arg(&arg.text));
-                annotations.push(Annotation {
-                    name,
-                    args,
-                    span: Span::new(at.span.file, at.span.start, end),
-                });
+                annotations.push(annotation(name, args, at.span));
                 true
             }
             other => {
@@ -349,15 +313,10 @@ impl Parser<'_> {
         // The name token follows the `def` keyword. `span` covers the
         // definition (`def name`), and `name_span` is the exact identifier
         // occurrence (rename targets, not the keyword).
-        let name_token = self.peek().clone();
+        let name_span = self.peek().span;
         let name = match self.expect_ident("a subroutine name after `def`") {
             Ok(name) => name,
             Err(()) => return false,
-        };
-        let name_span = if name_token.kind == TokenKind::Ident {
-            name_token.span
-        } else {
-            start.span
         };
         let params = match self.parse_param_list() {
             Some(params) => params,
@@ -370,66 +329,52 @@ impl Parser<'_> {
             );
             return false;
         }
-        if self
-            .expect(TokenKind::Colon, "':' after the subroutine signature")
-            .is_err()
-        {
+        let Ok(body_indent) =
+            self.expect_block_indent(start.span.start.col, "':' after the subroutine signature")
+        else {
             return false;
-        }
-        let line_indent = start.span.start.col;
-        let body_indent = match self.block_indent(line_indent) {
-            Some(indent) => indent,
-            None => return false,
         };
-        let mut annotations = Vec::new();
-        let mut event = None;
-        let mut conditions = Vec::new();
-        let mut disabled = false;
-        let mut delimiter = false;
-        let mut new_page = None;
+        let mut directives = DirectiveState::default();
         loop {
             self.skip_newlines();
             if self.peek_kind() != TokenKind::At {
                 break;
             }
-            if !self.parse_directive(
-                &mut event,
-                &mut conditions,
-                &mut annotations,
-                &mut disabled,
-                &mut delimiter,
-                &mut new_page,
-                true,
-            ) {
+            if !self.parse_directive(&mut directives, true) {
                 self.recover_line();
                 return false;
             }
         }
-        if event.is_some() || !conditions.is_empty() {
+        if directives.event.is_some() || !directives.conditions.is_empty() {
             self.error_at_current("subroutines cannot have events or conditions".to_string());
             return false;
         }
-        let _ = (disabled, delimiter, new_page);
-        let presentation_name = annotations
+        let presentation_name = directives
+            .annotations
             .iter()
             .find(|annotation| annotation.name == "Name")
             .and_then(|annotation| annotation.args.first())
             .map(|arg| unquote_annotation_arg(&arg.text));
         let body = self.parse_block(body_indent);
-        let span = if name_token.kind == TokenKind::Ident {
-            Span::new(start.span.file, start.span.start, name_token.span.end)
-        } else {
-            start.span
-        };
+        let span = Span::new(start.span.file, start.span.start, name_span.end);
         rules.push(RuleEntry::SubroutineDef {
             name,
             presentation_name,
             span,
             name_span,
             body,
-            annotations,
+            annotations: directives.annotations,
             rule_prefix,
         });
         true
+    }
+}
+
+fn annotation(name: String, args: Vec<AnnotationArg>, directive_span: Span) -> Annotation {
+    let end = args.last().map_or(directive_span.end, |arg| arg.span.end);
+    Annotation {
+        name,
+        args,
+        span: Span::new(directive_span.file, directive_span.start, end),
     }
 }

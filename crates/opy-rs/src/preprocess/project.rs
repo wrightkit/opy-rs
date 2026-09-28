@@ -30,7 +30,6 @@ pub(super) fn display_path(
     let mut components = Vec::new();
     for component in relative.components() {
         match component {
-            std::path::Component::CurDir => {}
             std::path::Component::ParentDir => {
                 components.push("..".to_string());
             }

@@ -28,6 +28,7 @@ mod operator_optimization;
 mod settings;
 mod size_optimization;
 mod string_format;
+mod value_walk;
 
 pub(crate) use backend::MacroExpander;
 pub(super) use backend::{expand_macros, expand_macros_attributed, reject_unlowered_directives};
@@ -162,12 +163,7 @@ fn emit_debug_element_counts(
                 (report.rules.get(rule_index), rule_counts.get(rule_index))
             {
                 if *rule_count > 1 {
-                    let suffix = if *rule_count == 1 {
-                        "element"
-                    } else {
-                        "elements"
-                    };
-                    annotated.push_str(&format!("//{} {suffix}\n", rule_count));
+                    annotated.push_str(&format!("//{rule_count} elements\n"));
                 }
                 conditions.clear();
                 collect_element_nodes(
@@ -238,8 +234,7 @@ fn emit_debug_element_counts(
 fn debug_value_count(node: &workshop_rs::actions::ElementCountNode) -> usize {
     let children = node.children.iter().map(debug_value_count).sum::<usize>();
     match node.name.as_str() {
-        "number" | "global variable" => 2,
-        "localized string" => 2,
+        "number" | "global variable" | "localized string" => 2,
         "customString" => 1 + 4usize.saturating_sub(node.children.len()) + children,
         "Team" | "Color" => 1 + children.max(1),
         "array" | "evalOnce" => 2 + children,
@@ -496,7 +491,7 @@ impl Compiler {
         }
         reject_unlowered_directives(hir)?;
         let expanded_hir = expand_macros(hir)?;
-        let mut lowering = Lowering::new(self, &expanded_hir)?;
+        let mut lowering = Lowering::new(self, &expanded_hir);
         lowering.copy_files()?;
         lowering.lower_declarations()?;
         lowering.lower_rules()?;
@@ -564,7 +559,7 @@ impl Compiler {
     ) -> Result<MappedText, IntegrationError> {
         let locale = Locale::new(language);
         let expanded = expand_macros_attributed(hir)?;
-        let mut lowering = Lowering::new(self, &expanded)?;
+        let mut lowering = Lowering::new(self, &expanded);
         lowering.copy_files()?;
         lowering.lower_declarations()?;
         lowering.lower_rules()?;
@@ -717,14 +712,13 @@ impl Compiler {
                     match self.mapped_text(&artifact, &hir, &locale.to_string()) {
                         Ok(text) => Some(text),
                         Err(error) => {
-                            let mut diagnostics = frontend_diagnostics;
-                            diagnostics.push(compile_diagnostic(error, &hir.files));
                             return (
-                                CompileReport::failure(
+                                integration_failure_report(
                                     compiler,
                                     catalog,
-                                    CompileFailureClass::Integration,
-                                    diagnostics,
+                                    frontend_diagnostics,
+                                    error,
+                                    &hir.files,
                                 ),
                                 None,
                             );
@@ -738,34 +732,28 @@ impl Compiler {
                         CompileReport::success(compiler, catalog, artifact, frontend_diagnostics),
                         mapped,
                     ),
-                    Err(error) => {
-                        let mut diagnostics = frontend_diagnostics;
-                        diagnostics.push(compile_diagnostic(error, &hir.files));
-                        (
-                            CompileReport::failure(
-                                compiler,
-                                catalog,
-                                CompileFailureClass::Integration,
-                                diagnostics,
-                            ),
-                            None,
-                        )
-                    }
+                    Err(error) => (
+                        integration_failure_report(
+                            compiler,
+                            catalog,
+                            frontend_diagnostics,
+                            error,
+                            &hir.files,
+                        ),
+                        None,
+                    ),
                 }
             }
-            Err(error) => {
-                let mut diagnostics = frontend_diagnostics;
-                diagnostics.push(compile_diagnostic(error, &hir.files));
-                (
-                    CompileReport::failure(
-                        compiler,
-                        catalog,
-                        CompileFailureClass::Integration,
-                        diagnostics,
-                    ),
-                    None,
-                )
-            }
+            Err(error) => (
+                integration_failure_report(
+                    compiler,
+                    catalog,
+                    frontend_diagnostics,
+                    error,
+                    &hir.files,
+                ),
+                None,
+            ),
         }
     }
 
@@ -836,8 +824,6 @@ fn workshop_error_span(error: &workshop_rs::WorkshopError) -> Option<workshop_rs
         workshop_rs::WorkshopError::Unknown { span, .. }
         | workshop_rs::WorkshopError::Malformed { span, .. }
         | workshop_rs::WorkshopError::Unsupported { span, .. } => *span,
-        workshop_rs::WorkshopError::Catalog(_)
-        | workshop_rs::WorkshopError::MissingMapping { .. } => None,
         _ => None,
     }
 }
@@ -867,6 +853,7 @@ impl CompileReport {
         artifact: CompilationArtifact,
         diagnostics: Vec<CompileDiagnostic>,
     ) -> Self {
+        let workshop = normalize_workshop(&artifact.final_output);
         Self {
             schema_version: COMPILE_SCHEMA_VERSION,
             compiler,
@@ -877,8 +864,8 @@ impl CompileReport {
                 failure_class: None,
                 diagnostics,
                 stdout: String::new(),
-                workshop_exact: artifact.final_output.clone(),
-                workshop: normalize_workshop(&artifact.final_output),
+                workshop_exact: artifact.final_output,
+                workshop,
             },
         }
     }
@@ -917,6 +904,22 @@ fn compile_diagnostic(error: IntegrationError, files: &[hir::SourceFile]) -> Com
             .and_then(|span| source_location_from_hir(span, files)),
         script: diagnostic.script.map(|script| *script),
     }
+}
+
+fn integration_failure_report(
+    compiler: CompilerIdentity,
+    catalog: CatalogIdentity,
+    mut diagnostics: Vec<CompileDiagnostic>,
+    error: IntegrationError,
+    files: &[hir::SourceFile],
+) -> CompileReport {
+    diagnostics.push(compile_diagnostic(error, files));
+    CompileReport::failure(
+        compiler,
+        catalog,
+        CompileFailureClass::Integration,
+        diagnostics,
+    )
 }
 
 fn compile_frontend_diagnostic(diagnostic: &crate::tooling::Diagnostic) -> CompileDiagnostic {

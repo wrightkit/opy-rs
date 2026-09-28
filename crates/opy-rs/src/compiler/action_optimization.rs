@@ -7,6 +7,7 @@ use workshop_rs::{Action, Value};
 use super::Compiler;
 use super::operator_optimization::falsy;
 use super::size_optimization::{action_values, is_empty_string};
+use super::value_walk::for_each_child;
 
 pub(super) struct ActionOptimizer<'a> {
     compiler: &'a Compiler,
@@ -88,10 +89,7 @@ impl<'a> ActionOptimizer<'a> {
     fn nested(&self, value: &mut Value) {
         match value {
             Value::Call { name, args } => self.booleans(Kind::Value, name, args),
-            Value::Array(elements) => elements.iter_mut().for_each(|element| self.nested(element)),
-            Value::Vector { x, y, z } => [x, y, z].into_iter().for_each(|part| self.nested(part)),
-            Value::PlayerVariable { player, .. } => self.nested(player),
-            _ => {}
+            _ => for_each_child(value, |child| self.nested(child)),
         }
     }
 }

@@ -672,10 +672,7 @@ impl Lowerer {
                             "invalid-iterable",
                             format!("for-loop iterable '{name}' must be a range(...) call"),
                         ),
-                        CallPosition::LambdaArgument => {
-                            ("unknown-value", format!("unknown value '{name}'"))
-                        }
-                        CallPosition::MacroBody => {
+                        CallPosition::LambdaArgument | CallPosition::MacroBody => {
                             ("unknown-value", format!("unknown value '{name}'"))
                         }
                     };
@@ -1347,7 +1344,7 @@ impl Lowerer {
                     );
                 }
             }
-            CallPosition::Value => {
+            CallPosition::Value | CallPosition::LambdaArgument => {
                 if entry.kind.is_action() {
                     self.error_at(
                         "action-in-value-position",
@@ -1370,23 +1367,6 @@ impl Lowerer {
                     self.error_at(
                         "invalid-iterable",
                         format!("for-loop iterable '{name}' must be a range(...) call"),
-                        span,
-                    );
-                }
-            }
-            CallPosition::LambdaArgument => {
-                if entry.kind.is_action() {
-                    self.error_at(
-                        "action-in-value-position",
-                        format!("action function '{name}' cannot be used as a value"),
-                        span,
-                    );
-                } else if policy::function_context(&entry.id)
-                    == Some(policy::FunctionContext::ForIterable)
-                {
-                    self.error_at(
-                        "invalid-call-context",
-                        format!("'{name}' is only valid as a for-loop iterable"),
                         span,
                     );
                 }

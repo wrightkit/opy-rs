@@ -90,8 +90,7 @@ impl<'a> OperatorOptimizer<'a> {
             (">", 2) => Self::ordering(">", args, |a, b| a > b, false),
             (">=", 2) => Self::ordering(">=", args, |a, b| a >= b, true),
             ("not", 1) => self.not(args),
-            ("and", 2) => self.and(args),
-            ("or", 2) => self.or(args),
+            ("and", 2) | ("or", 2) => self.logical(args, &name),
             ("ifThenElse", 3) => self.if_then_else(args),
             ("add", 2) => self.add(args),
             ("subtract", 2) => self.subtract(args),
@@ -101,7 +100,7 @@ impl<'a> OperatorOptimizer<'a> {
             ("raiseToPower", 2) => self.power(args),
             ("-", 1) => self.negate(args),
             ("roundToInteger", 2) => Self::round(args),
-            ("absoluteValue", 1) => Self::absolute(args),
+            ("absoluteValue", 1) => Self::unary("absoluteValue", args, f64::abs),
             ("sin", 1) => Self::unary("sin", args, f64::sin),
             ("cos", 1) => Self::unary("cos", args, f64::cos),
             ("sinDeg", 1) => Self::unary("sinDeg", args, |degrees| {
@@ -250,56 +249,32 @@ impl<'a> OperatorOptimizer<'a> {
         Rewrite::Same(not(operand))
     }
 
-    fn and(&self, args: Vec<Value>) -> Rewrite {
+    fn logical(&self, args: Vec<Value>, name: &str) -> Rewrite {
+        let conjunction = name == "and";
+        let opposite = if conjunction { "or" } else { "and" };
         let [left, right] = two(args);
         if falsy(&left) {
-            return Rewrite::Changed(left);
+            return Rewrite::Changed(if conjunction { left } else { right });
         }
         if !self.strict && falsy(&right) {
-            return Rewrite::Changed(right);
+            return Rewrite::Changed(if conjunction { right } else { left });
         }
         if self.truthy(&left) {
-            return Rewrite::Changed(right);
+            return Rewrite::Changed(if conjunction { right } else { left });
         }
         if !self.strict && self.truthy(&right) {
-            return Rewrite::Changed(left);
+            return Rewrite::Changed(if conjunction { left } else { right });
         }
         if same(&left, &right) {
             return Rewrite::Changed(left);
         }
         if !self.strict && (negates(&right, &left) || negates(&left, &right)) {
-            return Rewrite::Changed(Value::Bool(false));
+            return Rewrite::Changed(Value::Bool(!conjunction));
         }
         if let (Some(a), Some(b)) = (negated(&left), negated(&right)) {
-            return Rewrite::Changed(not(call("or", vec![a.clone(), b.clone()])));
+            return Rewrite::Changed(not(call(opposite, vec![a.clone(), b.clone()])));
         }
-        Rewrite::Same(call("and", vec![left, right]))
-    }
-
-    fn or(&self, args: Vec<Value>) -> Rewrite {
-        let [left, right] = two(args);
-        if falsy(&left) {
-            return Rewrite::Changed(right);
-        }
-        if !self.strict && falsy(&right) {
-            return Rewrite::Changed(left);
-        }
-        if self.truthy(&left) {
-            return Rewrite::Changed(left);
-        }
-        if !self.strict && self.truthy(&right) {
-            return Rewrite::Changed(right);
-        }
-        if same(&left, &right) {
-            return Rewrite::Changed(left);
-        }
-        if !self.strict && (negates(&right, &left) || negates(&left, &right)) {
-            return Rewrite::Changed(Value::Bool(true));
-        }
-        if let (Some(a), Some(b)) = (negated(&left), negated(&right)) {
-            return Rewrite::Changed(not(call("and", vec![a.clone(), b.clone()])));
-        }
-        Rewrite::Same(call("or", vec![left, right]))
+        Rewrite::Same(call(name, vec![left, right]))
     }
 
     fn if_then_else(&self, args: Vec<Value>) -> Rewrite {
@@ -492,14 +467,6 @@ impl<'a> OperatorOptimizer<'a> {
         Rewrite::Same(call("roundToInteger", vec![number, direction]))
     }
 
-    fn absolute(args: Vec<Value>) -> Rewrite {
-        let [number] = one(args);
-        match number {
-            Value::Number(number) => Rewrite::Changed(Value::Number(number.abs())),
-            other => Rewrite::Same(call("absoluteValue", vec![other])),
-        }
-    }
-
     fn unary(name: &str, args: Vec<Value>, apply: fn(f64) -> f64) -> Rewrite {
         let [number] = one(args);
         match number {
@@ -557,17 +524,7 @@ impl<'a> OperatorOptimizer<'a> {
 
     fn string_length(args: Vec<Value>) -> Rewrite {
         let [text] = one(args);
-        let literal = match &text {
-            Value::String(text) => Some(text),
-            Value::Call { name, args } if name == "customString" && args.len() == 1 => {
-                match &args[0] {
-                    Value::String(text) => Some(text),
-                    _ => None,
-                }
-            }
-            _ => None,
-        };
-        match literal {
+        match literal_text(&text) {
             Some(text) => Rewrite::Changed(Value::Number(text.chars().count() as f64)),
             None => Rewrite::Same(call("strLen", vec![text])),
         }
@@ -590,11 +547,7 @@ impl<'a> OperatorOptimizer<'a> {
     }
 
     fn extremum(name: &str, args: Vec<Value>, apply: fn(f64, f64) -> f64) -> Rewrite {
-        let [left, right] = two(args);
-        match (&left, &right) {
-            (Value::Number(a), Value::Number(b)) => Rewrite::Changed(Value::Number(apply(*a, *b))),
-            _ => Rewrite::Same(call(name, vec![left, right])),
-        }
+        Self::binary(name, args, apply)
     }
 
     fn magnitude(args: Vec<Value>) -> Rewrite {
@@ -776,17 +729,7 @@ impl<'a> OperatorOptimizer<'a> {
 
     fn char_at(args: Vec<Value>) -> Rewrite {
         let [text, index] = two(args);
-        let literal = match &text {
-            Value::String(text) => Some(text.as_str()),
-            Value::Call { name, args } if name == "customString" && args.len() == 1 => {
-                match &args[0] {
-                    Value::String(text) => Some(text.as_str()),
-                    _ => None,
-                }
-            }
-            _ => None,
-        };
-        if let (Some(text), Value::Number(index)) = (literal, &index) {
+        if let (Some(text), Value::Number(index)) = (literal_text(&text), &index) {
             let position = index.max(0.0) as usize;
             let character = text
                 .chars()
@@ -1061,7 +1004,7 @@ fn three(args: Vec<Value>) -> [Value; 3] {
 }
 
 /// The text of a string literal that carries no format arguments.
-fn literal_text(value: &Value) -> Option<&str> {
+pub(super) fn literal_text(value: &Value) -> Option<&str> {
     match value {
         Value::String(text) => Some(text),
         Value::Call { name, args } if name == "customString" && args.len() == 1 => match &args[0] {
@@ -1097,7 +1040,7 @@ fn zero_vector(value: &Value) -> bool {
     number_components(value).is_some_and(|components| components == [0.0, 0.0, 0.0])
 }
 
-fn number_components(value: &Value) -> Option<[f64; 3]> {
+pub(super) fn number_components(value: &Value) -> Option<[f64; 3]> {
     match value {
         Value::Call { name, args } if name == "vector" => match args.as_slice() {
             [Value::Number(x), Value::Number(y), Value::Number(z)] => Some([*x, *y, *z]),
@@ -1206,7 +1149,9 @@ pub(super) fn same(left: &Value, right: &Value) -> bool {
     match (left, right) {
         (Value::Number(a), Value::Number(b)) => a == b,
         (Value::String(a), Value::String(b))
-        | (Value::LocalizedString(a), Value::LocalizedString(b)) => a == b,
+        | (Value::LocalizedString(a), Value::LocalizedString(b))
+        | (Value::GlobalVariable(a), Value::GlobalVariable(b))
+        | (Value::Subroutine(a), Value::Subroutine(b)) => a == b,
         (Value::Bool(a), Value::Bool(b)) => a == b,
         (Value::Null, Value::Null) | (Value::EventPlayer, Value::EventPlayer) => true,
         (Value::Array(a), Value::Array(b)) => {
@@ -1234,8 +1179,6 @@ pub(super) fn same(left: &Value, right: &Value) -> bool {
                 value: bv,
             },
         ) => at == bt && av == bv,
-        (Value::GlobalVariable(a), Value::GlobalVariable(b))
-        | (Value::Subroutine(a), Value::Subroutine(b)) => a == b,
         (
             Value::PlayerVariable {
                 player: ap,
@@ -1296,14 +1239,14 @@ fn modify_operation(name: &str) -> Option<ModifyOp> {
 /// The operand of `target = target <op> operand`.
 fn self_operand(
     name: &str,
-    args: &mut Vec<Value>,
-    is_target: impl Fn(&Value) -> bool,
+    args: &[Value],
+    is_target: impl FnOnce(&Value) -> bool,
 ) -> Option<(ModifyOp, Value)> {
     let op = modify_operation(name)?;
     if args.len() != 2 || !is_target(&args[0]) {
         return None;
     }
-    Some((op, args.pop().expect("two arguments")))
+    Some((op, args[1].clone()))
 }
 
 /// `x = x <op> y` is the modification `x <op>= y`.
@@ -1315,7 +1258,7 @@ pub(super) fn self_modification(action: &Action) -> Option<Action> {
         } => {
             let (op, value) = self_operand(
                 name,
-                &mut args.clone(),
+                args,
                 |target| matches!(target, Value::GlobalVariable(other) if other == variable),
             )?;
             Some(Action::ModifyGlobalVariable {
@@ -1329,7 +1272,7 @@ pub(super) fn self_modification(action: &Action) -> Option<Action> {
             variable,
             value: Value::Call { name, args },
         } => {
-            let (op, value) = self_operand(name, &mut args.clone(), |target| {
+            let (op, value) = self_operand(name, args, |target| {
                 matches!(target, Value::PlayerVariable { player: other, variable: other_variable }
                     if other_variable == variable && same(player, other))
             })?;
@@ -1354,7 +1297,7 @@ pub(super) fn self_modification(action: &Action) -> Option<Action> {
                 return None;
             };
             let (variable, index) = (&args[0], &args[1]);
-            let (_, value) = self_operand(operation, &mut operands.clone(), |read| match read {
+            let (_, value) = self_operand(operation, operands, |read| match read {
                 Value::Call { name, args } if name == "valueInArray" && args.len() == 2 => {
                     same(&args[0], variable) && same(&args[1], index)
                 }
