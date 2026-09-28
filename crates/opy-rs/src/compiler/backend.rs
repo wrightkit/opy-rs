@@ -24,25 +24,24 @@ pub(crate) fn reject_unlowered_directives(hir: &hir::Program) -> Result<(), Inte
     Ok(())
 }
 
-pub(crate) type MacroBindings = HashMap<String, Expr>;
+pub(crate) type MacroBindings<'a> = HashMap<&'a str, Expr>;
 
-pub(crate) struct MacroExpander {
-    macros: HashMap<String, (Vec<String>, Vec<Stmt>)>,
+pub(crate) struct MacroExpander<'a> {
+    macros: HashMap<&'a str, (&'a [String], &'a [Stmt])>,
     stack: Vec<String>,
     /// Relocate expanded spans to the invocation site; only the source
     /// attribution pass sets it, so diagnostics keep the definition spans.
     attribute_to_site: bool,
 }
 
-impl MacroExpander {
-    pub(crate) fn from_program(program: &hir::Program) -> Self {
-        let macros = program
-            .declarations
+impl<'a> MacroExpander<'a> {
+    pub(crate) fn from_declarations(declarations: &'a [hir::Declaration]) -> Self {
+        let macros = declarations
             .iter()
             .filter_map(|declaration| match declaration {
                 hir::Declaration::Macro {
                     name, args, body, ..
-                } => Some((name.clone(), (args.clone(), body.clone()))),
+                } => Some((name.as_str(), (args.as_slice(), body.as_slice()))),
                 _ => None,
             })
             .collect();
@@ -69,7 +68,7 @@ fn expand_macros_with(
     program: &hir::Program,
     attribute_to_site: bool,
 ) -> Result<hir::Program, IntegrationError> {
-    let mut expander = MacroExpander::from_program(program);
+    let mut expander = MacroExpander::from_declarations(&program.declarations);
     expander.attribute_to_site = attribute_to_site;
     let mut expanded = program.clone();
     let bindings = MacroBindings::new();
@@ -104,11 +103,11 @@ fn expand_macros_with(
     Ok(expanded)
 }
 
-impl MacroExpander {
+impl<'a> MacroExpander<'a> {
     fn expand_stmts(
         &mut self,
         statements: &mut Vec<Stmt>,
-        bindings: &MacroBindings,
+        bindings: &MacroBindings<'_>,
         site: Option<HirSpan>,
     ) -> Result<(), IntegrationError> {
         let mut expanded = Vec::new();
@@ -135,7 +134,7 @@ impl MacroExpander {
     fn expand_stmt_inner(
         &mut self,
         statement: &mut Stmt,
-        bindings: &MacroBindings,
+        bindings: &MacroBindings<'_>,
         site: Option<HirSpan>,
     ) -> Result<(), IntegrationError> {
         match statement {
@@ -209,7 +208,7 @@ impl MacroExpander {
     pub(crate) fn expand_expr(
         &mut self,
         expression: &Expr,
-        bindings: &MacroBindings,
+        bindings: &MacroBindings<'_>,
         site: Option<HirSpan>,
     ) -> Result<Expr, IntegrationError> {
         let mut expanded = expression.clone();
@@ -220,12 +219,12 @@ impl MacroExpander {
     fn expand_expr_in_place(
         &mut self,
         expression: &mut Expr,
-        bindings: &MacroBindings,
+        bindings: &MacroBindings<'_>,
         site: Option<HirSpan>,
     ) -> Result<(), IntegrationError> {
         let replacement = match expression {
             Expr::MacroParam { name, span } => {
-                let value = bindings.get(name).ok_or_else(|| {
+                let value = bindings.get(name.as_str()).ok_or_else(|| {
                     IntegrationError::new(
                         "unsupported-integration-surface",
                         format!("macro parameter '{name}' has no expansion binding"),
@@ -392,7 +391,7 @@ impl MacroExpander {
         span: Option<HirSpan>,
         parent_site: Option<HirSpan>,
     ) -> Result<Vec<Stmt>, IntegrationError> {
-        let Some((params, mut body)) = self.macros.get(name).cloned() else {
+        let Some((params, template)) = self.macros.get(name) else {
             return Err(IntegrationError::new(
                 "unsupported-integration-surface",
                 format!("macro '{name}' has no declaration"),
@@ -418,11 +417,12 @@ impl MacroExpander {
             ));
         }
         let mut bindings = MacroBindings::new();
-        for (param, arg) in params.into_iter().zip(args.iter()) {
+        for (param, arg) in params.iter().zip(args.iter()) {
             bindings.insert(param, arg.clone());
         }
         self.stack.push(name.to_string());
         let site = parent_site.or_else(|| self.attribute_to_site.then_some(span).flatten());
+        let mut body = template.to_vec();
         let result = self.expand_stmts(&mut body, &bindings, site).map(|()| body);
         self.stack.pop();
         result

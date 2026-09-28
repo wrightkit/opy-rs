@@ -314,7 +314,7 @@ pub(crate) fn resolve_hir_settings(
             _ => None,
         })
         .collect::<HashMap<_, _>>();
-    let mut expander = crate::compiler::MacroExpander::from_program(program);
+    let mut expander = crate::compiler::MacroExpander::from_declarations(&program.declarations);
     let Some(settings) = program.settings.take() else {
         return Ok(());
     };
@@ -334,7 +334,7 @@ fn resolve_hir_node(
     node: hir::SettingsNode,
     cst_program: &cst::Program,
     constants: &HashMap<String, &hir::Expr>,
-    expander: &mut crate::compiler::MacroExpander,
+    expander: &mut crate::compiler::MacroExpander<'_>,
 ) -> OpyResult<hir::SettingsNode> {
     match node {
         hir::SettingsNode::Group {
