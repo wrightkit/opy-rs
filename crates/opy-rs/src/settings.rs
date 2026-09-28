@@ -19,7 +19,7 @@ use std::collections::HashMap;
 use crate::cst;
 use crate::diag::{OpyError, OpyResult, Position, Span};
 use crate::hir;
-use crate::lexer::{is_ident_continue, is_ident_start};
+use crate::lexer::{decode_string_escape, is_ident_continue, is_ident_start};
 
 /// A project `settings { ... }` block.
 #[derive(Debug, Clone)]
@@ -148,12 +148,7 @@ fn match_block(
             };
             scanner.advance_by(1);
             if escaped {
-                path.push(match ch {
-                    'n' => '\n',
-                    'r' => '\r',
-                    't' => '\t',
-                    other => other,
-                });
+                path.push(decode_string_escape(ch));
                 escaped = false;
             } else if ch == '\\' {
                 escaped = true;
@@ -986,12 +981,7 @@ impl Cursor<'_> {
             }
             if ch == '\\' {
                 let escaped = self.advance()?;
-                match escaped {
-                    'n' => value.push('\n'),
-                    't' => value.push('\t'),
-                    'r' => value.push('\r'),
-                    other => value.push(other),
-                }
+                value.push(decode_string_escape(escaped));
             } else {
                 value.push(ch);
             }
