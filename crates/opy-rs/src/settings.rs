@@ -315,15 +315,9 @@ pub(crate) fn resolve_hir_settings(
         .declarations
         .iter()
         .filter_map(|declaration| match declaration {
-            hir::Declaration::Constant { name, value, .. } => {
-                Some((name.clone(), value.as_ref().clone()))
-            }
+            hir::Declaration::Constant { name, value, .. } => Some((name.clone(), value.as_ref())),
             _ => None,
         })
-        .collect::<HashMap<_, _>>();
-    let constant_refs = constants
-        .iter()
-        .map(|(name, value)| (name.clone(), value))
         .collect::<HashMap<_, _>>();
     let mut expander = crate::compiler::MacroExpander::from_program(program);
     let Some(settings) = program.settings.take() else {
@@ -332,7 +326,7 @@ pub(crate) fn resolve_hir_settings(
     let children = settings
         .children
         .into_iter()
-        .map(|node| resolve_hir_node(node, cst_program, &constant_refs, &mut expander))
+        .map(|node| resolve_hir_node(node, cst_program, &constants, &mut expander))
         .collect::<OpyResult<Vec<_>>>()?;
     program.settings = Some(hir::Settings {
         span: settings.span,
