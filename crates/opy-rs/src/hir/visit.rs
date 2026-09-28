@@ -1,4 +1,4 @@
-use super::types::{Expr, Stmt, SwitchArm};
+use super::types::{Declaration, Expr, Program, RuleEntry, Stmt, SwitchArm};
 
 pub(crate) fn contains_random(expression: &Expr) -> bool {
     struct RandomFinder(bool);
@@ -54,6 +54,38 @@ pub(crate) trait Visitor {
 
     fn visit_stmt(&mut self, statement: &Stmt) {
         walk_stmt(self, statement);
+    }
+}
+
+pub(crate) fn walk_program<V: Visitor + ?Sized>(visitor: &mut V, program: &Program) {
+    for declaration in &program.declarations {
+        match declaration {
+            Declaration::GlobalVariable {
+                initializer: Some(initializer),
+                ..
+            }
+            | Declaration::PlayerVariable {
+                initializer: Some(initializer),
+                ..
+            } => visitor.visit_expr(initializer),
+            Declaration::Constant { value, .. } => visitor.visit_expr(value),
+            Declaration::Macro { body, .. } => walk_stmts(visitor, body),
+            _ => {}
+        }
+    }
+    for entry in &program.rules {
+        match entry {
+            RuleEntry::Rule(rule) => {
+                for argument in &rule.event.args {
+                    visitor.visit_expr(argument);
+                }
+                for condition in &rule.conditions {
+                    visitor.visit_expr(condition);
+                }
+                walk_stmts(visitor, &rule.actions);
+            }
+            RuleEntry::SubroutineDef { body, .. } => walk_stmts(visitor, body),
+        }
     }
 }
 

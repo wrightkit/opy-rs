@@ -483,39 +483,7 @@ impl SemanticModel {
         }
 
         let mut collector = ReferenceSiteCollector { sites: Vec::new() };
-        for declaration in &self.hir.declarations {
-            match declaration {
-                Declaration::GlobalVariable {
-                    initializer: Some(initializer),
-                    ..
-                }
-                | Declaration::PlayerVariable {
-                    initializer: Some(initializer),
-                    ..
-                } => hir::visit::Visitor::visit_expr(&mut collector, initializer),
-                Declaration::Constant { value, .. } => {
-                    hir::visit::Visitor::visit_expr(&mut collector, value)
-                }
-                Declaration::Macro { body, .. } => hir::visit::walk_stmts(&mut collector, body),
-                _ => {}
-            }
-        }
-        for entry in &self.hir.rules {
-            match entry {
-                RuleEntry::Rule(rule) => {
-                    for argument in &rule.event.args {
-                        hir::visit::Visitor::visit_expr(&mut collector, argument);
-                    }
-                    for condition in &rule.conditions {
-                        hir::visit::Visitor::visit_expr(&mut collector, condition);
-                    }
-                    hir::visit::walk_stmts(&mut collector, &rule.actions);
-                }
-                RuleEntry::SubroutineDef { body, .. } => {
-                    hir::visit::walk_stmts(&mut collector, body)
-                }
-            }
-        }
+        hir::visit::walk_program(&mut collector, &self.hir);
         for (kind, name, span) in collector.sites {
             self.attach_reference(kind, &name, span);
         }
