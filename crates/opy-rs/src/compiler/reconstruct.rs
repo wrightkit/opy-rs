@@ -1087,12 +1087,7 @@ impl<'a> Emitter<'a> {
                 );
             }
             Action::CallSubroutine { subroutine } => {
-                if !self
-                    .program
-                    .subroutines
-                    .iter()
-                    .any(|definition| definition.name == *subroutine)
-                {
+                if !self.subroutine_names.contains(subroutine) {
                     self.issue(
                         "unsupported-dangling",
                         format!("unknown subroutine '{subroutine}'"),
