@@ -441,10 +441,6 @@ pub(super) fn shift_expansion_spans(tokens: &mut [Token], origin: Span) {
 }
 
 fn replace_identifier(source: &str, identifier: &str, replacement: &str) -> String {
-    fn is_word(character: Option<char>) -> bool {
-        character.is_some_and(|character| character.is_ascii_alphanumeric() || character == '_')
-    }
-
     let source_chars: Vec<char> = source.chars().collect();
     let identifier_chars: Vec<char> = identifier.chars().collect();
     if identifier_chars.is_empty() {
@@ -456,12 +452,13 @@ fn replace_identifier(source: &str, identifier: &str, replacement: &str) -> Stri
         let end = index + identifier_chars.len();
         if end <= source_chars.len()
             && source_chars[index..end] == identifier_chars
-            && !is_word(
-                index
-                    .checked_sub(1)
-                    .and_then(|position| source_chars.get(position).copied()),
-            )
-            && !is_word(source_chars.get(end).copied())
+            && !index
+                .checked_sub(1)
+                .and_then(|position| source_chars.get(position).copied())
+                .is_some_and(crate::lexer::is_ident_continue)
+            && !source_chars
+                .get(end)
+                .is_some_and(|character| crate::lexer::is_ident_continue(*character))
         {
             result.push_str(replacement);
             index = end;
