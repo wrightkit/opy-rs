@@ -31,16 +31,20 @@ fn is_compressible_column(values: &[&Expr]) -> bool {
     else {
         return false;
     };
-    let Some(first) = numbers.first() else {
+    is_compressible_components(&numbers)
+}
+
+fn is_compressible_components(values: &[Vec<f64>]) -> bool {
+    let Some(first) = values.first() else {
         return false;
     };
-    let is_vector = first.len() == 3;
-    numbers.iter().all(|value| {
-        value.len() == first.len()
-            && (value.len() == 3) == is_vector
-            && value
-                .iter()
-                .all(|component| component.abs() < if is_vector { 4999.0 } else { 49999.0 })
+    let limit = match first.len() {
+        1 => 49999.0,
+        3 => 4999.0,
+        _ => return false,
+    };
+    values.iter().all(|components| {
+        components.len() == first.len() && components.iter().all(|value| value.abs() < limit)
     })
 }
 
@@ -336,23 +340,16 @@ impl Lowerer {
 /// Whether `compressed()` accepts these elements: only numbers, or only
 /// vectors of numbers.
 fn is_compressible(values: &[HirExpr]) -> bool {
-    if values.is_empty() {
-        return false;
-    }
-    let vectors = values
+    let values = values
         .iter()
-        .all(|value| matches!(value, HirExpr::Vector { .. }));
-    if vectors {
-        return values.iter().all(|value| {
-            let HirExpr::Vector { x, y, z, .. } = value else {
-                return false;
-            };
-            [x, y, z].into_iter().all(|component| {
-                crate::hir::visit::literal_number(component).is_some_and(|v| v.abs() < 4999.0)
-            })
-        });
-    }
-    values
-        .iter()
-        .all(|value| crate::hir::visit::literal_number(value).is_some_and(|v| v.abs() < 49999.0))
+        .map(|value| match value {
+            HirExpr::Vector { x, y, z, .. } => Some(vec![
+                crate::hir::visit::literal_number(x)?,
+                crate::hir::visit::literal_number(y)?,
+                crate::hir::visit::literal_number(z)?,
+            ]),
+            _ => crate::hir::visit::literal_number(value).map(|number| vec![number]),
+        })
+        .collect::<Option<Vec<_>>>();
+    values.as_deref().is_some_and(is_compressible_components)
 }
