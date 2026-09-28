@@ -505,8 +505,8 @@ impl<'a> Emitter<'a> {
     // ---- emission ----
 
     fn emit_program(&mut self, layout: &RuleLayout) {
-        let global_initializers = self.collect_global_initializers(layout.global_init);
-        let player_initializers = self.collect_player_initializers(layout.player_init);
+        let global_initializers = self.collect_initializers(layout.global_init, true);
+        let player_initializers = self.collect_initializers(layout.player_init, false);
         self.check_initializer_slot(&global_initializers);
 
         // Declarations.
@@ -654,9 +654,10 @@ impl<'a> Emitter<'a> {
     /// Map initializer rule actions onto declaration positions (table order),
     /// validating the rule's Sets are in table order like the frontend's
     /// synthesized initializer rule.
-    fn collect_global_initializers(
+    fn collect_initializers(
         &mut self,
         initializer: Option<IndexedRule<'_>>,
+        global: bool,
     ) -> std::collections::HashMap<usize, (Value, Option<Span>)> {
         let mut initializers = std::collections::HashMap::new();
         let Some((rule_index, rule)) = initializer else {
@@ -665,76 +666,40 @@ impl<'a> Emitter<'a> {
         let mut previous: Option<usize> = None;
         for (action_index, action) in rule.actions.iter().enumerate() {
             let span = self.program.action_span(rule_index, action_index);
-            let Action::SetGlobalVariable { variable, value } = action else {
-                continue;
-            };
-            let Some(variable_position) = self
-                .program
-                .global_variables
-                .iter()
-                .position(|declaration| declaration.name == *variable)
-            else {
-                self.issue(
-                    "unsupported-dangling",
-                    format!("unknown global variable '{variable}'"),
-                    span,
-                );
-                continue;
-            };
-            self.record_initializer_position(
-                &mut previous,
-                variable_position,
-                variable,
-                "global",
-                span,
-            );
-            initializers.insert(
-                variable_position,
+            let (player, variable, value) = match (global, action) {
+                (true, Action::SetGlobalVariable { variable, value }) => (None, variable, value),
                 (
-                    value.clone(),
-                    self.program
-                        .action_argument_span(rule_index, action_index, 0),
-                ),
-            );
-        }
-        initializers
-    }
-
-    fn collect_player_initializers(
-        &mut self,
-        initializer: Option<IndexedRule<'_>>,
-    ) -> std::collections::HashMap<usize, (Value, Option<Span>)> {
-        let mut initializers = std::collections::HashMap::new();
-        let Some((rule_index, rule)) = initializer else {
-            return initializers;
-        };
-        let mut previous: Option<usize> = None;
-        for (action_index, action) in rule.actions.iter().enumerate() {
-            let span = self.program.action_span(rule_index, action_index);
-            let Action::SetPlayerVariable {
-                player,
-                variable,
-                value,
-            } = action
-            else {
-                continue;
+                    false,
+                    Action::SetPlayerVariable {
+                        player,
+                        variable,
+                        value,
+                    },
+                ) => (Some(player), variable, value),
+                _ => continue,
             };
-            if !self.is_event_player(player) {
+            if player.is_some_and(|player| !self.is_event_player(player)) {
                 self.issue(
                     "unsupported-init-rule",
                     "player initializer targets a non-event-player expression",
                     span,
                 );
             }
-            let Some(variable_position) = self
-                .program
-                .player_variables
+            let variables = if global {
+                &self.program.global_variables
+            } else {
+                &self.program.player_variables
+            };
+            let Some(variable_position) = variables
                 .iter()
                 .position(|declaration| declaration.name == *variable)
             else {
                 self.issue(
                     "unsupported-dangling",
-                    format!("unknown player variable '{variable}'"),
+                    format!(
+                        "unknown {} variable '{variable}'",
+                        if global { "global" } else { "player" }
+                    ),
                     span,
                 );
                 continue;
@@ -743,15 +708,18 @@ impl<'a> Emitter<'a> {
                 &mut previous,
                 variable_position,
                 variable,
-                "player",
+                if global { "global" } else { "player" },
                 span,
             );
             initializers.insert(
                 variable_position,
                 (
                     value.clone(),
-                    self.program
-                        .action_argument_span(rule_index, action_index, 1),
+                    self.program.action_argument_span(
+                        rule_index,
+                        action_index,
+                        usize::from(!global),
+                    ),
                 ),
             );
         }
