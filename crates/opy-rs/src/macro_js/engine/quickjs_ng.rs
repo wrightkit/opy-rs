@@ -10,7 +10,7 @@
 //! This module owns the raw `JSRuntime`/`JSContext` pointers and never shares
 //! them across threads. The interrupt handler and the `console.log` native
 //! function are armed only while the engine is at a stable address inside
-//! [`evaluate`](JsEngine::evaluate), and they read engine-owned state through
+//! [`QuickJsEngine::evaluate`], and they read engine-owned state through
 //! raw pointers that stay valid until the context is freed in `Drop`.
 
 use std::ffi::{CStr, CString};
@@ -21,7 +21,7 @@ use std::time::Instant;
 use libquickjs_ng_sys as q;
 
 use super::super::limits::Limits;
-use super::{Completion, EngineError, JsEngine};
+use super::{Completion, EngineError};
 
 pub(crate) struct QuickJsEngine {
     runtime: *mut q::JSRuntime,
@@ -30,8 +30,8 @@ pub(crate) struct QuickJsEngine {
     console_lines: Vec<String>,
 }
 
-impl JsEngine for QuickJsEngine {
-    fn new(limits: &Limits) -> Result<Self, EngineError> {
+impl QuickJsEngine {
+    pub(crate) fn new(limits: &Limits) -> Result<Self, EngineError> {
         #[cfg(test)]
         crate::resource_metrics::record_macro_engine_creation();
         #[cfg(test)]
@@ -63,7 +63,7 @@ impl JsEngine for QuickJsEngine {
         }
     }
 
-    fn install_console(&mut self) -> Result<(), EngineError> {
+    pub(crate) fn install_console(&mut self) -> Result<(), EngineError> {
         unsafe {
             let sink_value = q::JS_Ext_NewPointer(
                 q::JS_TAG_UNDEFINED,
@@ -102,7 +102,11 @@ impl JsEngine for QuickJsEngine {
         Ok(())
     }
 
-    fn evaluate(&mut self, source: &str, filename: &str) -> Result<Completion, EngineError> {
+    pub(crate) fn evaluate(
+        &mut self,
+        source: &str,
+        filename: &str,
+    ) -> Result<Completion, EngineError> {
         let source = CString::new(source)
             .map_err(|_| EngineError::Internal("script contains a NUL byte".into()))?;
         let filename = CString::new(filename)
@@ -154,7 +158,7 @@ impl JsEngine for QuickJsEngine {
         }
     }
 
-    fn set_interrupt_deadline(&mut self, deadline: Option<Instant>) {
+    pub(crate) fn set_interrupt_deadline(&mut self, deadline: Option<Instant>) {
         self.interrupt_deadline = deadline;
         unsafe {
             q::JS_SetInterruptHandler(
@@ -165,12 +169,10 @@ impl JsEngine for QuickJsEngine {
         }
     }
 
-    fn console_output(&self) -> &[String] {
+    pub(crate) fn console_output(&self) -> &[String] {
         &self.console_lines
     }
-}
 
-impl QuickJsEngine {
     /// Reads the string property `name` of `obj`; when the property is not a
     /// string (missing, or a thrown non-Error value), returns `fallback`.
     ///
@@ -285,7 +287,7 @@ impl Drop for QuickJsEngine {
 }
 
 /// Deadline-based interrupt handler: returns non-zero once the deadline set by
-/// [`JsEngine::set_interrupt_deadline`] has passed, aborting the running
+/// [`QuickJsEngine::set_interrupt_deadline`] has passed, aborting the running
 /// script with the QuickJS `"interrupted"` error.
 ///
 /// # Safety
@@ -306,7 +308,7 @@ unsafe extern "C" fn interrupt_handler(_runtime: *mut q::JSRuntime, opaque: *mut
 /// # Safety
 ///
 /// The captured data value must be the pointer value created in
-/// [`JsEngine::install_console`], pointing at the engine's `console_lines`
+/// [`QuickJsEngine::install_console`], pointing at the engine's `console_lines`
 /// field; the engine is alive for the whole call.
 unsafe extern "C" fn console_log(
     context: *mut q::JSContext,

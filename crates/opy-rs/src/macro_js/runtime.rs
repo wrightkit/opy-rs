@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use super::engine::quickjs_ng::QuickJsEngine;
-use super::engine::{Completion, EngineError, JsEngine};
+use super::engine::{Completion, EngineError};
 use super::error::{MacroError, ScriptError};
 use super::helpers::Helpers;
 use super::limits::Limits;
