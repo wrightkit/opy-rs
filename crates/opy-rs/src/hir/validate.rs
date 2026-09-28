@@ -384,9 +384,10 @@ fn validate_stmts(
         expressions,
         errors,
     } = validator;
-    errors
+    expressions
+        .errors
         .into_iter()
-        .chain(expressions.errors)
+        .chain(errors)
         .next()
         .map_or(Ok(()), Err)
 }

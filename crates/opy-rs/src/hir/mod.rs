@@ -82,6 +82,34 @@ mod tests {
     }
 
     #[test]
+    fn expression_errors_precede_invalid_statement_structure() {
+        let payload = json!({
+            "protocol": { "name": "wright/opy-hir", "version": "2.0.0" },
+            "generator": { "name": "test", "version": "0", "frontend": "test" },
+            "files": [],
+            "rules": [{
+                "name": "test",
+                "event": { "name": "Ongoing - Global", "args": [] },
+                "conditions": [],
+                "actions": [{
+                    "kind": "delete",
+                    "target": { "kind": "globalVar", "name": "missing" }
+                }]
+            }]
+        });
+
+        let program: super::Program = serde_json::from_value(payload.clone()).unwrap();
+        assert_eq!(
+            program.validate().unwrap_err().code(),
+            "unresolved-reference"
+        );
+        assert_eq!(
+            parse_value(payload).unwrap_err().code(),
+            "unresolved-reference"
+        );
+    }
+
+    #[test]
     fn unknown_conditional_condition_kind_preserves_unsupported_node_span() {
         let error = parse_value(json!({
             "protocol": { "name": "wright/opy-hir", "version": "2.0.0" },
