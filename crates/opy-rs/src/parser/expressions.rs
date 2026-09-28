@@ -329,74 +329,69 @@ impl Parser<'_> {
         self.peek_kind() != closing
     }
 
+    fn parse_delimited_items<T>(
+        &mut self,
+        items: &mut Vec<T>,
+        first_item_parsed: bool,
+        closing: TokenKind,
+        closing_text: &str,
+        mut parse_item: impl FnMut(&mut Self) -> Result<T, ()>,
+    ) -> Result<Token, ()> {
+        self.skip_newlines();
+        if !first_item_parsed && self.peek_kind() == closing {
+            return Ok(self.advance());
+        }
+        if !first_item_parsed {
+            items.push(parse_item(self)?);
+        }
+        while self.has_more_delimited_items(closing) {
+            items.push(parse_item(self)?);
+        }
+        self.expect(closing, closing_text)
+    }
+
     /// `@Event name(args)`: positional expressions only (keyword arguments
     /// are a call-argument form, not an event form).
     pub(super) fn parse_event_args(&mut self, args: &mut Vec<Expr>) -> Result<(), ()> {
         self.expect(TokenKind::LParen, "'('")?;
-        self.skip_newlines();
-        if self.peek_kind() == TokenKind::RParen {
-            self.advance();
-            return Ok(());
-        }
-        loop {
-            let expr = self.parse_expr()?;
-            if self.peek_kind() == TokenKind::Assign {
-                self.error_at_current("keyword arguments are not valid in @Event".to_string());
+        self.parse_delimited_items(args, false, TokenKind::RParen, "')'", |parser| {
+            let expr = parser.parse_expr()?;
+            if parser.peek_kind() == TokenKind::Assign {
+                parser.error_at_current("keyword arguments are not valid in @Event".to_string());
                 return Err(());
             }
-            args.push(expr);
-            if !self.has_more_delimited_items(TokenKind::RParen) {
-                break;
-            }
-        }
-        self.expect(TokenKind::RParen, "')'")?;
+            Ok(expr)
+        })?;
         Ok(())
     }
 
     pub(super) fn parse_call_args(&mut self, args: &mut Vec<CallArg>) -> Result<(), ()> {
         self.expect(TokenKind::LParen, "'('")?;
-        self.skip_newlines();
-        if self.peek_kind() == TokenKind::RParen {
-            self.advance();
-            return Ok(());
-        }
-        loop {
-            match self.parse_expr() {
-                Ok(expr) => {
-                    // A keyword argument is `name = expr` (issue #110): a
-                    // bare identifier immediately followed by `=`. Anything
-                    // else (`expr = ...`) is not a call argument form and is
-                    // rejected like the pinned reference rejects it.
-                    if self.peek_kind() == TokenKind::Assign {
-                        let Expr::Name { name, span } = expr else {
-                            self.error_at_current(
-                                "expected a keyword name before '=' in this call".to_string(),
-                            );
-                            return Err(());
-                        };
-                        self.advance();
-                        let value = match self.parse_expr() {
-                            Ok(value) => value,
-                            Err(()) => return Err(()),
-                        };
-                        args.push(CallArg {
-                            keyword: Some((name, span)),
-                            value,
-                        });
-                    } else {
-                        args.push(CallArg {
-                            keyword: None,
-                            value: expr,
-                        });
-                    }
-                }
-                Err(()) => return Err(()),
+        self.parse_delimited_items(args, false, TokenKind::RParen, "')'", |parser| {
+            let expr = parser.parse_expr()?;
+            // A keyword argument is `name = expr` (issue #110): a bare
+            // identifier immediately followed by `=`. Anything else is
+            // rejected like the pinned reference rejects it.
+            if parser.peek_kind() == TokenKind::Assign {
+                let Expr::Name { name, span } = expr else {
+                    parser.error_at_current(
+                        "expected a keyword name before '=' in this call".to_string(),
+                    );
+                    return Err(());
+                };
+                parser.advance();
+                let value = parser.parse_expr()?;
+                Ok(CallArg {
+                    keyword: Some((name, span)),
+                    value,
+                })
+            } else {
+                Ok(CallArg {
+                    keyword: None,
+                    value: expr,
+                })
             }
-            if !self.has_more_delimited_items(TokenKind::RParen) {
-                break;
-            }
-        }
-        self.expect(TokenKind::RParen, "')'")?;
+        })?;
         Ok(())
     }
 
@@ -522,16 +517,16 @@ impl Parser<'_> {
                     });
                 }
                 elements.push(first);
-                loop {
-                    if !self.has_more_delimited_items(TokenKind::RBracket) {
-                        break;
-                    }
-                    elements.push(self.parse_expr()?);
-                }
-                let end = match self.expect(TokenKind::RBracket, "']'") {
-                    Ok(token) => token.span.end,
-                    Err(()) => return Err(()),
-                };
+                let end = self
+                    .parse_delimited_items(
+                        &mut elements,
+                        true,
+                        TokenKind::RBracket,
+                        "']'",
+                        Self::parse_expr,
+                    )?
+                    .span
+                    .end;
                 Ok(Expr::Array {
                     elements,
                     span: Span::new(open.span.file, open.span.start, end),
@@ -595,25 +590,16 @@ impl Parser<'_> {
     pub(super) fn parse_dict(&mut self) -> Result<Expr, ()> {
         let open = self.advance();
         let mut entries = Vec::new();
-        self.skip_newlines();
-        if self.peek_kind() == TokenKind::RBrace {
-            let end = self.advance().span.end;
-            return Ok(Expr::Dict {
-                entries,
-                span: Span::new(open.span.file, open.span.start, end),
-            });
-        }
-        loop {
-            let key = self.parse_expr()?;
-            self.expect(TokenKind::Colon, "':' in a dictionary entry")?;
-            let value = self.parse_expr()?;
-            let span = Span::new(key.span().file, key.span().start, value.span().end);
-            entries.push(DictEntry { key, value, span });
-            if !self.has_more_delimited_items(TokenKind::RBrace) {
-                break;
-            }
-        }
-        let end = self.expect(TokenKind::RBrace, "'}'")?.span.end;
+        let end = self
+            .parse_delimited_items(&mut entries, false, TokenKind::RBrace, "'}'", |parser| {
+                let key = parser.parse_expr()?;
+                parser.expect(TokenKind::Colon, "':' in a dictionary entry")?;
+                let value = parser.parse_expr()?;
+                let span = Span::new(key.span().file, key.span().start, value.span().end);
+                Ok(DictEntry { key, value, span })
+            })?
+            .span
+            .end;
         Ok(Expr::Dict {
             entries,
             span: Span::new(open.span.file, open.span.start, end),
