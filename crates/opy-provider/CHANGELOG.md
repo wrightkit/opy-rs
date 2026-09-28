@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.62](https://github.com/wrightkit/opy-rs/compare/opy-provider-v0.1.61...opy-provider-v0.1.62) - 2026-09-28
+
+### Other
+
+- Merge pull request #406 from wrightkit/codex/massive-simplification
+
 ## [0.1.61](https://github.com/wrightkit/opy-rs/compare/opy-provider-v0.1.60...opy-provider-v0.1.61) - 2026-09-27
 
 ### Other
