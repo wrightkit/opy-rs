@@ -828,9 +828,6 @@ fn check_expr(value: &Value) -> Result<(), HirError> {
             }
         }
     }
-    if let Some(condition) = object.get("condition") {
-        check_expr(condition)?;
-    }
     if let Some(body) = object.get("body") {
         check_expr(body)?;
     }
