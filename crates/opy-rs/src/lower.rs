@@ -270,172 +270,145 @@ fn texture_setup_rule() -> RuleEntry {
         },
         conditions: Vec::new(),
         actions: vec![
-            HirStmt::Expr {
-                expr: Box::new(HirExpr::Call {
-                    name: "createDummy".to_string(),
-                    args: vec![
-                        HirExpr::Call {
-                            name: "getAllHeroes".to_string(),
-                            args: Vec::new(),
-                            debug_source: None,
-                            span: None,
-                        },
-                        texture_dummy_team(),
-                        HirExpr::Bool {
-                            value: false,
-                            span: None,
-                        },
-                        HirExpr::Null { span: None },
-                        HirExpr::Null { span: None },
-                    ],
-                    debug_source: None,
+            synthetic_statement(synthetic_call(
+                "createDummy",
+                vec![
+                    synthetic_call("getAllHeroes", Vec::new()),
+                    texture_dummy_team(),
+                    synthetic_boolean(false),
+                    HirExpr::Null { span: None },
+                    HirExpr::Null { span: None },
+                ],
+            )),
+            synthetic_statement(synthetic_method(
+                texture_dummy_player(),
+                "startForcingName",
+                vec![texture_marker('\u{303c}')],
+            )),
+            texture_state_assignment(synthetic_method(
+                texture_dummy_first_value(),
+                "split",
+                vec![HirExpr::Array {
+                    elements: Vec::new(),
                     span: None,
-                }),
-                span: None,
-            },
-            HirStmt::Expr {
-                expr: Box::new(HirExpr::ReceiverCall {
-                    receiver: Box::new(texture_dummy_player()),
-                    name: "startForcingName".to_string(),
-                    args: vec![texture_marker('\u{303c}')],
-                    span: None,
-                }),
-                span: None,
-            },
-            HirStmt::Assign {
-                target: Box::new(HirExpr::GlobalVar {
-                    name: "__holygrail__".to_string(),
-                    span: None,
-                }),
-                value: Box::new(HirExpr::ReceiverCall {
-                    receiver: Box::new(texture_dummy_first_value()),
-                    name: "split".to_string(),
-                    args: vec![HirExpr::Array {
-                        elements: Vec::new(),
-                        span: None,
-                    }],
-                    span: None,
-                }),
-                span: None,
-            },
-            HirStmt::Expr {
-                expr: Box::new(HirExpr::ReceiverCall {
-                    receiver: Box::new(texture_dummy_player()),
-                    name: "startForcingName".to_string(),
-                    args: vec![texture_marker('\u{840}')],
-                    span: None,
-                }),
-                span: None,
-            },
-            HirStmt::Assign {
-                target: Box::new(HirExpr::GlobalVar {
-                    name: "__holygrail__".to_string(),
-                    span: None,
-                }),
-                value: Box::new(HirExpr::ReceiverCall {
-                    receiver: Box::new(HirExpr::ReceiverCall {
-                        receiver: Box::new(texture_marker('\u{303c}')),
-                        name: "replace".to_string(),
-                        args: vec![
-                            HirExpr::GlobalVar {
-                                name: "__holygrail__".to_string(),
-                                span: None,
-                            },
-                            texture_dummy_first_value(),
-                        ],
-                        span: None,
-                    }),
-                    name: "substring".to_string(),
-                    args: vec![
-                        HirExpr::Number {
-                            value: 126.0,
-                            text: "126".to_string(),
-                            span: None,
-                        },
-                        HirExpr::Bool {
-                            value: true,
-                            span: None,
-                        },
-                    ],
-                    span: None,
-                }),
-                span: None,
-            },
-            HirStmt::Expr {
-                expr: Box::new(HirExpr::Call {
-                    name: "destroyAllDummies".to_string(),
-                    args: Vec::new(),
-                    debug_source: None,
-                    span: None,
-                }),
-                span: None,
-            },
+                }],
+            )),
+            synthetic_statement(synthetic_method(
+                texture_dummy_player(),
+                "startForcingName",
+                vec![texture_marker('\u{840}')],
+            )),
+            texture_state_assignment(synthetic_method(
+                synthetic_method(
+                    texture_marker('\u{303c}'),
+                    "replace",
+                    vec![texture_state_variable(), texture_dummy_first_value()],
+                ),
+                "substring",
+                vec![synthetic_number(126.0), synthetic_boolean(true)],
+            )),
+            synthetic_statement(synthetic_call("destroyAllDummies", Vec::new())),
         ],
     })
 }
 
-fn texture_dummy_player() -> HirExpr {
+fn synthetic_call(name: &str, args: Vec<HirExpr>) -> HirExpr {
     HirExpr::Call {
-        name: "lastCreatedEntity".to_string(),
-        args: Vec::new(),
+        name: name.to_string(),
+        args,
         debug_source: None,
         span: None,
     }
 }
 
-fn texture_dummy_first_value() -> HirExpr {
-    HirExpr::Index {
-        array: Box::new(texture_dummy_player()),
-        index: Box::new(HirExpr::Number {
-            value: 0.0,
-            text: "0".to_string(),
-            span: None,
-        }),
+fn synthetic_method(receiver: HirExpr, name: &str, args: Vec<HirExpr>) -> HirExpr {
+    HirExpr::ReceiverCall {
+        receiver: Box::new(receiver),
+        name: name.to_string(),
+        args,
         span: None,
     }
 }
 
-fn texture_dummy_team() -> HirExpr {
-    HirExpr::Conditional {
-        then_value: Box::new(HirExpr::Enum {
-            value_type: "Team".to_string(),
-            value: "TEAM_1".to_string(),
-            span: None,
-        }),
-        condition: Box::new(HirExpr::Call {
-            name: "getNumberOfSlots".to_string(),
-            args: vec![HirExpr::Enum {
-                value_type: "Team".to_string(),
-                value: "TEAM_1".to_string(),
-                span: None,
-            }],
-            debug_source: None,
-            span: None,
-        }),
-        else_value: Box::new(HirExpr::Conditional {
-            then_value: Box::new(HirExpr::Enum {
-                value_type: "Team".to_string(),
-                value: "TEAM_2".to_string(),
-                span: None,
-            }),
-            condition: Box::new(HirExpr::Call {
-                name: "getNumberOfSlots".to_string(),
-                args: vec![HirExpr::Enum {
-                    value_type: "Team".to_string(),
-                    value: "TEAM_2".to_string(),
-                    span: None,
-                }],
-                debug_source: None,
-                span: None,
-            }),
-            else_value: Box::new(HirExpr::Bool {
-                value: true,
-                span: None,
-            }),
-            span: None,
-        }),
+fn synthetic_enum(value_type: &str, value: &str) -> HirExpr {
+    HirExpr::Enum {
+        value_type: value_type.to_string(),
+        value: value.to_string(),
         span: None,
     }
+}
+
+fn synthetic_number(value: f64) -> HirExpr {
+    HirExpr::Number {
+        value,
+        text: value.to_string(),
+        span: None,
+    }
+}
+
+fn synthetic_boolean(value: bool) -> HirExpr {
+    HirExpr::Bool { value, span: None }
+}
+
+fn synthetic_index(array: HirExpr, index: HirExpr) -> HirExpr {
+    HirExpr::Index {
+        array: Box::new(array),
+        index: Box::new(index),
+        span: None,
+    }
+}
+
+fn synthetic_conditional(then_value: HirExpr, condition: HirExpr, else_value: HirExpr) -> HirExpr {
+    HirExpr::Conditional {
+        then_value: Box::new(then_value),
+        condition: Box::new(condition),
+        else_value: Box::new(else_value),
+        span: None,
+    }
+}
+
+fn synthetic_statement(expr: HirExpr) -> HirStmt {
+    HirStmt::Expr {
+        expr: Box::new(expr),
+        span: None,
+    }
+}
+
+fn texture_state_variable() -> HirExpr {
+    HirExpr::GlobalVar {
+        name: "__holygrail__".to_string(),
+        span: None,
+    }
+}
+
+fn texture_state_assignment(value: HirExpr) -> HirStmt {
+    HirStmt::Assign {
+        target: Box::new(texture_state_variable()),
+        value: Box::new(value),
+        span: None,
+    }
+}
+
+fn texture_dummy_player() -> HirExpr {
+    synthetic_call("lastCreatedEntity", Vec::new())
+}
+
+fn texture_dummy_first_value() -> HirExpr {
+    synthetic_index(texture_dummy_player(), synthetic_number(0.0))
+}
+
+fn texture_dummy_team() -> HirExpr {
+    let team_1 = synthetic_enum("Team", "TEAM_1");
+    let team_2 = synthetic_enum("Team", "TEAM_2");
+    synthetic_conditional(
+        team_1.clone(),
+        synthetic_call("getNumberOfSlots", vec![team_1]),
+        synthetic_conditional(
+            team_2.clone(),
+            synthetic_call("getNumberOfSlots", vec![team_2]),
+            synthetic_boolean(true),
+        ),
+    )
 }
 
 fn texture_marker(suffix: char) -> HirExpr {
