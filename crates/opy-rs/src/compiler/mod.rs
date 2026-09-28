@@ -853,6 +853,7 @@ impl CompileReport {
         artifact: CompilationArtifact,
         diagnostics: Vec<CompileDiagnostic>,
     ) -> Self {
+        let workshop = normalize_workshop(&artifact.final_output);
         Self {
             schema_version: COMPILE_SCHEMA_VERSION,
             compiler,
@@ -863,8 +864,8 @@ impl CompileReport {
                 failure_class: None,
                 diagnostics,
                 stdout: String::new(),
-                workshop_exact: artifact.final_output.clone(),
-                workshop: normalize_workshop(&artifact.final_output),
+                workshop_exact: artifact.final_output,
+                workshop,
             },
         }
     }
