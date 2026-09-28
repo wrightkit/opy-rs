@@ -123,7 +123,7 @@ impl<'a> MacroExpander<'a> {
             }
             self.expand_stmt_inner(&mut statement, bindings, site)?;
             if let Some(site) = site {
-                set_stmt_span(&mut statement, site);
+                *statement.span_mut() = Some(site);
             }
             expanded.push(statement);
         }
@@ -269,7 +269,7 @@ impl<'a> MacroExpander<'a> {
         if let Some(replacement) = replacement {
             *expression = replacement;
             if let Some(site) = site {
-                set_expr_span(expression, site);
+                *expression.span_mut() = Some(site);
             }
             return Ok(());
         }
@@ -379,7 +379,7 @@ impl<'a> MacroExpander<'a> {
             | Expr::MacroParam { .. } => {}
         }
         if let Some(site) = site {
-            set_expr_span(expression, site);
+            *expression.span_mut() = Some(site);
         }
         Ok(())
     }
@@ -426,58 +426,5 @@ impl<'a> MacroExpander<'a> {
         let result = self.expand_stmts(&mut body, &bindings, site).map(|()| body);
         self.stack.pop();
         result
-    }
-}
-
-fn set_stmt_span(statement: &mut Stmt, site: HirSpan) {
-    match statement {
-        Stmt::Expr { span, .. }
-        | Stmt::Assign { span, .. }
-        | Stmt::If { span, .. }
-        | Stmt::For { span, .. }
-        | Stmt::While { span, .. }
-        | Stmt::DoWhile { span, .. }
-        | Stmt::Switch { span, .. }
-        | Stmt::Delete { span, .. }
-        | Stmt::Goto { span, .. }
-        | Stmt::Break { span }
-        | Stmt::Return { span }
-        | Stmt::Continue { span }
-        | Stmt::Label { span, .. }
-        | Stmt::CallSubroutine { span, .. }
-        | Stmt::Pass { span } => *span = Some(site),
-    }
-}
-
-fn set_expr_span(expression: &mut Expr, site: HirSpan) {
-    match expression {
-        Expr::Number { span, .. }
-        | Expr::String { span, .. }
-        | Expr::Bool { span, .. }
-        | Expr::Null { span }
-        | Expr::StringModifier { span, .. }
-        | Expr::Local { span, .. }
-        | Expr::Enum { span, .. }
-        | Expr::GlobalVar { span, .. }
-        | Expr::HostPlayer { span }
-        | Expr::EventPlayer { span }
-        | Expr::Constant { span, .. }
-        | Expr::MacroParam { span, .. }
-        | Expr::Array { span, .. }
-        | Expr::Dict { span, .. }
-        | Expr::Comprehension { span, .. }
-        | Expr::Lambda { span, .. }
-        | Expr::Type { span, .. }
-        | Expr::Vector { span, .. }
-        | Expr::PlayerVar { span, .. }
-        | Expr::Member { span, .. }
-        | Expr::Call { span, .. }
-        | Expr::ReceiverCall { span, .. }
-        | Expr::Binary { span, .. }
-        | Expr::Conditional { span, .. }
-        | Expr::Unary { span, .. }
-        | Expr::Index { span, .. }
-        | Expr::Format { span, .. }
-        | Expr::MacroCall { span, .. } => *span = Some(site),
     }
 }

@@ -10,6 +10,25 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+macro_rules! impl_span_accessors {
+    ($ty:ident, $description:literal, $($variant:ident),+ $(,)?) => {
+        impl $ty {
+            #[doc = $description]
+            pub fn span(&self) -> Option<&Span> {
+                match self {
+                    $(Self::$variant { span, .. } => span.as_ref(),)+
+                }
+            }
+
+            pub(crate) fn span_mut(&mut self) -> &mut Option<Span> {
+                match self {
+                    $(Self::$variant { span, .. } => span,)+
+                }
+            }
+        }
+    };
+}
+
 /// The `wright/opy-hir` protocol name.
 pub const PROTOCOL_NAME: &str = "wright/opy-hir";
 /// The protocol major version this consumer understands.
@@ -537,28 +556,25 @@ pub struct IfBranch {
     pub body: Vec<Stmt>,
 }
 
-impl Stmt {
-    /// The source span of this statement, if any.
-    pub fn span(&self) -> Option<&Span> {
-        match self {
-            Stmt::Expr { span, .. }
-            | Stmt::Assign { span, .. }
-            | Stmt::If { span, .. }
-            | Stmt::For { span, .. }
-            | Stmt::While { span, .. }
-            | Stmt::DoWhile { span, .. }
-            | Stmt::Switch { span, .. }
-            | Stmt::Delete { span, .. }
-            | Stmt::Break { span }
-            | Stmt::Return { span }
-            | Stmt::Continue { span }
-            | Stmt::Goto { span, .. }
-            | Stmt::Label { span, .. }
-            | Stmt::CallSubroutine { span, .. }
-            | Stmt::Pass { span } => span.as_ref(),
-        }
-    }
-}
+impl_span_accessors!(
+    Stmt,
+    "The source span of this statement, if any.",
+    Expr,
+    Assign,
+    If,
+    For,
+    While,
+    DoWhile,
+    Switch,
+    Delete,
+    Break,
+    Return,
+    Continue,
+    Goto,
+    Label,
+    CallSubroutine,
+    Pass,
+);
 
 /// One source-ordered arm in the OPY HIR. Arms execute in source order and
 /// fall through to subsequent arms until a `break` statement is encountered.
@@ -787,40 +803,6 @@ pub struct DictEntry {
 }
 
 impl Expr {
-    /// The source span of this expression, if any.
-    pub fn span(&self) -> Option<&Span> {
-        match self {
-            Expr::Number { span, .. }
-            | Expr::String { span, .. }
-            | Expr::Bool { span, .. }
-            | Expr::Null { span }
-            | Expr::Array { span, .. }
-            | Expr::Dict { span, .. }
-            | Expr::Comprehension { span, .. }
-            | Expr::Lambda { span, .. }
-            | Expr::StringModifier { span, .. }
-            | Expr::Local { span, .. }
-            | Expr::Vector { span, .. }
-            | Expr::Enum { span, .. }
-            | Expr::GlobalVar { span, .. }
-            | Expr::PlayerVar { span, .. }
-            | Expr::HostPlayer { span }
-            | Expr::Member { span, .. }
-            | Expr::EventPlayer { span }
-            | Expr::Constant { span, .. }
-            | Expr::Call { span, .. }
-            | Expr::ReceiverCall { span, .. }
-            | Expr::MacroCall { span, .. }
-            | Expr::MacroParam { span, .. }
-            | Expr::Type { span, .. }
-            | Expr::Binary { span, .. }
-            | Expr::Conditional { span, .. }
-            | Expr::Unary { span, .. }
-            | Expr::Index { span, .. }
-            | Expr::Format { span, .. } => span.as_ref(),
-        }
-    }
-
     /// The protocol `kind` of this expression.
     pub fn kind_name(&self) -> &'static str {
         match self {
@@ -855,3 +837,36 @@ impl Expr {
         }
     }
 }
+
+impl_span_accessors!(
+    Expr,
+    "The source span of this expression, if any.",
+    Number,
+    String,
+    Bool,
+    Null,
+    Array,
+    Dict,
+    Comprehension,
+    Lambda,
+    StringModifier,
+    Local,
+    Vector,
+    Enum,
+    GlobalVar,
+    PlayerVar,
+    HostPlayer,
+    Member,
+    EventPlayer,
+    Constant,
+    Call,
+    ReceiverCall,
+    MacroCall,
+    MacroParam,
+    Type,
+    Binary,
+    Conditional,
+    Unary,
+    Index,
+    Format,
+);
