@@ -12,7 +12,7 @@ use crate::cst::{
     RuleEntry, Stmt, SwitchArm, TopLevel,
 };
 use crate::diag::{OpyError, Position, Span};
-use crate::lexer::{Token, TokenKind, is_identifier};
+use crate::lexer::{Token, TokenKind, decode_string_escape, is_identifier};
 
 /// The outcome of a parse.
 #[derive(Debug, Default)]
@@ -349,18 +349,6 @@ fn shift_span(span: Span, origin: Position) -> Span {
         crate::diag::shift_position(span.start, origin),
         crate::diag::shift_position(span.end, origin),
     )
-}
-
-fn decode_string_escape(character: char) -> char {
-    match character {
-        'n' => '\n',
-        't' => '\t',
-        'r' => '\r',
-        '\\' => '\\',
-        '"' => '"',
-        '\'' => '\'',
-        other => other,
-    }
 }
 
 fn is_string_modifier(text: &str) -> bool {

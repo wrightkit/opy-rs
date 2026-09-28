@@ -61,33 +61,29 @@ impl Parser<'_> {
     }
 
     pub(super) fn parse_or(&mut self) -> Result<Expr, ()> {
-        self.skip_expression_newlines();
-        let mut left = self.parse_and()?;
-        loop {
-            self.skip_expression_newlines();
-            if !self.is_ident("or") {
-                break;
-            }
-            self.advance();
-            self.skip_expression_newlines();
-            let right = self.parse_and()?;
-            left = binary("or", left, right);
-        }
-        Ok(left)
+        self.parse_ident_chain("or", |parser| parser.parse_and())
     }
 
     pub(super) fn parse_and(&mut self) -> Result<Expr, ()> {
+        self.parse_ident_chain("and", |parser| parser.parse_not())
+    }
+
+    fn parse_ident_chain(
+        &mut self,
+        operator: &str,
+        mut parse_next: impl FnMut(&mut Self) -> Result<Expr, ()>,
+    ) -> Result<Expr, ()> {
         self.skip_expression_newlines();
-        let mut left = self.parse_not()?;
+        let mut left = parse_next(self)?;
         loop {
             self.skip_expression_newlines();
-            if !self.is_ident("and") {
+            if !self.is_ident(operator) {
                 break;
             }
             self.advance();
             self.skip_expression_newlines();
-            let right = self.parse_not()?;
-            left = binary("and", left, right);
+            let right = parse_next(self)?;
+            left = binary(operator, left, right);
         }
         Ok(left)
     }

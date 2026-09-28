@@ -358,15 +358,7 @@ impl Lexer {
                     value.push(decoded);
                     continue;
                 }
-                value.push(match escaped {
-                    'n' => '\n',
-                    't' => '\t',
-                    'r' => '\r',
-                    '\\' => '\\',
-                    '"' => '"',
-                    '\'' => '\'',
-                    other => other,
-                });
+                value.push(decode_string_escape(escaped));
                 self.advance();
                 continue;
             }
@@ -546,6 +538,18 @@ impl Lexer {
 pub(crate) fn is_identifier(text: &str) -> bool {
     let mut characters = text.chars();
     characters.next().is_some_and(is_ident_start) && characters.all(is_ident_continue)
+}
+
+pub(crate) fn decode_string_escape(character: char) -> char {
+    match character {
+        'n' => '\n',
+        't' => '\t',
+        'r' => '\r',
+        '\\' => '\\',
+        '"' => '"',
+        '\'' => '\'',
+        other => other,
+    }
 }
 
 pub(crate) fn is_ident_start(c: char) -> bool {
