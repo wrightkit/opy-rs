@@ -1,5 +1,15 @@
 use super::*;
 
+fn declaration_visible(
+    declarations: &HashMap<String, usize>,
+    name: &str,
+    current_order: usize,
+) -> bool {
+    declarations
+        .get(name)
+        .is_some_and(|order| *order <= current_order)
+}
+
 impl Lowerer {
     pub(super) fn lower_declaration(&mut self, decl: &Decl) -> Option<Declaration> {
         match decl {
@@ -154,9 +164,7 @@ impl Lowerer {
     }
 
     pub(super) fn subroutine_visible(&self, name: &str) -> bool {
-        self.subroutine_declarations
-            .get(name)
-            .is_some_and(|order| *order <= self.current_order)
+        declaration_visible(&self.subroutine_declarations, name, self.current_order)
             || self
                 .subroutine_definitions
                 .iter()
@@ -164,33 +172,23 @@ impl Lowerer {
     }
 
     pub(super) fn global_visible(&self, name: &str) -> bool {
-        self.global_declarations
-            .get(name)
-            .is_some_and(|order| *order <= self.current_order)
+        declaration_visible(&self.global_declarations, name, self.current_order)
     }
 
     pub(super) fn player_visible(&self, name: &str) -> bool {
-        self.player_declarations
-            .get(name)
-            .is_some_and(|order| *order <= self.current_order)
+        declaration_visible(&self.player_declarations, name, self.current_order)
     }
 
     pub(super) fn macro_visible(&self, name: &str) -> bool {
-        self.macro_declarations
-            .get(name)
-            .is_some_and(|order| *order <= self.current_order)
+        declaration_visible(&self.macro_declarations, name, self.current_order)
     }
 
     pub(super) fn constant_visible(&self, name: &str) -> bool {
-        self.constant_declarations
-            .get(name)
-            .is_some_and(|order| *order <= self.current_order)
+        declaration_visible(&self.constant_declarations, name, self.current_order)
     }
 
     pub(super) fn enum_visible(&self, name: &str) -> bool {
-        self.enum_declarations
-            .get(name)
-            .is_some_and(|order| *order <= self.current_order)
+        declaration_visible(&self.enum_declarations, name, self.current_order)
     }
 
     /// A declaration initializer: integer-`0` literal initializers are
