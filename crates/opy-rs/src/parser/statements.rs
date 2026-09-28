@@ -253,13 +253,7 @@ impl Parser<'_> {
         let start = self.advance();
         let line_indent = start.span.start.col;
         let condition = self.parse_expr()?;
-        if self
-            .expect(TokenKind::Colon, "':' after the if condition")
-            .is_err()
-        {
-            return Err(());
-        }
-        let body = self.parse_colon_body(line_indent)?;
+        let body = self.expect_colon_body(line_indent, "':' after the if condition")?;
         let continued_inline_body = self.last_colon_body_continued;
         if continued_inline_body {
             self.errors.push(OpyError::at(
@@ -288,33 +282,25 @@ impl Parser<'_> {
                     Ok(expr) => expr,
                     Err(()) => return Err(()),
                 };
-                if self
-                    .expect(TokenKind::Colon, "':' after the elif condition")
-                    .is_err()
-                {
-                    return Err(());
-                }
-                let body = self.parse_colon_body(branch_start.span.start.col)?;
+                let body = self.expect_colon_body(
+                    branch_start.span.start.col,
+                    "':' after the elif condition",
+                )?;
                 branches.push(IfBranch { condition, body });
             } else if self.is_ident("else") {
                 let branch_start = self.advance();
                 if self.is_ident("if") {
                     self.advance();
                     let condition = self.parse_expr()?;
-                    if self
-                        .expect(TokenKind::Colon, "':' after the else-if condition")
-                        .is_err()
-                    {
-                        return Err(());
-                    }
-                    let body = self.parse_colon_body(branch_start.span.start.col)?;
+                    let body = self.expect_colon_body(
+                        branch_start.span.start.col,
+                        "':' after the else-if condition",
+                    )?;
                     branches.push(IfBranch { condition, body });
                     continue;
                 }
-                if self.expect(TokenKind::Colon, "':' after `else`").is_err() {
-                    return Err(());
-                }
-                let body = self.parse_colon_body(branch_start.span.start.col)?;
+                let body =
+                    self.expect_colon_body(branch_start.span.start.col, "':' after `else`")?;
                 r#else = Some(body);
                 break;
             } else {
@@ -349,6 +335,15 @@ impl Parser<'_> {
             self.last_colon_body_continued = self.last_statement_continued;
             Ok(vec![statement])
         }
+    }
+
+    fn expect_colon_body(
+        &mut self,
+        line_indent: u32,
+        colon_context: &str,
+    ) -> Result<Vec<Stmt>, ()> {
+        self.expect(TokenKind::Colon, colon_context)?;
+        self.parse_colon_body(line_indent)
     }
 
     pub(super) fn parse_for(&mut self) -> Result<Stmt, ()> {
