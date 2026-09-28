@@ -7,6 +7,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.62](https://github.com/wrightkit/opy-rs/compare/v0.1.61...v0.1.62) - 2026-09-28
+
+### Fixed
+
+- *(opy-rs)* preserve HIR validation error precedence
+
+### Other
+
+- Merge pull request #406 from wrightkit/codex/massive-simplification
+- *(opy-rs)* avoid cloning compile report output
+- *(opy-rs)* reuse reconstruction subroutine set
+- *(opy-rs)* borrow self-modification operands
+- *(opy-rs)* remove unused JavaScript engine trait
+- *(opy-rs)* simplify synthetic texture rule
+- *(opy-rs)* share indexed expression decomposition
+- *(opy-rs)* keep HIR span accessors explicit
+- *(opy-rs)* share delimited expression parsing
+- *(opy-rs)* centralize HIR span accessors
+- *(opy-rs)* centralize HIR program traversal
+- *(opy-rs)* share variable declaration emission
+- *(opy-rs)* share disabled-rule diagnostics
+- *(opy-rs)* borrow macro templates during expansion
+- *(opy-rs)* share declaration visibility check
+- *(opy-rs)* share compressed component classification
+- *(opy-rs)* share compression eligibility checks
+- *(opy-rs)* share colon body parsing
+- *(opy-rs)* share block indentation parsing
+- *(opy-rs)* share initializer reconstruction scan
+- *(opy-rs)* reuse lexer identifier boundaries
+- *(opy-rs)* share settings string escape decoding
+- *(opy-rs)* consolidate expression parser helpers
+- *(opy-rs)* share cased glyph record construction
+- *(opy-rs)* avoid duplicate HIR condition validation
+- *(opy-rs)* borrow settings constant expressions
+- *(opy-rs)* share reconstruction call resolution
+- *(opy-rs)* group parser directive state
+- *(opy-rs)* share size optimizer boolean rewrite
+- *(opy-rs)* reuse literal value predicates
+- *(opy-rs)* unify logical operator folding
+- *(opy-rs)* centralize rule provenance writes
+- *(opy-rs)* reuse generated rule construction
+- *(opy-rs)* share rule name formatting filter
+- *(opy-rs)* mutate expanded hir in place
+- *(opy-rs)* streamline declaration planning
+- *(opy-rs)* combine declaration allocation scans
+- *(opy-rs)* isolate declaration lowering
+- *(opy-rs)* localize cased progress lowering
+- *(opy-rs)* reuse lexer identifier rules
+- *(opy-rs)* read space widths from source table
+- *(opy-rs)* remove string token forwarder
+- *(opy-rs)* reuse shared directive lookup
+- *(opy-rs)* share rule template values
+- *(opy-rs)* share compression decode lowering
+- *(opy-rs)* share value tree traversal
+- *(opy-rs)* reuse numeric operator folds
+- *(opy-rs)* consolidate parser and lowering paths
+- *(opy-rs)* centralize preprocessing error state
+- *(opy-rs)* centralize check failure state
+- *(opy-rs)* centralize settings cursor creation
+- *(opy-rs)* centralize parser initialization
+- *(opy-rs)* centralize lowerer initialization
+- *(opy-rs)* move reserved index set
+- *(opy-rs)* remove dead debug count branch
+- *(opy-rs)* share settings source cursor
+- *(opy-rs)* centralize condition folding
+- *(opy-rs)* share loop condition lowering
+- *(opy-rs)* reuse compile-time value display
+- *(opy-rs)* remove HIR validation wrappers
+- *(opy-rs)* unify settings scalar parsing
+- *(opy-rs)* split lowering responsibilities
+- *(opy-rs)* collapse redundant match arms
+- *(opy-rs)* remove redundant lowering state
+- *(opy-rs)* centralize HIR traversal
+- *(opy-rs)* simplify repeated lowering paths
+
 ## [0.1.61](https://github.com/wrightkit/opy-rs/compare/v0.1.60...v0.1.61) - 2026-09-27
 
 ### Other

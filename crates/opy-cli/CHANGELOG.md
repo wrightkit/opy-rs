@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.62](https://github.com/wrightkit/opy-rs/compare/opy-cli-v0.1.61...opy-cli-v0.1.62) - 2026-09-28
+
+### Other
+
+- Merge pull request #406 from wrightkit/codex/massive-simplification
+- *(opy-rs)* consolidate parser and lowering paths
+- *(opy-rs)* simplify repeated lowering paths
+
 ## [0.1.61](https://github.com/wrightkit/opy-rs/compare/opy-cli-v0.1.60...opy-cli-v0.1.61) - 2026-09-27
 
 ### Other
