@@ -518,38 +518,8 @@ impl<'a> Emitter<'a> {
         self.check_initializer_slot(&global_initializers);
 
         // Declarations.
-        for (position, variable) in self.program.global_variables.iter().enumerate() {
-            self.out.push_str("globalvar ");
-            self.out.push_str(&variable.name);
-            match global_initializers.get(&position) {
-                Some(value) => {
-                    self.out.push_str(" = ");
-                    self.emit_initializer(&value.0, value.1);
-                }
-                None => {
-                    self.out.push(' ');
-                    self.out
-                        .push_str(&variable.index.unwrap_or(position as u32).to_string());
-                }
-            }
-            self.out.push('\n');
-        }
-        for (position, variable) in self.program.player_variables.iter().enumerate() {
-            self.out.push_str("playervar ");
-            self.out.push_str(&variable.name);
-            match player_initializers.get(&position) {
-                Some(value) => {
-                    self.out.push_str(" = ");
-                    self.emit_initializer(&value.0, value.1);
-                }
-                None => {
-                    self.out.push(' ');
-                    self.out
-                        .push_str(&variable.index.unwrap_or(position as u32).to_string());
-                }
-            }
-            self.out.push('\n');
-        }
+        self.emit_variable_declarations(true, &global_initializers);
+        self.emit_variable_declarations(false, &player_initializers);
         if self.program.subroutines.is_empty() {
             self.out.push('\n');
         } else {
@@ -641,6 +611,34 @@ impl<'a> Emitter<'a> {
                 self.out.push('\n');
             }
             self.emit_actions(*rule_index, &rule.actions, 1);
+            self.out.push('\n');
+        }
+    }
+
+    fn emit_variable_declarations(
+        &mut self,
+        global: bool,
+        initializers: &std::collections::HashMap<usize, (Value, Option<Span>)>,
+    ) {
+        let (kind, variables) = if global {
+            ("globalvar ", &self.program.global_variables)
+        } else {
+            ("playervar ", &self.program.player_variables)
+        };
+        for (position, variable) in variables.iter().enumerate() {
+            self.out.push_str(kind);
+            self.out.push_str(&variable.name);
+            match initializers.get(&position) {
+                Some(value) => {
+                    self.out.push_str(" = ");
+                    self.emit_initializer(&value.0, value.1);
+                }
+                None => {
+                    self.out.push(' ');
+                    self.out
+                        .push_str(&variable.index.unwrap_or(position as u32).to_string());
+                }
+            }
             self.out.push('\n');
         }
     }
