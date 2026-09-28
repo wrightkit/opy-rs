@@ -1239,14 +1239,14 @@ fn modify_operation(name: &str) -> Option<ModifyOp> {
 /// The operand of `target = target <op> operand`.
 fn self_operand(
     name: &str,
-    args: &mut Vec<Value>,
-    is_target: impl Fn(&Value) -> bool,
+    args: &[Value],
+    is_target: impl FnOnce(&Value) -> bool,
 ) -> Option<(ModifyOp, Value)> {
     let op = modify_operation(name)?;
     if args.len() != 2 || !is_target(&args[0]) {
         return None;
     }
-    Some((op, args.pop().expect("two arguments")))
+    Some((op, args[1].clone()))
 }
 
 /// `x = x <op> y` is the modification `x <op>= y`.
@@ -1258,7 +1258,7 @@ pub(super) fn self_modification(action: &Action) -> Option<Action> {
         } => {
             let (op, value) = self_operand(
                 name,
-                &mut args.clone(),
+                args,
                 |target| matches!(target, Value::GlobalVariable(other) if other == variable),
             )?;
             Some(Action::ModifyGlobalVariable {
@@ -1272,7 +1272,7 @@ pub(super) fn self_modification(action: &Action) -> Option<Action> {
             variable,
             value: Value::Call { name, args },
         } => {
-            let (op, value) = self_operand(name, &mut args.clone(), |target| {
+            let (op, value) = self_operand(name, args, |target| {
                 matches!(target, Value::PlayerVariable { player: other, variable: other_variable }
                     if other_variable == variable && same(player, other))
             })?;
@@ -1297,7 +1297,7 @@ pub(super) fn self_modification(action: &Action) -> Option<Action> {
                 return None;
             };
             let (variable, index) = (&args[0], &args[1]);
-            let (_, value) = self_operand(operation, &mut operands.clone(), |read| match read {
+            let (_, value) = self_operand(operation, operands, |read| match read {
                 Value::Call { name, args } if name == "valueInArray" && args.len() == 2 => {
                     same(&args[0], variable) && same(&args[1], index)
                 }
