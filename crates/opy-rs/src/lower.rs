@@ -390,7 +390,7 @@ fn texture_state_assignment(value: HirExpr) -> HirStmt {
 }
 
 fn texture_dummy_player() -> HirExpr {
-    synthetic_call("lastCreatedEntity", Vec::new())
+    synthetic_call("getLastCreatedEntity", Vec::new())
 }
 
 fn texture_dummy_first_value() -> HirExpr {
@@ -1743,6 +1743,46 @@ mod tests {
 
         let error = compile_error(&action_source("g = squareRoot(9)"), 4);
         assert_eq!(error.code, "unknown-value");
+    }
+
+    #[test]
+    fn canonical_ids_without_upstream_spellings_are_rejected() {
+        // These canonical Workshop ids are not upstream OPY spellings (#410):
+        // the oracle rejects them, so they are source diagnostics. Their
+        // upstream spellings keep the same canonical identity via `catalogId`.
+        for (statement, code) in [
+            ("g = evaluateOnce(1)", "unknown-value"),
+            ("g = lastCreatedEntity()", "unknown-value"),
+            ("g = lastTextId()", "unknown-value"),
+            ("g = allTankHeroes()", "unknown-value"),
+            ("g = allDamageHeroes()", "unknown-value"),
+            ("g = allSupportHeroes()", "unknown-value"),
+            ("destroyAllHudText()", "unknown-action"),
+        ] {
+            let error = compile_error(&action_source(statement), 4);
+            assert_eq!(error.code, code, "{statement}");
+        }
+
+        let member = "globalvar g\nrule \"r\":\n    @Event eachPlayer\n    eventPlayer.isButtonHeld(Button.PRIMARY_FIRE)\n";
+        let error = compile_error(member, 4);
+        assert_eq!(error.code, "unknown-member");
+
+        // `.x`/`.y`/`.z` are vector component accessors, not member calls.
+        for axis in ["x", "y", "z"] {
+            let source = format!(
+                "globalvar g\nrule \"r\":\n    @Event eachPlayer\n    g = eventPlayer.{axis}()\n"
+            );
+            let error = compile_error(&source, 4);
+            assert_eq!(error.code, "unknown-member", "{axis}()");
+        }
+
+        // The upstream spellings still resolve.
+        crate::compile(
+            "globalvar g\nrule \"r\":\n    @Event eachPlayer\n    g = evalOnce(1)\n    g = getLastCreatedEntity()\n    g = getLastCreatedText()\n    g = getTankHeroes()\n    g = getDamageHeroes()\n    g = getSupportHeroes()\n    g = eventPlayer.isHoldingButton(Button.PRIMARY_FIRE)\n    destroyAllHudTexts()\n",
+            "test.opy",
+            std::path::Path::new(""),
+        )
+        .expect("the upstream spellings compile");
     }
 
     #[test]

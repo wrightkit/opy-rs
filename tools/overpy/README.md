@@ -73,6 +73,13 @@ lowering entries and those whose arguments are ids created by another call.
 A probe the oracle rejects and the native compiler accepts is diagnostics
 parity and is only counted.
 
+Every accepted spelling is also compared against the oracle's name
+resolution: functions without a sample call and every alias source get a
+`:name` probe, and `base` calls already exercise the rest. An
+`unknown-spelling` finding means the oracle reports a declared name as an
+unknown function; it fails the run like any unexplained difference — a
+spelling beyond upstream needs an approved, recorded exception (#410).
+
 ## Structural convergence gate
 
 `structural_gate.py` enforces the structural compatibility contract for real

@@ -769,4 +769,52 @@ mod tests {
         assert!(manifest.resolve_function("frobnicate").is_none());
         assert!(manifest.resolve_member("frobnicate").is_none());
     }
+
+    #[test]
+    fn canonical_ids_are_not_source_spellings() {
+        // #410: a `catalogId` is the canonical Workshop identity, not an OPY
+        // source spelling. The manifest only accepts names the pinned oracle
+        // accepts; canonical-only ids stay unresolved while the upstream
+        // spellings resolve to the same canonical identity.
+        let manifest = Manifest::builtin().expect("builtin");
+        for (canonical, upstream, catalog_id) in [
+            ("evaluateOnce", "evalOnce", "evaluateOnce"),
+            (
+                "lastCreatedEntity",
+                "getLastCreatedEntity",
+                "lastCreatedEntity",
+            ),
+            ("lastTextId", "getLastCreatedText", "lastTextId"),
+            ("allTankHeroes", "getTankHeroes", "allTankHeroes"),
+            ("allDamageHeroes", "getDamageHeroes", "allDamageHeroes"),
+            ("allSupportHeroes", "getSupportHeroes", "allSupportHeroes"),
+            (
+                "destroyAllHudText",
+                "destroyAllHudTexts",
+                "destroyAllHudText",
+            ),
+        ] {
+            assert!(
+                manifest.resolve_function(canonical).is_none(),
+                "{canonical} must not be a callable source spelling"
+            );
+            let entry = manifest
+                .resolve_function(upstream)
+                .unwrap_or_else(|| panic!("{upstream} must resolve"));
+            assert_eq!(
+                entry.catalog_id.as_deref(),
+                Some(catalog_id),
+                "{upstream} must keep the canonical identity"
+            );
+        }
+        assert!(manifest.resolve_member("isButtonHeld").is_none());
+        let held = manifest
+            .resolve_member("isHoldingButton")
+            .expect("isHoldingButton");
+        assert_eq!(held.catalog_id.as_deref(), Some("isButtonHeld"));
+        // Vector components are accessors, not callable members.
+        for axis in ["x", "y", "z"] {
+            assert!(manifest.resolve_member(axis).is_none(), "{axis}()");
+        }
+    }
 }

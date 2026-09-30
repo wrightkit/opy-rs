@@ -28,14 +28,6 @@
       "evidence": [
         "builtin-surface"
       ],
-      "kind": "memberAlias",
-      "source": "isHoldingButton",
-      "target": "isButtonHeld"
-    },
-    {
-      "evidence": [
-        "builtin-surface"
-      ],
       "kind": "functionAlias",
       "source": "angleToDirection",
       "target": "directionFromAngles"
@@ -53,32 +45,8 @@
         "builtin-surface"
       ],
       "kind": "functionAlias",
-      "source": "evalOnce",
-      "target": "evaluateOnce"
-    },
-    {
-      "evidence": [
-        "builtin-surface"
-      ],
-      "kind": "functionAlias",
       "source": "updateEveryTick",
       "target": "updateEveryFrame"
-    },
-    {
-      "evidence": [
-        "builtin-surface"
-      ],
-      "kind": "functionAlias",
-      "source": "destroyAllHudTexts",
-      "target": "destroyAllHudText"
-    },
-    {
-      "evidence": [
-        "builtin-surface"
-      ],
-      "kind": "functionAlias",
-      "source": "getLastCreatedEntity",
-      "target": "lastCreatedEntity"
     },
     {
       "evidence": [
@@ -87,38 +55,6 @@
       "kind": "memberAlias",
       "source": "disableHeroHUD",
       "target": "disableHeroHud"
-    },
-    {
-      "evidence": [
-        "builtin-surface"
-      ],
-      "kind": "functionAlias",
-      "source": "getLastCreatedText",
-      "target": "lastTextId"
-    },
-    {
-      "evidence": [
-        "builtin-surface"
-      ],
-      "kind": "functionAlias",
-      "source": "getTankHeroes",
-      "target": "allTankHeroes"
-    },
-    {
-      "evidence": [
-        "builtin-surface"
-      ],
-      "kind": "functionAlias",
-      "source": "getDamageHeroes",
-      "target": "allDamageHeroes"
-    },
-    {
-      "evidence": [
-        "builtin-surface"
-      ],
-      "kind": "functionAlias",
-      "source": "getSupportHeroes",
-      "target": "allSupportHeroes"
     }
   ],
   "functions": [
@@ -852,7 +788,7 @@
       "evidence": [
         "builtin-surface"
       ],
-      "id": "destroyAllHudText",
+      "id": "destroyAllHudTexts",
       "kind": "action",
       "params": []
     },
@@ -1335,7 +1271,7 @@
       "evidence": [
         "builtin-surface"
       ],
-      "id": "lastCreatedEntity",
+      "id": "getLastCreatedEntity",
       "kind": "value",
       "params": []
     },
@@ -1344,7 +1280,7 @@
       "evidence": [
         "builtin-surface"
       ],
-      "id": "lastTextId",
+      "id": "getLastCreatedText",
       "kind": "value",
       "params": []
     },
@@ -1427,7 +1363,7 @@
       "evidence": [
         "builtin-surface"
       ],
-      "id": "evaluateOnce",
+      "id": "evalOnce",
       "kind": "value",
       "params": [
         {
@@ -1929,7 +1865,7 @@
       "evidence": [
         "builtin-surface"
       ],
-      "id": "allTankHeroes",
+      "id": "getTankHeroes",
       "kind": "value",
       "params": []
     },
@@ -1938,7 +1874,7 @@
       "evidence": [
         "builtin-surface"
       ],
-      "id": "allDamageHeroes",
+      "id": "getDamageHeroes",
       "kind": "value",
       "params": []
     },
@@ -1947,7 +1883,7 @@
       "evidence": [
         "builtin-surface"
       ],
-      "id": "allSupportHeroes",
+      "id": "getSupportHeroes",
       "kind": "value",
       "params": []
     },
@@ -2648,36 +2584,6 @@
       "receiver": "Any"
     },
     {
-      "catalogId": "__xComponentOf__",
-      "evidence": [
-        "builtin-surface"
-      ],
-      "id": "x",
-      "kind": "memberValue",
-      "params": [],
-      "receiver": "Vector"
-    },
-    {
-      "catalogId": "__yComponentOf__",
-      "evidence": [
-        "builtin-surface"
-      ],
-      "id": "y",
-      "kind": "memberValue",
-      "params": [],
-      "receiver": "Vector"
-    },
-    {
-      "catalogId": "__zComponentOf__",
-      "evidence": [
-        "builtin-surface"
-      ],
-      "id": "z",
-      "kind": "memberValue",
-      "params": [],
-      "receiver": "Vector"
-    },
-    {
       "catalogId": "lastOf",
       "evidence": [
         "builtin-surface"
@@ -3360,7 +3266,7 @@
       "evidence": [
         "builtin-surface"
       ],
-      "id": "isButtonHeld",
+      "id": "isHoldingButton",
       "kind": "memberValue",
       "params": [
         {

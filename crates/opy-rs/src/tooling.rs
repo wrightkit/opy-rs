@@ -773,4 +773,49 @@ mod tests {
         assert_eq!(span.path, "main.opy");
         assert_eq!(span.start.line, 3);
     }
+
+    #[test]
+    fn canonical_workshop_ids_are_source_diagnostics() {
+        // #410: canonical Workshop ids that upstream OverPy does not spell
+        // are rejected with a source span, not accepted as callables.
+        for (statement, code) in [
+            ("g = allTankHeroes()", "unknown-value"),
+            ("g = lastCreatedEntity()", "unknown-value"),
+            ("g = evaluateOnce(1)", "unknown-value"),
+            ("destroyAllHudText()", "unknown-action"),
+        ] {
+            let outcome = check_source(&format!(
+                "globalvar g\nrule \"r\":\n    @Event global\n    {statement}\n"
+            ));
+            assert!(!outcome.is_clean(), "{statement}");
+            let diagnostic = outcome
+                .diagnostics
+                .iter()
+                .find(|diagnostic| diagnostic.code == code)
+                .unwrap_or_else(|| panic!("{statement}: expected {code}"));
+            let span = diagnostic.span.as_ref().expect("source-located");
+            assert_eq!(span.start.line, 4, "{statement}");
+        }
+
+        let outcome = check_source(
+            "globalvar g\nrule \"r\":\n    @Event eachPlayer\n    g = eventPlayer.isButtonHeld(Button.PRIMARY_FIRE)\n",
+        );
+        assert!(!outcome.is_clean());
+        let diagnostic = outcome
+            .diagnostics
+            .iter()
+            .find(|diagnostic| diagnostic.code == "unknown-member")
+            .expect("unknown-member diagnostic");
+        assert_eq!(diagnostic.span.as_ref().unwrap().start.line, 4);
+
+        // The upstream spellings stay clean.
+        let outcome = check_source(
+            "globalvar g\nrule \"r\":\n    @Event eachPlayer\n    g = getTankHeroes()\n    g = getLastCreatedEntity()\n    g = evalOnce(1)\n    g = eventPlayer.isHoldingButton(Button.PRIMARY_FIRE)\n    destroyAllHudTexts()\n",
+        );
+        assert!(
+            outcome.is_clean(),
+            "unexpected diagnostics: {:?}",
+            outcome.diagnostics
+        );
+    }
 }
