@@ -25,7 +25,7 @@ mod integration;
 mod lowering;
 mod number_format;
 mod operator_optimization;
-mod settings;
+pub(crate) mod settings;
 mod size_optimization;
 mod string_format;
 mod value_walk;
@@ -819,7 +819,9 @@ fn write_translation_files(
     Ok(())
 }
 
-fn workshop_error_span(error: &workshop_rs::WorkshopError) -> Option<workshop_rs::source::Span> {
+pub(crate) fn workshop_error_span(
+    error: &workshop_rs::WorkshopError,
+) -> Option<workshop_rs::source::Span> {
     match error {
         workshop_rs::WorkshopError::Unknown { span, .. }
         | workshop_rs::WorkshopError::Malformed { span, .. }

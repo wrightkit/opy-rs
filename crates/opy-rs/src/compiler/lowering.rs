@@ -283,23 +283,7 @@ impl<'a> Lowering<'a> {
             self.program
                 .add_file(workshop_rs::source::SourceFile::new(file.path.clone()));
         }
-        let settings_constants = self
-            .hir
-            .declarations
-            .iter()
-            .filter_map(|declaration| match declaration {
-                hir::Declaration::Constant { name, value, .. } => {
-                    Some((name.clone(), value.as_ref()))
-                }
-                _ => None,
-            })
-            .collect();
-        self.program.settings = super::settings::merge_extensions(
-            self.hir.settings.clone().map(|settings| {
-                super::settings::expand_settings_constants(settings, &settings_constants)
-            }),
-            &self.hir.preprocessing.directives,
-        )?;
+        self.program.settings = super::settings::workshop_settings(self.hir)?;
         Ok(())
     }
 

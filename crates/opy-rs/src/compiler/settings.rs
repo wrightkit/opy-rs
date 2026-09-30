@@ -1,6 +1,29 @@
 use super::*;
 use workshop_rs::source::{Position as WorkshopPosition, Span as WorkshopSpan};
 
+/// Convert resolved HIR settings into the canonical Workshop settings
+/// carrier exactly as lowering does: constant expansion, then `#!extension`
+/// merging. Shared by lowering and by `check`'s emission-acceptance pass so
+/// `check` and `compile` see the same settings tree (#411).
+pub(crate) fn workshop_settings(
+    hir: &crate::hir::Program,
+) -> Result<Option<workshop_rs::settings::Settings>, IntegrationError> {
+    let settings_constants: HashMap<String, &Expr> = hir
+        .declarations
+        .iter()
+        .filter_map(|declaration| match declaration {
+            hir::Declaration::Constant { name, value, .. } => Some((name.clone(), value.as_ref())),
+            _ => None,
+        })
+        .collect();
+    merge_extensions(
+        hir.settings
+            .clone()
+            .map(|settings| expand_settings_constants(settings, &settings_constants)),
+        &hir.preprocessing.directives,
+    )
+}
+
 pub(super) fn merge_extensions(
     settings: Option<crate::hir::Settings>,
     directives: &[crate::hir::DirectiveRecord],

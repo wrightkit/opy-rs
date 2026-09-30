@@ -8,10 +8,13 @@ assemble frontend or compiler implementation crates.
 ## Pipeline contract
 
 `check` runs the source pipeline through resolution (preprocess (includes,
-`#!define` macros) → parse (CST) → resolve (Opy HIR)). `compile` continues
-from that resolved model through canonical WIR lowering, validation, and
-localized Workshop emission. A compile report retains the source-attributed
-diagnostic when either the frontend or integration stage fails.
+`#!define` macros) → parse (CST) → resolve (Opy HIR)), then validates the
+resolved settings block against the canonical Workshop emission table so
+settings keys cannot pass `check` and fail only inside the emitter.
+`compile` continues from that resolved model through canonical WIR lowering,
+validation, and localized Workshop emission. A compile report retains the
+source-attributed diagnostic when either the frontend or integration stage
+fails.
 
 ## Compile API
 
@@ -141,6 +144,7 @@ Span layout: `file_id` indexes the registry, positions are 1-based
 | `value-in-action-position` / `action-in-value-position` | resolve | Action/value identity |
 | `invalid-receiver` | resolve | Receiver category validation |
 | `vect-arity` | resolve | `vect` arity |
+| `workshop-emission` | settings | Settings key outside the canonical emission table, or a member the emitter cannot emit |
 
 Parse diagnostics are reported in full (recovery collects several);
 semantic-resolution diagnostics follow the compile contract and report the

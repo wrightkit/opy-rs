@@ -357,3 +357,44 @@ fn player_member_references_use_exact_member_span() {
             .any(|reference| reference.start.line == 5 && reference.start.col == 20)
     );
 }
+
+#[test]
+fn settings_emission_agreement_between_check_and_compile() {
+    // opy-rs#411: a settings key the canonical emission table cannot emit
+    // must fail `check` under the same `workshop-emission` code `compile`
+    // reports, instead of passing check and only failing inside the emitter.
+    let invalid = concat!(
+        "settings {\n",
+        "    \"main\": {\"description\": \"t\"},\n",
+        "    \"gamemodes\": {\"ffa\": {\"notASetting\": 3}}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    );
+    let outcome = check(invalid, "main.opy", Path::new(""));
+    assert!(outcome.model.is_none());
+    let diagnostic = outcome
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.severity == tooling::DiagnosticSeverity::Error)
+        .expect("unsupported settings key must fail check");
+    assert_eq!(diagnostic.code, "workshop-emission");
+    assert_eq!(diagnostic.span.as_ref().expect("span").path, "main.opy");
+    let compile_error = opy_rs::compile(invalid, "main.opy", Path::new("")).unwrap_err();
+    assert_eq!(compile_error.code, "workshop-emission");
+
+    // The inherited `gamemodes.general` key that motivated the issue passes
+    // both entry points.
+    let valid = concat!(
+        "settings {\n",
+        "    \"main\": {\"description\": \"t\"},\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabledMaps\": [\"workshopIsland\"], \"enableKillCam\": false}}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    );
+    let outcome = check(valid, "main.opy", Path::new(""));
+    assert!(
+        outcome.is_clean(),
+        "inherited gamemode key must check clean: {:?}",
+        outcome.diagnostics
+    );
+}
