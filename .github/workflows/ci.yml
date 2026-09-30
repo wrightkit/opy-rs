@@ -81,6 +81,11 @@ jobs:
       - name: Install oracle dependencies
         run: pnpm install --dir tools/overpy/oracle --frozen-lockfile
 
+      - name: Run builtin surface differential probe against the oracle
+        run: >-
+          python3 -B tools/overpy/probe_builtins.py
+          --binary target/debug/opy-compat
+
       - name: Run structural convergence gate for pinned real projects
         run: >-
           python3 -B tools/overpy/structural_gate.py

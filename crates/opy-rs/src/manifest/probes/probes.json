@@ -54,7 +54,7 @@
       "diagnosticContains": "Unknown function 'createHudText'",
       "expect": "failure",
       "id": "catalog-only-names",
-      "sha256": "f5ee4ed1a779991253afa2d4be9685c2f85c837923d88cbf14f3e36296dacb58",
+      "sha256": "9ad9581e87c6a28c1271ac442c897b0dc4af9aef76a00d1ead8bfc91250ac100",
       "source": "catalog-only-names.opy"
     },
     {

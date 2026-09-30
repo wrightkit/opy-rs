@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use opy_rs::Compiler;
-use opy_rs::manifest::{Function, Manifest};
+use opy_rs::manifest::{AliasKind, Function, Manifest};
 use serde::{Deserialize, Serialize};
 use workshop_rs::catalog::{Catalog, CatalogEntry, Kind, Locale};
 
@@ -126,6 +126,8 @@ struct Reference {
     ok: bool,
     #[serde(default)]
     workshop: String,
+    #[serde(default)]
+    error: String,
 }
 
 pub(super) fn generate() -> Result<(), String> {
@@ -134,6 +136,12 @@ pub(super) fn generate() -> Result<(), String> {
     let mut probes = Vec::new();
     for function in &manifest.functions {
         let calls = calls(&catalog, function);
+        if calls.is_empty() {
+            // Functions without a valid sample call would otherwise never
+            // reach the oracle; a name probe still verifies the declared
+            // spelling is one upstream resolves.
+            probes.push(name_probe(&function.id, function.kind.is_member()));
+        }
         let mut statements: Vec<(String, String)> = calls
             .iter()
             .map(|call| {
@@ -165,6 +173,14 @@ pub(super) fn generate() -> Result<(), String> {
             }
         }
     }
+    for alias in &manifest.aliases {
+        // Alias sources are accepted spellings too; verify each resolves
+        // upstream like the function table ids do.
+        probes.push(name_probe(
+            &alias.source,
+            alias.kind == AliasKind::MemberAlias,
+        ));
+    }
     for (function, variant, call) in SETTING_CALLS {
         for (mode, prefix) in [("default", ""), ("size", "#!optimizeForSize\n")] {
             probes.push(Probe {
@@ -189,6 +205,22 @@ fn source(prefix: &str, statement: &str) -> String {
     format!(
         "{prefix}globalvar g\nplayervar p\n\nrule \"probe\":\n    @Event eachPlayer\n    {statement}\n"
     )
+}
+
+/// A probe that exercises only name resolution: `g = name()` gets far enough
+/// for the oracle to report `Unknown function` when the spelling is not
+/// upstream. Any other oracle outcome means the name resolved, so argument
+/// mismatches on the synthetic call are expected and ignored.
+fn name_probe(name: &str, member: bool) -> Probe {
+    let call = if member {
+        format!("eventPlayer.{name}()")
+    } else {
+        format!("{name}()")
+    };
+    Probe {
+        id: format!("default:{name}:name"),
+        source: source("", &format!("g = {call}")),
+    }
 }
 
 /// The base call, its trailing-default omissions, and one call per argument
@@ -340,26 +372,55 @@ pub(super) fn compare(probes: &Path, references: &Path) -> Result<(), String> {
         let reference = references
             .get(&probe.id)
             .ok_or_else(|| format!("no reference result for {}", probe.id))?;
-        let native = compiler.compile_source_with_locale(
-            &probe.source,
-            "probe.opy",
-            Path::new("."),
-            &locale,
-        );
-        let (status, detail) = match (reference.ok, native) {
-            (false, Err(_)) => ("both-reject", String::new()),
-            (false, Ok(_)) => ("native-accepts", String::new()),
-            (true, Err(error)) => ("native-rejects", error.to_string()),
-            (true, Ok(artifact)) => match (parse(&artifact.emitted), parse(&reference.workshop)) {
-                (Ok(native), Ok(reference)) if structurally_identical(&native, &reference) => {
-                    ("match", String::new())
+        // `mode:name:variant`; the probed spelling is the middle field and
+        // `name` variants only exercise name resolution, not native behavior.
+        let mut fields = probe.id.split(':');
+        let _ = fields.next();
+        let name = fields.next().unwrap_or_default();
+        let variant = fields.next().unwrap_or_default();
+        let unknown_spelling = !reference.ok
+            && (reference
+                .error
+                .contains(&format!("Unknown function '{name}'"))
+                || reference
+                    .error
+                    .contains(&format!("Unknown function '.{name}'")));
+        let (status, detail) = if variant == "name" {
+            (
+                if unknown_spelling {
+                    "unknown-spelling"
+                } else {
+                    "spelling-ok"
+                },
+                String::new(),
+            )
+        } else {
+            let native = compiler.compile_source_with_locale(
+                &probe.source,
+                "probe.opy",
+                Path::new("."),
+                &locale,
+            );
+            match (reference.ok, native) {
+                (false, _) if unknown_spelling => ("unknown-spelling", String::new()),
+                (false, Err(_)) => ("both-reject", String::new()),
+                (false, Ok(_)) => ("native-accepts", String::new()),
+                (true, Err(error)) => ("native-rejects", error.to_string()),
+                (true, Ok(artifact)) => {
+                    match (parse(&artifact.emitted), parse(&reference.workshop)) {
+                        (Ok(native), Ok(reference))
+                            if structurally_identical(&native, &reference) =>
+                        {
+                            ("match", String::new())
+                        }
+                        (Ok(_), Ok(_)) => ("different", String::new()),
+                        (Err(error), _) | (_, Err(error)) => ("unparsable", error),
+                    }
                 }
-                (Ok(_), Ok(_)) => ("different", String::new()),
-                (Err(error), _) | (_, Err(error)) => ("unparsable", error),
-            },
+            }
         };
         *counts.entry(status).or_default() += 1;
-        if !matches!(status, "match" | "both-reject") {
+        if !matches!(status, "match" | "both-reject" | "spelling-ok") {
             findings.push(serde_json::json!({
                 "id": probe.id,
                 "status": status,

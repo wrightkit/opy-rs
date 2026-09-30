@@ -12,6 +12,12 @@ recorded gap must still match something, so an unexplained or a stale
 difference fails. The oracle rejecting a probe while the native compiler
 accepts it is diagnostics parity, not structure, and is only counted.
 
+Every accepted spelling — each manifest function id and alias source — is
+also probed against the oracle's name resolution (a `:name` variant, and the
+`base` calls for catalog-backed entries). An `unknown-spelling` finding means
+the oracle reports the declared name as an unknown function; it fails the run
+unless a recorded gap lists it as an approved exception with its decision.
+
     cargo build --locked -p opy-cli --features compatibility --bin opy-compat
     python3 tools/overpy/probe_builtins.py --binary target/debug/opy-compat
 """
@@ -105,7 +111,11 @@ def main() -> int:
         stale = []
 
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))["functions"]
-    probed = {function_of(p["id"]) for p in selected}
+    # `:name` probes exercise name resolution only; they are not valid sample
+    # calls and must not count toward call-shape coverage.
+    probed = {
+        function_of(p["id"]) for p in selected if p["id"].rsplit(":", 1)[-1] != "name"
+    }
     unprobed = sorted({f["id"] for f in manifest} - probed)
 
     print(f"probes: {report['probes']}  {report['counts']}")

@@ -1263,7 +1263,7 @@ impl<'a> Emitter<'a> {
             return;
         }
         let (entry, member) =
-            match Self::resolve_call_entry(self.manifest, name, FunctionKind::Action) {
+            match Self::resolve_call_entry(self.manifest, name, FunctionKind::Action, args.len()) {
                 Ok(call) => call,
                 Err(message) => {
                     self.issue("unsupported-action-call", message, span);
@@ -1290,26 +1290,49 @@ impl<'a> Emitter<'a> {
         manifest: &'manifest Manifest,
         name: &str,
         expected: FunctionKind,
+        args_len: usize,
     ) -> Result<(&'manifest Function, bool), String> {
         let expected_action = expected.is_action();
-        let (entry, member) = match manifest.resolve_function(name) {
-            Some(entry) => (entry, false),
-            None => match manifest.resolve_member(name) {
-                Some(entry) => (entry, true),
-                None => {
-                    let message = if expected_action {
-                        format!(
-                            "action call '{name}' has no OPY source form on the \
-                             reconstruction surface"
-                        )
-                    } else {
-                        format!(
-                            "value call '{name}' has no OPY source form on the \
-                             reconstruction surface"
-                        )
-                    };
-                    return Err(message);
+        // `name` is a canonical Workshop call identity, so an entry that
+        // links to it through `catalogId` is the same builtin under its
+        // upstream source spelling (`id`). Distinct spellings may share one
+        // canonical id (e.g. `getAllPlayers` and `getPlayers`); prefer the
+        // candidate whose signature can bind the call's arguments.
+        let by_catalog = |entry: &&Function| {
+            entry.catalog_id.as_deref() == Some(name)
+                && entry.kind.is_action() == expected_action
+                && {
+                    let provided = args_len.saturating_sub(usize::from(entry.kind.is_member()));
+                    let required = entry.params.iter().filter(|param| !param.optional).count();
+                    required <= provided && provided <= entry.params.len()
                 }
+        };
+        let (entry, member) = match manifest
+            .functions
+            .iter()
+            .filter(by_catalog)
+            .min_by_key(|entry| entry.params.len())
+        {
+            Some(entry) => (entry, entry.kind.is_member()),
+            None => match manifest.resolve_function(name) {
+                Some(entry) => (entry, false),
+                None => match manifest.resolve_member(name) {
+                    Some(entry) => (entry, true),
+                    None => {
+                        let message = if expected_action {
+                            format!(
+                                "action call '{name}' has no OPY source form on the \
+                                 reconstruction surface"
+                            )
+                        } else {
+                            format!(
+                                "value call '{name}' has no OPY source form on the \
+                                 reconstruction surface"
+                            )
+                        };
+                        return Err(message);
+                    }
+                },
             },
         };
         if expected_action != entry.kind.is_action() {
@@ -1752,7 +1775,7 @@ impl<'a> Emitter<'a> {
             return;
         }
         let (entry, member) =
-            match Self::resolve_call_entry(self.manifest, name, FunctionKind::Value) {
+            match Self::resolve_call_entry(self.manifest, name, FunctionKind::Value, args.len()) {
                 Ok(call) => call,
                 Err(message) => {
                     self.issue("unsupported-value-call", message, span);

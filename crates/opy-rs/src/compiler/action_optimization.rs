@@ -101,10 +101,13 @@ impl<'a> ActionOptimizer<'a> {
 /// other value, including strings, teams and direction constants, as it is.
 fn wraps_in_boolean(value: &Value) -> bool {
     const ENUMS: [&str; 5] = ["Hero", "Map", "Color", "Button", "Gamemode"];
-    const CALLS: [&str; 43] = [
+    const CALLS: [&str; 47] = [
         "abilityIconString",
+        "allDamageHeroes",
         "allHeroes",
         "allPlayers",
+        "allSupportHeroes",
+        "allTankHeroes",
         "allowedHeroes",
         "crossProduct",
         "currentMap",
@@ -136,6 +139,7 @@ fn wraps_in_boolean(value: &Value) -> bool {
         "heroIconString",
         "iconString",
         "inputBindingString",
+        "lastCreatedEntity",
         "localVector",
         "nearestWalkablePosition",
         "normalize",
