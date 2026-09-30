@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/context-player-component-validation",
+  "category": "synthetic",
+  "features": [
+    "semantics/receiver-members",
+    "compilation/vector-component-access"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": true
+    },
+    "compiler": {
+      "nativeStatus": "failure",
+      "relationship": "known-gap",
+      "comparison": "diagnostic-code",
+      "diagnosticCode": "catalog-validation",
+      "failureClass": "integration"
+    }
+  }
+}

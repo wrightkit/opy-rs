@@ -1028,6 +1028,76 @@ mod tests {
     }
 
     #[test]
+    fn context_player_components_lower_to_member_expressions() {
+        // `x`/`y`/`z` are reserved member names in the pinned reference: on a
+        // context-player receiver they resolve unconditionally to the vector
+        // component path instead of a player-variable lookup (#414).
+        for (receiver_name, event) in [
+            ("eventPlayer", "eachPlayer"),
+            ("hostPlayer", "eachPlayer"),
+            ("localPlayer", "eachPlayer"),
+            ("attacker", "playerDied"),
+            ("victim", "playerDied"),
+        ] {
+            for axis in ["x", "y", "z"] {
+                let hir = lower_ok(&format!(
+                    "globalvar g\nrule \"r\":\n    @Event {event}\n    g = {receiver_name}.{axis}\n"
+                ));
+                let HirRuleEntry::Rule(rule) = &hir.rules[0] else {
+                    panic!("expected a rule");
+                };
+                let HirStmt::Assign { value, .. } = &rule.actions[0] else {
+                    panic!("expected an assign statement");
+                };
+                let HirExpr::Member {
+                    receiver, member, ..
+                } = value.as_ref()
+                else {
+                    panic!("{receiver_name}.{axis}: expected member expression, got {value:?}");
+                };
+                assert_eq!(member, axis, "{receiver_name}.{axis}");
+                match receiver_name {
+                    "eventPlayer" => {
+                        assert!(matches!(receiver.as_ref(), HirExpr::EventPlayer { .. }))
+                    }
+                    "hostPlayer" => {
+                        assert!(matches!(receiver.as_ref(), HirExpr::HostPlayer { .. }))
+                    }
+                    _ => assert!(
+                        matches!(receiver.as_ref(), HirExpr::Call { name, .. } if name == receiver_name),
+                        "{receiver_name}.{axis}: receiver must keep its source identity"
+                    ),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn context_player_non_component_members_stay_player_variables() {
+        // A declared player variable still resolves as a player-variable
+        // reference, an uppercase default var is not a component access, and
+        // an undeclared member keeps the unknown-member diagnostic.
+        let value = lowered_value(
+            "globalvar g\nplayervar pos\nrule \"r\":\n    @Event eachPlayer\n    g = eventPlayer.pos\n",
+        );
+        assert!(
+            matches!(&value, HirExpr::PlayerVar { name, .. } if name == "pos"),
+            "declared playervar member must stay a player-variable reference, got {value:?}"
+        );
+
+        let value = lowered_value(
+            "globalvar g\nrule \"r\":\n    @Event eachPlayer\n    g = eventPlayer.X\n",
+        );
+        assert!(
+            matches!(&value, HirExpr::PlayerVar { name, .. } if name == "X"),
+            "default-var member must stay a player-variable reference, got {value:?}"
+        );
+
+        let error = compile_error(&action_source("g = eventPlayer.pos"), 4);
+        assert_eq!(error.code, "unknown-member");
+    }
+
+    #[test]
     fn rule_prefix_template_is_global_and_subroutine_identity_is_preserved() {
         let text = "rule \"before\":\n    pass\ndef source_name():\n    @Name \"Friendly\"\n    pass\nrule \"after\":\n    pass\n";
         let tokens = lex(LexInput { file_id: 0, text }).expect("lexes");
