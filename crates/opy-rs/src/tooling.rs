@@ -11,6 +11,9 @@
 //!   without requiring lowering to any Workshop backend. Resolution stops at
 //!   the Opy HIR semantic model ([`hir::Program`]); Workshop emission,
 //!   decompilation, and catalog behavior are deliberately out of scope here.
+//!   The one Workshop-bound input, the settings block, is additionally checked
+//!   against the canonical emission table so `check` never accepts a settings
+//!   key `compile` would reject (issue #411).
 //! * [`SemanticModel`] wraps the resolved program and answers semantic
 //!   queries: declarations, rule listing, symbol/reference lookup by name or
 //!   span, custom-enum declarations, macro defines, and source provenance
@@ -92,7 +95,9 @@ impl CheckOutcome {
 
 /// Check one `.opy` project: preprocess (includes/defines) → parse (CST) →
 /// resolve (Opy HIR). `main_path` is the display path recorded in the file
-/// registry; `root` is the include base. No Workshop backend is required.
+/// registry; `root` is the include base. No Workshop backend is required;
+/// settings blocks are validated against the canonical emission table so the
+/// `check` verdict agrees with `compile` on settings keys (issue #411).
 pub fn check(source: &str, main_path: &str, root: &Path) -> CheckOutcome {
     check_with_overlay(source, main_path, root, &std::collections::BTreeMap::new())
 }
@@ -178,17 +183,35 @@ pub fn check_with_overlay(
         &preprocessed.preprocessing,
     ) {
         Ok(mut hir) => {
-            let frontend_warnings = visible_warnings(&preprocessed)
+            let mut diagnostics = visible_warnings(&preprocessed)
                 .map(|warning| Diagnostic::from_warning(warning, &files))
                 .collect::<Vec<_>>();
             hir.preprocessing = preprocessed.preprocessing;
             if let Err(error) = crate::settings::resolve_hir_settings(&mut hir, &program) {
-                let mut diagnostics = frontend_warnings;
                 diagnostics.push(Diagnostic::from_error(error, &files));
                 return CheckOutcome::failure(diagnostics, files);
             }
+            // Settings are Workshop-bound data: convert them through the same
+            // path the compiler uses and report every member the canonical
+            // emission table cannot emit, so `check` never accepts a settings
+            // key that `compile` would reject (#411).
+            match crate::compiler::settings::workshop_settings(&hir) {
+                Ok(Some(settings)) => diagnostics.extend(
+                    workshop_rs::settings::check_emission(&settings)
+                        .into_iter()
+                        .map(|error| Diagnostic::from_workshop_error(error, &files)),
+                ),
+                Ok(None) => {}
+                Err(error) => diagnostics.push(Diagnostic::from_integration_error(error, &files)),
+            }
+            if diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error)
+            {
+                return CheckOutcome::failure(diagnostics, files);
+            }
             CheckOutcome {
-                diagnostics: frontend_warnings,
+                diagnostics,
                 model: Some(SemanticModel::build(hir, &program)),
                 files,
                 // The directive was parsed, validated, and recorded by
@@ -237,6 +260,41 @@ impl Diagnostic {
             code: error.code,
             message: error.message,
             span: error.span.and_then(|span| resolve_record_span(span, files)),
+        }
+    }
+
+    /// A canonical Workshop settings error surfaced under the same code the
+    /// compile pipeline reports for emission failures.
+    fn from_workshop_error(error: workshop_rs::WorkshopError, files: &[FileRecord]) -> Diagnostic {
+        let span = crate::compiler::workshop_error_span(&error).map(|span| {
+            Span::new(
+                span.file.index() as u32,
+                Position::new(span.start.line, span.start.col),
+                Position::new(span.end.line, span.end.col),
+            )
+        });
+        Diagnostic {
+            severity: DiagnosticSeverity::Error,
+            code: "workshop-emission".to_string(),
+            message: error.to_string(),
+            span: span.and_then(|span| resolve_record_span(span, files)),
+        }
+    }
+
+    /// A settings-conversion failure at the Workshop integration boundary.
+    fn from_integration_error(
+        error: crate::compiler::IntegrationError,
+        files: &[FileRecord],
+    ) -> Diagnostic {
+        Diagnostic {
+            severity: DiagnosticSeverity::Error,
+            code: error.diagnostic.code,
+            message: error.diagnostic.message,
+            span: error
+                .diagnostic
+                .span
+                .map(to_frontend_span)
+                .and_then(|span| resolve_record_span(span, files)),
         }
     }
 }

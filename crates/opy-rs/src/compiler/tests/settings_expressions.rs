@@ -327,6 +327,37 @@ fn extension_directives_lower_as_canonical_flags_without_authored_settings() {
 }
 
 #[test]
+fn gamemode_kill_cam_compiles_into_the_deathmatch_block() {
+    // opy-rs#411: `gamemodes.<mode>` inherits the `gamemodes.general`
+    // settings the pinned OverPy merges into every mode schema, so
+    // `enableKillCam` under `ffa` must reach the Deathmatch block instead of
+    // dying as an outside-the-emission-table key.
+    let source = source_with_settings(
+        r#"settings {
+    "main": {"description": "t"},
+    "gamemodes": {"ffa": {"enabledMaps": ["workshopIsland"], "enableKillCam": false}}
+}"#,
+    );
+    let artifact = Compiler::new()
+        .expect("released Workshop contract must load")
+        .compile_source_artifact(&source, "issue-411.opy", Path::new("."))
+        .expect("inherited gamemode setting must compile");
+    let deathmatch = artifact
+        .emitted
+        .find("Deathmatch {")
+        .expect("ffa lowers to the Deathmatch mode block");
+    let mode_block = &artifact.emitted[deathmatch..];
+    let mode_end = mode_block
+        .find("\n        }")
+        .expect("the mode block closes at mode depth");
+    assert!(
+        mode_block[..mode_end].contains("Kill Cam: Off"),
+        "Kill Cam must emit inside the Deathmatch block: {}",
+        &mode_block[..mode_end]
+    );
+}
+
+#[test]
 fn extension_directives_merge_with_authored_settings_and_preserve_provenance() {
     let source = "#!extension projectiles\n#!extension beamEffects\n#!extension projectiles\nsettings {\n    \"main\": {\n        \"description\": \"authored\"\n    },\n    \"gamemodes\": {}\n}\nrule \"extensions\":\n    @Event global\n    pass\n";
     let artifact = Compiler::new()
