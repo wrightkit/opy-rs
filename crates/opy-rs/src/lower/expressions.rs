@@ -507,11 +507,27 @@ impl Lowerer {
                     span: Some(span.into()),
                 };
             }
-            // Context-player member: a player-variable reference.
+            // Context-player member: `x`/`y`/`z` are reserved member names
+            // that resolve unconditionally to the vector-component call; any
+            // other member is a player-variable reference.
             if matches!(
                 name.as_str(),
                 "eventPlayer" | "hostPlayer" | "localPlayer" | "attacker" | "victim"
             ) {
+                let player = context_player_expr(
+                    name,
+                    (!matches!(name.as_str(), "eventPlayer" | "hostPlayer"))
+                        .then_some(receiver.span()),
+                )
+                .expect("context-player receiver name is exhaustive");
+                if matches!(member, "x" | "y" | "z") {
+                    return HirExpr::Member {
+                        receiver: Box::new(player),
+                        member: member.to_string(),
+                        member_span: Some(member_span.into()),
+                        span: Some(span.into()),
+                    };
+                }
                 if !default_var_index(member).is_some() && !self.player_visible(member) {
                     self.error_at(
                         "unknown-member",
@@ -520,12 +536,6 @@ impl Lowerer {
                     );
                     return HirExpr::Null { span: None };
                 }
-                let player = context_player_expr(
-                    name,
-                    (!matches!(name.as_str(), "eventPlayer" | "hostPlayer"))
-                        .then_some(receiver.span()),
-                )
-                .expect("context-player receiver name is exhaustive");
                 return HirExpr::PlayerVar {
                     player: Box::new(player),
                     name: member.to_string(),

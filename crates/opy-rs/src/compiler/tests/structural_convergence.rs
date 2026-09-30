@@ -170,6 +170,11 @@ fn size_optimization_action_rewrites_match_the_pinned_oracle() {
     assert_converges("structural-size-rewrites");
 }
 
+#[test]
+fn context_player_components_match_the_pinned_oracle() {
+    assert_converges("context-player-components");
+}
+
 /// Approved exceptions (workshop-rs ADR-0014, wrightkit/opy-rs#372): the
 /// pinned OverPy writes these programs, native compilation rejects them.
 fn assert_rejected(source: &str, needle: &str) {
