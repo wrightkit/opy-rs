@@ -115,6 +115,11 @@ fn entry_check_loads_the_owner_project_closure_without_documents() {
         true
     );
     assert_eq!(initialized["result"]["capabilities"]["symbols"], false);
+    assert_eq!(initialized["result"]["capabilities"]["rename"], true);
+    assert_eq!(
+        initialized["result"]["capabilities"]["editValidation"],
+        true
+    );
 
     let checked = session.request(json!({
         "jsonrpc": "2.0",
@@ -943,4 +948,575 @@ fn macro_definition_spans_stay_in_the_shared_lowering() {
         .action_span(0, 0)
         .expect("expanded action span");
     assert_eq!(span.start.line, 4);
+}
+
+// ---------- lpp/rename + lpp/validateEdits (issue #403) ----------
+
+const RENAME_MAIN_URI: &str = "file:///project/main.opy";
+const RENAME_DEFS_URI: &str = "file:///project/shared/defs.opy";
+
+/// Line 6 of `main` is tab-indented: `\t` occupies one UTF-16 unit in the
+/// returned ranges but four frontend columns in the semantic model.
+const RENAME_MAIN: &str = concat!(
+    "#!include \"shared/defs.opy\"\n",
+    "\n",
+    "playervar hp\n",
+    "\n",
+    "rule \"tick\":\n",
+    "    @Event eachPlayer\n",
+    "\tscoreBank += 1\n",
+    "    eventPlayer.hp = scoreBank\n",
+    "    reset()\n",
+);
+const RENAME_DEFS: &str = concat!(
+    "globalvar scoreBank = 0\n",
+    "\n",
+    "subroutine reset\n",
+    "\n",
+    "def reset():\n",
+    "    scoreBank = 0\n",
+    "\n",
+    "globalvar other = 1\n",
+);
+
+fn rename_documents(main_version: i64, defs_version: i64) -> Value {
+    json!({
+        RENAME_MAIN_URI: {
+            "uri": RENAME_MAIN_URI,
+            "languageId": "opy",
+            "version": main_version,
+            "text": RENAME_MAIN,
+        },
+        RENAME_DEFS_URI: {
+            "uri": RENAME_DEFS_URI,
+            "languageId": "opy",
+            "version": defs_version,
+            "text": RENAME_DEFS,
+        },
+    })
+}
+
+fn rename_request(
+    id: i64,
+    documents: Value,
+    position_uri: &str,
+    line: u32,
+    character: u32,
+    new_name: &str,
+) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "lpp/rename",
+        "params": {
+            "documents": documents,
+            "positionDocumentUri": position_uri,
+            "position": { "line": line, "character": character },
+            "newName": new_name,
+        },
+    })
+}
+
+fn refusal_code(response: &Value) -> &str {
+    assert_eq!(response["error"]["data"]["lpp"]["kind"], "refusal");
+    response["error"]["data"]["lpp"]["details"]["refusalCode"]
+        .as_str()
+        .expect("refusal code")
+}
+
+fn sorted_ranges(edits: &Value) -> Vec<(u32, u32, u32)> {
+    edits["textEdits"]
+        .as_array()
+        .expect("textEdits")
+        .iter()
+        .map(|edit| {
+            (
+                edit["range"]["start"]["line"].as_u64().expect("line") as u32,
+                edit["range"]["start"]["character"].as_u64().expect("start") as u32,
+                edit["range"]["end"]["character"].as_u64().expect("end") as u32,
+            )
+        })
+        .collect()
+}
+
+/// Apply `edits` to `text` in sorted order and return the edited source.
+fn apply_text_edits(text: &str, edits: &Value) -> String {
+    let source: Vec<&str> = text.split_inclusive('\n').collect();
+    let mut pieces: Vec<String> = source.iter().map(|line| line.to_string()).collect();
+    for edit in edits["textEdits"].as_array().expect("textEdits") {
+        let line = edit["range"]["start"]["line"].as_u64().expect("line") as usize;
+        let start = edit["range"]["start"]["character"].as_u64().expect("s") as usize;
+        let end = edit["range"]["end"]["character"].as_u64().expect("e") as usize;
+        let content = pieces[line].clone();
+        pieces[line] = format!(
+            "{}{}{}",
+            &content[..start],
+            edit["newText"].as_str().expect("newText"),
+            &content[end..]
+        );
+    }
+    pieces.concat()
+}
+
+#[test]
+fn rename_global_covers_declaration_and_references_across_documents() {
+    let mut session = Session::spawn();
+    session.initialize();
+    let renamed = session.request(rename_request(
+        2,
+        rename_documents(3, 5),
+        RENAME_MAIN_URI,
+        7,
+        25,
+        "vault",
+    ));
+    let edits = renamed["result"]["edits"].as_array().expect("edits");
+    assert_eq!(edits.len(), 2);
+
+    let main = edits
+        .iter()
+        .find(|edit| edit["documentUri"] == RENAME_MAIN_URI)
+        .expect("main edits");
+    assert_eq!(main["version"], 3);
+    // `scoreBank` sites in main: the tab-indented `+=` target and the
+    // assignment value — UTF-16 characters, sorted by range start.
+    assert_eq!(sorted_ranges(main), vec![(6, 1, 10), (7, 21, 30)]);
+
+    let defs = edits
+        .iter()
+        .find(|edit| edit["documentUri"] == RENAME_DEFS_URI)
+        .expect("defs edits");
+    assert_eq!(defs["version"], 5);
+    assert_eq!(sorted_ranges(defs), vec![(0, 10, 19), (5, 4, 13)]);
+
+    // The applied edits keep the project clean and only move identifiers.
+    let edited_main = apply_text_edits(RENAME_MAIN, main);
+    let edited_defs = apply_text_edits(RENAME_DEFS, defs);
+    assert_eq!(edited_main, RENAME_MAIN.replace("scoreBank", "vault"));
+    assert_eq!(edited_defs, RENAME_DEFS.replace("scoreBank", "vault"));
+    let checked = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "lpp/check",
+        "params": {
+            "documents": {
+                RENAME_MAIN_URI: {
+                    "uri": RENAME_MAIN_URI,
+                    "languageId": "opy",
+                    "version": 3,
+                    "text": edited_main,
+                },
+                RENAME_DEFS_URI: {
+                    "uri": RENAME_DEFS_URI,
+                    "languageId": "opy",
+                    "version": 5,
+                    "text": edited_defs,
+                },
+            }
+        }
+    }));
+    assert!(
+        checked["result"]["documents"]
+            .as_array()
+            .expect("documents")
+            .iter()
+            .all(|document| document["diagnostics"] == json!([]))
+    );
+    session.shutdown();
+}
+
+#[test]
+fn rename_player_and_subroutine_cover_their_binding_groups() {
+    let mut session = Session::spawn();
+    session.initialize();
+
+    // Player rename: declaration plus the `eventPlayer.hp` member token only.
+    let renamed = session.request(rename_request(
+        2,
+        rename_documents(3, 5),
+        RENAME_MAIN_URI,
+        7,
+        16,
+        "health",
+    ));
+    let edits = renamed["result"]["edits"].as_array().expect("edits");
+    assert_eq!(edits.len(), 1);
+    assert_eq!(edits[0]["documentUri"], RENAME_MAIN_URI);
+    assert_eq!(sorted_ranges(&edits[0]), vec![(2, 10, 12), (7, 16, 18)]);
+
+    // Subroutine rename rewrites the `subroutine` declaration, the `def`
+    // implementation name, and every call site — one binding group.
+    let renamed = session.request(rename_request(
+        3,
+        rename_documents(3, 5),
+        RENAME_DEFS_URI,
+        4,
+        5,
+        "wipe",
+    ));
+    let edits = renamed["result"]["edits"].as_array().expect("edits");
+    assert_eq!(edits.len(), 2);
+    let defs = edits
+        .iter()
+        .find(|edit| edit["documentUri"] == RENAME_DEFS_URI)
+        .expect("defs edits");
+    assert_eq!(sorted_ranges(defs), vec![(2, 11, 16), (4, 4, 9)]);
+    let main = edits
+        .iter()
+        .find(|edit| edit["documentUri"] == RENAME_MAIN_URI)
+        .expect("main edits");
+    assert_eq!(sorted_ranges(main), vec![(8, 4, 9)]);
+    session.shutdown();
+}
+
+#[test]
+fn rename_refusals_are_structured() {
+    let mut session = Session::spawn();
+    session.initialize();
+    let documents = || rename_documents(3, 5);
+
+    // Invalid identifiers and reserved words refuse before any analysis.
+    let invalid = session.request(rename_request(2, documents(), RENAME_MAIN_URI, 7, 25, "9x"));
+    assert_eq!(refusal_code(&invalid), "rename.invalidName");
+    let reserved = session.request(rename_request(
+        3,
+        documents(),
+        RENAME_MAIN_URI,
+        7,
+        25,
+        "rule",
+    ));
+    assert_eq!(refusal_code(&reserved), "rename.invalidName");
+
+    // Positions with no symbol: a blank line, and an unknown name.
+    let blank = session.request(rename_request(4, documents(), RENAME_MAIN_URI, 1, 0, "x"));
+    assert_eq!(refusal_code(&blank), "rename.noSymbolAtPosition");
+    let whitespace = session.request(rename_request(5, documents(), RENAME_MAIN_URI, 5, 1, "x"));
+    assert_eq!(refusal_code(&whitespace), "rename.noSymbolAtPosition");
+
+    // A name that the resolver would bind differently — `eventPlayer` is a
+    // context name that captures expression references.
+    let captured = session.request(rename_request(
+        6,
+        documents(),
+        RENAME_MAIN_URI,
+        7,
+        25,
+        "eventPlayer",
+    ));
+    assert_eq!(refusal_code(&captured), "rename.nameCollision");
+
+    // Renaming onto an existing global duplicates the declaration.
+    let colliding = session.request(rename_request(
+        7,
+        documents(),
+        RENAME_MAIN_URI,
+        7,
+        25,
+        "other",
+    ));
+    assert_eq!(refusal_code(&colliding), "rename.nameCollision");
+
+    // A reference inside an unsent project file refuses instead of producing
+    // a partial edit set.
+    let partial = session.request(rename_request(
+        8,
+        json!({
+            RENAME_MAIN_URI: {
+                "uri": RENAME_MAIN_URI,
+                "languageId": "opy",
+                "version": 3,
+                "text": RENAME_MAIN,
+            }
+        }),
+        RENAME_MAIN_URI,
+        7,
+        25,
+        "vault",
+    ));
+    assert_eq!(refusal_code(&partial), "rename.requiresDocument");
+    let details = &partial["error"]["data"]["lpp"]["details"];
+    let mentions_defs = |value: &Value| {
+        value.as_array().is_some_and(|items| {
+            items
+                .iter()
+                .any(|item| item.as_str().is_some_and(|item| item.contains("defs.opy")))
+        })
+    };
+    assert!(
+        mentions_defs(&details["uris"]) || mentions_defs(&details["missing"]),
+        "the refusal names the missing include: {details}"
+    );
+
+    // When the missing file exists on disk the model still resolves the
+    // include, so the refusal names the exact document holding a rename site.
+    let main_uri = file_uri(MULTI_FILE_MAIN);
+    let on_disk = session.request(rename_request(
+        10,
+        json!({
+            main_uri.clone(): {
+                "uri": main_uri.clone(),
+                "languageId": "opy",
+                "version": 3,
+                "text": std::fs::read_to_string(
+                    Path::new(MULTI_FILE_MAIN).canonicalize().expect("fixture"),
+                )
+                .expect("fixture source"),
+            }
+        }),
+        &main_uri,
+        8,
+        9,
+        "grand_total",
+    ));
+    assert_eq!(refusal_code(&on_disk), "rename.requiresDocument");
+    assert!(
+        on_disk["error"]["data"]["lpp"]["details"]["uris"]
+            .as_array()
+            .expect("missing uris")
+            .iter()
+            .any(|uri| uri.as_str().is_some_and(|uri| uri.ends_with("defs.opy")))
+    );
+
+    // The position document must be part of the request's document set.
+    let outside = session.request(rename_request(
+        9,
+        documents(),
+        "file:///project/elsewhere.opy",
+        0,
+        0,
+        "x",
+    ));
+    assert_eq!(outside["error"]["data"]["lpp"]["kind"], "invalidDocument");
+    session.shutdown();
+}
+
+#[test]
+fn rename_refuses_unsupported_kinds_and_expanded_sites() {
+    let mut session = Session::spawn();
+    session.initialize();
+
+    // `macro NAME = value` indexes a Constant; `macro NAME(args):` a Macro.
+    // Both stay outside the renameable scope.
+    let source = concat!(
+        "macro LIMIT = 4\n",
+        "\n",
+        "macro double(value):\n",
+        "    value + value\n",
+        "\n",
+        "rule \"r\":\n",
+        "    @Event global\n",
+        "    LIMIT\n",
+        "    double(2)\n",
+    );
+    let uri = "file:///project/macros.opy";
+    let documents = || {
+        json!({
+            uri: { "uri": uri, "languageId": "opy", "version": 2, "text": source }
+        })
+    };
+    let constant = session.request(rename_request(2, documents(), uri, 0, 7, "CAP"));
+    assert_eq!(refusal_code(&constant), "rename.unsupportedSymbolKind");
+    let constant_use = session.request(rename_request(3, documents(), uri, 7, 4, "CAP"));
+    assert_eq!(refusal_code(&constant_use), "rename.unsupportedSymbolKind");
+    let macro_call = session.request(rename_request(4, documents(), uri, 8, 5, "triple"));
+    assert_eq!(refusal_code(&macro_call), "rename.unsupportedSymbolKind");
+
+    // A `#!define` alias expands to a generated `scoreBank` token at the use
+    // site; that reference does not spell authored text, so the rename must
+    // refuse rather than emit a partial set.
+    let aliased = concat!(
+        "#!define ALIAS scoreBank\n",
+        "\n",
+        "globalvar scoreBank = 0\n",
+        "\n",
+        "rule \"r\":\n",
+        "    @Event global\n",
+        "    scoreBank = ALIAS\n",
+    );
+    let alias_uri = "file:///project/alias.opy";
+    let refused = session.request(rename_request(
+        5,
+        json!({
+            alias_uri: { "uri": alias_uri, "languageId": "opy", "version": 2, "text": aliased }
+        }),
+        alias_uri,
+        6,
+        4,
+        "vault",
+    ));
+    assert_eq!(
+        refusal_code(&refused),
+        "rename.unsupportedReference",
+        "generated reference sites refuse the rename"
+    );
+    session.shutdown();
+}
+
+#[test]
+fn rename_keeps_compile_output_identical_modulo_the_identifier() {
+    let mut session = Session::spawn();
+    let source = concat!(
+        "globalvar scoreBank = 0\n",
+        "\n",
+        "rule \"r\":\n",
+        "    @Event global\n",
+        "    scoreBank += 1\n",
+        "    wait(0.1)\n",
+    );
+    let uri = "file:///project/main.opy";
+    let document =
+        |text: &str| json!({ "uri": uri, "languageId": "opy", "version": 1, "text": text });
+    session.initialize();
+
+    let before = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "lpp/compile",
+        "params": { "documents": { uri: document(source) } },
+    }));
+    let before_content = before["result"]["artifact"]["content"]
+        .as_str()
+        .expect("compiled workshop text")
+        .to_string();
+
+    let renamed = session.request(rename_request(
+        3,
+        json!({ uri: document(source) }),
+        uri,
+        4,
+        5,
+        "vault",
+    ));
+    let edits = &renamed["result"]["edits"][0];
+    let edited = apply_text_edits(source, edits);
+
+    let after = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 4,
+        "method": "lpp/compile",
+        "params": { "documents": { uri: document(&edited) } },
+    }));
+    let after_content = after["result"]["artifact"]["content"]
+        .as_str()
+        .expect("compiled workshop text");
+    assert_eq!(after_content, before_content.replace("scoreBank", "vault"));
+    session.shutdown();
+}
+
+#[test]
+fn validate_edits_applies_normative_rules() {
+    let mut session = Session::spawn();
+    session.initialize();
+    let document = || json!({ "uri": RENAME_MAIN_URI, "languageId": "opy", "version": 7, "text": RENAME_MAIN });
+    let validate = |session: &mut Session, id: i64, edits: Value| {
+        session.request(json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": "lpp/validateEdits",
+            "params": { "document": document(), "edits": edits },
+        }))
+    };
+    let edit = |line: u32, start: u32, end: u32, new_text: &str| {
+        json!({
+            "range": {
+                "start": { "line": line, "character": start },
+                "end": { "line": line, "character": end },
+            },
+            "newText": new_text,
+        })
+    };
+
+    // A clean identifier swap validates and echoes the document version.
+    let valid = validate(
+        &mut session,
+        2,
+        json!([edit(7, 21, 30, "vault"), edit(6, 1, 10, "vault")]),
+    );
+    assert_eq!(valid["result"], json!({ "valid": true, "version": 7 }));
+
+    // Overlaps report the later edit's index in the original request order:
+    // request edit 1 sorts first and overlaps request edit 0.
+    let overlap = validate(
+        &mut session,
+        3,
+        json!([edit(7, 25, 30, "x"), edit(7, 21, 26, "y")]),
+    );
+    assert_eq!(
+        overlap["result"],
+        json!({
+            "valid": false,
+            "version": 7,
+            "reason": "overlappingEdits",
+            "failingEditIndex": 0,
+        })
+    );
+
+    // Out-of-bounds and reversed ranges report the first offending index.
+    let bounds = validate(&mut session, 4, json!([edit(99, 0, 1, "x")]));
+    assert_eq!(
+        bounds["result"],
+        json!({
+            "valid": false,
+            "version": 7,
+            "reason": "rangeOutOfBounds",
+            "failingEditIndex": 0,
+        })
+    );
+    let reversed = validate(&mut session, 5, json!([edit(6, 10, 1, "x")]));
+    assert_eq!(reversed["result"]["reason"], "rangeOutOfBounds");
+
+    // A result that no longer parses reports `syntaxError` without an index.
+    // (A standalone document: an unresolvable `#!include` would short-circuit
+    // checking before the parser runs.)
+    let standalone = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 6,
+        "method": "lpp/validateEdits",
+        "params": {
+            "document": {
+                "uri": "file:///project/standalone.opy",
+                "languageId": "opy",
+                "version": 4,
+                "text": "rule \"r\":\n    @Event global\n    wait(0.1)\n",
+            },
+            "edits": [{
+                "range": {
+                    "start": { "line": 0, "character": 0 },
+                    "end": { "line": 0, "character": 4 },
+                },
+                "newText": "zzz",
+            }],
+        },
+    }));
+    assert_eq!(
+        standalone["result"],
+        json!({ "valid": false, "version": 4, "reason": "syntaxError" })
+    );
+
+    // A fragment referencing cross-file names is well-formed for this
+    // single-document validation; cross-file checking is the client's
+    // follow-up `lpp/check`.
+    let fragment = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 7,
+        "method": "lpp/validateEdits",
+        "params": {
+            "document": {
+                "uri": "file:///project/fragment.opy",
+                "languageId": "opy",
+                "version": 11,
+                "text": "rule \"part\":\n    @Event global\n    foreignCall()\n    foreignVar += 1\n",
+            },
+            "edits": [{
+                "range": {
+                    "start": { "line": 2, "character": 4 },
+                    "end": { "line": 2, "character": 15 },
+                },
+                "newText": "otherCall",
+            }],
+        },
+    }));
+    assert_eq!(fragment["result"], json!({ "valid": true, "version": 11 }));
+    session.shutdown();
 }

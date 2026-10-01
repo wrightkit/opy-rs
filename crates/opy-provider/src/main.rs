@@ -16,6 +16,8 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use workshop_rs::program::MappedText;
 
+mod edits;
+
 const PROTOCOL_VERSIONS: [&str; 5] = ["1.0", "1.1", "1.2", "1.3", "1.4"];
 const PROJECT_LOADING_VERSION: &str = "1.1";
 const DIRECTORY_TARGET_VERSION: &str = "1.2";
@@ -40,6 +42,8 @@ struct Capabilities {
     compile: bool,
     project_loading: bool,
     source_identity: bool,
+    rename: bool,
+    edit_validation: bool,
 }
 
 impl Capabilities {
@@ -49,6 +53,8 @@ impl Capabilities {
             compile: true,
             project_loading: true,
             source_identity: true,
+            rename: true,
+            edit_validation: true,
         }
     }
 
@@ -57,6 +63,8 @@ impl Capabilities {
             "check" => self.check,
             "compile" => self.compile,
             "projectLoading" => self.project_loading,
+            "rename" => self.rename,
+            "editValidation" => self.edit_validation,
             _ => false,
         }
     }
@@ -69,8 +77,8 @@ impl Capabilities {
             "symbols": false,
             "definition": false,
             "references": false,
-            "rename": false,
-            "editValidation": false,
+            "rename": self.rename,
+            "editValidation": self.edit_validation,
         });
         if version_at_least(protocol_version, PROJECT_LOADING_VERSION) {
             capabilities["projectLoading"] = json!(self.project_loading);
@@ -408,6 +416,8 @@ impl Server {
         let result = match method {
             "lpp/check" => self.check(params),
             "lpp/compile" => self.compile(params),
+            "lpp/rename" => edits::rename(params),
+            "lpp/validateEdits" => edits::validate_edits(params),
             _ => Err(HandlerError::Standard {
                 code: -32601,
                 message: "Method not found",
@@ -1399,7 +1409,8 @@ mod tests {
         assert_eq!(response["result"]["languages"][0]["id"], LANGUAGE_ID);
         assert_eq!(response["result"]["capabilities"]["check"], true);
         assert_eq!(response["result"]["capabilities"]["compile"], true);
-        assert_eq!(response["result"]["capabilities"]["rename"], false);
+        assert_eq!(response["result"]["capabilities"]["rename"], true);
+        assert_eq!(response["result"]["capabilities"]["editValidation"], true);
     }
 
     #[test]

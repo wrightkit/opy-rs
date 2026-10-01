@@ -535,7 +535,9 @@ impl Lexer {
     }
 }
 
-pub(crate) fn is_identifier(text: &str) -> bool {
+/// Whether `text` is a well-formed OPY identifier: an identifier start
+/// character followed by identifier continuation characters.
+pub fn is_identifier(text: &str) -> bool {
     let mut characters = text.chars();
     characters.next().is_some_and(is_ident_start) && characters.all(is_ident_continue)
 }
@@ -552,11 +554,13 @@ pub(crate) fn decode_string_escape(character: char) -> char {
     }
 }
 
-pub(crate) fn is_ident_start(c: char) -> bool {
+/// Whether `c` may start an OPY identifier.
+pub fn is_ident_start(c: char) -> bool {
     c.is_ascii_alphabetic() || c == '_'
 }
 
-pub(crate) fn is_ident_continue(c: char) -> bool {
+/// Whether `c` may continue an OPY identifier.
+pub fn is_ident_continue(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '_'
 }
 
