@@ -32,6 +32,10 @@ impl Parser<'_> {
                 ));
                 return false;
             }
+        } else if self.peek_kind() == TokenKind::LBrace {
+            self.report_workshop_source(self.peek().span, BRACE_BLOCKS);
+            self.skip_workshop_construct();
+            return false;
         } else if self.peek_kind() != TokenKind::Newline && self.peek_kind() != TokenKind::Eof {
             self.error_at_current(
                 "expected '=', an integer index, or end of line after the variable name"
@@ -166,6 +170,11 @@ impl Parser<'_> {
         } else {
             false
         };
+        if self.peek_kind() == TokenKind::LBrace {
+            self.report_workshop_source(self.peek().span, BRACE_BLOCKS);
+            self.skip_workshop_construct();
+            return false;
+        }
         if self.peek_kind() == TokenKind::Assign {
             self.advance();
             let value = match self.parse_expr() {

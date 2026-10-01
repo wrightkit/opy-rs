@@ -22,8 +22,8 @@
 //! Diagnostics contract: every [`Diagnostic`] carries a stable machine code,
 //! a severity, a human message, and — when known — a resolved source location
 //! (`path:line:col` through the file registry). Codes are the same ones the
-//! compile pipeline emits (`lex-error`, `parse-error`, `unknown-identifier`,
-//! `unknown-action`, `include-not-found`, …); see
+//! compile pipeline emits (`lex-error`, `parse-error`, `workshop-source`,
+//! `unknown-identifier`, `unknown-action`, `include-not-found`, …); see
 //! `docs/opy/tooling-api.md` for the full table.
 //!
 //! Parse diagnostics are collected in full (the parser recovers at statement
