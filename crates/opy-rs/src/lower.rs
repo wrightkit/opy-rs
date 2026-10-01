@@ -867,6 +867,206 @@ fn context_player_expr(name: &str, span: Option<Span>) -> Option<HirExpr> {
     }
 }
 
+/// The declaration namespace an identifier would occupy: `globalvar`,
+/// `playervar`, or `subroutine`/`def`. The pinned upstream compiler reserves
+/// a different name set per namespace, so a name refused for a `globalvar`
+/// can still be a legal `playervar` name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NameNamespace {
+    /// `globalvar` declarations — upstream `reservedNames`.
+    Global,
+    /// `playervar` declarations — upstream `reservedMemberNames`.
+    Player,
+    /// `subroutine`/`def` declarations — upstream `reservedSubroutineNames`.
+    Subroutine,
+}
+
+/// Whether the pinned upstream compiler (OverPy 9.7.10) reserves `name` for
+/// `namespace` declarations — such a declaration is never valid source.
+///
+/// Mirrors the upstream reservation rules: globals reserve the grammar
+/// keywords, the type lattice (`typeMatrix`), `AsyncBehavior`, and the
+/// bare-spelled builtins (`funcKw` entries with `args === null`: context
+/// names, literals, `ruleCondition`, …); subroutines reserve the keywords
+/// plus builtins callable with an empty argument list (`args.length === 0`,
+/// mirrored here by manifest functions that declare no parameters); player
+/// variables reserve only the member axis names `x`, `y`, `z`.
+pub fn is_reserved_name(name: &str, namespace: NameNamespace) -> bool {
+    match namespace {
+        NameNamespace::Player => matches!(name, "x" | "y" | "z"),
+        NameNamespace::Global => {
+            RESERVED_KEYWORDS.contains(&name) || RESERVED_GLOBAL_NAMES.contains(&name)
+        }
+        NameNamespace::Subroutine => {
+            RESERVED_KEYWORDS.contains(&name)
+                || Manifest::builtin().ok().is_some_and(|manifest| {
+                    manifest
+                        .resolve_function(name)
+                        .is_some_and(|function| function.params.is_empty())
+                })
+        }
+    }
+}
+
+/// The upstream `opyKeywords` set (OverPy 9.7.10): grammar keywords reserved
+/// in every declaration namespace.
+const RESERVED_KEYWORDS: &[&str] = &[
+    "and",
+    "bool",
+    "case",
+    "def",
+    "default",
+    "del",
+    "elif",
+    "else",
+    "enum",
+    "float",
+    "for",
+    "globalvar",
+    "goto",
+    "if",
+    "in",
+    "int",
+    "lambda",
+    "loc",
+    "macro",
+    "not",
+    "or",
+    "playervar",
+    "rule",
+    "self",
+    "settings",
+    "signed",
+    "subroutine",
+    "switch",
+    "unsigned",
+    "while",
+];
+
+/// Names upstream reserves for `globalvar` beyond the keyword set (OverPy
+/// 9.7.10 `reservedNames`): the type lattice (`typeMatrix` keys), and the
+/// bare-spelled builtins (`funcKw` entries with `args === null`) — context
+/// names, literals, and `ruleCondition`.
+const RESERVED_GLOBAL_NAMES: &[&str] = &[
+    "AccelReeval",
+    "Array",
+    "AssistId",
+    "AssistReeval",
+    "AsyncBehavior",
+    "BarrierLos",
+    "Beam",
+    "BoolLiteral",
+    "Button",
+    "ButtonLiteral",
+    "ChaseRateReeval",
+    "ChaseTimeReeval",
+    "Clip",
+    "Color",
+    "ColorLiteral",
+    "Comms",
+    "CustomStringLiteral",
+    "DamageModificationId",
+    "DamageReeval",
+    "Dict",
+    "DictElem",
+    "DictKey",
+    "Direction",
+    "DotId",
+    "DynamicEffect",
+    "Effect",
+    "EffectReeval",
+    "EntityId",
+    "FacingReeval",
+    "FloatLiteral",
+    "Gamemode",
+    "GamemodeLiteral",
+    "GlobalVariable",
+    "HealingModificationId",
+    "HealingReeval",
+    "Health",
+    "HealthPoolId",
+    "Hero",
+    "HeroLiteral",
+    "HeroStat",
+    "HotId",
+    "HudPosition",
+    "HudReeval",
+    "Icon",
+    "IconReeval",
+    "Impulse",
+    "IntLiteral",
+    "Invis",
+    "Label",
+    "Lambda",
+    "LocalizedStringLiteral",
+    "LosCheck",
+    "Map",
+    "MapLiteral",
+    "ModifyHealth",
+    "Object",
+    "OutlineVisibility",
+    "Player",
+    "PlayerVariable",
+    "Position",
+    "ProgressHudReeval",
+    "ProgressWorldTextReeval",
+    "Projectile",
+    "ProjectileEffectReeval",
+    "Raycast",
+    "Relativity",
+    "SignedFloatLiteral",
+    "SignedIntLiteral",
+    "SpecVisibility",
+    "StartRuleBehavior",
+    "Stat",
+    "Status",
+    "String",
+    "StringLiteral",
+    "Subroutine",
+    "Team",
+    "TeamLiteral",
+    "TextId",
+    "Throttle",
+    "ThrottleReeval",
+    "Transform",
+    "Type",
+    "UnsignedFloatLiteral",
+    "UnsignedIntLiteral",
+    "Value",
+    "Vector",
+    "Velocity",
+    "Wait",
+    "WorldTextReeval",
+    "__ChaseReeval__",
+    "__Operation__",
+    "__Operator__",
+    "__Rounding__",
+    "__global__",
+    "attacker",
+    "break",
+    "continue",
+    "eventAbility",
+    "eventDamage",
+    "eventDirection",
+    "eventHealing",
+    "eventPlayer",
+    "eventWasCriticalHit",
+    "eventWasEnvironment",
+    "eventWasHealthPack",
+    "false",
+    "healee",
+    "healer",
+    "hostPlayer",
+    "localPlayer",
+    "null",
+    "pass",
+    "return",
+    "ruleCondition",
+    "true",
+    "victim",
+    "void",
+];
+
 /// Whether a CST receiver is assignable (the `.append` receiver rule): a
 /// variable name (including macro parameters), an array literal, or an index
 /// expression — matching the pinned reference, which rejects constant and

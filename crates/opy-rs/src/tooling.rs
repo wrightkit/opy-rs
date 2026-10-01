@@ -73,15 +73,24 @@ pub struct CheckOutcome {
     /// lowering-dependent (workshop-rs emission, issue #8); the frontend
     /// never fabricates a Workshop payload.
     pub post_compile_hook: Option<crate::preprocess::PostCompileHook>,
+    /// The directory the `files` display paths resolve against — the
+    /// `#!mainFile` effective directory when the entry redirects the project
+    /// root, otherwise the canonicalized input root.
+    pub display_root: std::path::PathBuf,
 }
 
 impl CheckOutcome {
-    fn failure(diagnostics: Vec<Diagnostic>, files: Vec<FileRecord>) -> Self {
+    fn failure(
+        diagnostics: Vec<Diagnostic>,
+        files: Vec<FileRecord>,
+        display_root: std::path::PathBuf,
+    ) -> Self {
         Self {
             diagnostics,
             model: None,
             files,
             post_compile_hook: None,
+            display_root,
         }
     }
 
@@ -113,6 +122,7 @@ pub fn check_with_overlay(
     let PreprocessOutcome {
         result,
         files,
+        display_root,
         warnings,
     } = crate::preprocess::preprocess_with_overlay_outcome(source, main_path, root, overlay);
     let preprocessed = match result {
@@ -123,7 +133,7 @@ pub fn check_with_overlay(
                 .map(|warning| Diagnostic::from_warning(warning, &files))
                 .collect::<Vec<_>>();
             diagnostics.push(Diagnostic::from_error(error, &files));
-            return CheckOutcome::failure(diagnostics, files);
+            return CheckOutcome::failure(diagnostics, files, display_root);
         }
     };
     let parsed = crate::parser::parse_with_options(
@@ -142,7 +152,7 @@ pub fn check_with_overlay(
                 .iter()
                 .map(|error| Diagnostic::from_error(error.clone(), &files)),
         );
-        return CheckOutcome::failure(diagnostics, files);
+        return CheckOutcome::failure(diagnostics, files, display_root);
     };
     // Parse the extracted settings block into the CST; expression values are
     // resolved after ordinary CST-to-HIR lowering so they use the shared OPY
@@ -155,7 +165,7 @@ pub fn check_with_overlay(
                     .map(|warning| Diagnostic::from_warning(warning, &files))
                     .collect::<Vec<_>>();
                 diagnostics.push(Diagnostic::from_error(error, &files));
-                return CheckOutcome::failure(diagnostics, files);
+                return CheckOutcome::failure(diagnostics, files, display_root);
             }
         }
     }
@@ -189,7 +199,7 @@ pub fn check_with_overlay(
             hir.preprocessing = preprocessed.preprocessing;
             if let Err(error) = crate::settings::resolve_hir_settings(&mut hir, &program) {
                 diagnostics.push(Diagnostic::from_error(error, &files));
-                return CheckOutcome::failure(diagnostics, files);
+                return CheckOutcome::failure(diagnostics, files, display_root);
             }
             // Settings are Workshop-bound data: convert them through the same
             // path the compiler uses and report every member the canonical
@@ -208,7 +218,7 @@ pub fn check_with_overlay(
                 .iter()
                 .any(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error)
             {
-                return CheckOutcome::failure(diagnostics, files);
+                return CheckOutcome::failure(diagnostics, files, display_root);
             }
             CheckOutcome {
                 diagnostics,
@@ -219,6 +229,7 @@ pub fn check_with_overlay(
                 // execution receives the final Workshop text and is
                 // lowering-dependent, issue #8).
                 post_compile_hook: preprocessed.post_compile_hook,
+                display_root,
             }
         }
         Err(error) => {
@@ -226,7 +237,7 @@ pub fn check_with_overlay(
                 .map(|warning| Diagnostic::from_warning(warning, &files))
                 .collect::<Vec<_>>();
             diagnostics.push(Diagnostic::from_error(error, &files));
-            CheckOutcome::failure(diagnostics, files)
+            CheckOutcome::failure(diagnostics, files, display_root)
         }
     }
 }

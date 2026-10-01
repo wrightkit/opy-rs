@@ -28,7 +28,7 @@ pub struct Span {
 }
 
 /// A 1-based line/column position.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
 pub struct Position {
     pub line: u32,
     pub col: u32,
