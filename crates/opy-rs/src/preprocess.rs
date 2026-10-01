@@ -153,6 +153,10 @@ pub fn preprocess_with_overlay(
 pub struct PreprocessOutcome {
     pub result: OpyResult<(Preprocessed, Vec<FileRecord>)>,
     pub files: Vec<FileRecord>,
+    /// The directory the file-registry `display_path`s resolve against — the
+    /// `#!mainFile` effective directory when the first line redirects the
+    /// project root, otherwise the canonicalized input root.
+    pub display_root: PathBuf,
     pub warnings: Vec<PreprocessWarning>,
 }
 
@@ -161,6 +165,7 @@ impl PreprocessOutcome {
         Self {
             result: Err(error),
             files: pre.files,
+            display_root: pre.display_root,
             warnings: pre.warnings,
         }
     }
@@ -341,6 +346,7 @@ pub fn preprocess_with_overlay_outcome(
     PreprocessOutcome {
         result,
         files: pre.files,
+        display_root: pre.display_root,
         warnings: pre.warnings,
     }
 }

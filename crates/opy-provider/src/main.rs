@@ -1271,6 +1271,21 @@ fn filesystem_path(value: &str) -> Option<PathBuf> {
         };
         return Some(PathBuf::from(percent_decode(path)?));
     }
+    // A `scheme:` prefix makes `value` a URI, not a filesystem path — a
+    // document URI like `untitled:Untitled-1` must not silently resolve
+    // against the provider's working directory. A single letter before ':'
+    // is a Windows drive (`C:`), not a scheme.
+    if let Some(end) = value.find(':') {
+        let scheme = &value[..end];
+        if scheme.len() > 1
+            && scheme.starts_with(|c: char| c.is_ascii_alphabetic())
+            && scheme
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
+        {
+            return None;
+        }
+    }
     Some(PathBuf::from(value))
 }
 

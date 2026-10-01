@@ -16,8 +16,10 @@ and LPP `1.4` for compile artifact format negotiation.
 | Check | `lpp/check` | Loads the selected entry's OPY project and returns source diagnostics. |
 | Compile | `lpp/compile` | Uses the same project loading path and returns canonical Workshop text when clean. |
 | Project loading | `lpp/check`, `lpp/compile` | LPP 1.1 loads from a client-selected file entry; LPP 1.2 also lets the provider select the default entry from a directory target. |
+| Rename | `lpp/rename` | Semantic rename of globals, player variables, and subroutines/`def`s across the received documents; refuses (`rename.*` refusal codes) when a site does not map to authored source or the result would not rebind identically. |
+| Edit validation | `lpp/validateEdits` | Applies a client's proposed edits and reports whether the result still checks clean, per the spec's normative rules. |
 
-All other LPP v1 capabilities are advertised as unavailable until they are
+Other LPP v1 capabilities are advertised as unavailable until they are
 implemented end to end.
 
 ## Entry-based project loading

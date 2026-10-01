@@ -15,8 +15,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use opy_rs::diag::Position;
-use opy_rs::lexer::{is_ident_continue, is_ident_start, is_identifier};
-use opy_rs::tooling::{SemanticModel, SourceLocation, Symbol, SymbolKind};
+use opy_rs::lexer::{self, TokenKind, is_ident_continue, is_ident_start, is_identifier};
+use opy_rs::lower::{NameNamespace, is_reserved_name};
+use opy_rs::tooling::{SourceLocation, Symbol, SymbolKind};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -24,42 +25,6 @@ use crate::{
     Document, HandlerError, document_path, filesystem_path, path_string, path_to_file_uri,
     resolved_path, same_path, validate_documents,
 };
-
-/// Words the grammar consumes structurally — as operators or literals in
-/// expressions (`and`, `if`, `lambda`, ...), as statement heads (`break`,
-/// `del`, `while`, ...), or as top-level declaration heads (`def`, `rule`,
-/// ...). They can never spell a renameable symbol name, so they are invalid
-/// rename names rather than collisions.
-const UNNAMEABLE_WORDS: [&str; 28] = [
-    "None",
-    "and",
-    "break",
-    "continue",
-    "def",
-    "del",
-    "do",
-    "else",
-    "enum",
-    "false",
-    "for",
-    "globalvar",
-    "goto",
-    "if",
-    "in",
-    "lambda",
-    "macro",
-    "not",
-    "null",
-    "or",
-    "pass",
-    "playervar",
-    "return",
-    "rule",
-    "subroutine",
-    "switch",
-    "true",
-    "while",
-];
 
 /// Diagnostics that describe sources or bindings outside a single document.
 /// A document whose only failures are these is a project fragment — edits to
@@ -123,17 +88,25 @@ struct ModelView {
 /// An authored identifier token a semantic site narrows to.
 #[derive(Debug, Clone, Copy)]
 struct SiteToken {
-    /// 1-based frontend line of the token.
-    line: u32,
     /// 1-based frontend column of the token start.
     col: u32,
-    /// Token length in characters (identifier characters are width 1).
-    len: u32,
     /// 0-based line index for text access.
     line_index: usize,
     /// Char-index range of the token within its line.
     start_index: usize,
     end_index: usize,
+}
+
+impl SiteToken {
+    /// The token's 1-based frontend line.
+    fn line(&self) -> u32 {
+        self.line_index as u32 + 1
+    }
+
+    /// The token's length in characters (identifier characters are width 1).
+    fn len(&self) -> u32 {
+        (self.end_index - self.start_index) as u32
+    }
 }
 
 /// Source text with LPP position mapping: 0-based lines, UTF-16 code units
@@ -163,9 +136,12 @@ impl<'a> SourceText<'a> {
             .get(line + 1)
             .copied()
             .unwrap_or(self.text.len());
-        if self.text.as_bytes().get(end.wrapping_sub(1)) == Some(&b'\n') {
+        // The trailing "\n"/"\r\n" belongs to the previous line: a document
+        // ending in a newline has an implicit empty last line, so only strip
+        // when the terminator lies inside this line's byte range.
+        if end > start && self.text.as_bytes()[end - 1] == b'\n' {
             end -= 1;
-            if self.text.as_bytes().get(end.wrapping_sub(1)) == Some(&b'\r') {
+            if end > start && self.text.as_bytes()[end - 1] == b'\r' {
                 end -= 1;
             }
         }
@@ -271,12 +247,23 @@ fn ident_token_at(line: &str, index: usize) -> Option<(usize, usize)> {
     Some((index, index + len))
 }
 
-fn position_leq(a: Position, b: Position) -> bool {
-    (a.line, a.col) <= (b.line, b.col)
-}
-
-fn position_lt(a: Position, b: Position) -> bool {
-    (a.line, a.col) < (b.line, b.col)
+/// Whether `text` spells `name` as an identifier token. Comments and string
+/// literals never produce `Ident` tokens, so they don't count; directive
+/// payloads (`#!define ALIAS total`) are scanned for a word-boundary match
+/// since a rename must still rewrite the replacement body.
+fn mentions_identifier(text: &str, name: &str) -> bool {
+    let Ok(tokens) = lexer::lex(lexer::LexInput { file_id: 0, text }) else {
+        // Unlexable text may still hold the name — stay conservative.
+        return true;
+    };
+    tokens.iter().any(|token| match token.kind {
+        TokenKind::Ident => token.text == name,
+        TokenKind::Directive => token
+            .text
+            .split(|c: char| !is_ident_continue(c))
+            .any(|piece| piece == name),
+        _ => false,
+    })
 }
 
 /// The parent directory of `path`, or `"."` for a bare file name.
@@ -326,47 +313,6 @@ fn overlay_map(
     Ok(overlays)
 }
 
-/// The registry display root `check_with_overlay` produces for `text` loaded
-/// from `root`: the `#!mainFile` effective directory when the first line
-/// redirects the entry, mirroring `preprocess_with_overlay_outcome`.
-fn display_root(text: &str, root: &Path, overlay: &BTreeMap<String, String>) -> PathBuf {
-    let resolved_root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
-    let Some(first_line) = text.lines().next() else {
-        return resolved_root;
-    };
-    let first_line = first_line.trim_end_matches('\r');
-    let Some(value) = first_line.strip_prefix("#!mainFile").map(str::trim) else {
-        return resolved_root;
-    };
-    let value = value
-        .strip_prefix('"')
-        .and_then(|value| value.strip_suffix('"'))
-        .or_else(|| {
-            value
-                .strip_prefix('\'')
-                .and_then(|value| value.strip_suffix('\''))
-        });
-    let Some(main_file) = value.filter(|value| !value.is_empty()) else {
-        return resolved_root;
-    };
-    let candidate = resolved_root.join(main_file);
-    let canonical = candidate.canonicalize().ok();
-    let overlay_hit = overlay.contains_key(main_file)
-        || overlay.contains_key(&path_string(&candidate))
-        || canonical
-            .as_ref()
-            .is_some_and(|path| overlay.contains_key(&path_string(path)));
-    if overlay_hit {
-        return candidate
-            .parent()
-            .map(Path::to_path_buf)
-            .unwrap_or(resolved_root);
-    }
-    canonical
-        .and_then(|path| path.parent().map(Path::to_path_buf))
-        .unwrap_or(resolved_root)
-}
-
 /// Narrow a recorded semantic location to the authored identifier token at
 /// its start. Returns `None` when the location does not spell `name` exactly
 /// in the source — macro-expanded or generated sites report positions whose
@@ -381,10 +327,8 @@ fn narrow_site(text: &str, location: &SourceLocation, name: &str) -> Option<Site
         .skip(start_index)
         .take(end_index - start_index)
         .collect();
-    (token == name).then(|| SiteToken {
-        line: location.start.line,
+    (token == name).then_some(SiteToken {
         col: location.start.col,
-        len: (end_index - start_index) as u32,
         line_index,
         start_index,
         end_index,
@@ -416,27 +360,32 @@ fn token_byte_range(text: &str, token: SiteToken) -> Option<(usize, usize)> {
 /// The symbol-kind group a rename of `symbol` must rewrite together, or
 /// `None` when the symbol is outside the renameable scope. A `subroutine`
 /// declaration and a `def` of the same name index as separate symbols but
-/// share one call-site namespace, so they move as one group; a `def` that is
-/// not a subroutine's implementation body, plus constants and macros, are
-/// unsupported rename targets.
-fn rename_group(symbol: &Symbol, model: &SemanticModel) -> Option<&'static [SymbolKind]> {
+/// share one call-site namespace, so they move as one group — every `def`
+/// also materializes an implicit same-name `Subroutine` declaration, so a
+/// `Def` hit is always that subroutine's implementation body. Constants and
+/// macros are unsupported rename targets.
+fn rename_group(symbol: &Symbol) -> Option<&'static [SymbolKind]> {
     const CALLABLE: &[SymbolKind] = &[SymbolKind::Subroutine, SymbolKind::Def];
     match symbol.kind {
         SymbolKind::Global => Some(&[SymbolKind::Global]),
         SymbolKind::Player => Some(&[SymbolKind::Player]),
-        SymbolKind::Subroutine => Some(CALLABLE),
-        SymbolKind::Def => model
-            .symbols()
-            .iter()
-            .any(|other| other.name == symbol.name && other.kind == SymbolKind::Subroutine)
-            .then_some(CALLABLE),
+        SymbolKind::Subroutine | SymbolKind::Def => Some(CALLABLE),
         SymbolKind::Constant | SymbolKind::Macro => None,
+    }
+}
+
+/// The upstream declaration namespace a rename group's name occupies.
+fn rename_namespace(kind: SymbolKind) -> NameNamespace {
+    match kind {
+        SymbolKind::Global => NameNamespace::Global,
+        SymbolKind::Player => NameNamespace::Player,
+        _ => NameNamespace::Subroutine,
     }
 }
 
 /// Whether `span` (half-open `[start, end)`) contains the point `position`.
 fn site_contains(site: &SourceLocation, file_id: u32, position: Position) -> bool {
-    site.file_id == file_id && position_leq(site.start, position) && position_lt(position, site.end)
+    site.file_id == file_id && site.start <= position && position < site.end
 }
 
 fn refusal(code: &'static str, details: Value, message: impl Into<String>) -> HandlerError {
@@ -479,7 +428,7 @@ fn model_view(
         if outcome.model.is_none() {
             continue;
         }
-        let display_root = display_root(&document.text, &root, overlay);
+        let display_root = outcome.display_root.clone();
         let covers = |target: &Path| {
             outcome
                 .files
@@ -588,13 +537,13 @@ fn verify_rename(
         let mut current_line = u32::MAX;
         let mut shift = 0i64;
         for token in tokens {
-            if token.line != current_line {
-                current_line = token.line;
+            if token.line() != current_line {
+                current_line = token.line();
                 shift = 0;
             }
             let start = token.col as i64 + shift;
-            expected.insert((path.clone(), token.line, start, start + new_len));
-            shift += new_len - token.len as i64;
+            expected.insert((path.clone(), token.line(), start, start + new_len));
+            shift += new_len - token.len() as i64;
         }
     }
 
@@ -641,7 +590,7 @@ fn verify_rename(
             let site_key = match token {
                 Some(token) => (
                     resolved,
-                    token.line,
+                    token.line(),
                     token.col as i64,
                     token.col as i64 + new_len,
                 ),
@@ -664,7 +613,7 @@ pub(crate) fn rename(params: Value) -> Result<Value, HandlerError> {
             message: "Invalid params",
         })?;
     validate_documents(&params.documents)?;
-    if !is_identifier(&params.new_name) || UNNAMEABLE_WORDS.contains(&params.new_name.as_str()) {
+    if !is_identifier(&params.new_name) {
         return Err(refusal(
             "rename.invalidName",
             json!({ "newName": params.new_name }),
@@ -734,8 +683,8 @@ pub(crate) fn rename(params: Value) -> Result<Value, HandlerError> {
             }
             contained = true;
             if let Some(token) = narrow_site(&position_document.text, site, &symbol.name) {
-                let token_end = Position::new(token.line, token.col + token.len);
-                if position_lt(position, token_end) {
+                let token_end = Position::new(token.line(), token.col + token.len());
+                if position < token_end {
                     narrowed = true;
                 }
             }
@@ -751,12 +700,12 @@ pub(crate) fn rename(params: Value) -> Result<Value, HandlerError> {
     let symbol = narrowed_hits
         .iter()
         .copied()
-        .find(|symbol| rename_group(symbol, model).is_some())
+        .find(|symbol| rename_group(symbol).is_some())
         .or_else(|| narrowed_hits.first().copied());
     let Some(symbol) = symbol else {
         if containing
             .iter()
-            .any(|symbol| rename_group(symbol, model).is_some())
+            .any(|symbol| rename_group(symbol).is_some())
         {
             return Err(no_symbol(&position_document.uri));
         }
@@ -769,7 +718,7 @@ pub(crate) fn rename(params: Value) -> Result<Value, HandlerError> {
         }
         return Err(no_symbol(&position_document.uri));
     };
-    let Some(group) = rename_group(symbol, model) else {
+    let Some(group) = rename_group(symbol) else {
         return Err(refusal(
             "rename.unsupportedSymbolKind",
             json!({ "uri": position_document.uri, "kind": symbol.kind }),
@@ -777,6 +726,17 @@ pub(crate) fn rename(params: Value) -> Result<Value, HandlerError> {
         ));
     };
     let name = symbol.name.clone();
+
+    // The upstream compiler reserves different names per declaration
+    // namespace (`x`/`y`/`z` for player variables, keywords and builtin
+    // spellings elsewhere); `is_reserved_name` owns the exact sets.
+    if is_reserved_name(&params.new_name, rename_namespace(symbol.kind)) {
+        return Err(refusal(
+            "rename.invalidName",
+            json!({ "newName": params.new_name }),
+            format!("'{}' is a reserved OPY name", params.new_name),
+        ));
+    }
 
     // Collect the declaration plus every reference site of the same-name
     // symbols in the rename group.
@@ -820,6 +780,34 @@ pub(crate) fn rename(params: Value) -> Result<Value, HandlerError> {
             "the rename touches documents outside the received document set",
         ));
     }
+
+    // Spec §15.2: every reference to the symbol in the *received* documents
+    // must be covered, or the rename must refuse. A received document outside
+    // the chosen project view that still spells the name — as an identifier
+    // token or inside a directive's payload — may hold references this model
+    // cannot see (a second project root over a shared include), so renaming
+    // would leave it broken.
+    let mut unaccounted = Vec::new();
+    for document in params.documents.values() {
+        let path = document_path(document)?;
+        let covered = view
+            .outcome
+            .files
+            .iter()
+            .any(|file| same_path(&resolved_path(&view.display_root, &file.path), &path));
+        if !covered && mentions_identifier(&document.text, &name) {
+            unaccounted.push(document.uri.clone());
+        }
+    }
+    if !unaccounted.is_empty() {
+        unaccounted.sort();
+        return Err(refusal(
+            "rename.requiresDocument",
+            json!({ "uris": unaccounted }),
+            "the rename may touch documents outside the analyzed project",
+        ));
+    }
+
     for tokens in sites.values_mut() {
         tokens.sort_by_key(|token| (token.line_index, token.start_index));
     }
@@ -901,11 +889,36 @@ pub(crate) fn validate_edits(params: Value) -> Result<Value, HandlerError> {
     let path = document_path(&document)?;
     let root = document_root(&path);
     let overlay = overlay_map(&singleton, None)?;
+
+    // Cross-file diagnostics are tolerated only up to the count already
+    // present in the original document — a fragment's unresolved include or
+    // foreign symbols predate the edits, and swapping one foreign name for
+    // another keeps the count unchanged. A *new* `unknown-*` produced by the
+    // edits is an introduced error, not a cross-file artifact.
+    let baseline_outcome =
+        opy_rs::tooling::check_with_overlay(&document.text, &path_string(&path), &root, &overlay);
+    let mut budget: BTreeMap<&str, usize> = BTreeMap::new();
+    for diagnostic in &baseline_outcome.diagnostics {
+        if diagnostic.severity == opy_rs::tooling::DiagnosticSeverity::Error
+            && CROSS_FILE_CODES.contains(&diagnostic.code.as_str())
+        {
+            *budget.entry(diagnostic.code.as_str()).or_insert(0) += 1;
+        }
+    }
+
     let outcome =
         opy_rs::tooling::check_with_overlay(&result, &path_string(&path), &root, &overlay);
     let error = outcome.diagnostics.iter().any(|diagnostic| {
-        diagnostic.severity == opy_rs::tooling::DiagnosticSeverity::Error
-            && !CROSS_FILE_CODES.contains(&diagnostic.code.as_str())
+        if diagnostic.severity != opy_rs::tooling::DiagnosticSeverity::Error {
+            return false;
+        }
+        match budget.get_mut(diagnostic.code.as_str()) {
+            Some(remaining) if *remaining > 0 => {
+                *remaining -= 1;
+                false
+            }
+            _ => true,
+        }
     });
     if error {
         return invalid("syntaxError", None);

@@ -1,5 +1,6 @@
 //! Process-level contract tests for the first-party OPY provider.
 
+use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
@@ -1039,23 +1040,47 @@ fn sorted_ranges(edits: &Value) -> Vec<(u32, u32, u32)> {
         .collect()
 }
 
-/// Apply `edits` to `text` in sorted order and return the edited source.
-fn apply_text_edits(text: &str, edits: &Value) -> String {
-    let source: Vec<&str> = text.split_inclusive('\n').collect();
-    let mut pieces: Vec<String> = source.iter().map(|line| line.to_string()).collect();
-    for edit in edits["textEdits"].as_array().expect("textEdits") {
-        let line = edit["range"]["start"]["line"].as_u64().expect("line") as usize;
-        let start = edit["range"]["start"]["character"].as_u64().expect("s") as usize;
-        let end = edit["range"]["end"]["character"].as_u64().expect("e") as usize;
-        let content = pieces[line].clone();
-        pieces[line] = format!(
-            "{}{}{}",
-            &content[..start],
-            edit["newText"].as_str().expect("newText"),
-            &content[end..]
-        );
+/// The byte offset of `units` UTF-16 code units into `line`.
+fn utf16_byte_offset(line: &str, units: usize) -> usize {
+    let mut used = 0usize;
+    for (byte, ch) in line.char_indices() {
+        if used == units {
+            return byte;
+        }
+        used += ch.len_utf16();
     }
-    pieces.concat()
+    assert_eq!(used, units, "UTF-16 offset past the line end");
+    line.len()
+}
+
+/// Apply `edits` (original-source UTF-16 coordinates) to `text` and return
+/// the edited source. Edits on one line apply right-to-left so earlier
+/// replacements don't shift later offsets.
+fn apply_text_edits(text: &str, edits: &Value) -> String {
+    let mut lines: Vec<String> = text.split_inclusive('\n').map(str::to_string).collect();
+    let mut per_line: BTreeMap<usize, Vec<(usize, usize, String)>> = BTreeMap::new();
+    for edit in edits["textEdits"].as_array().expect("textEdits") {
+        let start_line = edit["range"]["start"]["line"].as_u64().expect("line") as usize;
+        let end_line = edit["range"]["end"]["line"].as_u64().expect("line") as usize;
+        assert_eq!(
+            start_line, end_line,
+            "test helper only applies inline edits"
+        );
+        per_line.entry(start_line).or_default().push((
+            edit["range"]["start"]["character"].as_u64().expect("s") as usize,
+            edit["range"]["end"]["character"].as_u64().expect("e") as usize,
+            edit["newText"].as_str().expect("newText").to_string(),
+        ));
+    }
+    for (line, mut line_edits) in per_line {
+        line_edits.sort_by_key(|edit| usize::MAX - edit.0);
+        for (start, end, new_text) in line_edits {
+            let content = &mut lines[line];
+            let range = utf16_byte_offset(content, start)..utf16_byte_offset(content, end);
+            content.replace_range(range, &new_text);
+        }
+    }
+    lines.concat()
 }
 
 #[test]
@@ -1194,8 +1219,8 @@ fn rename_refusals_are_structured() {
     let whitespace = session.request(rename_request(5, documents(), RENAME_MAIN_URI, 5, 1, "x"));
     assert_eq!(refusal_code(&whitespace), "rename.noSymbolAtPosition");
 
-    // A name that the resolver would bind differently — `eventPlayer` is a
-    // context name that captures expression references.
+    // `eventPlayer` is upstream-reserved for globals (a context name): the
+    // name itself is invalid, not merely a binding collision.
     let captured = session.request(rename_request(
         6,
         documents(),
@@ -1204,7 +1229,7 @@ fn rename_refusals_are_structured() {
         25,
         "eventPlayer",
     ));
-    assert_eq!(refusal_code(&captured), "rename.nameCollision");
+    assert_eq!(refusal_code(&captured), "rename.invalidName");
 
     // Renaming onto an existing global duplicates the declaration.
     let colliding = session.request(rename_request(
@@ -1518,5 +1543,252 @@ fn validate_edits_applies_normative_rules() {
         },
     }));
     assert_eq!(fragment["result"], json!({ "valid": true, "version": 11 }));
+
+    // A cross-file code the edits *introduce* is not fragment leniency:
+    // `wiat` is not a catalog action, so the result must report syntaxError.
+    let introduced = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 8,
+        "method": "lpp/validateEdits",
+        "params": {
+            "document": {
+                "uri": "file:///project/typo.opy",
+                "languageId": "opy",
+                "version": 2,
+                "text": "rule \"r\":\n    @Event global\n    wait(0.1)\n",
+            },
+            "edits": [{
+                "range": {
+                    "start": { "line": 2, "character": 4 },
+                    "end": { "line": 2, "character": 8 },
+                },
+                "newText": "wiat",
+            }],
+        },
+    }));
+    assert_eq!(
+        introduced["result"],
+        json!({ "valid": false, "version": 2, "reason": "syntaxError" }),
+        "an introduced unknown-action is an error, not a cross-file artifact"
+    );
+
+    // The first offending index is the earliest bad edit in request order.
+    let multi = validate(
+        &mut session,
+        9,
+        json!([
+            edit(7, 21, 30, "vault"),
+            edit(42, 0, 1, "x"),
+            edit(50, 0, 1, "y")
+        ]),
+    );
+    assert_eq!(
+        multi["result"],
+        json!({
+            "valid": false,
+            "version": 7,
+            "reason": "rangeOutOfBounds",
+            "failingEditIndex": 1,
+        })
+    );
+    session.shutdown();
+}
+
+#[test]
+fn end_of_document_positions_do_not_panic() {
+    // A document ending in a newline has an implicit empty last line; a
+    // position or range endpoint on it must produce a structured result, not
+    // a provider crash.
+    let mut session = Session::spawn();
+    session.initialize();
+    let uri = "file:///project/eof.opy";
+    let text = "globalvar g = 1\n";
+    let document = || json!({ "uri": uri, "languageId": "opy", "version": 1, "text": text });
+
+    let position = session.request(rename_request(
+        2,
+        json!({ uri: document() }),
+        uri,
+        1,
+        0,
+        "h",
+    ));
+    assert_eq!(refusal_code(&position), "rename.noSymbolAtPosition");
+
+    let beyond = session.request(rename_request(
+        3,
+        json!({ uri: document() }),
+        uri,
+        5,
+        0,
+        "h",
+    ));
+    assert_eq!(beyond["error"]["data"]["lpp"]["kind"], "invalidPosition");
+
+    let insert = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 4,
+        "method": "lpp/validateEdits",
+        "params": {
+            "document": document(),
+            "edits": [{
+                "range": {
+                    "start": { "line": 1, "character": 0 },
+                    "end": { "line": 1, "character": 0 },
+                },
+                "newText": "globalvar h = 2\n",
+            }],
+        },
+    }));
+    assert_eq!(insert["result"], json!({ "valid": true, "version": 1 }));
+
+    let out_of_bounds = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 5,
+        "method": "lpp/validateEdits",
+        "params": {
+            "document": document(),
+            "edits": [{
+                "range": {
+                    "start": { "line": 1, "character": 0 },
+                    "end": { "line": 1, "character": 1 },
+                },
+                "newText": "x",
+            }],
+        },
+    }));
+    assert_eq!(out_of_bounds["result"]["reason"], "rangeOutOfBounds");
+    session.shutdown();
+}
+
+#[test]
+fn rename_refuses_when_a_received_document_escapes_the_project_view() {
+    // Two project roots share one include: the analysis covers one root, so
+    // the other received document's references would be left dangling. The
+    // provider must refuse instead of shipping a partial edit set.
+    let mut session = Session::spawn();
+    session.initialize();
+    let shared_uri = "file:///project/shared.opy";
+    let m1_uri = "file:///project/m1.opy";
+    let m2_uri = "file:///project/m2.opy";
+    let shared = "globalvar sharedBank = 0\n";
+    let main = |amount: i32| {
+        format!(
+            "#!include \"shared.opy\"\n\nrule \"r\":\n    @Event global\n    sharedBank += {amount}\n"
+        )
+    };
+    let documents = |m2_text: &str| {
+        json!({
+            m1_uri: { "uri": m1_uri, "languageId": "opy", "version": 1, "text": main(1) },
+            shared_uri: { "uri": shared_uri, "languageId": "opy", "version": 1, "text": shared },
+            m2_uri: { "uri": m2_uri, "languageId": "opy", "version": 1, "text": m2_text },
+        })
+    };
+
+    let refused = session.request(rename_request(
+        2,
+        documents(&main(2)),
+        m1_uri,
+        4,
+        6,
+        "vault",
+    ));
+    assert_eq!(refusal_code(&refused), "rename.requiresDocument");
+    assert!(
+        refused["error"]["data"]["lpp"]["details"]["uris"]
+            .as_array()
+            .expect("uris")
+            .iter()
+            .any(|uri| uri.as_str() == Some(m2_uri)),
+        "the refusal names the document outside the analyzed view"
+    );
+
+    // A received document outside the view that never mentions the symbol is
+    // an unrelated buffer, not a rename target — the rename proceeds.
+    let unrelated = session.request(rename_request(
+        3,
+        documents("globalvar other = 1\n"),
+        m1_uri,
+        4,
+        6,
+        "vault",
+    ));
+    let edits = unrelated["result"]["edits"].as_array().expect("edits");
+    assert_eq!(edits.len(), 2);
+    assert!(edits.iter().all(|edit| edit["documentUri"] != m2_uri));
+    session.shutdown();
+}
+
+#[test]
+fn rename_refuses_upstream_reserved_names_per_namespace() {
+    let mut session = Session::spawn();
+    session.initialize();
+    let documents = || rename_documents(3, 5);
+
+    // `elif` and `Map` are upstream-reserved for globals even though the
+    // local parser would rebind them.
+    for new_name in ["elif", "Map", "Array"] {
+        let refused = session.request(rename_request(
+            2,
+            documents(),
+            RENAME_MAIN_URI,
+            7,
+            25,
+            new_name,
+        ));
+        assert_eq!(refusal_code(&refused), "rename.invalidName", "{new_name}");
+    }
+
+    // Context names are global-reserved upstream — `invalidName`, not a
+    // binding collision.
+    let context = session.request(rename_request(
+        3,
+        documents(),
+        RENAME_MAIN_URI,
+        7,
+        25,
+        "hostPlayer",
+    ));
+    assert_eq!(refusal_code(&context), "rename.invalidName");
+
+    // Player variables reserve only the member axis names.
+    let axis = session.request(rename_request(4, documents(), RENAME_MAIN_URI, 7, 16, "x"));
+    assert_eq!(refusal_code(&axis), "rename.invalidName");
+
+    // A keyword reserved in every namespace still refuses for subroutines;
+    // so do builtins callable with an empty argument list.
+    let keyword = session.request(rename_request(
+        5,
+        documents(),
+        RENAME_DEFS_URI,
+        4,
+        5,
+        "elif",
+    ));
+    assert_eq!(refusal_code(&keyword), "rename.invalidName");
+    let builtin = session.request(rename_request(
+        6,
+        documents(),
+        RENAME_DEFS_URI,
+        4,
+        5,
+        "getTotalTimeElapsed",
+    ));
+    assert_eq!(refusal_code(&builtin), "rename.invalidName");
+
+    // But a name that is only global-reserved is still a legal player
+    // variable name upstream — `playervar Map` compiles there.
+    let renamed = session.request(rename_request(
+        7,
+        documents(),
+        RENAME_MAIN_URI,
+        7,
+        16,
+        "elif",
+    ));
+    assert!(
+        renamed["result"]["edits"].is_array(),
+        "player rename onto a global-only reserved name is upstream-legal: {renamed}"
+    );
     session.shutdown();
 }
