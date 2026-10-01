@@ -1296,8 +1296,10 @@ impl<'a> Emitter<'a> {
         // `name` is a canonical Workshop call identity, so an entry that
         // links to it through `catalogId` is the same builtin under its
         // upstream source spelling (`id`). Distinct spellings may share one
-        // canonical id (e.g. `getAllPlayers` and `getPlayers`); prefer the
-        // candidate whose signature can bind the call's arguments.
+        // canonical id (`getPlayers` aliases `getAllPlayers`, and
+        // `getRealPlayersInRadius` expands to a filtered `getPlayersInRadius`
+        // call); prefer the entry whose own id is the canonical name so the
+        // emitted spelling reproduces the same bare call.
         let by_catalog = |entry: &&Function| {
             entry.catalog_id.as_deref() == Some(name)
                 && entry.kind.is_action() == expected_action
@@ -1310,7 +1312,7 @@ impl<'a> Emitter<'a> {
             .functions
             .iter()
             .filter(by_catalog)
-            .min_by_key(|entry| entry.params.len())
+            .min_by_key(|entry| entry.id.as_str() != name)
         {
             Some(entry) => (entry, entry.kind.is_member()),
             None => match manifest.resolve_function(name) {
@@ -1732,8 +1734,9 @@ impl<'a> Emitter<'a> {
             self.out.push(')');
             return;
         }
-        // The `format` special form: `"text".format(args...)`.
-        if name == "format" {
+        // Interpolated strings lower to `customString`; emit the OPY member
+        // form `"text".format(args...)`.
+        if name == "customString" {
             let Some(first) = args.first() else {
                 self.issue(
                     "unsupported-value-call",
@@ -2056,5 +2059,62 @@ mod tests {
 
         let error = reconstruct(&program).expect_err("dynamic member assignment is unsupported");
         assert_eq!(error.issues[0].code, "unsupported-member-assignment");
+    }
+
+    #[test]
+    fn catalog_identity_prefers_the_canonical_source_spelling() {
+        // `getRealPlayersInRadius` shares `getPlayersInRadius`'s catalog id; a
+        // bare canonical call is the unfiltered builtin, not the macro that
+        // would recompile to an extra `Filtered Array` wrapper.
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("g", 0));
+        program.rule(
+            Rule::new("main", Event::Global).action(Action::SetGlobalVariable {
+                variable: "g".into(),
+                value: Value::call(
+                    "getPlayersInRadius",
+                    [
+                        Value::EventPlayer,
+                        Value::number(3.0),
+                        Value::Enum {
+                            value_type: "Team".into(),
+                            value: "ALL".into(),
+                        },
+                        Value::Enum {
+                            value_type: "LosCheck".into(),
+                            value: "OFF".into(),
+                        },
+                    ],
+                ),
+            }),
+        );
+
+        let source = reconstruct(&program).expect("canonical call should reconstruct");
+        assert!(source.contains("getPlayersInRadius("));
+        assert!(!source.contains("getRealPlayersInRadius"));
+
+        let reparsed = compile_to_program(&source, "players-in-radius.opy");
+        assert!(workshop_rs::roundtrip::equivalent(&program, &reparsed));
+    }
+
+    #[test]
+    fn custom_string_calls_reconstruct_as_format() {
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("g", 0));
+        program.rule(
+            Rule::new("main", Event::Global).action(Action::SetGlobalVariable {
+                variable: "g".into(),
+                value: Value::call(
+                    "customString",
+                    [Value::string("hp: {0}"), Value::EventPlayer],
+                ),
+            }),
+        );
+
+        let source = reconstruct(&program).expect("customString should reconstruct");
+        assert!(source.contains("\"hp: {0}\".format(eventPlayer)"));
+
+        let reparsed = compile_to_program(&source, "format.opy");
+        assert!(workshop_rs::roundtrip::equivalent(&program, &reparsed));
     }
 }

@@ -324,38 +324,46 @@
     {
       "catalogLink": "special-lowering",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "defaulted-arguments"
       ],
       "id": "raycast",
       "kind": "value",
       "params": [
         {
-          "name": "startPosition"
+          "name": "startPos"
         },
         {
-          "name": "endPosition"
+          "name": "endPos"
         },
         {
+          "alternateNames": [
+            "include"
+          ],
           "name": "playersToInclude"
         },
         {
+          "alternateNames": [
+            "exclude"
+          ],
           "name": "playersToExclude"
         },
         {
-          "name": "includePlayerOwnedObjects"
+          "name": "includePlayerObjects"
         }
       ]
     },
     {
       "catalogId": "waitUntil",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "defaulted-arguments"
       ],
       "id": "waitUntil",
       "kind": "action",
       "params": [
         {
-          "name": "condition"
+          "name": "continueCondition"
         },
         {
           "default": 999999999999,
@@ -1190,16 +1198,17 @@
     {
       "catalogId": "isInLoS",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "defaulted-arguments"
       ],
       "id": "isInLoS",
       "kind": "value",
       "params": [
         {
-          "name": "startPosition"
+          "name": "startPos"
         },
         {
-          "name": "endPosition"
+          "name": "endPos"
         },
         {
           "default": "PASS_THROUGH_BARRIERS",
@@ -2381,16 +2390,18 @@
     {
       "catalogId": "stringSlice",
       "evidence": [
+        "defaulted-arguments",
         "texture-string-substring"
       ],
       "id": "substring",
       "kind": "memberValue",
       "params": [
         {
-          "name": "startIndex"
+          "name": "substringStartIndex"
         },
         {
-          "name": "count"
+          "default": 999999999999,
+          "name": "substringLength"
         }
       ],
       "receiver": "Any"
@@ -3376,7 +3387,8 @@
     {
       "catalogId": "startCamera",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "defaulted-arguments"
       ],
       "id": "startCamera",
       "kind": "memberAction",
@@ -3389,7 +3401,7 @@
         },
         {
           "default": 0,
-          "name": "facing"
+          "name": "blendSpeed"
         }
       ],
       "receiver": "Player"
@@ -3785,7 +3797,8 @@
     {
       "catalogId": "startThrottleInDirection",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "defaulted-arguments"
       ],
       "id": "startThrottleInDirection",
       "kind": "memberAction",
@@ -3795,7 +3808,7 @@
           "name": "direction"
         },
         {
-          "name": "speed"
+          "name": "magnitude"
         },
         {
           "domain": "Relativity",
@@ -3804,7 +3817,7 @@
         {
           "default": "REPLACE_EXISTING",
           "domain": "Throttle",
-          "name": "throttle"
+          "name": "behavior"
         },
         {
           "default": "DIRECTION_AND_MAGNITUDE",
