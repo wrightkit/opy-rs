@@ -19,4 +19,5 @@ rule "defaults":
     g = getPlayersInSlot(1)
     g = getPlayersOnObjective()
     g = getNumberOfSlots()
+    g = getPlayersOnHero(Hero.ANA)
     g = getRealPlayersInRadius(vect(0, 0, 0), 3)

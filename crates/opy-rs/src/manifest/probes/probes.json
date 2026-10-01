@@ -151,8 +151,8 @@
     {
       "expect": "success",
       "id": "defaulted-arguments",
-      "outputSha256": "8a1d99cd2363f11addd1796a5573d2d5ebb7966ab878f777455593f978754bbb",
-      "sha256": "31956040d26bce9674efa69e14bca35f29459794a6e576b7f9d6968232ab1c09",
+      "outputSha256": "5d33aef0f599169f28e3fcb437464cc15c575fb4c797450411c2e2426b409c75",
+      "sha256": "6042579f7e3ea062a68a9006fc200d986b54258646dc6bfe80ef028bcef8f9e4",
       "source": "defaulted-arguments.opy"
     },
     {

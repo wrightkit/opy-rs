@@ -265,7 +265,8 @@
     {
       "catalogId": "getPlayersOnHero",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "defaulted-arguments"
       ],
       "id": "getPlayersOnHero",
       "kind": "value",
@@ -275,6 +276,7 @@
           "name": "hero"
         },
         {
+          "default": "ALL",
           "domain": "Team",
           "name": "team"
         }
@@ -530,9 +532,6 @@
           "name": "text"
         },
         {
-          "alternateNames": [
-            "position"
-          ],
           "default": "LEFT",
           "domain": "HudPosition",
           "name": "location"
@@ -552,9 +551,6 @@
           "name": "reevaluation"
         },
         {
-          "alternateNames": [
-            "spectators"
-          ],
           "default": "DEFAULT",
           "domain": "SpecVisibility",
           "name": "specVisibility"
@@ -579,9 +575,6 @@
           "name": "text"
         },
         {
-          "alternateNames": [
-            "position"
-          ],
           "default": "LEFT",
           "domain": "HudPosition",
           "name": "location"
@@ -601,9 +594,6 @@
           "name": "reevaluation"
         },
         {
-          "alternateNames": [
-            "spectators"
-          ],
           "default": "DEFAULT",
           "domain": "SpecVisibility",
           "name": "specVisibility"

@@ -1303,8 +1303,7 @@ impl<'a> Emitter<'a> {
                 && entry.kind.is_action() == expected_action
                 && {
                     let provided = args_len.saturating_sub(usize::from(entry.kind.is_member()));
-                    let required = entry.params.iter().filter(|param| !param.optional).count();
-                    required <= provided && provided <= entry.params.len()
+                    provided == entry.params.len()
                 }
         };
         let (entry, member) = match manifest
