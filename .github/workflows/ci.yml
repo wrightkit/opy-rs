@@ -74,7 +74,7 @@ jobs:
           --report target/opy-rs-compiler-report.json
 
       - name: Install pinned OverPy oracle
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: 11.10.0
 
