@@ -25,6 +25,11 @@ impl Parser<'_> {
     }
 
     pub(super) fn parse_statement(&mut self) -> Result<Stmt, ()> {
+        if let Some((span, detail)) = self.workshop_construct(false) {
+            self.report_workshop_source(span, &detail);
+            self.skip_workshop_construct();
+            return Err(());
+        }
         let token = self.peek();
         if token.kind == TokenKind::Ident {
             match token.text.as_str() {
@@ -342,7 +347,7 @@ impl Parser<'_> {
         line_indent: u32,
         colon_context: &str,
     ) -> Result<Vec<Stmt>, ()> {
-        self.expect(TokenKind::Colon, colon_context)?;
+        self.expect_block_colon(colon_context)?;
         self.parse_colon_body(line_indent)
     }
 

@@ -59,6 +59,10 @@ struct Parser<'a> {
     last_colon_body_continued: bool,
     /// Columns of the `if` statements whose branches are being parsed.
     open_if_indents: Vec<u32>,
+    /// Set once a `workshop-source` diagnostic has been reported; later
+    /// Workshop-looking constructs are skipped silently so a pasted Workshop
+    /// script produces one diagnostic instead of a cascade.
+    workshop_source_reported: bool,
 }
 
 impl<'a> Parser<'a> {
@@ -71,9 +75,42 @@ impl<'a> Parser<'a> {
             last_statement_continued: false,
             last_colon_body_continued: false,
             open_if_indents: Vec::new(),
+            workshop_source_reported: false,
         }
     }
 }
+
+/// OPY keywords and expression words that can validly sit in front of an
+/// identifier or a `(`/`-delimited operand; they must never count toward a
+/// multi-word Workshop call name such as `Set Player Variable`.
+fn is_opy_word(text: &str) -> bool {
+    matches!(
+        text,
+        "and"
+            | "or"
+            | "not"
+            | "in"
+            | "lambda"
+            | "if"
+            | "elif"
+            | "else"
+            | "for"
+            | "while"
+            | "do"
+            | "switch"
+            | "del"
+            | "goto"
+            | "continue"
+            | "break"
+            | "return"
+            | "pass"
+            | "case"
+            | "default"
+    )
+}
+
+/// The `workshop-source` detail for `{`/`}` brace scaffolding.
+const BRACE_BLOCKS: &str = "a `{`/`}` brace block; OPY blocks open with `:` and indentation";
 
 fn is_binary_operator(kind: TokenKind) -> bool {
     matches!(
@@ -204,6 +241,142 @@ impl Parser<'_> {
         self.errors.push(OpyError::at("parse-error", message, span));
     }
 
+    // ---- Workshop-script detection ----
+    //
+    // Raw Workshop script shares no surface syntax with OPY: it opens blocks
+    // with `{`/`}` braces, terminates statements with `;`, and calls actions
+    // through space-separated multi-word names such as `Set Player
+    // Variable(...)`. When a line carries one of those tells the source is
+    // not OPY at all, so it is reported once — at the first construct — and
+    // the construct is skipped instead of cascading a generic parse error
+    // per following token (issue #420).
+
+    /// The Workshop-script tell in the construct starting at the current
+    /// position: `(span, detail)` when the line cannot be OPY.
+    pub(super) fn workshop_construct(&self, top_level: bool) -> Option<(Span, String)> {
+        let mut end = self.pos;
+        while !matches!(self.tokens[end].kind, TokenKind::Newline | TokenKind::Eof) {
+            end += 1;
+        }
+        let line = &self.tokens[self.pos..end];
+        let first = line.first()?;
+        let last = line.last().expect("line is non-empty");
+        // `;` is never a valid OPY statement terminator, at any level.
+        if last.kind == TokenKind::Semicolon {
+            return Some((
+                Span::new(first.span.file, first.span.start, last.span.end),
+                "a `;` statement terminator; OPY ends statements at the line".to_string(),
+            ));
+        }
+        // Inside a rule body, adjacent bare expressions are legal OPY
+        // statements (`x`, then `f()`, then `{k: v}`), so `ident {`- and
+        // `ident…(`-shaped lines cannot be told apart from OPY there — a
+        // `{`/`;`/`:` tell or a keyword position has to flag them instead.
+        // At top level no declaration begins with a bare identifier, so
+        // these shapes are unambiguous.
+        if !top_level {
+            return None;
+        }
+        match first.kind {
+            // `}` can never start an OPY construct.
+            TokenKind::RBrace => {
+                return Some((
+                    first.span,
+                    "a `}` only closes a Workshop brace block; OPY blocks end by dedenting"
+                        .to_string(),
+                ));
+            }
+            // A lone `{` opens a dict literal inside a rule, but nothing at
+            // top level begins with one.
+            TokenKind::LBrace => {
+                return Some((first.span, BRACE_BLOCKS.to_string()));
+            }
+            _ => {}
+        }
+        if first.kind != TokenKind::Ident {
+            return None;
+        }
+        // `ident {` opens a brace block: `event {`, `actions {`, `variables {`.
+        // OPY words are excluded for uniformity with the multi-word scan.
+        if line
+            .get(1)
+            .is_some_and(|token| token.kind == TokenKind::LBrace)
+            && !is_opy_word(&first.text)
+        {
+            return Some((
+                Span::new(first.span.file, first.span.start, line[1].span.end),
+                BRACE_BLOCKS.to_string(),
+            ));
+        }
+        // `Word Word ... (` is a multi-word Workshop call name; a bare
+        // juxtaposition without a call (`x y`) stays plain OPY.
+        let mut words = 0;
+        while line
+            .get(words)
+            .is_some_and(|token| token.kind == TokenKind::Ident && !is_opy_word(&token.text))
+        {
+            words += 1;
+        }
+        if words >= 2
+            && line
+                .get(words)
+                .is_some_and(|token| token.kind == TokenKind::LParen)
+        {
+            let name = line[..words]
+                .iter()
+                .map(|token| token.text.as_str())
+                .collect::<Vec<_>>()
+                .join(" ");
+            return Some((
+                Span::new(first.span.file, first.span.start, line[words].span.end),
+                format!("a multi-word call name `{name}`; OPY calls use a single name"),
+            ));
+        }
+        None
+    }
+
+    /// Report the file's one `workshop-source` diagnostic; later constructs
+    /// are skipped silently.
+    pub(super) fn report_workshop_source(&mut self, span: Span, detail: &str) {
+        if self.workshop_source_reported {
+            return;
+        }
+        self.workshop_source_reported = true;
+        self.errors.push(OpyError::at(
+            "workshop-source",
+            format!("this looks like Workshop script, not OPY ({detail})"),
+            span,
+        ));
+    }
+
+    /// Consume the rest of the construct's line; when it opened a `{` block,
+    /// keep consuming until the matching `}` (or EOF).
+    pub(super) fn skip_workshop_construct(&mut self) {
+        let mut depth = 0u32;
+        loop {
+            match self.peek_kind() {
+                TokenKind::Eof => break,
+                TokenKind::Newline if depth == 0 => break,
+                TokenKind::LBrace => depth += 1,
+                TokenKind::RBrace => depth = depth.saturating_sub(1),
+                _ => {}
+            }
+            self.advance();
+        }
+    }
+
+    /// `:` where a block opens; a `{` in that position is a Workshop brace
+    /// block rather than a mistyped colon.
+    pub(super) fn expect_block_colon(&mut self, colon_context: &str) -> Result<(), ()> {
+        if self.peek_kind() == TokenKind::LBrace {
+            let span = self.peek().span;
+            self.report_workshop_source(span, BRACE_BLOCKS);
+            self.skip_workshop_construct();
+            return Err(());
+        }
+        self.expect(TokenKind::Colon, colon_context).map(|_| ())
+    }
+
     // ---- program ----
 
     fn parse_program(&mut self) -> Program {
@@ -268,10 +441,15 @@ impl Parser<'_> {
                 _ => {}
             }
         }
-        self.error_at_current(format!(
-            "expected a top-level declaration (rule/def/globalvar/playervar/subroutine/enum/macro) but found '{}'",
-            token.text
-        ));
+        if let Some((span, detail)) = self.workshop_construct(true) {
+            self.report_workshop_source(span, &detail);
+            self.skip_workshop_construct();
+        } else {
+            self.error_at_current(format!(
+                "expected a top-level declaration (rule/def/globalvar/playervar/subroutine/enum/macro) but found '{}'",
+                token.text
+            ));
+        }
         false
     }
 
@@ -303,7 +481,7 @@ impl Parser<'_> {
         line_indent: u32,
         colon_context: &str,
     ) -> Result<u32, ()> {
-        self.expect(TokenKind::Colon, colon_context)?;
+        self.expect_block_colon(colon_context)?;
         self.block_indent(line_indent).ok_or(())
     }
 
@@ -577,6 +755,120 @@ mod tests {
             }
         ));
         assert!(matches!(&rule.actions[7], Stmt::Label { name, .. } if name == "target"));
+    }
+
+    #[test]
+    fn workshop_script_source_reports_one_diagnostic() {
+        // opy-rs#420: pasted Workshop script is a different language surface.
+        // It must produce one `workshop-source` diagnostic at the first
+        // construct instead of a per-line `parse-error` cascade.
+        let errors = parse_err(concat!(
+            "rule \"workshop style\" {\n",
+            "    event {\n",
+            "        Ongoing - Global;\n",
+            "    }\n",
+            "    actions {\n",
+            "        Wait(1, Ignore Condition);\n",
+            "    }\n",
+            "}\n",
+        ));
+        assert_eq!(errors.len(), 1, "expected one diagnostic, got {errors:?}");
+        let error = &errors[0];
+        assert_eq!(error.code, "workshop-source");
+        assert_eq!(
+            error.span.expect("a source span"),
+            Span::new(0, Position::new(1, 23), Position::new(1, 24))
+        );
+    }
+
+    #[test]
+    fn workshop_script_forms_report_once() {
+        for source in [
+            // `rule("name")` + `;` statements + `Ident {` headers.
+            "rule(\"x\") {\n    event {\n        Ongoing - Global;\n    }\n}\n",
+            // A `;`-terminated statement inside an OPY rule.
+            "rule \"r\":\n    @Event global\n    Ongoing - Global;\n",
+            // An `ident {` section header at top level.
+            "actions {\n    Wait(1);\n}\n",
+            // `if`-with-braces is a brace-block tell, not a mistyped colon.
+            "rule \"r\":\n    @Event global\n    if x == 1 {\n        pass\n    }\n",
+            // A `;` tell followed by a `}` line: the second tell reaches
+            // dispatch and must be suppressed by the once-only flag, not by
+            // the first construct's brace skip.
+            "rule \"r\":\n    @Event global\n    Wait(1);\n}\n",
+            // Two `;` tells on consecutive lines: the second must dedup.
+            "rule \"r\":\n    @Event global\n    a = 1;\n    b = 2;\n",
+        ] {
+            let errors = parse_err(source);
+            assert_eq!(
+                errors.len(),
+                1,
+                "expected one diagnostic for {source:?}, got {errors:?}"
+            );
+            assert_eq!(errors[0].code, "workshop-source");
+        }
+    }
+
+    #[test]
+    fn workshop_tells_only_apply_at_top_level() {
+        // #420: the identifier-shaped tells only fire at top level, where no
+        // OPY declaration starts with a bare identifier. Inside a rule body
+        // the same token shapes are adjacent statements and stay plain OPY.
+        for source in [
+            // `x y(1)` is token-identical to `Set Player Variable(...)`.
+            "x y(1)\n", // `x {` is token-identical to `event {`.
+            "x {}\n",   // A stray `}` at top level closes nothing OPY-side.
+            "}\n",
+        ] {
+            let errors = parse_err(source);
+            assert_eq!(
+                errors.len(),
+                1,
+                "expected one diagnostic for {source:?}, got {errors:?}"
+            );
+            assert_eq!(errors[0].code, "workshop-source");
+        }
+        // In a rule body all of these parse: `x` + `y(1)`/`{}` juxtapose as
+        // statements, and a keyword's `{` is a dict literal.
+        parse_ok(
+            "globalvar x\nglobalvar y\nrule \"r\":\n    @Event global\n    x y(1)\n    x {}\n    if {1: 2}: pass\n",
+        );
+        // A `}` reached via malformed-dict recovery inside a body keeps the
+        // ordinary parse error, not a Workshop mislabel.
+        let errors = parse_err("rule \"r\":\n    @Event global\n    x = {\n        a\n    }\n");
+        assert!(!errors.is_empty(), "malformed dict parsed cleanly");
+        assert!(errors.iter().all(|error| error.code == "parse-error"));
+    }
+
+    #[test]
+    fn workshop_style_action_call_reports_once() {
+        // `Set Player Variable(...)` is the multi-word Workshop action shape;
+        // it only flags at top level, where a bare-identifier line is never a
+        // valid OPY declaration.
+        let errors = parse_err("Set Player Variable(eventPlayer, score, 1)\n");
+        assert_eq!(errors.len(), 1, "expected one diagnostic, got {errors:?}");
+        let error = &errors[0];
+        assert_eq!(error.code, "workshop-source");
+        assert_eq!(
+            error.span.expect("a source span").start,
+            Position::new(1, 1)
+        );
+    }
+
+    #[test]
+    fn ordinary_syntax_errors_keep_their_diagnostics() {
+        // #420: a plain OPY syntax error keeps its code, message, and span.
+        let errors = parse_err("rule no_quotes:\n");
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].code, "parse-error");
+        // The message is not contractual; pin its content loosely.
+        assert!(errors[0].message.contains("rule name string"));
+        assert_eq!(
+            errors[0].span.expect("a source span").start,
+            Position::new(1, 6)
+        );
+        // Juxtaposed names without a call still parse as adjacent statements.
+        parse_ok("globalvar x\nglobalvar y\nrule \"r\":\n    @Event global\n    x y\n");
     }
 
     #[test]

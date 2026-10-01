@@ -132,6 +132,7 @@ Span layout: `file_id` indexes the registry, positions are 1-based
 | `macro-invalid` / `macro-arity` / `macro-recursion` | preprocess | Macro expansion failures |
 | `settings-invalid` / `settings-placement` | preprocess | Settings block parse / placement failures |
 | `parse-error` | parse | Syntax error (parser recovers at statement boundaries) |
+| `workshop-source` | parse | Source looks like Workshop script rather than OPY; reported once at the first such construct |
 | `manifest-error` | resolve | Semantic manifest load failure |
 | `unknown-identifier` / `enum-type-without-member` | resolve | Unresolved names |
 | `unknown-action` / `unknown-value` / `unknown-member` | resolve | Unknown builtins |

@@ -19,6 +19,21 @@ impl Parser<'_> {
         let start = self.advance();
         let name = match self.peek_kind() {
             TokenKind::String => self.advance().text,
+            // `rule("name") {` and `rule {` are the Workshop script forms.
+            TokenKind::LParen => {
+                let span = Span::new(start.span.file, start.span.start, self.peek().span.end);
+                self.report_workshop_source(
+                    span,
+                    "a `rule(\"name\")` header; OPY uses `rule \"name\":` plus an indented block",
+                );
+                self.skip_workshop_construct();
+                return false;
+            }
+            TokenKind::LBrace => {
+                self.report_workshop_source(self.peek().span, BRACE_BLOCKS);
+                self.skip_workshop_construct();
+                return false;
+            }
             _ => {
                 self.error_at_current("expected a rule name string after `rule`".to_string());
                 return false;
@@ -318,6 +333,11 @@ impl Parser<'_> {
             Ok(name) => name,
             Err(()) => return false,
         };
+        if self.peek_kind() == TokenKind::LBrace {
+            self.report_workshop_source(self.peek().span, BRACE_BLOCKS);
+            self.skip_workshop_construct();
+            return false;
+        }
         let params = match self.parse_param_list() {
             Some(params) => params,
             None => return false,
