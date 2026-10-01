@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.67](https://github.com/wrightkit/opy-rs/compare/opy-provider-v0.1.66...opy-provider-v0.1.67) - 2026-10-01
+
+### Added
+
+- *(opy-provider)* implement lpp/rename and lpp/validateEdits ([#427](https://github.com/wrightkit/opy-rs/pull/427))
+
 ## [0.1.66](https://github.com/wrightkit/opy-rs/compare/opy-provider-v0.1.65...opy-provider-v0.1.66) - 2026-10-01
 
 ### Other

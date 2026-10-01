@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.67](https://github.com/wrightkit/opy-rs/compare/v0.1.66...v0.1.67) - 2026-10-01
+
+### Added
+
+- *(opy-provider)* implement lpp/rename and lpp/validateEdits ([#427](https://github.com/wrightkit/opy-rs/pull/427))
+
+### Fixed
+
+- *(parser)* flag Workshop-script source once instead of cascading ([#425](https://github.com/wrightkit/opy-rs/pull/425))
+
 ## [0.1.64](https://github.com/wrightkit/opy-rs/compare/v0.1.63...v0.1.64) - 2026-09-30
 
 ### Fixed
