@@ -223,6 +223,7 @@ pub fn preprocess_with_overlay_outcome(
         let canonical = std::fs::canonicalize(&candidate).ok();
         let overlay_text = overlay
             .get(&main_file)
+            .or_else(|| overlay.get(&candidate.to_string_lossy().into_owned()))
             .or_else(|| {
                 canonical
                     .as_ref()
