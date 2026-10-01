@@ -1238,6 +1238,19 @@ impl Lowerer {
             }
         }
         if matches!(name, "map" | "filter" | "all" | "any") {
+            // The reference parser special-cases these member calls to a bare
+            // `lambda x: expr` argument; keyword spellings cannot be written.
+            for arg in args {
+                if let Some((keyword, span)) = &arg.keyword {
+                    self.error_at(
+                        "keyword-unsupported",
+                        format!(
+                            "function '{name}' does not accept keyword arguments ('{keyword}')"
+                        ),
+                        *span,
+                    );
+                }
+            }
             let lowered = HirExpr::ReceiverCall {
                 receiver: Box::new(self.lower_expr(receiver, macro_params, CallPosition::Value)),
                 name: name.to_string(),

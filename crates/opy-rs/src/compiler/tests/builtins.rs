@@ -554,3 +554,23 @@ fn declare_round_victory_accepts_its_reference_keyword() {
     );
     assert!(out.contains("Declare Round Victory"), "{out}");
 }
+
+#[test]
+fn member_lambda_calls_reject_keyword_arguments() {
+    let error = crate::compile(
+        "globalvar g\nrule \"r\":\n    @Event global\n    g = [1, 2].filter(condition=lambda x: x > 0)\n",
+        "source.opy",
+        Path::new("."),
+    )
+    .expect_err("the reference grammar cannot spell a keyword on member lambda calls");
+    assert_eq!(error.code, "keyword-unsupported");
+    assert!(error.message.contains("condition"));
+
+    let error = crate::compile(
+        "globalvar g\nrule \"r\":\n    @Event global\n    g = getAllPlayers().all(condition=lambda x: x)\n",
+        "source.opy",
+        Path::new("."),
+    )
+    .expect_err("member lambda calls take a bare lambda argument");
+    assert_eq!(error.code, "keyword-unsupported");
+}

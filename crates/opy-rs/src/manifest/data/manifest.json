@@ -97,13 +97,14 @@
     {
       "catalogId": "getObjectivePosition",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "getObjectivePosition",
       "kind": "value",
       "params": [
         {
-          "name": "objective"
+          "name": "number"
         }
       ]
     },
@@ -220,16 +221,17 @@
     {
       "catalogId": "angleBetweenVectors",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "angleBetweenVectors",
       "kind": "value",
       "params": [
         {
-          "name": "direction1"
+          "name": "vector"
         },
         {
-          "name": "direction2"
+          "name": "vector"
         }
       ]
     },
@@ -249,16 +251,17 @@
     {
       "catalogId": "directionTowards",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "directionTowards",
       "kind": "value",
       "params": [
         {
-          "name": "start"
+          "name": "startPos"
         },
         {
-          "name": "end"
+          "name": "endPos"
         }
       ]
     },
@@ -308,16 +311,17 @@
     {
       "catalogId": "min",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "min",
       "kind": "value",
       "params": [
         {
-          "name": "a"
+          "name": "value"
         },
         {
-          "name": "b"
+          "name": "value"
         }
       ]
     },
@@ -752,13 +756,14 @@
     {
       "catalogId": "setSlowMotion",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "setSlowMotion",
       "kind": "action",
       "params": [
         {
-          "name": "percent"
+          "name": "speedPercent"
         }
       ]
     },
@@ -925,13 +930,14 @@
     {
       "catalogId": "destroyEffect",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "destroyEffect",
       "kind": "action",
       "params": [
         {
-          "name": "effectId"
+          "name": "entity"
         }
       ]
     },
@@ -980,19 +986,20 @@
     {
       "catalogId": "startDamageOverTime",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "startDamageOverTime",
       "kind": "memberAction",
       "params": [
         {
-          "name": "attacker"
+          "name": "damager"
         },
         {
           "name": "duration"
         },
         {
-          "name": "damage"
+          "name": "damagePerSecond"
         }
       ],
       "receiver": "Player"
@@ -1000,7 +1007,8 @@
     {
       "catalogId": "startHealingOverTime",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "startHealingOverTime",
       "kind": "memberAction",
@@ -1012,7 +1020,7 @@
           "name": "duration"
         },
         {
-          "name": "healing"
+          "name": "healingPerSecond"
         }
       ],
       "receiver": "Player"
@@ -1020,39 +1028,42 @@
     {
       "catalogId": "stopHealingOverTime",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "stopHoT",
       "kind": "action",
       "params": [
         {
-          "name": "healingOverTimeId"
+          "name": "healOverTimeId"
         }
       ]
     },
     {
       "catalogId": "stopHealingOverTime",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "stopHealingOverTime",
       "kind": "action",
       "params": [
         {
-          "name": "healingOverTimeId"
+          "name": "healOverTimeId"
         }
       ]
     },
     {
       "catalogId": "stopHealingModification",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "stopHealingModification",
       "kind": "action",
       "params": [
         {
-          "name": "player"
+          "name": "healingModificationId"
         }
       ]
     },
@@ -1398,16 +1409,17 @@
     {
       "catalogId": "max",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "max",
       "kind": "value",
       "params": [
         {
-          "name": "left"
+          "name": "value"
         },
         {
-          "name": "right"
+          "name": "value"
         }
       ]
     },
@@ -1432,13 +1444,14 @@
     {
       "catalogId": "evaluateOnce",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "evalOnce",
       "kind": "value",
       "params": [
         {
-          "name": "value"
+          "name": "inputValue"
         }
       ]
     },
@@ -1463,26 +1476,28 @@
     {
       "catalogId": "sinDeg",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "sinDeg",
       "kind": "value",
       "params": [
         {
-          "name": "value"
+          "name": "angle"
         }
       ]
     },
     {
       "catalogId": "cosDeg",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "cosDeg",
       "kind": "value",
       "params": [
         {
-          "name": "value"
+          "name": "angle"
         }
       ]
     },
@@ -1525,61 +1540,65 @@
     {
       "catalogId": "distance",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "distance",
       "kind": "value",
       "params": [
         {
-          "name": "left"
+          "name": "startPos"
         },
         {
-          "name": "right"
+          "name": "endPos"
         }
       ]
     },
     {
       "catalogId": "vectorTowards",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "vectorTowards",
       "kind": "value",
       "params": [
         {
-          "name": "start"
+          "name": "startPos"
         },
         {
-          "name": "end"
+          "name": "endPos"
         }
       ]
     },
     {
       "catalogId": "dotProduct",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "dotProduct",
       "kind": "value",
       "params": [
         {
-          "name": "left"
+          "name": "value"
         },
         {
-          "name": "right"
+          "name": "value"
         }
       ]
     },
     {
       "catalogId": "strContains",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "strContains",
       "kind": "value",
       "params": [
         {
-          "name": "text"
+          "name": "string"
         },
         {
           "name": "substring"
@@ -2038,13 +2057,14 @@
     {
       "catalogId": "heroIconString",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "heroIcon",
       "kind": "value",
       "params": [
         {
-          "name": "hero"
+          "name": "value"
         }
       ]
     },
@@ -2073,13 +2093,14 @@
     {
       "catalogId": "filteredArray",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "filter",
       "kind": "memberValue",
       "params": [
         {
-          "name": "condition"
+          "name": "lambda"
         }
       ],
       "receiver": "Any"
@@ -2409,13 +2430,14 @@
     {
       "catalogId": "stringReplace",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "replace",
       "kind": "memberValue",
       "params": [
         {
-          "name": "search"
+          "name": "pattern"
         },
         {
           "name": "replacement"
@@ -2719,14 +2741,15 @@
     {
       "catalogId": "getHealthOfType",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "getHealthOfType",
       "kind": "memberValue",
       "params": [
         {
           "domain": "Health",
-          "name": "healthType"
+          "name": "health"
         }
       ],
       "receiver": "Player"
@@ -2963,7 +2986,8 @@
     {
       "catalogId": "startForcingPosition",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "startForcingPosition",
       "kind": "memberAction",
@@ -2972,7 +2996,7 @@
           "name": "position"
         },
         {
-          "name": "includeY"
+          "name": "reevaluate"
         }
       ],
       "receiver": "Player"
@@ -3010,7 +3034,8 @@
     {
       "catalogId": "attachTo",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "attachTo",
       "kind": "memberAction",
@@ -3019,7 +3044,7 @@
           "name": "parent"
         },
         {
-          "name": "position"
+          "name": "offset"
         }
       ],
       "receiver": "Player"
@@ -3714,7 +3739,8 @@
     {
       "catalogId": "startScalingSize",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "startScalingSize",
       "kind": "memberAction",
@@ -3723,7 +3749,7 @@
           "name": "scale"
         },
         {
-          "name": "relative"
+          "name": "reevaluation"
         }
       ],
       "receiver": "Player"
@@ -3751,7 +3777,8 @@
     {
       "catalogId": "startScalingBarriers",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "startScalingBarriers",
       "kind": "memberAction",
@@ -3760,7 +3787,7 @@
           "name": "scale"
         },
         {
-          "name": "relative"
+          "name": "reevaluation"
         }
       ],
       "receiver": "Player"
@@ -3768,28 +3795,29 @@
     {
       "catalogId": "startForcingThrottle",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "startForcingThrottle",
       "kind": "memberAction",
       "params": [
         {
-          "name": "forward"
+          "name": "minForward"
         },
         {
-          "name": "backward"
+          "name": "maxForward"
         },
         {
-          "name": "left"
+          "name": "minBackward"
         },
         {
-          "name": "right"
+          "name": "maxBackward"
         },
         {
-          "name": "up"
+          "name": "minSideways"
         },
         {
-          "name": "down"
+          "name": "maxSideways"
         }
       ],
       "receiver": "Player"
@@ -3910,16 +3938,17 @@
     {
       "catalogId": "startModifyingVoicelinePitch",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "startModifyingVoicelinePitch",
       "kind": "memberAction",
       "params": [
         {
-          "name": "pitch"
+          "name": "pitchScalar"
         },
         {
-          "name": "relative"
+          "name": "reevaluation"
         }
       ],
       "receiver": "Player"
@@ -4113,7 +4142,8 @@
     {
       "catalogId": "setAbilityCharge",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "setAbilityCharge",
       "kind": "memberAction",
@@ -4123,7 +4153,7 @@
           "name": "button"
         },
         {
-          "name": "charge"
+          "name": "chargeCount"
         }
       ],
       "receiver": "Player"
@@ -4229,13 +4259,14 @@
     {
       "catalogId": "setProjectileSpeed",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "setProjectileSpeed",
       "kind": "memberAction",
       "params": [
         {
-          "name": "speed"
+          "name": "projectileSpeedPercent"
         }
       ],
       "receiver": "Player"
@@ -4243,13 +4274,14 @@
     {
       "catalogId": "setProjectileGravity",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "setProjectileGravity",
       "kind": "memberAction",
       "params": [
         {
-          "name": "gravity"
+          "name": "projectileGravityPercent"
         }
       ],
       "receiver": "Player"
@@ -4435,14 +4467,15 @@
     {
       "catalogId": "getMaxHealthOfType",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "getMaxHealthOfType",
       "kind": "memberValue",
       "params": [
         {
           "domain": "Health",
-          "name": "healthType"
+          "name": "health"
         }
       ],
       "receiver": "Player"
@@ -4477,13 +4510,14 @@
     {
       "catalogId": "setHealingDealt",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "setHealingDealt",
       "kind": "memberAction",
       "params": [
         {
-          "name": "healingPercent"
+          "name": "healingDealtPercent"
         }
       ],
       "receiver": "Player"
@@ -4491,13 +4525,14 @@
     {
       "catalogId": "setHealingReceived",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "setHealingReceived",
       "kind": "memberAction",
       "params": [
         {
-          "name": "healingPercent"
+          "name": "healingReceivedPercent"
         }
       ],
       "receiver": "Player"
@@ -4505,13 +4540,14 @@
     {
       "catalogId": "setKnockbackReceived",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "setKnockbackReceived",
       "kind": "memberAction",
       "params": [
         {
-          "name": "percent"
+          "name": "knockbackReceivedPercent"
         }
       ],
       "receiver": "Player"
@@ -4519,13 +4555,14 @@
     {
       "catalogId": "setKnockbackDealt",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "setKnockbackDealt",
       "kind": "memberAction",
       "params": [
         {
-          "name": "percent"
+          "name": "knockbackDealtPercent"
         }
       ],
       "receiver": "Player"
@@ -4533,14 +4570,15 @@
     {
       "catalogId": "setAllowedHeroes",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "setAllowedHeroes",
       "kind": "memberAction",
       "params": [
         {
           "domain": "Hero",
-          "name": "heroes"
+          "name": "hero"
         }
       ],
       "receiver": "Player"
@@ -4568,7 +4606,8 @@
     {
       "catalogId": "addHealthPool",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "addHealthPool",
       "kind": "memberAction",
@@ -4578,13 +4617,13 @@
           "name": "healthType"
         },
         {
-          "name": "amount"
+          "name": "maxHealth"
         },
         {
-          "name": "isPermanent"
+          "name": "isRecoverable"
         },
         {
-          "name": "receivesHealing"
+          "name": "reevaluation"
         }
       ],
       "receiver": "Player"
@@ -4629,7 +4668,8 @@
     {
       "catalogId": "startForcingSpawn",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "startForcingSpawn",
       "kind": "action",
@@ -4639,7 +4679,7 @@
           "name": "team"
         },
         {
-          "name": "spawnRoom"
+          "name": "room"
         }
       ]
     },
@@ -4769,13 +4809,14 @@
     {
       "catalogId": "sin",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "sin",
       "kind": "value",
       "params": [
         {
-          "name": "value"
+          "name": "angle"
         }
       ]
     },
@@ -5729,14 +5770,15 @@
     {
       "catalogId": "getAbilityResource",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "getAbilityResource",
       "kind": "memberValue",
       "params": [
         {
           "domain": "Button",
-          "name": "ability"
+          "name": "button"
         }
       ],
       "receiver": "Player"
@@ -5808,17 +5850,18 @@
     {
       "catalogId": "setAbilityResource",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "setAbilityResource",
       "kind": "memberAction",
       "params": [
         {
           "domain": "Button",
-          "name": "ability"
+          "name": "button"
         },
         {
-          "name": "resource"
+          "name": "resourcePercent"
         }
       ],
       "receiver": "Player"
@@ -5826,13 +5869,14 @@
     {
       "catalogId": "setEnvironmentCreditPlayer",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "setEnvironmentalKillCreditor",
       "kind": "memberAction",
       "params": [
         {
-          "name": "creditor"
+          "name": "environmentCreditPlayer"
         }
       ],
       "receiver": "Player"
@@ -5840,7 +5884,8 @@
     {
       "catalogId": "getHeroStatistic",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "getHeroStatistic",
       "kind": "memberValue",
@@ -5851,7 +5896,7 @@
         },
         {
           "domain": "HeroStat",
-          "name": "statistic"
+          "name": "stat"
         }
       ],
       "receiver": "Player"
@@ -5873,14 +5918,15 @@
     {
       "catalogId": "communicate",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "communicate",
       "kind": "memberAction",
       "params": [
         {
           "domain": "Comms",
-          "name": "message"
+          "name": "type"
         }
       ],
       "receiver": "Player"
@@ -5888,13 +5934,14 @@
     {
       "catalogId": "cos",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "cos",
       "kind": "value",
       "params": [
         {
-          "name": "radians"
+          "name": "angle"
         }
       ]
     },
@@ -5918,33 +5965,35 @@
     {
       "catalogId": "destroyIcon",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "destroyIcon",
       "kind": "action",
       "params": [
         {
-          "name": "iconId"
+          "name": "entity"
         }
       ]
     },
     {
       "catalogId": "localVector",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "upstream-keyword-arguments"
       ],
       "id": "localVector",
       "kind": "value",
       "params": [
         {
-          "name": "vector"
+          "name": "worldVector"
         },
         {
-          "name": "player"
+          "name": "relativePlayer"
         },
         {
           "domain": "Transform",
-          "name": "transform"
+          "name": "transformation"
         }
       ]
     },

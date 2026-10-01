@@ -378,6 +378,20 @@
       "outputSha256": "43ac2d338b6206f6e2f51ea643dc892ff05cf4b539b280c1d0195e146ffd1a3d",
       "sha256": "31b55160c3c8340a91531d8a4c26b0fe48c8312898d7bd1ed21f9528a5b0859e",
       "source": "missing-actions.opy"
+    },
+    {
+      "expect": "success",
+      "id": "upstream-keyword-arguments",
+      "outputSha256": "2b0c0b5cee5e7dfe8d090378d15f45141b010a3c26219172aaaaade196e8d8a8",
+      "sha256": "b0b0f2456215ea3811aecb1ad0551eae9ceab575ce164ca2801e4841134930c4",
+      "source": "upstream-keyword-arguments.opy"
+    },
+    {
+      "expect": "failure",
+      "id": "member-lambda-keyword",
+      "sha256": "836691f1ee70b8741b9421f23d523fdef3e0428eb7f973ae7f4bb58beb8da630",
+      "source": "member-lambda-keyword.opy",
+      "diagnosticContains": "Expected 'lambda x' before ':'"
     }
   ]
 }
