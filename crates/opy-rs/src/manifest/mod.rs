@@ -139,13 +139,20 @@ impl ReceiverCategory {
     }
 }
 
-/// A parameter default that the frontend expands: a function call, enum
-/// member (`"MEMBER"`), scalar (`0.016`), or `Null` (`{"null": true}`).
+/// A parameter default that the frontend expands: a function call with
+/// optional numeric arguments, enum member (`"MEMBER"`), scalar (`0.016`),
+/// or `Null` (`{"null": true}`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ParamDefault {
-    Call { call: String },
-    Null { null: bool },
+    Call {
+        call: String,
+        #[serde(default)]
+        args: Vec<f64>,
+    },
+    Null {
+        null: bool,
+    },
     EnumMember(String),
     Bool(bool),
     Number(f64),

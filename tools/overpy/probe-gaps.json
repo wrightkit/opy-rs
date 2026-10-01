@@ -8,12 +8,14 @@
         "createBeam",
         "createHomingProjectile",
         "createProjectileEffect",
-        "getPlayersInRadius"
+        "getPlayersInRadius",
+        "getRealPlayersInRadius",
+        "setObjectiveDescription"
       ],
       "variant": ":omit-arg",
-      "cause": "Given one argument fewer for an optional or defaulted middle parameter, the reference shifts the remaining arguments left without checking their types and writes a call with an enum in the wrong slot (Players Within Radius(Up, 3, Off, Off), a beam whose colour is None). The native compiler rejects the call, which is the valid outcome.",
+      "cause": "Given one argument fewer for a defaulted middle parameter, the reference shifts the remaining arguments left without checking their types and writes a call with an enum in the wrong slot (Players Within Radius(Up, 3, Off, Off), a beam whose colour is None). The native compiler binds identically; canonical validation rejects the mistyped call.",
       "owner": "opy-rs binding",
-      "decision": "approved exception (project owner, wrightkit/opy-rs#366); pinned by compiler::tests::structural_convergence",
+      "decision": "approved exception (project owner, wrightkit/opy-rs#366); pending the scoped canonical admission tracked by wrightkit/opy-rs#392; pinned by compiler::tests::structural_convergence",
       "detail": ""
     },
     {

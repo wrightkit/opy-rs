@@ -289,7 +289,6 @@
       "kind": "value",
       "params": [
         {
-          "default": "ALL",
           "domain": "Team",
           "name": "team"
         }
@@ -365,16 +364,20 @@
     {
       "catalogId": "damage",
       "evidence": [
-        "generic-builtins"
+        "generic-builtins",
+        "defaulted-arguments"
       ],
       "id": "damage",
       "kind": "action",
       "params": [
         {
-          "name": "target"
+          "name": "player"
         },
         {
-          "name": "attacker"
+          "default": {
+            "null": true
+          },
+          "name": "damager"
         },
         {
           "name": "amount"
@@ -432,15 +435,19 @@
     {
       "catalogId": "heal",
       "evidence": [
-        "generic-builtins"
+        "generic-builtins",
+        "defaulted-arguments"
       ],
       "id": "heal",
       "kind": "action",
       "params": [
         {
-          "name": "target"
+          "name": "player"
         },
         {
+          "default": {
+            "null": true
+          },
           "name": "healer"
         },
         {
@@ -464,36 +471,44 @@
     {
       "catalogLink": "special-lowering",
       "evidence": [
-        "hud-subheader"
+        "hud-subheader",
+        "defaulted-arguments"
       ],
       "id": "hudSubheader",
       "kind": "action",
       "params": [
         {
+          "default": {
+            "call": "getAllPlayers"
+          },
           "name": "visibleTo"
         },
         {
           "name": "text"
         },
         {
+          "default": "LEFT",
           "domain": "HudPosition",
-          "name": "position"
+          "name": "location"
         },
         {
+          "default": 0,
           "name": "sortOrder"
         },
         {
+          "default": "WHITE",
           "domain": "Color",
           "name": "color"
         },
         {
+          "default": "VISIBILITY_SORT_ORDER_STRING_AND_COLOR",
           "domain": "HudReeval",
           "name": "reevaluation"
         },
         {
           "default": "DEFAULT",
           "domain": "SpecVisibility",
-          "name": "spectators"
+          "name": "specVisibility"
         }
       ]
     },
@@ -654,18 +669,23 @@
     {
       "catalogId": "setObjectiveDescription",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "defaulted-arguments"
       ],
       "id": "setObjectiveDescription",
       "kind": "action",
       "params": [
         {
+          "default": {
+            "call": "getAllPlayers"
+          },
           "name": "visibleTo"
         },
         {
-          "name": "description"
+          "name": "text"
         },
         {
+          "default": "VISIBILITY_SORT_ORDER_STRING_AND_COLOR",
           "domain": "HudReeval",
           "name": "reevaluation"
         }
@@ -674,7 +694,8 @@
     {
       "catalogId": "createEffect",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "defaulted-arguments"
       ],
       "id": "createEffect",
       "kind": "action",
@@ -697,6 +718,7 @@
           "name": "radius"
         },
         {
+          "default": "VISIBILITY_POSITION_RADIUS_AND_COLOR",
           "domain": "EffectReeval",
           "name": "reevaluation"
         }
@@ -711,7 +733,6 @@
       "kind": "action",
       "params": [
         {
-          "default": "ALL",
           "domain": "Team",
           "name": "team"
         }
@@ -746,16 +767,20 @@
     {
       "catalogId": "createInWorldText",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "defaulted-arguments"
       ],
       "id": "createInWorldText",
       "kind": "action",
       "params": [
         {
+          "default": {
+            "call": "getAllPlayers"
+          },
           "name": "visibleTo"
         },
         {
-          "name": "header"
+          "name": "text"
         },
         {
           "name": "position"
@@ -764,22 +789,24 @@
           "name": "scale"
         },
         {
+          "default": "NONE",
           "domain": "Clipping",
           "name": "clipping"
         },
         {
+          "default": "VISIBILITY_POSITION_STRING_AND_COLOR",
           "domain": "WorldTextReeval",
           "name": "reevaluation"
         },
         {
           "default": "WHITE",
           "domain": "Color",
-          "name": "textColor"
+          "name": "color"
         },
         {
           "default": "DEFAULT",
           "domain": "SpecVisibility",
-          "name": "spectators"
+          "name": "specVisibility"
         }
       ]
     },
@@ -795,7 +822,8 @@
     {
       "catalogId": "progressBarHud",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "defaulted-arguments"
       ],
       "id": "progressBarHud",
       "kind": "action",
@@ -804,28 +832,43 @@
           "name": "visibleTo"
         },
         {
+          "default": 0,
           "name": "value"
         },
         {
+          "default": {
+            "null": true
+          },
           "name": "text"
         },
         {
-          "name": "position"
+          "default": "LEFT",
+          "domain": "HudPosition",
+          "name": "location"
         },
         {
-          "name": "scale"
+          "default": 0,
+          "name": "sortOrder"
         },
         {
-          "name": "barColor"
+          "default": "WHITE",
+          "domain": "Color",
+          "name": "progressBarColor"
         },
         {
+          "default": "WHITE",
+          "domain": "Color",
           "name": "textColor"
         },
         {
+          "default": "VISIBILITY_VALUES_AND_COLOR",
+          "domain": "ProgressHudReeval",
           "name": "reevaluation"
         },
         {
-          "name": "spectators"
+          "default": "DEFAULT",
+          "domain": "SpecVisibility",
+          "name": "specVisibility"
         }
       ]
     },
@@ -1018,21 +1061,23 @@
     {
       "catalogId": "startHealingModification",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "defaulted-arguments"
       ],
       "id": "startHealingModification",
       "kind": "action",
       "params": [
         {
-          "name": "target"
+          "name": "receivers"
         },
         {
-          "name": "healer"
+          "name": "healers"
         },
         {
-          "name": "amount"
+          "name": "healingPercent"
         },
         {
+          "default": "RECEIVERS_HEALERS_AND_HEALPERCENT",
           "domain": "HealingReeval",
           "name": "reevaluation"
         }
@@ -1068,50 +1113,69 @@
     {
       "catalogId": "createHudText",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "defaulted-arguments"
       ],
       "id": "hudText",
       "kind": "action",
       "params": [
         {
+          "default": {
+            "call": "getAllPlayers"
+          },
           "name": "visibleTo"
         },
         {
+          "default": {
+            "null": true
+          },
           "name": "header"
         },
         {
+          "default": {
+            "null": true
+          },
           "name": "subheader"
         },
         {
+          "default": {
+            "null": true
+          },
           "name": "text"
         },
         {
+          "default": "LEFT",
           "domain": "HudPosition",
-          "name": "position"
+          "name": "location"
         },
         {
+          "default": 0,
           "name": "sortOrder"
         },
         {
+          "default": "WHITE",
           "domain": "Color",
           "name": "headerColor"
         },
         {
+          "default": "WHITE",
           "domain": "Color",
           "name": "subheaderColor"
         },
         {
+          "default": "WHITE",
           "domain": "Color",
           "name": "textColor"
         },
         {
+          "default": "VISIBILITY_SORT_ORDER_STRING_AND_COLOR",
           "domain": "HudReeval",
           "name": "reevaluation"
         },
         {
           "default": "DEFAULT",
           "domain": "SpecVisibility",
-          "name": "spectators"
+          "name": "specVisibility"
         }
       ]
     },
@@ -1157,15 +1221,19 @@
     {
       "catalogId": "kill",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "defaulted-arguments"
       ],
       "id": "kill",
       "kind": "action",
       "params": [
         {
-          "name": "target"
+          "name": "player"
         },
         {
+          "default": {
+            "null": true
+          },
           "name": "killer"
         }
       ]
@@ -1179,7 +1247,6 @@
       "kind": "value",
       "params": [
         {
-          "default": "ALL",
           "domain": "Team",
           "name": "team"
         }
@@ -1188,7 +1255,8 @@
     {
       "catalogId": "getPlayersInRadius",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "defaulted-arguments"
       ],
       "id": "getRealPlayersInRadius",
       "kind": "value",
@@ -1200,10 +1268,12 @@
           "name": "radius"
         },
         {
+          "default": "ALL",
           "domain": "Team",
           "name": "team"
         },
         {
+          "default": "OFF",
           "domain": "LosCheck",
           "name": "losCheck"
         }
@@ -1255,12 +1325,14 @@
     {
       "catalogId": "getNumberOfSlots",
       "evidence": [
-        "get-number-of-slots"
+        "get-number-of-slots",
+        "defaulted-arguments"
       ],
       "id": "getNumberOfSlots",
       "kind": "value",
       "params": [
         {
+          "default": "ALL",
           "domain": "Team",
           "name": "team"
         }
@@ -1545,7 +1617,8 @@
     {
       "catalogId": "createBeamEffect",
       "evidence": [
-        "generic-builtins"
+        "generic-builtins",
+        "defaulted-arguments"
       ],
       "id": "createBeam",
       "kind": "action",
@@ -1564,11 +1637,14 @@
           "name": "endPosition"
         },
         {
+          "default": {
+            "null": true
+          },
           "domain": "Color",
-          "name": "color",
-          "optional": true
+          "name": "color"
         },
         {
+          "default": "VISIBILITY_POSITION_RADIUS_AND_COLOR",
           "domain": "EffectReeval",
           "name": "reevaluation"
         }
@@ -1904,46 +1980,59 @@
     {
       "catalogId": "createProgressBarInWorldText",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "defaulted-arguments"
       ],
       "id": "createProgressBarInWorldText",
       "kind": "action",
       "params": [
         {
+          "default": {
+            "call": "getAllPlayers"
+          },
           "name": "visibleTo"
         },
         {
+          "default": 0,
           "name": "value"
         },
         {
+          "default": {
+            "null": true
+          },
           "name": "text"
         },
         {
           "name": "position"
         },
         {
+          "default": 1,
           "name": "scale"
         },
         {
+          "default": "NONE",
           "domain": "Clipping",
           "name": "clipping"
         },
         {
+          "default": "WHITE",
           "domain": "Color",
-          "name": "headerColor"
+          "name": "progressBarColor"
         },
         {
+          "default": "WHITE",
           "domain": "Color",
           "name": "textColor"
         },
         {
+          "default": "VISIBILITY_POSITION_VALUES_AND_COLOR",
           "domain": "ProgressWorldTextReeval",
           "name": "reevaluation"
         },
         {
           "default": "DEFAULT",
           "domain": "SpecVisibility",
-          "name": "spectators"
+          "name": "specVisibility"
         }
       ]
     },
@@ -2145,7 +2234,8 @@
     {
       "catalogId": "createDummyBot",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "defaulted-arguments"
       ],
       "id": "createDummy",
       "kind": "action",
@@ -2165,8 +2255,15 @@
           "name": "position"
         },
         {
-          "name": "facing",
-          "optional": true
+          "default": {
+            "args": [
+              0,
+              0,
+              0
+            ],
+            "call": "vect"
+          },
+          "name": "facing"
         }
       ]
     },
@@ -4858,7 +4955,8 @@
     {
       "catalogId": "getPlayersInSlot",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "defaulted-arguments"
       ],
       "id": "getPlayersInSlot",
       "kind": "value",
@@ -4867,6 +4965,7 @@
           "name": "slot"
         },
         {
+          "default": "ALL",
           "domain": "Team",
           "name": "team"
         }
@@ -4903,12 +5002,14 @@
     {
       "catalogId": "getPlayersOnObjective",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "defaulted-arguments"
       ],
       "id": "getPlayersOnObjective",
       "kind": "value",
       "params": [
         {
+          "default": "ALL",
           "domain": "Team",
           "name": "team"
         }
@@ -5856,8 +5957,10 @@
           "name": "contextOrString"
         },
         {
-          "name": "string",
-          "optional": true
+          "default": {
+            "null": true
+          },
+          "name": "string"
         }
       ]
     },
@@ -5873,8 +5976,10 @@
           "name": "contextOrString"
         },
         {
-          "name": "string",
-          "optional": true
+          "default": {
+            "null": true
+          },
+          "name": "string"
         }
       ]
     },
@@ -5890,8 +5995,10 @@
           "name": "contextOrString"
         },
         {
-          "name": "string",
-          "optional": true
+          "default": {
+            "null": true
+          },
+          "name": "string"
         }
       ]
     },
