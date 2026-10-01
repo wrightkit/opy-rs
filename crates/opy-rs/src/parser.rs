@@ -261,6 +261,22 @@ impl Parser<'_> {
         let line = &self.tokens[self.pos..end];
         let first = line.first()?;
         let last = line.last().expect("line is non-empty");
+        // `;` is never a valid OPY statement terminator, at any level.
+        if last.kind == TokenKind::Semicolon {
+            return Some((
+                Span::new(first.span.file, first.span.start, last.span.end),
+                "a `;` statement terminator; OPY ends statements at the line".to_string(),
+            ));
+        }
+        // Inside a rule body, adjacent bare expressions are legal OPY
+        // statements (`x`, then `f()`, then `{k: v}`), so `ident {`- and
+        // `ident…(`-shaped lines cannot be told apart from OPY there — a
+        // `{`/`;`/`:` tell or a keyword position has to flag them instead.
+        // At top level no declaration begins with a bare identifier, so
+        // these shapes are unambiguous.
+        if !top_level {
+            return None;
+        }
         match first.kind {
             // `}` can never start an OPY construct.
             TokenKind::RBrace => {
@@ -272,26 +288,16 @@ impl Parser<'_> {
             }
             // A lone `{` opens a dict literal inside a rule, but nothing at
             // top level begins with one.
-            TokenKind::LBrace if top_level => {
+            TokenKind::LBrace => {
                 return Some((first.span, BRACE_BLOCKS.to_string()));
             }
             _ => {}
-        }
-        // `;` is never a valid OPY statement terminator.
-        if last.kind == TokenKind::Semicolon {
-            return Some((
-                Span::new(first.span.file, first.span.start, last.span.end),
-                "a `;` statement terminator; OPY ends statements at the line".to_string(),
-            ));
         }
         if first.kind != TokenKind::Ident {
             return None;
         }
         // `ident {` opens a brace block: `event {`, `actions {`, `variables {`.
-        // OPY words are excluded: a statement keyword's `{` is a dict-literal
-        // operand (`if {1: 2}:`, `return {k: v}`), not a brace block — those
-        // stay plain OPY. `if cond {`/`do {` still report via
-        // `expect_block_colon` when the expression parses and `{` replaces `:`.
+        // OPY words are excluded for uniformity with the multi-word scan.
         if line
             .get(1)
             .is_some_and(|token| token.kind == TokenKind::LBrace)
@@ -303,10 +309,7 @@ impl Parser<'_> {
             ));
         }
         // `Word Word ... (` is a multi-word Workshop call name; a bare
-        // juxtaposition without a call (`x y`) stays plain OPY. Note `x y(1)`
-        // and `x {` flag as Workshop forms — they are token-identical to
-        // `Set Player Variable(` and `event {`, and only parsed before as
-        // adjacent no-effect statements, a deliberate narrowing for #420.
+        // juxtaposition without a call (`x y`) stays plain OPY.
         let mut words = 0;
         while line
             .get(words)
@@ -785,8 +788,8 @@ mod tests {
             "rule(\"x\") {\n    event {\n        Ongoing - Global;\n    }\n}\n",
             // A `;`-terminated statement inside an OPY rule.
             "rule \"r\":\n    @Event global\n    Ongoing - Global;\n",
-            // A `{`-opened block inside a rule body.
-            "rule \"r\":\n    @Event global\n    actions {\n        Wait(1);\n    }\n",
+            // An `ident {` section header at top level.
+            "actions {\n    Wait(1);\n}\n",
             // `if`-with-braces is a brace-block tell, not a mistyped colon.
             "rule \"r\":\n    @Event global\n    if x == 1 {\n        pass\n    }\n",
             // A `;` tell followed by a `}` line: the second tell reaches
@@ -807,15 +810,15 @@ mod tests {
     }
 
     #[test]
-    fn workshop_tells_share_tokens_with_valid_opy_adjacency() {
-        // #420 narrows two token shapes that parsed before as adjacent
-        // no-effect statements, because they are identical to the Workshop
-        // forms being detected. Pinned so the narrowing stays deliberate.
+    fn workshop_tells_only_apply_at_top_level() {
+        // #420: the identifier-shaped tells only fire at top level, where no
+        // OPY declaration starts with a bare identifier. Inside a rule body
+        // the same token shapes are adjacent statements and stay plain OPY.
         for source in [
             // `x y(1)` is token-identical to `Set Player Variable(...)`.
-            "globalvar x\nglobalvar y\nrule \"r\":\n    @Event global\n    x y(1)\n",
-            // `x {` is token-identical to `event {`.
-            "globalvar x\nrule \"r\":\n    @Event global\n    x {}\n",
+            "x y(1)\n", // `x {` is token-identical to `event {`.
+            "x {}\n",   // A stray `}` at top level closes nothing OPY-side.
+            "}\n",
         ] {
             let errors = parse_err(source);
             assert_eq!(
@@ -825,25 +828,30 @@ mod tests {
             );
             assert_eq!(errors[0].code, "workshop-source");
         }
-        // But a statement keyword's `{` is a dict literal, not a brace block.
-        parse_ok("rule \"r\":\n    @Event global\n    if {1: 2}: pass\n");
+        // In a rule body all of these parse: `x` + `y(1)`/`{}` juxtapose as
+        // statements, and a keyword's `{` is a dict literal.
+        parse_ok(
+            "globalvar x\nglobalvar y\nrule \"r\":\n    @Event global\n    x y(1)\n    x {}\n    if {1: 2}: pass\n",
+        );
+        // A `}` reached via malformed-dict recovery inside a body keeps the
+        // ordinary parse error, not a Workshop mislabel.
+        let errors = parse_err("rule \"r\":\n    @Event global\n    x = {\n        a\n    }\n");
+        assert!(!errors.is_empty(), "malformed dict parsed cleanly");
+        assert!(errors.iter().all(|error| error.code == "parse-error"));
     }
 
     #[test]
-    fn workshop_style_action_call_in_a_rule_reports_once() {
-        // `Set Player Variable(...)` is the multi-word Workshop action shape.
-        let errors = parse_err(concat!(
-            "globalvar score\n",
-            "rule \"r\":\n",
-            "    @Event global\n",
-            "    Set Player Variable(eventPlayer, score, 1)\n",
-        ));
+    fn workshop_style_action_call_reports_once() {
+        // `Set Player Variable(...)` is the multi-word Workshop action shape;
+        // it only flags at top level, where a bare-identifier line is never a
+        // valid OPY declaration.
+        let errors = parse_err("Set Player Variable(eventPlayer, score, 1)\n");
         assert_eq!(errors.len(), 1, "expected one diagnostic, got {errors:?}");
         let error = &errors[0];
         assert_eq!(error.code, "workshop-source");
         assert_eq!(
             error.span.expect("a source span").start,
-            Position::new(4, 5)
+            Position::new(1, 1)
         );
     }
 
