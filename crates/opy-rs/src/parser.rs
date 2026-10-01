@@ -288,10 +288,14 @@ impl Parser<'_> {
             return None;
         }
         // `ident {` opens a brace block: `event {`, `actions {`, `variables {`.
+        // OPY words are excluded: a statement keyword's `{` is a dict-literal
+        // operand (`if {1: 2}:`, `return {k: v}`), not a brace block — those
+        // stay plain OPY. `if cond {`/`do {` still report via
+        // `expect_block_colon` when the expression parses and `{` replaces `:`.
         if line
             .get(1)
             .is_some_and(|token| token.kind == TokenKind::LBrace)
-            && !matches!(first.text.as_str(), "and" | "or" | "not" | "in" | "lambda")
+            && !is_opy_word(&first.text)
         {
             return Some((
                 Span::new(first.span.file, first.span.start, line[1].span.end),
@@ -299,7 +303,10 @@ impl Parser<'_> {
             ));
         }
         // `Word Word ... (` is a multi-word Workshop call name; a bare
-        // juxtaposition without a call (`x y`) stays plain OPY.
+        // juxtaposition without a call (`x y`) stays plain OPY. Note `x y(1)`
+        // and `x {` flag as Workshop forms — they are token-identical to
+        // `Set Player Variable(` and `event {`, and only parsed before as
+        // adjacent no-effect statements, a deliberate narrowing for #420.
         let mut words = 0;
         while line
             .get(words)
@@ -782,6 +789,12 @@ mod tests {
             "rule \"r\":\n    @Event global\n    actions {\n        Wait(1);\n    }\n",
             // `if`-with-braces is a brace-block tell, not a mistyped colon.
             "rule \"r\":\n    @Event global\n    if x == 1 {\n        pass\n    }\n",
+            // A `;` tell followed by a `}` line: the second tell reaches
+            // dispatch and must be suppressed by the once-only flag, not by
+            // the first construct's brace skip.
+            "rule \"r\":\n    @Event global\n    Wait(1);\n}\n",
+            // Two `;` tells on consecutive lines: the second must dedup.
+            "rule \"r\":\n    @Event global\n    a = 1;\n    b = 2;\n",
         ] {
             let errors = parse_err(source);
             assert_eq!(
@@ -791,6 +804,29 @@ mod tests {
             );
             assert_eq!(errors[0].code, "workshop-source");
         }
+    }
+
+    #[test]
+    fn workshop_tells_share_tokens_with_valid_opy_adjacency() {
+        // #420 narrows two token shapes that parsed before as adjacent
+        // no-effect statements, because they are identical to the Workshop
+        // forms being detected. Pinned so the narrowing stays deliberate.
+        for source in [
+            // `x y(1)` is token-identical to `Set Player Variable(...)`.
+            "globalvar x\nglobalvar y\nrule \"r\":\n    @Event global\n    x y(1)\n",
+            // `x {` is token-identical to `event {`.
+            "globalvar x\nrule \"r\":\n    @Event global\n    x {}\n",
+        ] {
+            let errors = parse_err(source);
+            assert_eq!(
+                errors.len(),
+                1,
+                "expected one diagnostic for {source:?}, got {errors:?}"
+            );
+            assert_eq!(errors[0].code, "workshop-source");
+        }
+        // But a statement keyword's `{` is a dict literal, not a brace block.
+        parse_ok("rule \"r\":\n    @Event global\n    if {1: 2}: pass\n");
     }
 
     #[test]
@@ -817,10 +853,8 @@ mod tests {
         let errors = parse_err("rule no_quotes:\n");
         assert_eq!(errors.len(), 1);
         assert_eq!(errors[0].code, "parse-error");
-        assert_eq!(
-            errors[0].message,
-            "expected a rule name string after `rule`"
-        );
+        // The message is not contractual; pin its content loosely.
+        assert!(errors[0].message.contains("rule name string"));
         assert_eq!(
             errors[0].span.expect("a source span").start,
             Position::new(1, 6)

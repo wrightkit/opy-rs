@@ -226,6 +226,28 @@ fn diagnostic_codes_are_stable_for_malformed_inputs() {
 }
 
 #[test]
+fn workshop_script_source_reports_exactly_one_diagnostic() {
+    // opy-rs#420: pasted Workshop script must surface as exactly one
+    // `workshop-source` diagnostic through `check` — the surface Wright/LPP
+    // consume — not only at the parser layer.
+    let outcome = check(
+        "rule \"workshop style\" {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Wait(1, Ignore Condition);\n    }\n}\n",
+        "main.opy",
+        Path::new(""),
+    );
+    assert_eq!(
+        outcome.diagnostics.len(),
+        1,
+        "expected one diagnostic, got {:?}",
+        outcome.diagnostics
+    );
+    let diagnostic = &outcome.diagnostics[0];
+    assert_eq!(diagnostic.code, "workshop-source");
+    assert_eq!(diagnostic.span.as_ref().expect("span").path, "main.opy");
+    assert!(outcome.model.is_none(), "a failing project has no model");
+}
+
+#[test]
 fn include_failures_are_stable_and_source_located() {
     // Missing include names the directive site.
     let outcome = check(
