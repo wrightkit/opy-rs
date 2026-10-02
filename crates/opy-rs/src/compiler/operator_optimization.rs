@@ -13,7 +13,7 @@ use super::string_format;
 use crate::compile_time::round_half_up;
 
 /// Folded numbers beyond this magnitude keep their operator form.
-const NUMBER_LIMIT: f64 = 1e7;
+pub(crate) const NUMBER_LIMIT: f64 = 1e7;
 
 const RANDOM_CALLS: [&str; 4] = [
     "randomInteger",
@@ -1114,9 +1114,10 @@ fn vector(components: [f64; 3]) -> Value {
 /// `log` has no canonical builtin. The reference expands it to the power
 /// approximation `10000 * (x ** 0.0001 - 1)` — with a `log(a) / log(b)`
 /// division when a non-e base is given — and folds `Math.log` on constant
-/// operands while optimization is enabled. Non-finite folds (`log(0)`)
-/// keep the approximation: the reference's `-Infinity`/`NaN` spellings are
-/// not canonical number syntax.
+/// operands while optimization is enabled. A fold that lands non-finite
+/// (`log(0)` → upstream `-Infinity`) needs spellings the canonical grammar
+/// cannot parse, so the marker survives and canonical validation rejects
+/// the value instead (pending `wrightkit/workshop-rs#358`).
 pub(super) fn expand_log(args: Vec<Value>, fold_constants: bool) -> Value {
     fn approximated(value: Value) -> Value {
         call(
@@ -1136,6 +1137,7 @@ pub(super) fn expand_log(args: Vec<Value>, fold_constants: bool) -> Value {
     fn resolve(value: Value, fold_constants: bool) -> Value {
         match (fold_constants, value) {
             (true, Value::Number(number)) if number.ln().is_finite() => Value::Number(number.ln()),
+            (true, value @ Value::Number(_)) => call("log", vec![value]),
             (_, value) => approximated(value),
         }
     }
@@ -1146,13 +1148,47 @@ pub(super) fn expand_log(args: Vec<Value>, fold_constants: bool) -> Value {
     match args.next() {
         None => resolve(number, fold_constants),
         Some(Value::Number(base)) if base == std::f64::consts::E => resolve(number, fold_constants),
-        Some(base) => call(
-            "divide",
-            vec![
-                resolve(number, fold_constants),
-                resolve(base, fold_constants),
-            ],
-        ),
+        Some(base) => {
+            // The reference folds the `log(a) / log(b)` division as a whole,
+            // so a non-finite operand can still fold to a finite result.
+            if fold_constants && let (Value::Number(number), Value::Number(base)) = (&number, &base)
+            {
+                let folded = number.ln() / base.ln();
+                if folded.is_finite() && folded.abs() <= NUMBER_LIMIT {
+                    return Value::Number(if folded == 0.0 { 0.0 } else { folded });
+                }
+            }
+            call(
+                "divide",
+                vec![
+                    resolve(number, fold_constants),
+                    resolve(base, fold_constants),
+                ],
+            )
+        }
+    }
+}
+
+/// The index of the `log` argument whose constant fold would emit the
+/// non-finite `-Infinity`/`NaN` spellings canonical Workshop cannot parse,
+/// unless the whole `log(a) / log(b)` still folds to a finite quotient
+/// (`log(100, 0)` → `0`). `None`-valued operands are not constants: they
+/// emit the power approximation and never need the spelling.
+pub(super) fn non_finite_log_operand(number: Option<f64>, base: Option<f64>) -> Option<usize> {
+    match (number, base) {
+        (Some(number), Some(base)) if base != std::f64::consts::E => {
+            let folded = number.ln() / base.ln();
+            if folded.is_finite() && folded.abs() <= NUMBER_LIMIT {
+                None
+            } else if !number.ln().is_finite() {
+                Some(0)
+            } else {
+                (!base.ln().is_finite()).then_some(1)
+            }
+        }
+        (Some(number), _) => (!number.ln().is_finite()).then_some(0),
+        (None, Some(base)) if base != std::f64::consts::E => (!base.ln().is_finite()).then_some(1),
+        _ => None,
     }
 }
 

@@ -219,3 +219,43 @@ fn an_omitted_optional_argument_shifts_the_rest_but_stays_rejected() {
         "semantic type 'Color'",
     );
 }
+
+#[test]
+fn a_non_finite_log_fold_is_rejected_instead_of_spelling_it() {
+    // The reference writes `-Infinity`/`NaN`, which the canonical grammar
+    // cannot parse; pending wrightkit/workshop-rs#358 the call is refused
+    // rather than emitted as a different shape.
+    for call in ["log(0)", "log(-1)", "log(0, 10)", "log(floor(0.5))"] {
+        let source = format!("globalvar v\nrule \"x\":\n    @Event global\n    v = {call}\n");
+        assert_rejected(&source, "non-finite");
+    }
+    // `log(100, 0)` still folds to the finite `0`, exactly as the reference.
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = "globalvar v\nrule \"x\":\n    @Event global\n    v = log(100, 0)\n";
+    let hir = crate::compile(source, "source.opy", dir).expect("source must resolve");
+    let artifact = Compiler::new()
+        .expect("released workshop contract must load")
+        .compile_hir(&hir)
+        .expect("the finite fold must emit");
+    assert!(
+        artifact.emitted.contains("Set Global Variable(v, 0);"),
+        "{}",
+        artifact.emitted
+    );
+    // With optimizations off the reference itself emits the power
+    // approximation, which is valid canonical Workshop and must keep emitting.
+    let source =
+        "#!disableOptimizations\nglobalvar v\nrule \"x\":\n    @Event global\n    v = log(0)\n";
+    let hir = crate::compile(source, "source.opy", dir).expect("source must resolve");
+    let artifact = Compiler::new()
+        .expect("released workshop contract must load")
+        .compile_hir(&hir)
+        .expect("the unoptimized approximation must emit");
+    assert!(
+        artifact
+            .emitted
+            .contains("Multiply(10000, Subtract(Raise To Power(0, 0.0001), 1))"),
+        "{}",
+        artifact.emitted
+    );
+}
