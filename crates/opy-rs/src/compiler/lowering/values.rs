@@ -543,7 +543,7 @@ impl<'a> Lowering<'a> {
                         value.chars().map(blizzard_global::width).sum(),
                     )));
                 }
-                if name == "hsl" {
+                if matches!(name.as_str(), "hsl" | "hsla") {
                     let (hue, saturation, lightness, alpha) = match args.as_slice() {
                         [hue, saturation, lightness] => (hue, saturation, lightness, None),
                         [hue, saturation, lightness, alpha] => {
@@ -555,10 +555,8 @@ impl<'a> Lowering<'a> {
                             );
                         }
                     };
-                    if args.iter().any(hir::visit::contains_random) {
-                        return Err(self
-                            .unsupported("Cannot use random functions in hsl() or hsla()", span));
-                    }
+                    // The reference checks constant-folded ranges first, then
+                    // random inputs, each reported at the offending argument.
                     let hue = self.lower_value(hue)?;
                     let saturation = self.lower_value(saturation)?;
                     let lightness = self.lower_value(lightness)?;
@@ -566,18 +564,29 @@ impl<'a> Lowering<'a> {
                         Some(alpha) => self.lower_value(alpha)?,
                         None => self.push_number(255.0),
                     };
-                    for (argument, label, low, high) in [
+                    for (index, (argument, label, low, high)) in [
                         (hue, "Hue", 0.0, 360.0),
                         (saturation, "Saturation", 0.0, 1.0),
                         (lightness, "Lightness", 0.0, 1.0),
                         (alpha, "Alpha", 0.0, 255.0),
-                    ] {
+                    ]
+                    .into_iter()
+                    .enumerate()
+                    {
                         if let Value::Number(value) = &self.values[argument]
                             && !(low..=high).contains(value)
                         {
                             return Err(self.unsupported(
                                 format!("{label} must be between {low} and {high}"),
-                                span,
+                                args.get(index).and_then(|expr| expr.span().copied()),
+                            ));
+                        }
+                    }
+                    for expr in args {
+                        if hir::visit::contains_random(expr) {
+                            return Err(self.unsupported(
+                                "Cannot use random functions in hsl() or hsla()",
+                                expr.span().copied(),
                             ));
                         }
                     }

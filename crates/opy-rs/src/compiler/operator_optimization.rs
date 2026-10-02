@@ -1114,7 +1114,9 @@ fn vector(components: [f64; 3]) -> Value {
 /// `log` has no canonical builtin. The reference expands it to the power
 /// approximation `10000 * (x ** 0.0001 - 1)` — with a `log(a) / log(b)`
 /// division when a non-e base is given — and folds `Math.log` on constant
-/// operands while optimization is enabled.
+/// operands while optimization is enabled. Non-finite folds (`log(0)`)
+/// keep the approximation: the reference's `-Infinity`/`NaN` spellings are
+/// not canonical number syntax.
 pub(super) fn expand_log(args: Vec<Value>, fold_constants: bool) -> Value {
     fn approximated(value: Value) -> Value {
         call(
@@ -1133,13 +1135,13 @@ pub(super) fn expand_log(args: Vec<Value>, fold_constants: bool) -> Value {
     }
     fn resolve(value: Value, fold_constants: bool) -> Value {
         match (fold_constants, value) {
-            (true, Value::Number(number)) => Value::Number(number.ln()),
+            (true, Value::Number(number)) if number.ln().is_finite() => Value::Number(number.ln()),
             (_, value) => approximated(value),
         }
     }
     let mut args = args.into_iter();
     let Some(number) = args.next() else {
-        return call("log", vec![]);
+        unreachable!("log lowering enforces one or two arguments");
     };
     match args.next() {
         None => resolve(number, fold_constants),
