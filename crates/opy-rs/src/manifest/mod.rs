@@ -139,13 +139,20 @@ impl ReceiverCategory {
     }
 }
 
-/// A parameter default that the frontend expands: a function call, enum
-/// member (`"MEMBER"`), scalar (`0.016`), or `Null` (`{"null": true}`).
+/// A parameter default that the frontend expands: a function call with
+/// optional numeric arguments, enum member (`"MEMBER"`), scalar (`0.016`),
+/// or `Null` (`{"null": true}`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ParamDefault {
-    Call { call: String },
-    Null { null: bool },
+    Call {
+        call: String,
+        #[serde(default)]
+        args: Vec<f64>,
+    },
+    Null {
+        null: bool,
+    },
     EnumMember(String),
     Bool(bool),
     Number(f64),
@@ -223,18 +230,18 @@ pub struct Function {
 }
 
 impl Function {
-    /// The (minimum, maximum) argument count: the first parameter with a
-    /// default makes every following parameter optional; `unbounded` entries
-    /// accept any count.
+    /// The (minimum, maximum) argument count: positional binding needs every
+    /// parameter up to the last one without a default or `optional` marker;
+    /// `unbounded` entries accept any count.
     pub fn arity_bounds(&self) -> (usize, Option<usize>) {
         if self.unbounded {
             return (0, None);
         }
-        let first_default = self
+        let min = self
             .params
             .iter()
-            .position(|param| param.default.is_some() || param.optional);
-        let min = first_default.unwrap_or(self.params.len());
+            .rposition(|param| param.default.is_none() && !param.optional)
+            .map_or(0, |index| index + 1);
         (min, Some(self.params.len()))
     }
 }

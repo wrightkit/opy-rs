@@ -150,6 +150,13 @@
     },
     {
       "expect": "success",
+      "id": "defaulted-arguments",
+      "outputSha256": "1fbcfe6c442ddf1a58abc9f2231e474154c2d0d4d0d6764248914b4e18673e40",
+      "sha256": "abb5529a693b68acabb42bb3d6be48ab50207dd2a4a956b4185b176c6950440d",
+      "source": "defaulted-arguments.opy"
+    },
+    {
+      "expect": "success",
       "id": "enum-gated-members",
       "outputSha256": "aea63820d0ebfc177a7a32f2b4af9bc20adfea499509b2952aa3b79b814acaaa",
       "sha256": "14d5f9542b07daaf4599aa7ecb27f21e99edadcbee80f76b5f8974b5640511d7",

@@ -283,20 +283,6 @@ impl<'a> Lowering<'a> {
             };
             return self.lower_hud_text(args, span, text_slot, &function.id);
         }
-        if function.id == "createDummy" && args.len() == 4 {
-            let spans = args
-                .iter()
-                .map(|expr| expr.span().copied())
-                .chain(std::iter::once(None));
-            let mut lowered = self.lower_values(args)?;
-            let mut zero_vector = Vec::with_capacity(3);
-            for value in [0.0, 0.0, 0.0] {
-                zero_vector.push(self.push_number(value));
-            }
-            lowered.push(self.push_call("vector", zero_vector));
-            let args = self.normalize_contextual_arguments("createDummyBot", lowered);
-            return Ok(self.push_call_action_with_spans("createDummyBot", &args, spans));
-        }
         let spans = args
             .iter()
             .map(|expr| expr.span().copied())

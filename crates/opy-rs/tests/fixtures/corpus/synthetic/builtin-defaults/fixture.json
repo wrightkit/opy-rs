@@ -1,0 +1,22 @@
+{
+  "category": "synthetic",
+  "features": [
+    "builtin argument defaults matching the pinned reference"
+  ],
+  "id": "synthetic/builtin-defaults",
+  "schemaVersion": 1,
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": true
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": true
+    }
+  }
+}

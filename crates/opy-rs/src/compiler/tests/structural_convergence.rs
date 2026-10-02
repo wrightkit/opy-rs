@@ -131,6 +131,11 @@ fn builtin_defaults_and_size_arguments_match_the_pinned_oracle() {
 }
 
 #[test]
+fn omitted_arguments_fill_the_reference_defaults() {
+    assert_converges("builtin-defaults");
+}
+
+#[test]
 fn compression_matches_the_pinned_oracle() {
     assert_converges("structural-compression");
 }
@@ -205,13 +210,12 @@ fn a_vector_that_folds_to_zero_in_a_vector_position_stays_rejected() {
 }
 
 #[test]
-fn an_omitted_optional_argument_does_not_shift_the_rest() {
+fn an_omitted_optional_argument_shifts_the_rest_but_stays_rejected() {
     // The reference moves the remaining arguments left and writes a beam whose
-    // colour is `None`; native compilation rejects the mistyped call.
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let source = "rule \"x\":\n    @Event eachPlayer\n    createBeam(eventPlayer, Beam.GRAPPLE, Vector.UP, Vector.UP, EffectReeval.NONE)\n";
-    match crate::compile(source, "source.opy", dir) {
-        Ok(_) => panic!("the mistyped call must stay rejected"),
-        Err(error) => assert_eq!(error.code, "missing-argument"),
-    }
+    // colour is `None`; canonical validation rejects the mistyped call until
+    // the scoped admission contract lands (#392).
+    assert_rejected(
+        "rule \"x\":\n    @Event eachPlayer\n    createBeam(eventPlayer, Beam.GRAPPLE, Vector.UP, Vector.UP, EffectReeval.NONE)\n",
+        "semantic type 'Color'",
+    );
 }

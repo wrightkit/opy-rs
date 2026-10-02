@@ -1009,10 +1009,17 @@ impl Lowerer {
             match &slots[index] {
                 Some(value) => bound.push(value.clone()),
                 None => match &param.default {
-                    Some(ParamDefault::Call { call }) => {
+                    Some(ParamDefault::Call { call, args }) => {
                         bound.push(HirExpr::Call {
                             name: call.clone(),
-                            args: Vec::new(),
+                            args: args
+                                .iter()
+                                .map(|value| HirExpr::Number {
+                                    value: *value,
+                                    text: format!("{value}"),
+                                    span: None,
+                                })
+                                .collect(),
                             debug_source: None,
                             span: None,
                         });
