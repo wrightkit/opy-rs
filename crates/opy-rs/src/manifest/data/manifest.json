@@ -2987,7 +2987,8 @@
       "catalogId": "startForcingPosition",
       "evidence": [
         "builtin-surface",
-        "upstream-keyword-arguments"
+        "upstream-keyword-arguments",
+        "defaulted-arguments"
       ],
       "id": "startForcingPosition",
       "kind": "memberAction",
@@ -2996,6 +2997,7 @@
           "name": "position"
         },
         {
+          "default": true,
           "name": "reevaluate"
         }
       ],
@@ -3740,7 +3742,8 @@
       "catalogId": "startScalingSize",
       "evidence": [
         "builtin-surface",
-        "upstream-keyword-arguments"
+        "upstream-keyword-arguments",
+        "defaulted-arguments"
       ],
       "id": "startScalingSize",
       "kind": "memberAction",
@@ -3749,6 +3752,7 @@
           "name": "scale"
         },
         {
+          "default": true,
           "name": "reevaluation"
         }
       ],
@@ -3778,7 +3782,8 @@
       "catalogId": "startScalingBarriers",
       "evidence": [
         "builtin-surface",
-        "upstream-keyword-arguments"
+        "upstream-keyword-arguments",
+        "defaulted-arguments"
       ],
       "id": "startScalingBarriers",
       "kind": "memberAction",
@@ -3787,6 +3792,7 @@
           "name": "scale"
         },
         {
+          "default": true,
           "name": "reevaluation"
         }
       ],
@@ -3939,7 +3945,8 @@
       "catalogId": "startModifyingVoicelinePitch",
       "evidence": [
         "builtin-surface",
-        "upstream-keyword-arguments"
+        "upstream-keyword-arguments",
+        "defaulted-arguments"
       ],
       "id": "startModifyingVoicelinePitch",
       "kind": "memberAction",
@@ -3948,6 +3955,7 @@
           "name": "pitchScalar"
         },
         {
+          "default": true,
           "name": "reevaluation"
         }
       ],
@@ -4607,7 +4615,8 @@
       "catalogId": "addHealthPool",
       "evidence": [
         "builtin-surface",
-        "upstream-keyword-arguments"
+        "upstream-keyword-arguments",
+        "defaulted-arguments"
       ],
       "id": "addHealthPool",
       "kind": "memberAction",
@@ -4623,6 +4632,7 @@
           "name": "isRecoverable"
         },
         {
+          "default": true,
           "name": "reevaluation"
         }
       ],
@@ -4960,7 +4970,8 @@
     {
       "catalogId": "startForcingOutlineFor",
       "evidence": [
-        "builtin-surface"
+        "builtin-surface",
+        "defaulted-arguments"
       ],
       "id": "startForcingOutlineFor",
       "kind": "memberAction",
@@ -4976,6 +4987,7 @@
           "name": "color"
         },
         {
+          "default": "DEFAULT",
           "domain": "OutlineVisibility",
           "name": "visibility"
         }
