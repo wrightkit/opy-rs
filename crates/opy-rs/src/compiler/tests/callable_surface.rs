@@ -100,7 +100,7 @@ rule "helper behavior":
     assert!(artifact.emitted.contains("285"));
     assert!(artifact.emitted.contains("Custom String(\" \")"));
     assert!(artifact.emitted.contains("Custom String(\"{0}, …"));
-    assert!(artifact.emitted.contains("Custom String(\"{0}:{1}:{2}\""));
+    assert!(artifact.emitted.contains("Custom String(\"0:{0}:{0}\""));
 }
 
 #[test]
@@ -239,6 +239,10 @@ rule "folds":
     result = crossProduct(vect(1, 0, 0), vect(0, 1, 0))
     result = normalize(vect(0, 0, 5))
     result = angleDifference(10, 350)
+    result = vectorTowards(vect(1, 0, 0), vect(0, 1, 0))
+    result = vect(1, 2, 3).x
+    result = log(100, 10)
+    result = hsl(0, 1, 0.5)
 "#;
     let emitted = Compiler::new()
         .unwrap()
@@ -253,6 +257,10 @@ rule "folds":
         "Set Global Variable(result, 0.018277045187202);",
         "Set Global Variable(result, Forward);",
         "Set Global Variable(result, Angle Difference(10, 350));",
+        "Set Global Variable(result, Vector(-1, 1, 0));",
+        "Set Global Variable(result, 1);",
+        "Set Global Variable(result, 2);",
+        "Set Global Variable(result, Custom Color(255, 0, 0, 255));",
     ] {
         assert!(emitted.contains(expected), "missing {expected}\n{emitted}");
     }

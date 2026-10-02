@@ -399,6 +399,13 @@
       "sha256": "7362e4c38af2da942c4f574e0c75c2ed37696b595b0a03317eb217456bdf3af5",
       "source": "stop-hot-unknown-keyword.opy",
       "diagnosticContains": "Unknown keyword argument 'healingOverTimeId' for function 'stopHealingOverTime'"
+    },
+    {
+      "expect": "success",
+      "id": "constant-folding",
+      "outputSha256": "65a0d2c0973cb6805df1a633e1861c1f376e666ee781e8eda2a66d99fca5b1ab",
+      "sha256": "dc7203dcf1b09b189818c8bc78211ce48ceb3a3022345b67a62663f9243df0d7",
+      "source": "constant-folding.opy"
     }
   ]
 }

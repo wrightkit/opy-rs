@@ -12,14 +12,14 @@ impl<'a> Lowering<'a> {
     }
 
     pub(super) fn lower_value(&mut self, expr: &Expr) -> Result<ValueId, IntegrationError> {
-        let value_id = self.lower_value_unoptimized(expr)?;
         let optimization = self.optimization_state_at(expr.span());
-        if optimization.enabled {
-            self.optimized_nodes
-                .entry(value_id)
-                .or_insert(optimization.strict);
-        }
-        Ok(value_id)
+        let previous = std::mem::replace(
+            &mut self.optimization_mark,
+            optimization.enabled.then_some(optimization.strict),
+        );
+        let result = self.lower_value_unoptimized(expr);
+        self.optimization_mark = previous;
+        result
     }
 
     fn lower_value_unoptimized(&mut self, expr: &Expr) -> Result<ValueId, IntegrationError> {
@@ -450,12 +450,8 @@ impl<'a> Lowering<'a> {
                     let line_direction = self.lower_value(line_direction)?;
                     let sphere_center = self.lower_value(sphere_center)?;
                     let sphere_radius = self.lower_value(sphere_radius)?;
-                    let center_direction =
-                        self.push_call("subtract", vec![sphere_center, line_start]);
-                    let angle = self.push_call(
-                        "angleBetweenVectors",
-                        vec![line_direction, center_direction],
-                    );
+                    let angle =
+                        self.push_call("angleBetweenVectors", vec![line_start, line_direction]);
                     let distance = self.push_call("distance", vec![line_start, sphere_center]);
                     let ratio = self.push_call("divide", vec![sphere_radius, distance]);
                     let limit = self.push_call("asinDeg", vec![ratio]);
@@ -559,6 +555,10 @@ impl<'a> Lowering<'a> {
                             );
                         }
                     };
+                    if args.iter().any(hir::visit::contains_random) {
+                        return Err(self
+                            .unsupported("Cannot use random functions in hsl() or hsla()", span));
+                    }
                     let hue = self.lower_value(hue)?;
                     let saturation = self.lower_value(saturation)?;
                     let lightness = self.lower_value(lightness)?;
@@ -566,6 +566,21 @@ impl<'a> Lowering<'a> {
                         Some(alpha) => self.lower_value(alpha)?,
                         None => self.push_number(255.0),
                     };
+                    for (argument, label, low, high) in [
+                        (hue, "Hue", 0.0, 360.0),
+                        (saturation, "Saturation", 0.0, 1.0),
+                        (lightness, "Lightness", 0.0, 1.0),
+                        (alpha, "Alpha", 0.0, 255.0),
+                    ] {
+                        if let Value::Number(value) = &self.values[argument]
+                            && !(low..=high).contains(value)
+                        {
+                            return Err(self.unsupported(
+                                format!("{label} must be between {low} and {high}"),
+                                span,
+                            ));
+                        }
+                    }
                     let one = self.push_number(1.0);
                     let thirty = self.push_number(30.0);
                     let hue_thirtieths = self.push_call("divide", vec![hue, thirty]);
@@ -581,16 +596,18 @@ impl<'a> Lowering<'a> {
                         let lower = this.push_call("subtract", vec![phase, three]);
                         let nine = this.push_number(9.0);
                         let upper = this.push_call("subtract", vec![nine, phase]);
-                        let clamped = this.push_call("min", vec![lower, upper]);
+                        let inner = this.push_call("min", vec![lower, upper]);
+                        let one = this.push_number(1.0);
+                        let inner = this.push_call("min", vec![inner, one]);
                         let negative_one = this.push_number(-1.0);
-                        let clamped = this.push_call("max", vec![clamped, negative_one]);
+                        let clamped = this.push_call("max", vec![inner, negative_one]);
                         let saturation_limit =
                             this.push_call("multiply", vec![saturation, lightness_limit]);
                         let adjustment =
                             this.push_call("multiply", vec![saturation_limit, clamped]);
                         let value = this.push_call("subtract", vec![lightness, adjustment]);
                         let scale = this.push_number(255.0);
-                        this.push_call("multiply", vec![scale, value])
+                        this.push_call("multiply", vec![value, scale])
                     };
                     let red = channel(self, 0.0);
                     let green = channel(self, 8.0);
@@ -601,6 +618,9 @@ impl<'a> Lowering<'a> {
                     let [time] = args.as_slice() else {
                         return Err(self.unsupported("timeToString requires one argument", span));
                     };
+                    // The reference slices padded numbers directly; a Number in
+                    // the `stringSlice` string position is not canonical, so the
+                    // padding goes through `customString` instead.
                     let time = self.lower_value(time)?;
                     let three_thousand_six_hundred = self.push_number(3600.0);
                     let sixty = self.push_number(60.0);
@@ -650,13 +670,12 @@ impl<'a> Lowering<'a> {
                         return Err(self.unsupported("getSign requires one argument", span));
                     };
                     let number = self.lower_value(number)?;
-                    let zero = self.push_number(0.0);
-                    let positive = self.push_call(">", vec![number, zero]);
-                    let one = self.push_number(1.0);
-                    let negative_one = self.push_number(-1.0);
-                    let sign = self.push_call("ifThenElse", vec![positive, one, negative_one]);
-                    let is_zero = self.push_call("==", vec![number, zero]);
-                    return Ok(self.push_call("ifThenElse", vec![is_zero, zero, sign]));
+                    let infinity = self.push_number(999_999_999_999.0);
+                    let scaled = self.push_call("multiply", vec![number, infinity]);
+                    let scaled = self.push_call("multiply", vec![scaled, infinity]);
+                    let scaled = self.push_call("divide", vec![scaled, infinity]);
+                    let ten = self.push_number(10.0);
+                    return Ok(self.push_call("divide", vec![scaled, ten]));
                 }
                 if name == "lerp" {
                     let [start, end, t] = args.as_slice() else {
@@ -672,30 +691,18 @@ impl<'a> Lowering<'a> {
                     return Ok(self.push_call("add", vec![start_part, end_part]));
                 }
                 if name == "log" {
-                    let (number, base) = match args.as_slice() {
-                        [number] => (number, None),
-                        [number, base] => (number, Some(base)),
-                        _ => {
-                            return Err(self.unsupported("log requires one or two arguments", span));
-                        }
-                    };
-                    let number = self.lower_value(number)?;
-                    let exponent = self.push_number(0.0001);
-                    let powered = self.push_call("raiseToPower", vec![number, exponent]);
-                    let one = self.push_number(1.0);
-                    let delta = self.push_call("subtract", vec![powered, one]);
-                    let scale = self.push_number(10000.0);
-                    let approximation = self.push_call("multiply", vec![scale, delta]);
-                    if let Some(base) = base {
-                        let base = self.lower_value(base)?;
-                        let base_powered = self.push_call("raiseToPower", vec![base, exponent]);
-                        let base_one = self.push_number(1.0);
-                        let base_delta = self.push_call("subtract", vec![base_powered, base_one]);
-                        let base_scale = self.push_number(10000.0);
-                        let base_log = self.push_call("multiply", vec![base_scale, base_delta]);
-                        return Ok(self.push_call("divide", vec![approximation, base_log]));
+                    if !matches!(args.as_slice(), [_] | [_, _]) {
+                        return Err(self.unsupported("log requires one or two arguments", span));
                     }
-                    return Ok(approximation);
+                    // The reference expands `log` to a power approximation,
+                    // folding `Math.log` when the operand is a constant, so the
+                    // expansion waits for the optimized arguments at
+                    // materialization.
+                    let args = args
+                        .iter()
+                        .map(|arg| self.lower_value(arg))
+                        .collect::<Result<_, _>>()?;
+                    return Ok(self.push_call("log", args));
                 }
                 if name == "getCurrentMap" && args.is_empty() && !self.used_maps.is_empty() {
                     return Ok(self.lower_bugged_current_map());
@@ -1186,12 +1193,7 @@ impl<'a> Lowering<'a> {
                 let element = element?;
                 let iterable = if let Some(predicate) = predicate {
                     let predicate = predicate?;
-                    let filtered = self.push_call("filteredArray", vec![iterable, predicate]);
-                    let optimization = self.optimization_state_at(comprehension_span.as_ref());
-                    if optimization.enabled {
-                        self.optimized_nodes.insert(filtered, optimization.strict);
-                    }
-                    filtered
+                    self.push_call("filteredArray", vec![iterable, predicate])
                 } else {
                     iterable
                 };
@@ -1425,7 +1427,6 @@ impl<'a> Lowering<'a> {
                 width,
                 min_decimal_place,
                 component_offset,
-                None,
             );
             let offset = this.push_number(offset);
             this.push_call("subtract", vec![value, offset])
@@ -1473,7 +1474,6 @@ impl<'a> Lowering<'a> {
         width: usize,
         min_decimal_place: f64,
         component_offset: usize,
-        optimized_strict: Option<bool>,
     ) -> ValueId {
         let current = self.push_call("currentArrayElement", Vec::new());
         let mut terms = Vec::with_capacity(width);
@@ -1489,9 +1489,6 @@ impl<'a> Lowering<'a> {
             let power = 100_f64.powf(index as f64 + min_decimal_place / 2.0);
             let power = self.push_number(power);
             let weighted = self.push_call("multiply", vec![power, digit]);
-            if let Some(strict) = optimized_strict {
-                self.optimized_nodes.insert(weighted, strict);
-            }
             terms.push(weighted);
         }
         let mut value = terms
@@ -1649,8 +1646,6 @@ impl<'a> Lowering<'a> {
         let (decoded, alphabet, variable_alphabet) =
             self.lower_compression_source(compressed_string);
         let width = ((max_decimal_place - min_decimal_place + 1) / 2) as usize;
-        let optimization = self.optimization_state_at(span.as_ref());
-        let optimized_strict = optimization.enabled.then_some(optimization.strict);
         let component = |this: &mut Self, component_offset| {
             this.lower_compressed_component(
                 alphabet,
@@ -1658,7 +1653,6 @@ impl<'a> Lowering<'a> {
                 width,
                 f64::from(min_decimal_place),
                 component_offset,
-                optimized_strict,
             )
         };
         let value = if is_vector {
