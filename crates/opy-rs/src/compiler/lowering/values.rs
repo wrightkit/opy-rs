@@ -157,14 +157,17 @@ impl<'a> Lowering<'a> {
             }
             Expr::Constant { name, .. } => {
                 // The definition's spans apply its own optimization state; the
-                // reference substitutes the definition at the use site, so a
-                // constant crossing an optimization boundary folds under that
-                // boundary's state instead.
+                // reference substitutes the definition at the use site, so the
+                // substituted root additionally keeps the caller's state.
                 let const_expr = *self
                     .constants
                     .get(name)
                     .ok_or_else(|| self.unsupported(format!("unknown constant '{name}'"), span))?;
-                return self.lower_value(const_expr);
+                let value = self.lower_value(const_expr)?;
+                if let Some(strict) = self.optimization_mark {
+                    self.optimized_nodes.entry(value).or_insert(strict);
+                }
+                return Ok(value);
             }
             Expr::Index { array, index, .. } => {
                 if let Expr::Dict { entries, .. } = array.as_ref()
