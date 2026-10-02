@@ -1116,8 +1116,8 @@ fn vector(components: [f64; 3]) -> Value {
 /// division when a non-e base is given — and folds `Math.log` on constant
 /// operands while optimization is enabled. A fold that lands non-finite
 /// (`log(0)` → upstream `-Infinity`) needs spellings the canonical grammar
-/// cannot parse, so the marker survives and canonical validation rejects
-/// the value instead (pending `wrightkit/workshop-rs#358`).
+/// cannot parse, so the call keeps the approximation it emitted before
+/// folding was added until `wrightkit/workshop-rs#358` decides them.
 pub(super) fn expand_log(args: Vec<Value>, fold_constants: bool) -> Value {
     fn approximated(value: Value) -> Value {
         call(
@@ -1137,7 +1137,6 @@ pub(super) fn expand_log(args: Vec<Value>, fold_constants: bool) -> Value {
     fn resolve(value: Value, fold_constants: bool) -> Value {
         match (fold_constants, value) {
             (true, Value::Number(number)) if number.ln().is_finite() => Value::Number(number.ln()),
-            (true, value @ Value::Number(_)) => call("log", vec![value]),
             (_, value) => approximated(value),
         }
     }
@@ -1151,11 +1150,19 @@ pub(super) fn expand_log(args: Vec<Value>, fold_constants: bool) -> Value {
         Some(base) => {
             // The reference folds the `log(a) / log(b)` division as a whole,
             // so a non-finite operand can still fold to a finite result.
-            if fold_constants && let (Value::Number(number), Value::Number(base)) = (&number, &base)
-            {
-                let folded = number.ln() / base.ln();
+            if fold_constants && let (Value::Number(a), Value::Number(b)) = (&number, &base) {
+                let folded = a.ln() / b.ln();
                 if folded.is_finite() && folded.abs() <= NUMBER_LIMIT {
                     return Value::Number(if folded == 0.0 { 0.0 } else { folded });
+                }
+                // An operand that folds non-finite would need the
+                // `-Infinity`/`NaN` spellings; both operands keep the
+                // approximation until `wrightkit/workshop-rs#358` decides.
+                if !a.ln().is_finite() || !b.ln().is_finite() {
+                    return call(
+                        "divide",
+                        vec![approximated(number.clone()), approximated(base.clone())],
+                    );
                 }
             }
             call(
@@ -1166,29 +1173,6 @@ pub(super) fn expand_log(args: Vec<Value>, fold_constants: bool) -> Value {
                 ],
             )
         }
-    }
-}
-
-/// The index of the `log` argument whose constant fold would emit the
-/// non-finite `-Infinity`/`NaN` spellings canonical Workshop cannot parse,
-/// unless the whole `log(a) / log(b)` still folds to a finite quotient
-/// (`log(100, 0)` → `0`). `None`-valued operands are not constants: they
-/// emit the power approximation and never need the spelling.
-pub(super) fn non_finite_log_operand(number: Option<f64>, base: Option<f64>) -> Option<usize> {
-    match (number, base) {
-        (Some(number), Some(base)) if base != std::f64::consts::E => {
-            let folded = number.ln() / base.ln();
-            if folded.is_finite() && folded.abs() <= NUMBER_LIMIT {
-                None
-            } else if !number.ln().is_finite() {
-                Some(0)
-            } else {
-                (!base.ln().is_finite()).then_some(1)
-            }
-        }
-        (Some(number), _) => (!number.ln().is_finite()).then_some(0),
-        (None, Some(base)) if base != std::f64::consts::E => (!base.ln().is_finite()).then_some(1),
-        _ => None,
     }
 }
 

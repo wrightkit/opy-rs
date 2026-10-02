@@ -718,36 +718,10 @@ impl<'a> Lowering<'a> {
                     // folding `Math.log` when the operand is a constant, so the
                     // expansion waits for the optimized arguments at
                     // materialization.
-                    let arg_spans: Vec<_> = args.iter().map(|arg| arg.span().copied()).collect();
                     let args = args
                         .iter()
                         .map(|arg| self.lower_value(arg))
-                        .collect::<Result<Vec<_>, _>>()?;
-                    // A fold that lands non-finite would need the reference's
-                    // `-Infinity`/`NaN` spellings, which the canonical grammar
-                    // cannot parse (pending wrightkit/workshop-rs#358). Reject
-                    // it here while the argument span is still available; the
-                    // materialized arguments are exactly what `expand_log`
-                    // sees when optimization is enabled.
-                    if self.optimization_mark.is_some() {
-                        let operand = |lowering: &Self, arg: ValueId| match lowering
-                            .materialize_value_inner(arg)
-                        {
-                            workshop_rs::Value::Number(value) => Some(value),
-                            _ => None,
-                        };
-                        if let Some(index) =
-                            crate::compiler::operator_optimization::non_finite_log_operand(
-                                operand(self, args[0]),
-                                args.get(1).and_then(|arg| operand(self, *arg)),
-                            )
-                        {
-                            return Err(self.unsupported(
-                                "log argument folds to a non-finite number, which canonical Workshop cannot spell",
-                                arg_spans[index],
-                            ));
-                        }
-                    }
+                        .collect::<Result<_, _>>()?;
                     return Ok(self.push_call("log", args));
                 }
                 if name == "getCurrentMap" && args.is_empty() && !self.used_maps.is_empty() {
