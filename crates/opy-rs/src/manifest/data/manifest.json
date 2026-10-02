@@ -55,6 +55,78 @@
       "kind": "memberAlias",
       "source": "disableHeroHUD",
       "target": "disableHeroHud"
+    },
+    {
+      "evidence": [
+        "aliases"
+      ],
+      "kind": "functionAlias",
+      "source": "destroyAllInWorldText",
+      "target": "destroyAllInWorldTexts"
+    },
+    {
+      "evidence": [
+        "aliases"
+      ],
+      "kind": "functionAlias",
+      "source": "getLastAssistID",
+      "target": "getLastAssistId"
+    },
+    {
+      "evidence": [
+        "aliases"
+      ],
+      "kind": "functionAlias",
+      "source": "getLastDoT",
+      "target": "getLastDamageOverTimeId"
+    },
+    {
+      "evidence": [
+        "aliases"
+      ],
+      "kind": "functionAlias",
+      "source": "getNumberOfDoTIds",
+      "target": "getNumberOfDamageOverTimeIds"
+    },
+    {
+      "evidence": [
+        "aliases"
+      ],
+      "kind": "functionAlias",
+      "source": "getNumberOfHoTIds",
+      "target": "getNumberOfHealingOverTimeIds"
+    },
+    {
+      "evidence": [
+        "aliases"
+      ],
+      "kind": "functionAlias",
+      "source": "rgba",
+      "target": "rgb"
+    },
+    {
+      "evidence": [
+        "aliases"
+      ],
+      "kind": "functionAlias",
+      "source": "hsla",
+      "target": "hsl"
+    },
+    {
+      "evidence": [
+        "aliases"
+      ],
+      "kind": "functionAlias",
+      "source": "teamHasHero",
+      "target": "isHeroBeingPlayed"
+    },
+    {
+      "evidence": [
+        "aliases"
+      ],
+      "kind": "functionAlias",
+      "source": "stopDoT",
+      "target": "stopDamageOverTime"
     }
   ],
   "functions": [

@@ -39,8 +39,8 @@
     {
       "expect": "success",
       "id": "aliases",
-      "outputSha256": "a6e298c6cca101812d7471383d3091d3a0873fac8d2193788eaa88797a81eef0",
-      "sha256": "7137c6c459efee047d49aeb96e3e3324e300098ead933c65653512d91cd8f8ef",
+      "outputSha256": "1ab482a18c54bd14c3a192ffa35d888caf78d47afdbf3ba925e02a0f783e70ed",
+      "sha256": "ef89a16b02cd1caa1db1f17dc85a65e465bc6431b711bffc463d27c0d03da368",
       "source": "aliases.opy"
     },
     {
