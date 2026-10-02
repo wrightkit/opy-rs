@@ -330,6 +330,17 @@ fn start_hot_keyword_arguments_bind_like_positional_arguments() {
 }
 
 #[test]
+fn stop_hot_uses_the_upstream_keyword_name() {
+    let source = "rule \"r\":\n    stopHoT(healOverTimeId=getLastHealingOverTimeId())\n";
+    let hir = crate::compile(source, "stop-hot.opy", Path::new(".")).unwrap();
+    Compiler::new().unwrap().compile_hir(&hir).unwrap();
+
+    let source = include_str!("../../manifest/probes/stop-hot-unknown-keyword.opy");
+    let error = crate::compile(source, "stop-hot.opy", Path::new(".")).unwrap_err();
+    assert_eq!(error.code, "unknown-keyword");
+}
+
+#[test]
 fn stop_chasing_variable_dispatches_by_variable_kind() {
     let source = "globalvar g\nplayervar p\nrule \"r\":\n    @Event eachPlayer\n    stopChasingVariable(g)\n    stopChasingVariable(eventPlayer.p)\n";
     let hir = crate::compile(source, "stop-chasing.opy", Path::new(".")).unwrap();

@@ -30,6 +30,7 @@ rule "upstream keyword names":
     destroyIcon(entity=eventPlayer)
     startForcingSpawn(Team.ALL, room=3)
     stopHealingOverTime(healOverTimeId=getLastHealingOverTimeId())
+    stopHoT(healOverTimeId=getLastHealingOverTimeId())
     stopHealingModification(healingModificationId=getLastHealingModification())
     eventPlayer.attachTo(eventPlayer, offset=Vector.UP)
     eventPlayer.startDamageOverTime(damager=eventPlayer, duration=3, damagePerSecond=3)

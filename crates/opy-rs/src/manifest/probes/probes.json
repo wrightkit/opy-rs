@@ -382,8 +382,8 @@
     {
       "expect": "success",
       "id": "upstream-keyword-arguments",
-      "outputSha256": "2b0c0b5cee5e7dfe8d090378d15f45141b010a3c26219172aaaaade196e8d8a8",
-      "sha256": "b0b0f2456215ea3811aecb1ad0551eae9ceab575ce164ca2801e4841134930c4",
+      "outputSha256": "e834b59737a863155b955ff26634d7137c65e2c0d4786163d85a768881719b51",
+      "sha256": "d08a26049fcb814bb01bc79848a0fa0c3ffa035c62c08d00137ba5d0faba5fdb",
       "source": "upstream-keyword-arguments.opy"
     },
     {
@@ -392,6 +392,13 @@
       "sha256": "836691f1ee70b8741b9421f23d523fdef3e0428eb7f973ae7f4bb58beb8da630",
       "source": "member-lambda-keyword.opy",
       "diagnosticContains": "Expected 'lambda x' before ':'"
+    },
+    {
+      "expect": "failure",
+      "id": "stop-hot-unknown-keyword",
+      "sha256": "7362e4c38af2da942c4f574e0c75c2ed37696b595b0a03317eb217456bdf3af5",
+      "source": "stop-hot-unknown-keyword.opy",
+      "diagnosticContains": "Unknown keyword argument 'healingOverTimeId' for function 'stopHealingOverTime'"
     }
   ]
 }
