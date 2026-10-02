@@ -36,7 +36,11 @@ impl<'a> Lowering<'a> {
                 crate::compile_time::evaluate(expr, &self.constants, &bindings, &mut stack)
             {
                 match value {
-                    crate::compile_time::Value::Number(value) if value.is_finite() => {
+                    crate::compile_time::Value::Number(value)
+                        if value.is_finite()
+                            && value.abs()
+                                <= crate::compiler::operator_optimization::NUMBER_LIMIT =>
+                    {
                         return Ok(self.push_number(value));
                     }
                     crate::compile_time::Value::String(value) => {
@@ -152,6 +156,10 @@ impl<'a> Lowering<'a> {
                 }
             }
             Expr::Constant { name, .. } => {
+                // The definition's spans apply its own optimization state; the
+                // reference substitutes the definition at the use site, so a
+                // constant crossing an optimization boundary folds under that
+                // boundary's state instead.
                 let const_expr = *self
                     .constants
                     .get(name)
@@ -557,6 +565,8 @@ impl<'a> Lowering<'a> {
                     };
                     // The reference checks constant-folded ranges first, then
                     // random inputs, each reported at the offending argument.
+                    // Its fold runs at parse time, so the check must see each
+                    // argument's optimized value, not only lowering-time folds.
                     let hue = self.lower_value(hue)?;
                     let saturation = self.lower_value(saturation)?;
                     let lightness = self.lower_value(lightness)?;
@@ -573,8 +583,9 @@ impl<'a> Lowering<'a> {
                     .into_iter()
                     .enumerate()
                     {
-                        if let Value::Number(value) = &self.values[argument]
-                            && !(low..=high).contains(value)
+                        if let workshop_rs::Value::Number(value) =
+                            self.materialize_value_inner(argument)
+                            && !(low..=high).contains(&value)
                         {
                             return Err(self.unsupported(
                                 format!("{label} must be between {low} and {high}"),

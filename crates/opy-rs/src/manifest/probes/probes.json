@@ -403,8 +403,8 @@
     {
       "expect": "success",
       "id": "constant-folding",
-      "outputSha256": "65a0d2c0973cb6805df1a633e1861c1f376e666ee781e8eda2a66d99fca5b1ab",
-      "sha256": "dc7203dcf1b09b189818c8bc78211ce48ceb3a3022345b67a62663f9243df0d7",
+      "outputSha256": "a2b80c07f0b733f044a5681883c3a493bfbb7f160cd41925ff10eb6997fa42aa",
+      "sha256": "f611fe92e80baba72cbf8ac620810f4a42e9b24c75f9340ceb1aad18d3f2bbb0",
       "source": "constant-folding.opy"
     }
   ]

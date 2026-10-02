@@ -7,7 +7,9 @@ mod values;
 
 use super::action_optimization::ActionOptimizer;
 use super::number_format::trim_numbers;
-use super::operator_optimization::{OperatorOptimizer, expand_log, same, self_modification};
+use super::operator_optimization::{
+    NUMBER_LIMIT, OperatorOptimizer, expand_log, same, self_modification,
+};
 use super::size_optimization::{SizeOptimizer, action_values, is_empty_string};
 use super::string_format::split_all;
 use super::*;
@@ -480,7 +482,7 @@ impl<'a> Lowering<'a> {
             "**" => left.powf(right),
             _ => return None,
         };
-        value.is_finite().then_some(value)
+        (value.is_finite() && value.abs() <= NUMBER_LIMIT).then_some(value)
     }
 
     fn value_is_number(&self, id: ValueId, expected: f64) -> bool {

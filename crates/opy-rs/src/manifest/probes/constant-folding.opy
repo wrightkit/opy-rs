@@ -18,6 +18,8 @@ rule "folding":
     g = hsl(120, 0.5, 0.5)
     g = hsl(0, 1, 0.5, 128)
     g = hsl(eventPlayer, 0.5, 0.5)
+    g = hsl(floor(120.7), 0.5, 0.5)
+    g = hsl(max(120, 1), 0.5, 0.5)
     g = lerp(0, 10, 0.5)
     g = lerp(0, 10, eventPlayer)
     g = getSign(-1)

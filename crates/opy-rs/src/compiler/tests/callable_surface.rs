@@ -267,6 +267,52 @@ rule "folds":
 }
 
 #[test]
+fn hsl_range_validation_sees_optimizer_folded_arguments() {
+    // The reference range-checks the parse-time fold (`floor`, `max`, `abs`),
+    // not just literals, and reports the offending argument's span.
+    let compiler = Compiler::new().expect("compiler initializes");
+    for (call, message, col) in [
+        (
+            "hsl(floor(400.5), 0.5, 0.5)",
+            "Hue must be between 0 and 360",
+            13,
+        ),
+        (
+            "hsl(max(500, 1), 0.5, 0.5)",
+            "Hue must be between 0 and 360",
+            13,
+        ),
+        (
+            "hsl(120, max(2, 1), 0.5)",
+            "Saturation must be between 0 and 1",
+            18,
+        ),
+        (
+            "hsl(120, 0.5, 0.5, abs(300))",
+            "Alpha must be between 0 and 255",
+            28,
+        ),
+    ] {
+        let source = format!("globalvar g\nrule \"r\":\n    @Event global\n    g = {call}\n");
+        let hir = crate::compile(&source, "hsl.opy", Path::new(".")).expect("source must resolve");
+        let error = match compiler.compile_hir(&hir) {
+            Ok(_) => panic!("a folded out-of-range argument must be rejected"),
+            Err(error) => error,
+        };
+        assert_eq!(error.diagnostic.code, "unsupported-integration-surface");
+        assert!(error.diagnostic.message.contains(message), "{error}");
+        assert_eq!(
+            error
+                .diagnostic
+                .span
+                .map(|span| (span.start.line, span.start.col)),
+            Some((4, col)),
+            "the diagnostic must anchor the offending argument"
+        );
+    }
+}
+
+#[test]
 fn event_direction_flags_and_hero_setting_lower_to_their_canonical_calls() {
     let source = r#"globalvar result
 globalvar heroSetting = createWorkshopSettingHero("cat", "hero", Hero.ANA)
