@@ -34,3 +34,5 @@ rule "defaults":
     eventPlayer.startModifyingVoicelinePitch(3)
     eventPlayer.addHealthPool(Health.ARMOR, 3, true)
     eventPlayer.startForcingOutlineFor(getAllPlayers(), true, Color.RED)
+    g = "a{0}".format(5).substring(2)
+    g = [1, 2, 3].slice(1)
