@@ -119,6 +119,7 @@ pub(crate) struct Lowering<'a> {
     translation_uses: Vec<(String, Option<String>)>,
     optimized_nodes: HashMap<ValueId, bool>,
     optimization_mark: Option<bool>,
+    optimization_override: Option<OptimizationState>,
     used_maps: Vec<&'static str>,
 }
 
@@ -275,6 +276,7 @@ impl<'a> Lowering<'a> {
             current_rule_conditions: None,
             optimized_nodes: HashMap::new(),
             optimization_mark: None,
+            optimization_override: None,
             used_maps: used_bugged_maps(hir),
             visible_labels: Vec::new(),
             deferred_gotos: Vec::new(),

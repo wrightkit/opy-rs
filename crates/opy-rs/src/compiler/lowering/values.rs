@@ -156,18 +156,18 @@ impl<'a> Lowering<'a> {
                 }
             }
             Expr::Constant { name, .. } => {
-                // The definition's spans apply its own optimization state; the
-                // reference substitutes the definition at the use site, so the
-                // substituted root additionally keeps the caller's state.
                 let const_expr = *self
                     .constants
                     .get(name)
                     .ok_or_else(|| self.unsupported(format!("unknown constant '{name}'"), span))?;
-                let value = self.lower_value(const_expr)?;
-                if let Some(strict) = self.optimization_mark {
-                    self.optimized_nodes.entry(value).or_insert(strict);
-                }
-                return Ok(value);
+                // The reference substitutes the definition at the use site, so
+                // the whole subtree optimizes under the caller's state rather
+                // than the definition's spans.
+                let override_state = self.optimization_state_at(span.as_ref());
+                let previous = self.optimization_override.replace(override_state);
+                let value = self.lower_value(const_expr);
+                self.optimization_override = previous;
+                return value;
             }
             Expr::Index { array, index, .. } => {
                 if let Expr::Dict { entries, .. } = array.as_ref()
@@ -1717,6 +1717,9 @@ impl<'a> Lowering<'a> {
     }
 
     pub(super) fn optimization_state_at(&self, span: Option<&HirSpan>) -> OptimizationState {
+        if let Some(state) = &self.optimization_override {
+            return state.clone();
+        }
         let Some(span) = span else {
             return self.hir.preprocessing.optimization.clone();
         };

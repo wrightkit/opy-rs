@@ -264,19 +264,51 @@ fn a_non_finite_log_fold_keeps_the_pre_fold_expansion() {
 }
 
 #[test]
-fn a_constant_substitution_folds_under_the_use_site_state() {
-    // The reference substitutes a `macro` constant at the use site, so a
-    // definition in an optimizations-disabled region must still fold where
-    // the caller enables them.
+fn a_constant_substitution_optimizes_under_the_use_site_state() {
+    // The reference substitutes a `macro` constant at the use site, so the
+    // substituted expression optimizes under the caller's state: it folds
+    // where the caller enables optimizations and stays unfolded where the
+    // caller disables them, regardless of the definition site's state.
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let source = "#!disableOptimizations\nmacro MY_CONST = 2 + 3\n#!enableOptimizations\nglobalvar v\nrule \"x\":\n    @Event global\n    v = MY_CONST\n";
+    let source = "#!disableOptimizations\nmacro DISABLED_DEF = 2 + 3\n#!enableOptimizations\nmacro ENABLED_DEF = 4 + 5\nglobalvar v\nrule \"enabled\":\n    @Event global\n    v = DISABLED_DEF\n    v = ENABLED_DEF\n#!disableOptimizations\nrule \"disabled\":\n    @Event global\n    v = DISABLED_DEF\n    v = ENABLED_DEF\n";
     let hir = crate::compile(source, "source.opy", dir).expect("source must resolve");
     let artifact = Compiler::new()
         .expect("released workshop contract must load")
         .compile_hir(&hir)
-        .expect("the constant must emit");
-    assert!(
-        artifact.emitted.contains("Set Global Variable(v, 5);"),
+        .expect("the constants must emit");
+    assert_eq!(
+        artifact
+            .emitted
+            .matches("Set Global Variable(v, 5);")
+            .count(),
+        1,
+        "{}",
+        artifact.emitted
+    );
+    assert_eq!(
+        artifact
+            .emitted
+            .matches("Set Global Variable(v, 9);")
+            .count(),
+        1,
+        "{}",
+        artifact.emitted
+    );
+    assert_eq!(
+        artifact
+            .emitted
+            .matches("Set Global Variable(v, Add(2, 3));")
+            .count(),
+        1,
+        "{}",
+        artifact.emitted
+    );
+    assert_eq!(
+        artifact
+            .emitted
+            .matches("Set Global Variable(v, Add(4, 5));")
+            .count(),
+        1,
         "{}",
         artifact.emitted
     );
