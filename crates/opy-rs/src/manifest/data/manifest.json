@@ -58,6 +58,38 @@
     },
     {
       "evidence": [
+        "member-aliases"
+      ],
+      "kind": "memberAlias",
+      "source": "setCamera",
+      "target": "startCamera"
+    },
+    {
+      "evidence": [
+        "member-aliases"
+      ],
+      "kind": "memberAlias",
+      "source": "startDoT",
+      "target": "startDamageOverTime"
+    },
+    {
+      "evidence": [
+        "member-aliases"
+      ],
+      "kind": "memberAlias",
+      "source": "stopAllDoT",
+      "target": "stopAllDamageOverTime"
+    },
+    {
+      "evidence": [
+        "member-aliases"
+      ],
+      "kind": "memberAlias",
+      "source": "stopAllHoT",
+      "target": "stopAllHealingOverTime"
+    },
+    {
+      "evidence": [
         "aliases"
       ],
       "kind": "functionAlias",
