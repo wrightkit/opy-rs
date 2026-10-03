@@ -1,7 +1,9 @@
 # Release automation
 
 `release-plz` maintains the release PR, publishes the workspace crates to
-crates.io, and creates the canonical `vX.Y.Z` tag.
+crates.io, and creates the canonical `vX.Y.Z` tag. The `opy-rs` GitHub Release
+is created as a draft (`git_release_draft` in `release-plz.toml`) and becomes
+public only after the provider artifact set is verified.
 
 The two publishable workspace packages share one version group: `opy-rs` and
 `opy-cli`. Compiler lowering and the JavaScript macro runtime are internal
@@ -35,17 +37,18 @@ an already-published version under a different version.
 
 ## First-party provider artifacts
 
-The tag-driven `provider-release` workflow builds `opy-provider` for the
-supported Wright targets and uploads one archive plus checksum per target to the
-same GitHub Release. Artifact names are
+After `release-plz` creates the release draft and tag, the `release-plz`
+workflow's `provider` matrix builds `opy-provider` for the supported Wright
+targets and stages one archive plus checksum per target. Artifact names are
 `opy-provider-<version>-<target>.tar.gz` and
 `opy-provider-<version>-<target>.tar.gz.sha256`. The archive contains only the
 provider executable (`opy-provider` or `opy-provider.exe`); it is independent of
 the crates.io publication path.
 
-After the GitHub Release upload succeeds, the same archives and checksums are
-published to the WrightKit R2 distribution bucket. The public, version-pinned
-URLs are:
+Two jobs consume the same staged artifacts without rebuilding:
+`publish-provider-github` uploads them to the draft release (draft assets are
+not public), and `publish-provider-r2` publishes them to the WrightKit R2
+distribution bucket. The public, version-pinned URLs are:
 
 ```text
 https://releases.wrightkit.dev/opy-rs/releases/<version>/opy-provider-<version>-<target>.tar.gz
@@ -62,11 +65,14 @@ cache semantics. Publication does not reconcile an existing version: GitHub
 asset upload refuses duplicate names without clobbering, and R2 uses a native
 conditional create that refuses an existing object. A rerun therefore fails
 without overwriting either published copy and requires explicit maintainer
-recovery for any partial release.
+recovery for any partial release; a draft release abandoned by a permanently
+failed pipeline is deleted manually.
 
-After the complete versioned provider artifact set passes public R2
-verification, the release job writes the released semantic version as plain
-text to:
+Once the draft carries the complete artifact set and the R2 objects pass
+public verification, `promote-release` publishes the GitHub Release; it runs in
+the protected `release` environment, so any required-reviewer rule configured
+there also gates promotion. Only then does `advance-latest` write the released
+semantic version as plain text to:
 
 ```text
 https://releases.wrightkit.dev/opy-rs/latest/version

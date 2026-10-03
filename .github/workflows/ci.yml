@@ -135,3 +135,14 @@ jobs:
 
       - name: Run internal macro runtime tests
         run: cargo test --locked -p opy-rs --lib macro_js::tests
+
+  release-order:
+    name: Release promotion order
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Assert the verified-R2-before-promotion release order
+        run: python3 tools/verify-release-order.py
