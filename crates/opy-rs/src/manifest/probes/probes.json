@@ -256,8 +256,8 @@
     {
       "expect": "success",
       "id": "member-aliases",
-      "outputSha256": "dd250b6bb625584867937f72f477eda6a25789361cbd761a29c3f731c2990835",
-      "sha256": "a8eeee51f7ab5ffeefaa449c101f780c332e406a19b1521a07fcbaa184896d41",
+      "outputSha256": "bf867985a10335475f243a703699d4555ab69245aafe82023b9334c3d8ff19a1",
+      "sha256": "df02e2851175a950935015619cb568c729edd9394f116e4806161e1c91da3dca",
       "source": "member-aliases.opy"
     },
     {
