@@ -65,8 +65,26 @@ def needs_of(job: str, jobs: dict[str, list[str]]) -> list[str]:
     return needs
 
 
+def job_gate(job: str, jobs: dict[str, list[str]]) -> str:
+    """The job-level `if:` expression, including `>-` folded continuations."""
+    gate, lines = [], jobs[job]
+    for i, line in enumerate(lines):
+        head = re.match(r"^    if:\s*(.*)$", line)
+        if not head:
+            continue
+        gate.append(head.group(1))
+        j = i + 1
+        while j < len(lines) and re.match(r"^      [^\s-]", lines[j]) and ":" not in lines[j]:
+            gate.append(lines[j].strip())
+            j += 1
+    return " ".join(gate)
+
+
 def require_draft_release() -> None:
-    config = (REPO_ROOT / "release-plz.toml").read_text()
+    config = "\n".join(
+        re.sub(r"(\s|^)#.*$", "", line)
+        for line in (REPO_ROOT / "release-plz.toml").read_text().splitlines()
+    )
     for block in re.split(r"(?m)^\[\[package\]\]\s*$", config):
         if re.search(r'(?m)^name\s*=\s*"opy-rs"\s*$', block):
             if not re.search(r"(?m)^git_release_draft\s*=\s*true\s*$", block):
@@ -93,6 +111,16 @@ def main() -> None:
     for job in ("publish-provider-github", "publish-provider-r2"):
         if "provider" not in needs_of(job, jobs):
             fail(f"{job} does not need provider: it cannot reuse the staged artifacts")
+    for job in jobs:
+        # A status-check function would let the job run despite failed needs.
+        if re.search(r"(always|failure|cancelled)\s*\(", job_gate(job, jobs)):
+            fail(f"{job} gates on a status-check function: failed prerequisites no longer block it")
+    github_body = "\n".join(jobs["publish-provider-github"])
+    if "gh release upload" not in github_body:
+        fail("publish-provider-github does not upload the artifacts to the release")
+    r2_body = "\n".join(jobs["publish-provider-r2"])
+    if "curl" not in r2_body or "sha256sum --check" not in r2_body:
+        fail("publish-provider-r2 does not publicly verify the R2 objects")
     r2_needs = needs_of("publish-provider-r2", jobs)
     for later in ("publish-provider-github", "promote-release", "advance-latest"):
         if later in r2_needs:
@@ -106,7 +134,6 @@ def main() -> None:
     if "gh release edit" not in "\n".join(jobs["promote-release"]) or \
             "--draft=false" not in "\n".join(jobs["promote-release"]):
         fail("promote-release does not publish the draft release")
-    r2_body = "\n".join(jobs["publish-provider-r2"])
     if "latest/version" in r2_body:
         fail("publish-provider-r2 still advances the version pointer inside the R2 job")
     if "latest/version" not in "\n".join(jobs["advance-latest"]):

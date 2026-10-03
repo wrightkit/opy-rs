@@ -69,8 +69,10 @@ recovery for any partial release; a draft release abandoned by a permanently
 failed pipeline is deleted manually.
 
 Once the draft carries the complete artifact set and the R2 objects pass
-public verification, `promote-release` publishes the GitHub Release. Only then
-does `advance-latest` write the released semantic version as plain text to:
+public verification, `promote-release` publishes the GitHub Release; it runs in
+the protected `release` environment, so any required-reviewer rule configured
+there also gates promotion. Only then does `advance-latest` write the released
+semantic version as plain text to:
 
 ```text
 https://releases.wrightkit.dev/opy-rs/latest/version
