@@ -566,50 +566,35 @@ impl<'a> Lowering<'a> {
             this.push_call("valueInArray", vec![current, index_value])
         };
         let first = call!("firstOf", call!("currentArrayElement"));
-        let array_head = if max_length == 6 {
-            let array_tail = call!(
-                "customString",
-                self.push_value(Value::String("{0}, {1}, {2}".to_string())),
-                x_value(self, 4.0),
-                x_value(self, 5.0),
-                call!(
-                    "customString",
-                    self.push_value(Value::String("{0}, {1}, …\u{0001}".to_string())),
-                    x_value(self, 6.0),
-                    x_value(self, 7.0),
-                ),
-            );
-            call!(
-                "customString",
-                self.push_value(Value::String("{0}, {1}, {2}".to_string())),
-                x_value(self, 2.0),
-                x_value(self, 3.0),
-                array_tail,
-            )
-        } else if max_length <= 3 {
-            let display = format!(
-                "{}…\u{0001}",
-                (0..max_length)
-                    .map(|index| format!("{{{index}}}, "))
-                    .collect::<String>()
-            );
-            let mut args = vec![self.push_value(Value::String(display))];
-            for index in 0..max_length {
-                args.push(x_value(self, (index + 2) as f64));
-            }
-            self.push_call("customString", args)
-        } else {
-            let mut array_head = self.push_value(Value::String("…\u{0001}".to_string()));
-            for index in (0..max_length).rev() {
-                array_head = call!(
-                    "customString",
-                    self.push_value(Value::String("{0}, {1}".to_string())),
-                    x_value(self, (index + 2) as f64),
-                    array_head,
-                );
-            }
-            array_head
+        // The reference splits the flattened `{0}, {1}, …` display format
+        // into `customString` chunks of at most three slots: outer chunks
+        // hold two elements and pass the remaining format through `{2}`,
+        // and the innermost chunk keeps the last two or three elements.
+        let tail_length = match max_length {
+            0..=3 => max_length,
+            length if length % 2 == 0 => 2,
+            _ => 3,
         };
+        let tail = format!(
+            "{}…\u{0001}",
+            (0..tail_length)
+                .map(|index| format!("{{{index}}}, "))
+                .collect::<String>()
+        );
+        let mut args = vec![self.push_value(Value::String(tail))];
+        for index in 0..tail_length {
+            args.push(x_value(self, (max_length - tail_length + index + 2) as f64));
+        }
+        let mut array_head = self.push_call("customString", args);
+        for chunk in (0..(max_length - tail_length) / 2).rev() {
+            array_head = call!(
+                "customString",
+                self.push_value(Value::String("{0}, {1}, {2}".to_string())),
+                x_value(self, (chunk * 2 + 2) as f64),
+                x_value(self, (chunk * 2 + 3) as f64),
+                array_head,
+            );
+        }
         let placeholder_text = format!(
             "{}\u{2026}\u{0001}",
             (0..max_length).map(|_| "0, ").collect::<String>()

@@ -100,7 +100,7 @@ rule "helper behavior":
     assert!(artifact.emitted.contains("285"));
     assert!(artifact.emitted.contains("Custom String(\" \")"));
     assert!(artifact.emitted.contains("Custom String(\"{0}, …"));
-    assert!(artifact.emitted.contains("Custom String(\"0:{0}:{0}\""));
+    assert!(artifact.emitted.contains("Custom String(\"0:{0}:{1}\""));
 }
 
 #[test]

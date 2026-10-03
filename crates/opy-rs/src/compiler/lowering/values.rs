@@ -641,9 +641,12 @@ impl<'a> Lowering<'a> {
                     let [time] = args.as_slice() else {
                         return Err(self.unsupported("timeToString requires one argument", span));
                     };
-                    // The reference slices padded numbers directly; a Number in
-                    // the `stringSlice` string position is not canonical, so the
-                    // padding goes through `customString` instead.
+                    // The reference slices padded numbers directly with `True`
+                    // as the start index; neither the Number in the `stringSlice`
+                    // string position nor the Boolean in its start position is
+                    // canonical, so the padding goes through `customString` and
+                    // the start index stays `1` (approved exception,
+                    // docs/architecture/language-core.md).
                     let time = self.lower_value(time)?;
                     let three_thousand_six_hundred = self.push_number(3600.0);
                     let sixty = self.push_number(60.0);
@@ -656,26 +659,28 @@ impl<'a> Lowering<'a> {
                     let hour = self.push_call("roundToInteger", vec![hour_value, down]);
                     let minute_remainder =
                         self.push_call("modulo", vec![time, three_thousand_six_hundred]);
-                    let minute_value = self.push_call("divide", vec![minute_remainder, sixty]);
-                    let minute = self.push_call("roundToInteger", vec![minute_value, down]);
+                    let minute = self.push_call("divide", vec![minute_remainder, sixty]);
                     let second = self.push_call("modulo", vec![time, sixty]);
                     let hundred = self.push_number(100.0);
-                    let first_digit = self.push_number(1.0);
+                    let start = self.push_number(1.0);
                     let two = self.push_number(2.0);
+                    let all_digits = self.push_number(9999.0);
                     let minute_with_padding = self.push_call("add", vec![minute, hundred]);
+                    let second_with_padding = self.push_call("add", vec![second, hundred]);
+                    // The reference emits its `substring` calls unevaluated, so
+                    // the canonical wrapper and slices stay unfolded even when
+                    // `time` is a constant.
+                    let optimization = self.optimization_mark.take();
                     let padding_template = self.push_value(Value::String("{0}".to_string()));
                     let minute_with_padding =
                         self.push_call("customString", vec![padding_template, minute_with_padding]);
                     let minute_text =
-                        self.push_call("stringSlice", vec![minute_with_padding, first_digit, two]);
-                    let second_with_padding = self.push_call("add", vec![second, hundred]);
+                        self.push_call("stringSlice", vec![minute_with_padding, start, two]);
                     let second_with_padding =
                         self.push_call("customString", vec![padding_template, second_with_padding]);
-                    let all_digits = self.push_number(9999.0);
-                    let second_text = self.push_call(
-                        "stringSlice",
-                        vec![second_with_padding, first_digit, all_digits],
-                    );
+                    let second_text =
+                        self.push_call("stringSlice", vec![second_with_padding, start, all_digits]);
+                    self.optimization_mark = optimization;
                     let template = self.push_value(Value::String("{0}:{1}:{2}".to_string()));
                     return Ok(self.push_call(
                         "customString",
@@ -846,18 +851,14 @@ impl<'a> Lowering<'a> {
                         args: self.value_args(&[value, rounding]),
                     }
                 } else if name == "sorted" {
-                    let (array, key) = match args.as_slice() {
-                        [array] => (
-                            self.lower_value(array)?,
-                            self.push_call("currentArrayElement", Vec::new()),
-                        ),
+                    let (array_expr, key) = match args.as_slice() {
+                        [array] => (array, self.push_call("currentArrayElement", Vec::new())),
                         [
                             array,
                             Expr::Lambda {
                                 params, body, span, ..
                             },
                         ] => {
-                            let array = self.lower_value(array)?;
                             let key = self.lower_array_callback(params, body, *span)?;
                             (array, key)
                         }
@@ -868,6 +869,14 @@ impl<'a> Lowering<'a> {
                             ));
                         }
                     };
+                    // The reference folds `sorted` on an array literal whose
+                    // key is `-Current Array Index` into the reversed literal.
+                    if self.is_reversed_index_key(key)
+                        && let Some(elements) = self.lower_reversed_literal_array(array_expr)?
+                    {
+                        return Ok(elements);
+                    }
+                    let array = self.lower_value(array_expr)?;
                     Value::Call {
                         name: "sortedArray".to_string(),
                         args: self.value_args(&[array, key]),
@@ -997,6 +1006,12 @@ impl<'a> Lowering<'a> {
                 if function.id == "reverse" {
                     if !args.is_empty() {
                         return Err(self.unsupported("reverse requires no arguments", span));
+                    }
+                    // `x.reverse()` expands to `sorted` on the `-Current Array
+                    // Index` key, which the reference folds into the reversed
+                    // literal when `x` is an array literal.
+                    if let Some(elements) = self.lower_reversed_literal_array(receiver)? {
+                        return Ok(elements);
                     }
                     let receiver = self.lower_value(receiver)?;
                     let index = self.push_call("currentArrayIndex", Vec::new());
@@ -1749,6 +1764,70 @@ impl<'a> Lowering<'a> {
                     .cloned()
             })
             .unwrap_or_else(|| self.hir.preprocessing.optimization.clone())
+    }
+
+    /// The array literal behind `expr`, following `const`/`macro`
+    /// substitution like the reference's `__array__` check, lowered in
+    /// reverse. Returns `None` when `expr` is not an array literal.
+    fn lower_reversed_literal_array(
+        &mut self,
+        expr: &Expr,
+    ) -> Result<Option<ValueId>, IntegrationError> {
+        let mut definition = expr;
+        let mut substituted = false;
+        for _ in 0..=self.constants.len() {
+            let Expr::Constant { name, .. } = definition else {
+                break;
+            };
+            let Some(next) = self.constants.get(name).copied() else {
+                return Ok(None);
+            };
+            substituted = true;
+            definition = next;
+        }
+        let Expr::Array { elements, .. } = definition else {
+            return Ok(None);
+        };
+        // As in `Expr::Constant`, a substituted expression optimizes under
+        // the use-site state.
+        let previous = substituted.then(|| {
+            let state = self.optimization_state_at(expr.span());
+            self.optimization_override.replace(state)
+        });
+        let elements = elements
+            .iter()
+            .rev()
+            .map(|element| self.lower_value(element))
+            .collect::<Result<Vec<_>, _>>();
+        if let Some(previous) = previous {
+            self.optimization_override = previous;
+        }
+        Ok(Some(self.lower_array(elements?)))
+    }
+
+    /// Whether `key` is the reference's `-Current Array Index` sort key —
+    /// `multiply` of `-1` and the index in either order, or unary minus on
+    /// the index — under which `sorted` folds an array literal into its
+    /// reverse.
+    fn is_reversed_index_key(&self, key: ValueId) -> bool {
+        let is_index = |id: ValueId| {
+            matches!(
+                self.value(id),
+                Value::Call { name, args } if name == "currentArrayIndex" && args.is_empty()
+            )
+        };
+        let is_negative_one = |id: ValueId| matches!(self.value(id), Value::Number(-1.0));
+        let Value::Call { name, args } = self.value(key) else {
+            return false;
+        };
+        match (name.as_str(), args.as_slice()) {
+            ("-", [operand]) => is_index(*operand),
+            ("multiply", [left, right]) => {
+                (is_negative_one(*left) && is_index(*right))
+                    || (is_index(*left) && is_negative_one(*right))
+            }
+            _ => false,
+        }
     }
 
     fn lower_array_callback(
