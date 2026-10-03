@@ -1879,6 +1879,24 @@ mod tests {
     }
 
     #[test]
+    fn sorted_rejects_keyword_arguments_beyond_the_key_lambda() {
+        // #437: the reference's special `sorted` parse path only strips a
+        // `key=` prefix inside the second argument; other keyword spellings
+        // and a misplaced `key=` fail upstream parsing.
+        let error = compile_error(&action_source("g = sorted([1, 2], bogus=lambda v: v)"), 4);
+        assert_eq!(error.code, "unknown-keyword");
+
+        let error = compile_error(
+            &action_source("g = sorted(array=[1, 2], key=lambda v: -v)"),
+            4,
+        );
+        assert_eq!(error.code, "unknown-keyword");
+
+        let error = compile_error(&action_source("g = sorted(key=lambda v: v)"), 4);
+        assert_eq!(error.code, "unknown-keyword");
+    }
+
+    #[test]
     fn wait_uses_the_reference_keyword_names() {
         // The manifest's `wait` parameter names match the pinned reference
         // (`time`, `waitBehavior`), so `wait(duration=1)` is an unknown
