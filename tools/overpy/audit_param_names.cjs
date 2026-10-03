@@ -7,9 +7,10 @@
 //   pnpm install --dir tools/overpy/oracle
 //   node tools/overpy/audit_param_names.cjs
 //
-// Member-call args carry a leading receiver argument upstream; member params
-// are compared against both `args.slice(1)` and `args`, because a few member
-// entries (for example `.toArray`) declare no receiver arg.
+// Member calls pass the receiver to `parseArgs` ahead of the call args, so
+// member params are compared against `args.slice(1)`. Entries that model
+// that receiver slot as a param (for example `.toArray`) carry a recorded
+// exemption instead.
 //
 // A manifest entry is exempt when it records why its names cannot track
 // upstream: `catalogLink: "special-lowering"` (the binder parses the call
@@ -34,10 +35,13 @@ loadFuncKw((funcKw) => {
     const member = fn.kind.startsWith("member");
     const recorded =
       fn.catalogLink === "special-lowering" || fn.keywordArgs === false || fn.unbounded === true;
-    const keys = [fn.id, fn.catalogId, `__${fn.id}__`, `__${fn.catalogId}__`]
-      .filter(Boolean)
-      .map((key) => (member ? `.${key}` : key));
-    const upstream = keys.map((key) => funcKw[key]).find(Boolean);
+    const bases = [fn.id, fn.catalogId].filter(Boolean);
+    const keys = [...bases, ...bases.map((base) => `__${base}__`)].map((key) =>
+      member ? `.${key}` : key,
+    );
+    const upstream = keys
+      .map((key) => (Object.hasOwn(funcKw, key) ? funcKw[key] : undefined))
+      .find(Boolean);
     if (upstream === undefined) {
       (recorded ? exempt : unmapped).push(fn.id);
       continue;
@@ -54,17 +58,17 @@ loadFuncKw((funcKw) => {
       continue;
     }
     checked += 1;
-    const alignments = member ? [args.slice(1), args] : [args];
-    if (!alignments.some((a) => JSON.stringify(a) === JSON.stringify(params))) {
+    const expected = member ? args.slice(1) : args;
+    if (JSON.stringify(expected) !== JSON.stringify(params)) {
       divergent.push([fn.id, params, args, []]);
     }
   }
+  let report = "";
   for (const [id, params, args, alternate] of divergent) {
-    console.log(`DIVERGENT ${id}: manifest=${JSON.stringify(params)} upstream=${JSON.stringify(args)}${alternate.length ? ` alternateNames=${JSON.stringify(alternate)}` : ""}`);
+    report += `DIVERGENT ${id}: manifest=${JSON.stringify(params)} upstream=${JSON.stringify(args)}${alternate.length ? ` alternateNames=${JSON.stringify(alternate)}` : ""}\n`;
   }
-  for (const id of unmapped) console.log(`UNMAPPED ${id}: no upstream funcKw entry`);
-  console.log(
-    `checked ${checked}, exempt ${exempt.length}, divergent ${divergent.length}, unmapped ${unmapped.length}`,
-  );
+  for (const id of unmapped) report += `UNMAPPED ${id}: no upstream funcKw entry\n`;
+  report += `checked ${checked}, exempt ${exempt.length}, divergent ${divergent.length}, unmapped ${unmapped.length}\n`;
+  fs.writeSync(1, report);
   process.exit(divergent.length + unmapped.length ? 1 : 0);
 });

@@ -4,6 +4,7 @@
 .env
 # Pinned oracle installs (pnpm install --dir tools/overpy/oracle)
 tools/overpy/oracle/node_modules/
+tools/overpy/oracle/.funckw-*/
 # Python harness caches
 __pycache__/
 *.pyc

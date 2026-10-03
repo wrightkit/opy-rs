@@ -2,10 +2,10 @@
 // `parseArgs` uses to bind `name=` keyword arguments — and hands them to
 // `callback`.
 //
-// `overpy.js` keeps `funcKw` in a module-local `var` and populates it after
-// require returns, so the loader copies the package to a scratch directory,
-// hooks the declaration to export a getter, and defers the callback until
-// the module's deferred initialization has completed.
+// `overpy.js` keeps `funcKw` in a module-local `var` and populates it during
+// deferred initialization, so the loader copies the package to a scratch
+// directory, hooks the declaration to export a getter, and waits on the
+// module's exported `readyPromise`.
 const fs = require("fs");
 const path = require("path");
 const { createRequire } = require("module");
@@ -20,19 +20,23 @@ function loadFuncKw(callback) {
   try {
     fs.cpSync(pkg, scratch, { recursive: true });
     const entry = path.join(scratch, "overpy.js");
-    fs.writeFileSync(
-      entry,
-      fs.readFileSync(entry, "utf8").replace(
-        "var funcKw;",
-        "var funcKw; globalThis.__funcKw = () => funcKw;",
-      ),
-    );
-    require(entry);
-    setTimeout(() => {
-      const funcKw = globalThis.__funcKw();
-      fs.rmSync(scratch, { recursive: true });
-      callback(funcKw);
-    }, 3000);
+    const patched = fs
+      .readFileSync(entry, "utf8")
+      .replace("var funcKw;", "var funcKw; globalThis.__funcKw = () => funcKw;");
+    if (!patched.includes("__funcKw")) {
+      throw new Error("funcKw hook anchor not found in pinned overpy.js");
+    }
+    fs.writeFileSync(entry, patched);
+    require(entry)
+      .readyPromise.then(() => {
+        const funcKw = globalThis.__funcKw();
+        fs.rmSync(scratch, { recursive: true });
+        callback(funcKw);
+      })
+      .catch((error) => {
+        fs.rmSync(scratch, { recursive: true });
+        throw error;
+      });
   } catch (error) {
     fs.rmSync(scratch, { recursive: true });
     throw error;
