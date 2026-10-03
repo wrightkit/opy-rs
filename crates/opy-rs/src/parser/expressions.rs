@@ -395,9 +395,10 @@ impl Parser<'_> {
                 // A keyword argument is `name = expr` (issue #110): a bare
                 // identifier immediately followed by `=`. The reference detects
                 // keyword arguments at the token level, so the name must be the
-                // argument's first token; a parenthesized `(name) = expr` is a
-                // positional expression (issue #443). Anything else is rejected
-                // like the pinned reference rejects it.
+                // argument's first token; a parenthesized `(name) = expr`
+                // parses positionally and rejects at the `=` (issue #443).
+                // Anything else is rejected like the pinned reference rejects
+                // it.
                 let bare_name = parser.peek_kind() == TokenKind::Ident;
                 let expr = parser.parse_expr()?;
                 if parser.peek_kind() == TokenKind::Assign {
@@ -663,11 +664,12 @@ impl Parser<'_> {
         }
         self.expect(TokenKind::Colon, "':' after lambda parameters")?;
         let body = self.parse_expr()?;
+        let end = body.span().end;
         Ok(Expr::Lambda {
             params,
-            body: Box::new(body.clone()),
+            body: Box::new(body),
             parenthesized: false,
-            span: Span::new(start.file, start.start, body.span().end),
+            span: Span::new(start.file, start.start, end),
         })
     }
 

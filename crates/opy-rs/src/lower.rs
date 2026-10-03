@@ -1906,9 +1906,10 @@ mod tests {
         let error = compile_error(&action_source("g = sorted([1, 2], (key)=lambda v: -v)"), 4);
         assert_eq!(error.code, "parse-error");
 
-        // Bare `name=expr` keyword binding is unaffected.
+        // Bare `name=expr` keyword binding is unaffected, and a parenthesized
+        // name without `=` still binds positionally.
         crate::compile(
-            &action_source("g = vect(x=1, y=2, z=3)"),
+            &action_source("g = vect(x=1, y=2, z=3) + vect((g), 2, 3)"),
             "test.opy",
             std::path::Path::new(""),
         )
@@ -1929,13 +1930,26 @@ mod tests {
             assert_eq!(error.code, "parse-error", "statement: {statement}");
         }
 
-        // Array literals accept a trailing comma on both sides.
+        // Array and dictionary literals keep accepting a trailing comma on
+        // both sides, as do parenthesized @Event argument lists.
         crate::compile(
             &action_source("g = [1, 2,]"),
             "test.opy",
             std::path::Path::new(""),
         )
         .expect("array literal trailing comma compiles");
+        crate::compile(
+            &action_source("g = {\"a\": 1,}[\"a\"]"),
+            "test.opy",
+            std::path::Path::new(""),
+        )
+        .expect("dict literal trailing comma compiles");
+        crate::compile(
+            "rule \"r\":\n    @Event playerDied(victim,)\n    wait(1)\n",
+            "test.opy",
+            std::path::Path::new(""),
+        )
+        .expect("@Event argument trailing comma compiles");
     }
 
     #[test]
@@ -1949,6 +1963,7 @@ mod tests {
             "g = [1, 2].filter((lambda v: v))",
             "g = [1, 2].all((lambda v: v))",
             "g = [1, 2].any((lambda v: v))",
+            "g = sorted([1, 2], ((lambda v: -v)))",
         ] {
             let error = compile_error(&action_source(statement), 4);
             assert_eq!(error.code, "lambda-context", "statement: {statement}");
