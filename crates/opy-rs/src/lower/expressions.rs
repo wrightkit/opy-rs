@@ -691,14 +691,33 @@ impl Lowerer {
             }
         }
         match name {
-            "sorted" => HirExpr::Call {
-                name: name.to_string(),
-                args: self.lower_arg_values_with_lambda(args, macro_params, |index, arg| {
-                    index == 1 || arg.keyword.as_ref().is_some_and(|(name, _)| name == "key")
-                }),
-                debug_source: None,
-                span: Some(span.into()),
-            },
+            "sorted" => {
+                // The reference's special `sorted` parse path only strips a
+                // `key=` prefix inside the second argument's lambda; every
+                // other keyword spelling or position fails upstream parsing
+                // (issue #437).
+                for (index, arg) in args.iter().enumerate() {
+                    if let Some((keyword, keyword_span)) = &arg.keyword {
+                        if index != 1 || keyword != "key" {
+                            self.error_at(
+                                "unknown-keyword",
+                                format!(
+                                    "unknown keyword argument '{keyword}' for function 'sorted'"
+                                ),
+                                *keyword_span,
+                            );
+                        }
+                    }
+                }
+                HirExpr::Call {
+                    name: name.to_string(),
+                    args: self.lower_arg_values_with_lambda(args, macro_params, |index, arg| {
+                        index == 1 || arg.keyword.as_ref().is_some_and(|(name, _)| name == "key")
+                    }),
+                    debug_source: None,
+                    span: Some(span.into()),
+                }
+            }
             "vect" => {
                 // `vect` goes through the generic argument binder so its
                 // keyword forms (`vect(x=1, y=2, z=3)`) bind like any other
