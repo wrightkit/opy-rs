@@ -14,6 +14,9 @@ git_tag_enable = true
 git_tag_name = "v{{ version }}"
 git_release_enable = true
 git_release_name = "v{{ version }}"
+# The release stays a draft until the provider artifact set is verified on R2;
+# the release workflow's promote-release job makes it public (#236).
+git_release_draft = true
 
 [[package]]
 name = "opy-cli"

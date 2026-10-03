@@ -158,7 +158,6 @@ jobs:
     needs:
       - release-context
       - provider
-      - publish-provider-github
     runs-on: ubuntu-latest
 
     steps:
@@ -252,6 +251,39 @@ jobs:
             (cd "$verify_dir" && sha256sum --check "$checksum")
           done
 
+  # The GitHub Release is created as a draft by release-plz
+  # (git_release_draft in release-plz.toml); it becomes public only after the
+  # provider artifact set is verified on R2 and uploaded to the draft (#236).
+  promote-release:
+    name: Publish the GitHub Release
+    if: needs.release-context.outputs.opy_release_created == 'true'
+    needs:
+      - release-context
+      - publish-provider-github
+      - publish-provider-r2
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+
+    steps:
+      - name: Publish the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.release-context.outputs.opy_release_tag }}
+        run: gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+
+  # opy-rs/latest/version advances only after the canonical GitHub Release is
+  # public, so the pointer can never name a version without one (#236).
+  advance-latest:
+    name: Advance opy-rs/latest/version
+    if: needs.release-context.outputs.opy_release_created == 'true'
+    needs:
+      - release-context
+      - promote-release
+    runs-on: ubuntu-latest
+
+    steps:
       - name: Advance latest provider version
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
