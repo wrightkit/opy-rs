@@ -687,13 +687,28 @@ impl<'a> Lowering<'a> {
             },
             Value::Subroutine(value) => workshop_rs::Value::Subroutine(value.clone()),
             Value::EventPlayer => workshop_rs::Value::EventPlayer,
-            Value::Call { name, args } => workshop_rs::Value::Call {
-                name: name.clone(),
-                args: args
+            Value::Call { name, args } => {
+                let mut args: Vec<workshop_rs::Value> = args
                     .iter()
                     .map(|arg| self.materialize_value_inner(*arg))
-                    .collect(),
-            },
+                    .collect();
+                // The reference wraps a `.replace` replacement in
+                // `Update Every Frame` at emission unless the value already
+                // reevaluates on its own; the wrap is unconditional on the
+                // optimization state.
+                if name == "stringReplace" && args.len() == 3 {
+                    let replacement = args.pop().expect("len checked");
+                    args.push(if string_replace_passthrough(&replacement) {
+                        replacement
+                    } else {
+                        workshop_rs::Value::call("updateEveryFrame", [replacement])
+                    });
+                }
+                workshop_rs::Value::Call {
+                    name: name.clone(),
+                    args,
+                }
+            }
         }
     }
 
@@ -1247,6 +1262,77 @@ fn is_literal_key(expr: &hir::Expr) -> bool {
 
 fn is_membership_literal(expr: &hir::Expr, strict: bool) -> bool {
     is_literal_key(expr) && (!strict || !matches!(expr, hir::Expr::String { .. }))
+}
+
+/// Canonical call heads the pinned reference does not wrap in
+/// `Update Every Frame` when they appear as the `String Replace`
+/// replacement: the self-reevaluating forms in the upstream `.replace`
+/// emission whitelist.
+const STRING_REPLACE_PASSTHROUGH_CALLS: &[&str] = &[
+    "abilityIconString",
+    "add",
+    "appendToArray",
+    "array",
+    "arrayContains",
+    "charAt",
+    "currentArrayElement",
+    "currentArrayIndex",
+    "customColor",
+    "customString",
+    "divide",
+    "emptyArray",
+    "evaluateOnce",
+    "filteredArray",
+    "firstOf",
+    "getHeroStatistic",
+    "getPlayerClosestToReticle",
+    "getPlayersInViewAngle",
+    "getSpawnPoints",
+    "healee",
+    "healer",
+    "heroIconString",
+    "hostPlayer",
+    "iconString",
+    "ifThenElse",
+    "indexOfArrayValue",
+    "inputBindingString",
+    "isTrueForAll",
+    "isTrueForAny",
+    "isUsingUltimate",
+    "lastOf",
+    "mappedArray",
+    "multiply",
+    "randomValueInArray",
+    "randomizedArray",
+    "removeFromArray",
+    "slice",
+    "sortedArray",
+    "string",
+    "stringReplace",
+    "stringSlice",
+    "stringSplit",
+    "subtract",
+    "updateEveryFrame",
+    "valueInArray",
+];
+
+/// Whether the reference keeps a `String Replace` replacement unwrapped:
+/// the call whitelist plus the node kinds it names (`__array__`,
+/// `__customString__`, `__localizedString__`, `__globalVar__`,
+/// `__playerVar__`, `__color__`).
+fn string_replace_passthrough(value: &workshop_rs::Value) -> bool {
+    match value {
+        workshop_rs::Value::Array(_)
+        | workshop_rs::Value::String(_)
+        | workshop_rs::Value::LocalizedString(_)
+        | workshop_rs::Value::GlobalVariable(_)
+        | workshop_rs::Value::PlayerVariable { .. } => true,
+        workshop_rs::Value::Enum { value_type, .. } => value_type == "Color",
+        workshop_rs::Value::Call { name, .. } => {
+            STRING_REPLACE_PASSTHROUGH_CALLS.contains(&name.as_str())
+        }
+        _ => false,
+    }
 }
 
 fn format_number_marker(index: usize) -> String {
