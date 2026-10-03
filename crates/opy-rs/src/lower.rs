@@ -1897,6 +1897,73 @@ mod tests {
     }
 
     #[test]
+    fn call_args_reject_parenthesized_keyword_names() {
+        // #443: the reference detects keyword arguments at the token level,
+        // so `(name)=expr` never binds as a keyword.
+        let error = compile_error(&action_source("g = vect((g)=1, y=2, z=3)"), 4);
+        assert_eq!(error.code, "parse-error");
+
+        let error = compile_error(&action_source("g = sorted([1, 2], (key)=lambda v: -v)"), 4);
+        assert_eq!(error.code, "parse-error");
+
+        // Bare `name=expr` keyword binding is unaffected.
+        crate::compile(
+            &action_source("g = vect(x=1, y=2, z=3)"),
+            "test.opy",
+            std::path::Path::new(""),
+        )
+        .expect("bare keyword arguments compile");
+    }
+
+    #[test]
+    fn call_args_reject_trailing_comma() {
+        // #444: the reference keeps the empty segment after a trailing comma
+        // and rejects it in call argument lists.
+        for statement in [
+            "wait(1,)",
+            "g = vect(1, 2, 3,)",
+            "g = sorted([1, 2],)",
+            "g = sorted([1, 2], key=lambda v: -v,)",
+        ] {
+            let error = compile_error(&action_source(statement), 4);
+            assert_eq!(error.code, "parse-error", "statement: {statement}");
+        }
+
+        // Array literals accept a trailing comma on both sides.
+        crate::compile(
+            &action_source("g = [1, 2,]"),
+            "test.opy",
+            std::path::Path::new(""),
+        )
+        .expect("array literal trailing comma compiles");
+    }
+
+    #[test]
+    fn binder_lambda_rejects_parenthesized() {
+        // #445: the reference detects binder lambdas at the token level, so
+        // `(lambda x: e)` never satisfies a lambda-argument position.
+        for statement in [
+            "g = sorted([1, 2], (lambda v: -v))",
+            "g = sorted([1, 2], key=(lambda v: -v))",
+            "g = [1, 2].map((lambda v: v))",
+            "g = [1, 2].filter((lambda v: v))",
+            "g = [1, 2].all((lambda v: v))",
+            "g = [1, 2].any((lambda v: v))",
+        ] {
+            let error = compile_error(&action_source(statement), 4);
+            assert_eq!(error.code, "lambda-context", "statement: {statement}");
+        }
+
+        // Bare lambdas still bind.
+        crate::compile(
+            &action_source("g = sorted([1, 2], key=lambda v: -v)"),
+            "test.opy",
+            std::path::Path::new(""),
+        )
+        .expect("bare lambda key compiles");
+    }
+
+    #[test]
     fn wait_uses_the_reference_keyword_names() {
         // The manifest's `wait` parameter names match the pinned reference
         // (`time`, `waitBehavior`), so `wait(duration=1)` is an unknown

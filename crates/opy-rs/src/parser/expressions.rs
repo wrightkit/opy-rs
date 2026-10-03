@@ -319,14 +319,24 @@ impl Parser<'_> {
         Ok(base)
     }
 
-    fn has_more_delimited_items(&mut self, closing: TokenKind) -> bool {
+    fn has_more_delimited_items(
+        &mut self,
+        closing: TokenKind,
+        allow_trailing_comma: bool,
+    ) -> Result<bool, ()> {
         self.skip_newlines();
         if self.peek_kind() != TokenKind::Comma {
-            return false;
+            return Ok(false);
         }
         self.advance();
         self.skip_newlines();
-        self.peek_kind() != closing
+        if self.peek_kind() == closing && !allow_trailing_comma {
+            // The reference keeps the empty segment after a trailing comma
+            // and rejects it (issue #444); array literals allow it.
+            self.error_at_current("expected an item after ','".to_string());
+            return Err(());
+        }
+        Ok(self.peek_kind() != closing)
     }
 
     fn parse_delimited_items<T>(
@@ -336,6 +346,7 @@ impl Parser<'_> {
         closing: TokenKind,
         closing_text: &str,
         mut parse_item: impl FnMut(&mut Self) -> Result<T, ()>,
+        allow_trailing_comma: bool,
     ) -> Result<Token, ()> {
         self.skip_newlines();
         if !first_item_parsed && self.peek_kind() == closing {
@@ -344,7 +355,7 @@ impl Parser<'_> {
         if !first_item_parsed {
             items.push(parse_item(self)?);
         }
-        while self.has_more_delimited_items(closing) {
+        while self.has_more_delimited_items(closing, allow_trailing_comma)? {
             items.push(parse_item(self)?);
         }
         self.expect(closing, closing_text)
@@ -354,44 +365,63 @@ impl Parser<'_> {
     /// are a call-argument form, not an event form).
     pub(super) fn parse_event_args(&mut self, args: &mut Vec<Expr>) -> Result<(), ()> {
         self.expect(TokenKind::LParen, "'('")?;
-        self.parse_delimited_items(args, false, TokenKind::RParen, "')'", |parser| {
-            let expr = parser.parse_expr()?;
-            if parser.peek_kind() == TokenKind::Assign {
-                parser.error_at_current("keyword arguments are not valid in @Event".to_string());
-                return Err(());
-            }
-            Ok(expr)
-        })?;
+        self.parse_delimited_items(
+            args,
+            false,
+            TokenKind::RParen,
+            "')'",
+            |parser| {
+                let expr = parser.parse_expr()?;
+                if parser.peek_kind() == TokenKind::Assign {
+                    parser
+                        .error_at_current("keyword arguments are not valid in @Event".to_string());
+                    return Err(());
+                }
+                Ok(expr)
+            },
+            true,
+        )?;
         Ok(())
     }
 
     pub(super) fn parse_call_args(&mut self, args: &mut Vec<CallArg>) -> Result<(), ()> {
         self.expect(TokenKind::LParen, "'('")?;
-        self.parse_delimited_items(args, false, TokenKind::RParen, "')'", |parser| {
-            let expr = parser.parse_expr()?;
-            // A keyword argument is `name = expr` (issue #110): a bare
-            // identifier immediately followed by `=`. Anything else is
-            // rejected like the pinned reference rejects it.
-            if parser.peek_kind() == TokenKind::Assign {
-                let Expr::Name { name, span } = expr else {
-                    parser.error_at_current(
-                        "expected a keyword name before '=' in this call".to_string(),
-                    );
-                    return Err(());
-                };
-                parser.advance();
-                let value = parser.parse_expr()?;
-                Ok(CallArg {
-                    keyword: Some((name, span)),
-                    value,
-                })
-            } else {
-                Ok(CallArg {
-                    keyword: None,
-                    value: expr,
-                })
-            }
-        })?;
+        self.parse_delimited_items(
+            args,
+            false,
+            TokenKind::RParen,
+            "')'",
+            |parser| {
+                // A keyword argument is `name = expr` (issue #110): a bare
+                // identifier immediately followed by `=`. The reference detects
+                // keyword arguments at the token level, so the name must be the
+                // argument's first token; a parenthesized `(name) = expr` is a
+                // positional expression (issue #443). Anything else is rejected
+                // like the pinned reference rejects it.
+                let bare_name = parser.peek_kind() == TokenKind::Ident;
+                let expr = parser.parse_expr()?;
+                if parser.peek_kind() == TokenKind::Assign {
+                    let (true, Expr::Name { name, span }) = (bare_name, expr) else {
+                        parser.error_at_current(
+                            "expected a keyword name before '=' in this call".to_string(),
+                        );
+                        return Err(());
+                    };
+                    parser.advance();
+                    let value = parser.parse_expr()?;
+                    Ok(CallArg {
+                        keyword: Some((name, span)),
+                        value,
+                    })
+                } else {
+                    Ok(CallArg {
+                        keyword: None,
+                        value: expr,
+                    })
+                }
+            },
+            false,
+        )?;
         Ok(())
     }
 
@@ -458,9 +488,15 @@ impl Parser<'_> {
             TokenKind::LParen => {
                 self.advance();
                 self.skip_expression_newlines();
-                let expr = self.parse_expr()?;
+                let mut expr = self.parse_expr()?;
                 self.skip_expression_newlines();
                 self.expect(TokenKind::RParen, "')'")?;
+                // The reference detects binder lambdas at the token level, so
+                // a parenthesized lambda never satisfies a lambda-argument
+                // position (issue #445); record the surface on the CST.
+                if let Expr::Lambda { parenthesized, .. } = &mut expr {
+                    *parenthesized = true;
+                }
                 Ok(expr)
             }
             TokenKind::LBracket => {
@@ -524,6 +560,7 @@ impl Parser<'_> {
                         TokenKind::RBracket,
                         "']'",
                         Self::parse_expr,
+                        true,
                     )?
                     .span
                     .end;
@@ -591,13 +628,20 @@ impl Parser<'_> {
         let open = self.advance();
         let mut entries = Vec::new();
         let end = self
-            .parse_delimited_items(&mut entries, false, TokenKind::RBrace, "'}'", |parser| {
-                let key = parser.parse_expr()?;
-                parser.expect(TokenKind::Colon, "':' in a dictionary entry")?;
-                let value = parser.parse_expr()?;
-                let span = Span::new(key.span().file, key.span().start, value.span().end);
-                Ok(DictEntry { key, value, span })
-            })?
+            .parse_delimited_items(
+                &mut entries,
+                false,
+                TokenKind::RBrace,
+                "'}'",
+                |parser| {
+                    let key = parser.parse_expr()?;
+                    parser.expect(TokenKind::Colon, "':' in a dictionary entry")?;
+                    let value = parser.parse_expr()?;
+                    let span = Span::new(key.span().file, key.span().start, value.span().end);
+                    Ok(DictEntry { key, value, span })
+                },
+                true,
+            )?
             .span
             .end;
         Ok(Expr::Dict {
@@ -622,6 +666,7 @@ impl Parser<'_> {
         Ok(Expr::Lambda {
             params,
             body: Box::new(body.clone()),
+            parenthesized: false,
             span: Span::new(start.file, start.start, body.span().end),
         })
     }
