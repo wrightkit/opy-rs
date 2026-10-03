@@ -176,8 +176,16 @@ fn size_optimization_action_rewrites_match_the_pinned_oracle() {
 }
 
 #[test]
-fn context_player_components_match_the_pinned_oracle() {
-    assert_converges("context-player-components");
+fn context_player_components_stay_rejected_under_canonical_validation() {
+    // Approved exception (workshop-rs ADR-0014, wrightkit/workshop-rs#336):
+    // the pinned OverPy emits `X Component Of(Event Player)`, but bare
+    // Player has no acceptance evidence for the component positions, so
+    // canonical validation rejects them. `context-player-component-validation`
+    // records the same gap for the other context-player receivers.
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/corpus/synthetic/context-player-components");
+    let source = std::fs::read_to_string(dir.join("source.opy")).expect("source must be readable");
+    assert_rejected(&source, "semantic type 'Vector'");
 }
 
 /// Approved exceptions (workshop-rs ADR-0014, wrightkit/opy-rs#372): the
@@ -217,6 +225,17 @@ fn an_omitted_optional_argument_shifts_the_rest_but_stays_rejected() {
     assert_rejected(
         "rule \"x\":\n    @Event eachPlayer\n    createBeam(eventPlayer, Beam.GRAPPLE, Vector.UP, Vector.UP, EffectReeval.NONE)\n",
         "semantic type 'Color'",
+    );
+}
+
+#[test]
+fn a_bare_player_for_an_entity_parameter_stays_rejected() {
+    // The reference writes `Destroy Effect(Event Player)` unchecked; the
+    // canonical entity parameter requires EntityId and a bare Player has no
+    // admission evidence (probe gap `validation-player-for-entity-id`).
+    assert_rejected(
+        "rule \"x\":\n    @Event eachPlayer\n    destroyEffect(eventPlayer)\n",
+        "semantic type 'EntityId'",
     );
 }
 

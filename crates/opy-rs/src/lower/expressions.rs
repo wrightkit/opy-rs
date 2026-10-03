@@ -415,7 +415,9 @@ impl Lowerer {
                     };
                     return HirExpr::Call {
                         name: "rgb".to_string(),
-                        args: vec![number(red), number(green), number(blue)],
+                        // The reference binds the declared alpha default
+                        // (255) for these OverPy-only constants.
+                        args: vec![number(red), number(green), number(blue), number(255)],
                         debug_source: None,
                         span: Some(span.into()),
                     };
