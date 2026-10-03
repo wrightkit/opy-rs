@@ -7,7 +7,9 @@ mod values;
 
 use super::action_optimization::ActionOptimizer;
 use super::number_format::trim_numbers;
-use super::operator_optimization::{OperatorOptimizer, same, self_modification};
+use super::operator_optimization::{
+    NUMBER_LIMIT, OperatorOptimizer, expand_log, same, self_modification,
+};
 use super::size_optimization::{SizeOptimizer, action_values, is_empty_string};
 use super::string_format::split_all;
 use super::*;
@@ -116,6 +118,8 @@ pub(crate) struct Lowering<'a> {
     deferred_gotos: Vec<(ActionId, String, Option<HirSpan>, usize)>,
     translation_uses: Vec<(String, Option<String>)>,
     optimized_nodes: HashMap<ValueId, bool>,
+    optimization_mark: Option<bool>,
+    optimization_override: Option<OptimizationState>,
     used_maps: Vec<&'static str>,
 }
 
@@ -271,6 +275,8 @@ impl<'a> Lowering<'a> {
             array_bindings: Vec::new(),
             current_rule_conditions: None,
             optimized_nodes: HashMap::new(),
+            optimization_mark: None,
+            optimization_override: None,
             used_maps: used_bugged_maps(hir),
             visible_labels: Vec::new(),
             deferred_gotos: Vec::new(),
@@ -303,6 +309,11 @@ impl<'a> Lowering<'a> {
     fn push_value(&mut self, value: Value) -> ValueId {
         let id = self.values.len();
         self.values.push(value);
+        if let Some(strict) = self.optimization_mark {
+            // Nodes synthesized while lowering a source expression optimize
+            // like the expression's own nodes.
+            self.optimized_nodes.insert(id, strict);
+        }
         #[cfg(test)]
         crate::resource_metrics::record_lowering_values(self.values.len());
         id
@@ -473,7 +484,7 @@ impl<'a> Lowering<'a> {
             "**" => left.powf(right),
             _ => return None,
         };
-        value.is_finite().then_some(value)
+        (value.is_finite() && value.abs() <= NUMBER_LIMIT).then_some(value)
     }
 
     fn value_is_number(&self, id: ValueId, expected: f64) -> bool {
@@ -639,7 +650,12 @@ impl<'a> Lowering<'a> {
         let value = self.materialize_node(id);
         match self.optimized_nodes.get(&id) {
             Some(strict) => OperatorOptimizer::new(self.compiler, *strict).node(value),
-            None => value,
+            // `log` expands to its power approximation even when the value is
+            // not optimized; the folded form only applies under optimization.
+            None => match value {
+                workshop_rs::Value::Call { name, args } if name == "log" => expand_log(args, false),
+                value => value,
+            },
         }
     }
 

@@ -13,7 +13,7 @@ use super::string_format;
 use crate::compile_time::round_half_up;
 
 /// Folded numbers beyond this magnitude keep their operator form.
-const NUMBER_LIMIT: f64 = 1e7;
+pub(crate) const NUMBER_LIMIT: f64 = 1e7;
 
 const RANDOM_CALLS: [&str; 4] = [
     "randomInteger",
@@ -68,11 +68,11 @@ impl<'a> OperatorOptimizer<'a> {
         let value = literal_array(value);
         let head = head_of(&value);
         let rewritten = match self.rewrite(value) {
-            Rewrite::Same(value) => return array_call(value),
+            Rewrite::Same(value) => return canonical(value),
             Rewrite::Changed(value) => value,
         };
         if head_of(&rewritten) == head {
-            array_call(rewritten)
+            canonical(rewritten)
         } else {
             self.node(rewritten)
         }
@@ -138,6 +138,7 @@ impl<'a> OperatorOptimizer<'a> {
             ("distance", 2) => Self::distance(args),
             ("dotProduct", 2) => Self::dot_product(args),
             ("directionTowards", 2) => Self::direction_towards(args),
+            ("vectorTowards", 2) => Self::vector_towards(args),
             ("oppositeTeamOf", 1) => Self::opposite_team(args),
             ("strContains", 2) => Self::string_contains(args),
             ("stringSlice", 3) => Self::string_slice(args),
@@ -171,6 +172,7 @@ impl<'a> OperatorOptimizer<'a> {
             ("__xComponentOf__", 1) => Self::component(args, 0),
             ("__yComponentOf__", 1) => Self::component(args, 1),
             ("__zComponentOf__", 1) => Self::component(args, 2),
+            ("log", 1) | ("log", 2) => Rewrite::Changed(expand_log(args, true)),
             _ => Rewrite::Same(Value::Call { name, args }),
         }
     }
@@ -583,6 +585,18 @@ impl<'a> OperatorOptimizer<'a> {
         }
     }
 
+    fn vector_towards(args: Vec<Value>) -> Rewrite {
+        let [start, end] = two(args);
+        let (Some(a), Some(b)) = (number_components(&start), number_components(&end)) else {
+            return Rewrite::Same(call("vectorTowards", vec![start, end]));
+        };
+        Rewrite::Changed(vector([
+            b[0] - a[0] + 0.0,
+            b[1] - a[1] + 0.0,
+            b[2] - a[2] + 0.0,
+        ]))
+    }
+
     fn direction_towards(args: Vec<Value>) -> Rewrite {
         let [start, end] = two(args);
         let (Some(a), Some(b)) = (number_components(&start), number_components(&end)) else {
@@ -878,10 +892,19 @@ impl<'a> OperatorOptimizer<'a> {
 
     fn component(args: Vec<Value>, axis: usize) -> Rewrite {
         let [operand] = one(args);
-        let name = ["__xComponentOf__", "__yComponentOf__", "__zComponentOf__"][axis];
         match operand {
             Value::Vector { x, y, z } => Rewrite::Changed([*x, *y, *z][axis].clone()),
-            other => Rewrite::Same(call(name, vec![other])),
+            // `vect` args flow through as the raw member, constants or not.
+            Value::Call { name, mut args } if name == "vector" && args.len() == 3 => {
+                Rewrite::Changed(args.swap_remove(axis))
+            }
+            other => match number_components(&other) {
+                Some(components) => Rewrite::Changed(Value::Number(components[axis])),
+                None => Rewrite::Same(call(
+                    ["__xComponentOf__", "__yComponentOf__", "__zComponentOf__"][axis],
+                    vec![other],
+                )),
+            },
         }
     }
 
@@ -983,7 +1006,7 @@ fn head_of(value: &Value) -> String {
 fn call(name: &str, args: Vec<Value>) -> Value {
     Value::Call {
         name: name.to_string(),
-        args,
+        args: args.into_iter().map(array_call).collect(),
     }
 }
 
@@ -1085,6 +1108,71 @@ fn vector(components: [f64; 3]) -> Value {
         x: Box::new(Value::Number(x)),
         y: Box::new(Value::Number(y)),
         z: Box::new(Value::Number(z)),
+    }
+}
+
+/// `log` has no canonical builtin. The reference expands it to the power
+/// approximation `10000 * (x ** 0.0001 - 1)` — with a `log(a) / log(b)`
+/// division when a non-e base is given — and folds `Math.log` on constant
+/// operands while optimization is enabled. A fold that lands non-finite
+/// (`log(0)` → upstream `-Infinity`) needs spellings the canonical grammar
+/// cannot parse, so the call keeps the approximation it emitted before
+/// folding was added until `wrightkit/workshop-rs#358` decides them.
+pub(super) fn expand_log(args: Vec<Value>, fold_constants: bool) -> Value {
+    fn approximated(value: Value) -> Value {
+        call(
+            "multiply",
+            vec![
+                Value::Number(10000.0),
+                call(
+                    "subtract",
+                    vec![
+                        call("raiseToPower", vec![value, Value::Number(0.0001)]),
+                        Value::Number(1.0),
+                    ],
+                ),
+            ],
+        )
+    }
+    fn resolve(value: Value, fold_constants: bool) -> Value {
+        match (fold_constants, value) {
+            (true, Value::Number(number)) if number.ln().is_finite() => Value::Number(number.ln()),
+            (_, value) => approximated(value),
+        }
+    }
+    let mut args = args.into_iter();
+    let Some(number) = args.next() else {
+        unreachable!("log lowering enforces one or two arguments");
+    };
+    match args.next() {
+        None => resolve(number, fold_constants),
+        Some(Value::Number(base)) if base == std::f64::consts::E => resolve(number, fold_constants),
+        Some(base) => {
+            // The reference folds the `log(a) / log(b)` division as a whole,
+            // so a non-finite operand can still fold to a finite result.
+            if fold_constants && let (Value::Number(a), Value::Number(b)) = (&number, &base) {
+                let folded = a.ln() / b.ln();
+                if folded.is_finite() && folded.abs() <= NUMBER_LIMIT {
+                    return Value::Number(if folded == 0.0 { 0.0 } else { folded });
+                }
+                // An operand that folds non-finite would need the
+                // `-Infinity`/`NaN` spellings; both operands keep the
+                // approximation until `wrightkit/workshop-rs#358` decides.
+                if !a.ln().is_finite() || !b.ln().is_finite() {
+                    return call(
+                        "divide",
+                        vec![approximated(number.clone()), approximated(base.clone())],
+                    );
+                }
+            }
+            call(
+                "divide",
+                vec![
+                    resolve(number, fold_constants),
+                    resolve(base, fold_constants),
+                ],
+            )
+        }
     }
 }
 
@@ -1330,6 +1418,18 @@ fn array_call(value: Value) -> Value {
         Value::Array(elements) => Value::Call {
             name: "array".to_string(),
             args: elements,
+        },
+        other => other,
+    }
+}
+
+/// Canonical optimizer output: array literals surface as `Array`/`Empty Array`
+/// calls at every level, not the internal `Value::Array` form.
+fn canonical(value: Value) -> Value {
+    match array_call(value) {
+        Value::Call { name, args } => Value::Call {
+            name,
+            args: args.into_iter().map(canonical).collect(),
         },
         other => other,
     }

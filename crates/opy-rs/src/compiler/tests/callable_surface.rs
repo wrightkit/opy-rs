@@ -100,7 +100,7 @@ rule "helper behavior":
     assert!(artifact.emitted.contains("285"));
     assert!(artifact.emitted.contains("Custom String(\" \")"));
     assert!(artifact.emitted.contains("Custom String(\"{0}, …"));
-    assert!(artifact.emitted.contains("Custom String(\"{0}:{1}:{2}\""));
+    assert!(artifact.emitted.contains("Custom String(\"0:{0}:{0}\""));
 }
 
 #[test]
@@ -239,6 +239,10 @@ rule "folds":
     result = crossProduct(vect(1, 0, 0), vect(0, 1, 0))
     result = normalize(vect(0, 0, 5))
     result = angleDifference(10, 350)
+    result = vectorTowards(vect(1, 0, 0), vect(0, 1, 0))
+    result = vect(1, 2, 3).x
+    result = log(100, 10)
+    result = hsl(0, 1, 0.5)
 "#;
     let emitted = Compiler::new()
         .unwrap()
@@ -253,8 +257,58 @@ rule "folds":
         "Set Global Variable(result, 0.018277045187202);",
         "Set Global Variable(result, Forward);",
         "Set Global Variable(result, Angle Difference(10, 350));",
+        "Set Global Variable(result, Vector(-1, 1, 0));",
+        "Set Global Variable(result, 1);",
+        "Set Global Variable(result, 2);",
+        "Set Global Variable(result, Custom Color(255, 0, 0, 255));",
     ] {
         assert!(emitted.contains(expected), "missing {expected}\n{emitted}");
+    }
+}
+
+#[test]
+fn hsl_range_validation_sees_optimizer_folded_arguments() {
+    // The reference range-checks the parse-time fold (`floor`, `max`, `abs`),
+    // not just literals, and reports the offending argument's span.
+    let compiler = Compiler::new().expect("compiler initializes");
+    for (call, message, col) in [
+        (
+            "hsl(floor(400.5), 0.5, 0.5)",
+            "Hue must be between 0 and 360",
+            13,
+        ),
+        (
+            "hsl(max(500, 1), 0.5, 0.5)",
+            "Hue must be between 0 and 360",
+            13,
+        ),
+        (
+            "hsl(120, max(2, 1), 0.5)",
+            "Saturation must be between 0 and 1",
+            18,
+        ),
+        (
+            "hsl(120, 0.5, 0.5, abs(300))",
+            "Alpha must be between 0 and 255",
+            28,
+        ),
+    ] {
+        let source = format!("globalvar g\nrule \"r\":\n    @Event global\n    g = {call}\n");
+        let hir = crate::compile(&source, "hsl.opy", Path::new(".")).expect("source must resolve");
+        let error = match compiler.compile_hir(&hir) {
+            Ok(_) => panic!("a folded out-of-range argument must be rejected"),
+            Err(error) => error,
+        };
+        assert_eq!(error.diagnostic.code, "unsupported-integration-surface");
+        assert!(error.diagnostic.message.contains(message), "{error}");
+        assert_eq!(
+            error
+                .diagnostic
+                .span
+                .map(|span| (span.start.line, span.start.col)),
+            Some((4, col)),
+            "the diagnostic must anchor the offending argument"
+        );
     }
 }
 

@@ -219,3 +219,97 @@ fn an_omitted_optional_argument_shifts_the_rest_but_stays_rejected() {
         "semantic type 'Color'",
     );
 }
+
+#[test]
+fn a_non_finite_log_fold_keeps_the_pre_fold_expansion() {
+    // The reference writes `-Infinity`/`NaN`, which the canonical grammar
+    // cannot parse; pending wrightkit/workshop-rs#358 the call keeps emitting
+    // the approximation it produced before folding was added.
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = "globalvar v\nrule \"x\":\n    @Event global\n    v = log(0)\n    v = log(-1)\n    v = log(0, 10)\n    v = log(100, 0)\n";
+    let hir = crate::compile(source, "source.opy", dir).expect("source must resolve");
+    let artifact = Compiler::new()
+        .expect("released workshop contract must load")
+        .compile_hir(&hir)
+        .expect("the approximation must emit");
+    assert!(
+        artifact.emitted.contains(
+            "Set Global Variable(v, Multiply(10000, Subtract(Raise To Power(0, 0.0001), 1)))"
+        ),
+        "{}",
+        artifact.emitted
+    );
+    assert!(
+        artifact
+            .emitted
+            .contains("Multiply(10000, Subtract(Raise To Power(-1, 0.0001), 1))"),
+        "{}",
+        artifact.emitted
+    );
+    // A non-finite operand keeps the whole call on the expansion it emitted
+    // before folding, rather than a mix of folded and expanded operands.
+    assert!(
+        artifact.emitted.contains(
+            "Divide(Multiply(10000, Subtract(Raise To Power(0, 0.0001), 1)), Multiply(10000, Subtract(Raise To Power(10, 0.0001), 1)))"
+        ),
+        "{}",
+        artifact.emitted
+    );
+    // `log(100, 0)` still folds to the finite `0`, exactly as the reference.
+    assert!(
+        artifact.emitted.contains("Set Global Variable(v, 0);"),
+        "{}",
+        artifact.emitted
+    );
+}
+
+#[test]
+fn a_constant_substitution_optimizes_under_the_use_site_state() {
+    // The reference substitutes a `macro` constant at the use site, so the
+    // substituted expression optimizes under the caller's state: it folds
+    // where the caller enables optimizations and stays unfolded where the
+    // caller disables them, regardless of the definition site's state.
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = "#!disableOptimizations\nmacro DISABLED_DEF = 2 + 3\n#!enableOptimizations\nmacro ENABLED_DEF = 4 + 5\nglobalvar v\nrule \"enabled\":\n    @Event global\n    v = DISABLED_DEF\n    v = ENABLED_DEF\n#!disableOptimizations\nrule \"disabled\":\n    @Event global\n    v = DISABLED_DEF\n    v = ENABLED_DEF\n";
+    let hir = crate::compile(source, "source.opy", dir).expect("source must resolve");
+    let artifact = Compiler::new()
+        .expect("released workshop contract must load")
+        .compile_hir(&hir)
+        .expect("the constants must emit");
+    assert_eq!(
+        artifact
+            .emitted
+            .matches("Set Global Variable(v, 5);")
+            .count(),
+        1,
+        "{}",
+        artifact.emitted
+    );
+    assert_eq!(
+        artifact
+            .emitted
+            .matches("Set Global Variable(v, 9);")
+            .count(),
+        1,
+        "{}",
+        artifact.emitted
+    );
+    assert_eq!(
+        artifact
+            .emitted
+            .matches("Set Global Variable(v, Add(2, 3));")
+            .count(),
+        1,
+        "{}",
+        artifact.emitted
+    );
+    assert_eq!(
+        artifact
+            .emitted
+            .matches("Set Global Variable(v, Add(4, 5));")
+            .count(),
+        1,
+        "{}",
+        artifact.emitted
+    );
+}
