@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/structural-string-replace-reevaluation",
+  "category": "compilation",
+  "features": [
+    "structural convergence",
+    "strings"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": true
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": true
+    }
+  }
+}
