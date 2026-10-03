@@ -180,6 +180,11 @@ fn context_player_components_match_the_pinned_oracle() {
     assert_converges("context-player-components");
 }
 
+#[test]
+fn helper_macro_expansions_match_the_pinned_oracle() {
+    assert_converges("structural-macro-expansions");
+}
+
 /// Approved exceptions (workshop-rs ADR-0014, wrightkit/opy-rs#372): the
 /// pinned OverPy writes these programs, native compilation rejects them.
 fn assert_rejected(source: &str, needle: &str) {
@@ -258,6 +263,38 @@ fn a_non_finite_log_fold_keeps_the_pre_fold_expansion() {
     // `log(100, 0)` still folds to the finite `0`, exactly as the reference.
     assert!(
         artifact.emitted.contains("Set Global Variable(v, 0);"),
+        "{}",
+        artifact.emitted
+    );
+}
+
+#[test]
+fn time_to_string_keeps_the_reference_shape_modulo_canonical_types() {
+    // Approved exception (docs/architecture/language-core.md): the reference
+    // writes `String Slice(Add(...), True, 2)` — a Number in the string
+    // position and a Boolean in the start position, both rejected by
+    // canonical validation — so the padded number goes through
+    // `customString` and the start index stays `1`. Everything else,
+    // including the unrounded minute division and the unevaluated slices on
+    // a constant argument, matches the pinned oracle.
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = "globalvar a\nglobalvar b\nrule \"x\":\n    @Event global\n    a = timeToString(getTotalTimeElapsed())\n    b = timeToString(3757.65)\n";
+    let hir = crate::compile(source, "source.opy", dir).expect("source must resolve");
+    let artifact = Compiler::new()
+        .expect("released workshop contract must load")
+        .compile_hir(&hir)
+        .expect("timeToString must emit");
+    assert!(
+        artifact.emitted.contains(
+            "Custom String(\"{0}:{1}:{2}\", Round To Integer(Divide(Total Time Elapsed, 3600), Down), String Slice(Custom String(\"{0}\", Add(Divide(Modulo(Total Time Elapsed, 3600), 60), 100)), 1, 2), String Slice(Custom String(\"{0}\", Add(Modulo(Total Time Elapsed, 60), 100)), 1, 9999))"
+        ),
+        "{}",
+        artifact.emitted
+    );
+    assert!(
+        artifact.emitted.contains(
+            "Custom String(\"1:{0}:{1}\", String Slice(Custom String(\"102.63\"), 1, 2), String Slice(Custom String(\"137.65\"), 1, 9999))"
+        ),
         "{}",
         artifact.emitted
     );
