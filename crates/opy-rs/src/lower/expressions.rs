@@ -88,8 +88,15 @@ impl Lowerer {
                     span: Some(span.into()),
                 }
             }
-            Expr::Lambda { params, body, span } => {
-                if position != CallPosition::LambdaArgument {
+            Expr::Lambda {
+                params,
+                body,
+                parenthesized,
+                span,
+            } => {
+                // The reference's token-level lambda check never sees a
+                // parenthesized lambda as a binder argument (issue #445).
+                if position != CallPosition::LambdaArgument || *parenthesized {
                     self.error_at(
                         "lambda-context",
                         "lambda expressions are only valid as array operation arguments"

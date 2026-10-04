@@ -321,6 +321,12 @@ pub enum Expr {
     Lambda {
         params: Vec<(String, Span)>,
         body: Box<Expr>,
+        /// `true` when the lambda was written wrapped in parentheses. The
+        /// reference detects binder lambdas at the token level, so
+        /// `(lambda x: e)` never satisfies a lambda-argument position
+        /// (issue #445); the flag lets lowering enforce the same rule
+        /// without reparsing source.
+        parenthesized: bool,
         span: Span,
     },
     StringModifier {
