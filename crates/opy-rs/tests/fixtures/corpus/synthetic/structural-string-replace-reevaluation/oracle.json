@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    player:\n        0: p\n}\n\nrule (\"string replace keeps reevaluating replacements\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Set Player Variable(Event Player, p, String Replace(Custom String(\"text\"), Custom String(\"x\"), Array(1, 2)));\n        Set Player Variable(Event Player, p, String Replace((Event Player).p, Custom String(\"x\"), Custom String(\"y\")));\n        Set Player Variable(Event Player, p, String Replace(Custom String(\"text\"), Custom String(\"x\"), (Event Player).p));\n        Set Player Variable(Event Player, p, String Replace(Custom String(\"text\"), Custom String(\"x\"), String Slice((Event Player).p, 0, 1)));\n        Set Player Variable(Event Player, p, String Replace(Custom String(\"text\"), Custom String(\"x\"), Update Every Frame(Event Player)));\n        Set Player Variable(Event Player, p, String Replace(Custom String(\"text\"), Custom String(\"x\"), Update Every Frame(Up)));\n    }\n}\n",
+    "workshopExact": "variables {\n    player:\n        0: p\n}\n\nrule (\"string replace keeps reevaluating replacements\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Set Player Variable(Event Player, p, String Replace(Custom String(\"text\"), Custom String(\"x\"), Array(1, 2)));\n        Set Player Variable(Event Player, p, String Replace((Event Player).p, Custom String(\"x\"), Custom String(\"y\")));\n        Set Player Variable(Event Player, p, String Replace(Custom String(\"text\"), Custom String(\"x\"), (Event Player).p));\n        Set Player Variable(Event Player, p, String Replace(Custom String(\"text\"), Custom String(\"x\"), String Slice((Event Player).p, 0, 1)));\n        Set Player Variable(Event Player, p, String Replace(Custom String(\"text\"), Custom String(\"x\"), Update Every Frame(Event Player)));\n        Set Player Variable(Event Player, p, String Replace(Custom String(\"text\"), Custom String(\"x\"), Update Every Frame(Up)));\n    }\n}\n\n",
+    "workshopSha256": "02dec6af1c1a690a71f4df9aac9b10acb4c2652ec39cea53a651310462ba4242"
+  },
+  "fixture": "synthetic/structural-string-replace-reevaluation",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "6885e92752ed69982df502ac22012f8c1d03e230639b3027558ce527f3e84021"
+      }
+    ],
+    "sha256": "026c23e0936f33cd23769ea602969037aca59093e719b8e9d423d249ead29ecf",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

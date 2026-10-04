@@ -14,10 +14,11 @@
       "ruleNames": true
     },
     "compiler": {
-      "nativeStatus": "success",
-      "relationship": "match",
-      "comparison": "semantic-wir",
-      "semanticEquivalent": true
+      "nativeStatus": "failure",
+      "relationship": "known-gap",
+      "comparison": "diagnostic-code",
+      "diagnosticCode": "catalog-validation",
+      "failureClass": "integration"
     }
   }
 }
