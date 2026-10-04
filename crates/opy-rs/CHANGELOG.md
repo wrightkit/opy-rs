@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.69](https://github.com/wrightkit/opy-rs/compare/v0.1.68...v0.1.69) - 2026-10-04
+
+### Fixed
+
+- *(compiler)* expand buttonToString like the pinned oracle ([#451](https://github.com/wrightkit/opy-rs/pull/451))
+- *(parser)* reject reference-invalid parenthesized keyword names, binder lambdas, and trailing commas ([#450](https://github.com/wrightkit/opy-rs/pull/450))
+- *(compiler)* converge with the workshop-rs 1.4 catalog contract ([#441](https://github.com/wrightkit/opy-rs/pull/441))
+- *(compiler)* converge helper macro expansions on the pinned oracle ([#448](https://github.com/wrightkit/opy-rs/pull/448))
+- *(lower)* reject non-key keyword arguments on sorted calls ([#440](https://github.com/wrightkit/opy-rs/pull/440))
+- *(manifest)* add missing upstream member-call aliases ([#439](https://github.com/wrightkit/opy-rs/pull/439))
+- *(compiler)* fold synthesized builtin expansions like the reference ([#435](https://github.com/wrightkit/opy-rs/pull/435))
+
+### Other
+
+- Sync manifest keyword-argument names with the pinned OverPy reference ([#432](https://github.com/wrightkit/opy-rs/pull/432))
+- Sync manifest builtin signatures with the pinned OverPy reference ([#431](https://github.com/wrightkit/opy-rs/pull/431))
+
 ## [0.1.68](https://github.com/wrightkit/opy-rs/compare/v0.1.67...v0.1.68) - 2026-10-01
 
 ### Fixed
