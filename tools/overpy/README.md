@@ -80,6 +80,21 @@ resolution: functions without a sample call and every alias source get a
 unknown function; it fails the run like any unexplained difference — a
 spelling beyond upstream needs an approved, recorded exception (#410).
 
+## Parameter-name audit
+
+`audit_param_names.cjs` compares every manifest `params[].name` against the
+pinned oracle's `funcKw` argument tables — the tables upstream `parseArgs`
+uses to bind `name=` keyword arguments. Any name divergence both rejects
+upstream-valid code and accepts upstream-invalid code, so the audit fails on
+any unexplained mismatch. Entries whose names cannot track upstream
+(`special-lowering` parsing, `keywordArgs: false`, `unbounded` variadics)
+are exempt by the recorded reason on the manifest entry.
+
+```sh
+pnpm install --dir tools/overpy/oracle
+node tools/overpy/audit_param_names.cjs
+```
+
 ## Structural convergence gate
 
 `structural_gate.py` enforces the structural compatibility contract for real

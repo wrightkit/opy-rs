@@ -81,6 +81,9 @@ jobs:
       - name: Install oracle dependencies
         run: pnpm install --dir tools/overpy/oracle --frozen-lockfile
 
+      - name: Audit manifest parameter names against the oracle
+        run: node tools/overpy/audit_param_names.cjs
+
       - name: Run builtin surface differential probe against the oracle
         run: >-
           python3 -B tools/overpy/probe_builtins.py

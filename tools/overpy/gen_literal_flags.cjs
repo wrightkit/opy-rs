@@ -10,20 +10,7 @@
 // rules for those on the typed actions and rule conditions directly.
 const fs = require("fs");
 const path = require("path");
-const { createRequire } = require("module");
-
-const oracle = path.join(__dirname, "oracle");
-const pkg = path.dirname(
-  createRequire(path.join(oracle, "package.json")).resolve("overpy/package.json"),
-);
-const scratch = fs.mkdtempSync(path.join(oracle, ".flags-"));
-fs.cpSync(pkg, scratch, { recursive: true });
-const entry = path.join(scratch, "overpy.js");
-fs.writeFileSync(
-  entry,
-  fs.readFileSync(entry, "utf8").replace("var funcKw;", "var funcKw; globalThis.__funcKw = () => funcKw;"),
-);
-require(entry);
+const { loadFuncKw } = require("./oracle_func_kw.cjs");
 
 const excluded = new Set([
   "__for__", "__setGlobalVariableAtIndex__",
@@ -52,9 +39,9 @@ const flagOf = {
   canReplaceNullVectorByNull: "NULL_VECTOR_BY_NULL",
 };
 
-setTimeout(() => {
+loadFuncKw((funcKw) => {
   const rows = [];
-  for (const [name, info] of Object.entries(globalThis.__funcKw())) {
+  for (const [name, info] of Object.entries(funcKw)) {
     if (excluded.has(name)) continue;
     const bare = name.replace(/^\./, "").replace(/^__(.*)__$/, "$1");
     const canonical = catalogId.get(bare) ?? bare;
@@ -66,6 +53,5 @@ setTimeout(() => {
   rows.sort((a, b) => a[0].localeCompare(b[0]) || a[1] - b[1]);
   const out = path.join(__dirname, "upstream-literal-flags.json");
   fs.writeFileSync(out, `[\n${rows.map((row) => JSON.stringify(row)).join(",\n")}\n]\n`);
-  fs.rmSync(scratch, { recursive: true });
   process.exit(0);
-}, 3000);
+});
