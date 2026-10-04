@@ -34,11 +34,11 @@ function loadFuncKw(callback) {
         callback(funcKw);
       })
       .catch((error) => {
-        fs.rmSync(scratch, { recursive: true });
+        fs.rmSync(scratch, { recursive: true, force: true });
         throw error;
       });
   } catch (error) {
-    fs.rmSync(scratch, { recursive: true });
+    fs.rmSync(scratch, { recursive: true, force: true });
     throw error;
   }
 }
