@@ -400,7 +400,55 @@ impl<'a> Lowering<'a> {
                         return Err(self.unsupported("buttonToString requires one button", span));
                     };
                     let button = self.lower_value(button)?;
-                    return Ok(self.push_call("inputBindingString", vec![button]));
+                    // The reference expands the `buttonToString` macro
+                    // syntactically and emits the expansion unfolded even
+                    // under `#!optimizeForSize`, so the synthesized nodes
+                    // stay outside the optimization mark.
+                    let optimization = self.optimization_mark.take();
+                    let bindings = self.push_call("inputBindingString", vec![button]);
+                    // The reference maps over the binding String directly,
+                    // which is not canonical (`mappedArray` takes `Array`);
+                    // the expansion needs the whole string as the sole
+                    // element, so it wraps it in `Array` — the canonical
+                    // form of the same formula (approved exception,
+                    // docs/architecture/language-core.md).
+                    let bindings = self.lower_array(vec![bindings]);
+                    let element = self.push_call("currentArrayElement", Vec::new());
+                    let labels = self.push_value(Value::String(
+                        "{0}(0.00, 1.00, 0.00)[{0}](0.00, 1.00, 0.00)[SHIFT](0.00, 1.00, 0.00)[CTRL](0.00, 1.00, 0.00)[ALT]"
+                            .to_string(),
+                    ));
+                    let padded = self.push_call("customString", vec![labels, element]);
+                    let up = self.push_value(Value::Enum {
+                        value_type: "Vector".to_string(),
+                        value: "UP".to_string(),
+                    });
+                    let first_up = self.push_call("firstOf", vec![up]);
+                    let segments = self.push_call("stringSplit", vec![padded, first_up]);
+                    let element = self.push_call("currentArrayElement", Vec::new());
+                    let length_text =
+                        self.push_value(Value::String("\\{0}{0}{0}{0}{0}{0}{0}".to_string()));
+                    let length_text = self.push_call("customString", vec![length_text, element]);
+                    let length = self.push_call("strLen", vec![length_text]);
+                    let seven = self.push_number(7.0);
+                    let remainder = self.push_call("modulo", vec![length, seven]);
+                    let one = self.push_number(1.0);
+                    let is_texture = self.push_call("==", vec![remainder, one]);
+                    let keys = self.push_value(Value::String(
+                        "\u{ec47}0\u{ec47}0LSHIFT0LCONTROL0LALT".to_string(),
+                    ));
+                    let keys = self.push_call("customString", vec![keys]);
+                    let null = self.push_value(Value::Null);
+                    let first_null = self.push_call("firstOf", vec![null]);
+                    let keys = self.push_call("stringSplit", vec![keys, first_null]);
+                    let element = self.push_call("currentArrayElement", Vec::new());
+                    let key_index = self.push_call("indexOfArrayValue", vec![keys, element]);
+                    let key_index = self.push_call("absoluteValue", vec![key_index]);
+                    let index = self.push_call("and", vec![is_texture, key_index]);
+                    let segment = self.push_call("valueInArray", vec![segments, index]);
+                    let result = self.push_call("mappedArray", vec![bindings, segment]);
+                    self.optimization_mark = optimization;
+                    return Ok(result);
                 }
                 if matches!(
                     name.as_str(),
