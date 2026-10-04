@@ -350,3 +350,56 @@ fn a_constant_substitution_optimizes_under_the_use_site_state() {
         artifact.emitted
     );
 }
+
+#[test]
+fn button_to_string_expands_with_the_canonical_array_wrap() {
+    // Approved exception (docs/architecture/language-core.md): the reference
+    // expands the `buttonToString` macro to `Mapped Array(Input Binding
+    // String(b), ...)`, putting the binding String in the `Array` parameter;
+    // the expansion selects the whole string, so the canonical form wraps it
+    // in `Array(...)` — the only structural difference. The expansion stays
+    // unfolded under `#!optimizeForSize`, exactly as the reference emits it.
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source =
+        "globalvar a\nrule \"x\":\n    @Event global\n    a = buttonToString(Button.JUMP)\n";
+    let hir = crate::compile(source, "source.opy", dir).expect("source must resolve");
+    let artifact = Compiler::new()
+        .expect("released workshop contract must load")
+        .compile_hir(&hir)
+        .expect("buttonToString must emit");
+    let expansion = "Mapped Array(Array(Input Binding String(Button(Jump))), Value In Array(String Split(Custom String(\"{0}(0.00, 1.00, 0.00)[{0}](0.00, 1.00, 0.00)[SHIFT](0.00, 1.00, 0.00)[CTRL](0.00, 1.00, 0.00)[ALT]\", Current Array Element), First Of(Up)), And(Compare(Modulo(String Length(Custom String(\"\\\\{0}{0}{0}{0}{0}{0}{0}\", Current Array Element)), 7), ==, 1), Absolute Value(Index Of Array Value(String Split(Custom String(\"\u{ec47}0\u{ec47}0LSHIFT0LCONTROL0LALT\"), First Of(Null)), Current Array Element)))))";
+    assert!(artifact.emitted.contains(expansion), "{}", artifact.emitted);
+    // Without the `Array(` wrap the emission is the reference's own text,
+    // which canonical validation cannot represent.
+    let reference_shape = expansion.replacen(
+        "Array(Input Binding String(Button(Jump)))",
+        "Input Binding String(Button(Jump))",
+        1,
+    );
+    assert!(
+        !artifact.emitted.contains(&reference_shape),
+        "{}",
+        artifact.emitted
+    );
+}
+
+#[test]
+fn button_to_string_keeps_the_expansion_under_size_optimization() {
+    // The reference emits the macro expansion unfolded even under
+    // `#!optimizeForSize`; the synthesized nodes stay outside the
+    // optimization mark.
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = "#!optimizeForSize\nglobalvar a\nrule \"x\":\n    @Event global\n    a = buttonToString(Button.JUMP)\n";
+    let hir = crate::compile(source, "source.opy", dir).expect("source must resolve");
+    let artifact = Compiler::new()
+        .expect("released workshop contract must load")
+        .compile_hir(&hir)
+        .expect("buttonToString must emit");
+    assert!(
+        artifact
+            .emitted
+            .contains("Mapped Array(Array(Input Binding String(Button(Jump)))"),
+        "{}",
+        artifact.emitted
+    );
+}
