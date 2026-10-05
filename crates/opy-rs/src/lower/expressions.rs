@@ -334,26 +334,35 @@ impl Lowerer {
             };
         }
         if let Expr::Name { name, .. } = receiver {
-            // Custom enum member: folds to its numeric constant.
-            if self.enum_visible(name) {
-                let members = self.enums.get(name).expect("enum span and members agree");
-                return match members.iter().position(|candidate| candidate == member) {
-                    Some(index) => HirExpr::Number {
+            // The reference rewrites `AsyncBehavior` to `StartRuleBehavior`
+            // before the enum-domain lookup; keep the same effective name.
+            let enum_name = match name.as_str() {
+                "AsyncBehavior" => "StartRuleBehavior",
+                other => other,
+            };
+            // Custom enum member: folds to its numeric constant. A member
+            // missing from a custom enum falls through to a builtin domain
+            // of the same name, matching the reference's per-member lookup.
+            if self.enum_visible(enum_name) {
+                let members = self
+                    .enums
+                    .get(enum_name)
+                    .expect("enum span and members agree");
+                if let Some(index) = members.iter().position(|candidate| candidate == member) {
+                    return HirExpr::Number {
                         value: index as f64,
                         text: index.to_string(),
                         span: Some(span.into()),
-                    },
-                    None => {
-                        self.error_at_closed_candidates(
-                            "unknown-enum-member",
-                            format!("enum '{name}' has no member '{member}'"),
-                            span,
-                            member,
-                            &crate::matcher::bare_candidates(members.iter().cloned()),
-                        );
-                        HirExpr::Null { span: None }
-                    }
-                };
+                    };
+                }
+                self.error_at_closed_candidates(
+                    "unknown-enum-member",
+                    format!("enum '{name}' has no member '{member}'"),
+                    span,
+                    member,
+                    &crate::matcher::bare_candidates(members.iter().cloned()),
+                );
+                return HirExpr::Null { span: None };
             }
             if name == "Texture" {
                 if let Some(tag) = super::textures::tag(member) {
@@ -409,7 +418,10 @@ impl Lowerer {
                     };
                 }
             }
-            if name == "Color" {
+            if name == "Color" || name == "ColorLiteral" {
+                // `ColorLiteral` carries the four OverPy-only LIGHT_*
+                // constants alongside the catalog colors; upstream lowers
+                // them to an `rgb()` call (issue #466).
                 if let Some((red, green, blue)) = crate::enums::extra_color_member(member) {
                     let number = |value: i32| HirExpr::Number {
                         value: f64::from(value),
@@ -426,17 +438,17 @@ impl Lowerer {
                     };
                 }
             }
-            // Builtin Workshop enum: the domain name is a declared OPY
-            // signature identity (manifest `param.domain`); the member list
-            // is Workshop-owned catalog content, so the member access
-            // resolves as an opaque identity after validating the member
-            // against the canonical Workshop catalog (`crate::enums` holds
-            // the OPY spelling table both this resolution and the lookup
-            // derive from).
+            // Builtin Workshop enum: only the domain names and member
+            // spellings the pinned upstream compiler exposes are accepted —
+            // catalog member ids are not source spellings. `crate::enums`
+            // holds the OPY spelling table both this resolution and the
+            // lookup derive from; the `*Literal` receivers share their base
+            // domain's member surface (issue #466).
             let catalog_domain = crate::enums::catalog_domain(name);
             if (!policy::is_contextual_domain(name) && self.manifest.domain_identity(name))
                 || self.catalog.enum_domain(name).is_some()
                 || self.catalog.enum_domain(catalog_domain).is_some()
+                || crate::enums::literal_domain(name).is_some()
                 || (name == "Clip" && self.manifest.domain_identity(catalog_domain))
             {
                 match crate::enums::canonical_member(name, member, &self.catalog) {
@@ -448,13 +460,37 @@ impl Lowerer {
                         };
                     }
                     None => {
-                        self.error_at_closed_candidates(
-                            "unknown-enum-member",
-                            format!("enum '{name}' has no member '{member}'"),
-                            span,
-                            member,
-                            &crate::matcher::enum_member_candidates(&self.catalog, name),
-                        );
+                        match crate::enums::member_rejection(name, member) {
+                            crate::enums::EnumMemberError::Misspelled(spelling) => {
+                                self.error_at(
+                                    "unknown-enum-member",
+                                    format!(
+                                        "enum '{name}' has no member '{member}'; the OverPy \
+                                         spelling is '{name}.{spelling}'"
+                                    ),
+                                    span,
+                                );
+                            }
+                            crate::enums::EnumMemberError::Unspellable => {
+                                self.error_at(
+                                    "unknown-enum-member",
+                                    format!(
+                                        "enum '{name}' has no member '{member}'; the canonical \
+                                         member has no OverPy spelling"
+                                    ),
+                                    span,
+                                );
+                            }
+                            crate::enums::EnumMemberError::Unknown => {
+                                self.error_at_closed_candidates(
+                                    "unknown-enum-member",
+                                    format!("enum '{name}' has no member '{member}'"),
+                                    span,
+                                    member,
+                                    &crate::matcher::enum_member_candidates(&self.catalog, name),
+                                );
+                            }
+                        }
                         return HirExpr::Null { span: None };
                     }
                 }

@@ -1617,9 +1617,9 @@ mod tests {
 
     #[test]
     fn hud_reeval_string_and_color_alias_resolves_and_ranks() {
-        // `VISIBILITY_STRING_AND_COLOR` is an accepted alternate spelling
-        // of the catalog member `VISIBLE_TO_STRING_AND_COLOR`; it lives in
-        // `MEMBER_SPELLING_ALIASES` so the candidate pool names it too.
+        // `VISIBILITY_STRING_AND_COLOR` is the OverPy spelling of the
+        // catalog member `VISIBLE_TO_STRING_AND_COLOR`; it lives in
+        // `crate::enums` so the candidate pool names it too.
         let hir = crate::compile(
             &action_source("g = HudReeval.VISIBILITY_STRING_AND_COLOR"),
             "test.opy",

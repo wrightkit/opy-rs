@@ -115,6 +115,25 @@ const SETTING_CALLS: [(&str, &str, &str); 16] = [
     ),
 ];
 
+/// `*Literal` member spellings the reference accepts: one member per literal
+/// domain, every `onlyInOverpy` `ColorLiteral` member, and the `Color.`
+/// spelling of the same member. The `ColorLiteral` entries pin the
+/// empty-argument emission the reference writes for members without a
+/// display name (`docs/architecture/language-core.md` `*Literal` exception).
+const LITERAL_MEMBER_CALLS: [(&str, &str); 11] = [
+    ("TeamLiteral.1", "g = TeamLiteral.1"),
+    ("HeroLiteral.ANA", "g = HeroLiteral.ANA"),
+    ("MapLiteral.ROUTE66", "g = MapLiteral.ROUTE66"),
+    ("GamemodeLiteral.ASSAULT", "g = GamemodeLiteral.ASSAULT"),
+    ("ButtonLiteral.JUMP", "g = ButtonLiteral.JUMP"),
+    ("ColorLiteral.WHITE", "g = ColorLiteral.WHITE"),
+    ("ColorLiteral.LIGHT_RED", "g = ColorLiteral.LIGHT_RED"),
+    ("ColorLiteral.LIGHT_PURPLE", "g = ColorLiteral.LIGHT_PURPLE"),
+    ("ColorLiteral.LIGHT_VIOLET", "g = ColorLiteral.LIGHT_VIOLET"),
+    ("ColorLiteral.LIGHT_GRAY", "g = ColorLiteral.LIGHT_GRAY"),
+    ("Color.LIGHT_RED", "g = Color.LIGHT_RED"),
+];
+
 #[derive(Debug, Serialize, Deserialize)]
 struct Probe {
     id: String,
@@ -197,6 +216,12 @@ pub(super) fn generate() -> Result<(), String> {
                 source: source(prefix, &format!("g = {call}")),
             });
         }
+    }
+    for (member, statement) in LITERAL_MEMBER_CALLS {
+        probes.push(Probe {
+            id: format!("default:{member}:base"),
+            source: source("", statement),
+        });
     }
     println!(
         "{}",

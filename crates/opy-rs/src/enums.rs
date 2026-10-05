@@ -11,7 +11,7 @@
 //! that upstream rejects stay query keys (`MatchKind::CatalogId`), never
 //! advertised members or aliases.
 
-use workshop_rs::catalog::{Catalog, Locale};
+use workshop_rs::catalog::{Catalog, EnumDomain, Locale};
 
 /// The display-name locale OPY lookups and member resolution answer in.
 pub(crate) fn en_us() -> Locale {
@@ -68,9 +68,33 @@ pub(crate) fn opy_domain(domain: &str) -> &str {
 
 /// Catalog members with no reference source spelling: `LIJIANG_TOWER_LUNAR`
 /// exists in the catalog while upstream's map list has no spelling for it.
-/// The lowerer still accepts the catalog id (acceptance superset), but
-/// lookup must not advertise it.
+/// Neither the lowerer nor the lookup exposes it to OverPy source (issue
+/// #466).
 const NON_SOURCE_MEMBERS: &[(&str, &str)] = &[("Map", "LIJIANG_TOWER_LUNAR")];
+
+/// The enum-literal receivers the pinned reference exposes: each shares the
+/// base domain's member spellings (`constantValues` builds the literal
+/// tables from the same `*Kw` keyword maps) but emits the member's bare
+/// display name, and does not take the base receiver's member aliases —
+/// upstream rewrites `Hero.MCCREE` for the `Hero` receiver only, so
+/// `HeroLiteral.MCCREE` is a reference rejection (issue #466).
+const LITERAL_DOMAINS: &[(&str, &str)] = &[
+    ("HeroLiteral", "Hero"),
+    ("MapLiteral", "Map"),
+    ("GamemodeLiteral", "Gamemode"),
+    ("TeamLiteral", "Team"),
+    ("ButtonLiteral", "Button"),
+    ("ColorLiteral", "Color"),
+];
+
+/// The base source domain behind a `*Literal` enum receiver, when the
+/// pinned reference exposes one.
+pub(crate) fn literal_domain(source_name: &str) -> Option<&'static str> {
+    LITERAL_DOMAINS
+        .iter()
+        .find(|&&(literal, _)| literal == source_name)
+        .map(|&(_, base)| base)
+}
 
 /// An OPY `Domain.MEMBER` spelling whose canonical catalog member id differs.
 struct MemberRename {
@@ -591,55 +615,141 @@ pub(crate) fn extra_color_member(member: &str) -> Option<(i32, i32, i32)> {
         .map(|(_, red, green, blue)| (*red, *green, *blue))
 }
 
-/// Resolve an OPY `domain.member` access to its canonical Workshop identity,
-/// returning `(catalog domain, canonical member)`. `None` is the
-/// `unknown-enum-member` rejection.
-///
-/// Map member ids are additionally matched with underscores stripped:
-/// `Map.KINGSROW` is accepted alongside `Map.KINGS_ROW` (existing
-/// opy-rs acceptance, tracked separately from the canonical spellings).
+/// Resolve an OPY `domain.member` access to its canonical Workshop
+/// identity, returning `(catalog domain, canonical member)`. `None` is the
+/// `unknown-enum-member` rejection: a renamed member's catalog id
+/// (`Hero.SOLDIER_76`), a member with no source spelling
+/// (`Map.LIJIANG_TOWER_LUNAR`), or a non-member.
 pub(crate) fn canonical_member(
     domain: &str,
     member: &str,
     catalog: &Catalog,
 ) -> Option<(String, String)> {
-    let catalog_domain = catalog_domain(domain);
+    // A `*Literal` receiver shares its base domain's member spellings but
+    // not the receiver-keyed aliases (`HeroLiteral.MCCREE` is a reference
+    // rejection; issue #466).
+    let literal = literal_domain(domain);
+    let source = literal.unwrap_or(domain);
+    let catalog_domain = catalog_domain(source);
     let enum_domain = catalog.enum_domain(catalog_domain)?;
-    let catalog_member = MEMBER_RENAMES
-        .iter()
-        .find(|rename| rename.domain == domain && rename.opy == member)
-        .map(|rename| rename.catalog)
-        .unwrap_or(member);
-    enum_domain
+    resolve_member(
+        source,
+        catalog_domain,
+        enum_domain,
+        member,
+        literal.is_none(),
+        catalog,
+    )
+    .map(|member| (catalog_domain.to_string(), member))
+}
+
+/// The canonical catalog member behind a member spelling accepted on the
+/// `source` domain receiver, or `None` when the pinned reference rejects
+/// the spelling. `Domain.MEMBER` aliases apply only under `allow_aliases`:
+/// literal receivers and the event-filter keyword tables do not expose
+/// them upstream.
+fn resolve_member(
+    source: &str,
+    catalog_domain: &str,
+    enum_domain: &EnumDomain,
+    member: &str,
+    allow_aliases: bool,
+    catalog: &Catalog,
+) -> Option<String> {
+    if let Some(rename) = MEMBER_RENAMES.iter().find(|rename| {
+        rename.domain == source && rename.opy == member && (allow_aliases || !rename.alias)
+    }) {
+        return enum_domain
+            .members
+            .iter()
+            .find(|candidate| candidate.member == rename.catalog)
+            .map(|candidate| candidate.member.clone())
+            // `HudReeval.VISIBILITY_STRING_AND_COLOR` renames onto a catalog
+            // member id that is itself accepted; the rename stays the
+            // member even if a catalog data change drops the underlying id.
+            .or_else(|| {
+                (source == "HudReeval" && member == "VISIBILITY_STRING_AND_COLOR")
+                    .then(|| rename.catalog.to_string())
+            });
+    }
+    if member_rejection(source, member) != EnumMemberError::Unknown {
+        return None;
+    }
+    if let Some(candidate) = enum_domain
         .members
         .iter()
-        .find(|candidate| candidate.member == catalog_member)
-        .map(|candidate| (catalog_domain.to_string(), candidate.member.clone()))
-        .or_else(|| {
-            (domain == "Map").then(|| {
-                let normalized = catalog_member.replace('_', "");
-                enum_domain
-                    .members
-                    .iter()
-                    .find(|candidate| candidate.member.replace('_', "") == normalized)
-                    .map(|candidate| (catalog_domain.to_string(), candidate.member.clone()))
-            })?
-        })
-        // `Team.{n}` spells a member by its display name (`Team 1`).
-        .or_else(|| {
-            if domain == "Team" && member.parse::<u32>().is_ok() {
-                catalog.resolve_enum_member(catalog_domain, &en_us(), &format!("Team {member}"))
-            } else {
-                None
-            }
-        })
-        // `HudReeval.VISIBILITY_STRING_AND_COLOR` renames onto a catalog member
-        // id that is itself accepted; the rename stays the member even if a
-        // catalog data change drops the underlying id.
-        .or_else(|| {
-            (domain == "HudReeval" && member == "VISIBILITY_STRING_AND_COLOR")
-                .then(|| (catalog_domain.to_string(), catalog_member.to_string()))
-        })
+        .find(|candidate| candidate.member == member)
+    {
+        return Some(candidate.member.clone());
+    }
+    // `Team.{n}` spells a member by its display name (`Team 1`).
+    if source == "Team"
+        && member.parse::<u32>().is_ok()
+        && let Some((_, member)) =
+            catalog.resolve_enum_member(catalog_domain, &en_us(), &format!("Team {member}"))
+    {
+        return Some(member);
+    }
+    None
+}
+
+/// A member spelling under the event-filter keyword tables
+/// (`eventPlayerKw` shares `heroKw`): the domain's spelling surface without
+/// the `Domain.MEMBER` aliases, which upstream keys to the `Hero` receiver
+/// only.
+pub(crate) fn filter_member(
+    domain: &str,
+    spelling: &str,
+    catalog: &Catalog,
+) -> Result<String, EnumMemberError> {
+    let catalog_domain = catalog_domain(domain);
+    let Some(enum_domain) = catalog.enum_domain(catalog_domain) else {
+        return Err(EnumMemberError::Unknown);
+    };
+    resolve_member(
+        domain,
+        catalog_domain,
+        enum_domain,
+        spelling,
+        false,
+        catalog,
+    )
+    .ok_or_else(|| member_rejection(domain, spelling))
+}
+
+/// How `Domain.MEMBER` resolution fails against the pinned upstream enum
+/// surface — for the rejection diagnostic.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum EnumMemberError {
+    /// The spelling is not a member of the domain at all.
+    Unknown,
+    /// The spelling is a canonical Workshop member the pinned reference
+    /// does not expose to OverPy source (e.g. `Map.LIJIANG_TOWER_LUNAR`).
+    Unspellable,
+    /// The spelling is the canonical Workshop member id; the pinned
+    /// reference's OverPy spelling is the returned name (e.g.
+    /// `Map.ROUTE_66` must be written `Map.ROUTE66`).
+    Misspelled(&'static str),
+}
+
+/// Why the pinned reference rejects `domain.member` as a member spelling —
+/// call only for a spelling [`resolve_member`] rejected.
+pub(crate) fn member_rejection(domain: &str, member: &str) -> EnumMemberError {
+    let source = literal_domain(domain).unwrap_or(domain);
+    let catalog_domain = catalog_domain(source);
+    if let Some(rename) = MEMBER_RENAMES
+        .iter()
+        .find(|rename| rename.domain == source && !rename.alias && rename.catalog == member)
+    {
+        return EnumMemberError::Misspelled(rename.opy);
+    }
+    if NON_SOURCE_MEMBERS
+        .iter()
+        .any(|&(hidden_domain, hidden)| hidden_domain == catalog_domain && hidden == member)
+    {
+        return EnumMemberError::Unspellable;
+    }
+    EnumMemberError::Unknown
 }
 
 /// One OPY enum member within a source-level domain.
@@ -659,20 +769,25 @@ pub(crate) struct DomainMember {
 /// `None` when the source domain has no catalog domain behind it
 /// (contextual domains such as `ChaseReeval`, or unknown domains).
 pub(crate) fn domain_members(domain: &str, catalog: &Catalog) -> Option<Vec<DomainMember>> {
-    let enum_domain = catalog.enum_domain(catalog_domain(domain))?;
+    // A `*Literal` receiver answers with its base domain's members minus
+    // the receiver-keyed aliases (`HeroLiteral.MCCREE` is a reference
+    // rejection; issue #466).
+    let literal = literal_domain(domain);
+    let source = literal.unwrap_or(domain);
+    let enum_domain = catalog.enum_domain(catalog_domain(source))?;
     let mut members: Vec<DomainMember> = enum_domain
         .members
         .iter()
         .filter(|entry| {
             !NON_SOURCE_MEMBERS
                 .iter()
-                .any(|(d, member)| *d == domain && *member == entry.member)
+                .any(|(d, member)| *d == source && *member == entry.member)
         })
         .map(|entry| {
             let rename = MEMBER_RENAMES
                 .iter()
                 .find(|rename| {
-                    rename.domain == domain && !rename.alias && rename.catalog == entry.member
+                    rename.domain == source && !rename.alias && rename.catalog == entry.member
                 })
                 .map(|rename| rename.opy.to_string());
             let member = rename.unwrap_or_else(|| entry.member.clone());
@@ -680,13 +795,17 @@ pub(crate) fn domain_members(domain: &str, catalog: &Catalog) -> Option<Vec<Doma
             // accepts (`Hero.MCCREE`). A canonical catalog id is never one:
             // `Hero.SOLDIER_76` is a reference rejection, and the catalog id
             // still matches queries through `MatchKind::CatalogId`.
-            let aliases: Vec<String> = MEMBER_RENAMES
-                .iter()
-                .filter(|rename| {
-                    rename.domain == domain && rename.alias && rename.catalog == entry.member
-                })
-                .map(|rename| rename.opy.to_string())
-                .collect();
+            let aliases: Vec<String> = if literal.is_some() {
+                Vec::new()
+            } else {
+                MEMBER_RENAMES
+                    .iter()
+                    .filter(|rename| {
+                        rename.domain == source && rename.alias && rename.catalog == entry.member
+                    })
+                    .map(|rename| rename.opy.to_string())
+                    .collect()
+            };
             DomainMember {
                 member,
                 aliases,
@@ -695,7 +814,7 @@ pub(crate) fn domain_members(domain: &str, catalog: &Catalog) -> Option<Vec<Doma
             }
         })
         .collect();
-    if domain == "Color" {
+    if source == "Color" {
         members.extend(EXTRA_COLOR_MEMBERS.iter().map(|(name, ..)| DomainMember {
             member: (*name).to_string(),
             aliases: Vec::new(),
@@ -704,4 +823,84 @@ pub(crate) fn domain_members(domain: &str, catalog: &Catalog) -> Option<Vec<Doma
         }));
     }
     Some(members)
+}
+
+/// The OPY spelling under which `member` of `domain` is written in
+/// source, for Workshop → OPY reconstruction. `None` when the domain is
+/// not source-exposed or the member has no OverPy spelling.
+pub(crate) fn spelling_of_member<'a>(
+    catalog_domain: &'a str,
+    member: &'a str,
+) -> Option<(&'a str, &'a str)> {
+    if NON_SOURCE_DOMAINS.contains(&catalog_domain)
+        || NON_SOURCE_MEMBERS
+            .iter()
+            .any(|&(hidden_domain, hidden)| hidden_domain == catalog_domain && hidden == member)
+    {
+        return None;
+    }
+    let source = opy_domain(catalog_domain);
+    match MEMBER_RENAMES
+        .iter()
+        .find(|rename| rename.domain == source && !rename.alias && rename.catalog == member)
+    {
+        Some(rename) => Some((source, rename.opy)),
+        None => Some((source, member)),
+    }
+}
+
+/// The upstream `camelCaseToUpperCase` helper
+/// (`str.split(/(?=[A-Z])/).join("_").toUpperCase()`): inserts `_` before
+/// each uppercase ASCII letter, including a leading one, and uppercases
+/// everything (`soldier` → `SOLDIER`, `wreckingBall` → `WRECKING_BALL`,
+/// `route66` → `ROUTE66`).
+pub(crate) fn camel_case_to_upper_case(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    for character in input.chars() {
+        if character.is_ascii_uppercase() {
+            out.push('_');
+        }
+        out.extend(character.to_uppercase());
+    }
+    out
+}
+
+/// The upstream `upperCaseToCamelCase` helper: lowercases the input, then
+/// uppercases the character after each `_`, then lowercases the first
+/// character (`SOLDIER` → `soldier`, `WRECKING_BALL` → `wreckingBall`,
+/// `SOLDIER_76` → `soldier76`).
+pub(crate) fn upper_case_to_camel_case(input: &str) -> String {
+    let lower = input.to_lowercase();
+    let mut out = String::with_capacity(lower.len());
+    let mut chars = lower.chars().peekable();
+    while let Some(character) = chars.next() {
+        if character == '_' {
+            match chars.next() {
+                Some(next) if next.is_ascii_alphanumeric() || next == '_' => {
+                    out.extend(next.to_uppercase())
+                }
+                Some(next) => {
+                    out.push('_');
+                    out.push(next);
+                }
+                None => out.push('_'),
+            }
+        } else {
+            out.push(character);
+        }
+    }
+    if let Some(first) = out.chars().next() {
+        out.replace_range(..first.len_utf8(), &first.to_lowercase().to_string());
+    }
+    out
+}
+
+/// The upstream annotation normalization: a `Team.X` or `Hero.X` argument
+/// on a rule annotation reduces to `upperCaseToCamelCase(X)` before the
+/// keyword lookup, whichever annotation carries it.
+pub(crate) fn event_filter_key(argument: &str) -> String {
+    match argument.split_once('.') {
+        Some(("Team", member)) | Some(("Hero", member)) => upper_case_to_camel_case(member),
+        _ => argument.to_string(),
+    }
 }
