@@ -71,8 +71,11 @@ pub struct CheckOutcome {
 }
 ```
 
-* `Diagnostic { severity, code, message, span }`: structured, stable-coded,
-  source-attributed (see the diagnostics contract below).
+* `Diagnostic { severity, code, message, span, candidates }`: structured,
+  stable-coded, source-attributed (see the diagnostics contract below).
+  `candidates` lists the valid spellings nearest a rejected name (unknown
+  builtins, enum members, settings keys); it is empty when the diagnostic
+  has no spelling pool to draw from.
 * `SourceLocation { file_id, path, start, end }`: a span resolved through
   the file registry to `(file id, path, line/col)`.
 * `PostCompileHook`: the declared `#!postCompileHook` script (root-relative
@@ -113,10 +116,12 @@ queryable through `provenance`.
 
 ## Diagnostics contract
 
-Every diagnostic is `{ severity, code, message, span }`. `code` and `span`
-are the machine contract; `message` and wording are not. Frontend errors use
-`error`; non-fatal project warnings use `warning` and do not make a project
-unclean.
+Every diagnostic is `{ severity, code, message, span, candidates }`. `code`
+and `span` are the machine contract; `message` and wording are not.
+`candidates` carries the bounded, best-first list of valid spellings nearest
+the rejected name when the diagnostic names something resolvable — the same
+ranked list `opy_rs::lookup` returns. Frontend errors use `error`; non-fatal
+project warnings use `warning` and do not make a project unclean.
 
 Span layout: `file_id` indexes the registry, positions are 1-based
 `(line, col)`; the CLI renders them as `path:line:col`.
@@ -157,6 +162,32 @@ semantic-resolution diagnostics follow the compile contract and report the
 first error. `check` and `compile` agree on the verdict; only the parse-stage
 reporting depth differs.
 
+## Vocabulary lookup (`opy_rs::lookup`)
+
+`opy_rs::lookup::lookup(&LookupQuery)` answers name-resolution questions
+against the same manifest, catalog, and settings tables resolution itself
+uses — OPY owns no separate vocabulary copy:
+
+* Queries carry free `text` (an OPY spelling, a canonical Workshop id, a
+  Workshop display name, a guessed name, or a settings path/leaf), a
+  `scope` (functions, enums, settings — all by default), and a `limit`
+  (`0` selects `DEFAULT_LIMIT`).
+* Hits are `Function` (OPY spelling, signature, parameter list with
+  alternate keyword spellings, enum domains/defaults), `EnumDomain`
+  (members the domain accepts), `EnumMember` (OPY spelling → canonical
+  member id, display name, accepted aliases), or `Setting` (effective path,
+  display name, accepted value form including enum members and numeric
+  bounds).
+* `matchedOn` records which spelling form matched: `opySpelling`,
+  `catalogId`, `displayName`, `alias`, `path`, or `near` for a best-effort
+  close match.
+* `LookupOutcome::Unsupported` reports queries outside the served surface
+  (empty text, empty scope, a non-`en-US` display-name locale — localized
+  names stay `workshop-rs`-owned).
+* OPY-specific spellings (`Clip.NONE`, `Map.KINGSROW`, `Hero.SOLDIER`,
+  `Hero.MCCREE`, OPY-only `Color` members) resolve to their canonical
+  members; legacy spellings list as aliases on the canonical hit.
+
 ## CLI (`opy-cli`)
 
 ```
@@ -166,6 +197,10 @@ opy-cli compile <main.opy>                        # Workshop text → stdout
 opy-cli compile --format json <main.opy>           # versioned compile report → stdout
 opy-cli compile --language zh-CN <main.opy>        # catalog-declared locale
 opy-cli inspect <main.opy>                        # resolved model as JSON on stdout
+opy-cli lookup <query>                            # name → OPY spelling/signature/member/setting
+opy-cli lookup <query> --format json              # structured lookup outcome
+opy-cli lookup <query> --scope functions|enums|settings  # repeatable namespace filter
+opy-cli lookup <query> --limit N                  # bound the returned hits
 opy-cli completion bash|zsh|fish|powershell       # static completion from the command model
 opy-cli version                                   # crate + source implementation protocol identity
 ```

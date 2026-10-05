@@ -207,9 +207,15 @@ pub fn check_with_overlay(
             // key that `compile` would reject (#411).
             match crate::compiler::settings::workshop_settings(&hir) {
                 Ok(Some(settings)) => diagnostics.extend(
-                    workshop_rs::settings::check_emission(&settings)
+                    workshop_rs::settings::check_emission_diagnostics(&settings)
                         .into_iter()
-                        .map(|error| Diagnostic::from_workshop_error(error, &files)),
+                        .map(|diagnostic| {
+                            Diagnostic::from_settings_diagnostic(
+                                diagnostic,
+                                hir.settings.as_ref(),
+                                &files,
+                            )
+                        }),
                 ),
                 Ok(None) => {}
                 Err(error) => diagnostics.push(Diagnostic::from_integration_error(error, &files)),
@@ -253,6 +259,11 @@ pub struct Diagnostic {
     pub code: String,
     pub message: String,
     pub span: Option<SourceLocation>,
+    /// The valid spellings nearest the rejected name, when the diagnostic
+    /// knows them (unknown names, enum members, settings keys). Empty when
+    /// the diagnostic carries no spelling candidates.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub candidates: Vec<String>,
 }
 
 impl Diagnostic {
@@ -262,6 +273,7 @@ impl Diagnostic {
             code: warning.code.clone(),
             message: warning.message.clone(),
             span: resolve_record_span(warning.span, files),
+            candidates: Vec::new(),
         }
     }
 
@@ -271,12 +283,18 @@ impl Diagnostic {
             code: error.code,
             message: error.message,
             span: error.span.and_then(|span| resolve_record_span(span, files)),
+            candidates: error.candidates,
         }
     }
 
     /// A canonical Workshop settings error surfaced under the same code the
     /// compile pipeline reports for emission failures.
-    fn from_workshop_error(error: workshop_rs::WorkshopError, files: &[FileRecord]) -> Diagnostic {
+    fn from_settings_diagnostic(
+        diagnostic: workshop_rs::settings::SettingsDiagnostic,
+        hir_settings: Option<&crate::hir::types::Settings>,
+        files: &[FileRecord],
+    ) -> Diagnostic {
+        let error = diagnostic.error;
         let span = crate::compiler::workshop_error_span(&error).map(|span| {
             Span::new(
                 span.file.index() as u32,
@@ -289,6 +307,11 @@ impl Diagnostic {
             code: "workshop-emission".to_string(),
             message: error.to_string(),
             span: span.and_then(|span| resolve_record_span(span, files)),
+            candidates: crate::lookup::settings_member_candidates(
+                hir_settings,
+                &error,
+                diagnostic.suggestion.as_deref(),
+            ),
         }
     }
 
@@ -306,6 +329,7 @@ impl Diagnostic {
                 .span
                 .map(to_frontend_span)
                 .and_then(|span| resolve_record_span(span, files)),
+            candidates: Vec::new(),
         }
     }
 }

@@ -34,8 +34,10 @@ pub(crate) mod compile_time;
 pub(crate) mod compiler;
 pub mod cst;
 pub mod diag;
+pub(crate) mod enums;
 pub mod hir;
 pub mod lexer;
+pub mod lookup;
 pub mod lower;
 mod macro_js;
 pub mod manifest;
@@ -197,6 +199,7 @@ pub fn compile_with_overlay_outcome(
                 .span
                 .as_ref()
                 .map(tooling::SourceLocation::to_span),
+            candidates: diagnostic.candidates.clone(),
         });
     // The directive was parsed, validated, and recorded by preprocessing; the
     // source implementation never executes the hook (real hook execution receives the

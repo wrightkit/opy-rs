@@ -344,10 +344,12 @@ impl Lowerer {
                         span: Some(span.into()),
                     },
                     None => {
-                        self.error_at(
+                        self.error_at_candidates(
                             "unknown-enum-member",
                             format!("enum '{name}' has no member '{member}'"),
                             span,
+                            member,
+                            members.clone(),
                         );
                         HirExpr::Null { span: None }
                     }
@@ -408,13 +410,7 @@ impl Lowerer {
                 }
             }
             if name == "Color" {
-                if let Some((red, green, blue)) = match member {
-                    "LIGHT_RED" => Some((255, 112, 122)),
-                    "LIGHT_PURPLE" => Some((210, 127, 243)),
-                    "LIGHT_VIOLET" => Some((203, 135, 255)),
-                    "LIGHT_GRAY" => Some((168, 168, 168)),
-                    _ => None,
-                } {
+                if let Some((red, green, blue)) = crate::enums::extra_color_member(member) {
                     let number = |value: i32| HirExpr::Number {
                         value: f64::from(value),
                         text: value.to_string(),
@@ -434,87 +430,34 @@ impl Lowerer {
             // signature identity (manifest `param.domain`); the member list
             // is Workshop-owned catalog content, so the member access
             // resolves as an opaque identity after validating the member
-            // against the canonical Workshop catalog.
-            let catalog_domain = match name.as_str() {
-                "Clip" => "Clipping",
-                "AsyncBehavior" => "StartRuleBehavior",
-                _ => name.as_str(),
-            };
+            // against the canonical Workshop catalog (`crate::enums` holds
+            // the OPY spelling table both this resolution and the lookup
+            // derive from).
+            let catalog_domain = crate::enums::catalog_domain(name);
             if (!policy::is_contextual_domain(name) && self.manifest.domain_identity(name))
                 || self.catalog.enum_domain(name).is_some()
                 || self.catalog.enum_domain(catalog_domain).is_some()
                 || (name == "Clip" && self.manifest.domain_identity(catalog_domain))
             {
-                let locale = Locale::new("en-US");
-                let catalog_member = match (name.as_str(), member) {
-                    ("Map", "BLIZZ_WORLD") => "BLIZZARD_WORLD",
-                    ("Map", "BLIZZ_WORLD_WINTER") => "BLIZZARD_WORLD_WINTER",
-                    ("Map", "ROUTE66") => "ROUTE_66",
-                    ("Map", "VOLSKAYA") => "VOLSKAYA_INDUSTRIES",
-                    ("Clip", "NONE") => "DO_NOT_CLIP",
-                    ("Clip", "SURFACES") => "CLIP_AGAINST_SURFACES",
-                    ("SpecVisibility", "ALWAYS") => "VISIBLE_ALWAYS",
-                    ("SpecVisibility", "NEVER") => "VISIBLE_NEVER",
-                    ("EffectReeval", "VISIBILITY_POSITION_AND_RADIUS") => {
-                        "VISIBLE_TO_POSITION_AND_RADIUS"
+                match crate::enums::canonical_member(name, member, &self.catalog) {
+                    Some((domain, canonical_member)) => {
+                        return HirExpr::Enum {
+                            value_type: domain,
+                            value: canonical_member,
+                            span: Some(span.into()),
+                        };
                     }
-                    ("HudReeval", "VISIBILITY_AND_COLOR") => "VISIBLE_TO_AND_COLOR",
-                    ("HudReeval", "VISIBILITY_STRING_AND_COLOR") => "VISIBLE_TO_STRING_AND_COLOR",
-                    ("Hero", "MCCREE") => "CASSIDY",
-                    ("Hero", "HAMMOND") => "WRECKING_BALL",
-                    ("Hero", "SOLDIER") => "SOLDIER_76",
-                    ("Hero", "DOMINA") => "JINYU",
-                    ("Hero", "DMON") => "D_MON",
-                    _ => member,
-                };
-                let canonical_member = self
-                    .catalog
-                    .enum_domain(catalog_domain)
-                    .and_then(|domain| {
-                        domain
-                            .members
-                            .iter()
-                            .find(|candidate| candidate.member == catalog_member)
-                            .map(|candidate| candidate.member.clone())
-                            .or_else(|| {
-                                (name == "Map").then(|| {
-                                    let normalized = catalog_member.replace('_', "");
-                                    domain
-                                        .members
-                                        .iter()
-                                        .find(|candidate| {
-                                            candidate.member.replace('_', "") == normalized
-                                        })
-                                        .map(|candidate| candidate.member.clone())
-                                })?
-                            })
-                    })
-                    .or_else(|| {
-                        if name == "Team" && member.parse::<u32>().is_ok() {
-                            self.catalog
-                                .resolve_enum_member(name, &locale, &format!("{name} {member}"))
-                                .map(|(_, member)| member)
-                        } else {
-                            None
-                        }
-                    })
-                    .or_else(|| {
-                        (name == "HudReeval" && member == "VISIBILITY_STRING_AND_COLOR")
-                            .then_some(catalog_member.to_string())
-                    });
-                let Some(canonical_member) = canonical_member else {
-                    self.error_at(
-                        "unknown-enum-member",
-                        format!("enum '{name}' has no member '{member}'"),
-                        span,
-                    );
-                    return HirExpr::Null { span: None };
-                };
-                return HirExpr::Enum {
-                    value_type: catalog_domain.to_string(),
-                    value: canonical_member,
-                    span: Some(span.into()),
-                };
+                    None => {
+                        self.error_at_candidates(
+                            "unknown-enum-member",
+                            format!("enum '{name}' has no member '{member}'"),
+                            span,
+                            member,
+                            crate::enums::member_spellings(name, &self.catalog),
+                        );
+                        return HirExpr::Null { span: None };
+                    }
+                }
             }
             // Context-player member: `x`/`y`/`z` are reserved member names
             // that resolve unconditionally to the vector-component call; any
@@ -538,10 +481,14 @@ impl Lowerer {
                     };
                 }
                 if !default_var_index(member).is_some() && !self.player_visible(member) {
-                    self.error_at(
+                    let mut pool = crate::lookup::member_function_spellings(self.manifest);
+                    pool.extend(["x", "y", "z"].map(String::from));
+                    self.error_at_candidates(
                         "unknown-member",
                         format!("unknown member '{member}'"),
                         member_span,
+                        member,
+                        pool,
                     );
                     return HirExpr::Null { span: None };
                 }
@@ -695,7 +642,12 @@ impl Lowerer {
                             ("unknown-value", format!("unknown value '{name}'"))
                         }
                     };
-                    self.error_at(code, message, span);
+                    let pool = match code {
+                        "unknown-action" => crate::lookup::function_spellings(self.manifest, true),
+                        "unknown-value" => crate::lookup::function_spellings(self.manifest, false),
+                        _ => Vec::new(),
+                    };
+                    self.error_at_candidates(code, message, span, name, pool);
                 }
             }
         }
@@ -1341,7 +1293,13 @@ impl Lowerer {
                 (entry.id.clone(), bound)
             }
             None => {
-                self.error_at("unknown-member", format!("unknown member '{name}'"), span);
+                self.error_at_candidates(
+                    "unknown-member",
+                    format!("unknown member '{name}'"),
+                    span,
+                    name,
+                    crate::lookup::member_function_spellings(self.manifest),
+                );
                 (name.to_string(), self.lower_arg_values(args, macro_params))
             }
         };

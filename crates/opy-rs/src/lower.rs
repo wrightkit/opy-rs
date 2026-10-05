@@ -38,7 +38,7 @@ use crate::hir::types::{
 use crate::cst::{self, CallArg, Decl, Expr, RuleEntry as CstRuleEntry, Stmt, TopLevel};
 use crate::diag::{OpyError, OpyResult, Span};
 use crate::manifest::{Function, FunctionKind, Manifest, Param, ParamDefault};
-use workshop_rs::catalog::{Catalog, Locale};
+use workshop_rs::catalog::Catalog;
 
 /// The protocol envelope this frontend produces.
 const PROTOCOL_NAME: &str = "wright/opy-hir";
@@ -834,6 +834,25 @@ fn lower_settings_node(node: &cst::SettingsNode) -> HirSettingsNode {
 impl Lowerer {
     fn error_at(&mut self, code: &str, message: String, span: Span) {
         self.errors.push(OpyError::at(code, message, span));
+    }
+
+    /// An error that carries the valid spellings nearest `rejected`: the
+    /// message gains a `did you mean` suffix and the diagnostic records the
+    /// bounded, best-first candidate list (`crate::lookup` ranks both from
+    /// the same data the resolution used).
+    fn error_at_candidates(
+        &mut self,
+        code: &str,
+        message: String,
+        span: Span,
+        rejected: &str,
+        candidates: Vec<String>,
+    ) {
+        let message = crate::lookup::did_you_mean(message, rejected, &candidates);
+        self.errors.push(
+            OpyError::at(code, message, span)
+                .with_candidates(crate::lookup::rank(rejected, &candidates)),
+        );
     }
 }
 

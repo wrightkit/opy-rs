@@ -14,12 +14,15 @@ use std::process::ExitCode;
 
 use clap::{CommandFactory, Parser, error::ErrorKind};
 use clap_complete::{generate, shells};
+use opy_rs::lookup::{LookupHit, LookupOutcome, LookupQuery, LookupScope, lookup};
 use opy_rs::tooling::{CheckOutcome, Diagnostic as OpyDiagnostic, SourceLocation, check};
 use opy_rs::{CompileDiagnostic, CompileStatus, Compiler};
 use opy_rs::{FilesystemProject, LANGUAGE_NAME, LANGUAGE_VERSION};
 use serde::Serialize;
 
-use crate::cli::{CheckArgs, Cli, Command, CompileArgs, FileArgs, OutputFormatArg};
+use crate::cli::{
+    CheckArgs, Cli, Command, CompileArgs, FileArgs, LookupArgs, LookupScopeArg, OutputFormatArg,
+};
 use crate::present::{CheckView, DiagnosticView, PositionView, Presentation, SpanView};
 
 fn main() -> ExitCode {
@@ -52,6 +55,7 @@ fn main() -> ExitCode {
         Some(Command::Check(args)) => cmd_check(&args, presentation),
         Some(Command::Compile(args)) => cmd_compile(&args, presentation),
         Some(Command::Inspect(args)) => cmd_inspect(&args, presentation),
+        Some(Command::Lookup(args)) => cmd_lookup(&args),
         Some(Command::Completion(args)) => cmd_completion(args.shell),
         Some(Command::Help) => {
             print!("{}", Cli::command().render_help());
@@ -176,6 +180,115 @@ fn cmd_inspect(args: &FileArgs, presentation: Presentation) -> ExitCode {
     match print_json(model) {
         Ok(()) => ExitCode::SUCCESS,
         Err(code) => code,
+    }
+}
+
+fn cmd_lookup(args: &LookupArgs) -> ExitCode {
+    let scope = if args.scope.is_empty() {
+        LookupScope::ALL
+    } else {
+        args.scope.iter().fold(
+            LookupScope {
+                functions: false,
+                enums: false,
+                settings: false,
+            },
+            |mut scope, arg| {
+                match arg {
+                    LookupScopeArg::Functions => scope.functions = true,
+                    LookupScopeArg::Enums => scope.enums = true,
+                    LookupScopeArg::Settings => scope.settings = true,
+                }
+                scope
+            },
+        )
+    };
+    let outcome = lookup(&LookupQuery {
+        text: args.query.clone(),
+        scope,
+        locale: None,
+        limit: args.limit,
+    });
+    let code = match &outcome {
+        LookupOutcome::Matched { .. } => ExitCode::SUCCESS,
+        LookupOutcome::Unsupported { .. } => ExitCode::from(1),
+    };
+    if args.format == OutputFormatArg::Json {
+        return match print_json(&outcome) {
+            Ok(()) => code,
+            Err(code) => code,
+        };
+    }
+    match &outcome {
+        LookupOutcome::Matched { results, .. } => {
+            if results.is_empty() {
+                println!("no matches");
+            }
+            for hit in results {
+                println!("{}", lookup_hit_line(hit));
+            }
+        }
+        LookupOutcome::Unsupported { reason, .. } => {
+            eprintln!("opy-cli: lookup cannot be answered: {reason}");
+        }
+    }
+    code
+}
+
+/// One human-readable line per lookup hit; JSON output is the machine
+/// contract, so the text form stays terse.
+fn lookup_hit_line(hit: &LookupHit) -> String {
+    match hit {
+        LookupHit::Function {
+            spelling,
+            function_kind,
+            signature,
+            matched_on,
+            ..
+        } => format!(
+            "{} {spelling}  {signature}  [{}]",
+            function_kind.as_str(),
+            matched_on.as_str()
+        ),
+        LookupHit::EnumDomain {
+            domain,
+            members,
+            matched_on,
+        } => format!(
+            "enumDomain {domain}  {}  [{}]",
+            members
+                .as_ref()
+                .map(|members| format!("{} members", members.len()))
+                .unwrap_or_else(|| "contextual".to_string()),
+            matched_on.as_str()
+        ),
+        LookupHit::EnumMember {
+            spelling,
+            display_name,
+            matched_on,
+            ..
+        } => format!(
+            "enumMember {spelling}{}  [{}]",
+            display_name
+                .as_deref()
+                .map(|name| format!("  \"{name}\""))
+                .unwrap_or_default(),
+            matched_on.as_str()
+        ),
+        LookupHit::Setting {
+            path,
+            display_name,
+            value,
+            matched_on,
+        } => format!(
+            "setting {path}  {}{}  [{}]",
+            value.kind.as_str(),
+            display_name
+                .as_deref()
+                .map(|name| format!("  \"{name}\""))
+                .unwrap_or_default(),
+            matched_on.as_str()
+        ),
     }
 }
 

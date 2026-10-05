@@ -17,6 +17,10 @@ pub struct OpyError {
     pub message: String,
     /// The offending source region, when known.
     pub span: Option<Span>,
+    /// The valid spellings nearest the rejected input, when the error names
+    /// something resolvable (an unknown builtin, enum member, or settings
+    /// key). Empty when the error has no candidate set.
+    pub candidates: Vec<String>,
 }
 
 /// A source span in the frontend's file registry.
@@ -67,7 +71,14 @@ impl OpyError {
             code: code.into(),
             message: message.into(),
             span: None,
+            candidates: Vec::new(),
         }
+    }
+
+    /// Attach the candidate spellings nearest the rejected input.
+    pub fn with_candidates(mut self, candidates: Vec<String>) -> OpyError {
+        self.candidates = candidates;
+        self
     }
 
     /// An error at a source position.
@@ -76,6 +87,7 @@ impl OpyError {
             code: code.into(),
             message: message.into(),
             span: Some(span),
+            candidates: Vec::new(),
         }
     }
 }
