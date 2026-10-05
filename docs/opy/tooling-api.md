@@ -148,7 +148,7 @@ Span layout: `file_id` indexes the registry, positions are 1-based
 | `keyword-unsupported` / `unknown-keyword` / `duplicate-argument` / `keyword-required` / `positional-after-keyword` | resolve | Keyword binding |
 | `invalid-iterable` / `invalid-call-context` | resolve | Position/context validation |
 | `value-in-action-position` / `action-in-value-position` | resolve | Action/value identity |
-| `invalid-receiver` | resolve | Receiver category validation |
+| `invalid-receiver` | resolve | Receiver requirement validation |
 | `vect-arity` | resolve | `vect` arity |
 | `workshop-emission` | settings | Settings key outside the canonical emission table, or a member the emitter cannot emit |
 

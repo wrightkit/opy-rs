@@ -11,9 +11,13 @@ The manifest under `crates/opy-rs/src/manifest/` carries declarative compatibili
 - identities, names, aliases, signatures (including parameter defaults, optionality,
   binding spellings, and enum-domain links), catalog links, and source attribution.
 
-Typed feature-local lowering policy owns behavioral contextual dispatch and call-context
-restrictions: currently `chase` selector dispatch and `range`'s for-iterable-only rule
-live in `crates/opy-rs/src/lower/policy.rs`.
+Typed feature-local lowering policy owns behavioral contextual dispatch, call-context
+restrictions, and special argument/receiver requirements: currently `chase` selector
+dispatch, `range`'s for-iterable-only rule, the chase family's variable first argument,
+and the `.append`/`.remove`/`.format` receiver requirements live in
+`crates/opy-rs/src/lower/policy.rs`. The manifest's `param.variable` flag and member
+`receiver` category remain descriptive signature metadata; they do not select that
+enforcement.
 
 Declarative inventories remain data-driven. Observable source-language behavior and
 invariants belong in typed Rust close to the owning semantic feature rather than a

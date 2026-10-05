@@ -6,6 +6,7 @@ use workshop_rs::program::{Action, Event, EventTarget, EventTeam, ModifyOp, Rule
 use workshop_rs::source::Span;
 
 use crate::lexer::is_identifier;
+use crate::lower::policy;
 use crate::manifest::{Function, FunctionKind, Manifest};
 
 /// A structured reconstruction diagnostic naming one non-representable
@@ -1477,8 +1478,11 @@ impl<'a> Emitter<'a> {
     }
 
     /// Validate a provided argument against its manifest parameter: enum
-    /// domains are enforced (like the frontend) and `variable`-required
-    /// parameters must be variable references.
+    /// domains are enforced (like the frontend) and variable-required
+    /// parameters must be variable references. The variable requirement is
+    /// typed policy (`policy::variable_args`); the manifest's
+    /// `param.variable` flag records the same fact descriptively and does
+    /// not select this check (issue #458).
     fn check_param_argument(
         &mut self,
         entry: &Function,
@@ -1486,10 +1490,11 @@ impl<'a> Emitter<'a> {
         arg: &Value,
         span: Option<Span>,
     ) {
-        let Some(param) = entry.params.get(index) else {
-            return;
-        };
-        if let Some(domain) = &param.domain {
+        if let Some(domain) = entry
+            .params
+            .get(index)
+            .and_then(|param| param.domain.as_ref())
+        {
             match arg {
                 Value::Enum { value_type, value } if value_type == domain => {
                     if !self.enum_member_in_domain(domain, value) {
@@ -1531,7 +1536,7 @@ impl<'a> Emitter<'a> {
                 }
             }
         }
-        if param.variable {
+        if policy::variable_args(&entry.id).contains(&index) {
             let is_variable =
                 matches!(arg, Value::GlobalVariable(_) | Value::PlayerVariable { .. });
             if !is_variable {
