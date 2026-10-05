@@ -37,7 +37,7 @@ use crate::hir::types::{
 
 use crate::cst::{self, CallArg, Decl, Expr, RuleEntry as CstRuleEntry, Stmt, TopLevel};
 use crate::diag::{OpyError, OpyResult, Span};
-use crate::manifest::{Function, FunctionKind, Manifest, Param, ParamDefault, ReceiverCategory};
+use crate::manifest::{Function, FunctionKind, Manifest, Param, ParamDefault};
 use workshop_rs::catalog::{Catalog, Locale};
 
 /// The protocol envelope this frontend produces.
@@ -152,6 +152,17 @@ pub fn lower_with_preprocessing(
             ));
         }
     };
+    lower_program(program, files, defines, preprocessing, manifest, catalog)
+}
+
+fn lower_program(
+    program: &cst::Program,
+    files: Vec<SourceFile>,
+    defines: Vec<Define>,
+    preprocessing: &PreprocessingState,
+    manifest: &'static Manifest,
+    catalog: Catalog,
+) -> OpyResult<HirProgram> {
     let mut lowerer = Lowerer::new(manifest, catalog);
     lowerer.setup_tags = preprocessing
         .directives
@@ -1788,6 +1799,20 @@ mod tests {
             4,
         );
         assert_eq!(error.code, "invalid-argument");
+
+        let error = compile_error(
+            &action_source("chaseAtRate(10, 0, 2, ChaseRateReeval.NONE)"),
+            4,
+        );
+        assert_eq!(error.code, "invalid-argument");
+
+        // A variable first argument binds (positive case).
+        crate::compile(
+            &action_source("chaseAtRate(g, 0, 2, ChaseRateReeval.NONE)"),
+            "test.opy",
+            std::path::Path::new(""),
+        )
+        .expect("a variable first argument compiles");
     }
 
     #[test]
@@ -2024,8 +2049,9 @@ mod tests {
 
     #[test]
     fn invalid_receiver_categories_are_rejected() {
-        // `.append` requires an assignable receiver; `.format` a string
-        // literal (both reference-enforced categories).
+        // `.append`/`.remove` require an assignable receiver; `.format` a
+        // string literal — the reference-enforced requirements, now typed
+        // member policy (`lower::policy`, issue #458).
         let error = compile_error(&action_source("3.append(1)"), 4);
         assert_eq!(error.code, "invalid-receiver");
         assert!(error.message.contains("append"));
@@ -2034,9 +2060,127 @@ mod tests {
         assert_eq!(error.code, "invalid-receiver");
         assert!(error.message.contains("append"));
 
+        let error = compile_error(&action_source("3.remove(1)"), 4);
+        assert_eq!(error.code, "invalid-receiver");
+        assert!(error.message.contains("remove"));
+
         let error = compile_error(&action_source("print(3.format(\"{}\"))"), 4);
         assert_eq!(error.code, "invalid-receiver");
         assert!(error.message.contains("format"));
+
+        // Positive cases: assignable receivers and string literals compile.
+        crate::compile(
+            &action_source("g.append(1)\n    g.remove(1)"),
+            "test.opy",
+            std::path::Path::new(""),
+        )
+        .expect("assignable receivers compile");
+        crate::compile(
+            &action_source("g = \"{}\".format(1)"),
+            "test.opy",
+            std::path::Path::new(""),
+        )
+        .expect("a string-literal receiver compiles");
+    }
+
+    /// Lower `source` against an explicitly supplied manifest. The builtin
+    /// manifest is immutable, so tests that mutate descriptive metadata use
+    /// this entry instead of [`crate::compile`].
+    fn lower_with_manifest(source: &str, manifest: &'static Manifest) -> OpyResult<HirProgram> {
+        let tokens = lex(LexInput {
+            file_id: 0,
+            text: source,
+        })
+        .expect("lexes");
+        let output = parse(&tokens);
+        assert!(
+            output.errors.is_empty(),
+            "unexpected parse errors: {:?}",
+            output.errors
+        );
+        let program = output.program.expect("parse produces a program");
+        lower_program(
+            &program,
+            vec![],
+            vec![],
+            &PreprocessingState::default(),
+            manifest,
+            Catalog::builtin().expect("the builtin catalog loads"),
+        )
+    }
+
+    #[test]
+    fn special_enforcement_is_typed_policy_not_manifest_metadata() {
+        // #458: `param.variable` and `Function::receiver` are descriptive
+        // signature metadata. Mutating them alone must not change
+        // acceptance/rejection — enforcement is typed `lower::policy`.
+        let mut file: serde_json::Value =
+            serde_json::from_str(crate::manifest::MANIFEST_DATA).unwrap();
+        for function in file["functions"].as_array_mut().unwrap() {
+            match function["id"].as_str().unwrap() {
+                // Strip the chase family's variable-argument markers.
+                "chase" | "chaseAtRate" | "chaseOverTime" => {
+                    for param in function["params"].as_array_mut().unwrap() {
+                        param.as_object_mut().unwrap().remove("variable");
+                    }
+                }
+                // Reclassify the enforced receivers to an unenforced
+                // category.
+                "append" | "remove" | "format" => {
+                    function["receiver"] = "Any".into();
+                }
+                // Mark unrelated signatures with the metadata: if the flag
+                // still selected behavior, these calls would start
+                // rejecting.
+                "wait" => function["params"][0]["variable"] = true.into(),
+                "getPosition" => function["receiver"] = "Variable".into(),
+                _ => {}
+            }
+        }
+        let manifest: &'static Manifest = Box::leak(Box::new(
+            Manifest::load(
+                &serde_json::to_string(&file).unwrap(),
+                crate::manifest::PROBES_DATA,
+            )
+            .expect("mutated metadata still validates"),
+        ));
+
+        // The chase family still rejects a non-variable first argument…
+        for call in [
+            "chase(10, 10, rate=2, ChaseReeval.NONE)",
+            "chaseAtRate(10, 0, 2, ChaseRateReeval.NONE)",
+            "chaseOverTime(10, 0, 30, ChaseTimeReeval.NONE)",
+        ] {
+            let error = lower_with_manifest(&action_source(call), manifest)
+                .expect_err("the chase family still requires a variable");
+            assert_eq!(error.code, "invalid-argument", "{call}");
+        }
+        // …and still accepts a variable.
+        lower_with_manifest(&action_source("chaseOverTime(g, 10, 3)"), manifest)
+            .expect("a variable first argument compiles");
+
+        // `.append`/`.remove` still reject a non-assignable receiver and
+        // `.format` a non-string receiver.
+        for call in ["3.append(1)", "3.remove(1)", "print(3.format(\"{}\"))"] {
+            let error = lower_with_manifest(&action_source(call), manifest)
+                .expect_err("the enforced receiver requirement still rejects");
+            assert_eq!(error.code, "invalid-receiver", "{call}");
+        }
+        lower_with_manifest(&action_source("g.append(1)"), manifest)
+            .expect("an assignable receiver compiles");
+        lower_with_manifest(&action_source("g = \"{}\".format(1)"), manifest)
+            .expect("a string-literal receiver compiles");
+
+        // Conversely, the mutated markers create no new enforcement:
+        // `wait`'s first argument and `getPosition`'s receiver are accepted.
+        lower_with_manifest(&action_source("wait(1)"), manifest)
+            .expect("`wait`'s first argument is not variable-required");
+        lower_with_manifest(
+            "globalvar g\nrule \"r\":\n    @Event eachPlayer\n    \
+             g = eventPlayer.getPosition()\n",
+            manifest,
+        )
+        .expect("`getPosition`'s receiver is not assignable-enforced");
     }
 
     #[test]

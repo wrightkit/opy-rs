@@ -109,13 +109,15 @@ impl FunctionKind {
     }
 }
 
-/// The declared receiver category of a member function.
+/// The declared receiver category of a member function — descriptive
+/// signature metadata recording what the reference expects (`Player` for
+/// player-oriented members, `Variable`/`String`/`Vector`/`Any` for the
+/// others).
 ///
-/// `Player` is the metadata category for player-oriented members (the pinned
-/// reference does not type-check those receivers, so the frontend does not
-/// reject them); `Variable` and `String` are enforced where the reference
-/// semantics are clear (`.append` requires an assignable receiver, `.format`
-/// requires a string literal).
+/// This field does not select enforcement: the receiver requirements the
+/// reference actually rejects on (`.append`/`.remove` assignable, `.format`
+/// string literal) are typed member policy
+/// (`crate::lower::policy::member_receiver_requirement`, issue #458).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub enum ReceiverCategory {
@@ -190,7 +192,9 @@ pub struct Param {
     pub alternate_names: Vec<String>,
     /// Whether the argument must be a variable reference (a global variable
     /// or a player variable); the chase family requires a variable first
-    /// argument to select the global/player emission form.
+    /// argument to select the global/player emission form. Descriptive
+    /// signature metadata — enforcement is typed policy
+    /// (`crate::lower::policy::variable_args`, issue #458), not this flag.
     #[serde(default)]
     pub variable: bool,
 }
@@ -201,7 +205,8 @@ pub struct Param {
 pub struct Function {
     pub id: String,
     pub kind: FunctionKind,
-    /// The receiver category of member functions.
+    /// The declared receiver category of member functions (descriptive
+    /// metadata; see [`ReceiverCategory`]).
     #[serde(default)]
     pub receiver: Option<ReceiverCategory>,
     #[serde(default)]

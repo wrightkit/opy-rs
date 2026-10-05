@@ -879,7 +879,8 @@ impl Lowerer {
     /// source-located: `unknown-keyword`, `duplicate-argument`,
     /// `keyword-required`, `positional-after-keyword`, `missing-argument`,
     /// `keyword-unsupported`, `invalid-arity` (overflow), and
-    /// `invalid-argument` (variable-required parameters).
+    /// `invalid-argument` (the chase family's variable-argument requirement,
+    /// typed policy at `policy::variable_args`).
     ///
     /// The returned `selector` is the keyword spelling used to bind the
     /// entry's contextual-domain selector parameter (the `chase` form's
@@ -1096,11 +1097,11 @@ impl Lowerer {
         }
 
         // Variable-required parameters (the chase family's first argument)
-        // must resolve to a variable reference.
-        for (index, param) in entry.params.iter().enumerate() {
-            if !param.variable {
-                continue;
-            }
+        // must resolve to a variable reference. The requirement is typed
+        // policy keyed on the function id; the manifest's `param.variable`
+        // flag records the same fact descriptively and does not select this
+        // check (issue #458).
+        for &index in policy::variable_args(&entry.id) {
             if let Some(Some(value)) = slots.get(index) {
                 if !matches!(value, HirExpr::GlobalVar { .. } | HirExpr::PlayerVar { .. }) {
                     self.error_at(
@@ -1301,8 +1302,7 @@ impl Lowerer {
             }
         }
         // `.format` on a string literal is the format special form; it is
-        // also a declared member value (receiver category `String`), so
-        // position misuse diagnoses here.
+        // also a declared member value, so position misuse diagnoses here.
         if let Expr::String { value, .. } = receiver {
             if name == "format" {
                 if args.iter().any(|arg| arg.keyword.is_some()) {
@@ -1330,14 +1330,13 @@ impl Lowerer {
                 };
             }
         }
-        // Member calls resolve through the manifest (receiver category,
-        // explicit-argument signatures, keyword binding).
+        // Member calls resolve through the manifest (identity,
+        // explicit-argument signatures, keyword binding); enforced receiver
+        // requirements are typed member policy, not manifest metadata.
         let (member_name, lowered) = match self.manifest.resolve_member(name) {
             Some(entry) => {
                 self.check_call_position(name, entry, position, span);
-                if let Some(category) = entry.receiver {
-                    self.check_receiver(receiver, category, entry, span);
-                }
+                self.check_receiver(receiver, entry, span);
                 let (bound, _) = self.bind_args(entry, args, macro_params);
                 (entry.id.clone(), bound)
             }
@@ -1433,24 +1432,23 @@ impl Lowerer {
         }
     }
 
-    /// Check a member call's receiver against its declared category. Only
-    /// the reference-enforced categories reject: `.append` requires an
-    /// assignable receiver and `.format` a string literal; player-oriented
-    /// members accept any receiver (the pinned reference does not type-check
-    /// them).
-    pub(super) fn check_receiver(
-        &mut self,
-        receiver: &Expr,
-        category: ReceiverCategory,
-        entry: &Function,
-        span: Span,
-    ) {
-        let mismatch = match category {
-            ReceiverCategory::String => {
+    /// Check a member call's receiver against the requirement the member
+    /// enforces (`policy::member_receiver_requirement`): `.append` and
+    /// `.remove` require an assignable receiver, `.format` a string literal;
+    /// all other members accept any receiver (the pinned reference does not
+    /// type-check player-oriented receivers). The requirement is typed
+    /// policy keyed on the member id — the manifest's `Function::receiver`
+    /// category is descriptive signature metadata and does not select this
+    /// check (issue #458).
+    pub(super) fn check_receiver(&mut self, receiver: &Expr, entry: &Function, span: Span) {
+        let Some(requirement) = policy::member_receiver_requirement(&entry.id) else {
+            return;
+        };
+        let mismatch = match requirement {
+            policy::ReceiverRequirement::StringLiteral => {
                 !matches!(receiver, Expr::String { .. } | Expr::StringModifier { .. })
             }
-            ReceiverCategory::Variable => !assignable_receiver(receiver),
-            ReceiverCategory::Player | ReceiverCategory::Vector | ReceiverCategory::Any => false,
+            policy::ReceiverRequirement::Assignable => !assignable_receiver(receiver),
         };
         if mismatch {
             self.error_at(
@@ -1458,7 +1456,7 @@ impl Lowerer {
                 format!(
                     "member '{}' requires {} as its receiver",
                     entry.id,
-                    category.describe()
+                    requirement.describe()
                 ),
                 span,
             );
