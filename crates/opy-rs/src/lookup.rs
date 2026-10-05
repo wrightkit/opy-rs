@@ -1464,18 +1464,40 @@ mod tests {
             );
         }
         // Special-call spellings must be exactly the names `lower_call`
-        // resolves by name: `SPECIAL_VALUE_CALLS` is the shared table the
-        // resolver consults, so a dropped or renamed special form makes the
-        // reported set disagree and fails here.
+        // dispatches on: `SPECIAL_VALUE_CALLS` is the descriptor the resolver
+        // consults, so a dropped or renamed special form makes the reported
+        // set disagree and fails here.
         let reported: Vec<&str> = SPECIAL_FUNCTIONS
             .iter()
             .map(|special| special.name)
             .collect();
+        let dispatched: Vec<&str> = crate::lower::special_forms::SPECIAL_VALUE_CALLS
+            .iter()
+            .map(|(name, _)| *name)
+            .collect();
         assert_eq!(
-            reported.as_slice(),
-            crate::lower::special_forms::SPECIAL_VALUE_CALLS,
-            "reported special-call spellings must be the lowerer-recognized set"
+            reported, dispatched,
+            "reported special-call spellings must be the dispatched set"
         );
+        // Each reported special must resolve through the real lowerer: a
+        // call in value position is `unknown-value` when the dispatch table
+        // no longer recognizes the name.
+        for special in SPECIAL_FUNCTIONS {
+            let source = format!(
+                "globalvar x\nrule \"r\":\n    @Event global\n    x = {}()\n",
+                special.name
+            );
+            let diagnostics =
+                crate::tooling::check(&source, "main.opy", std::path::Path::new("")).diagnostics;
+            assert!(
+                !diagnostics.iter().any(|diagnostic| matches!(
+                    diagnostic.code.as_str(),
+                    "unknown-value" | "unknown-action" | "invalid-iterable"
+                )),
+                "'{}' is lookup-reported but the lowerer rejects it: {diagnostics:?}",
+                special.name
+            );
+        }
     }
 
     /// Every member alias the lookup reports must be an OPY spelling the
@@ -1485,6 +1507,7 @@ mod tests {
     /// `mccree`/`hammond` (overpy 9.7.10 rewrites them in `Hero` member
     /// access); `opy-compat probe-generate` emits a `:alias` probe per
     /// reported alias so the same set is checked against the oracle.
+    /// the same set is checked against the oracle.
     #[test]
     fn reported_member_aliases_are_reference_spellings() {
         let catalog = Catalog::builtin().expect("bundled catalog");
