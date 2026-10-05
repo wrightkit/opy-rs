@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.70](https://github.com/wrightkit/opy-rs/compare/opy-provider-v0.1.69...opy-provider-v0.1.70) - 2026-10-05
+
+### Fixed
+
+- *(provider)* preserve effective source context in LPP diagnostics ([#456](https://github.com/wrightkit/opy-rs/pull/456))
+
 ## [0.1.69](https://github.com/wrightkit/opy-rs/compare/opy-provider-v0.1.68...opy-provider-v0.1.69) - 2026-10-04
 
 ### Other
