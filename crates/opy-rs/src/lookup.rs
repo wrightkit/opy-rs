@@ -1,9 +1,9 @@
 //! OPY vocabulary lookup: display names and guesses resolve to OPY spellings,
-//! signatures, enum members, and settings keys through the same manifest,
+//! parameter facts, enum members, and settings keys through the same manifest,
 //! catalog, and settings tables `check`/`compile` resolve against.
 //!
 //! This module is the answer surface for agents; it owns no data of its own.
-//! Callable spellings and signatures come from the compatibility manifest,
+//! Callable spellings and parameter facts come from the compatibility manifest,
 //! enum members and display names come from the `workshop-rs` catalog, and
 //! settings vocabulary comes from the `workshop-rs` emission table (which it
 //! expands to every effective path, including inherited per-mode keys).
@@ -177,7 +177,7 @@ impl LookupQuery {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LookupScope {
-    /// Callable spellings and signatures.
+    /// Callable spellings and parameter facts.
     pub functions: bool,
     /// Enum domains and members.
     pub enums: bool,
@@ -530,352 +530,6 @@ pub fn lookup_str(text: &str) -> LookupOutcome {
 }
 
 // ---------------------------------------------------------------------------
-// Scoring — shared by lookup hits and diagnostic candidate lists
-// ---------------------------------------------------------------------------
-
-/// Fold a spelling or phrase to a comparable form: lowercase letters and
-/// digits only; `_`, `.`, `:`, `%`, and whitespace are dropped.
-fn fold(text: &str) -> String {
-    text.chars()
-        .filter(|c| c.is_alphanumeric())
-        .flat_map(|c| c.to_lowercase())
-        .collect()
-}
-
-/// Score a query against a valid spelling; lower is closer, `None` is
-/// unrelated. Exact folded equality beats prefix beats substring beats
-/// edit distance.
-fn score(query: &str, spelling: &str) -> Option<u32> {
-    let query = fold(query);
-    let spelling = fold(spelling);
-    if query.is_empty() || spelling.is_empty() {
-        return None;
-    }
-    if query == spelling {
-        return Some(0);
-    }
-    if spelling.starts_with(&query) {
-        return Some((spelling.len() - query.len()) as u32 + 2);
-    }
-    if query.starts_with(&spelling) {
-        return Some((query.len() - spelling.len()) as u32 + 4);
-    }
-    // Substring matching on very short spellings is pure noise (a one-letter
-    // display name like Icon's "X" hides inside unrelated folds).
-    if spelling.len().min(query.len()) >= 3
-        && (spelling.contains(&query) || query.contains(&spelling))
-    {
-        return Some(
-            (spelling.len().max(query.len()) - spelling.len().min(query.len())) as u32 + 10,
-        );
-    }
-    let distance = levenshtein(&query, &spelling);
-    (distance * 3 <= query.len() as u32 + 1).then_some(distance * 10 + 20)
-}
-
-/// Rank `pool` by closeness to `query`, best first, bounded to
-/// `DEFAULT_LIMIT` entries. This is the candidate list diagnostics carry.
-pub(crate) fn rank(query: &str, pool: &[String]) -> Vec<String> {
-    let mut scored: Vec<(u32, &str)> = pool
-        .iter()
-        .map(String::as_str)
-        .filter_map(|spelling| score(query, spelling).map(|s| (s, spelling)))
-        .collect();
-    scored.sort_by(|(a, x), (b, y)| a.cmp(b).then_with(|| x.cmp(y)));
-    scored.dedup_by(|a, b| a.1 == b.1);
-    scored
-        .into_iter()
-        .take(DEFAULT_LIMIT)
-        .map(|(_, spelling)| spelling.to_string())
-        .collect()
-}
-
-/// Append a `(did you mean …?)` suffix naming the closest `ranked`
-/// candidates (at most three; the list must already be [`rank`]ed).
-pub(crate) fn did_you_mean(message: String, ranked: &[String]) -> String {
-    match ranked {
-        [] => message,
-        [one] => format!("{message} (did you mean '{one}'?)"),
-        [first, rest @ ..] => {
-            let others = rest
-                .iter()
-                .take(2)
-                .map(|s| format!("'{s}'"))
-                .collect::<Vec<_>>()
-                .join(" or ");
-            format!("{message} (did you mean '{first}', {others}?)")
-        }
-    }
-}
-
-/// Segment-aware scoring for a settings path: the query's dot-separated
-/// segments must be a prefix of the path's segments, where a template
-/// segment (`<team>`, `<hero>`) accepts any segment spelling and the last
-/// query segment may be a prefix of its path segment. `None` when the
-/// query is not a path prefix — near-name ranking falls back to `score`.
-fn path_score(query: &str, path: &str) -> Option<u32> {
-    let segments: Vec<String> = query.trim().split('.').map(fold).collect();
-    if segments.iter().any(String::is_empty) {
-        return None;
-    }
-    let path_segments: Vec<&str> = path.split('.').collect();
-    if segments.len() > path_segments.len() {
-        return None;
-    }
-    let mut penalty = 0u32;
-    for (index, segment) in segments.iter().enumerate() {
-        let target = path_segments[index];
-        if (target.starts_with('<') && target.ends_with('>')) || fold(target) == *segment {
-            continue;
-        }
-        let target_folded = fold(target);
-        if index + 1 == segments.len() && target_folded.starts_with(segment.as_str()) {
-            penalty += (target_folded.len() - segment.len()) as u32 + 2;
-            continue;
-        }
-        return None;
-    }
-    Some(penalty + (path_segments.len() - segments.len()) as u32)
-}
-
-fn levenshtein(a: &str, b: &str) -> u32 {
-    let a: Vec<char> = a.chars().collect();
-    let b: Vec<char> = b.chars().collect();
-    let mut row: Vec<u32> = (0..=b.len() as u32).collect();
-    for (i, &x) in a.iter().enumerate() {
-        let mut prev = row[0];
-        row[0] = i as u32 + 1;
-        for (j, &y) in b.iter().enumerate() {
-            let next = (row[j] + 1)
-                .min(row[j + 1] + 1)
-                .min(prev + u32::from(x != y));
-            prev = row[j + 1];
-            row[j + 1] = next;
-        }
-    }
-    row[b.len()]
-}
-
-// ---------------------------------------------------------------------------
-// Diagnostic candidate pools — the names each unknown-name failure compares
-// ---------------------------------------------------------------------------
-
-/// The standalone spellings callable in the given position.
-pub(crate) fn function_spellings(manifest: &Manifest, actions: bool) -> Vec<String> {
-    let mut pool: Vec<String> = manifest
-        .functions()
-        .iter()
-        .filter(|function| {
-            !function.kind.is_member()
-                && if actions {
-                    function.kind.is_action()
-                } else {
-                    function.kind.is_value()
-                }
-        })
-        .map(|function| function.id.clone())
-        .collect();
-    pool.extend(
-        manifest
-            .aliases()
-            .iter()
-            .filter(|alias| {
-                alias.kind == AliasKind::FunctionAlias
-                    && manifest.function(&alias.target).is_some_and(|function| {
-                        if actions {
-                            function.kind.is_action()
-                        } else {
-                            function.kind.is_value()
-                        }
-                    })
-            })
-            .map(|alias| alias.source.clone()),
-    );
-    if !actions {
-        pool.extend(
-            SPECIAL_FUNCTIONS
-                .iter()
-                .map(|special| special.name.to_string()),
-        );
-    }
-    pool
-}
-
-/// The member-call spellings (`eventPlayer.member(...)`, `player.member`).
-pub(crate) fn member_function_spellings(manifest: &Manifest) -> Vec<String> {
-    let mut pool: Vec<String> = manifest
-        .functions()
-        .iter()
-        .filter(|function| function.kind.is_member())
-        .map(|function| function.id.clone())
-        .collect();
-    pool.extend(
-        manifest
-            .aliases()
-            .iter()
-            .filter(|alias| alias.kind == AliasKind::MemberAlias)
-            .map(|alias| alias.source.clone()),
-    );
-    pool
-}
-
-/// The candidates a settings-emission rejection carries: the leaf keys or
-/// enum members valid at the rejected member's path, resolved by walking
-/// the source `settings` tree to the reported span. The owner's own single
-/// `suggestion` (already in the message) is the candidate of record for
-/// positions whose spelling pool is not enumerable through the public
-/// settings API (hero group names, list element spellings).
-pub(crate) fn settings_member_candidates(
-    hir_settings: Option<&crate::hir::types::Settings>,
-    error: &workshop_rs::WorkshopError,
-    suggestion: Option<&str>,
-) -> Vec<String> {
-    let Some(hir_settings) = hir_settings else {
-        return Vec::new();
-    };
-    let Some(span) = crate::compiler::workshop_error_span(error) else {
-        return Vec::new();
-    };
-    let mut path = Vec::new();
-    match find_settings_node(&hir_settings.children, &mut path, &span) {
-        // A leaf member: the key either resolves (the value or kind is the
-        // problem) or is itself outside the emission table.
-        Some(SettingsMatch::Member { path, name }) => {
-            let member_path: Vec<PathPart<'_>> = {
-                let mut full = path;
-                full.push(PathPart::Part(name));
-                full
-            };
-            match settings::definition(&member_path) {
-                Some(definition) => {
-                    // A `BoolEnum` key is Boolean-typed over an enum domain
-                    // and accepts `true` only.
-                    if matches!(definition.domain(), SettingValueDomain::Boolean)
-                        && definition.enum_members().next().is_some()
-                    {
-                        vec!["true".to_string()]
-                    } else {
-                        definition
-                            .enum_members()
-                            .map(|member| member.id().to_string())
-                            .collect()
-                    }
-                }
-                None => rank(name, &sibling_keys(&member_path[..member_path.len() - 1])),
-            }
-        }
-        // A hero group under `heroes.<team>`: hero names are the accepted
-        // spelling pool, which the owner only exposes through `suggestion`.
-        Some(SettingsMatch::Group { path })
-            if matches!(
-                path.as_slice(),
-                [PathPart::Part("heroes"), PathPart::Team, PathPart::Hero]
-            ) =>
-        {
-            suggestion.into_iter().map(str::to_string).collect()
-        }
-        // A team group or a structural rejection: no enumerable pool.
-        Some(SettingsMatch::Group { .. }) => Vec::new(),
-        // No node matched the reported span (list-element spans land here):
-        // the owner's suggestion is the only available candidate.
-        None => suggestion.into_iter().map(str::to_string).collect(),
-    }
-}
-
-/// The leaf keys valid at `parent_path` — every declaration whose last part
-/// resolves at that parent (so `gamemodes.ffa` inherits `gamemodes.general`).
-fn sibling_keys(parent_path: &[PathPart<'_>]) -> Vec<String> {
-    let mut keys: Vec<String> = Vec::new();
-    for definition in settings::definitions() {
-        let Some(leaf) = definition.path().rsplit('.').next() else {
-            continue;
-        };
-        let mut probe = parent_path.to_vec();
-        probe.push(PathPart::Part(leaf));
-        if settings::definition(&probe).is_some() && !keys.iter().any(|key| key == leaf) {
-            keys.push(leaf.to_string());
-        }
-    }
-    keys
-}
-
-/// The settings node found at a reported span, with its emission-table path.
-enum SettingsMatch<'a> {
-    Member {
-        path: Vec<PathPart<'a>>,
-        name: &'a str,
-    },
-    Group {
-        path: Vec<PathPart<'a>>,
-    },
-}
-
-/// Walk the settings tree to the node whose span `check` reported, building
-/// the emission-table path (`gamemodes.<mode>`, `heroes.<team>`,
-/// `heroes.<team>.<hero>`) on the way down.
-fn find_settings_node<'a>(
-    children: &'a [crate::hir::types::SettingsNode],
-    path: &mut Vec<PathPart<'a>>,
-    span: &workshop_rs::source::Span,
-) -> Option<SettingsMatch<'a>> {
-    use crate::hir::types::SettingsNode as Node;
-    for node in children {
-        if let Node::Group { name, children, .. } = node {
-            path.push(settings_path_part(name, path));
-            if let Some(found) = find_settings_node(children, path, span) {
-                return Some(found);
-            }
-            if settings_span_matches(node.span(), span) {
-                return Some(SettingsMatch::Group {
-                    path: std::mem::take(path),
-                });
-            }
-            path.pop();
-        } else if settings_span_matches(node.span(), span) {
-            return Some(SettingsMatch::Member {
-                path: path.clone(),
-                name: settings_member_name(node),
-            });
-        }
-    }
-    None
-}
-
-/// The path part a group name occupies, given the path so far.
-fn settings_path_part<'a>(name: &'a str, path: &[PathPart<'a>]) -> PathPart<'a> {
-    match path {
-        [PathPart::Part("heroes")] => PathPart::Team,
-        [PathPart::Part("heroes"), PathPart::Team] => PathPart::Hero,
-        _ => PathPart::Part(name),
-    }
-}
-
-/// Whether the HIR node span is the span a `WorkshopError` reported.
-fn settings_span_matches(
-    span: Option<&crate::hir::Span>,
-    reported: &workshop_rs::source::Span,
-) -> bool {
-    let Some(span) = span else { return false };
-    span.file == reported.file.index() as u32
-        && span.start.line == reported.start.line
-        && span.start.col == reported.start.col
-        && span.end.line == reported.end.line
-        && span.end.col == reported.end.col
-}
-
-fn settings_member_name(node: &crate::hir::types::SettingsNode) -> &str {
-    use crate::hir::types::SettingsNode as Node;
-    match node {
-        Node::Number { name, .. }
-        | Node::Bool { name, .. }
-        | Node::String { name, .. }
-        | Node::Raw { name, .. }
-        | Node::List { name, .. } => name,
-        Node::Group { .. } => unreachable!("groups are not leaf members"),
-    }
-}
-
-// ---------------------------------------------------------------------------
 // The search index — spellings projected from manifest + catalog data
 // ---------------------------------------------------------------------------
 
@@ -996,14 +650,16 @@ impl<'a> Index<'a> {
                         // Settings paths match segment by segment: structure,
                         // template segments and `%` suffixes stay meaningful
                         // for exact/path-prefix queries; the folded `score`
-                        // only serves near-name ranking.
+                        // only serves near-name ranking. Both scorers live in
+                        // `crate::matcher` — the same pipeline that produces
+                        // the `did you mean` candidates on rejected names.
                         let (scored, structural) = if *kind == MatchKind::Path {
-                            match path_score(&query.text, form) {
+                            match crate::matcher::path_score(&query.text, form) {
                                 Some(s) => (Some(s), true),
-                                None => (score(&query.text, form), false),
+                                None => (crate::matcher::score(&query.text, form), false),
                             }
                         } else {
-                            (score(&query.text, form), false)
+                            (crate::matcher::score(&query.text, form), false)
                         };
                         scored.map(|s| {
                             // A raw (case-insensitive) hit reports the form
@@ -1187,18 +843,18 @@ impl<'a> Index<'a> {
             // else position wins.
             let candidate = index + offset;
             match (0..count).position(|i| {
-                entry
-                    .param_name(i)
-                    .is_some_and(|name| fold(name) == fold(&param.name))
+                entry.param_name(i).is_some_and(|name| {
+                    crate::matcher::fold(name) == crate::matcher::fold(&param.name)
+                })
             }) {
                 Some(i) => Some(i),
                 None => (candidate < count).then_some(candidate),
             }
         } else {
             (0..count).find(|&i| {
-                entry
-                    .param_name(i)
-                    .is_some_and(|name| fold(name) == fold(&param.name))
+                entry.param_name(i).is_some_and(|name| {
+                    crate::matcher::fold(name) == crate::matcher::fold(&param.name)
+                })
             })
         }
     }
@@ -1608,27 +1264,12 @@ mod tests {
         );
     }
 
-    /// The diagnostic candidate pool is the same member list the lookup
-    /// reports: `member_spellings` feeds `unknown-enum-member`.
-    #[test]
-    fn enum_member_candidates_match_lookup_members() {
-        let catalog = Catalog::builtin().expect("bundled catalog");
-        let reported: Vec<String> = crate::enums::domain_members("Clip", &catalog)
-            .expect("Clip members")
-            .iter()
-            .map(|member| member.member.clone())
-            .collect();
-        assert_eq!(reported, crate::enums::member_spellings("Clip", &catalog));
-    }
-
-    /// Ranking puts exact and near matches first and bounds the list.
+    /// Ranking goes through the shared `crate::matcher` pipeline: exact and
+    /// near matches come first, the rejected spelling is not a candidate.
     #[test]
     fn rank_prefers_close_spellings() {
-        let pool: Vec<String> = ["hudText", "smallMessage", "destroyIcon"]
-            .iter()
-            .map(|s| s.to_string())
-            .collect();
-        let ranked = rank("hudTex", &pool);
+        let pool = crate::matcher::bare_candidates(["hudText", "smallMessage", "destroyIcon"]);
+        let ranked = crate::matcher::rank("hudTex", &pool);
         assert_eq!(ranked.first().map(String::as_str), Some("hudText"));
         assert!(
             !ranked.iter().any(|candidate| candidate == "hudTex"),
@@ -1640,7 +1281,8 @@ mod tests {
     /// at a per-mode path (inherited `gamemodes.general` keys included).
     #[test]
     fn sibling_keys_cover_inherited_gamemode_keys() {
-        let keys = sibling_keys(&[PathPart::Part("gamemodes"), PathPart::Part("ffa")]);
+        let keys =
+            crate::matcher::sibling_keys(&[PathPart::Part("gamemodes"), PathPart::Part("ffa")]);
         assert!(
             keys.iter().any(|key| key == "scoreToWin"),
             "inherited general keys must be candidates: {keys:?}"

@@ -344,12 +344,12 @@ impl Lowerer {
                         span: Some(span.into()),
                     },
                     None => {
-                        self.error_at_candidates(
+                        self.error_at_closed_candidates(
                             "unknown-enum-member",
                             format!("enum '{name}' has no member '{member}'"),
                             span,
                             member,
-                            members.clone(),
+                            &crate::matcher::bare_candidates(members.iter().cloned()),
                         );
                         HirExpr::Null { span: None }
                     }
@@ -448,12 +448,12 @@ impl Lowerer {
                         };
                     }
                     None => {
-                        self.error_at_candidates(
+                        self.error_at_closed_candidates(
                             "unknown-enum-member",
                             format!("enum '{name}' has no member '{member}'"),
                             span,
                             member,
-                            crate::enums::member_spellings(name, &self.catalog),
+                            &crate::matcher::enum_member_candidates(&self.catalog, name),
                         );
                         return HirExpr::Null { span: None };
                     }
@@ -481,14 +481,14 @@ impl Lowerer {
                     };
                 }
                 if !default_var_index(member).is_some() && !self.player_visible(member) {
-                    let mut pool = crate::lookup::member_function_spellings(self.manifest);
-                    pool.extend(["x", "y", "z"].map(String::from));
+                    let mut pool = crate::matcher::member_candidates(self.manifest, &self.catalog);
+                    pool.extend(crate::matcher::bare_candidates(["x", "y", "z"]));
                     self.error_at_candidates(
                         "unknown-member",
                         format!("unknown member '{member}'"),
                         member_span,
                         member,
-                        pool,
+                        &pool,
                     );
                     return HirExpr::Null { span: None };
                 }
@@ -628,11 +628,15 @@ impl Lowerer {
                         }
                     };
                     let pool = match code {
-                        "unknown-action" => crate::lookup::function_spellings(self.manifest, true),
-                        "unknown-value" => crate::lookup::function_spellings(self.manifest, false),
+                        "unknown-action" => {
+                            crate::matcher::action_candidates(self.manifest, &self.catalog)
+                        }
+                        "unknown-value" => {
+                            crate::matcher::value_candidates(self.manifest, &self.catalog)
+                        }
                         _ => Vec::new(),
                     };
-                    self.error_at_candidates(code, message, span, name, pool);
+                    self.error_at_candidates(code, message, span, name, &pool);
                 }
             }
         }
@@ -1256,7 +1260,7 @@ impl Lowerer {
                     format!("unknown member '{name}'"),
                     span,
                     name,
-                    crate::lookup::member_function_spellings(self.manifest),
+                    &crate::matcher::member_candidates(self.manifest, &self.catalog),
                 );
                 (name.to_string(), self.lower_arg_values(args, macro_params))
             }

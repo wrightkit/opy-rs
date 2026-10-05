@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0](https://github.com/wrightkit/opy-rs/compare/opy-cli-v0.1.70...opy-cli-v0.2.0) - 2026-10-05
+
+### Fixed
+
+- *(manifest)* [**breaking**] protect validated state from public mutation ([#459](https://github.com/wrightkit/opy-rs/pull/459))
+
 ## [0.1.69](https://github.com/wrightkit/opy-rs/compare/opy-cli-v0.1.68...opy-cli-v0.1.69) - 2026-10-04
 
 ### Other

@@ -205,7 +205,7 @@ opy-cli compile <main.opy>                        # Workshop text → stdout
 opy-cli compile --format json <main.opy>           # versioned compile report → stdout
 opy-cli compile --language zh-CN <main.opy>        # catalog-declared locale
 opy-cli inspect <main.opy>                        # resolved model as JSON on stdout
-opy-cli lookup <query>                            # name → OPY spelling/signature/member/setting
+opy-cli lookup <query>                            # name → OPY spelling/parameters/member/setting
 opy-cli lookup <query> --format json              # structured lookup outcome
 opy-cli lookup <query> --scope functions|enums|settings  # repeatable namespace filter
 opy-cli lookup <query> --limit N                  # bound the returned hits

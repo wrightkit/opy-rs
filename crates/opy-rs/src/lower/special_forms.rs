@@ -16,8 +16,9 @@ pub(crate) enum SpecialValueCall {
 }
 
 /// The special-call spellings `lower_call` dispatches on. `crate::lookup`'s
-/// reported special-call names must be exactly the spellings here — the
-/// lookup tests assert the tables agree.
+/// reported special-call names and the `crate::matcher` candidate pool must
+/// be exactly the spellings here — the lookup tests assert the tables
+/// agree (issue #469).
 pub(crate) const SPECIAL_VALUE_CALLS: &[(&str, SpecialValueCall)] = &[
     ("sorted", SpecialValueCall::Sorted),
     (

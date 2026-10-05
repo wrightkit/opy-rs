@@ -41,6 +41,7 @@ pub mod lookup;
 pub mod lower;
 mod macro_js;
 pub mod manifest;
+pub(crate) mod matcher;
 pub mod parser;
 pub mod preprocess;
 pub mod project;

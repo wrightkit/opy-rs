@@ -837,19 +837,34 @@ impl Lowerer {
     }
 
     /// An error whose message names the valid spellings nearest `rejected`
-    /// in a `(did you mean …?)` suffix; `crate::lookup` ranks the pool —
+    /// in a `(did you mean …?)` suffix. `crate::matcher` ranks the pool —
     /// the same data the resolution just failed on — so the suggestion
-    /// cannot drift from what the source accepts.
+    /// cannot drift from what the source accepts (issue #469).
     fn error_at_candidates(
         &mut self,
         code: &str,
         message: String,
         span: Span,
         rejected: &str,
-        pool: Vec<String>,
+        pool: &[crate::matcher::MatchCandidate],
     ) {
-        let ranked = crate::lookup::rank(rejected, &pool);
-        self.error_at(code, crate::lookup::did_you_mean(message, &ranked), span);
+        let ranked = crate::matcher::rank(rejected, pool);
+        self.error_at(code, crate::matcher::did_you_mean(message, &ranked), span);
+    }
+
+    /// Like [`Lowerer::error_at_candidates`] for a closed candidate space
+    /// (an enum domain): when nothing is near, the members themselves are
+    /// the candidates, spelled out sorted and bounded.
+    fn error_at_closed_candidates(
+        &mut self,
+        code: &str,
+        message: String,
+        span: Span,
+        rejected: &str,
+        pool: &[crate::matcher::MatchCandidate],
+    ) {
+        let ranked = crate::matcher::rank_closed(rejected, pool);
+        self.error_at(code, crate::matcher::did_you_mean(message, &ranked), span);
     }
 }
 
@@ -1538,6 +1553,117 @@ mod tests {
 
     fn action_source(statement: &str) -> String {
         format!("globalvar g\nrule \"r\":\n    @Event global\n    {statement}\n")
+    }
+
+    // --- Shared did-you-mean candidates on rejected names (#469) ---
+
+    #[test]
+    fn unknown_action_names_the_nearest_spellings_in_message() {
+        let error = compile_error(&action_source("createHudText(g, \"t\")"), 4);
+        assert_eq!(error.code, "unknown-action");
+        // "Create HUD Text" is the catalog display name of `hudText`.
+        assert!(
+            error.message.contains("(did you mean 'hudText'"),
+            "message: {}",
+            error.message
+        );
+    }
+
+    #[test]
+    fn unknown_action_finds_member_action_names() {
+        let error = compile_error(&action_source("startForcingPlayerToBeHero(g)"), 4);
+        assert_eq!(error.code, "unknown-action");
+        assert!(
+            error.message.contains("(did you mean 'startForcingHero'"),
+            "message: {}",
+            error.message
+        );
+    }
+
+    #[test]
+    fn unknown_member_names_the_nearest_member_spellings() {
+        let error = compile_error(&action_source("eventPlayer.teleprt(g)"), 4);
+        assert_eq!(error.code, "unknown-member");
+        assert_eq!(
+            error.message,
+            "unknown member 'teleprt' (did you mean 'teleport'?)"
+        );
+    }
+
+    #[test]
+    fn unknown_value_includes_the_by_name_special_calls() {
+        let error = compile_error(&action_source("g = sroted([1])"), 4);
+        assert_eq!(error.code, "unknown-value");
+        assert!(
+            error.message.contains("'sorted'"),
+            "message: {}",
+            error.message
+        );
+    }
+
+    #[test]
+    fn unknown_enum_member_names_the_domain_surface() {
+        // `Hero.SOLDIER` is an accepted source spelling naming `SOLDIER_76`;
+        // both must be candidates. (Strict upstream spellings land with
+        // #466; the pool then keeps yielding `SOLDIER`.)
+        let error = compile_error(&action_source("g = Hero.SOLDIER76"), 4);
+        assert_eq!(error.code, "unknown-enum-member");
+        assert!(
+            error.message.contains("'SOLDIER'"),
+            "message: {}",
+            error.message
+        );
+    }
+
+    #[test]
+    fn hud_reeval_string_and_color_alias_resolves_and_ranks() {
+        // `VISIBILITY_STRING_AND_COLOR` is an accepted alternate spelling
+        // of the catalog member `VISIBLE_TO_STRING_AND_COLOR`; it lives in
+        // `MEMBER_SPELLING_ALIASES` so the candidate pool names it too.
+        let hir = crate::compile(
+            &action_source("g = HudReeval.VISIBILITY_STRING_AND_COLOR"),
+            "test.opy",
+            std::path::Path::new(""),
+        )
+        .expect("the accepted alternate resolves");
+        let RuleEntry::Rule(rule) = &hir.rules[0] else {
+            panic!("expected a rule");
+        };
+        let HirStmt::Assign { value, .. } = &rule.actions[0] else {
+            panic!("expected an assignment");
+        };
+        assert!(matches!(
+            value.as_ref(),
+            HirExpr::Enum { value_type, value, .. }
+                if value_type == "HudReeval" && value == "VISIBLE_TO_STRING_AND_COLOR"
+        ));
+
+        let error = compile_error(
+            &action_source("g = HudReeval.VISIBILITY_STRING_AND_COLO"),
+            4,
+        );
+        assert_eq!(error.code, "unknown-enum-member");
+        assert!(
+            error.message.starts_with(
+                "enum 'HudReeval' has no member 'VISIBILITY_STRING_AND_COLO' \
+                              (did you mean 'VISIBILITY_STRING_AND_COLOR'"
+            ),
+            "message: {}",
+            error.message
+        );
+    }
+
+    #[test]
+    fn unknown_custom_enum_member_names_the_declared_members() {
+        let error = compile_error(
+            "globalvar g\nenum Dir:\n    NORTH\n    SOUTH\nrule \"r\":\n    @Event global\n    g = Dir.NROTH\n",
+            7,
+        );
+        assert_eq!(error.code, "unknown-enum-member");
+        assert_eq!(
+            error.message,
+            "enum 'Dir' has no member 'NROTH' (did you mean 'NORTH'?)"
+        );
     }
 
     #[test]

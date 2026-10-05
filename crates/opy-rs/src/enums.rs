@@ -705,11 +705,3 @@ pub(crate) fn domain_members(domain: &str, catalog: &Catalog) -> Option<Vec<Doma
     }
     Some(members)
 }
-
-/// The canonical OPY member spellings of `domain` — the `unknown-enum-member`
-/// candidate list. Unknown or unlistable domains yield an empty list.
-pub(crate) fn member_spellings(domain: &str, catalog: &Catalog) -> Vec<String> {
-    domain_members(domain, catalog)
-        .map(|members| members.into_iter().map(|entry| entry.member).collect())
-        .unwrap_or_default()
-}

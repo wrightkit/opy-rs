@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0](https://github.com/wrightkit/opy-rs/compare/v0.1.70...v0.2.0) - 2026-10-05
+
+### Fixed
+
+- *(manifest)* [**breaking**] protect validated state from public mutation ([#459](https://github.com/wrightkit/opy-rs/pull/459))
+
+### Other
+
+- *(lower)* move special argument and receiver enforcement to typed policy ([#460](https://github.com/wrightkit/opy-rs/pull/460))
+
 ## [0.1.70](https://github.com/wrightkit/opy-rs/compare/v0.1.69...v0.1.70) - 2026-10-05
 
 ### Fixed

@@ -519,7 +519,14 @@ impl Compiler {
             workshop_rs::emitter::emit(&program, self.catalog, locale).map_err(|error| {
                 IntegrationError::new(
                     "workshop-emission",
-                    error.to_string(),
+                    crate::matcher::did_you_mean(
+                        error.to_string(),
+                        &crate::matcher::settings_member_candidates(
+                            expanded_hir.settings.as_ref(),
+                            &error,
+                            None,
+                        ),
+                    ),
                     workshop_error_span(&error)
                         .and_then(|span| hir_span_from_workshop(span, &expanded_hir)),
                 )
@@ -545,32 +552,65 @@ impl Compiler {
         })
     }
 
-    /// Pair the artifact's Workshop text with the source map of its authored
-    /// origin (`workshop-rs/mapped-text-v1`). `hir` is the program the artifact
-    /// was compiled from. Spans come from a second lowering that attributes
-    /// macro-expanded code to its invocation site, so diagnostics keep their
-    /// spans. The map is proven against the re-parsed text, so a program shape
-    /// that differs is reported instead of yielding displaced spans.
-    pub fn mapped_text(
+    /// Lower, validate, and emit `hir`, then pair the emitted Workshop text
+    /// with the source map of its authored origin (`workshop-rs/mapped-text-v1`)
+    /// in the same operation.
+    ///
+    /// The map is built from this call's own compilation, so the artifact and
+    /// its map can never come from different compiles. Diagnostics on the
+    /// artifact keep macro definition provenance while the map attributes
+    /// macro-expanded code to its invocation site.
+    pub fn compile_hir_mapped(
         &self,
-        artifact: &CompilationArtifact,
         hir: &hir::Program,
-        language: &str,
+    ) -> Result<(CompilationArtifact, MappedText), IntegrationError> {
+        self.compile_hir_mapped_with_locale(hir, &Locale::new("en-US"))
+    }
+
+    /// [`Self::compile_hir_mapped`] using a locale declared by the canonical
+    /// catalog.
+    pub fn compile_hir_mapped_with_locale(
+        &self,
+        hir: &hir::Program,
+        locale: &Locale,
+    ) -> Result<(CompilationArtifact, MappedText), IntegrationError> {
+        self.compile_hir_mapped_with_hook(hir, None, locale)
+    }
+
+    fn compile_hir_mapped_with_hook(
+        &self,
+        hir: &hir::Program,
+        hook: Option<crate::PostCompileHookRecord>,
+        locale: &Locale,
+    ) -> Result<(CompilationArtifact, MappedText), IntegrationError> {
+        let artifact = self.compile_hir_with_locale_and_hook(hir, hook, locale)?;
+        let mapped = self.mapped_text(hir, &artifact.final_output, locale)?;
+        Ok((artifact, mapped))
+    }
+
+    /// Pair emitted Workshop `text` with the source map of its authored origin.
+    /// `hir` is the program `text` was emitted from in this operation. Spans
+    /// come from a second lowering that attributes macro-expanded code to its
+    /// invocation site, so diagnostics keep their spans. The map is proven
+    /// against the re-parsed text, so a program shape that differs is reported
+    /// instead of yielding displaced spans.
+    fn mapped_text(
+        &self,
+        hir: &hir::Program,
+        text: &str,
+        locale: &Locale,
     ) -> Result<MappedText, IntegrationError> {
-        let locale = Locale::new(language);
         let expanded = expand_macros_attributed(hir)?;
         let mut lowering = Lowering::new(self, &expanded);
         lowering.copy_files()?;
         lowering.lower_declarations()?;
         lowering.lower_rules()?;
         let map = SourceMap::extract(&lowering.program);
-        let mut reparsed =
-            workshop_rs::parser::parse(&artifact.final_output, self.catalog, &locale).map_err(
-                |error| IntegrationError::new("source-map-parse", error.to_string(), None),
-            )?;
+        let mut reparsed = workshop_rs::parser::parse(text, self.catalog, locale)
+            .map_err(|error| IntegrationError::new("source-map-parse", error.to_string(), None))?;
         map.apply(&mut reparsed)
             .map_err(|error| IntegrationError::new("source-map-shape", error.to_string(), None))?;
-        Ok(MappedText::new(artifact.final_output.clone(), map))
+        Ok(MappedText::new(text.to_owned(), map))
     }
 
     /// Compile source using the default `en-US` catalog locale.
@@ -706,27 +746,15 @@ impl Compiler {
             );
         };
 
-        match self.compile_hir_with_locale_and_hook(&hir, outcome.post_compile_hook, locale) {
-            Ok(artifact) => {
-                let mapped = if mapped {
-                    match self.mapped_text(&artifact, &hir, &locale.to_string()) {
-                        Ok(text) => Some(text),
-                        Err(error) => {
-                            return (
-                                integration_failure_report(
-                                    compiler,
-                                    catalog,
-                                    frontend_diagnostics,
-                                    error,
-                                    &hir.files,
-                                ),
-                                None,
-                            );
-                        }
-                    }
-                } else {
-                    None
-                };
+        let compiled = if mapped {
+            self.compile_hir_mapped_with_hook(&hir, outcome.post_compile_hook, locale)
+                .map(|(artifact, mapped)| (artifact, Some(mapped)))
+        } else {
+            self.compile_hir_with_locale_and_hook(&hir, outcome.post_compile_hook, locale)
+                .map(|artifact| (artifact, None))
+        };
+        match compiled {
+            Ok((artifact, mapped)) => {
                 match write_translation_files(root, &hir, &artifact.translation_files) {
                     Ok(()) => (
                         CompileReport::success(compiler, catalog, artifact, frontend_diagnostics),
@@ -2278,6 +2306,42 @@ rule "main":
         assert_eq!(script.source_name.as_deref(), Some("hook-boom.js"));
         assert_eq!(script.line, Some(1));
         assert!(script.stack.unwrap().contains("hook-boom.js:1"));
+    }
+
+    #[test]
+    fn shape_preserving_post_compile_output_still_maps() {
+        let compiler = Compiler::new().unwrap();
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/macros");
+        let source = "#!postCompileHook \"hook.js\"\n\nrule \"setup\":\n    debug(\"ready\")\n";
+        let (report, mapped) =
+            compiler.compile_source_report_mapped_with_language(source, "hook.opy", &root, "en-US");
+        assert_eq!(report.compile.status, CompileStatus::Success);
+        let mapped = mapped.expect("shape-preserving hook output keeps a proven map");
+        assert!(mapped.text.contains("rule (\"transformed\")"));
+    }
+
+    #[test]
+    fn shape_changing_post_compile_output_rejects_mapped_output() {
+        let compiler = Compiler::new().unwrap();
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/macros");
+        let source =
+            "#!postCompileHook \"hook-shape.js\"\n\nrule \"setup\":\n    debug(\"ready\")\n";
+        let (report, mapped) = compiler.compile_source_report_mapped_with_language(
+            source,
+            "hook-shape.opy",
+            &root,
+            "en-US",
+        );
+        assert!(mapped.is_none());
+        assert_eq!(report.compile.status, CompileStatus::Failure);
+        assert!(
+            report
+                .compile
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == "source-map-shape"),
+            "shape-changing post-compile output must fail the map proof"
+        );
     }
 
     fn normalize_workshop_structural_whitespace(text: &str) -> String {

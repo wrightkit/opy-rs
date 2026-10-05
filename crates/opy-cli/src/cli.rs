@@ -41,7 +41,7 @@ pub(crate) enum Command {
     Compile(CompileArgs),
     /// Print the resolved program model as JSON.
     Inspect(FileArgs),
-    /// Resolve names to OPY spellings, signatures, enum members, and
+    /// Resolve names to OPY spellings, parameters, enum members, and
     /// settings keys.
     Lookup(LookupArgs),
     /// Generate static shell completion from this command model.
@@ -104,7 +104,7 @@ pub(crate) struct LookupArgs {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
 pub(crate) enum LookupScopeArg {
-    /// Callable spellings and signatures.
+    /// Callable spellings and parameter facts.
     Functions,
     /// Enum domains and members.
     Enums,

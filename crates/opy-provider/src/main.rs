@@ -951,41 +951,45 @@ fn compile_document(
     }
     let compiler = server.compiler.as_ref().expect("compiler initialized");
     let artifact = match outcome.hir.as_ref() {
-        Some(hir) => match compiler.compile_hir(hir).and_then(|artifact| {
-            let mapped = (format == Some(ArtifactFormat::Mapped))
-                .then(|| compiler.mapped_text(&artifact, hir, "en-US"))
-                .transpose()?;
-            Ok((artifact, mapped))
-        }) {
-            Ok((artifact, mapped)) => Some(artifact_json(
-                format,
-                &artifact.final_output,
-                mapped.as_ref(),
-                &|path| {
-                    supplied_uri_for_path(&request.documents, &outcome.display_root, path)
-                        .unwrap_or_else(|| {
-                            path_to_file_uri(&resolved_path(&outcome.display_root, path))
-                        })
-                },
-            )?),
-            Err(error) => {
-                let diagnostic = json!({
-                    "range": {
-                        "start": { "line": 0, "character": 0 },
-                        "end": { "line": 0, "character": 0 },
+        Some(hir) => {
+            let compiled = if format == Some(ArtifactFormat::Mapped) {
+                compiler
+                    .compile_hir_mapped(hir)
+                    .map(|(artifact, mapped)| (artifact, Some(mapped)))
+            } else {
+                compiler.compile_hir(hir).map(|artifact| (artifact, None))
+            };
+            match compiled {
+                Ok((artifact, mapped)) => Some(artifact_json(
+                    format,
+                    &artifact.final_output,
+                    mapped.as_ref(),
+                    &|path| {
+                        supplied_uri_for_path(&request.documents, &outcome.display_root, path)
+                            .unwrap_or_else(|| {
+                                path_to_file_uri(&resolved_path(&outcome.display_root, path))
+                            })
                     },
-                    "severity": "error",
-                    "code": error.diagnostic.code,
-                    "message": error.diagnostic.message,
-                    "source": LANGUAGE_ID,
-                });
-                diagnostics_by_uri
-                    .get_mut(uri)
-                    .expect("diagnostics initialized")
-                    .push(diagnostic);
-                None
+                )?),
+                Err(error) => {
+                    let diagnostic = json!({
+                        "range": {
+                            "start": { "line": 0, "character": 0 },
+                            "end": { "line": 0, "character": 0 },
+                        },
+                        "severity": "error",
+                        "code": error.diagnostic.code,
+                        "message": error.diagnostic.message,
+                        "source": LANGUAGE_ID,
+                    });
+                    diagnostics_by_uri
+                        .get_mut(uri)
+                        .expect("diagnostics initialized")
+                        .push(diagnostic);
+                    None
+                }
             }
-        },
+        }
         None => None,
     };
     let diagnostics = request
