@@ -138,9 +138,10 @@ fn renamed_opy_member_resolves_to_canonical_member() {
 }
 
 #[test]
-fn legacy_hero_spelling_resolves_to_current_member() {
+fn renamed_member_keeps_catalog_id_match_without_alias() {
     // `Hero.SOLDIER` is the OPY spelling of the Soldier: 76 hero; the
-    // canonical catalog id is `SOLDIER_76`.
+    // canonical catalog id is `SOLDIER_76`. The id is a lookup key, never an
+    // advertised OPY alias — the pinned reference rejects `Hero.SOLDIER_76`.
     let hits = results("Hero.SOLDIER");
     match hits
         .iter()
@@ -156,7 +157,44 @@ fn legacy_hero_spelling_resolves_to_current_member() {
             assert_eq!(spelling, "Hero.SOLDIER");
             assert_eq!(member, "SOLDIER_76");
             assert_eq!(display_name.as_deref(), Some("Soldier: 76"));
-            assert!(aliases.iter().any(|alias| alias == "SOLDIER_76"));
+            assert!(
+                !aliases.iter().any(|alias| alias == "SOLDIER_76"),
+                "the catalog id is not an OPY spelling: {aliases:?}"
+            );
+        }
+        other => panic!("expected a Hero member hit, got {other:?}"),
+    }
+    let hits = results("SOLDIER_76");
+    match &hits[0] {
+        LookupHit::EnumMember {
+            spelling,
+            matched_on,
+            ..
+        } => {
+            assert_eq!(spelling, "Hero.SOLDIER");
+            assert_eq!(*matched_on, MatchKind::CatalogId);
+        }
+        other => panic!("expected an enum member hit, got {other:?}"),
+    }
+}
+
+#[test]
+fn legacy_hero_spelling_resolves_to_current_member() {
+    // `Hero.MCCREE` is a reference-accepted alias of `Hero.CASSIDY`.
+    let hits = results("Hero.MCCREE");
+    match hits
+        .iter()
+        .find(|hit| matches!(hit, LookupHit::EnumMember { domain, .. } if domain == "Hero"))
+    {
+        Some(LookupHit::EnumMember {
+            spelling,
+            member,
+            aliases,
+            ..
+        }) => {
+            assert_eq!(spelling, "Hero.CASSIDY");
+            assert_eq!(member, "CASSIDY");
+            assert!(aliases.iter().any(|alias| alias == "MCCREE"));
         }
         other => panic!("expected a Hero member hit, got {other:?}"),
     }

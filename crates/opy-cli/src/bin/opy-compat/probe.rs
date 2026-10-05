@@ -181,6 +181,15 @@ pub(super) fn generate() -> Result<(), String> {
             alias.kind == AliasKind::MemberAlias,
         ));
     }
+    // Every enum-member alias the vocabulary lookup reports is an accepted
+    // OPY spelling by contract; probe each against the oracle so a catalog
+    // id or other upstream-rejected spelling cannot be advertised.
+    for (domain, alias) in enum_aliases(manifest, &catalog) {
+        probes.push(Probe {
+            id: format!("default:{domain}.{alias}:alias"),
+            source: source("", &format!("g = {domain}.{alias}")),
+        });
+    }
     for (function, variant, call) in SETTING_CALLS {
         for (mode, prefix) in [("default", ""), ("size", "#!optimizeForSize\n")] {
             probes.push(Probe {
@@ -221,6 +230,60 @@ fn name_probe(name: &str, member: bool) -> Probe {
         id: format!("default:{name}:name"),
         source: source("", &format!("g = {call}")),
     }
+}
+
+/// The `(domain, alias)` spellings the vocabulary lookup reports for enum
+/// members, enumerated through the public `lookup` API so the probed set is
+/// exactly the advertised one. Catalog and manifest-parameter domain names
+/// seed the walk; every `EnumDomain` hit (renamed source domains included)
+/// is queued and its members' aliases collected.
+fn enum_aliases(manifest: &Manifest, catalog: &Catalog) -> Vec<(String, String)> {
+    use opy_rs::lookup::{LookupHit, LookupOutcome, LookupQuery, lookup};
+    let mut queue: Vec<String> = catalog
+        .enum_domains()
+        .map(|domain| domain.domain.clone())
+        .collect();
+    queue.extend(
+        manifest
+            .functions()
+            .iter()
+            .flat_map(|function| function.params.iter())
+            .filter_map(|param| param.domain.clone()),
+    );
+    let mut seen = std::collections::BTreeSet::new();
+    let mut aliases = Vec::new();
+    while let Some(name) = queue.pop() {
+        if !seen.insert(name.clone()) {
+            continue;
+        }
+        let mut query = LookupQuery::new(name);
+        query.limit = 64;
+        let LookupOutcome::Matched { results, .. } = lookup(&query) else {
+            continue;
+        };
+        for hit in results {
+            let LookupHit::EnumDomain {
+                domain,
+                members: Some(members),
+                ..
+            } = hit
+            else {
+                continue;
+            };
+            queue.push(domain.clone());
+            for member in members {
+                aliases.extend(
+                    member
+                        .aliases
+                        .iter()
+                        .map(|alias| (domain.clone(), alias.clone())),
+                );
+            }
+        }
+    }
+    aliases.sort();
+    aliases.dedup();
+    aliases
 }
 
 /// The base call, its trailing-default omissions, and one call per argument
@@ -391,6 +454,19 @@ pub(super) fn compare(probes: &Path, references: &Path) -> Result<(), String> {
                     "unknown-spelling"
                 } else {
                     "spelling-ok"
+                },
+                String::new(),
+            )
+        } else if variant == "alias" {
+            // An enum-alias probe is a bare `Domain.ALIAS` member access:
+            // member resolution is the only thing that can fail, so any
+            // oracle rejection means the lookup advertised a spelling the
+            // reference does not accept.
+            (
+                if reference.ok {
+                    "spelling-ok"
+                } else {
+                    "unknown-spelling"
                 },
                 String::new(),
             )

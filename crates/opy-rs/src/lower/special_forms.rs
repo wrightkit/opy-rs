@@ -1,5 +1,18 @@
 use super::*;
 
+/// The value-position call names `lower_call` resolves by name rather than
+/// through the manifest. `crate::lookup`'s reported special-call spellings
+/// must be exactly this set — the lookup tests assert the tables agree.
+pub(crate) const SPECIAL_VALUE_CALLS: &[&str] = &[
+    "sorted",
+    "createWorkshopSetting",
+    "createWorkshopSettingBool",
+    "createWorkshopSettingEnum",
+    "createWorkshopSettingInt",
+    "createWorkshopSettingFloat",
+    "createWorkshopSettingHero",
+];
+
 fn literal_number(expr: &Expr) -> Option<f64> {
     match expr {
         Expr::Number { value, .. } => Some(*value),

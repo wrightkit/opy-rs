@@ -1463,15 +1463,51 @@ mod tests {
                 function.id
             );
         }
-        for special in SPECIAL_FUNCTIONS {
-            // Special forms resolve by name in the lowerer (`lower_call`).
-            assert!(
-                ["sorted", "createWorkshopSetting"].contains(&special.name)
-                    || special.name.starts_with("createWorkshopSetting"),
-                "{} must be a lowerer-recognized special form",
-                special.name
-            );
+        // Special-call spellings must be exactly the names `lower_call`
+        // resolves by name: `SPECIAL_VALUE_CALLS` is the shared table the
+        // resolver consults, so a dropped or renamed special form makes the
+        // reported set disagree and fails here.
+        let reported: Vec<&str> = SPECIAL_FUNCTIONS
+            .iter()
+            .map(|special| special.name)
+            .collect();
+        assert_eq!(
+            reported.as_slice(),
+            crate::lower::special_forms::SPECIAL_VALUE_CALLS,
+            "reported special-call spellings must be the lowerer-recognized set"
+        );
+    }
+
+    /// Every member alias the lookup reports must be an OPY spelling the
+    /// pinned reference accepts — never a canonical catalog id
+    /// (`Hero.SOLDIER_76` is a reference rejection, not an alias). The
+    /// upstream-accepted extra spellings are the legacy hero names
+    /// `mccree`/`hammond` (overpy 9.7.10 rewrites them in `Hero` member
+    /// access); `opy-compat probe-generate` emits a `:alias` probe per
+    /// reported alias so the same set is checked against the oracle.
+    #[test]
+    fn reported_member_aliases_are_reference_spellings() {
+        let catalog = Catalog::builtin().expect("bundled catalog");
+        let manifest = Manifest::builtin().expect("bundled manifest");
+        let index = Index::new(manifest, &catalog);
+        let mut reported = Vec::new();
+        for domain in index.lookup_domains() {
+            let Some(members) = crate::enums::domain_members(&domain, &catalog) else {
+                continue;
+            };
+            for member in members {
+                for alias in member.aliases {
+                    assert_ne!(
+                        Some(alias.as_str()),
+                        member.catalog_member.as_deref(),
+                        "{domain}.{alias} advertises the catalog id as an OPY alias"
+                    );
+                    reported.push(format!("{domain}.{alias}"));
+                }
+            }
         }
+        reported.sort();
+        assert_eq!(reported, ["Hero.HAMMOND", "Hero.MCCREE"]);
     }
 
     /// The diagnostic candidate pool is the same member list the lookup

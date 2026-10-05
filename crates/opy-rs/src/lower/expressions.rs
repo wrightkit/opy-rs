@@ -625,7 +625,10 @@ impl Lowerer {
         }
         // Builtin identity and position checks run before the special forms
         // so that a misplaced `wait`/`vect` still diagnoses its position.
-        if !self.macro_visible(name) && !self.subroutine_visible(name) && name != "sorted" {
+        if !self.macro_visible(name)
+            && !self.subroutine_visible(name)
+            && !special_forms::SPECIAL_VALUE_CALLS.contains(&name)
+        {
             match self.manifest.resolve_function(name) {
                 Some(entry) => self.check_call_position(name, entry, position, span),
                 None => {

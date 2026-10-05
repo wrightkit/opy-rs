@@ -259,18 +259,17 @@ pub(crate) fn domain_members(domain: &str, catalog: &Catalog) -> Option<Vec<Doma
                 })
                 .map(|rename| rename.opy.to_string());
             let member = rename.unwrap_or_else(|| entry.member.clone());
-            let mut aliases: Vec<String> = MEMBER_RENAMES
+            // Aliases are the extra OPY spellings the pinned reference
+            // accepts (`Hero.MCCREE`). A canonical catalog id is never one:
+            // `Hero.SOLDIER_76` is a reference rejection, and the catalog id
+            // still matches queries through `MatchKind::CatalogId`.
+            let aliases: Vec<String> = MEMBER_RENAMES
                 .iter()
                 .filter(|rename| {
                     rename.domain == domain && rename.legacy && rename.catalog == entry.member
                 })
                 .map(|rename| rename.opy.to_string())
                 .collect();
-            // A canonical member id that differs from its OPY spelling stays
-            // accepted verbatim (the `_ => member` resolution path).
-            if member != entry.member {
-                aliases.push(entry.member.clone());
-            }
             DomainMember {
                 member,
                 aliases,

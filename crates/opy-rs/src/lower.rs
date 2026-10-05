@@ -108,7 +108,7 @@ impl Lowerer {
 mod declarations;
 mod expressions;
 pub(crate) mod policy;
-mod special_forms;
+pub(crate) mod special_forms;
 mod statements;
 mod textures;
 
