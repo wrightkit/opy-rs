@@ -1202,9 +1202,18 @@ mod tests {
 
     #[test]
     fn stale_catalog_links_fail_explicitly() {
-        let manifest = Manifest::builtin().unwrap().clone();
-        let mut stale = manifest;
-        stale.functions[0].catalog_id = Some("missing-catalog-id".to_string());
+        // A manifest whose entry links to a catalog id the catalog does not
+        // declare is invalid input; construct it before `Manifest::load`, the
+        // supported custom-manifest boundary, rather than mutating validated
+        // state (#455).
+        let mut data: serde_json::Value =
+            serde_json::from_str(crate::manifest::MANIFEST_DATA).unwrap();
+        data["functions"][0]["catalogId"] = serde_json::json!("missing-catalog-id");
+        let stale = Manifest::load(
+            &serde_json::to_string(&data).unwrap(),
+            crate::manifest::PROBES_DATA,
+        )
+        .unwrap();
         let error = cross_check_manifest(&stale, &Catalog::builtin().unwrap()).unwrap_err();
         assert_eq!(error.diagnostic.code, "catalog-link-missing");
     }
