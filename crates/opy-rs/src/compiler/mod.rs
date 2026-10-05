@@ -334,10 +334,6 @@ pub struct CompileDiagnostic {
     pub code: String,
     pub message: String,
     pub span: Option<crate::tooling::SourceLocation>,
-    /// The valid spellings nearest the rejected name, when the frontend
-    /// diagnostic recorded them (`crate::tooling::Diagnostic::candidates`).
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub candidates: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub script: Option<ScriptDiagnostic>,
 }
@@ -908,7 +904,6 @@ fn compile_diagnostic(error: IntegrationError, files: &[hir::SourceFile]) -> Com
         span: diagnostic
             .span
             .and_then(|span| source_location_from_hir(span, files)),
-        candidates: Vec::new(),
         script: diagnostic.script.map(|script| *script),
     }
 }
@@ -935,7 +930,6 @@ fn compile_frontend_diagnostic(diagnostic: &crate::tooling::Diagnostic) -> Compi
         code: diagnostic.code.clone(),
         message: diagnostic.message.clone(),
         span: diagnostic.span.clone(),
-        candidates: diagnostic.candidates.clone(),
         script: None,
     }
 }

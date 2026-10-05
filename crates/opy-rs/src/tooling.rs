@@ -259,11 +259,6 @@ pub struct Diagnostic {
     pub code: String,
     pub message: String,
     pub span: Option<SourceLocation>,
-    /// The valid spellings nearest the rejected name, when the diagnostic
-    /// knows them (unknown names, enum members, settings keys). Empty when
-    /// the diagnostic carries no spelling candidates.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub candidates: Vec<String>,
 }
 
 impl Diagnostic {
@@ -273,7 +268,6 @@ impl Diagnostic {
             code: warning.code.clone(),
             message: warning.message.clone(),
             span: resolve_record_span(warning.span, files),
-            candidates: Vec::new(),
         }
     }
 
@@ -283,7 +277,6 @@ impl Diagnostic {
             code: error.code,
             message: error.message,
             span: error.span.and_then(|span| resolve_record_span(span, files)),
-            candidates: error.candidates,
         }
     }
 
@@ -302,16 +295,16 @@ impl Diagnostic {
                 Position::new(span.end.line, span.end.col),
             )
         });
+        let candidates = crate::lookup::settings_member_candidates(
+            hir_settings,
+            &error,
+            diagnostic.suggestion.as_deref(),
+        );
         Diagnostic {
             severity: DiagnosticSeverity::Error,
             code: "workshop-emission".to_string(),
-            message: error.to_string(),
+            message: crate::lookup::did_you_mean(error.to_string(), &candidates),
             span: span.and_then(|span| resolve_record_span(span, files)),
-            candidates: crate::lookup::settings_member_candidates(
-                hir_settings,
-                &error,
-                diagnostic.suggestion.as_deref(),
-            ),
         }
     }
 
@@ -329,7 +322,6 @@ impl Diagnostic {
                 .span
                 .map(to_frontend_span)
                 .and_then(|span| resolve_record_span(span, files)),
-            candidates: Vec::new(),
         }
     }
 }

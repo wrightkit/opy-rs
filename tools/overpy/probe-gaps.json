@@ -47,6 +47,23 @@
       "cause": "The reference writes Destroy Effect(Event Player) unchecked; canonical validation requires EntityId at the entity parameter. workshop-rs#350 types Event Player as Player, ending the opaque exemption that let it pass, and ADR-0014 admits Player only at positions with recorded evidence — the real-project fixtures pass player variables here (defend.ow `Event Player.botEffects`, rework.ow `Event Player.DiamondIndicator`), never a bare Player.",
       "owner": "opy-rs",
       "decision": "pending workshop-rs admission evidence (ADR-0014); not an approved exception — owner call outstanding (wrightkit/opy-rs#441); pinned by compiler::tests::structural_convergence"
+    },
+    {
+      "id": "reference-gates-ow2-unavailable-members",
+      "status": "reference-rejected",
+      "functions": [
+        "Gamemode.LUCIOBALL",
+        "Map.BUSAN_STADIUM",
+        "Map.BUSAN_STADIUM_CLASSIC",
+        "Map.ESTADIO_DAS_RAS",
+        "Map.SYDNEY_HARBOUR_ARENA",
+        "Map.SYDNEY_HARBOUR_ARENA_CLASSIC"
+      ],
+      "variant": ":spelling",
+      "detail": "not available in OW2",
+      "cause": "These members resolve in the pinned reference's enum tables — the spelling is accepted — but an availability gate downstream rejects maps and gamemodes retired for OW2. The lookup advertises the spelling, which is the vocabulary contract; availability is a compile-time policy, not a name-resolution answer.",
+      "owner": "opy-rs",
+      "decision": "approved for the spelling contract: the probe verifies name resolution, and `Unknown map`/`Unknown gamemode` rejections still fail as `unknown-spelling`"
     }
   ]
 }

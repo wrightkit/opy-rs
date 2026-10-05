@@ -71,11 +71,8 @@ pub struct CheckOutcome {
 }
 ```
 
-* `Diagnostic { severity, code, message, span, candidates }`: structured,
+* `Diagnostic { severity, code, message, span }`: structured,
   stable-coded, source-attributed (see the diagnostics contract below).
-  `candidates` lists the valid spellings nearest a rejected name (unknown
-  builtins, enum members, settings keys); it is empty when the diagnostic
-  has no spelling pool to draw from.
 * `SourceLocation { file_id, path, start, end }`: a span resolved through
   the file registry to `(file id, path, line/col)`.
 * `PostCompileHook`: the declared `#!postCompileHook` script (root-relative
@@ -116,11 +113,13 @@ queryable through `provenance`.
 
 ## Diagnostics contract
 
-Every diagnostic is `{ severity, code, message, span, candidates }`. `code`
+Every diagnostic is `{ severity, code, message, span }`. `code`
 and `span` are the machine contract; `message` and wording are not.
-`candidates` carries the bounded, best-first list of valid spellings nearest
-the rejected name when the diagnostic names something resolvable — the same
-ranked list `opy_rs::lookup` returns. Frontend errors use `error`; non-fatal
+When the diagnostic rejects a name that has valid alternatives (an unknown
+action, value, member, enum member, or settings key), `message` carries a
+`(did you mean …?)` suffix naming the nearest valid spellings — the same
+ranked candidates `opy_rs::lookup` returns for the rejected spelling.
+Frontend errors use `error`; non-fatal
 project warnings use `warning` and do not make a project unclean.
 
 Span layout: `file_id` indexes the registry, positions are 1-based
@@ -172,21 +171,30 @@ uses — OPY owns no separate vocabulary copy:
   Workshop display name, a guessed name, or a settings path/leaf), a
   `scope` (functions, enums, settings — all by default), and a `limit`
   (`0` selects `DEFAULT_LIMIT`).
-* Hits are `Function` (OPY spelling, signature, parameter list with
-  alternate keyword spellings, enum domains/defaults), `EnumDomain`
+* Hits are `Function` (OPY spelling, call kind, declared receiver, ordered
+  parameter facts — name, type, required/optional, default, enum domain
+  with the domain's full member inventory), `EnumDomain`
   (members the domain accepts), `EnumMember` (OPY spelling → canonical
   member id, display name, accepted aliases), or `Setting` (effective path,
   display name, accepted value form including enum members and numeric
-  bounds).
+  bounds). `opy-rs` reports facts only; rendering a signature string and
+  choosing which members to inline is the caller's policy.
 * `matchedOn` records which spelling form matched: `opySpelling`,
   `catalogId`, `displayName`, `alias`, `path`, or `near` for a best-effort
   close match.
 * `LookupOutcome::Unsupported` reports queries outside the served surface
   (empty text, empty scope, a non-`en-US` display-name locale — localized
   names stay `workshop-rs`-owned).
-* OPY-specific spellings (`Clip.NONE`, `Map.KINGSROW`, `Hero.SOLDIER`,
-  `Hero.MCCREE`, OPY-only `Color` members) resolve to their canonical
-  members; legacy spellings list as aliases on the canonical hit.
+* Reported enum spellings are exactly the ones the pinned reference
+  accepts (`Clip.NONE`, `Map.KINGS_ROW`, `Hero.SOLDIER`, `Team.1`,
+  `AsyncBehavior.RESTART`, OPY-only `Color` members): canonical catalog
+  ids still resolve queries through `catalogId` but are never advertised
+  as OPY spellings (`Hero.SOLDIER_76` is a reference rejection), catalog
+  domains that are not reference enum sources (`EventTeam`, `Rounding`,
+  …) are not reported, and reference-accepted alternates (`Hero.MCCREE`,
+  `Hero.HAMMOND`, `HudPosition.ACTUALLY_LEFT`) list as aliases on the
+  canonical hit. `opy-compat probe-generate` emits a `:spelling` probe per
+  reported spelling so the advertised set is checked against the oracle.
 
 ## CLI (`opy-cli`)
 

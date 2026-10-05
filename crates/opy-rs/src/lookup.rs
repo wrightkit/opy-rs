@@ -14,85 +14,133 @@ use serde::Serialize;
 use workshop_rs::catalog::{Catalog, Kind};
 use workshop_rs::settings::{self, PathPart, SettingValueDomain};
 
-use crate::manifest::{AliasKind, Function, FunctionKind, Manifest, Param, ParamDefault};
+use crate::manifest::{
+    AliasKind, Function, FunctionKind, Manifest, Param, ParamDefault, ReceiverCategory,
+};
 
 /// The default bound on returned hits; also the diagnostic candidate bound.
 pub const DEFAULT_LIMIT: usize = 8;
 
 /// A source-level special form: a call name the lowerer handles by name
 /// rather than through the manifest (`crate::lower::expressions`). Their
-/// parameter lists are recorded for the lookup signature surface.
+/// parameter facts mirror the reference's declared signatures — the same
+/// `(name, type, required, default)` facts manifest-backed callables report.
 struct SpecialFunction {
     name: &'static str,
-    /// `(parameter name, required)` in call order.
-    params: &'static [(&'static str, bool)],
+    params: &'static [SpecialParam],
+}
+
+/// One ordered parameter of a special call, from the reference signature.
+struct SpecialParam {
+    name: &'static str,
+    /// The reference's declared argument type (`IntLiteral`, `Lambda`, …).
+    param_type: &'static str,
+    required: bool,
+    /// The declared default rendered in source syntax, when declared.
+    default: Option<&'static str>,
+}
+
+const fn required(name: &'static str, param_type: &'static str) -> SpecialParam {
+    SpecialParam {
+        name,
+        param_type,
+        required: true,
+        default: None,
+    }
+}
+
+const fn defaulted(
+    name: &'static str,
+    param_type: &'static str,
+    default: &'static str,
+) -> SpecialParam {
+    SpecialParam {
+        name,
+        param_type,
+        required: false,
+        default: Some(default),
+    }
+}
+
+const fn optional(name: &'static str, param_type: &'static str) -> SpecialParam {
+    SpecialParam {
+        name,
+        param_type,
+        required: false,
+        default: None,
+    }
 }
 
 /// The special-call spellings an `unknown-value` diagnostic can suggest and
-/// the lookup can describe.
+/// the lookup can describe, with the parameter facts the reference declares.
 const SPECIAL_FUNCTIONS: &[SpecialFunction] = &[
     SpecialFunction {
         name: "sorted",
-        params: &[("array", true), ("key", true)],
+        params: &[
+            required("array", "Array"),
+            // The reference's signature names the slot `lambda`; `key` is
+            // the keyword spelling callers write (#437).
+            optional("key", "Lambda"),
+        ],
     },
     SpecialFunction {
         name: "createWorkshopSetting",
         params: &[
-            ("type", true),
-            ("category", true),
-            ("name", true),
-            ("default", true),
-            ("sortOrder", false),
+            required("type", "Type"),
+            required("category", "CustomStringLiteral"),
+            required("name", "CustomStringLiteral"),
+            required("default", "BoolLiteral|IntLiteral|FloatLiteral|HeroLiteral"),
+            defaulted("sortOrder", "IntLiteral", "0"),
         ],
     },
     SpecialFunction {
         name: "createWorkshopSettingBool",
         params: &[
-            ("category", true),
-            ("name", true),
-            ("default", true),
-            ("sortOrder", false),
+            required("category", "CustomStringLiteral"),
+            required("name", "CustomStringLiteral"),
+            required("default", "BoolLiteral"),
+            defaulted("sortOrder", "IntLiteral", "0"),
         ],
     },
     SpecialFunction {
         name: "createWorkshopSettingEnum",
         params: &[
-            ("category", true),
-            ("name", true),
-            ("default", true),
-            ("options", true),
-            ("sortOrder", false),
+            required("category", "CustomStringLiteral"),
+            required("name", "CustomStringLiteral"),
+            required("default", "UnsignedIntLiteral"),
+            required("options", "Array<CustomStringLiteral>"),
+            defaulted("sortOrder", "IntLiteral", "0"),
         ],
     },
     SpecialFunction {
         name: "createWorkshopSettingInt",
         params: &[
-            ("category", true),
-            ("name", true),
-            ("default", true),
-            ("min", true),
-            ("max", true),
-            ("sortOrder", false),
+            required("category", "CustomStringLiteral"),
+            required("name", "CustomStringLiteral"),
+            required("default", "IntLiteral"),
+            required("min", "IntLiteral"),
+            required("max", "IntLiteral"),
+            defaulted("sortOrder", "IntLiteral", "0"),
         ],
     },
     SpecialFunction {
         name: "createWorkshopSettingFloat",
         params: &[
-            ("category", true),
-            ("name", true),
-            ("default", true),
-            ("min", true),
-            ("max", true),
-            ("sortOrder", false),
+            required("category", "CustomStringLiteral"),
+            required("name", "CustomStringLiteral"),
+            required("default", "FloatLiteral"),
+            required("min", "FloatLiteral"),
+            required("max", "FloatLiteral"),
+            defaulted("sortOrder", "IntLiteral", "0"),
         ],
     },
     SpecialFunction {
         name: "createWorkshopSettingHero",
         params: &[
-            ("category", true),
-            ("name", true),
-            ("default", true),
-            ("sortOrder", false),
+            required("category", "CustomStringLiteral"),
+            required("name", "CustomStringLiteral"),
+            required("default", "HeroLiteral"),
+            defaulted("sortOrder", "IntLiteral", "0"),
         ],
     },
 ];
@@ -248,11 +296,17 @@ pub enum LookupHit {
         spelling: String,
         /// Whether the callable is an action, a value, or a member call.
         function_kind: LookupFunctionKind,
-        /// The rendered parameter list, e.g.
-        /// `hudText(visibleTo, [header], [text], …, reevaluation, sortOrder, [spectators])`.
-        signature: String,
-        /// The parameters in call order.
-        params: Vec<SignatureParam>,
+        /// The declared receiver category of a member call — how it is
+        /// invoked (`eventPlayer.setMoveSpeed(…)` takes a `Player`
+        /// receiver). `None` for standalone calls.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        receiver: Option<ReceiverCategory>,
+        /// Whether the argument count is unbounded (`.format` placeholders).
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        unbounded: bool,
+        /// The parameters in call order: the owner facts Wright renders
+        /// into a signature string.
+        params: Vec<LookupParam>,
         /// The canonical catalog id the callable emits, when linked.
         catalog_id: Option<String>,
         /// Which spelling form matched.
@@ -323,10 +377,10 @@ impl LookupFunctionKind {
     }
 }
 
-/// One parameter of a returned signature.
+/// One ordered parameter of a callable: the owner facts a caller renders.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SignatureParam {
+pub struct LookupParam {
     /// The canonical OPY keyword spelling.
     pub name: String,
     /// The alternate keyword spellings the slot accepts.
@@ -337,14 +391,11 @@ pub struct SignatureParam {
     /// The enum domain the slot takes, when it takes one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub domain: Option<String>,
-    /// The member spellings of that domain: present only for a required
-    /// enum parameter whose domain has at most [`MAX_INLINE_MEMBERS`]
-    /// members. Larger domains are queried through `EnumDomain` hits.
+    /// Every member spelling of that domain, when it is an enum slot —
+    /// the owner supplies the full inventory; which members a signature
+    /// renders is the caller's policy.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub members: Option<Vec<EnumMemberEntry>>,
-    /// How many members the enum domain accepts, when it is one.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub member_count: Option<usize>,
     /// The semantic type the catalog records for the slot.
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
     pub param_type: Option<String>,
@@ -352,10 +403,6 @@ pub struct SignatureParam {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default: Option<String>,
 }
-
-/// The largest enum domain whose members a signature lists inline; larger
-/// domains report `memberCount` and are queried through an `EnumDomain` hit.
-pub const MAX_INLINE_MEMBERS: usize = 32;
 
 /// One member of an enum domain.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -543,22 +590,52 @@ pub(crate) fn rank(query: &str, pool: &[String]) -> Vec<String> {
         .collect()
 }
 
-/// Append a `(did you mean …?)` suffix naming the closest candidates.
-pub(crate) fn did_you_mean(message: String, rejected: &str, candidates: &[String]) -> String {
-    let mut top = rank(rejected, candidates);
-    top.truncate(3);
-    match top.as_slice() {
+/// Append a `(did you mean …?)` suffix naming the closest `ranked`
+/// candidates (at most three; the list must already be [`rank`]ed).
+pub(crate) fn did_you_mean(message: String, ranked: &[String]) -> String {
+    match ranked {
         [] => message,
         [one] => format!("{message} (did you mean '{one}'?)"),
         [first, rest @ ..] => {
             let others = rest
                 .iter()
+                .take(2)
                 .map(|s| format!("'{s}'"))
                 .collect::<Vec<_>>()
                 .join(" or ");
             format!("{message} (did you mean '{first}', {others}?)")
         }
     }
+}
+
+/// Segment-aware scoring for a settings path: the query's dot-separated
+/// segments must be a prefix of the path's segments, where a template
+/// segment (`<team>`, `<hero>`) accepts any segment spelling and the last
+/// query segment may be a prefix of its path segment. `None` when the
+/// query is not a path prefix — near-name ranking falls back to `score`.
+fn path_score(query: &str, path: &str) -> Option<u32> {
+    let segments: Vec<String> = query.trim().split('.').map(fold).collect();
+    if segments.iter().any(String::is_empty) {
+        return None;
+    }
+    let path_segments: Vec<&str> = path.split('.').collect();
+    if segments.len() > path_segments.len() {
+        return None;
+    }
+    let mut penalty = 0u32;
+    for (index, segment) in segments.iter().enumerate() {
+        let target = path_segments[index];
+        if (target.starts_with('<') && target.ends_with('>')) || fold(target) == *segment {
+            continue;
+        }
+        let target_folded = fold(target);
+        if index + 1 == segments.len() && target_folded.starts_with(segment.as_str()) {
+            penalty += (target_folded.len() - segment.len()) as u32 + 2;
+            continue;
+        }
+        return None;
+    }
+    Some(penalty + (path_segments.len() - segments.len()) as u32)
 }
 
 fn levenshtein(a: &str, b: &str) -> u32 {
@@ -817,21 +894,29 @@ impl LookupHit {
         }
     }
 
-    /// Stamp the matched-on kind: near-misses collapse to `Near`.
-    fn with_match_kind(self, kind: MatchKind, score: u32) -> LookupHit {
-        let matched_on = if score == 0 { kind } else { MatchKind::Near };
+    /// Stamp the matched-on kind: a folded-equal or structurally matching
+    /// (settings path-prefix) form reports its own kind; other hits are
+    /// `Near` near-misses.
+    fn with_match_kind(self, kind: MatchKind, score: u32, structural: bool) -> LookupHit {
+        let matched_on = if score == 0 || structural {
+            kind
+        } else {
+            MatchKind::Near
+        };
         match self {
             LookupHit::Function {
                 spelling,
                 function_kind,
-                signature,
+                receiver,
+                unbounded,
                 params,
                 catalog_id,
                 ..
             } => LookupHit::Function {
                 spelling,
                 function_kind,
-                signature,
+                receiver,
+                unbounded,
                 params,
                 catalog_id,
                 matched_on,
@@ -908,16 +993,33 @@ impl<'a> Index<'a> {
                     .forms
                     .iter()
                     .filter_map(|(form, kind)| {
-                        score(&query.text, form).map(|s| {
+                        // Settings paths match segment by segment: structure,
+                        // template segments and `%` suffixes stay meaningful
+                        // for exact/path-prefix queries; the folded `score`
+                        // only serves near-name ranking.
+                        let (scored, structural) = if *kind == MatchKind::Path {
+                            match path_score(&query.text, form) {
+                                Some(s) => (Some(s), true),
+                                None => (score(&query.text, form), false),
+                            }
+                        } else {
+                            (score(&query.text, form), false)
+                        };
+                        scored.map(|s| {
                             // A raw (case-insensitive) hit reports the form
                             // the user actually typed when folds collide.
-                            (s, form.eq_ignore_ascii_case(query.text.trim()), *kind)
+                            (
+                                s,
+                                form.eq_ignore_ascii_case(query.text.trim()),
+                                *kind,
+                                structural,
+                            )
                         })
                     })
-                    .min_by_key(|(s, exact, _)| (*s, !*exact))
-                    .map(|(s, _, kind)| ScoredHit {
+                    .min_by_key(|(s, exact, _, _)| (*s, !*exact))
+                    .map(|(s, _, kind, structural)| ScoredHit {
                         score: s,
-                        hit: candidate.hit.clone().with_match_kind(kind, s),
+                        hit: candidate.hit.clone().with_match_kind(kind, s, structural),
                     })
             })
             .collect()
@@ -959,7 +1061,7 @@ impl<'a> Index<'a> {
                     forms.push((alias.source.clone(), MatchKind::Alias));
                 }
             }
-            let params = self.signature_params(function);
+            let params = self.lookup_params(function);
             self.candidates.push(Candidate {
                 forms,
                 hit: LookupHit::Function {
@@ -970,7 +1072,8 @@ impl<'a> Index<'a> {
                         FunctionKind::MemberAction => LookupFunctionKind::MemberAction,
                         FunctionKind::MemberValue => LookupFunctionKind::MemberValue,
                     },
-                    signature: signature_text(function, &params),
+                    receiver: function.receiver,
+                    unbounded: function.unbounded,
                     params,
                     catalog_id: function.catalog_id.clone(),
                     matched_on: MatchKind::OpySpelling,
@@ -978,18 +1081,17 @@ impl<'a> Index<'a> {
             });
         }
         for special in SPECIAL_FUNCTIONS {
-            let params: Vec<SignatureParam> = special
+            let params: Vec<LookupParam> = special
                 .params
                 .iter()
-                .map(|(name, required)| SignatureParam {
-                    name: name.to_string(),
+                .map(|param| LookupParam {
+                    name: param.name.to_string(),
                     alternate_names: Vec::new(),
-                    required: *required,
+                    required: param.required,
                     domain: None,
                     members: None,
-                    member_count: None,
-                    param_type: None,
-                    default: None,
+                    param_type: Some(param.param_type.to_string()),
+                    default: param.default.map(str::to_string),
                 })
                 .collect();
             self.candidates.push(Candidate {
@@ -997,7 +1099,8 @@ impl<'a> Index<'a> {
                 hit: LookupHit::Function {
                     spelling: special.name.to_string(),
                     function_kind: LookupFunctionKind::Value,
-                    signature: signature_text_raw(special.name, &params),
+                    receiver: None,
+                    unbounded: false,
                     params,
                     catalog_id: None,
                     matched_on: MatchKind::OpySpelling,
@@ -1006,7 +1109,7 @@ impl<'a> Index<'a> {
         }
     }
 
-    fn signature_params(&self, function: &Function) -> Vec<SignatureParam> {
+    fn lookup_params(&self, function: &Function) -> Vec<LookupParam> {
         let catalog_entry = function.catalog_id.as_deref().and_then(|catalog_id| {
             let kind = match function.kind {
                 FunctionKind::Action | FunctionKind::MemberAction => Kind::Action,
@@ -1030,31 +1133,33 @@ impl<'a> Index<'a> {
                         })
                     })
                     .unwrap_or((None, None));
-                let domain = param.domain.clone().or(catalog_domain);
+                // The reported domain is the reference source spelling:
+                // a catalog-declared `Clipping` slot renders as `Clip`.
+                let domain = param
+                    .domain
+                    .clone()
+                    .or(catalog_domain)
+                    .map(|domain| crate::enums::opy_domain(&domain).to_string());
                 let required = !param.optional && param.default.is_none();
-                let domain_members = domain
+                // An enum slot carries its domain's full member inventory:
+                // which members a rendered signature shows is the caller's
+                // (Wright's) policy, not the owner's.
+                let members = domain
                     .as_deref()
-                    .and_then(|domain| crate::enums::domain_members(domain, self.catalog));
-                // Members are listed only for a required enum slot whose
-                // domain fits the inline bound; optional slots answer with
-                // their default and larger domains report the count.
-                let members = (required
-                    && domain_members.as_ref().map_or(0, Vec::len) <= MAX_INLINE_MEMBERS)
-                    .then(|| {
-                        domain_members
-                            .as_ref()
-                            .map(|members| members.iter().map(member_entry).collect::<Vec<_>>())
-                    })
-                    .flatten();
-                SignatureParam {
+                    .and_then(|domain| crate::enums::domain_members(domain, self.catalog))
+                    .map(|members| members.iter().map(member_entry).collect::<Vec<_>>());
+                let default = param
+                    .default
+                    .as_ref()
+                    .map(|d| default_text(d, domain.as_deref(), self.catalog));
+                LookupParam {
                     name: param.name.clone(),
                     alternate_names: param.alternate_names.clone(),
                     required,
                     members,
-                    member_count: domain_members.as_ref().map(Vec::len),
                     domain,
                     param_type,
-                    default: param.default.as_ref().map(|d| default_text(d, param)),
+                    default,
                 }
             })
             .collect()
@@ -1160,17 +1265,21 @@ impl<'a> Index<'a> {
         }
     }
 
-    /// Every enum domain the lookup reports: catalog domains under their OPY
-    /// domain spelling (renames appear under both spellings) plus
-    /// manifest-only signature domains.
+    /// Every enum domain the lookup reports: catalog domains under their
+    /// reference source spelling (`Clipping` reports as `Clip`), plus
+    /// source-level alias domains (`AsyncBehavior`) and manifest-only
+    /// signature domains. Catalog domains that are not `Domain.MEMBER`
+    /// sources in the reference (`EventTeam`, `Rounding`, …) are not
+    /// reported — their members are spellings upstream rejects.
     fn lookup_domains(&self) -> Vec<String> {
         let mut domains: Vec<String> = self
             .catalog
             .enum_domains()
-            .map(|domain| domain.domain.clone())
+            .filter(|domain| !crate::enums::NON_SOURCE_DOMAINS.contains(&domain.domain.as_str()))
+            .map(|domain| crate::enums::opy_domain(&domain.domain).to_string())
             .collect();
         domains.extend(
-            crate::enums::DOMAIN_RENAMES
+            crate::enums::DOMAIN_ALIASES
                 .iter()
                 .map(|(source, _)| source.to_string()),
         );
@@ -1180,8 +1289,11 @@ impl<'a> Index<'a> {
             .iter()
             .flat_map(|function| function.params.iter())
             .filter_map(|param| param.domain.as_deref())
+            .map(crate::enums::opy_domain)
         {
-            if !domains.iter().any(|d| d == domain) {
+            if !crate::enums::NON_SOURCE_DOMAINS.contains(&domain)
+                && !domains.iter().any(|d| d == domain)
+            {
                 domains.push(domain.to_string());
             }
         }
@@ -1322,63 +1434,8 @@ fn setting_value_form(definition: &settings::SettingDefinition) -> SettingValueF
     }
 }
 
-/// Render a signature in the call-syntax form Wright composes (`name: Type`
-/// for a required slot, `name = default` or `name?` for an optional one,
-/// `name: Domain(members|…)` or `name: Domain(count)` for a required enum
-/// slot).
-fn signature_text(function: &Function, params: &[SignatureParam]) -> String {
-    if function.unbounded && params.is_empty() {
-        return format!("{}(…)", function.id);
-    }
-    let mut signature = signature_text_raw(&function.id, params);
-    if function.unbounded {
-        signature = signature.replace(')', ", …)");
-    }
-    signature
-}
-
-/// The shared parameter-list renderer over resolved `SignatureParam`s.
-fn signature_text_raw(name: &str, params: &[SignatureParam]) -> String {
-    let params: Vec<String> = params.iter().map(param_text).collect();
-    format!("{name}({})", params.join(", "))
-}
-
-/// One rendered parameter.
-fn param_text(param: &SignatureParam) -> String {
-    let mut name = param.name.clone();
-    for alternate in &param.alternate_names {
-        name.push('|');
-        name.push_str(alternate);
-    }
-    if param.required {
-        if let Some(domain) = &param.domain {
-            return match (&param.members, param.member_count) {
-                (Some(members), _) => format!(
-                    "{name}: {domain}({})",
-                    members
-                        .iter()
-                        .map(|member| member.spelling.as_str())
-                        .collect::<Vec<_>>()
-                        .join("|")
-                ),
-                (None, Some(count)) => format!("{name}: {domain}({count})"),
-                (None, None) => format!("{name}: {domain}"),
-            };
-        }
-        return match &param.param_type {
-            Some(param_type) => format!("{name}: {param_type}"),
-            None => name,
-        };
-    }
-    match param.default.as_deref() {
-        Some("null") => format!("[{name}?]"),
-        Some(default) => format!("[{name} = {default}]"),
-        None => format!("[{name}]"),
-    }
-}
-
 /// Render a parameter default in source syntax.
-fn default_text(default: &ParamDefault, param: &Param) -> String {
+fn default_text(default: &ParamDefault, domain: Option<&str>, catalog: &Catalog) -> String {
     match default {
         ParamDefault::Null { .. } => "null".to_string(),
         ParamDefault::Bool(value) => value.to_string(),
@@ -1403,8 +1460,23 @@ fn default_text(default: &ParamDefault, param: &Param) -> String {
                 .join(", ");
             format!("{call}({args})")
         }
-        ParamDefault::EnumMember(member) => match &param.domain {
-            Some(domain) => format!("{domain}.{member}"),
+        ParamDefault::EnumMember(member) => match domain {
+            // Defaults render under the advertised OPY spelling: a member
+            // recorded by its catalog id (`DO_NOT_CLIP`) shows as `NONE`.
+            Some(domain) => {
+                let spelling = crate::enums::domain_members(domain, catalog)
+                    .and_then(|members| {
+                        members
+                            .iter()
+                            .find(|entry| {
+                                entry.member == *member
+                                    || entry.catalog_member.as_deref() == Some(member.as_str())
+                            })
+                            .map(|entry| entry.member.clone())
+                    })
+                    .unwrap_or_else(|| member.clone());
+                format!("{domain}.{spelling}")
+            }
             None => member.clone(),
         },
     }
@@ -1504,9 +1576,9 @@ mod tests {
     /// pinned reference accepts — never a canonical catalog id
     /// (`Hero.SOLDIER_76` is a reference rejection, not an alias). The
     /// upstream-accepted extra spellings are the legacy hero names
-    /// `mccree`/`hammond` (overpy 9.7.10 rewrites them in `Hero` member
-    /// access); `opy-compat probe-generate` emits a `:alias` probe per
-    /// reported alias so the same set is checked against the oracle.
+    /// `MCCREE`/`HAMMOND` and the `HudPosition.ACTUALLY_LEFT` emit alias
+    /// (overpy 9.7.10 rewrites all three in member access); `opy-compat
+    /// probe-generate` emits a `:spelling` probe per reported spelling so
     /// the same set is checked against the oracle.
     #[test]
     fn reported_member_aliases_are_reference_spellings() {
@@ -1530,7 +1602,10 @@ mod tests {
             }
         }
         reported.sort();
-        assert_eq!(reported, ["Hero.HAMMOND", "Hero.MCCREE"]);
+        assert_eq!(
+            reported,
+            ["Hero.HAMMOND", "Hero.MCCREE", "HudPosition.ACTUALLY_LEFT"]
+        );
     }
 
     /// The diagnostic candidate pool is the same member list the lookup

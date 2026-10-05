@@ -500,7 +500,7 @@ fn github_workflow_path_properties_are_escaped() {
 }
 
 #[test]
-fn lookup_prints_function_signature_lines() {
+fn lookup_prints_function_param_lines() {
     let output = run(&["lookup", "Create HUD Text"]);
     assert_eq!(
         output.status.code(),
@@ -511,7 +511,7 @@ fn lookup_prints_function_signature_lines() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("hudText(") && stdout.contains("visibleTo"),
-        "signature line: {stdout}"
+        "parameter line: {stdout}"
     );
 }
 

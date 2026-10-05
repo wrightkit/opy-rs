@@ -242,12 +242,17 @@ fn lookup_hit_line(hit: &LookupHit) -> String {
         LookupHit::Function {
             spelling,
             function_kind,
-            signature,
+            params,
             matched_on,
             ..
         } => format!(
-            "{} {spelling}  {signature}  [{}]",
+            "{} {spelling}({})  [{}]",
             function_kind.as_str(),
+            params
+                .iter()
+                .map(|param| param.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", "),
             matched_on.as_str()
         ),
         LookupHit::EnumDomain {

@@ -836,23 +836,20 @@ impl Lowerer {
         self.errors.push(OpyError::at(code, message, span));
     }
 
-    /// An error that carries the valid spellings nearest `rejected`: the
-    /// message gains a `did you mean` suffix and the diagnostic records the
-    /// bounded, best-first candidate list (`crate::lookup` ranks both from
-    /// the same data the resolution used).
+    /// An error whose message names the valid spellings nearest `rejected`
+    /// in a `(did you mean …?)` suffix; `crate::lookup` ranks the pool —
+    /// the same data the resolution just failed on — so the suggestion
+    /// cannot drift from what the source accepts.
     fn error_at_candidates(
         &mut self,
         code: &str,
         message: String,
         span: Span,
         rejected: &str,
-        candidates: Vec<String>,
+        pool: Vec<String>,
     ) {
-        let message = crate::lookup::did_you_mean(message, rejected, &candidates);
-        self.errors.push(
-            OpyError::at(code, message, span)
-                .with_candidates(crate::lookup::rank(rejected, &candidates)),
-        );
+        let ranked = crate::lookup::rank(rejected, &pool);
+        self.error_at(code, crate::lookup::did_you_mean(message, &ranked), span);
     }
 }
 

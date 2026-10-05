@@ -4,9 +4,12 @@
 //! accepts: the lowerer resolves member access through [`canonical_member`],
 //! and the lookup answers enum-domain and enum-member questions through
 //! [`domain_members`]. Workshop-owned enum member lists stay in the
-//! `workshop-rs` catalog; only the OPY-side spelling differences (renamed
-//! domains, renamed or legacy member spellings, and OPY-only `Color`
-//! constants) are declared here.
+//! `workshop-rs` catalog; only the OPY-side spelling differences (renamed or
+//! aliased domains, renamed members, reference-accepted alternate member
+//! spellings, and OPY-only `Color` constants) are declared here. The lookup
+//! reports exactly the spellings the pinned reference accepts — catalog ids
+//! that upstream rejects stay query keys (`MatchKind::CatalogId`), never
+//! advertised members or aliases.
 
 use workshop_rs::catalog::{Catalog, Locale};
 
@@ -15,22 +18,59 @@ pub(crate) fn en_us() -> Locale {
     Locale::new("en-US")
 }
 
-/// The OPY source domain spellings that rename a canonical catalog domain.
-///
-/// `Clip` and `AsyncBehavior` are the upstream OPY names for catalog
-/// domains the Workshop data names differently; the catalog ids stay
-/// accepted as source domain names too.
-pub(crate) const DOMAIN_RENAMES: &[(&str, &str)] =
-    &[("Clip", "Clipping"), ("AsyncBehavior", "StartRuleBehavior")];
+/// The OPY source domain spellings that rename a canonical catalog domain
+/// whose own name is not a reference source spelling: upstream's enum is
+/// named `Clip`, so `Clipping.DO_NOT_CLIP` does not compile upstream even
+/// though the lowerer resolves the catalog id verbatim.
+pub(crate) const DOMAIN_RENAMES: &[(&str, &str)] = &[("Clip", "Clipping")];
+
+/// Source-level domain spellings the reference accepts as aliases of a
+/// catalog domain: upstream rewrites `AsyncBehavior` to `StartRuleBehavior`
+/// at parse time, so both domain spellings compile with the same member
+/// set.
+pub(crate) const DOMAIN_ALIASES: &[(&str, &str)] = &[("AsyncBehavior", "StartRuleBehavior")];
+
+/// Catalog enum domains that are not `Domain.MEMBER` sources in the
+/// reference: upstream rejects `EventTeam.ALL`, `Rounding.UP`, and friends
+/// as ordinary member access on undeclared names. The lowerer still
+/// resolves their catalog members (an existing acceptance superset), but
+/// lookup must not advertise spellings the pinned reference cannot compile.
+pub(crate) const NON_SOURCE_DOMAINS: &[&str] = &[
+    "EventPlayer",
+    "EventTeam",
+    "InworldTextReeval",
+    "Operation",
+    "ProgressBarWorldReeval",
+    "Rounding",
+];
 
 /// The canonical catalog domain a source-level domain name resolves to.
 pub(crate) fn catalog_domain(domain: &str) -> &str {
     DOMAIN_RENAMES
         .iter()
+        .chain(DOMAIN_ALIASES)
         .find(|(source, _)| *source == domain)
         .map(|(_, canonical)| *canonical)
         .unwrap_or(domain)
 }
+
+/// The source-level spelling a catalog domain is reported under:
+/// `Clipping` reports as `Clip`. Catalog names that are themselves
+/// reference spellings (including `StartRuleBehavior`, whose `AsyncBehavior`
+/// alias is an additional hit) report unchanged.
+pub(crate) fn opy_domain(domain: &str) -> &str {
+    DOMAIN_RENAMES
+        .iter()
+        .find(|(_, canonical)| *canonical == domain)
+        .map(|(source, _)| *source)
+        .unwrap_or(domain)
+}
+
+/// Catalog members with no reference source spelling: `LIJIANG_TOWER_LUNAR`
+/// exists in the catalog while upstream's map list has no spelling for it.
+/// The lowerer still accepts the catalog id (acceptance superset), but
+/// lookup must not advertise it.
+const NON_SOURCE_MEMBERS: &[(&str, &str)] = &[("Map", "LIJIANG_TOWER_LUNAR")];
 
 /// An OPY `Domain.MEMBER` spelling whose canonical catalog member id differs.
 struct MemberRename {
@@ -40,9 +80,11 @@ struct MemberRename {
     opy: &'static str,
     /// The canonical catalog member it resolves to.
     catalog: &'static str,
-    /// Legacy upstream spellings the reference still accepts (`Hero.MCCREE`).
-    /// These are listed as lookup aliases rather than canonical spellings.
-    legacy: bool,
+    /// Alternate upstream spellings the reference still accepts
+    /// (`Hero.MCCREE` resolves to `CASSIDY`; `HudPosition.ACTUALLY_LEFT`
+    /// emits `Left`). These are listed as lookup aliases rather than
+    /// canonical spellings.
+    alias: bool,
 }
 
 const MEMBER_RENAMES: &[MemberRename] = &[
@@ -51,113 +93,483 @@ const MEMBER_RENAMES: &[MemberRename] = &[
         domain: "Map",
         opy: "BLIZZ_WORLD",
         catalog: "BLIZZARD_WORLD",
-        legacy: false,
+        alias: false,
     },
     MemberRename {
         domain: "Map",
         opy: "BLIZZ_WORLD_WINTER",
         catalog: "BLIZZARD_WORLD_WINTER",
-        legacy: false,
+        alias: false,
     },
     MemberRename {
         domain: "Map",
         opy: "ROUTE66",
         catalog: "ROUTE_66",
-        legacy: false,
+        alias: false,
     },
     MemberRename {
         domain: "Map",
         opy: "VOLSKAYA",
         catalog: "VOLSKAYA_INDUSTRIES",
-        legacy: false,
+        alias: false,
+    },
+    // Newer catalog map ids drop the underscores the reference keeps;
+    // upstream spells `busanDowntownLny` as `BUSAN_DOWNTOWN_LNY`.
+    MemberRename {
+        domain: "Map",
+        opy: "ARENA_VICTORIAE",
+        catalog: "ARENAVICTORIAE",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "BLACK_FOREST_WINTER",
+        catalog: "BLACKFORESTWINTER",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "BUSAN_DOWNTOWN_LNY",
+        catalog: "BUSANDOWNTOWNLNY",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "BUSAN_SANCTUARY_LNY",
+        catalog: "BUSANSANCTUARYLNY",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "BUSAN_STADIUM",
+        catalog: "BUSANSTADIUM",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "BUSAN_STADIUM_CLASSIC",
+        catalog: "BUSANSTADIUMCLASSIC",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "CHATEAU_GUILLARD_HALLOWEEN",
+        catalog: "CHATEAUGUILLARDHALLOWEEN",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "ECOPOINT_ANTARCTICA",
+        catalog: "ECOPOINTANTARCTICA",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "ECOPOINT_ANTARCTICA_WINTER",
+        catalog: "ECOPOINTANTARCTICAWINTER",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "ESTADIO_DAS_RAS",
+        catalog: "ESTADIODASRAS",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "ILIOS_LIGHTHOUSE",
+        catalog: "ILIOSLIGHTHOUSE",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "ILIOS_RUINS",
+        catalog: "ILIOSRUINS",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "ILIOS_WELL",
+        catalog: "ILIOSWELL",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "LIJIANG_CONTROL_CENTER",
+        catalog: "LIJIANGCONTROLCENTER",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "LIJIANG_CONTROL_CENTER_LNY",
+        catalog: "LIJIANGCONTROLCENTERLNY",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "LIJIANG_GARDEN",
+        catalog: "LIJIANGGARDEN",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "LIJIANG_GARDEN_LNY",
+        catalog: "LIJIANGGARDENLNY",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "LIJIANG_NIGHT_MARKET",
+        catalog: "LIJIANGNIGHTMARKET",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "LIJIANG_NIGHT_MARKET_LNY",
+        catalog: "LIJIANGNIGHTMARKETLNY",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "LIJIANG_TOWER_LNY",
+        catalog: "LIJIANGTOWERLNY",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "NEON_JUNCTION",
+        catalog: "NEONJUNCTION",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "NEPAL_SANCTUM",
+        catalog: "NEPALSANCTUM",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "NEPAL_SHRINE",
+        catalog: "NEPALSHRINE",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "NEPAL_VILLAGE",
+        catalog: "NEPALVILLAGE",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "NEPAL_VILLAGE_WINTER",
+        catalog: "NEPALVILLAGEWINTER",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "OASIS_CITY_CENTER",
+        catalog: "OASISCITYCENTER",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "OASIS_GARDENS",
+        catalog: "OASISGARDENS",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "OASIS_UNIVERSITY",
+        catalog: "OASISUNIVERSITY",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "PLACE_LACROIX",
+        catalog: "PLACELACROIX",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "PRACTICE_RANGE",
+        catalog: "PRACTICERANGE",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "REDWOOD_DAM",
+        catalog: "REDWOODDAM",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "SYDNEY_HARBOUR_ARENA",
+        catalog: "SYDNEYHARBOURARENA",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "SYDNEY_HARBOUR_ARENA_CLASSIC",
+        catalog: "SYDNEYHARBOURARENACLASSIC",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "WORKSHOP_CHAMBER",
+        catalog: "WORKSHOPCHAMBER",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "WORKSHOP_EXPANSE",
+        catalog: "WORKSHOPEXPANSE",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "WORKSHOP_EXPANSE_NIGHT",
+        catalog: "WORKSHOPEXPANSENIGHT",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "WORKSHOP_GREEN_SCREEN",
+        catalog: "WORKSHOPGREENSCREEN",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "WORKSHOP_ISLAND",
+        catalog: "WORKSHOPISLAND",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Map",
+        opy: "WORKSHOP_ISLAND_NIGHT",
+        catalog: "WORKSHOPISLANDNIGHT",
+        alias: false,
+    },
+    // `Gamemode` members follow the same camel-to-snake convention.
+    MemberRename {
+        domain: "Gamemode",
+        opy: "ASSAULT_BALANCED_OVERWATCH",
+        catalog: "ASSAULTBALANCEDOVERWATCH",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Gamemode",
+        opy: "BOUNTY_HUNTER",
+        catalog: "BOUNTYHUNTER",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Gamemode",
+        opy: "CONTROL_APRIL_FOOLS",
+        catalog: "CONTROLAPRILFOOLS",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Gamemode",
+        opy: "CONTROL_BALANCED_OVERWATCH",
+        catalog: "CONTROLBALANCEDOVERWATCH",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Gamemode",
+        opy: "CONTROL_COMMUNITY",
+        catalog: "CONTROLCOMMUNITY",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Gamemode",
+        opy: "ESCORT_APRIL_FOOLS",
+        catalog: "ESCORTAPRILFOOLS",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Gamemode",
+        opy: "ESCORT_BALANCED_OVERWATCH",
+        catalog: "ESCORTBALANCEDOVERWATCH",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Gamemode",
+        opy: "ESCORT_COMMUNITY",
+        catalog: "ESCORTCOMMUNITY",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Gamemode",
+        opy: "FLASHPOINT_APRIL_FOOLS",
+        catalog: "FLASHPOINTAPRILFOOLS",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Gamemode",
+        opy: "FREEZETHAW_ELIMINATION",
+        catalog: "FREEZETHAWELIMINATION",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Gamemode",
+        opy: "HYBRID_APRIL_FOOLS",
+        catalog: "HYBRIDAPRILFOOLS",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Gamemode",
+        opy: "HYBRID_BALANCED_OVERWATCH",
+        catalog: "HYBRIDBALANCEDOVERWATCH",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Gamemode",
+        opy: "HYBRID_COMMUNITY",
+        catalog: "HYBRIDCOMMUNITY",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Gamemode",
+        opy: "MEIS_SNOWBALL_OFFENSIVE",
+        catalog: "MEISSNOWBALLOFFENSIVE",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Gamemode",
+        opy: "PRACTICE_RANGE",
+        catalog: "PRACTICERANGE",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Gamemode",
+        opy: "PUSH_APRIL_FOOLS",
+        catalog: "PUSHAPRILFOOLS",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Gamemode",
+        opy: "PUSH_BALANCED_OVERWATCH",
+        catalog: "PUSHBALANCEDOVERWATCH",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Gamemode",
+        opy: "PUSH_COMMUNITY",
+        catalog: "PUSHCOMMUNITY",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Gamemode",
+        opy: "SNOWBALL_FFA",
+        catalog: "SNOWBALLFFA",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Gamemode",
+        opy: "STADIUM_PRACTICE_RANGE",
+        catalog: "STADIUMPRACTICERANGE",
+        alias: false,
+    },
+    MemberRename {
+        domain: "Gamemode",
+        opy: "YETI_HUNTER",
+        catalog: "YETIHUNTER",
+        alias: false,
+    },
+    // `HudPosition.ACTUALLY_LEFT` is an upstream alias that emits `Left`.
+    MemberRename {
+        domain: "HudPosition",
+        opy: "ACTUALLY_LEFT",
+        catalog: "LEFT",
+        alias: true,
     },
     // `Clip` members rename onto `Clipping` catalog members.
     MemberRename {
         domain: "Clip",
         opy: "NONE",
         catalog: "DO_NOT_CLIP",
-        legacy: false,
+        alias: false,
     },
     MemberRename {
         domain: "Clip",
         opy: "SURFACES",
         catalog: "CLIP_AGAINST_SURFACES",
-        legacy: false,
+        alias: false,
     },
     MemberRename {
         domain: "SpecVisibility",
         opy: "ALWAYS",
         catalog: "VISIBLE_ALWAYS",
-        legacy: false,
+        alias: false,
     },
     MemberRename {
         domain: "SpecVisibility",
         opy: "NEVER",
         catalog: "VISIBLE_NEVER",
-        legacy: false,
+        alias: false,
     },
     MemberRename {
         domain: "EffectReeval",
         opy: "VISIBILITY_POSITION_AND_RADIUS",
         catalog: "VISIBLE_TO_POSITION_AND_RADIUS",
-        legacy: false,
+        alias: false,
     },
     MemberRename {
         domain: "HudReeval",
         opy: "VISIBILITY_AND_COLOR",
         catalog: "VISIBLE_TO_AND_COLOR",
-        legacy: false,
+        alias: false,
     },
     MemberRename {
         domain: "HudReeval",
         opy: "VISIBILITY_STRING_AND_COLOR",
         catalog: "VISIBLE_TO_STRING_AND_COLOR",
-        legacy: false,
+        alias: false,
     },
     // Upstream hero member spellings differ from the canonical hero ids.
     MemberRename {
         domain: "Hero",
         opy: "DOMINA",
         catalog: "JINYU",
-        legacy: false,
+        alias: false,
     },
     MemberRename {
         domain: "Hero",
         opy: "DMON",
         catalog: "D_MON",
-        legacy: false,
+        alias: false,
     },
     MemberRename {
         domain: "Hero",
         opy: "SOLDIER",
         catalog: "SOLDIER_76",
-        legacy: false,
+        alias: false,
     },
     // Legacy upstream hero spellings the reference still accepts.
     MemberRename {
         domain: "Hero",
         opy: "MCCREE",
         catalog: "CASSIDY",
-        legacy: true,
+        alias: true,
     },
     MemberRename {
         domain: "Hero",
         opy: "HAMMOND",
         catalog: "WRECKING_BALL",
-        legacy: true,
+        alias: true,
     },
     // `Team.1`/`Team.2` are the upstream team spellings.
     MemberRename {
         domain: "Team",
         opy: "1",
         catalog: "TEAM_1",
-        legacy: false,
+        alias: false,
     },
     MemberRename {
         domain: "Team",
         opy: "2",
         catalog: "TEAM_2",
-        legacy: false,
+        alias: false,
     },
 ];
 
@@ -251,11 +663,16 @@ pub(crate) fn domain_members(domain: &str, catalog: &Catalog) -> Option<Vec<Doma
     let mut members: Vec<DomainMember> = enum_domain
         .members
         .iter()
+        .filter(|entry| {
+            !NON_SOURCE_MEMBERS
+                .iter()
+                .any(|(d, member)| *d == domain && *member == entry.member)
+        })
         .map(|entry| {
             let rename = MEMBER_RENAMES
                 .iter()
                 .find(|rename| {
-                    rename.domain == domain && !rename.legacy && rename.catalog == entry.member
+                    rename.domain == domain && !rename.alias && rename.catalog == entry.member
                 })
                 .map(|rename| rename.opy.to_string());
             let member = rename.unwrap_or_else(|| entry.member.clone());
@@ -266,7 +683,7 @@ pub(crate) fn domain_members(domain: &str, catalog: &Catalog) -> Option<Vec<Doma
             let aliases: Vec<String> = MEMBER_RENAMES
                 .iter()
                 .filter(|rename| {
-                    rename.domain == domain && rename.legacy && rename.catalog == entry.member
+                    rename.domain == domain && rename.alias && rename.catalog == entry.member
                 })
                 .map(|rename| rename.opy.to_string())
                 .collect();
