@@ -31,6 +31,18 @@ const MAIN_FILE_ERROR_ENTRY: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/tests/fixtures/project-main-file-error/error-source.opy"
 );
+const MAIN_FILE_SUBDIR_ENTRY: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/fixtures/project-main-file-subdir/source.opy"
+);
+const DIAGNOSTIC_POSITIONS: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/fixtures/diagnostic-positions/main.opy"
+);
+const DUPLICATE_INCLUDE: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/fixtures/duplicate-include/main.opy"
+);
 const UNSUPPORTED: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../opy-rs/tests/fixtures/corpus/synthetic/directives/source.opy"
@@ -413,7 +425,7 @@ fn compile_error_source_identity_uses_effective_main_file() {
     }));
     assert_eq!(
         compiled["result"]["sourceIdentity"],
-        "643cff51fa14f88a2f18e711820c020a24a859e7f01f3730c95a0709f76f1f33"
+        "e534d55d330626abcc547e9d70c09af23275de37f0e5e1cdbe125a13a4853526"
     );
     assert!(compiled["result"]["artifact"].is_null());
     assert!(
@@ -427,6 +439,376 @@ fn compile_error_source_identity_uses_effective_main_file() {
                     .expect("diagnostics")
                     .is_empty()
             })
+    );
+    session.shutdown();
+}
+
+#[test]
+fn check_project_main_file_error_reports_effective_document_uris() {
+    let mut session = Session::spawn();
+    session.initialize();
+    let checked = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "lpp/check",
+        "params": {
+            "entry": {
+                "uri": file_uri(MAIN_FILE_ERROR_ENTRY),
+                "languageId": "opy",
+                "version": 7,
+            }
+        },
+    }));
+    let documents = checked["result"]["documents"]
+        .as_array()
+        .expect("documents");
+    // The file registry resolves against the `#!mainFile` effective directory
+    // (`sub/`), not the directory that held the entry source.
+    let fixture = Path::new(MAIN_FILE_ERROR_ENTRY)
+        .parent()
+        .expect("fixture directory");
+    assert_eq!(
+        documents
+            .iter()
+            .map(|document| document["uri"].as_str().expect("uri").to_owned())
+            .collect::<Vec<_>>(),
+        vec![
+            file_uri(MAIN_FILE_ERROR_ENTRY),
+            file_uri(fixture.join("sub/error-entry.opy").to_str().expect("utf8")),
+            file_uri(
+                fixture
+                    .join("sub/error-include.opy")
+                    .to_str()
+                    .expect("utf8")
+            ),
+        ]
+    );
+    assert!(documents.iter().all(|document| document["version"] == 7));
+    assert_eq!(documents[0]["diagnostics"], json!([]));
+    let diagnostics = documents[1]["diagnostics"].as_array().expect("diagnostics");
+    assert_eq!(diagnostics.len(), 2);
+    // `rule "broken"` misses its colon at line 3 column 14; `@Event` is then
+    // an unexpected token at line 4 column 5.
+    assert_eq!(
+        diagnostics[0],
+        json!({
+            "range": {
+                "start": { "line": 2, "character": 13 },
+                "end": { "line": 2, "character": 13 },
+            },
+            "severity": "error",
+            "code": "parse-error",
+            "message": "expected ':' after the rule name",
+            "source": "opy",
+        })
+    );
+    assert_eq!(
+        diagnostics[1],
+        json!({
+            "range": {
+                "start": { "line": 3, "character": 4 },
+                "end": { "line": 3, "character": 5 },
+            },
+            "severity": "error",
+            "code": "parse-error",
+            "message": "expected a top-level declaration (rule/def/globalvar/playervar/subroutine/enum/macro) but found '@'",
+            "source": "opy",
+        })
+    );
+    assert_eq!(documents[2]["diagnostics"], json!([]));
+    session.shutdown();
+}
+
+#[test]
+fn check_project_main_file_subdirectory_reports_effective_document_uris() {
+    let mut session = Session::spawn();
+    session.initialize();
+    let checked = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "lpp/check",
+        "params": {
+            "entry": {
+                "uri": file_uri(MAIN_FILE_SUBDIR_ENTRY),
+                "languageId": "opy",
+                "version": 7,
+            }
+        },
+    }));
+    let documents = checked["result"]["documents"]
+        .as_array()
+        .expect("documents");
+    let fixture = Path::new(MAIN_FILE_SUBDIR_ENTRY)
+        .parent()
+        .expect("fixture directory");
+    assert_eq!(
+        documents
+            .iter()
+            .map(|document| document["uri"].as_str().expect("uri").to_owned())
+            .collect::<Vec<_>>(),
+        vec![
+            file_uri(MAIN_FILE_SUBDIR_ENTRY),
+            file_uri(fixture.join("sub/entry.opy").to_str().expect("utf8")),
+            file_uri(fixture.join("sub/defs.opy").to_str().expect("utf8")),
+        ]
+    );
+    assert!(
+        documents
+            .iter()
+            .all(|document| document["version"] == 7 && document["diagnostics"] == json!([]))
+    );
+    session.shutdown();
+}
+
+#[test]
+fn check_duplicate_include_warning_keeps_its_severity() {
+    let mut session = Session::spawn();
+    session.initialize();
+    let checked = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "lpp/check",
+        "params": {
+            "entry": {
+                "uri": file_uri(DUPLICATE_INCLUDE),
+                "languageId": "opy",
+                "version": 7,
+            }
+        },
+    }));
+    let documents = checked["result"]["documents"]
+        .as_array()
+        .expect("documents");
+    assert_eq!(documents.len(), 2);
+    assert_eq!(documents[0]["uri"], file_uri(DUPLICATE_INCLUDE));
+    assert_eq!(
+        documents[0]["diagnostics"]
+            .as_array()
+            .expect("diagnostics")
+            .len(),
+        1
+    );
+    assert_eq!(
+        documents[0]["diagnostics"][0],
+        json!({
+            "range": {
+                "start": { "line": 1, "character": 0 },
+                "end": { "line": 1, "character": 22 },
+            },
+            "severity": "warning",
+            "code": "w_already_imported",
+            "message": format!(
+                "The file '{}' was already imported and will not be imported again.",
+                Path::new(DUPLICATE_INCLUDE)
+                    .parent()
+                    .expect("fixture directory")
+                    .join("shared.opy")
+                    .canonicalize()
+                    .expect("include path")
+                    .display(),
+            ),
+            "source": "opy",
+        })
+    );
+    assert_eq!(
+        documents[1]["uri"],
+        file_uri(
+            Path::new(DUPLICATE_INCLUDE)
+                .parent()
+                .expect("fixture directory")
+                .join("shared.opy")
+                .to_str()
+                .expect("utf8")
+        )
+    );
+    assert_eq!(documents[1]["diagnostics"], json!([]));
+    session.shutdown();
+}
+
+#[test]
+fn check_maps_tab_expanded_columns_to_utf16_positions() {
+    let mut session = Session::spawn();
+    session.initialize();
+    let checked = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "lpp/check",
+        "params": {
+            "entry": {
+                "uri": file_uri(DIAGNOSTIC_POSITIONS),
+                "languageId": "opy",
+                "version": 7,
+            }
+        },
+    }));
+    let diagnostics = checked["result"]["documents"][0]["diagnostics"]
+        .as_array()
+        .expect("diagnostics");
+    assert_eq!(diagnostics.len(), 1);
+    // Line 3 is `\tbad ║`: the frontend column is 9 because the tab expands to
+    // four columns, but the UTF-16 character is 5. A raw character-index
+    // projection would report 8.
+    assert_eq!(
+        diagnostics[0],
+        json!({
+            "range": {
+                "start": { "line": 2, "character": 5 },
+                "end": { "line": 2, "character": 6 },
+            },
+            "severity": "error",
+            "code": "lex-error",
+            "message": "unexpected character '║'",
+            "source": "opy",
+        })
+    );
+    session.shutdown();
+}
+
+#[test]
+fn document_check_maps_bmp_and_supplementary_columns_to_utf16() {
+    let mut session = Session::spawn();
+    session.initialize();
+    let checked = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "lpp/check",
+        "params": {
+            "documents": {
+                "file:///pos/bmp.opy": {
+                    "uri": "file:///pos/bmp.opy",
+                    "languageId": "opy",
+                    "version": 1,
+                    "text": "rule \"r\":\n\t@Event global\n\tbad ║\n"
+                },
+                "file:///pos/supplementary.opy": {
+                    "uri": "file:///pos/supplementary.opy",
+                    "languageId": "opy",
+                    "version": 1,
+                    "text": "rule \"r\":\n\t@Event global\n\tbad \u{1D4E7}\n"
+                }
+            }
+        }
+    }));
+    let documents = checked["result"]["documents"]
+        .as_array()
+        .expect("documents");
+    let diagnostics_of = |uri: &str| {
+        documents
+            .iter()
+            .find(|document| document["uri"] == uri)
+            .unwrap_or_else(|| panic!("document {uri}"))["diagnostics"]
+            .clone()
+    };
+    // `\tbad ║`: the BMP character is one UTF-16 unit.
+    assert_eq!(
+        diagnostics_of("file:///pos/bmp.opy")[0]["range"],
+        json!({
+            "start": { "line": 2, "character": 5 },
+            "end": { "line": 2, "character": 6 },
+        })
+    );
+    // `\tbad 𝓧`: the supplementary character is a surrogate pair.
+    assert_eq!(
+        diagnostics_of("file:///pos/supplementary.opy")[0]["range"],
+        json!({
+            "start": { "line": 2, "character": 5 },
+            "end": { "line": 2, "character": 7 },
+        })
+    );
+    session.shutdown();
+}
+
+#[test]
+fn document_check_reports_effective_main_file_and_include_uris() {
+    let mut session = Session::spawn();
+    session.initialize();
+    let checked = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "lpp/check",
+        "params": {
+            "documents": {
+                "file:///proj/source.opy": {
+                    "uri": "file:///proj/source.opy",
+                    "languageId": "opy",
+                    "version": 3,
+                    "text": "#!mainFile \"sub/entry.opy\"\n"
+                },
+                "file:///proj/sub/entry.opy": {
+                    "uri": "file:///proj/sub/entry.opy",
+                    "languageId": "opy",
+                    "version": 4,
+                    "text": "#!include \"defs.opy\"\nrule \"broken\"\n    @Event global\n"
+                },
+                "file:///proj/sub/defs.opy": {
+                    "uri": "file:///proj/sub/defs.opy",
+                    "languageId": "opy",
+                    "version": 5,
+                    "text": "rule \"also broken\"\n    @Event global\n"
+                }
+            }
+        }
+    }));
+    let documents = checked["result"]["documents"]
+        .as_array()
+        .expect("documents");
+    let diagnostics_of = |uri: &str| {
+        documents
+            .iter()
+            .find(|document| document["uri"] == uri)
+            .unwrap_or_else(|| panic!("document {uri}"))["diagnostics"]
+            .clone()
+    };
+    // The diagnostics found through the redirected effective main file and its
+    // include resolve against `sub/` and land on the supplied documents.
+    assert_eq!(diagnostics_of("file:///proj/source.opy"), json!([]));
+    let entry_diagnostics = diagnostics_of("file:///proj/sub/entry.opy");
+    assert_eq!(
+        entry_diagnostics
+            .as_array()
+            .expect("diagnostics")
+            .iter()
+            .map(|diagnostic| {
+                (
+                    diagnostic["range"]["start"].clone(),
+                    diagnostic["range"]["end"].clone(),
+                )
+            })
+            .collect::<Vec<_>>(),
+        vec![
+            (
+                json!({ "line": 1, "character": 13 }),
+                json!({ "line": 1, "character": 13 })
+            ),
+            (
+                json!({ "line": 2, "character": 4 }),
+                json!({ "line": 2, "character": 5 })
+            ),
+        ]
+    );
+    let defs_diagnostics = diagnostics_of("file:///proj/sub/defs.opy");
+    assert_eq!(
+        defs_diagnostics
+            .as_array()
+            .expect("diagnostics")
+            .iter()
+            .map(|diagnostic| {
+                (
+                    diagnostic["range"]["start"].clone(),
+                    diagnostic["range"]["end"].clone(),
+                )
+            })
+            .collect::<Vec<_>>(),
+        vec![
+            (
+                json!({ "line": 0, "character": 18 }),
+                json!({ "line": 0, "character": 18 })
+            ),
+            (
+                json!({ "line": 1, "character": 4 }),
+                json!({ "line": 1, "character": 5 })
+            ),
+        ]
     );
     session.shutdown();
 }
@@ -805,6 +1187,35 @@ fn mapped_includes_carry_their_own_document_uris_and_macros_map_to_the_invocatio
     assert_eq!(
         (file, start_line, start_column, end_line),
         (main_index as u64, 6, 5, 6)
+    );
+    session.shutdown();
+}
+
+#[test]
+fn mapped_artifact_file_uris_resolve_against_the_effective_main_directory() {
+    let mut session = Session::spawn();
+    session.initialize_version("1.4");
+    let response = compile_entry(
+        &mut session,
+        MAIN_FILE_SUBDIR_ENTRY,
+        Some(json!([MAPPED_V1])),
+    );
+    let document = mapped_document(&response);
+    let fixture = Path::new(MAIN_FILE_SUBDIR_ENTRY)
+        .parent()
+        .expect("fixture directory");
+    assert_eq!(
+        document["files"]
+            .as_array()
+            .expect("files")
+            .iter()
+            .map(|file| file["path"].as_str().expect("path").to_owned())
+            .collect::<Vec<_>>(),
+        vec![
+            file_uri(MAIN_FILE_SUBDIR_ENTRY),
+            file_uri(fixture.join("sub/entry.opy").to_str().expect("utf8")),
+            file_uri(fixture.join("sub/defs.opy").to_str().expect("utf8")),
+        ]
     );
     session.shutdown();
 }

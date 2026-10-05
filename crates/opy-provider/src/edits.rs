@@ -112,13 +112,13 @@ impl SiteToken {
 /// Source text with LPP position mapping: 0-based lines, UTF-16 code units
 /// within a line. Mirrors the conformance reference implementation so every
 /// provider maps positions identically.
-struct SourceText<'a> {
+pub(crate) struct SourceText<'a> {
     text: &'a str,
     line_starts: Vec<usize>,
 }
 
 impl<'a> SourceText<'a> {
-    fn new(text: &'a str) -> Self {
+    pub(crate) fn new(text: &'a str) -> Self {
         let mut line_starts = vec![0];
         for (index, byte) in text.bytes().enumerate() {
             if byte == b'\n' {
@@ -148,7 +148,7 @@ impl<'a> SourceText<'a> {
         (start, end)
     }
 
-    fn line_text(&self, line: usize) -> Option<&'a str> {
+    pub(crate) fn line_text(&self, line: usize) -> Option<&'a str> {
         (line < self.line_starts.len()).then(|| {
             let (start, end) = self.line_byte_range(line);
             &self.text[start..end]
@@ -223,6 +223,23 @@ fn utf16_column(line: &str, index: usize) -> u32 {
         .take(index)
         .map(|ch| ch.len_utf16() as u32)
         .sum()
+}
+
+/// The UTF-16 `character` unit of 1-based frontend `column` within `line`.
+/// The lexer expands `\t` to four columns; a column inside a tab's span or
+/// past the line's end clamps to the next boundary so diagnostics always
+/// project to a valid LPP position.
+pub(crate) fn utf16_character(line: &str, column: u32) -> u32 {
+    let mut units = 0u32;
+    let mut current = 1u32;
+    for ch in line.chars() {
+        if current >= column {
+            break;
+        }
+        units += ch.len_utf16() as u32;
+        current += if ch == '\t' { 4 } else { 1 };
+    }
+    units
 }
 
 /// The byte offset of `index` (a char index) within `line`.
