@@ -452,12 +452,7 @@ impl Lowerer {
                     .iter()
                     .find(|(domain, spelling, _)| *domain == name && *spelling == member)
                     .map(|(.., catalog_member)| *catalog_member)
-                    .unwrap_or_else(|| match (name.as_str(), member) {
-                        ("HudReeval", "VISIBILITY_STRING_AND_COLOR") => {
-                            "VISIBLE_TO_STRING_AND_COLOR"
-                        }
-                        _ => member,
-                    });
+                    .unwrap_or(member);
                 let canonical_member = self
                     .catalog
                     .enum_domain(catalog_domain)
@@ -488,10 +483,6 @@ impl Lowerer {
                         } else {
                             None
                         }
-                    })
-                    .or_else(|| {
-                        (name == "HudReeval" && member == "VISIBILITY_STRING_AND_COLOR")
-                            .then_some(catalog_member.to_string())
                     });
                 let Some(canonical_member) = canonical_member else {
                     self.error_at_closed_candidates(

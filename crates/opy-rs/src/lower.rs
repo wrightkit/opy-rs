@@ -139,6 +139,11 @@ pub(crate) const MEMBER_SPELLING_ALIASES: &[(&str, &str, &str)] = &[
         "VISIBLE_TO_POSITION_AND_RADIUS",
     ),
     ("HudReeval", "VISIBILITY_AND_COLOR", "VISIBLE_TO_AND_COLOR"),
+    (
+        "HudReeval",
+        "VISIBILITY_STRING_AND_COLOR",
+        "VISIBLE_TO_STRING_AND_COLOR",
+    ),
     ("Hero", "MCCREE", "CASSIDY"),
     ("Hero", "HAMMOND", "WRECKING_BALL"),
     ("Hero", "SOLDIER", "SOLDIER_76"),
@@ -1637,6 +1642,44 @@ mod tests {
         assert_eq!(error.code, "unknown-enum-member");
         assert!(
             error.message.contains("'SOLDIER'"),
+            "message: {}",
+            error.message
+        );
+    }
+
+    #[test]
+    fn hud_reeval_string_and_color_alias_resolves_and_ranks() {
+        // `VISIBILITY_STRING_AND_COLOR` is an accepted alternate spelling
+        // of the catalog member `VISIBLE_TO_STRING_AND_COLOR`; it lives in
+        // `MEMBER_SPELLING_ALIASES` so the candidate pool names it too.
+        let hir = crate::compile(
+            &action_source("g = HudReeval.VISIBILITY_STRING_AND_COLOR"),
+            "test.opy",
+            std::path::Path::new(""),
+        )
+        .expect("the accepted alternate resolves");
+        let RuleEntry::Rule(rule) = &hir.rules[0] else {
+            panic!("expected a rule");
+        };
+        let HirStmt::Assign { value, .. } = &rule.actions[0] else {
+            panic!("expected an assignment");
+        };
+        assert!(matches!(
+            value.as_ref(),
+            HirExpr::Enum { value_type, value, .. }
+                if value_type == "HudReeval" && value == "VISIBLE_TO_STRING_AND_COLOR"
+        ));
+
+        let error = compile_error(
+            &action_source("g = HudReeval.VISIBILITY_STRING_AND_COLO"),
+            4,
+        );
+        assert_eq!(error.code, "unknown-enum-member");
+        assert!(
+            error.message.starts_with(
+                "enum 'HudReeval' has no member 'VISIBILITY_STRING_AND_COLO' \
+                              (did you mean 'VISIBILITY_STRING_AND_COLOR'"
+            ),
             "message: {}",
             error.message
         );

@@ -285,20 +285,28 @@ pub(crate) fn rank_closed(query: &str, pool: &[MatchCandidate]) -> Vec<String> {
 }
 
 /// Append a `(did you mean …?)` suffix naming the closest `ranked`
-/// candidates (at most three; the list must already be [`rank`]ed).
+/// candidates (at most three; the list must already be [`rank`]ed). A
+/// message that already ends in one — a canonical settings rejection
+/// embeds its own suggestion — has it replaced, so the rejection reports
+/// one candidate list, not two.
 pub(crate) fn did_you_mean(message: String, ranked: &[String]) -> String {
-    match ranked {
-        [] => message,
-        [one] => format!("{message} (did you mean '{one}'?)"),
-        [first, rest @ ..] => {
-            let others = rest
-                .iter()
-                .take(2)
-                .map(|s| format!("'{s}'"))
-                .collect::<Vec<_>>()
-                .join(" or ");
-            format!("{message} (did you mean '{first}', {others}?)")
-        }
+    let Some((first, rest)) = ranked.split_first() else {
+        return message;
+    };
+    let message = match message.rfind(" (did you mean ") {
+        Some(at) if message.ends_with("?)") => &message[..at],
+        _ => message.as_str(),
+    };
+    let others = rest
+        .iter()
+        .take(2)
+        .map(|s| format!("'{s}'"))
+        .collect::<Vec<_>>()
+        .join(" or ");
+    if others.is_empty() {
+        format!("{message} (did you mean '{first}'?)")
+    } else {
+        format!("{message} (did you mean '{first}', {others}?)")
     }
 }
 
@@ -490,6 +498,24 @@ mod tests {
             ["wait", "waits"],
             "exact beats prefix; unrelated names drop out"
         );
+    }
+
+    #[test]
+    fn did_you_mean_replaces_an_embedded_suggestion() {
+        // A canonical settings rejection already carries its own `did you
+        // mean` suffix; the ranked candidates replace it instead of
+        // stacking a second one.
+        let base = "settings key 'main.descriptino' is outside the emission table \
+                    (did you mean 'Description'?)"
+            .to_string();
+        assert_eq!(
+            did_you_mean(base.clone(), &["description".to_string()]),
+            "settings key 'main.descriptino' is outside the emission table \
+             (did you mean 'description'?)"
+        );
+        // With no candidates the owner's suffix stays — it is the only
+        // candidate information the rejection carries.
+        assert_eq!(did_you_mean(base.clone(), &[]), base);
     }
 
     #[test]
