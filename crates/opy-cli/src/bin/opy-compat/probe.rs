@@ -134,7 +134,7 @@ pub(super) fn generate() -> Result<(), String> {
     let manifest = Manifest::builtin().map_err(|error| error.to_string())?;
     let catalog = Catalog::builtin().map_err(|error| error.to_string())?;
     let mut probes = Vec::new();
-    for function in &manifest.functions {
+    for function in manifest.functions() {
         let calls = calls(&catalog, function);
         if calls.is_empty() {
             // Functions without a valid sample call would otherwise never
@@ -173,7 +173,7 @@ pub(super) fn generate() -> Result<(), String> {
             }
         }
     }
-    for alias in &manifest.aliases {
+    for alias in manifest.aliases() {
         // Alias sources are accepted spellings too; verify each resolves
         // upstream like the function table ids do.
         probes.push(name_probe(

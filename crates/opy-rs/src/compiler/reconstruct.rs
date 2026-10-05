@@ -1309,7 +1309,7 @@ impl<'a> Emitter<'a> {
                 }
         };
         let (entry, member) = match manifest
-            .functions
+            .functions()
             .iter()
             .filter(by_catalog)
             .min_by_key(|entry| entry.id.as_str() != name)

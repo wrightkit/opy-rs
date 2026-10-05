@@ -297,15 +297,27 @@ impl std::fmt::Display for ManifestError {
 impl std::error::Error for ManifestError {}
 
 /// The validated OPY semantic compatibility manifest.
+///
+/// A successfully loaded `Manifest` is immutable validated state
+/// ([#455](https://github.com/wrightkit/opy-rs/issues/455)): [`Manifest::load`]
+/// is the validation boundary, and the lookup tables are built from the
+/// validated inventory. Callers inspect the data through read-only accessors;
+/// mutating inventory or validation-covered state in place is not part of the
+/// API, so cached resolution cannot desynchronize from it.
+///
+/// ```compile_fail
+/// let mut manifest = opy_rs::manifest::Manifest::builtin().unwrap().clone();
+/// manifest.functions.clear(); // field is private: post-load mutation is rejected
+/// ```
 #[derive(Debug, Clone)]
 pub struct Manifest {
-    pub schema_version: u32,
-    pub reference: Reference,
-    pub functions: Vec<Function>,
-    pub aliases: Vec<Alias>,
-    pub provenance: Provenance,
+    schema_version: u32,
+    reference: Reference,
+    functions: Vec<Function>,
+    aliases: Vec<Alias>,
+    provenance: Provenance,
     /// The recorded probe evidence (`probes/probes.json`).
-    pub probes: Vec<Probe>,
+    probes: Vec<Probe>,
     by_function: HashMap<String, usize>,
     by_member: HashMap<String, usize>,
     alias_by_source: HashMap<String, usize>,
@@ -580,6 +592,36 @@ impl Manifest {
             .map_err(Clone::clone)
     }
 
+    /// The manifest data schema version.
+    pub fn schema_version(&self) -> u32 {
+        self.schema_version
+    }
+
+    /// The pinned reference identity the data is validated against.
+    pub fn reference(&self) -> &Reference {
+        &self.reference
+    }
+
+    /// Every declared builtin function entry, generic and member.
+    pub fn functions(&self) -> &[Function] {
+        &self.functions
+    }
+
+    /// Every declared non-contextual source alias.
+    pub fn aliases(&self) -> &[Alias] {
+        &self.aliases
+    }
+
+    /// The manifest data provenance record.
+    pub fn provenance(&self) -> &Provenance {
+        &self.provenance
+    }
+
+    /// The recorded probe evidence (`probes/probes.json`).
+    pub fn probes(&self) -> &[Probe] {
+        &self.probes
+    }
+
     fn resolve_alias(&self, name: &str, kind: AliasKind) -> Option<&str> {
         let alias = &self.aliases[*self.alias_by_source.get(name)?];
         (alias.kind == kind).then_some(alias.target.as_str())
@@ -644,15 +686,15 @@ mod tests {
     #[test]
     fn builtin_manifest_loads_and_validates() {
         let manifest = Manifest::builtin().expect("embedded manifest must validate");
-        assert_eq!(manifest.schema_version, 1);
-        assert_eq!(manifest.reference.name, "overpy");
-        assert_eq!(manifest.reference.version, "9.7.10");
+        assert_eq!(manifest.schema_version(), 1);
+        assert_eq!(manifest.reference().name, "overpy");
+        assert_eq!(manifest.reference().version, "9.7.10");
         assert_eq!(
-            manifest.reference.content_commit,
+            manifest.reference().content_commit,
             "889d9749d1def17f146548cbddb94ea1ab015847"
         );
-        assert!(!manifest.functions.is_empty());
-        assert!(!manifest.aliases.is_empty());
+        assert!(!manifest.functions().is_empty());
+        assert!(!manifest.aliases().is_empty());
         // Enum-domain *identities* come from the function signatures
         // (param.domain / contextual option domains); member lists are
         // Workshop-owned catalog content and are not carried here. Every
@@ -678,7 +720,7 @@ mod tests {
             !manifest.domain_identity("ChaseReeval"),
             "contextual domains are not standalone identities"
         );
-        for function in &manifest.functions {
+        for function in manifest.functions() {
             assert!(!function.evidence.is_empty(), "{}", function.id);
             if function.kind.is_member() {
                 assert!(function.receiver.is_some(), "{}", function.id);

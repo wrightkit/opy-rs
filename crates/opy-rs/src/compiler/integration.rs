@@ -30,7 +30,7 @@ pub(crate) fn cross_check_manifest(
     let mut catalog_ids_checked = 0;
     let mut domains_checked = 0;
 
-    for function in &manifest.functions {
+    for function in manifest.functions() {
         if let Some(catalog_id) = &function.catalog_id {
             let kind = match function.kind {
                 FunctionKind::Action | FunctionKind::MemberAction => Kind::Action,
