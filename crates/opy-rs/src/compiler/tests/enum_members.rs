@@ -57,7 +57,15 @@ fn invalid_numeric_and_named_team_members_keep_frontend_diagnostics() {
             .first()
             .expect("invalid member must report a diagnostic");
         assert_eq!(diagnostic.code, "unknown-enum-member");
-        assert_eq!(diagnostic.message, expected_message);
+        // The message carries the member candidates of the Team domain
+        // (issue #469).
+        assert!(
+            diagnostic
+                .message
+                .starts_with(&format!("{expected_message} (did you mean '")),
+            "message: {}",
+            diagnostic.message
+        );
         assert_eq!(
             diagnostic.span.as_ref().map(|span| span.start.line),
             Some(3)

@@ -207,9 +207,15 @@ pub fn check_with_overlay(
             // key that `compile` would reject (#411).
             match crate::compiler::settings::workshop_settings(&hir) {
                 Ok(Some(settings)) => diagnostics.extend(
-                    workshop_rs::settings::check_emission(&settings)
+                    workshop_rs::settings::check_emission_diagnostics(&settings)
                         .into_iter()
-                        .map(|error| Diagnostic::from_workshop_error(error, &files)),
+                        .map(|diagnostic| {
+                            Diagnostic::from_settings_diagnostic(
+                                diagnostic,
+                                hir.settings.as_ref(),
+                                &files,
+                            )
+                        }),
                 ),
                 Ok(None) => {}
                 Err(error) => diagnostics.push(Diagnostic::from_integration_error(error, &files)),
@@ -275,8 +281,15 @@ impl Diagnostic {
     }
 
     /// A canonical Workshop settings error surfaced under the same code the
-    /// compile pipeline reports for emission failures.
-    fn from_workshop_error(error: workshop_rs::WorkshopError, files: &[FileRecord]) -> Diagnostic {
+    /// compile pipeline reports for emission failures. The message names the
+    /// keys valid at the rejected member's path in a `did you mean` suffix
+    /// (issue #469).
+    fn from_settings_diagnostic(
+        diagnostic: workshop_rs::settings::SettingsDiagnostic,
+        hir_settings: Option<&crate::hir::Settings>,
+        files: &[FileRecord],
+    ) -> Diagnostic {
+        let error = diagnostic.error;
         let span = crate::compiler::workshop_error_span(&error).map(|span| {
             Span::new(
                 span.file.index() as u32,
@@ -284,10 +297,15 @@ impl Diagnostic {
                 Position::new(span.end.line, span.end.col),
             )
         });
+        let candidates = crate::matcher::settings_member_candidates(
+            hir_settings,
+            &error,
+            diagnostic.suggestion.as_deref(),
+        );
         Diagnostic {
             severity: DiagnosticSeverity::Error,
             code: "workshop-emission".to_string(),
-            message: error.to_string(),
+            message: crate::matcher::did_you_mean(error.to_string(), &candidates),
             span: span.and_then(|span| resolve_record_span(span, files)),
         }
     }
@@ -812,6 +830,48 @@ mod tests {
             .collect();
         assert_eq!(members, vec!["NORTH", "SOUTH"]);
         assert!(direction.members[0].span.path.ends_with("main.opy"));
+    }
+
+    #[test]
+    fn settings_rejection_names_the_keys_valid_at_the_path() {
+        // `notASetting` sits under `gamemodes.ffa`; nothing is near, so the
+        // message falls back to the bounded list of keys the path accepts
+        // (issue #469).
+        let outcome = check_source(
+            "settings {\n    \"gamemodes\": {\"ffa\": {\"notASetting\": true}}\n}\nrule \"a\":\n    @Event global\n    wait(1)\n",
+        );
+        let diagnostic = outcome
+            .diagnostics
+            .iter()
+            .find(|d| d.code == "workshop-emission")
+            .expect("emission diagnostic");
+        assert!(
+            diagnostic.message.contains("(did you mean "),
+            "message: {}",
+            diagnostic.message
+        );
+        assert!(
+            diagnostic.message.contains("'disabledMaps'"),
+            "message: {}",
+            diagnostic.message
+        );
+    }
+
+    #[test]
+    fn settings_rejection_preserves_template_paths_and_percent_suffixes() {
+        let outcome = check_source(
+            "settings {\n    \"main\": {\"description\": \"t\"},\n    \"gamemodes\": {},\n    \"heroes\": {\"team1\": {\"general\": {\"damageReceiveed%\": 50}}}\n}\nrule \"a\":\n    @Event global\n    wait(1)\n",
+        );
+        let diagnostic = outcome
+            .diagnostics
+            .iter()
+            .find(|d| d.code == "workshop-emission")
+            .expect("emission diagnostic");
+        assert!(
+            diagnostic.message.contains("'damageReceived%'"),
+            "message: {}",
+            diagnostic.message
+        );
     }
 
     #[test]

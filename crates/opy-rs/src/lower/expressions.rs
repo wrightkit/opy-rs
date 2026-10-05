@@ -344,10 +344,12 @@ impl Lowerer {
                         span: Some(span.into()),
                     },
                     None => {
-                        self.error_at(
+                        self.error_at_closed_candidates(
                             "unknown-enum-member",
                             format!("enum '{name}' has no member '{member}'"),
                             span,
+                            member,
+                            &crate::matcher::bare_candidates(members.iter().cloned()),
                         );
                         HirExpr::Null { span: None }
                     }
@@ -446,27 +448,16 @@ impl Lowerer {
                 || (name == "Clip" && self.manifest.domain_identity(catalog_domain))
             {
                 let locale = Locale::new("en-US");
-                let catalog_member = match (name.as_str(), member) {
-                    ("Map", "BLIZZ_WORLD") => "BLIZZARD_WORLD",
-                    ("Map", "BLIZZ_WORLD_WINTER") => "BLIZZARD_WORLD_WINTER",
-                    ("Map", "ROUTE66") => "ROUTE_66",
-                    ("Map", "VOLSKAYA") => "VOLSKAYA_INDUSTRIES",
-                    ("Clip", "NONE") => "DO_NOT_CLIP",
-                    ("Clip", "SURFACES") => "CLIP_AGAINST_SURFACES",
-                    ("SpecVisibility", "ALWAYS") => "VISIBLE_ALWAYS",
-                    ("SpecVisibility", "NEVER") => "VISIBLE_NEVER",
-                    ("EffectReeval", "VISIBILITY_POSITION_AND_RADIUS") => {
-                        "VISIBLE_TO_POSITION_AND_RADIUS"
-                    }
-                    ("HudReeval", "VISIBILITY_AND_COLOR") => "VISIBLE_TO_AND_COLOR",
-                    ("HudReeval", "VISIBILITY_STRING_AND_COLOR") => "VISIBLE_TO_STRING_AND_COLOR",
-                    ("Hero", "MCCREE") => "CASSIDY",
-                    ("Hero", "HAMMOND") => "WRECKING_BALL",
-                    ("Hero", "SOLDIER") => "SOLDIER_76",
-                    ("Hero", "DOMINA") => "JINYU",
-                    ("Hero", "DMON") => "D_MON",
-                    _ => member,
-                };
+                let catalog_member = super::MEMBER_SPELLING_ALIASES
+                    .iter()
+                    .find(|(domain, spelling, _)| *domain == name && *spelling == member)
+                    .map(|(.., catalog_member)| *catalog_member)
+                    .unwrap_or_else(|| match (name.as_str(), member) {
+                        ("HudReeval", "VISIBILITY_STRING_AND_COLOR") => {
+                            "VISIBLE_TO_STRING_AND_COLOR"
+                        }
+                        _ => member,
+                    });
                 let canonical_member = self
                     .catalog
                     .enum_domain(catalog_domain)
@@ -503,10 +494,16 @@ impl Lowerer {
                             .then_some(catalog_member.to_string())
                     });
                 let Some(canonical_member) = canonical_member else {
-                    self.error_at(
+                    self.error_at_closed_candidates(
                         "unknown-enum-member",
                         format!("enum '{name}' has no member '{member}'"),
                         span,
+                        member,
+                        &crate::matcher::enum_member_candidates(
+                            &self.catalog,
+                            name,
+                            catalog_domain,
+                        ),
                     );
                     return HirExpr::Null { span: None };
                 };
@@ -538,10 +535,14 @@ impl Lowerer {
                     };
                 }
                 if !default_var_index(member).is_some() && !self.player_visible(member) {
-                    self.error_at(
+                    let mut pool = crate::matcher::member_candidates(self.manifest, &self.catalog);
+                    pool.extend(crate::matcher::bare_candidates(["x", "y", "z"]));
+                    self.error_at_candidates(
                         "unknown-member",
                         format!("unknown member '{member}'"),
                         member_span,
+                        member,
+                        &pool,
                     );
                     return HirExpr::Null { span: None };
                 }
@@ -678,7 +679,10 @@ impl Lowerer {
         }
         // Builtin identity and position checks run before the special forms
         // so that a misplaced `wait`/`vect` still diagnoses its position.
-        if !self.macro_visible(name) && !self.subroutine_visible(name) && name != "sorted" {
+        if !self.macro_visible(name)
+            && !self.subroutine_visible(name)
+            && !super::special_forms::SPECIAL_VALUE_CALLS.contains(&name)
+        {
             match self.manifest.resolve_function(name) {
                 Some(entry) => self.check_call_position(name, entry, position, span),
                 None => {
@@ -695,7 +699,16 @@ impl Lowerer {
                             ("unknown-value", format!("unknown value '{name}'"))
                         }
                     };
-                    self.error_at(code, message, span);
+                    let pool = match code {
+                        "unknown-action" => {
+                            crate::matcher::action_candidates(self.manifest, &self.catalog)
+                        }
+                        "unknown-value" => {
+                            crate::matcher::value_candidates(self.manifest, &self.catalog)
+                        }
+                        _ => Vec::new(),
+                    };
+                    self.error_at_candidates(code, message, span, name, &pool);
                 }
             }
         }
@@ -1341,7 +1354,13 @@ impl Lowerer {
                 (entry.id.clone(), bound)
             }
             None => {
-                self.error_at("unknown-member", format!("unknown member '{name}'"), span);
+                self.error_at_candidates(
+                    "unknown-member",
+                    format!("unknown member '{name}'"),
+                    span,
+                    name,
+                    &crate::matcher::member_candidates(self.manifest, &self.catalog),
+                );
                 (name.to_string(), self.lower_arg_values(args, macro_params))
             }
         };

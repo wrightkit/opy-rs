@@ -1,5 +1,19 @@
 use super::*;
 
+/// The value-position call names `lower_call` resolves by name rather than
+/// through the manifest (`sorted`, `createWorkshopSetting*`). An
+/// `unknown-value` diagnostic may suggest them, so the matcher pool and
+/// the resolution sites share this list (issue #469).
+pub(crate) const SPECIAL_VALUE_CALLS: &[&str] = &[
+    "sorted",
+    "createWorkshopSetting",
+    "createWorkshopSettingBool",
+    "createWorkshopSettingEnum",
+    "createWorkshopSettingInt",
+    "createWorkshopSettingFloat",
+    "createWorkshopSettingHero",
+];
+
 fn literal_number(expr: &Expr) -> Option<f64> {
     match expr {
         Expr::Number { value, .. } => Some(*value),
