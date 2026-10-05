@@ -223,7 +223,6 @@ enum ProjectTargetKind {
 #[derive(Debug)]
 struct LoadedProject {
     filesystem: opy_rs::FilesystemProject,
-    documents: BTreeMap<String, Document>,
     locale: String,
     entry_uri: String,
     entry_version: i64,
@@ -511,19 +510,24 @@ impl Server {
             );
             (report, None)
         };
-        let paths = check_outcome
-            .files
-            .iter()
-            .map(|file| file.path.clone())
-            .collect::<Vec<_>>();
-        let diagnostics = compile_diagnostics(&project, &paths, &report.compile.diagnostics);
+        let display_root = &check_outcome.display_root;
+        let diagnostics = compile_diagnostics(
+            &project,
+            display_root,
+            &check_outcome
+                .files
+                .iter()
+                .map(|file| file.path.clone())
+                .collect::<Vec<_>>(),
+            &report.compile.diagnostics,
+        );
         let artifact = (report.compile.status == opy_rs::CompileStatus::Success)
             .then(|| {
                 artifact_json(
                     format,
                     &report.compile.workshop_exact,
                     mapped.as_ref(),
-                    &|path| path_to_file_uri(&resolved_project_path(&project, path)),
+                    &|path| path_to_file_uri(&resolved_path(display_root, path)),
                 )
             })
             .transpose()?;
@@ -746,7 +750,6 @@ fn load_entry(
     })?;
     Ok(LoadedRequest::Entry(LoadedProject {
         filesystem,
-        documents: BTreeMap::new(),
         locale: locale.unwrap_or_else(|| "en-US".to_string()),
         entry_uri: entry.uri,
         entry_version: entry.version,
@@ -875,9 +878,11 @@ fn check_documents(documents: &BTreeMap<String, Document>) -> Result<Value, Hand
             let target_uri = diagnostic
                 .span
                 .as_ref()
-                .and_then(|span| supplied_uri_for_path(documents, &root, &span.path))
+                .and_then(|span| {
+                    supplied_uri_for_path(documents, &outcome.display_root, &span.path)
+                })
                 .unwrap_or_else(|| uri.clone());
-            let value = diagnostic_json_for_documents(documents, &root, diagnostic);
+            let value = diagnostic_json_for_documents(documents, &outcome.display_root, diagnostic);
             let target = diagnostics_by_uri
                 .get_mut(&target_uri)
                 .expect("diagnostic target is a supplied document");
@@ -931,14 +936,16 @@ fn compile_document(
         let target_uri = diagnostic
             .span
             .as_ref()
-            .and_then(|span| supplied_uri_for_path(&request.documents, &root, &span.path))
+            .and_then(|span| {
+                supplied_uri_for_path(&request.documents, &outcome.display_root, &span.path)
+            })
             .unwrap_or_else(|| uri.clone());
         diagnostics_by_uri
             .get_mut(&target_uri)
             .expect("diagnostic target is a supplied document")
             .push(diagnostic_json_for_documents(
                 &request.documents,
-                &root,
+                &outcome.display_root,
                 diagnostic,
             ));
     }
@@ -955,8 +962,10 @@ fn compile_document(
                 &artifact.final_output,
                 mapped.as_ref(),
                 &|path| {
-                    supplied_uri_for_path(&request.documents, &root, path)
-                        .unwrap_or_else(|| path_to_file_uri(&resolved_path(&root, path)))
+                    supplied_uri_for_path(&request.documents, &outcome.display_root, path)
+                        .unwrap_or_else(|| {
+                            path_to_file_uri(&resolved_path(&outcome.display_root, path))
+                        })
                 },
             )?),
             Err(error) => {
@@ -1017,10 +1026,10 @@ fn ensure_entry_sources_loaded(
 
 fn supplied_uri_for_path(
     documents: &BTreeMap<String, Document>,
-    root: &Path,
+    display_root: &Path,
     path: &str,
 ) -> Option<String> {
-    let resolved = resolved_path(root, path);
+    let resolved = resolved_path(display_root, path);
     documents.iter().find_map(|(uri, document)| {
         let document_path = filesystem_path(&document.uri)?;
         (same_path(&document_path, &resolved)).then(|| uri.clone())
@@ -1034,12 +1043,12 @@ fn same_path(left: &Path, right: &Path) -> bool {
 
 fn diagnostic_json_for_documents(
     documents: &BTreeMap<String, Document>,
-    root: &Path,
+    display_root: &Path,
     diagnostic: &OpyDiagnostic,
 ) -> Value {
     json!({
-        "range": diagnostic_range_for_documents(documents, root, diagnostic.span.as_ref()),
-        "severity": "error",
+        "range": diagnostic_range_for_documents(documents, display_root, diagnostic.span.as_ref()),
+        "severity": diagnostic.severity.as_str(),
         "code": diagnostic.code,
         "message": diagnostic.message,
         "source": LANGUAGE_ID,
@@ -1048,7 +1057,7 @@ fn diagnostic_json_for_documents(
 
 fn diagnostic_range_for_documents(
     documents: &BTreeMap<String, Document>,
-    root: &Path,
+    display_root: &Path,
     location: Option<&SourceLocation>,
 ) -> Value {
     let Some(location) = location else {
@@ -1058,19 +1067,19 @@ fn diagnostic_range_for_documents(
         });
     };
     json!({
-        "start": document_lsp_position(documents, root, &location.path, location.start.line, location.start.col),
-        "end": document_lsp_position(documents, root, &location.path, location.end.line, location.end.col),
+        "start": document_lsp_position(documents, display_root, &location.path, location.start.line, location.start.col),
+        "end": document_lsp_position(documents, display_root, &location.path, location.end.line, location.end.col),
     })
 }
 
 fn document_lsp_position(
     documents: &BTreeMap<String, Document>,
-    root: &Path,
+    display_root: &Path,
     path: &str,
     line: u32,
     col: u32,
 ) -> Value {
-    let resolved = resolved_path(root, path);
+    let resolved = resolved_path(display_root, path);
     let source = documents
         .values()
         .find(|document| {
@@ -1097,20 +1106,23 @@ fn check_result(project: &LoadedProject, outcome: &CheckOutcome) -> Value {
         let index = path
             .and_then(|path| entries.iter().position(|entry| entry.path == path))
             .unwrap_or(0);
-        entries[index]
-            .diagnostics
-            .push(diagnostic_json(project, diagnostic));
+        entries[index].diagnostics.push(diagnostic_json(
+            project,
+            &outcome.display_root,
+            diagnostic,
+        ));
     }
     json!({
         "documents": entries
             .into_iter()
-            .map(|entry| entry.json(project))
+            .map(|entry| entry.json(&outcome.display_root))
             .collect::<Vec<_>>()
     })
 }
 
 fn compile_diagnostics(
     project: &LoadedProject,
+    display_root: &Path,
     paths: &[String],
     diagnostics: &[CompileDiagnostic],
 ) -> Vec<Value> {
@@ -1122,11 +1134,11 @@ fn compile_diagnostics(
             .unwrap_or(0);
         entries[index]
             .diagnostics
-            .push(compile_diagnostic_json(project, diagnostic));
+            .push(compile_diagnostic_json(project, display_root, diagnostic));
     }
     entries
         .into_iter()
-        .map(|entry| entry.json(project))
+        .map(|entry| entry.json(display_root))
         .collect()
 }
 
@@ -1138,9 +1150,9 @@ struct FileEntry {
 }
 
 impl FileEntry {
-    fn json(self, project: &LoadedProject) -> Value {
+    fn json(self, display_root: &Path) -> Value {
         json!({
-            "uri": path_to_file_uri(&resolved_project_path(project, &self.path)),
+            "uri": path_to_file_uri(&resolved_path(display_root, &self.path)),
             "version": self.version,
             "diagnostics": self.diagnostics,
         })
@@ -1156,52 +1168,47 @@ fn file_entries(project: &LoadedProject, paths: &[String]) -> Vec<FileEntry> {
     paths
         .into_iter()
         .map(|path| FileEntry {
-            version: version_for_path(project, &path),
+            // Filesystem-loaded documents all echo the entry version.
+            version: project.entry_version,
             path,
             diagnostics: Vec::new(),
         })
         .collect()
 }
 
-fn version_for_path(project: &LoadedProject, path: &str) -> i64 {
-    if project.entry_version >= 0 {
-        return project.entry_version;
-    }
-    let path = resolved_project_path(project, path);
-    project
-        .documents
-        .values()
-        .find(|document| {
-            filesystem_path(&document.uri)
-                .map(|document_path| {
-                    resolved_project_path(project, &path_string(&document_path)) == path
-                })
-                .unwrap_or(false)
-        })
-        .map_or(0, |document| document.version)
-}
-
-fn diagnostic_json(project: &LoadedProject, diagnostic: &OpyDiagnostic) -> Value {
+fn diagnostic_json(
+    project: &LoadedProject,
+    display_root: &Path,
+    diagnostic: &OpyDiagnostic,
+) -> Value {
     json!({
-        "range": diagnostic_range(project, diagnostic.span.as_ref()),
-        "severity": "error",
+        "range": diagnostic_range(project, display_root, diagnostic.span.as_ref()),
+        "severity": diagnostic.severity.as_str(),
         "code": diagnostic.code,
         "message": diagnostic.message,
         "source": LANGUAGE_ID,
     })
 }
 
-fn compile_diagnostic_json(project: &LoadedProject, diagnostic: &CompileDiagnostic) -> Value {
+fn compile_diagnostic_json(
+    project: &LoadedProject,
+    display_root: &Path,
+    diagnostic: &CompileDiagnostic,
+) -> Value {
     json!({
-        "range": diagnostic_range(project, diagnostic.span.as_ref()),
-        "severity": "error",
+        "range": diagnostic_range(project, display_root, diagnostic.span.as_ref()),
+        "severity": diagnostic.severity.as_str(),
         "code": diagnostic.code,
         "message": diagnostic.message,
         "source": LANGUAGE_ID,
     })
 }
 
-fn diagnostic_range(project: &LoadedProject, location: Option<&SourceLocation>) -> Value {
+fn diagnostic_range(
+    project: &LoadedProject,
+    display_root: &Path,
+    location: Option<&SourceLocation>,
+) -> Value {
     let Some(location) = location else {
         return json!({
             "start": { "line": 0, "character": 0 },
@@ -1209,30 +1216,33 @@ fn diagnostic_range(project: &LoadedProject, location: Option<&SourceLocation>) 
         });
     };
     json!({
-        "start": project_lsp_position(project, &location.path, location.start.line, location.start.col),
-        "end": project_lsp_position(project, &location.path, location.end.line, location.end.col),
+        "start": project_lsp_position(project, display_root, &location.path, location.start.line, location.start.col),
+        "end": project_lsp_position(project, display_root, &location.path, location.end.line, location.end.col),
     })
 }
 
-fn project_lsp_position(project: &LoadedProject, path: &str, line: u32, col: u32) -> Value {
+fn project_lsp_position(
+    project: &LoadedProject,
+    display_root: &Path,
+    path: &str,
+    line: u32,
+    col: u32,
+) -> Value {
     let source = if path == path_string(project.filesystem.main_path()) {
         project.filesystem.source().to_owned()
     } else {
-        std::fs::read_to_string(resolved_project_path(project, path)).unwrap_or_default()
+        std::fs::read_to_string(resolved_path(display_root, path)).unwrap_or_default()
     };
     lsp_position(&source, line, col)
 }
 
+/// The LPP position of a 1-based frontend `(line, col)`: frontend columns
+/// expand tabs to four columns, so the column first maps to a character
+/// index within the line and only then counts UTF-16 units.
 fn lsp_position(source: &str, line: u32, col: u32) -> Value {
-    let character = source
-        .lines()
-        .nth(line.saturating_sub(1) as usize)
-        .map(|text| {
-            text.chars()
-                .take(col.saturating_sub(1) as usize)
-                .map(char::len_utf16)
-                .sum::<usize>() as u32
-        })
+    let character = edits::SourceText::new(source)
+        .line_text(line.saturating_sub(1) as usize)
+        .map(|text| edits::utf16_character(text, col))
         .unwrap_or_else(|| col.saturating_sub(1));
     json!({
         "line": line.saturating_sub(1),
@@ -1242,15 +1252,6 @@ fn lsp_position(source: &str, line: u32, col: u32) -> Value {
 
 fn path_string(path: &Path) -> String {
     path.to_string_lossy().into_owned()
-}
-
-fn resolved_project_path(project: &LoadedProject, path: &str) -> PathBuf {
-    let path = Path::new(path);
-    if path.is_absolute() {
-        path.to_path_buf()
-    } else {
-        project.filesystem.root().join(path)
-    }
 }
 
 fn resolved_path(root: &Path, path: &str) -> PathBuf {
@@ -1455,7 +1456,6 @@ mod tests {
             project.filesystem.source(),
             "rule \"r\":\n    @Event global\n"
         );
-        assert!(project.documents.is_empty());
         let _ = fs::remove_dir_all(&dir);
     }
 }

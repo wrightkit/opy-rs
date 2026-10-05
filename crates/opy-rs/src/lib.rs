@@ -140,6 +140,10 @@ pub struct CompileOutcome {
     pub error: Option<OpyError>,
     pub diagnostics: Vec<tooling::Diagnostic>,
     pub files: Vec<preprocess::FileRecord>,
+    /// The directory the `files` display paths resolve against — the
+    /// `#!mainFile` effective directory when the entry redirects the project
+    /// root, otherwise the canonicalized input root.
+    pub display_root: std::path::PathBuf,
     /// The declared `#!postCompileHook` script, when the source declared one
     /// and compilation succeeded.
     ///
@@ -208,6 +212,7 @@ pub fn compile_with_overlay_outcome(
         error,
         diagnostics: outcome.diagnostics,
         files: outcome.files,
+        display_root: outcome.display_root,
         post_compile_hook,
     }
 }

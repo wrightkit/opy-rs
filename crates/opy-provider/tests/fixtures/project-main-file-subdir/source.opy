@@ -1,0 +1,1 @@
+#!mainFile "sub/entry.opy"

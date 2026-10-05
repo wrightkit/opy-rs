@@ -67,6 +67,7 @@ pub struct CheckOutcome {
     pub model: Option<SemanticModel>,   // present exactly when clean
     pub files: Vec<FileRecord>,         // file registry, retained on failure
     pub post_compile_hook: Option<PostCompileHook>, // declared hook record
+    pub display_root: PathBuf,          // directory the `files` paths resolve against
 }
 ```
 
@@ -100,7 +101,11 @@ binding kind in the contract; the current source implementation produces no cons
 declarations (custom enums fold instead).
 
 Source provenance: the file registry maps every span's file id to its path.
-id 0 is the main file, then one entry per include, in include order. Macro
+id 0 is the main file, then one entry per include, in include order.
+Registry paths are display paths resolved against `display_root`: when the
+first line's `#!mainFile` redirects the project into another directory,
+`display_root` is that file's directory; otherwise it is the canonicalized
+input root. Macro
 expansion stamps expanded tokens with the use-site span; the recorded
 `defines` carry their definition-site spans and whether they came from
 `#!defineMember`, so both define attribution and include attribution are
