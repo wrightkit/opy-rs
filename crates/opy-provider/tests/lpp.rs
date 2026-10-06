@@ -2203,3 +2203,311 @@ fn rename_refuses_upstream_reserved_names_per_namespace() {
     );
     session.shutdown();
 }
+
+// -- lpp/lookup (LPP 1.5) ---------------------------------------------------
+
+fn lookup_request(id: i64, params: Value) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "lpp/lookup",
+        "params": params,
+    })
+}
+
+/// `lookup` is negotiated only at LPP 1.5: the capability is absent at 1.4
+/// and an `lpp/lookup` request there is `capabilityUnavailable`.
+#[test]
+fn lookup_capability_is_negotiated_at_1_5() {
+    let mut session = Session::spawn();
+    let initialized = session.initialize_version("1.4");
+    assert_eq!(initialized["result"]["protocolVersion"], "1.4");
+    assert_eq!(
+        initialized["result"]["capabilities"]["lookup"],
+        Value::Null,
+        "lookup is not advertised before 1.5"
+    );
+    let response = session.request(lookup_request(
+        2,
+        json!({ "languageId": "opy", "query": "wait" }),
+    ));
+    assert_eq!(response["error"]["code"], -32000);
+    assert_eq!(
+        response["error"]["data"]["lpp"]["kind"],
+        "capabilityUnavailable"
+    );
+    assert_eq!(
+        response["error"]["data"]["lpp"]["details"],
+        json!({ "capability": "lookup", "method": "lpp/lookup" })
+    );
+    session.shutdown();
+
+    let mut session = Session::spawn();
+    let initialized = session.initialize_version("1.5");
+    assert_eq!(initialized["result"]["protocolVersion"], "1.5");
+    assert_eq!(initialized["result"]["capabilities"]["lookup"], true);
+    session.shutdown();
+}
+
+/// An `lpp/lookup` answer comes from the language vocabulary: the session
+/// never loads a project or opens a document.
+#[test]
+fn lookup_resolves_names_without_a_project() {
+    let mut session = Session::spawn();
+    session.initialize_version("1.5");
+
+    let response = session.request(lookup_request(
+        2,
+        json!({ "languageId": "opy", "query": "wait", "limit": 3 }),
+    ));
+    let entries = response["result"]["entries"].as_array().expect("entries");
+    assert_eq!(entries[0]["identity"], "opy:callable/wait");
+    assert_eq!(entries[0]["kind"], "action");
+    assert_eq!(entries[0]["spelling"], "wait");
+    assert_eq!(entries[0]["displayName"], "Wait");
+    assert!(
+        entries[0]["callable"]["parameters"]
+            .as_array()
+            .is_some_and(|params| !params.is_empty())
+    );
+
+    // A display-name guess resolves to the OPY spelling through the same
+    // vocabulary ("Wait Until" is the catalog name of `waitUntil`).
+    let display = session.request(lookup_request(
+        3,
+        json!({ "languageId": "opy", "query": "Wait Until", "limit": 3 }),
+    ));
+    let spellings: Vec<&str> = display["result"]["entries"]
+        .as_array()
+        .expect("entries")
+        .iter()
+        .filter_map(|entry| entry["spelling"].as_str())
+        .collect();
+    assert!(spellings.contains(&"waitUntil"), "{spellings:?}");
+    session.shutdown();
+}
+
+/// `within` selects the scope the listing draws from: a callable identity
+/// lists parameters in call order, an enum domain identity lists members in
+/// domain order, and a settings prefix lists immediate children spelled by
+/// their own segment.
+#[test]
+fn lookup_within_scopes_list_children() {
+    let mut session = Session::spawn();
+    session.initialize_version("1.5");
+
+    let params = session.request(lookup_request(
+        2,
+        json!({
+            "languageId": "opy",
+            "within": { "kind": "callable", "value": "opy:callable/wait" },
+        }),
+    ));
+    let entries = params["result"]["entries"].as_array().expect("entries");
+    assert_eq!(
+        entries
+            .iter()
+            .map(|entry| entry["spelling"].as_str().expect("spelling"))
+            .collect::<Vec<_>>(),
+        ["time", "waitBehavior"],
+        "parameter entries keep call order"
+    );
+    assert!(entries.iter().all(|entry| entry["kind"] == "parameter"));
+    assert_eq!(
+        entries[1]["parameter"]["enum"]["domain"], "opy:enum/Wait",
+        "the enum domain a parameter accepts is a valid within value"
+    );
+
+    let members = session.request(lookup_request(
+        3,
+        json!({
+            "languageId": "opy",
+            "within": { "kind": "enum", "value": "opy:enum/Button" },
+        }),
+    ));
+    let entries = members["result"]["entries"].as_array().expect("entries");
+    assert_eq!(entries.len(), 10);
+    assert!(entries.iter().all(|entry| entry["kind"] == "enumMember"));
+    assert_eq!(entries[0]["spelling"], "Button.PRIMARY_FIRE");
+    assert_eq!(
+        entries[0]["identity"],
+        "opy:enum-member/Button.PRIMARY_FIRE"
+    );
+
+    let root = session.request(lookup_request(
+        4,
+        json!({
+            "languageId": "opy",
+            "within": { "kind": "settings", "value": "" },
+        }),
+    ));
+    let entries = root["result"]["entries"].as_array().expect("entries");
+    assert!(
+        entries
+            .iter()
+            .all(|entry| entry["kind"] == "settingPath" && entry["spelling"].is_string())
+    );
+    assert!(entries.iter().any(|entry| entry["spelling"] == "gamemodes"));
+
+    let children = session.request(lookup_request(
+        5,
+        json!({
+            "languageId": "opy",
+            "within": { "kind": "settings", "value": "gamemodes.ffa" },
+        }),
+    ));
+    let entries = children["result"]["entries"].as_array().expect("entries");
+    let score_to_win = entries
+        .iter()
+        .find(|entry| entry["spelling"] == "scoreToWin")
+        .expect("leaf child");
+    assert_eq!(score_to_win["kind"], "setting");
+    assert_eq!(
+        score_to_win["identity"],
+        "opy:setting/gamemodes.ffa.scoreToWin"
+    );
+    assert_eq!(score_to_win["setting"]["type"], "number");
+
+    let leaf = session.request(lookup_request(
+        6,
+        json!({
+            "languageId": "opy",
+            "within": { "kind": "settings", "value": "gamemodes.ffa.scoreToWin" },
+        }),
+    ));
+    assert_eq!(
+        leaf["error"]["data"]["lpp"]["details"]["refusalCode"], "lookup.unknownWithin",
+        "a settings leaf is not a scope"
+    );
+
+    // A settings enum domain answers under `within: "enum"` with the member
+    // spellings the settings table declares.
+    let settings_enum = session.request(lookup_request(
+        7,
+        json!({
+            "languageId": "opy",
+            "within": { "kind": "enum", "value": "opy:enum/mapRotation" },
+        }),
+    ));
+    let spellings: Vec<&str> = settings_enum["result"]["entries"]
+        .as_array()
+        .expect("entries")
+        .iter()
+        .filter_map(|entry| entry["spelling"].as_str())
+        .collect();
+    assert_eq!(spellings, ["afterAGame", "afterMirrorMatch", "paused"]);
+    session.shutdown();
+}
+
+/// Repeated requests return identical entries, `limit` bounds the result,
+/// and `kind` filters by the entry's provider-defined kind.
+#[test]
+fn lookup_results_are_deterministic_bounded_and_kind_filtered() {
+    let mut session = Session::spawn();
+    session.initialize_version("1.5");
+
+    let first = session.request(lookup_request(
+        2,
+        json!({ "languageId": "opy", "query": "hudText", "limit": 5 }),
+    ));
+    let second = session.request(lookup_request(
+        3,
+        json!({ "languageId": "opy", "query": "hudText", "limit": 5 }),
+    ));
+    assert_eq!(
+        first["result"], second["result"],
+        "the same request returns the same entries in the same order"
+    );
+    assert_eq!(
+        first["result"]["entries"]
+            .as_array()
+            .expect("entries")
+            .len(),
+        5
+    );
+
+    let bounded = session.request(lookup_request(
+        4,
+        json!({ "languageId": "opy", "limit": 1 }),
+    ));
+    assert_eq!(
+        bounded["result"]["entries"]
+            .as_array()
+            .expect("entries")
+            .len(),
+        1
+    );
+
+    let enums = session.request(lookup_request(
+        5,
+        json!({ "languageId": "opy", "kind": "enum", "limit": 8 }),
+    ));
+    let entries = enums["result"]["entries"].as_array().expect("entries");
+    assert!(!entries.is_empty());
+    assert!(entries.iter().all(|entry| entry["kind"] == "enum"));
+
+    let no_such_kind = session.request(lookup_request(
+        6,
+        json!({ "languageId": "opy", "kind": "noSuchKind" }),
+    ));
+    assert_eq!(no_such_kind["result"]["entries"], json!([]));
+    session.shutdown();
+}
+
+/// Params that do not match the schema are `-32602`; a language the
+/// provider does not serve is `invalidLanguage`.
+#[test]
+fn lookup_validates_params() {
+    let mut session = Session::spawn();
+    session.initialize_version("1.5");
+
+    let mut id = 2;
+    let mut invalid_params = |session: &mut Session, params: Value| {
+        id += 1;
+        session.request(lookup_request(id, params))["error"]["code"]
+            .as_i64()
+            .expect("error code")
+    };
+    assert_eq!(
+        invalid_params(&mut session, json!({ "query": "x" })),
+        -32602
+    );
+    assert_eq!(
+        invalid_params(&mut session, json!({ "languageId": "opy", "limit": 0 })),
+        -32602
+    );
+    assert_eq!(
+        invalid_params(&mut session, json!({ "languageId": "opy", "limit": -1 })),
+        -32602
+    );
+    assert_eq!(
+        invalid_params(&mut session, json!({ "languageId": "opy", "limit": "3" })),
+        -32602
+    );
+    assert_eq!(
+        invalid_params(
+            &mut session,
+            json!({ "languageId": "opy", "within": { "kind": "document", "value": "x" } })
+        ),
+        -32602
+    );
+    assert_eq!(
+        invalid_params(
+            &mut session,
+            json!({ "languageId": "opy", "within": { "kind": "enum" } })
+        ),
+        -32602
+    );
+
+    let wrong_language =
+        session.request(lookup_request(20, json!({ "languageId": "x-demo-lang" })));
+    assert_eq!(
+        wrong_language["error"]["data"]["lpp"]["kind"],
+        "invalidLanguage"
+    );
+    assert_eq!(
+        wrong_language["error"]["data"]["lpp"]["details"]["languageId"],
+        "x-demo-lang"
+    );
+    session.shutdown();
+}

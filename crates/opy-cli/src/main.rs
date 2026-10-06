@@ -206,12 +206,15 @@ fn cmd_lookup(args: &LookupArgs) -> ExitCode {
     let outcome = lookup(&LookupQuery {
         text: args.query.clone(),
         scope,
+        within: None,
         locale: None,
         limit: args.limit,
     });
     let code = match &outcome {
         LookupOutcome::Matched { .. } => ExitCode::SUCCESS,
-        LookupOutcome::Unsupported { .. } => ExitCode::from(1),
+        LookupOutcome::UnknownWithin { .. } | LookupOutcome::Unsupported { .. } => {
+            ExitCode::from(1)
+        }
     };
     if args.format == OutputFormatArg::Json {
         return match print_json(&outcome) {
@@ -227,6 +230,9 @@ fn cmd_lookup(args: &LookupArgs) -> ExitCode {
             for hit in results {
                 println!("{}", lookup_hit_line(hit));
             }
+        }
+        LookupOutcome::UnknownWithin { within } => {
+            eprintln!("opy-cli: lookup cannot be answered: unknown scope {within:?}");
         }
         LookupOutcome::Unsupported { reason, .. } => {
             eprintln!("opy-cli: lookup cannot be answered: {reason}");
@@ -259,6 +265,7 @@ fn lookup_hit_line(hit: &LookupHit) -> String {
             domain,
             members,
             matched_on,
+            ..
         } => format!(
             "enumDomain {domain}  {}  [{}]",
             members
@@ -294,6 +301,18 @@ fn lookup_hit_line(hit: &LookupHit) -> String {
                 .unwrap_or_default(),
             matched_on.as_str()
         ),
+        LookupHit::Parameter {
+            callable,
+            param,
+            matched_on,
+        } => format!(
+            "parameter {}.{callable}  [{}]",
+            param.name,
+            matched_on.as_str()
+        ),
+        LookupHit::SettingPath { path, matched_on } => {
+            format!("settingPath {path}  [{}]", matched_on.as_str())
+        }
     }
 }
 

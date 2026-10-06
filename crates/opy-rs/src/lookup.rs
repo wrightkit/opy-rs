@@ -149,10 +149,16 @@ const SPECIAL_FUNCTIONS: &[SpecialFunction] = &[
 #[derive(Debug, Clone, PartialEq)]
 pub struct LookupQuery {
     /// The name or guess to resolve: an OPY spelling, a canonical Workshop
-    /// id, a Workshop display name, or a settings path prefix.
+    /// id, a Workshop display name, or a settings path prefix. Empty text
+    /// applies no text constraint and lists the in-scope entries instead of
+    /// scoring them.
     pub text: String,
     /// The namespaces the query searches; `LookupScope::ALL` is the default.
+    /// `within` selects its own namespace when set.
     pub scope: LookupScope,
+    /// Restricts the answer to the children of one named scope instead of
+    /// searching every candidate in `scope`.
+    pub within: Option<LookupWithin>,
     /// The display-name locale to read; only `en-US` is supported.
     /// Localized display names remain `workshop-rs`-owned and are answered
     /// as `LookupOutcome::Unsupported`, not silently returned in English.
@@ -167,6 +173,7 @@ impl LookupQuery {
         LookupQuery {
             text: text.into(),
             scope: LookupScope::ALL,
+            within: None,
             locale: None,
             limit: 0,
         }
@@ -216,6 +223,34 @@ impl LookupScope {
     }
 }
 
+/// A named scope whose children a lookup lists instead of searching every
+/// namespace. `text` still filters or ranks the children; each variant names
+/// the scope in the vocabulary's own terms.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", tag = "kind", content = "value")]
+pub enum LookupWithin {
+    /// The parameters of the callable with this OPY spelling, in call order.
+    Callable(String),
+    /// The member entries of this OPY enum domain, in domain order.
+    Enum(String),
+    /// The settings keys and intermediate path segments directly below this
+    /// settings path prefix; an empty value lists the root.
+    Settings(String),
+    /// The accepted member spellings of a settings enum domain.
+    SettingEnum(String),
+}
+
+impl LookupWithin {
+    /// The namespace this scope's children belong to.
+    fn scope(&self) -> LookupScope {
+        match self {
+            LookupWithin::Callable(_) => LookupScope::FUNCTIONS,
+            LookupWithin::Enum(_) | LookupWithin::SettingEnum(_) => LookupScope::ENUMS,
+            LookupWithin::Settings(_) => LookupScope::SETTINGS,
+        }
+    }
+}
+
 /// The result of a lookup.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(
@@ -233,6 +268,12 @@ pub enum LookupOutcome {
         /// The hits, best matches first.
         results: Vec<LookupHit>,
     },
+    /// The `within` selector names no scope the vocabulary knows; the
+    /// request carried no matches because the scope itself does not exist.
+    UnknownWithin {
+        /// The selector that named nothing.
+        within: LookupWithin,
+    },
     /// The query is valid but the requested capability is not served:
     /// nothing was searched.
     Unsupported {
@@ -249,7 +290,7 @@ impl LookupOutcome {
     pub fn results(&self) -> &[LookupHit] {
         match self {
             LookupOutcome::Matched { results, .. } => results,
-            LookupOutcome::Unsupported { .. } => &[],
+            LookupOutcome::UnknownWithin { .. } | LookupOutcome::Unsupported { .. } => &[],
         }
     }
 }
@@ -309,6 +350,9 @@ pub enum LookupHit {
         params: Vec<LookupParam>,
         /// The canonical catalog id the callable emits, when linked.
         catalog_id: Option<String>,
+        /// The English display name the catalog records, when linked.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        display_name: Option<String>,
         /// Which spelling form matched.
         matched_on: MatchKind,
     },
@@ -319,6 +363,9 @@ pub enum LookupHit {
         /// The members the domain accepts, or `None` when the domain is
         /// manifest-only/contextual and carries no standalone member list.
         members: Option<Vec<EnumMemberEntry>>,
+        /// The English display name the catalog records, when linked.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        display_name: Option<String>,
         /// Which spelling form matched.
         matched_on: MatchKind,
     },
@@ -346,6 +393,24 @@ pub enum LookupHit {
         display_name: Option<String>,
         /// The accepted value form.
         value: SettingValueForm,
+        /// Which spelling form matched.
+        matched_on: MatchKind,
+    },
+    /// One parameter of a callable, listed inside a `LookupWithin::Callable`
+    /// scope.
+    Parameter {
+        /// The callable's OPY spelling.
+        callable: String,
+        /// The parameter facts.
+        param: LookupParam,
+        /// Which spelling form matched.
+        matched_on: MatchKind,
+    },
+    /// An intermediate settings path segment, listed inside a
+    /// `LookupWithin::Settings` scope. It names a scope, not a key.
+    SettingPath {
+        /// The settings path this node represents.
+        path: String,
         /// Which spelling form matched.
         matched_on: MatchKind,
     },
@@ -426,6 +491,9 @@ pub struct EnumMemberEntry {
 pub struct SettingValueForm {
     /// The value shape.
     pub kind: SettingValueKind,
+    /// The settings enum domain an `enum` key accepts members of.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub domain: Option<String>,
     /// The member spellings an `enum` slot accepts.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub members: Vec<String>,
@@ -477,9 +545,12 @@ impl SettingValueKind {
 
 /// Resolve a `LookupQuery` against the bundled manifest and catalog.
 ///
-/// The answer is `LookupOutcome::Matched` (possibly with zero hits) or
+/// The answer is `LookupOutcome::Matched` (possibly with zero hits),
+/// `LookupOutcome::UnknownWithin` when the named scope does not exist, or
 /// `LookupOutcome::Unsupported` with a reason; vocabulary lookup never
 /// fails — a name that resolves to nothing is simply absent from `results`.
+/// An empty `text` applies no text constraint and lists the in-scope
+/// entries in the vocabulary's stable order.
 pub fn lookup(query: &LookupQuery) -> LookupOutcome {
     let limit = if query.limit == 0 {
         DEFAULT_LIMIT
@@ -499,28 +570,40 @@ pub fn lookup(query: &LookupQuery) -> LookupOutcome {
             );
         }
     }
-    if query.text.trim().is_empty() {
-        return unsupported("the query text is empty");
-    }
-    if !query.scope.any() {
-        return unsupported("the query scope selects no namespace");
-    }
     let (manifest, catalog) = match (Manifest::builtin(), Catalog::builtin()) {
         (Ok(manifest), Ok(catalog)) => (manifest, catalog),
         _ => return unsupported("vocabulary data (manifest or catalog) is not bundled"),
     };
     let index = Index::new(manifest, &catalog);
-    let mut hits = index.search(query);
-    hits.sort_by(|a, b| {
-        a.score
-            .cmp(&b.score)
-            .then_with(|| a.hit.sort_key().cmp(&b.hit.sort_key()))
-    });
-    hits.truncate(limit);
+    if let Some(within) = &query.within {
+        let Some(children) = index.children(within) else {
+            return LookupOutcome::UnknownWithin {
+                within: within.clone(),
+            };
+        };
+        let mut results = index.rank(children.iter(), query);
+        results.truncate(limit);
+        return LookupOutcome::Matched {
+            scope: within.scope(),
+            limit,
+            results,
+        };
+    }
+    if !query.scope.any() {
+        return unsupported("the query scope selects no namespace");
+    }
+    let mut results = index.rank(
+        index
+            .candidates
+            .iter()
+            .filter(|candidate| index.in_scope(candidate, scope)),
+        query,
+    );
+    results.truncate(limit);
     LookupOutcome::Matched {
         scope,
         limit,
-        results: hits.into_iter().map(|scored| scored.hit).collect(),
+        results,
     }
 }
 
@@ -545,7 +628,23 @@ impl LookupHit {
             LookupHit::EnumMember { spelling, .. } => format!("1{spelling}"),
             LookupHit::EnumDomain { domain, .. } => format!("2{domain}"),
             LookupHit::Setting { path, .. } => format!("3{path}"),
+            LookupHit::Parameter {
+                callable, param, ..
+            } => {
+                format!("4{callable}.{}", param.name)
+            }
+            LookupHit::SettingPath { path, .. } => format!("5{path}"),
         }
+    }
+
+    /// Restamp `matched_on` for a listed answer: no text constraint scored,
+    /// so the entry's own primary form is what it answers to.
+    fn listed(self) -> LookupHit {
+        let kind = match &self {
+            LookupHit::Setting { .. } | LookupHit::SettingPath { .. } => MatchKind::Path,
+            _ => MatchKind::OpySpelling,
+        };
+        self.with_match_kind(kind, 0, false)
     }
 
     /// Stamp the matched-on kind: a folded-equal or structurally matching
@@ -565,6 +664,7 @@ impl LookupHit {
                 unbounded,
                 params,
                 catalog_id,
+                display_name,
                 ..
             } => LookupHit::Function {
                 spelling,
@@ -573,13 +673,18 @@ impl LookupHit {
                 unbounded,
                 params,
                 catalog_id,
+                display_name,
                 matched_on,
             },
             LookupHit::EnumDomain {
-                domain, members, ..
+                domain,
+                members,
+                display_name,
+                ..
             } => LookupHit::EnumDomain {
                 domain,
                 members,
+                display_name,
                 matched_on,
             },
             LookupHit::EnumMember {
@@ -608,12 +713,21 @@ impl LookupHit {
                 value,
                 matched_on,
             },
+            LookupHit::Parameter {
+                callable, param, ..
+            } => LookupHit::Parameter {
+                callable,
+                param,
+                matched_on,
+            },
+            LookupHit::SettingPath { path, .. } => LookupHit::SettingPath { path, matched_on },
         }
     }
 }
 
 /// One searchable entry: every spelling form it answers to plus the payload
 /// returned when one matches.
+#[derive(Clone)]
 struct Candidate {
     forms: Vec<(String, MatchKind)>,
     hit: LookupHit,
@@ -638,10 +752,20 @@ impl<'a> Index<'a> {
         index
     }
 
-    fn search(&self, query: &LookupQuery) -> Vec<ScoredHit> {
-        self.candidates
-            .iter()
-            .filter(|candidate| self.in_scope(candidate, query.scope))
+    /// Rank `candidates` under `query`: a non-empty text scores each
+    /// candidate's best-matching form through the shared matcher pipeline,
+    /// while an empty text lists the candidates in their construction order.
+    fn rank<'c>(
+        &self,
+        candidates: impl Iterator<Item = &'c Candidate>,
+        query: &LookupQuery,
+    ) -> Vec<LookupHit> {
+        if query.text.trim().is_empty() {
+            return candidates
+                .map(|candidate| candidate.hit.clone().listed())
+                .collect();
+        }
+        let mut hits: Vec<ScoredHit> = candidates
             .filter_map(|candidate| {
                 candidate
                     .forms
@@ -678,15 +802,172 @@ impl<'a> Index<'a> {
                         hit: candidate.hit.clone().with_match_kind(kind, s, structural),
                     })
             })
-            .collect()
+            .collect();
+        hits.sort_by(|a, b| {
+            a.score
+                .cmp(&b.score)
+                .then_with(|| a.hit.sort_key().cmp(&b.hit.sort_key()))
+        });
+        hits.into_iter().map(|scored| scored.hit).collect()
     }
 
     fn in_scope(&self, candidate: &Candidate, scope: LookupScope) -> bool {
         match &candidate.hit {
-            LookupHit::Function { .. } => scope.functions,
+            LookupHit::Function { .. } | LookupHit::Parameter { .. } => scope.functions,
             LookupHit::EnumDomain { .. } | LookupHit::EnumMember { .. } => scope.enums,
-            LookupHit::Setting { .. } => scope.settings,
+            LookupHit::Setting { .. } | LookupHit::SettingPath { .. } => scope.settings,
         }
+    }
+
+    // -- within scopes -----------------------------------------------------
+
+    /// The child candidates of one `within` scope, or `None` when `within`
+    /// names no scope the index knows.
+    fn children(&self, within: &LookupWithin) -> Option<Vec<Candidate>> {
+        match within {
+            LookupWithin::Callable(name) => self.callable_children(name),
+            LookupWithin::Enum(domain) => self.enum_children(domain),
+            LookupWithin::Settings(prefix) => self.settings_children(prefix),
+            LookupWithin::SettingEnum(domain) => self.setting_enum_children(domain),
+        }
+    }
+
+    /// One candidate per declared parameter of the callable `name` (its OPY
+    /// spelling), in call order.
+    fn callable_children(&self, name: &str) -> Option<Vec<Candidate>> {
+        self.candidates
+            .iter()
+            .find_map(|candidate| match &candidate.hit {
+                LookupHit::Function {
+                    spelling, params, ..
+                } if spelling == name => Some(
+                    params
+                        .iter()
+                        .map(|param| {
+                            let mut forms = vec![(param.name.clone(), MatchKind::OpySpelling)];
+                            forms.extend(
+                                param
+                                    .alternate_names
+                                    .iter()
+                                    .map(|name| (name.clone(), MatchKind::Alias)),
+                            );
+                            Candidate {
+                                forms,
+                                hit: LookupHit::Parameter {
+                                    callable: spelling.clone(),
+                                    param: param.clone(),
+                                    matched_on: MatchKind::OpySpelling,
+                                },
+                            }
+                        })
+                        .collect(),
+                ),
+                _ => None,
+            })
+    }
+
+    /// One candidate per member of the enum domain `domain`, in domain
+    /// order. A manifest-only domain is an existing but empty scope.
+    fn enum_children(&self, domain: &str) -> Option<Vec<Candidate>> {
+        let known = self.candidates.iter().any(|candidate| {
+            matches!(&candidate.hit, LookupHit::EnumDomain { domain: d, .. } if d == domain)
+        });
+        if !known {
+            return None;
+        }
+        Some(
+            crate::enums::domain_members(domain, self.catalog)
+                .map(|members| {
+                    members
+                        .iter()
+                        .map(|member| self.member_candidate(domain, member))
+                        .collect()
+                })
+                .unwrap_or_default(),
+        )
+    }
+
+    /// The settings keys and intermediate path segments directly below
+    /// `prefix`, in settings-table order; an empty prefix lists the root.
+    /// `None` when `prefix` is not a proper segment-wise prefix of any
+    /// settings path.
+    fn settings_children(&self, prefix: &str) -> Option<Vec<Candidate>> {
+        let prefix_segments: Vec<&str> =
+            prefix.split('.').filter(|part| !part.is_empty()).collect();
+        let mut children: Vec<Candidate> = Vec::new();
+        let mut seen: Vec<&str> = Vec::new();
+        for candidate in &self.candidates {
+            let LookupHit::Setting { path, .. } = &candidate.hit else {
+                continue;
+            };
+            let segments: Vec<&str> = path.split('.').collect();
+            if !segments.starts_with(prefix_segments.as_slice()) {
+                continue;
+            }
+            let Some(&child_segment) = segments.get(prefix_segments.len()) else {
+                continue;
+            };
+            if seen.contains(&child_segment) {
+                continue;
+            }
+            seen.push(child_segment);
+            if segments.len() == prefix_segments.len() + 1 {
+                children.push(candidate.clone());
+            } else {
+                let child_path = prefix_segments
+                    .iter()
+                    .copied()
+                    .chain(std::iter::once(child_segment))
+                    .collect::<Vec<_>>()
+                    .join(".");
+                children.push(Candidate {
+                    forms: vec![
+                        (child_segment.to_string(), MatchKind::OpySpelling),
+                        (child_path.clone(), MatchKind::Path),
+                    ],
+                    hit: LookupHit::SettingPath {
+                        path: child_path,
+                        matched_on: MatchKind::Path,
+                    },
+                });
+            }
+        }
+        (!children.is_empty()).then_some(children)
+    }
+
+    /// One candidate per accepted member of a settings enum domain, in
+    /// table order. `None` when `domain` is not a settings enum domain.
+    fn setting_enum_children(&self, domain: &str) -> Option<Vec<Candidate>> {
+        let mut members: Vec<(String, String)> = Vec::new();
+        for definition in settings::definitions() {
+            for member in definition.enum_members() {
+                if member.domain() == domain && !members.iter().any(|(id, _)| id == member.id()) {
+                    members.push((member.id().to_string(), member.english_name().to_string()));
+                }
+            }
+        }
+        if members.is_empty() {
+            return None;
+        }
+        Some(
+            members
+                .into_iter()
+                .map(|(id, name)| Candidate {
+                    forms: vec![
+                        (id.clone(), MatchKind::OpySpelling),
+                        (name.clone(), MatchKind::DisplayName),
+                    ],
+                    hit: LookupHit::EnumMember {
+                        spelling: id.clone(),
+                        domain: domain.to_string(),
+                        member: id,
+                        display_name: (!name.is_empty()).then_some(name),
+                        aliases: Vec::new(),
+                        matched_on: MatchKind::OpySpelling,
+                    },
+                })
+                .collect(),
+        )
     }
 
     // -- functions --------------------------------------------------------
@@ -695,6 +976,7 @@ impl<'a> Index<'a> {
         let locale = crate::enums::en_us();
         for function in self.manifest.functions() {
             let mut forms = vec![(function.id.clone(), MatchKind::OpySpelling)];
+            let mut display_name = None;
             if let Some(catalog_id) = &function.catalog_id {
                 forms.push((catalog_id.clone(), MatchKind::CatalogId));
                 let kind = match function.kind {
@@ -703,6 +985,7 @@ impl<'a> Index<'a> {
                 };
                 if let Some(entry) = self.catalog.entry(kind, catalog_id) {
                     if let Some(spelling) = entry.spelling(&locale) {
+                        display_name = Some(spelling.to_string());
                         forms.push((spelling.to_string(), MatchKind::DisplayName));
                     }
                     for spelling in entry.spellings(&locale) {
@@ -732,6 +1015,7 @@ impl<'a> Index<'a> {
                     unbounded: function.unbounded,
                     params,
                     catalog_id: function.catalog_id.clone(),
+                    display_name,
                     matched_on: MatchKind::OpySpelling,
                 },
             });
@@ -759,6 +1043,7 @@ impl<'a> Index<'a> {
                     unbounded: false,
                     params,
                     catalog_id: None,
+                    display_name: None,
                     matched_on: MatchKind::OpySpelling,
                 },
             });
@@ -865,6 +1150,7 @@ impl<'a> Index<'a> {
         for domain in self.lookup_domains() {
             let members = crate::enums::domain_members(&domain, self.catalog);
             let mut domain_forms = vec![(domain.clone(), MatchKind::OpySpelling)];
+            let mut display_name = None;
             if let Some(catalog_domain) = self
                 .catalog
                 .enum_domain(crate::enums::catalog_domain(&domain))
@@ -872,6 +1158,7 @@ impl<'a> Index<'a> {
                 domain_forms.push((catalog_domain.domain.clone(), MatchKind::CatalogId));
                 let locale = crate::enums::en_us();
                 if let Some(spelling) = catalog_domain.spelling(&locale) {
+                    display_name = Some(spelling.to_string());
                     domain_forms.push((spelling.to_string(), MatchKind::DisplayName));
                 }
             }
@@ -883,41 +1170,48 @@ impl<'a> Index<'a> {
                 hit: LookupHit::EnumDomain {
                     domain: domain.clone(),
                     members: entries,
+                    display_name,
                     matched_on: MatchKind::OpySpelling,
                 },
             });
             if let Some(members) = members {
                 for member in &members {
-                    let entry = member_entry(member);
-                    let mut forms = vec![
-                        (
-                            format!("{domain}.{}", entry.spelling),
-                            MatchKind::OpySpelling,
-                        ),
-                        (entry.spelling.clone(), MatchKind::OpySpelling),
-                    ];
-                    if let Some(display) = &member.display_name {
-                        forms.push((display.clone(), MatchKind::DisplayName));
-                    }
-                    if let Some(catalog_member) = &member.catalog_member {
-                        forms.push((catalog_member.clone(), MatchKind::CatalogId));
-                    }
-                    for alias in &member.aliases {
-                        forms.push((alias.clone(), MatchKind::Alias));
-                    }
-                    self.candidates.push(Candidate {
-                        forms,
-                        hit: LookupHit::EnumMember {
-                            spelling: format!("{domain}.{}", entry.spelling),
-                            domain: domain.clone(),
-                            member: entry.id.clone(),
-                            display_name: entry.display_name.clone(),
-                            aliases: entry.aliases.clone(),
-                            matched_on: MatchKind::OpySpelling,
-                        },
-                    });
+                    self.candidates.push(self.member_candidate(&domain, member));
                 }
             }
+        }
+    }
+
+    /// The member candidate the enum domain index and a `within: enum`
+    /// scope share, so a member answers to the same forms in both.
+    fn member_candidate(&self, domain: &str, member: &crate::enums::DomainMember) -> Candidate {
+        let entry = member_entry(member);
+        let mut forms = vec![
+            (
+                format!("{domain}.{}", entry.spelling),
+                MatchKind::OpySpelling,
+            ),
+            (entry.spelling.clone(), MatchKind::OpySpelling),
+        ];
+        if let Some(display) = &member.display_name {
+            forms.push((display.clone(), MatchKind::DisplayName));
+        }
+        if let Some(catalog_member) = &member.catalog_member {
+            forms.push((catalog_member.clone(), MatchKind::CatalogId));
+        }
+        for alias in &member.aliases {
+            forms.push((alias.clone(), MatchKind::Alias));
+        }
+        Candidate {
+            forms,
+            hit: LookupHit::EnumMember {
+                spelling: format!("{domain}.{}", entry.spelling),
+                domain: domain.to_string(),
+                member: entry.id,
+                display_name: entry.display_name,
+                aliases: entry.aliases,
+                matched_on: MatchKind::OpySpelling,
+            },
         }
     }
 
@@ -1054,19 +1348,21 @@ fn member_entry(member: &crate::enums::DomainMember) -> EnumMemberEntry {
 
 /// The value form of one settings table definition.
 fn setting_value_form(definition: &settings::SettingDefinition) -> SettingValueForm {
-    let (kind, min, max) = match definition.domain() {
-        SettingValueDomain::PresenceOnly => (SettingValueKind::Presence, None, None),
-        SettingValueDomain::Boolean => (SettingValueKind::Boolean, None, None),
+    let (kind, domain, min, max) = match definition.domain() {
+        SettingValueDomain::PresenceOnly => (SettingValueKind::Presence, None, None, None),
+        SettingValueDomain::Boolean => (SettingValueKind::Boolean, None, None, None),
         SettingValueDomain::Number(bounds) => {
-            (SettingValueKind::Number, bounds.min(), bounds.max())
+            (SettingValueKind::Number, None, bounds.min(), bounds.max())
         }
         SettingValueDomain::Percent(bounds) => {
-            (SettingValueKind::Percent, bounds.min(), bounds.max())
+            (SettingValueKind::Percent, None, bounds.min(), bounds.max())
         }
-        SettingValueDomain::String => (SettingValueKind::String, None, None),
-        SettingValueDomain::Enum { .. } => (SettingValueKind::Enum, None, None),
-        SettingValueDomain::MapList => (SettingValueKind::MapList, None, None),
-        SettingValueDomain::HeroList => (SettingValueKind::HeroList, None, None),
+        SettingValueDomain::String => (SettingValueKind::String, None, None, None),
+        SettingValueDomain::Enum { domain } => {
+            (SettingValueKind::Enum, Some(domain.clone()), None, None)
+        }
+        SettingValueDomain::MapList => (SettingValueKind::MapList, None, None, None),
+        SettingValueDomain::HeroList => (SettingValueKind::HeroList, None, None, None),
         // `SettingValueDomain` is non-exhaustive upstream; a future variant
         // must be mapped here rather than silently re-typed.
         other => unreachable!("unhandled SettingValueDomain variant {other:?}"),
@@ -1084,6 +1380,7 @@ fn setting_value_form(definition: &settings::SettingDefinition) -> SettingValueF
         };
     SettingValueForm {
         kind,
+        domain,
         members,
         min,
         max,
@@ -1286,6 +1583,139 @@ mod tests {
         assert!(
             keys.iter().any(|key| key == "scoreToWin"),
             "inherited general keys must be candidates: {keys:?}"
+        );
+    }
+
+    fn within_query(within: LookupWithin) -> LookupQuery {
+        LookupQuery {
+            text: String::new(),
+            scope: LookupScope::ALL,
+            within: Some(within),
+            locale: None,
+            limit: usize::MAX,
+        }
+    }
+
+    /// A `within: callable` scope lists the callable's declared parameters
+    /// as `Parameter` hits in call order, not ranked text matches.
+    #[test]
+    fn within_callable_lists_params_in_call_order() {
+        let LookupOutcome::Matched { results, .. } =
+            lookup(&within_query(LookupWithin::Callable("wait".to_string())))
+        else {
+            panic!("wait is a known callable");
+        };
+        let names: Vec<&str> = results
+            .iter()
+            .map(|hit| {
+                let LookupHit::Parameter { param, .. } = hit else {
+                    panic!("callable children are parameters: {hit:?}");
+                };
+                param.name.as_str()
+            })
+            .collect();
+        assert_eq!(names, ["time", "waitBehavior"]);
+        let LookupOutcome::UnknownWithin { .. } = lookup(&within_query(LookupWithin::Callable(
+            "notAFunction".to_string(),
+        ))) else {
+            panic!("an unknown callable is not a scope");
+        };
+    }
+
+    /// A `within: enum` scope lists the domain's member spellings in domain
+    /// order; a `within: settings` scope lists immediate children — leaf
+    /// keys as `Setting` hits, intermediate segments as `SettingPath` hits —
+    /// and an empty prefix lists the root.
+    #[test]
+    fn within_scopes_list_their_children() {
+        let LookupOutcome::Matched { results, .. } =
+            lookup(&within_query(LookupWithin::Enum("Button".to_string())))
+        else {
+            panic!("Button is a known enum domain");
+        };
+        let LookupHit::EnumMember { spelling, .. } = &results[0] else {
+            panic!("enum children are members: {:?}", results[0]);
+        };
+        assert_eq!(spelling, "Button.PRIMARY_FIRE");
+
+        let LookupOutcome::Matched { results, .. } =
+            lookup(&within_query(LookupWithin::Settings(String::new())))
+        else {
+            panic!("the settings root exists");
+        };
+        assert!(
+            results
+                .iter()
+                .all(|hit| matches!(hit, LookupHit::SettingPath { .. })),
+            "the root has only intermediate segments: {results:?}"
+        );
+
+        let LookupOutcome::Matched { results, .. } = lookup(&within_query(LookupWithin::Settings(
+            "gamemodes.ffa".to_string(),
+        ))) else {
+            panic!("gamemodes.ffa is a settings path prefix");
+        };
+        assert!(
+            results.iter().any(|hit| matches!(
+                hit,
+                LookupHit::Setting { path, .. } if path == "gamemodes.ffa.scoreToWin"
+            )),
+            "a leaf child reports its Setting hit: {results:?}"
+        );
+
+        let LookupOutcome::UnknownWithin { .. } = lookup(&within_query(LookupWithin::Settings(
+            "gamemodes.ffa.scoreToWin".to_string(),
+        ))) else {
+            panic!("a leaf setting has no children");
+        };
+    }
+
+    /// A settings enum domain (`lobby.mapRotation` accepts `afterAGame`…)
+    /// answers under `LookupWithin::SettingEnum` with the member spellings
+    /// the settings table declares; it is not an OPY enum domain.
+    #[test]
+    fn within_settings_enum_lists_accepted_members() {
+        let LookupOutcome::Matched { results, .. } = lookup(&within_query(
+            LookupWithin::SettingEnum("mapRotation".to_string()),
+        )) else {
+            panic!("mapRotation is a settings enum domain");
+        };
+        let spellings: Vec<&str> = results
+            .iter()
+            .map(|hit| {
+                let LookupHit::EnumMember { spelling, .. } = hit else {
+                    panic!("settings enum children are members: {hit:?}");
+                };
+                spelling.as_str()
+            })
+            .collect();
+        assert_eq!(spellings, ["afterAGame", "afterMirrorMatch", "paused"]);
+        let LookupOutcome::UnknownWithin { .. } =
+            lookup(&within_query(LookupWithin::Enum("mapRotation".to_string())))
+        else {
+            panic!("mapRotation is not a source enum domain");
+        };
+    }
+
+    /// An empty text lists the scope's children in construction order with
+    /// each hit's primary match kind stamped; it is not a `Near` ranking.
+    #[test]
+    fn empty_text_lists_children_in_stable_order() {
+        let outcome_a = lookup(&within_query(LookupWithin::Enum("Button".to_string())));
+        let outcome_b = lookup(&within_query(LookupWithin::Enum("Button".to_string())));
+        assert_eq!(outcome_a, outcome_b, "repeat listings are identical");
+        let LookupOutcome::Matched { results, .. } = outcome_a else {
+            panic!("Button is a known enum domain");
+        };
+        assert!(
+            results.iter().all(|hit| matches!(
+                hit,
+                LookupHit::EnumMember {
+                    matched_on: MatchKind::OpySpelling,
+                    ..
+                }
+            )),
+            "listed members report their spelling form: {results:?}"
         );
     }
 }

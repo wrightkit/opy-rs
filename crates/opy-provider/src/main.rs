@@ -9,6 +9,10 @@ use std::fs;
 use std::io::{self, BufRead, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
+use opy_rs::lookup::{
+    LookupHit, LookupOutcome, LookupParam, LookupQuery, LookupScope, LookupWithin,
+    SettingValueForm, lookup as opy_lookup,
+};
 use opy_rs::tooling::{CheckOutcome, Diagnostic as OpyDiagnostic, SourceLocation};
 use opy_rs::{CompileDiagnostic, Compiler};
 use serde::Deserialize;
@@ -18,11 +22,12 @@ use workshop_rs::program::MappedText;
 
 mod edits;
 
-const PROTOCOL_VERSIONS: [&str; 5] = ["1.0", "1.1", "1.2", "1.3", "1.4"];
+const PROTOCOL_VERSIONS: [&str; 6] = ["1.0", "1.1", "1.2", "1.3", "1.4", "1.5"];
 const PROJECT_LOADING_VERSION: &str = "1.1";
 const DIRECTORY_TARGET_VERSION: &str = "1.2";
 const SOURCE_IDENTITY_VERSION: &str = "1.3";
 const ARTIFACT_NEGOTIATION_VERSION: &str = "1.4";
+const LOOKUP_VERSION: &str = "1.5";
 const SERVER_NAME: &str = "opy-provider";
 const LANGUAGE_ID: &str = "opy";
 const LANGUAGE_EXTENSIONS: [&str; 1] = ["opy"];
@@ -44,6 +49,7 @@ struct Capabilities {
     source_identity: bool,
     rename: bool,
     edit_validation: bool,
+    lookup: bool,
 }
 
 impl Capabilities {
@@ -55,6 +61,7 @@ impl Capabilities {
             source_identity: true,
             rename: true,
             edit_validation: true,
+            lookup: true,
         }
     }
 
@@ -65,6 +72,7 @@ impl Capabilities {
             "projectLoading" => self.project_loading,
             "rename" => self.rename,
             "editValidation" => self.edit_validation,
+            "lookup" => self.lookup,
             _ => false,
         }
     }
@@ -86,8 +94,17 @@ impl Capabilities {
         if version_at_least(protocol_version, SOURCE_IDENTITY_VERSION) {
             capabilities["sourceIdentity"] = json!(self.source_identity);
         }
+        if version_at_least(protocol_version, LOOKUP_VERSION) {
+            capabilities["lookup"] = json!(self.lookup);
+        }
         capabilities
     }
+}
+
+/// The minimum protocol version a method capability can be negotiated at,
+/// when the method does not exist in earlier sessions.
+fn capability_min_version(capability: &str) -> Option<&'static str> {
+    (capability == "lookup").then_some(LOOKUP_VERSION)
 }
 
 fn capability_for(method: &str) -> Option<&'static str> {
@@ -100,6 +117,7 @@ fn capability_for(method: &str) -> Option<&'static str> {
         "lpp/references" => "references",
         "lpp/rename" => "rename",
         "lpp/validateEdits" => "editValidation",
+        "lpp/lookup" => "lookup",
         _ => return None,
     })
 }
@@ -118,6 +136,13 @@ enum HandlerError {
 }
 
 impl HandlerError {
+    fn invalid_params() -> Self {
+        Self::Standard {
+            code: -32602,
+            message: "Invalid params",
+        }
+    }
+
     fn refusal(code: &'static str, details: Value, message: impl Into<String>) -> Self {
         let mut details = details;
         details["refusalCode"] = json!(code);
@@ -219,6 +244,35 @@ enum ProjectTargetKind {
     File,
     Directory,
 }
+
+/// `lpp/lookup` params (LPP 1.5 `name-lookup.md` §21.1).
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LookupParams {
+    language_id: String,
+    #[serde(default)]
+    query: Option<String>,
+    #[serde(default)]
+    kind: Option<String>,
+    #[serde(default)]
+    within: Option<LookupWithinParam>,
+    #[allow(dead_code)]
+    #[serde(default)]
+    locale: Option<String>,
+    #[serde(default)]
+    limit: Option<u64>,
+}
+
+/// One `within` selector: `{ "kind": "...", "value": "..." }`; `kind` is
+/// validated against the closed set in `lookup_within`.
+#[derive(Debug, Deserialize)]
+struct LookupWithinParam {
+    kind: String,
+    value: String,
+}
+
+/// The bound applied when an `lpp/lookup` request omits `limit`.
+const DEFAULT_LOOKUP_LIMIT: u64 = 20;
 
 #[derive(Debug)]
 struct LoadedProject {
@@ -404,7 +458,14 @@ impl Server {
                 "capability 'projectLoading' is not available",
             );
         }
-        if !self.capabilities.enabled(capability) {
+        if !self.capabilities.enabled(capability)
+            || capability_min_version(capability).is_some_and(|minimum| {
+                !version_at_least(
+                    self.protocol_version.as_deref().expect("initialized"),
+                    minimum,
+                )
+            })
+        {
             return lpp_error(
                 id,
                 "capabilityUnavailable",
@@ -417,6 +478,7 @@ impl Server {
             "lpp/compile" => self.compile(params),
             "lpp/rename" => edits::rename(params),
             "lpp/validateEdits" => edits::validate_edits(params),
+            "lpp/lookup" => self.lookup(params),
             _ => Err(HandlerError::Standard {
                 code: -32601,
                 message: "Method not found",
@@ -537,6 +599,257 @@ impl Server {
             "sourceIdentity": source_identity(&project)?,
         });
         Ok(result)
+    }
+
+    /// `lpp/lookup` — served from the language vocabulary alone; a loaded
+    /// project is never required.
+    fn lookup(&self, value: Value) -> Result<Value, HandlerError> {
+        let within_value = value.get("within").cloned();
+        let params: LookupParams =
+            serde_json::from_value(value).map_err(|_| HandlerError::invalid_params())?;
+        if params.language_id != LANGUAGE_ID {
+            return Err(invalid_language(&params.language_id));
+        }
+        if matches!(params.limit, Some(0)) {
+            return Err(HandlerError::invalid_params());
+        }
+        let within = params.within.as_ref().map(lookup_within).transpose()?;
+        // The OPY catalog serves `en-US` display names; that is also the
+        // deterministic fallback the spec permits for any requested locale.
+        let query = LookupQuery {
+            text: params.query.unwrap_or_default(),
+            scope: LookupScope::ALL,
+            within,
+            locale: None,
+            limit: usize::MAX,
+        };
+        let scoped = query.within.is_some();
+        let mut outcome = opy_lookup(&query);
+        // A settings enum domain answers under `within: "enum"` too.
+        if let (LookupOutcome::UnknownWithin { .. }, Some(LookupWithin::Enum(domain))) =
+            (&outcome, &query.within)
+        {
+            outcome = opy_lookup(&LookupQuery {
+                within: Some(LookupWithin::SettingEnum(domain.clone())),
+                ..query
+            });
+        }
+        match outcome {
+            LookupOutcome::Matched { results, .. } => {
+                let mut entries: Vec<Value> = results
+                    .iter()
+                    .map(|hit| lookup_entry(hit, scoped))
+                    .collect();
+                if let Some(kind) = &params.kind {
+                    entries.retain(|entry| entry["kind"] == *kind);
+                }
+                entries.truncate(
+                    usize::try_from(params.limit.unwrap_or(DEFAULT_LOOKUP_LIMIT))
+                        .unwrap_or(usize::MAX),
+                );
+                Ok(json!({ "entries": entries }))
+            }
+            LookupOutcome::UnknownWithin { .. } => Err(HandlerError::refusal(
+                "lookup.unknownWithin",
+                json!({ "within": within_value }),
+                "within selector names no known scope",
+            )),
+            LookupOutcome::Unsupported { reason, .. } => Err(HandlerError::Lpp {
+                kind: "providerFailure",
+                details: json!({ "code": "lookup-unsupported" }),
+                message: reason,
+            }),
+        }
+    }
+}
+
+// -- lpp/lookup -------------------------------------------------------------
+
+/// The identity prefixes the provider issues and accepts back as `within`
+/// values (`name-lookup.md` §21.2: clients must not parse identities).
+const CALLABLE_IDENTITY: &str = "opy:callable/";
+const ENUM_IDENTITY: &str = "opy:enum/";
+const ENUM_MEMBER_IDENTITY: &str = "opy:enum-member/";
+const SETTING_IDENTITY: &str = "opy:setting/";
+const SETTING_PATH_IDENTITY: &str = "opy:setting-path/";
+const PARAM_IDENTITY: &str = "opy:param/";
+
+/// Map a wire `within` selector to the vocabulary scope. `callable`/`enum`
+/// values are provider-issued identities (a bare spelling is accepted for
+/// convenience); `settings` takes a raw path prefix. A kind outside the
+/// closed set is `Invalid params`.
+fn lookup_within(within: &LookupWithinParam) -> Result<LookupWithin, HandlerError> {
+    let value = within.value.as_str();
+    Ok(match within.kind.as_str() {
+        "callable" => LookupWithin::Callable(identity_value(value, CALLABLE_IDENTITY).to_string()),
+        "enum" => LookupWithin::Enum(identity_value(value, ENUM_IDENTITY).to_string()),
+        "settings" => LookupWithin::Settings(value.to_string()),
+        _ => return Err(HandlerError::invalid_params()),
+    })
+}
+
+/// The scope name behind an identity, or the raw value when it is not an
+/// `opy:` identity of that kind (an unknown name resolves to an
+/// `unknownWithin` refusal downstream, not a param error).
+fn identity_value<'a>(value: &'a str, prefix: &str) -> &'a str {
+    value.strip_prefix(prefix).unwrap_or(value)
+}
+
+/// The last segment of a settings path; a scoped settings listing spells
+/// each child by its own segment (`name-lookup.md` §21.3).
+fn path_segment(path: &str) -> &str {
+    path.rsplit('.').next().unwrap_or(path)
+}
+
+/// The LPP wire entry for one `opy_rs::lookup` hit. `scoped` is set inside
+/// a `within` listing, where settings children spell their own segment.
+fn lookup_entry(hit: &LookupHit, scoped: bool) -> Value {
+    match hit {
+        LookupHit::Function {
+            spelling,
+            function_kind,
+            receiver,
+            params,
+            display_name,
+            ..
+        } => {
+            let mut callable = json!({
+                "parameters": params.iter().map(callable_param_wire).collect::<Vec<_>>(),
+            });
+            if let Some(receiver) = receiver {
+                callable["receiver"] = serde_json::to_value(receiver).expect("category string");
+            }
+            json!({
+                "identity": format!("{CALLABLE_IDENTITY}{spelling}"),
+                "kind": function_kind.as_str(),
+                "spelling": spelling,
+                "displayName": display_name.as_deref().unwrap_or(spelling),
+                "callable": callable,
+            })
+        }
+        LookupHit::EnumDomain {
+            domain,
+            members,
+            display_name,
+            ..
+        } => {
+            let mut entry = json!({
+                "identity": format!("{ENUM_IDENTITY}{domain}"),
+                "kind": "enum",
+                "spelling": domain,
+                "displayName": display_name.as_deref().unwrap_or(domain),
+            });
+            if let Some(members) = members {
+                entry["enum"] = json!({
+                    "domain": format!("{ENUM_IDENTITY}{domain}"),
+                    "members": members
+                        .iter()
+                        .map(|member| member.spelling.clone())
+                        .collect::<Vec<_>>(),
+                });
+            }
+            entry
+        }
+        LookupHit::EnumMember {
+            spelling,
+            member,
+            display_name,
+            ..
+        } => json!({
+            "identity": format!("{ENUM_MEMBER_IDENTITY}{spelling}"),
+            "kind": "enumMember",
+            "spelling": spelling,
+            "displayName": display_name.as_deref().unwrap_or(member),
+        }),
+        LookupHit::Setting {
+            path,
+            display_name,
+            value,
+            ..
+        } => json!({
+            "identity": format!("{SETTING_IDENTITY}{path}"),
+            "kind": "setting",
+            "spelling": if scoped { path_segment(path) } else { path },
+            "displayName": display_name.as_deref().unwrap_or(path),
+            "setting": setting_wire(value),
+        }),
+        LookupHit::Parameter {
+            callable, param, ..
+        } => {
+            let mut fact = callable_param_wire(param);
+            // The parameter's `name` is the entry spelling (§21.2).
+            fact.as_object_mut()
+                .expect("parameter object")
+                .remove("name");
+            json!({
+                "identity": format!("{PARAM_IDENTITY}{callable}/{}", param.name),
+                "kind": "parameter",
+                "spelling": param.name,
+                "displayName": param.name,
+                "parameter": fact,
+            })
+        }
+        LookupHit::SettingPath { path, .. } => json!({
+            "identity": format!("{SETTING_PATH_IDENTITY}{path}"),
+            "kind": "settingPath",
+            "spelling": path_segment(path),
+            "displayName": path,
+        }),
+    }
+}
+
+/// The wire form of one callable parameter (§21.4): name, type, required,
+/// optional default and the enum domain it accepts.
+fn callable_param_wire(param: &LookupParam) -> Value {
+    let mut wire = json!({
+        "name": param.name,
+        "type": param.param_type.as_deref().unwrap_or("any"),
+        "required": param.required,
+    });
+    if let Some(default) = &param.default {
+        wire["default"] = json!(default);
+    }
+    if let Some(domain) = &param.domain {
+        wire["enum"] = json!({
+            "domain": format!("{ENUM_IDENTITY}{domain}"),
+            "members": param
+                .members
+                .as_ref()
+                .map(|members| {
+                    members
+                        .iter()
+                        .map(|member| member.spelling.clone())
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default(),
+        });
+    }
+    wire
+}
+
+/// The wire form of a settings value form (§21.2 `setting`).
+fn setting_wire(value: &SettingValueForm) -> Value {
+    let mut wire = json!({ "type": value.kind.as_str() });
+    if let Some(min) = value.min {
+        wire["minimum"] = json!(min);
+    }
+    if let Some(max) = value.max {
+        wire["maximum"] = json!(max);
+    }
+    if let Some(domain) = &value.domain {
+        wire["enum"] = json!({
+            "domain": format!("{ENUM_IDENTITY}{domain}"),
+            "members": value.members,
+        });
+    }
+    wire
+}
+
+fn invalid_language(language_id: &str) -> HandlerError {
+    HandlerError::Lpp {
+        kind: "invalidLanguage",
+        details: json!({ "languageId": language_id }),
+        message: format!("language not served by provider: {language_id}"),
     }
 }
 
