@@ -422,21 +422,13 @@ impl Lowerer {
                 // The four OverPy-only LIGHT_* constants are members of the
                 // upstream `ColorLiteral` table. Through `Color.` the pinned
                 // upstream lowers them to `rgb(r, g, b, 255)`; through
-                // `ColorLiteral.` it emits the member's display-name lookup,
-                // which `onlyInOverpy` members do not have — an empty
-                // argument slot (`Set Global Variable(g, )`). The `literal`
-                // flag carries the member to the compiler, which emits that
-                // slot via `workshop_rs::Value::Empty` (issue #466,
-                // wrightkit/workshop-rs#383).
+                // `ColorLiteral.` it accepts the same spellings but emits
+                // the member's display-name lookup, which `onlyInOverpy`
+                // members do not have — an empty argument slot the Workshop
+                // grammar cannot parse. Emitting the canonical `rgb` form
+                // here is a recorded exception
+                // (docs/architecture/language-core.md, issue #466).
                 if let Some((red, green, blue)) = crate::enums::extra_color_member(member) {
-                    if name == "ColorLiteral" {
-                        return HirExpr::Enum {
-                            value_type: "Color".to_string(),
-                            value: member.to_string(),
-                            literal: true,
-                            span: Some(span.into()),
-                        };
-                    }
                     let number = |value: i32| HirExpr::Number {
                         value: f64::from(value),
                         text: value.to_string(),

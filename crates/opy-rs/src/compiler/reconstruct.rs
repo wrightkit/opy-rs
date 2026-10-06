@@ -1602,13 +1602,6 @@ impl<'a> Emitter<'a> {
             Value::Null => {
                 self.out.push_str("None");
             }
-            Value::Empty => {
-                self.issue(
-                    "unsupported-absent-argument",
-                    "an absent argument slot has no OPY source representation",
-                    span,
-                );
-            }
             Value::Array(elements) => {
                 self.out.push('[');
                 for (index, element) in elements.iter().enumerate() {

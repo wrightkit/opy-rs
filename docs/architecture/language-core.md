@@ -76,15 +76,10 @@ Structural rewrites are not accepted, even when they appear behaviorally equival
 | `timeToString` padded slices | Writes `String Slice(Add(...), True, …)`: a Number in the `stringSlice` string position and a Boolean in the start-index position. | Writes `String Slice(Custom String("{0}", Add(...)), 1, …)`, the canonical form of the same formula; the slices stay unevaluated on constant input exactly as the reference emits them. | `wrightkit/opy-rs#434`; canonical validation rejects both upstream argument types | `structural_convergence::time_to_string_keeps_the_reference_shape_modulo_canonical_types` |
 | `buttonToString` expansion | Writes `Mapped Array(Input Binding String(b), …)`, putting the binding `String` in the `Array` parameter. | Writes `Mapped Array(Array(Input Binding String(b)), …)` — the canonical form of the same formula, since the expansion selects the whole string. | `wrightkit/opy-rs#447`; canonical validation rejects `String` in the `mappedArray` `Array` parameter | `structural_convergence::button_to_string_expands_with_the_canonical_array_wrap` |
 | Non-finite `log` folds (`log(0)`, `log(-1)`, `log(x, non-positive base)`) | Writes `-Infinity`/`NaN`, which the canonical grammar cannot parse. | Keeps the pre-fold `log`/`ln` power approximation so the call emits a valid program. | `wrightkit/opy-rs#435`; pending the number-spelling decision in `wrightkit/workshop-rs#358` | `structural_convergence::a_non_finite_log_fold_keeps_the_pre_fold_expansion` |
+| `ColorLiteral.LIGHT_*` (`LIGHT_RED`, `LIGHT_PURPLE`, `LIGHT_VIOLET`, `LIGHT_GRAY`) | Resolves the member through a display-name lookup that does not exist for `onlyInOverpy` members and splices the missing text into the argument list, writing an empty argument slot (`Set Global Variable(g, )`) the canonical grammar cannot parse. Through the `Color.` receiver the same member emits `Custom Color(255, 112, 122, 255)`. | Writes the canonical `Custom Color(255, 112, 122, 255)`, as the `Color.` receiver does; an empty argument slot has no Workshop meaning and is not representable in the canonical `Program` (workshop-rs ADR-0008 decision 7). | Project owner, `wrightkit/opy-rs#468` review (2026-10-06): match upstream where it is a Workshop program, record the lookup failure as an exception | `structural_convergence::literal_domain_members_emit_the_reference_display_names`; probe gap `literal-onlyinoverpy-empty-slot` |
 
-`*Literal` member emission needs no exception: `opy-rs` reproduces the
-reference's bare display-name emission, including the `onlyInOverpy`
-`ColorLiteral.LIGHT_*` members whose absent lookup the reference splices as
-an empty argument slot (`Set Global Variable(g, )`, emitted through
-`workshop_rs::Value::Empty`, wrightkit/workshop-rs#383). That slot is not
-parseable by the canonical grammar on either side — the pinned reference's
-output is equally unparseable — so the builtin probe records the family as
-`unparsable` rather than `match` (issue #466).
+`*Literal` member emission otherwise needs no exception: `opy-rs` reproduces
+the reference's bare display-name emission (`Team 1`, `Assault`).
 
 ### Pending exceptions
 

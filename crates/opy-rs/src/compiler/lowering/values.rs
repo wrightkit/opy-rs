@@ -113,11 +113,12 @@ impl<'a> Lowering<'a> {
                     ("Clipping", "SURFACES") => "CLIP_AGAINST_SURFACES",
                     _ => value,
                 };
-                let spelled =
-                    self.compiler
-                        .catalog
-                        .enum_spelling(value_type, &Locale::new("en-US"), value);
-                if spelled.is_none() && !*literal {
+                if self
+                    .compiler
+                    .catalog
+                    .enum_spelling(value_type, &Locale::new("en-US"), value)
+                    .is_none()
+                {
                     return Err(self.unsupported(
                         format!("unknown catalog enum member '{value_type}.{value}'"),
                         span,
@@ -127,17 +128,10 @@ impl<'a> Lowering<'a> {
                     value_type: value_type.clone(),
                     value: value.to_string(),
                 };
-                // A `*Literal` member emits the bare display-name lookup:
-                // no canonical wrapper (`Game Mode(...)`, `Hero(...)`), and
-                // an `onlyInOverpy` member with no lookup emits an empty
-                // argument slot exactly as the reference splices the absent
-                // text (issue #466, wrightkit/workshop-rs#383).
+                // A `*Literal` member emits the bare display-name lookup,
+                // without the canonical wrapper (`Game Mode(...)`, `Hero(...)`).
                 if *literal {
-                    if spelled.is_some() {
-                        member
-                    } else {
-                        Value::Empty
-                    }
+                    member
                 } else if value_type == "Gamemode" {
                     let member = self.push_value(member);
                     Value::Call {

@@ -117,9 +117,9 @@ const SETTING_CALLS: [(&str, &str, &str); 16] = [
 
 /// `*Literal` member spellings the reference accepts: one member per literal
 /// domain, every `onlyInOverpy` `ColorLiteral` member, and the `Color.`
-/// spelling of the same member. The `ColorLiteral.LIGHT_*` emissions carry
-/// the reference's empty argument slot, which the canonical grammar cannot
-/// parse on either side — the expected `unparsable` findings are recorded in
+/// spelling of the same member. The `ColorLiteral.LIGHT_*` reference
+/// emissions carry an empty argument slot the canonical grammar cannot
+/// parse — the expected `unparsable` findings are recorded in
 /// `tools/overpy/probe-gaps.json` (issue #466).
 const LITERAL_MEMBER_CALLS: [(&str, &str); 11] = [
     ("TeamLiteral.1", "g = TeamLiteral.1"),
