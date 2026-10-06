@@ -60,9 +60,14 @@ fn invalid_spec_visibility_members_keep_source_attributed_diagnostics() {
     let error =
         crate::compile(source, "source.opy", Path::new(".")).expect_err("invalid member must fail");
     assert_eq!(error.code, "unknown-enum-member");
-    assert_eq!(
-        error.message,
-        "enum 'SpecVisibility' has no member 'INVALID'"
+    // The message carries the member candidates of the SpecVisibility
+    // domain (issue #469).
+    assert!(
+        error
+            .message
+            .starts_with("enum 'SpecVisibility' has no member 'INVALID' (did you mean '"),
+        "message: {}",
+        error.message
     );
     let span = error.span.expect("diagnostic provenance");
     assert_eq!(span.start.line, 3);

@@ -519,7 +519,14 @@ impl Compiler {
             workshop_rs::emitter::emit(&program, self.catalog, locale).map_err(|error| {
                 IntegrationError::new(
                     "workshop-emission",
-                    error.to_string(),
+                    crate::matcher::did_you_mean(
+                        error.to_string(),
+                        &crate::matcher::settings_member_candidates(
+                            expanded_hir.settings.as_ref(),
+                            &error,
+                            None,
+                        ),
+                    ),
                     workshop_error_span(&error)
                         .and_then(|span| hir_span_from_workshop(span, &expanded_hir)),
                 )

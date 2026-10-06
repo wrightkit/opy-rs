@@ -420,3 +420,32 @@ fn settings_emission_agreement_between_check_and_compile() {
         outcome.diagnostics
     );
 }
+
+#[test]
+fn settings_rejection_reports_a_single_candidate_suffix() {
+    // A near-miss settings key arrives from the canonical checker with its
+    // own `did you mean` already in the message; opy-rs candidate ranking
+    // replaces that suffix instead of appending a second one.
+    let source = concat!(
+        "settings {\n",
+        "    \"main\": { \"descriptino\": \"x\" },\n",
+        "    \"gamemodes\": {}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    );
+    let expected = "malformed: settings key 'main.descriptino' is outside the emission table \
+                    (did you mean 'description'?)";
+
+    let outcome = check(source, "main.opy", Path::new(""));
+    let diagnostic = outcome
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.severity == tooling::DiagnosticSeverity::Error)
+        .expect("the misspelled key must fail check");
+    assert_eq!(diagnostic.code, "workshop-emission");
+    assert_eq!(diagnostic.message, expected);
+
+    let compile_error = opy_rs::compile(source, "main.opy", Path::new("")).unwrap_err();
+    assert_eq!(compile_error.code, "workshop-emission");
+    assert_eq!(compile_error.message, expected);
+}
