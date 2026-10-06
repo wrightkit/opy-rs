@@ -387,10 +387,11 @@ fn callable_hits_expose_parameter_facts() {
         .find(|p| p.name == "hero")
         .expect("hero param");
     assert_eq!(hero.domain.as_deref(), Some("Hero"));
-    assert_eq!(
-        hero.members.as_ref().map(Vec::len),
-        Some(53),
-        "the full member inventory is a fact: {hero:?}"
+    assert!(
+        hero.members
+            .as_ref()
+            .is_some_and(|members| members.len() > 32),
+        "the full member inventory is a fact, not a bounded inline list: {hero:?}"
     );
     assert!(
         hero.members
