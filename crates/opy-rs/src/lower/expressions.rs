@@ -422,13 +422,21 @@ impl Lowerer {
                 // The four OverPy-only LIGHT_* constants are members of the
                 // upstream `ColorLiteral` table. Through `Color.` the pinned
                 // upstream lowers them to `rgb(r, g, b, 255)`; through
-                // `ColorLiteral.` it accepts the same spellings but emits
-                // the member's display-name lookup, which `onlyInOverpy`
-                // members do not have — an empty argument slot the Workshop
-                // grammar cannot parse. Emitting the canonical `rgb` form
-                // here is a recorded exception
-                // (docs/architecture/language-core.md, issue #466).
+                // `ColorLiteral.` it emits the member's display-name lookup,
+                // which `onlyInOverpy` members do not have — an empty
+                // argument slot (`Set Global Variable(g, )`). The `literal`
+                // flag carries the member to the compiler, which emits that
+                // slot via `workshop_rs::Value::Empty` (issue #466,
+                // wrightkit/workshop-rs#383).
                 if let Some((red, green, blue)) = crate::enums::extra_color_member(member) {
+                    if name == "ColorLiteral" {
+                        return HirExpr::Enum {
+                            value_type: "Color".to_string(),
+                            value: member.to_string(),
+                            literal: true,
+                            span: Some(span.into()),
+                        };
+                    }
                     let number = |value: i32| HirExpr::Number {
                         value: f64::from(value),
                         text: value.to_string(),
@@ -462,6 +470,7 @@ impl Lowerer {
                         return HirExpr::Enum {
                             value_type: domain,
                             value: canonical_member,
+                            literal: crate::enums::literal_domain(name).is_some(),
                             span: Some(span.into()),
                         };
                     }
@@ -1017,6 +1026,7 @@ impl Lowerer {
                         bound.push(HirExpr::Enum {
                             value_type: domain,
                             value: member.clone(),
+                            literal: false,
                             span: None,
                         });
                     }
@@ -1108,6 +1118,7 @@ impl Lowerer {
                             return HirExpr::Enum {
                                 value_type: contextual.domain.to_string(),
                                 value: member.clone(),
+                                literal: false,
                                 span: Some((*span).into()),
                             };
                         }
@@ -1149,6 +1160,7 @@ impl Lowerer {
         let HirExpr::Enum {
             value_type,
             value,
+            literal,
             span: value_span,
         } = &bound[contextual_param]
         else {
@@ -1170,6 +1182,7 @@ impl Lowerer {
         bound[contextual_param] = HirExpr::Enum {
             value_type: option.domain.to_string(),
             value: value.clone(),
+            literal: *literal,
             span: *value_span,
         };
         (option.target.to_string(), bound)

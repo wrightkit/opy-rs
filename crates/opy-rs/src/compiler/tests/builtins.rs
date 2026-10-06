@@ -82,6 +82,7 @@ fn collect_value_call_names(value: &workshop_rs::Value, names: &mut Vec<String>)
         | workshop_rs::Value::LocalizedString(_)
         | workshop_rs::Value::Bool(_)
         | workshop_rs::Value::Null
+        | workshop_rs::Value::Empty
         | workshop_rs::Value::Enum { .. }
         | workshop_rs::Value::GlobalVariable(_)
         | workshop_rs::Value::Subroutine(_)

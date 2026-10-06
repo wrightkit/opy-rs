@@ -546,9 +546,15 @@ fn render_expr(expr: &Expr, out: &mut String) {
             out.push(')');
         }
         Expr::Enum {
-            value_type, value, ..
+            value_type,
+            value,
+            literal,
+            ..
         } => {
             out.push_str(value_type);
+            if *literal {
+                out.push_str("Literal");
+            }
             out.push('.');
             out.push_str(value);
         }

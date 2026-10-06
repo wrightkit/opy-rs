@@ -118,6 +118,7 @@ fn value_node_count(value: &Value) -> usize {
         | Value::LocalizedString(_)
         | Value::Bool(_)
         | Value::Null
+        | Value::Empty
         | Value::Enum { .. }
         | Value::GlobalVariable(_)
         | Value::Subroutine(_)

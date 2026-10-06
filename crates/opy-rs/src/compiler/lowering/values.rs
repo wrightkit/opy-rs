@@ -103,19 +103,21 @@ impl<'a> Lowering<'a> {
                 args: Vec::new(),
             },
             Expr::Enum {
-                value_type, value, ..
+                value_type,
+                value,
+                literal,
+                ..
             } => {
                 let value = match (value_type.as_str(), value.as_str()) {
                     ("Clipping", "NONE") => "DO_NOT_CLIP",
                     ("Clipping", "SURFACES") => "CLIP_AGAINST_SURFACES",
                     _ => value,
                 };
-                if self
-                    .compiler
-                    .catalog
-                    .enum_spelling(value_type, &Locale::new("en-US"), value)
-                    .is_none()
-                {
+                let spelled =
+                    self.compiler
+                        .catalog
+                        .enum_spelling(value_type, &Locale::new("en-US"), value);
+                if spelled.is_none() && !*literal {
                     return Err(self.unsupported(
                         format!("unknown catalog enum member '{value_type}.{value}'"),
                         span,
@@ -125,7 +127,18 @@ impl<'a> Lowering<'a> {
                     value_type: value_type.clone(),
                     value: value.to_string(),
                 };
-                if value_type == "Gamemode" {
+                // A `*Literal` member emits the bare display-name lookup:
+                // no canonical wrapper (`Game Mode(...)`, `Hero(...)`), and
+                // an `onlyInOverpy` member with no lookup emits an empty
+                // argument slot exactly as the reference splices the absent
+                // text (issue #466, wrightkit/workshop-rs#383).
+                if *literal {
+                    if spelled.is_some() {
+                        member
+                    } else {
+                        Value::Empty
+                    }
+                } else if value_type == "Gamemode" {
                     let member = self.push_value(member);
                     Value::Call {
                         name: "gameMode".to_string(),

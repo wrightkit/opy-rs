@@ -345,6 +345,7 @@ fn synthetic_enum(value_type: &str, value: &str) -> HirExpr {
     HirExpr::Enum {
         value_type: value_type.to_string(),
         value: value.to_string(),
+        literal: false,
         span: None,
     }
 }

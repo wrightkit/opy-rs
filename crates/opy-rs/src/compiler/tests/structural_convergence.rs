@@ -442,20 +442,26 @@ fn button_to_string_stays_unwrapped_in_a_boolean_position() {
 }
 
 #[test]
-fn literal_domain_members_emit_canonical_values() {
-    // Recorded exception (docs/architecture/language-core.md, PR
-    // wrightkit/opy-rs#468): the pinned upstream emits a `*Literal` member as
-    // the bare display-name lookup of its constant table — `TeamLiteral.1`
-    // writes `Team 1`, `HeroLiteral.ANA` writes `Ana`, `ColorLiteral.WHITE`
-    // writes `White`. The canonical grammar reads those bare names back as
-    // the same members, so the wrapped literals emitted here are
-    // structurally identical to the reference. For `onlyInOverpy` members
-    // such as `ColorLiteral.LIGHT_RED` the lookup is absent and the reference
-    // emits an empty argument slot — `Set Global Variable(g, )` — which the
-    // canonical grammar cannot parse; the canonical `Custom Color` keeps the
-    // program valid.
+fn literal_domain_members_emit_the_reference_display_names() {
+    // Pinned OverPy 9.7.10 emits a `*Literal` member as the bare
+    // display-name lookup of its constant table — oracle output observed
+    // for this exact source:
+    //   `TeamLiteral.1`          → `Set Global Variable(g, Team 1)`
+    //   `HeroLiteral.ANA`        → `Set Global Variable(g, Ana)`
+    //   `ColorLiteral.WHITE`     → `Set Global Variable(g, White)`
+    //   `ColorLiteral.LIGHT_RED` → `Set Global Variable(g, )`
+    //   `Color.LIGHT_RED`        → `Set Global Variable(g, Custom Color(255, 112, 122, 255))`
+    //   `GamemodeLiteral.ASSAULT`→ `Set Global Variable(g, Assault)`
+    // Literal emission skips canonical wrappers like `Game Mode(...)`:
+    // `Team 1`, `Assault`, and the empty slot are byte-identical to the
+    // reference, while `Hero(Ana)`/`Color(White)` are the canonical forms
+    // the grammar reads back as the same members (probe: `match`). The
+    // `onlyInOverpy` empty slot is not canonical-parseable on either side —
+    // emitted here through `workshop_rs::Value::Empty`
+    // (wrightkit/workshop-rs#383); the durable probe records both sides as
+    // `unparsable` (tools/overpy/probe-gaps.json).
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let source = "globalvar g\nrule \"x\":\n    @Event global\n    g = TeamLiteral.1\n    g = HeroLiteral.ANA\n    g = ColorLiteral.WHITE\n    g = ColorLiteral.LIGHT_RED\n    g = Color.LIGHT_RED\n";
+    let source = "globalvar g\nrule \"x\":\n    @Event global\n    g = TeamLiteral.1\n    g = HeroLiteral.ANA\n    g = ColorLiteral.WHITE\n    g = ColorLiteral.LIGHT_RED\n    g = Color.LIGHT_RED\n    g = GamemodeLiteral.ASSAULT\n";
     let hir = crate::compile(source, "source.opy", dir).expect("source must resolve");
     let artifact = Compiler::new()
         .expect("released workshop contract must load")
@@ -465,7 +471,8 @@ fn literal_domain_members_emit_canonical_values() {
         "Set Global Variable(g, Team 1)",
         "Set Global Variable(g, Hero(Ana))",
         "Set Global Variable(g, Color(White))",
-        "Set Global Variable(g, Custom Color(255, 112, 122, 255))",
+        "Set Global Variable(g, )",
+        "Set Global Variable(g, Assault)",
     ] {
         assert!(
             artifact.emitted.contains(expected),
@@ -474,14 +481,14 @@ fn literal_domain_members_emit_canonical_values() {
         );
     }
     // `Color.LIGHT_RED` is the same OverPy-only member through the `Color`
-    // receiver, where the pinned upstream itself emits `rgb(...)`: both
-    // spellings produce the one canonical color call.
+    // receiver, where the pinned upstream lowers it to `rgb(...)`: exactly
+    // one canonical `Custom Color` call, never the literal's empty slot.
     assert_eq!(
         artifact
             .emitted
             .matches("Set Global Variable(g, Custom Color(255, 112, 122, 255))")
             .count(),
-        2,
+        1,
         "{}",
         artifact.emitted
     );

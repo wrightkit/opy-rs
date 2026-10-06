@@ -32,13 +32,30 @@ enum Value {
     Bool(bool),
     Null,
     Array(Vec<ValueId>),
-    Vector { x: ValueId, y: ValueId, z: ValueId },
-    Enum { value_type: String, value: String },
+    Vector {
+        x: ValueId,
+        y: ValueId,
+        z: ValueId,
+    },
+    Enum {
+        value_type: String,
+        value: String,
+    },
     GlobalVariable(String),
-    PlayerVariable { player: ValueId, variable: String },
+    PlayerVariable {
+        player: ValueId,
+        variable: String,
+    },
     Subroutine(String),
     EventPlayer,
-    Call { name: String, args: Vec<ValueId> },
+    /// An absent argument, emitted as the empty slot the pinned reference
+    /// splices for `*Literal` members with no display name (issue #466,
+    /// wrightkit/workshop-rs#383).
+    Empty,
+    Call {
+        name: String,
+        args: Vec<ValueId>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -687,6 +704,7 @@ impl<'a> Lowering<'a> {
             },
             Value::Subroutine(value) => workshop_rs::Value::Subroutine(value.clone()),
             Value::EventPlayer => workshop_rs::Value::EventPlayer,
+            Value::Empty => workshop_rs::Value::Empty,
             Value::Call { name, args } => {
                 let mut args: Vec<workshop_rs::Value> = args
                     .iter()

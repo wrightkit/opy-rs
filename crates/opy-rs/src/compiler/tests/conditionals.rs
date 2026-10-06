@@ -89,6 +89,7 @@ fn collect_value(value: &workshop_rs::Value, calls: &mut Vec<Vec<workshop_rs::Va
         | workshop_rs::Value::LocalizedString(_)
         | workshop_rs::Value::Bool(_)
         | workshop_rs::Value::Null
+        | workshop_rs::Value::Empty
         | workshop_rs::Value::Enum { .. }
         | workshop_rs::Value::GlobalVariable(_)
         | workshop_rs::Value::Subroutine(_)
