@@ -520,7 +520,22 @@ pub(super) fn compare(probes: &Path, references: &Path) -> Result<(), String> {
                             ("match", String::new())
                         }
                         (Ok(_), Ok(_)) => ("different", String::new()),
-                        (Err(error), _) | (_, Err(error)) => ("unparsable", error),
+                        (native, reference_parsed) => {
+                            // Name the failing side and carry the reference's
+                            // raw emission, so a recorded gap can pin the exact
+                            // malformed output rather than any parse failure.
+                            let mut sides = Vec::new();
+                            if let Err(error) = native {
+                                sides.push(format!("native unparsable: {error}"));
+                            }
+                            if let Err(error) = reference_parsed {
+                                sides.push(format!(
+                                    "reference unparsable: {error}; reference emission: {}",
+                                    reference.workshop.trim()
+                                ));
+                            }
+                            ("unparsable", sides.join("; "))
+                        }
                     }
                 }
             }

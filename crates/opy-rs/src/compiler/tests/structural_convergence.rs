@@ -443,7 +443,7 @@ fn button_to_string_stays_unwrapped_in_a_boolean_position() {
 
 #[test]
 fn literal_domain_members_emit_the_reference_display_names() {
-    // Recorded exception for `ColorLiteral.LIGHT_*` (docs/architecture/
+    // Exception for `ColorLiteral.LIGHT_*` (docs/architecture/
     // language-core.md, wrightkit/opy-rs#468). Pinned OverPy 9.7.10 emits a
     // `*Literal` member as the bare display-name lookup of its constant
     // table — oracle output observed for this exact source:

@@ -75,10 +75,10 @@
         "ColorLiteral.LIGHT_GRAY"
       ],
       "variant": ":base",
-      "detail": "malformed",
+      "detail": "Set Global Variable(g, )",
       "cause": "The reference splices the absent display-name lookup for onlyInOverpy ColorLiteral members, writing an empty argument slot (Set Global Variable(g, )) that the canonical grammar cannot parse. Native emission writes the canonical Custom Color the Color receiver produces, because an empty slot has no Workshop meaning.",
       "owner": "opy-rs emission",
-      "decision": "approved exception (project owner, wrightkit/opy-rs#468); pinned by compiler::tests::structural_convergence"
+      "decision": "pending owner approval (wrightkit/opy-rs#468); not an approved exception until recorded; pinned by compiler::tests::structural_convergence"
     }
   ]
 }
