@@ -1,7 +1,11 @@
 import json
+import subprocess
 import sys
 import unittest
+from collections import Counter
 from pathlib import Path
+from threading import Barrier
+from unittest.mock import patch
 
 
 TOOLS_DIR = Path(__file__).resolve().parents[1]
@@ -54,6 +58,61 @@ class ProbeClassificationTests(unittest.TestCase):
         for gap in gaps:
             self.assertTrue({"id", "status", "functions", "cause", "owner", "decision"} <= gap.keys())
             self.assertIsInstance(gap["functions"], list)
+
+
+class ProbeExecutionTests(unittest.TestCase):
+    def test_parallel_execution_preserves_every_probe_and_report_order(self):
+        selected = [
+            {"id": f"default:f{i}:base", "source": f"g = f{i}()"}
+            for i in range(7)
+        ]
+        barrier = None
+        seen = []
+
+        def run(command, **kwargs):
+            if command[0] == "node":
+                probes = json.loads(Path(command[-2]).read_text())
+                if barrier is not None:
+                    barrier.wait(timeout=5)
+                Path(command[-1]).write_text(json.dumps({p["id"]: p["source"] for p in probes}))
+                return subprocess.CompletedProcess(command, 0, "", "")
+            probes = json.loads(Path(command[-2]).read_text())
+            references = json.loads(Path(command[-1]).read_text())
+            self.assertEqual(references, {p["id"]: p["source"] for p in probes})
+            seen.extend(p["id"] for p in probes)
+            report = {
+                "probes": len(probes),
+                "counts": {"different": len(probes)},
+                "findings": [finding("different", p["id"]) for p in probes],
+            }
+            return subprocess.CompletedProcess(command, 0, json.dumps(report), "")
+
+        with patch.object(probe_builtins, "run", side_effect=run):
+            serial = probe_builtins.compare_probes(Path("native"), selected, 1)
+            self.assertEqual(Counter(seen), Counter(p["id"] for p in selected))
+            for jobs in (2, len(selected) + 1):
+                seen.clear()
+                barrier = Barrier(min(jobs, len(selected)))
+                parallel = probe_builtins.compare_probes(Path("native"), selected, jobs)
+                self.assertEqual(parallel, serial)
+                self.assertEqual(Counter(seen), Counter(p["id"] for p in selected))
+
+    def test_worker_failure_is_not_a_partial_success(self):
+        selected = [{"id": "default:f:base", "source": "g = f()"}]
+        for stage in ("oracle", "native"):
+            with self.subTest(stage=stage):
+                results = [subprocess.CompletedProcess([], 2, "", "worker failed")]
+                if stage == "native":
+                    results.insert(0, subprocess.CompletedProcess([], 0, "", ""))
+                with patch.object(probe_builtins, "run", side_effect=results):
+                    with self.assertRaisesRegex(RuntimeError, "worker failed"):
+                        probe_builtins.compare_probes(Path("native"), selected, 2)
+
+    def test_empty_selection_has_an_empty_report(self):
+        self.assertEqual(
+            probe_builtins.compare_probes(Path("native"), [], 2),
+            {"probes": 0, "counts": {}, "findings": []},
+        )
 
 
 if __name__ == "__main__":

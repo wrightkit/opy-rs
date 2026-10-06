@@ -29,6 +29,8 @@ import json
 import subprocess
 import sys
 import tempfile
+from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -65,6 +67,51 @@ def classify(findings: list[dict], gaps: list[dict]):
     return explained, unexplained, stale
 
 
+def compare_batch(binary: Path, selected: list[dict], scratch: Path) -> dict:
+    scratch.mkdir()
+    probes = scratch / "probes.json"
+    references = scratch / "references.json"
+    probes.write_text(json.dumps(selected), encoding="utf-8")
+    batch = run(
+        ["node", str(ROOT / "tools/overpy/probe_batch.cjs"), str(probes), str(references)],
+        capture_output=True,
+    )
+    if batch.returncode != 0:
+        raise RuntimeError(f"oracle probe batch failed: {batch.stderr}")
+    compared = run(
+        [str(binary), "probe-compare", str(probes), str(references)],
+        capture_output=True,
+    )
+    if compared.returncode != 0:
+        raise RuntimeError(f"native probe comparison failed: {compared.stderr}")
+    sys.stderr.write(compared.stderr)
+    return json.loads(compared.stdout)
+
+
+def compare_probes(binary: Path, selected: list[dict], jobs: int) -> dict:
+    scratch_root = ROOT / "target"
+    scratch_root.mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="opy-probe-", dir=scratch_root) as scratch:
+        batches = [selected[i::jobs] for i in range(min(jobs, len(selected)))]
+        with ThreadPoolExecutor(max_workers=jobs) as pool:
+            reports = list(pool.map(
+                lambda item: compare_batch(binary, item[1], Path(scratch) / str(item[0])),
+                enumerate(batches),
+            ))
+    counts = Counter()
+    findings = []
+    for report in reports:
+        counts.update(report["counts"])
+        findings.extend(report["findings"])
+    order = {probe["id"]: i for i, probe in enumerate(selected)}
+    findings.sort(key=lambda finding: order[finding["id"]])
+    return {
+        "probes": sum(report["probes"] for report in reports),
+        "counts": dict(sorted(counts.items())),
+        "findings": findings,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
@@ -75,35 +122,25 @@ def main() -> int:
         "--functions",
         help="comma-separated function ids to probe instead of every function",
     )
+    parser.add_argument("--jobs", type=int, default=1, help="independent probe workers (default: 1)")
     args = parser.parse_args()
+    if args.jobs < 1:
+        parser.error("--jobs must be positive")
 
-    with tempfile.TemporaryDirectory(prefix="opy-probe-") as scratch:
-        probes = Path(scratch) / "probes.json"
-        references = Path(scratch) / "references.json"
-        generated = run([str(args.binary), "probe-generate"], capture_output=True)
-        if generated.returncode != 0:
-            sys.stderr.write(generated.stderr)
-            return 2
-        selected = json.loads(generated.stdout)
-        if args.functions:
-            wanted = set(args.functions.split(","))
-            selected = [p for p in selected if function_of(p["id"]) in wanted]
-        probes.write_text(json.dumps(selected), encoding="utf-8")
-        batch = run(
-            ["node", str(ROOT / "tools/overpy/probe_batch.cjs"), str(probes), str(references)],
-            stderr=subprocess.DEVNULL,
-        )
-        if batch.returncode != 0:
-            return 2
-        compared = run(
-            [str(args.binary), "probe-compare", str(probes), str(references)],
-            capture_output=True,
-        )
-        sys.stderr.write(compared.stderr)
-        if compared.returncode != 0:
-            return 2
+    generated = run([str(args.binary), "probe-generate"], capture_output=True)
+    if generated.returncode != 0:
+        sys.stderr.write(generated.stderr)
+        return 2
+    selected = json.loads(generated.stdout)
+    if args.functions:
+        wanted = set(args.functions.split(","))
+        selected = [p for p in selected if function_of(p["id"]) in wanted]
+    try:
+        report = compare_probes(args.binary, selected, args.jobs)
+    except RuntimeError as error:
+        print(error, file=sys.stderr)
+        return 2
 
-    report = json.loads(compared.stdout)
     findings = [f for f in report["findings"] if f["status"] != "native-accepts"]
     gaps = json.loads(GAPS.read_text(encoding="utf-8"))["gaps"]
     explained, unexplained, stale = classify(findings, gaps)

@@ -60,7 +60,7 @@ jobs:
         run: cargo build --locked -p opy-cli --bin opy-cli
 
       - name: Build internal compatibility evidence target
-        run: cargo build --locked -p opy-cli --features compatibility --bin opy-compat
+        run: cargo build --locked --release -p opy-cli --features compatibility --bin opy-compat
 
       - name: Run OverPy evidence harness tests
         run: python3 -B -m unittest discover -s tools/overpy/tests
@@ -69,7 +69,7 @@ jobs:
         run: >-
           python3 -B tools/overpy/run_native.py
           --binary target/debug/opy-cli
-          --semantic-binary target/debug/opy-compat
+          --semantic-binary target/release/opy-compat
           --results target/opy-rs-compiler-results
           --report target/opy-rs-compiler-report.json
 
@@ -87,12 +87,14 @@ jobs:
       - name: Run builtin surface differential probe against the oracle
         run: >-
           python3 -B tools/overpy/probe_builtins.py
-          --binary target/debug/opy-compat
+          --binary target/release/opy-compat
+          --jobs 2
+          --report target/opy-rs-builtin-probe-report.json
 
       - name: Run structural convergence gate for pinned real projects
         run: >-
           python3 -B tools/overpy/structural_gate.py
-          --binary target/debug/opy-compat
+          --binary target/release/opy-compat
           --report target/opy-rs-structural-gate-report.json
 
       - name: Upload compiler compatibility report
@@ -101,6 +103,7 @@ jobs:
         with:
           name: opy-rs-compiler-compatibility-report
           path: |
+            target/opy-rs-builtin-probe-report.json
             target/opy-rs-compiler-report.json
             target/opy-rs-structural-gate-report.json
           if-no-files-found: ignore
