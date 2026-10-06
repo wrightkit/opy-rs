@@ -511,11 +511,19 @@ fn limit_bounds_returned_hits() {
 }
 
 #[test]
-fn unsupported_queries_report_reasons() {
+fn empty_text_lists_the_vocabulary() {
+    // An empty text applies no text constraint: the outcome lists the
+    // in-scope entries in construction order rather than ranking guesses.
     match lookup_str("   ") {
-        LookupOutcome::Unsupported { reason, .. } => assert!(reason.contains("empty")),
-        other => panic!("empty text must be unsupported: {other:?}"),
+        LookupOutcome::Matched { results, .. } => {
+            assert!(!results.is_empty(), "an unconstrained listing has entries")
+        }
+        other => panic!("empty text must be a listing, not an error: {other:?}"),
     }
+}
+
+#[test]
+fn unsupported_queries_report_reasons() {
     let mut query = LookupQuery::new("hudText");
     query.locale = Some("de-DE".to_string());
     match lookup(&query) {

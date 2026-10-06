@@ -546,13 +546,17 @@ fn lookup_scope_filters_namespaces() {
 }
 
 #[test]
-fn lookup_empty_query_exits_one() {
+fn lookup_empty_query_lists_the_vocabulary() {
     // clap rejects a missing QUERY argument as usage (exit 2); an explicit
-    // empty string is a lookup-level rejection (exit 1).
-    let output = run(&["lookup", ""]);
-    assert_eq!(output.status.code(), Some(1));
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("cannot be answered"), "stderr: {stderr}");
+    // empty string applies no text constraint and lists the bounded result
+    // set like the provider's unscoped listing does.
+    let output = run(&["lookup", "", "--format", "json"]);
+    assert_eq!(output.status.code(), Some(0));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("pure JSON");
+    assert!(
+        !json["results"].as_array().unwrap().is_empty(),
+        "an unconstrained listing returns entries"
+    );
 }
 
 #[test]

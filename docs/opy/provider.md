@@ -9,7 +9,8 @@ compiler; it does not expose OPY AST/HIR or Workshop WIR.
 The provider serves language id `opy` and the `opy` extension. It supports LPP
 `1.0` for document-supplied requests, LPP `1.1` for file-entry project loading,
 LPP `1.2` for provider-owned directory targets, LPP `1.3` for source identity,
-and LPP `1.4` for compile artifact format negotiation.
+LPP `1.4` for compile artifact format negotiation, and LPP `1.5` for name
+lookup.
 
 | Capability | Method | Behavior |
 | --- | --- | --- |
@@ -18,9 +19,36 @@ and LPP `1.4` for compile artifact format negotiation.
 | Project loading | `lpp/check`, `lpp/compile` | LPP 1.1 loads from a client-selected file entry; LPP 1.2 also lets the provider select the default entry from a directory target. |
 | Rename | `lpp/rename` | Semantic rename of globals, player variables, and subroutines/`def`s across the received documents; refuses (`rename.*` refusal codes) when a site does not map to authored source or the result would not rebind identically. |
 | Edit validation | `lpp/validateEdits` | Applies a client's proposed edits and reports whether the result still checks clean, per the spec's normative rules. |
+| Lookup | `lpp/lookup` | LPP 1.5. Resolves a name guess to OPY spellings and structured facts — callable signatures, enum domains and members, settings keys and value forms — from the `opy-rs` name vocabulary. No loaded project or source document is required. |
 
 Other LPP v1 capabilities are advertised as unavailable until they are
 implemented end to end.
+
+## Name lookup (LPP 1.5)
+
+`lpp/lookup` answers from the language vocabulary alone; it ignores project
+state. The provider returns owner facts, not rendered signatures:
+
+- Callable entries (`action`, `value`, `memberAction`, `memberValue`) carry
+  `callable` facts: the receiver category and the ordered parameters, each
+  with `name`, `type`, `required`, an optional `default` rendered in source
+  syntax, and the `enum` domain the slot accepts.
+- Enum domains report `enum` facts whose `domain` is a valid `within` value;
+  members are `enumMember` entries spelled `Domain.MEMBER`.
+- Settings keys report `setting` facts: the value `type`, numeric bounds,
+  and the enum domain an enum-typed key accepts.
+
+`within` accepts the closed selector set: `"callable"` and `"enum"` take a
+provider-issued `identity` (`opy:callable/<name>`, `opy:enum/<domain>`), and
+`"settings"` takes a settings path prefix (`""` lists the root). A callable
+scope lists its parameters in call order, an enum scope lists member
+spellings — including settings-table domains such as `opy:enum/mapRotation`
+— and a settings scope lists the immediate child keys and path segments.
+A selector naming no known scope is refused with `lookup.unknownWithin`.
+
+Results are deterministic and bounded: an absent `limit` applies a bound of
+20 entries. Display names are `en-US`, which is also the deterministic
+fallback for any requested `locale`.
 
 ## Entry-based project loading
 
