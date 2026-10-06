@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0](https://github.com/wrightkit/opy-rs/compare/v0.2.0...v0.3.0) - 2026-10-06
+
+### Added
+
+- *(provider)* serve lpp/lookup over LPP 1.5 ([#473](https://github.com/wrightkit/opy-rs/pull/473))
+- *(lookup)* expose OPY vocabulary lookup and candidate-bearing diagnostics ([#467](https://github.com/wrightkit/opy-rs/pull/467))
+- *(lower)* name the nearest valid candidates on rejected spellings ([#471](https://github.com/wrightkit/opy-rs/pull/471))
+
+### Fixed
+
+- *(lower)* [**breaking**] require the pinned upstream spellings for builtin enum members ([#468](https://github.com/wrightkit/opy-rs/pull/468))
+- *(compiler)* [**breaking**] bind mapped output to its own compilation ([#464](https://github.com/wrightkit/opy-rs/pull/464))
+
 ## [0.2.0](https://github.com/wrightkit/opy-rs/compare/v0.1.70...v0.2.0) - 2026-10-05
 
 ### Fixed

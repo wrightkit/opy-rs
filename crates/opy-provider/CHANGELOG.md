@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0](https://github.com/wrightkit/opy-rs/compare/opy-provider-v0.2.0...opy-provider-v0.3.0) - 2026-10-06
+
+### Added
+
+- *(provider)* serve lpp/lookup over LPP 1.5 ([#473](https://github.com/wrightkit/opy-rs/pull/473))
+
+### Fixed
+
+- *(compiler)* [**breaking**] bind mapped output to its own compilation ([#464](https://github.com/wrightkit/opy-rs/pull/464))
+
 ## [0.1.70](https://github.com/wrightkit/opy-rs/compare/opy-provider-v0.1.69...opy-provider-v0.1.70) - 2026-10-05
 
 ### Fixed
