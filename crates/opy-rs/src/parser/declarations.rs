@@ -13,7 +13,7 @@ impl Parser<'_> {
         let mut index = None;
         let mut initializer = None;
         if self.peek_kind() == TokenKind::Assign {
-            self.advance();
+            self.bump();
             match self.parse_expr() {
                 Ok(expr) => initializer = Some(expr),
                 Err(()) => return false,
@@ -121,7 +121,7 @@ impl Parser<'_> {
                 }
                 members.push((member.text, member_span));
                 if self.peek_kind() == TokenKind::Assign {
-                    self.advance();
+                    self.bump();
                     if self.parse_expr().is_err() {
                         self.recover_line();
                         continue;
@@ -133,7 +133,7 @@ impl Parser<'_> {
                 continue;
             }
             if self.peek_kind() == TokenKind::Comma {
-                self.advance();
+                self.bump();
             } else {
                 // A member must end the line (or be comma-separated).
                 if self.peek_kind() != TokenKind::Newline && self.peek_kind() != TokenKind::Eof {
@@ -159,7 +159,7 @@ impl Parser<'_> {
             Err(()) => return false,
         };
         let qualified = if self.peek_kind() == TokenKind::Dot {
-            self.advance();
+            self.bump();
             let member = match self.expect_ident("a macro member name") {
                 Ok(member) => member,
                 Err(()) => return false,
@@ -176,7 +176,7 @@ impl Parser<'_> {
             return false;
         }
         if self.peek_kind() == TokenKind::Assign {
-            self.advance();
+            self.bump();
             let value = match self.parse_expr() {
                 Ok(value) => value,
                 Err(()) => return false,
@@ -234,7 +234,7 @@ impl Parser<'_> {
         let mut params = Vec::new();
         self.skip_newlines();
         if self.peek_kind() == TokenKind::RParen {
-            self.advance();
+            self.bump();
             return Some(params);
         }
         loop {
@@ -244,7 +244,7 @@ impl Parser<'_> {
             }
             self.skip_newlines();
             if self.peek_kind() == TokenKind::Comma {
-                self.advance();
+                self.bump();
                 self.skip_newlines();
             } else {
                 break;

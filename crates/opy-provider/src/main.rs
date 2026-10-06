@@ -506,7 +506,7 @@ impl Server {
                     &path_string(project.filesystem.main_path()),
                     project.filesystem.root(),
                 );
-                ensure_entry_sources_loaded(&project, &outcome)?;
+                ensure_entry_sources_loaded(&project, &outcome.diagnostics)?;
                 Ok(check_result(&project, &outcome))
             }
             LoadedRequest::Documents(request) => check_documents(&request.documents),
@@ -548,41 +548,38 @@ impl Server {
                 message: format!("cannot initialize compiler: {error}"),
             })?);
         }
-        let check_outcome = opy_rs::tooling::check(
-            project.filesystem.source(),
-            &path_string(project.filesystem.main_path()),
-            project.filesystem.root(),
-        );
-        ensure_entry_sources_loaded(&project, &check_outcome)?;
         let compiler = self.compiler.as_ref().expect("compiler initialized");
         let main_path = path_string(project.filesystem.main_path());
+        let outcome = opy_rs::compile_with_overlay_outcome(
+            project.filesystem.source(),
+            &main_path,
+            project.filesystem.root(),
+            &BTreeMap::new(),
+        );
+        ensure_entry_sources_loaded(&project, &outcome.diagnostics)?;
+        let display_root = outcome.display_root.clone();
+        let paths = outcome
+            .files
+            .iter()
+            .map(|file| file.path.clone())
+            .collect::<Vec<_>>();
         let (report, mapped) = if format == Some(ArtifactFormat::Mapped) {
-            compiler.compile_source_report_mapped_with_language(
-                project.filesystem.source(),
-                &main_path,
+            compiler.compile_outcome_report_mapped_with_language(
+                outcome,
                 project.filesystem.root(),
                 &project.locale,
             )
         } else {
-            let report = compiler.compile_source_report_with_language(
-                project.filesystem.source(),
-                &main_path,
+            let report = compiler.compile_outcome_report_with_language(
+                outcome,
                 project.filesystem.root(),
                 &project.locale,
             );
             (report, None)
         };
-        let display_root = &check_outcome.display_root;
-        let diagnostics = compile_diagnostics(
-            &project,
-            display_root,
-            &check_outcome
-                .files
-                .iter()
-                .map(|file| file.path.clone())
-                .collect::<Vec<_>>(),
-            &report.compile.diagnostics,
-        );
+        let display_root = &display_root;
+        let diagnostics =
+            compile_diagnostics(&project, display_root, &paths, &report.compile.diagnostics);
         let artifact = (report.compile.status == opy_rs::CompileStatus::Success)
             .then(|| {
                 artifact_json(
@@ -1323,9 +1320,9 @@ fn compile_document(
 
 fn ensure_entry_sources_loaded(
     project: &LoadedProject,
-    outcome: &CheckOutcome,
+    diagnostics: &[OpyDiagnostic],
 ) -> Result<(), HandlerError> {
-    if outcome.diagnostics.iter().any(|diagnostic| {
+    if diagnostics.iter().any(|diagnostic| {
         matches!(
             diagnostic.code.as_str(),
             "include-not-found" | "main-file-not-found" | "script-not-found"

@@ -430,33 +430,55 @@ fn texture_marker(suffix: char) -> HirExpr {
     }
 }
 
-/// Lower a settings expression through the same CST-to-HIR semantic path as
+/// A `#!settings` raw-value lowerer reused across a settings block: the
+/// manifest, catalog, and program symbol tables are built once instead of
+/// once per value. Values lower through the same CST-to-HIR semantic path as
 /// ordinary OPY expressions.
-pub(crate) fn lower_settings_expression(
-    program: &cst::Program,
-    text: &str,
-    file: u32,
-    origin: crate::diag::Position,
-) -> OpyResult<HirExpr> {
-    let expression = crate::parser::parse_expression_fragment(text, file, origin)?;
-    let manifest = Manifest::builtin().map_err(|error| {
-        OpyError::new(
-            "manifest-error",
-            format!("cannot load the OPY semantic compatibility manifest: {error}"),
-        )
-    })?;
-    let catalog = Catalog::builtin().map_err(|error| {
-        OpyError::new(
-            "catalog-error",
-            format!("cannot load the Workshop catalog: {error}"),
-        )
-    })?;
-    let mut lowerer = Lowerer::new(manifest, catalog);
-    lowerer.current_order = program.top_level.len();
-    lowerer.allow_dict_literal = true;
-    lowerer.collect_symbols(program);
-    let lowered = lowerer.lower_expr(&expression, &[], CallPosition::Value);
-    lowerer.errors.into_iter().next().map_or(Ok(lowered), Err)
+pub(crate) struct SettingsLowerer {
+    lowerer: Lowerer,
+}
+
+impl SettingsLowerer {
+    pub(crate) fn new(program: &cst::Program) -> OpyResult<Self> {
+        let manifest = Manifest::builtin().map_err(|error| {
+            OpyError::new(
+                "manifest-error",
+                format!("cannot load the OPY semantic compatibility manifest: {error}"),
+            )
+        })?;
+        let catalog = Catalog::builtin().map_err(|error| {
+            OpyError::new(
+                "catalog-error",
+                format!("cannot load the Workshop catalog: {error}"),
+            )
+        })?;
+        let mut lowerer = Lowerer::new(manifest, catalog);
+        lowerer.current_order = program.top_level.len();
+        lowerer.allow_dict_literal = true;
+        lowerer.collect_symbols(program);
+        Ok(Self { lowerer })
+    }
+
+    /// Lower one raw settings value through the shared expression path;
+    /// per-node state is reset so each value observes a fresh context.
+    pub(crate) fn lower(
+        &mut self,
+        text: &str,
+        file: u32,
+        origin: crate::diag::Position,
+    ) -> OpyResult<HirExpr> {
+        let expression = crate::parser::parse_expression_fragment(text, file, origin)?;
+        self.lowerer.errors.clear();
+        self.lowerer.texture_used = false;
+        let lowered = self
+            .lowerer
+            .lower_expr(&expression, &[], CallPosition::Value);
+        self.lowerer
+            .errors
+            .first()
+            .cloned()
+            .map_or(Ok(lowered), Err)
+    }
 }
 
 fn prefixed_rule_name(name: &str, prefix: Option<&str>, delimiter: bool) -> String {
