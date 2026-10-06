@@ -71,8 +71,8 @@ pub struct CheckOutcome {
 }
 ```
 
-* `Diagnostic { severity, code, message, span }`: structured, stable-coded,
-  source-attributed (see the diagnostics contract below).
+* `Diagnostic { severity, code, message, span }`: structured,
+  stable-coded, source-attributed (see the diagnostics contract below).
 * `SourceLocation { file_id, path, start, end }`: a span resolved through
   the file registry to `(file id, path, line/col)`.
 * `PostCompileHook`: the declared `#!postCompileHook` script (root-relative
@@ -113,10 +113,14 @@ queryable through `provenance`.
 
 ## Diagnostics contract
 
-Every diagnostic is `{ severity, code, message, span }`. `code` and `span`
-are the machine contract; `message` and wording are not. Frontend errors use
-`error`; non-fatal project warnings use `warning` and do not make a project
-unclean.
+Every diagnostic is `{ severity, code, message, span }`. `code`
+and `span` are the machine contract; `message` and wording are not.
+When the diagnostic rejects a name that has valid alternatives (an unknown
+action, value, member, enum member, or settings key), `message` carries a
+`(did you mean …?)` suffix naming the nearest valid spellings — the same
+ranked candidates `opy_rs::lookup` returns for the rejected spelling.
+Frontend errors use `error`; non-fatal
+project warnings use `warning` and do not make a project unclean.
 
 Span layout: `file_id` indexes the registry, positions are 1-based
 `(line, col)`; the CLI renders them as `path:line:col`.
@@ -157,6 +161,41 @@ semantic-resolution diagnostics follow the compile contract and report the
 first error. `check` and `compile` agree on the verdict; only the parse-stage
 reporting depth differs.
 
+## Vocabulary lookup (`opy_rs::lookup`)
+
+`opy_rs::lookup::lookup(&LookupQuery)` answers name-resolution questions
+against the same manifest, catalog, and settings tables resolution itself
+uses — OPY owns no separate vocabulary copy:
+
+* Queries carry free `text` (an OPY spelling, a canonical Workshop id, a
+  Workshop display name, a guessed name, or a settings path/leaf), a
+  `scope` (functions, enums, settings — all by default), and a `limit`
+  (`0` selects `DEFAULT_LIMIT`).
+* Hits are `Function` (OPY spelling, call kind, declared receiver, ordered
+  parameter facts — name, type, required/optional, default, enum domain
+  with the domain's full member inventory), `EnumDomain`
+  (members the domain accepts), `EnumMember` (OPY spelling → canonical
+  member id, display name, accepted aliases), or `Setting` (effective path,
+  display name, accepted value form including enum members and numeric
+  bounds). `opy-rs` reports facts only; rendering a signature string and
+  choosing which members to inline is the caller's policy.
+* `matchedOn` records which spelling form matched: `opySpelling`,
+  `catalogId`, `displayName`, `alias`, `path`, or `near` for a best-effort
+  close match.
+* `LookupOutcome::Unsupported` reports queries outside the served surface
+  (empty text, empty scope, a non-`en-US` display-name locale — localized
+  names stay `workshop-rs`-owned).
+* Reported enum spellings are exactly the ones the pinned reference
+  accepts (`Clip.NONE`, `Map.KINGS_ROW`, `Hero.SOLDIER`, `Team.1`,
+  `AsyncBehavior.RESTART`, OPY-only `Color` members): canonical catalog
+  ids still resolve queries through `catalogId` but are never advertised
+  as OPY spellings (`Hero.SOLDIER_76` is a reference rejection), catalog
+  domains that are not reference enum sources (`EventTeam`, `Rounding`,
+  …) are not reported, and reference-accepted alternates (`Hero.MCCREE`,
+  `Hero.HAMMOND`, `HudPosition.ACTUALLY_LEFT`) list as aliases on the
+  canonical hit. `opy-compat probe-generate` emits a `:spelling` probe per
+  reported spelling so the advertised set is checked against the oracle.
+
 ## CLI (`opy-cli`)
 
 ```
@@ -166,6 +205,10 @@ opy-cli compile <main.opy>                        # Workshop text → stdout
 opy-cli compile --format json <main.opy>           # versioned compile report → stdout
 opy-cli compile --language zh-CN <main.opy>        # catalog-declared locale
 opy-cli inspect <main.opy>                        # resolved model as JSON on stdout
+opy-cli lookup <query>                            # name → OPY spelling/parameters/member/setting
+opy-cli lookup <query> --format json              # structured lookup outcome
+opy-cli lookup <query> --scope functions|enums|settings  # repeatable namespace filter
+opy-cli lookup <query> --limit N                  # bound the returned hits
 opy-cli completion bash|zsh|fish|powershell       # static completion from the command model
 opy-cli version                                   # crate + source implementation protocol identity
 ```

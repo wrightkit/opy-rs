@@ -39,20 +39,10 @@ impl MatchCandidate {
         }
     }
 
-    /// A manifest-declared callable: source id, reviewed source aliases,
-    /// and the `en-US` display spellings of its catalog entry.
-    fn function(function: &Function, manifest: &Manifest, catalog: &Catalog) -> MatchCandidate {
+    /// A manifest-declared callable: its source id and the `en-US` display
+    /// spellings of its catalog entry.
+    fn function(function: &Function, catalog: &Catalog) -> MatchCandidate {
         let mut forms = vec![function.id.clone()];
-        forms.extend(
-            manifest
-                .aliases()
-                .iter()
-                .filter(|alias| {
-                    alias_target(alias, manifest)
-                        .is_some_and(|target| std::ptr::eq(target, function))
-                })
-                .map(|alias| alias.source.clone()),
-        );
         if let Some(catalog_id) = &function.catalog_id {
             let kind = match function.kind {
                 FunctionKind::Action | FunctionKind::MemberAction => Kind::Action,
@@ -90,8 +80,7 @@ pub(crate) fn value_candidates(manifest: &Manifest, catalog: &Catalog) -> Vec<Ma
     pool.extend(
         crate::lower::special_forms::SPECIAL_VALUE_CALLS
             .iter()
-            .copied()
-            .map(MatchCandidate::bare),
+            .map(|(spelling, _)| MatchCandidate::bare(*spelling)),
     );
     pool
 }
@@ -110,46 +99,24 @@ pub(crate) fn member_candidates(manifest: &Manifest, catalog: &Catalog) -> Vec<M
 
 /// The members of a builtin domain an `unknown-enum-member` diagnostic
 /// can suggest. The pool is the resolver's own acceptance surface:
-/// catalog member ids (plus `en-US` display names and, for `Map`, the
-/// underscore-stripped spellings the resolver folds through) and the
-/// accepted alternates from
-/// [`crate::lower::MEMBER_SPELLING_ALIASES`].
+/// [`crate::enums::domain_members`] reports the canonical OPY spellings
+/// (so `SOLDIER`, never the catalog id `SOLDIER_76`), the reference
+/// aliases the same table declares (`MCCREE`), and the `en-US` display
+/// names.
 pub(crate) fn enum_member_candidates(
     catalog: &Catalog,
     source_domain: &str,
-    catalog_domain: &str,
 ) -> Vec<MatchCandidate> {
-    let locale = Locale::new("en-US");
-    let mut pool: Vec<MatchCandidate> = catalog
-        .enum_domain(catalog_domain)
-        .map(|domain| {
-            domain
-                .members
-                .iter()
-                .map(|member| {
-                    let mut forms = vec![member.member.clone()];
-                    forms.extend(member.spellings(&locale).iter().cloned());
-                    if source_domain == "Map" {
-                        let stripped: String =
-                            member.member.chars().filter(|c| *c != '_').collect();
-                        if stripped != member.member {
-                            forms.push(stripped);
-                        }
-                    }
-                    MatchCandidate {
-                        spelling: member.member.clone(),
-                        forms,
-                    }
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-    pool.extend(
-        crate::lower::MEMBER_SPELLING_ALIASES
-            .iter()
-            .filter(|(domain, ..)| *domain == source_domain)
-            .map(|(_, spelling, _)| MatchCandidate::bare(*spelling)),
-    );
+    let mut pool = Vec::new();
+    for member in crate::enums::domain_members(source_domain, catalog).unwrap_or_default() {
+        let mut forms = vec![member.member.clone()];
+        forms.extend(member.display_name.iter().cloned());
+        pool.push(MatchCandidate {
+            spelling: member.member,
+            forms,
+        });
+        pool.extend(member.aliases.iter().cloned().map(MatchCandidate::bare));
+    }
     pool
 }
 
@@ -158,12 +125,25 @@ fn function_candidates(
     catalog: &Catalog,
     position: impl Fn(FunctionKind) -> bool,
 ) -> Vec<MatchCandidate> {
-    manifest
+    let mut pool: Vec<MatchCandidate> = manifest
         .functions()
         .iter()
         .filter(|function| position(function.kind))
-        .map(|function| MatchCandidate::function(function, manifest, catalog))
-        .collect()
+        .map(|function| MatchCandidate::function(function, catalog))
+        .collect();
+    // A declared source alias is an accepted spelling in its own right, so it
+    // is a candidate of its own (`buttonStr` names `buttonString`, not the
+    // alias's canonical target).
+    pool.extend(
+        manifest
+            .aliases()
+            .iter()
+            .filter(|alias| {
+                alias_target(alias, manifest).is_some_and(|target| position(target.kind))
+            })
+            .map(|alias| MatchCandidate::bare(alias.source.clone())),
+    );
+    pool
 }
 
 /// The function an alias resolves to, through its declared kind.
@@ -182,8 +162,9 @@ fn alias_target<'a>(
 // ---------------------------------------------------------------------------
 
 /// Fold a spelling or phrase to a comparable form: lowercase letters and
-/// digits only; `_`, `.`, `:`, `%`, and whitespace are dropped.
-fn fold(text: &str) -> String {
+/// digits only; `_`, `.`, `:`, `%`, and whitespace are dropped. The
+/// lookup (`crate::lookup`) folds through this same function.
+pub(crate) fn fold(text: &str) -> String {
     text.chars()
         .filter(|c| c.is_alphanumeric())
         .flat_map(|c| c.to_lowercase())
@@ -192,8 +173,9 @@ fn fold(text: &str) -> String {
 
 /// Score a query against one match form; lower is closer, `None` is
 /// unrelated. Exact folded equality beats prefix beats substring beats
-/// edit distance.
-fn score(query: &str, form: &str) -> Option<u32> {
+/// edit distance. The lookup scores its hit forms through this same
+/// function.
+pub(crate) fn score(query: &str, form: &str) -> Option<u32> {
     let query = fold(query);
     let form = fold(form);
     if query.is_empty() || form.is_empty() {
@@ -220,6 +202,38 @@ fn score(query: &str, form: &str) -> Option<u32> {
     let close = distance * 3 <= query.len() as u32 + 1
         || distance * 2 <= query.len().max(form.len()) as u32;
     close.then_some(distance * 10 + 20)
+}
+
+/// Segment-aware scoring for a settings path: the query's dot-separated
+/// segments must be a prefix of the path's segments, where a template
+/// segment (`<team>`, `<hero>`) accepts any segment spelling and the last
+/// query segment may be a prefix of its path segment. `None` when the
+/// query is not a path prefix — near-name ranking falls back to
+/// [`score`]. Lookup settings queries score `MatchKind::Path` forms
+/// through this.
+pub(crate) fn path_score(query: &str, path: &str) -> Option<u32> {
+    let segments: Vec<String> = query.trim().split('.').map(fold).collect();
+    if segments.iter().any(String::is_empty) {
+        return None;
+    }
+    let path_segments: Vec<&str> = path.split('.').collect();
+    if segments.len() > path_segments.len() {
+        return None;
+    }
+    let mut penalty = 0u32;
+    for (index, segment) in segments.iter().enumerate() {
+        let target = path_segments[index];
+        if (target.starts_with('<') && target.ends_with('>')) || fold(target) == *segment {
+            continue;
+        }
+        let target_folded = fold(target);
+        if index + 1 == segments.len() && target_folded.starts_with(segment.as_str()) {
+            penalty += (target_folded.len() - segment.len()) as u32 + 2;
+            continue;
+        }
+        return None;
+    }
+    Some(penalty + (path_segments.len() - segments.len()) as u32)
 }
 
 fn levenshtein(a: &str, b: &str) -> u32 {
@@ -383,7 +397,7 @@ pub(crate) fn settings_member_candidates(
 
 /// The leaf keys valid at `parent_path` — every declaration whose last part
 /// resolves at that parent (so `gamemodes.ffa` inherits `gamemodes.general`).
-fn sibling_keys(parent_path: &[PathPart<'_>]) -> Vec<String> {
+pub(crate) fn sibling_keys(parent_path: &[PathPart<'_>]) -> Vec<String> {
     let mut keys: Vec<String> = Vec::new();
     for definition in settings::definitions() {
         let Some(leaf) = definition.path().rsplit('.').next() else {
@@ -561,15 +575,59 @@ mod tests {
     #[test]
     fn enum_member_candidates_cover_the_accepted_spelling_surface() {
         let catalog = Catalog::builtin().expect("builtin catalog");
-        let pool = enum_member_candidates(&catalog, "Hero", "Hero");
+        let pool = enum_member_candidates(&catalog, "Hero");
         let ranked = rank("SOLDIER76", &pool);
+        assert_eq!(
+            ranked.first().map(String::as_str),
+            Some("SOLDIER"),
+            "the canonical OPY spelling wins: {ranked:?}"
+        );
         assert!(
-            ranked.iter().any(|spelling| spelling == "SOLDIER"),
-            "the alias spelling must be a candidate: {ranked:?}"
+            !ranked.iter().any(|spelling| spelling == "SOLDIER_76"),
+            "the catalog id is never a candidate: {ranked:?}"
         );
         assert_eq!(rank("MCCEE", &pool)[0], "MCCREE");
-        // Display names match too ("Soldier: 76" folds onto the member id).
-        let map_pool = enum_member_candidates(&catalog, "Map", "Map");
-        assert_eq!(rank("blizzard world", &map_pool)[0], "BLIZZARD_WORLD");
+        // Display names match too ("Blizzard World" names `Map.BLIZZ_WORLD`).
+        let map_pool = enum_member_candidates(&catalog, "Map");
+        assert_eq!(rank("blizzard world", &map_pool)[0], "BLIZZ_WORLD");
+    }
+
+    /// The candidate pool is exactly the resolver's reported surface: every
+    /// `domain_members` spelling and alias, nothing else.
+    #[test]
+    fn enum_member_candidates_match_the_lookup_surface() {
+        let catalog = Catalog::builtin().expect("builtin catalog");
+        let mut expected: Vec<String> = Vec::new();
+        for member in crate::enums::domain_members("Clip", &catalog).expect("Clip members") {
+            expected.push(member.member);
+            expected.extend(member.aliases);
+        }
+        let mut reported: Vec<String> = enum_member_candidates(&catalog, "Clip")
+            .into_iter()
+            .map(|candidate| candidate.spelling)
+            .collect();
+        expected.sort_unstable();
+        reported.sort_unstable();
+        assert_eq!(reported, expected);
+    }
+
+    #[test]
+    fn path_score_matches_segment_by_segment() {
+        // A template segment accepts any spelling and `%` stays in the leaf.
+        assert_eq!(
+            path_score(
+                "heroes.team1.junkrat.health%",
+                "heroes.<team>.<hero>.health%"
+            ),
+            Some(0)
+        );
+        // Path prefixes answer their path; non-prefixes fall back to the
+        // folded near-name score.
+        assert_eq!(
+            path_score("gamemodes.ffa", "gamemodes.general.scoreToWin"),
+            None
+        );
+        assert!(path_score("gamemodes.ffa", "gamemodes.ffa.scoreToWin").is_some());
+        assert_eq!(path_score("health%", "heroes.<team>.<hero>.health%"), None);
     }
 }

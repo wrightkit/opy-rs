@@ -41,6 +41,9 @@ pub(crate) enum Command {
     Compile(CompileArgs),
     /// Print the resolved program model as JSON.
     Inspect(FileArgs),
+    /// Resolve names to OPY spellings, parameters, enum members, and
+    /// settings keys.
+    Lookup(LookupArgs),
     /// Generate static shell completion from this command model.
     Completion(CompletionArgs),
     /// Show the top-level help.
@@ -78,6 +81,35 @@ pub(crate) struct FileArgs {
     /// Main OPY source file.
     #[arg(value_name = "MAIN.OPY")]
     pub(crate) main: PathBuf,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct LookupArgs {
+    /// The name, path, or guess to resolve.
+    #[arg(value_name = "QUERY")]
+    pub(crate) query: String,
+
+    /// Output format; JSON contains the lookup outcome.
+    #[arg(long, value_enum, default_value_t = OutputFormatArg::Text)]
+    pub(crate) format: OutputFormatArg,
+
+    /// Restrict the searched namespace (repeatable; default: all).
+    #[arg(long, value_enum)]
+    pub(crate) scope: Vec<LookupScopeArg>,
+
+    /// Maximum number of returned results.
+    #[arg(long, default_value_t = opy_rs::lookup::DEFAULT_LIMIT)]
+    pub(crate) limit: usize,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
+pub(crate) enum LookupScopeArg {
+    /// Callable spellings and parameter facts.
+    Functions,
+    /// Enum domains and members.
+    Enums,
+    /// Settings keys and value forms.
+    Settings,
 }
 
 #[derive(Debug, Args)]

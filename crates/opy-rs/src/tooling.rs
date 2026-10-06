@@ -286,7 +286,7 @@ impl Diagnostic {
     /// (issue #469).
     fn from_settings_diagnostic(
         diagnostic: workshop_rs::settings::SettingsDiagnostic,
-        hir_settings: Option<&crate::hir::Settings>,
+        hir_settings: Option<&crate::hir::types::Settings>,
         files: &[FileRecord],
     ) -> Diagnostic {
         let error = diagnostic.error;

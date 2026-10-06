@@ -38,7 +38,7 @@ use crate::hir::types::{
 use crate::cst::{self, CallArg, Decl, Expr, RuleEntry as CstRuleEntry, Stmt, TopLevel};
 use crate::diag::{OpyError, OpyResult, Span};
 use crate::manifest::{Function, FunctionKind, Manifest, Param, ParamDefault};
-use workshop_rs::catalog::{Catalog, Locale};
+use workshop_rs::catalog::Catalog;
 
 /// The protocol envelope this frontend produces.
 const PROTOCOL_NAME: &str = "wright/opy-hir";
@@ -118,38 +118,6 @@ pub(crate) fn compressed_component_mode(values: &[Vec<f64>]) -> Option<(bool, f6
     (matches!(component_count, 1 | 3) && values.iter().all(|value| value.len() == component_count))
         .then_some((is_vector, if is_vector { 4999.0 } else { 49999.0 }))
 }
-
-/// Alternate spellings accepted in `Domain.MEMBER` position beyond the
-/// catalog member ids: `(domain, accepted spelling, catalog member it
-/// names)`. Member-access resolution reads the table forward; the
-/// shared matcher reads it backward so a rejected spelling's candidates
-/// name the accepted alternates (issue #469).
-pub(crate) const MEMBER_SPELLING_ALIASES: &[(&str, &str, &str)] = &[
-    ("Map", "BLIZZ_WORLD", "BLIZZARD_WORLD"),
-    ("Map", "BLIZZ_WORLD_WINTER", "BLIZZARD_WORLD_WINTER"),
-    ("Map", "ROUTE66", "ROUTE_66"),
-    ("Map", "VOLSKAYA", "VOLSKAYA_INDUSTRIES"),
-    ("Clip", "NONE", "DO_NOT_CLIP"),
-    ("Clip", "SURFACES", "CLIP_AGAINST_SURFACES"),
-    ("SpecVisibility", "ALWAYS", "VISIBLE_ALWAYS"),
-    ("SpecVisibility", "NEVER", "VISIBLE_NEVER"),
-    (
-        "EffectReeval",
-        "VISIBILITY_POSITION_AND_RADIUS",
-        "VISIBLE_TO_POSITION_AND_RADIUS",
-    ),
-    ("HudReeval", "VISIBILITY_AND_COLOR", "VISIBLE_TO_AND_COLOR"),
-    (
-        "HudReeval",
-        "VISIBILITY_STRING_AND_COLOR",
-        "VISIBLE_TO_STRING_AND_COLOR",
-    ),
-    ("Hero", "MCCREE", "CASSIDY"),
-    ("Hero", "HAMMOND", "WRECKING_BALL"),
-    ("Hero", "SOLDIER", "SOLDIER_76"),
-    ("Hero", "DOMINA", "JINYU"),
-    ("Hero", "DMON", "D_MON"),
-];
 
 /// Lower a parsed program into the Opy HIR contract.
 pub fn lower(

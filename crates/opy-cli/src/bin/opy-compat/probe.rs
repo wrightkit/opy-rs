@@ -181,6 +181,15 @@ pub(super) fn generate() -> Result<(), String> {
             alias.kind == AliasKind::MemberAlias,
         ));
     }
+    // Every enum-member spelling the vocabulary lookup reports is an
+    // accepted OPY spelling by contract; probe each against the oracle so a
+    // catalog id or other upstream-rejected spelling cannot be advertised.
+    for (domain, spelling) in enum_spellings(manifest, &catalog) {
+        probes.push(Probe {
+            id: format!("default:{domain}.{spelling}:spelling"),
+            source: source("", &format!("g = {domain}.{spelling}")),
+        });
+    }
     for (function, variant, call) in SETTING_CALLS {
         for (mode, prefix) in [("default", ""), ("size", "#!optimizeForSize\n")] {
             probes.push(Probe {
@@ -221,6 +230,62 @@ fn name_probe(name: &str, member: bool) -> Probe {
         id: format!("default:{name}:name"),
         source: source("", &format!("g = {call}")),
     }
+}
+
+/// The `(domain, spelling)` pairs the vocabulary lookup reports for enum
+/// members — the reported member spelling plus every reported alias —
+/// enumerated through the public `lookup` API so the probed set is exactly
+/// the advertised one. Catalog and manifest-parameter domain names seed
+/// the walk; every `EnumDomain` hit (renamed source domains included) is
+/// queued and its members' spellings collected.
+fn enum_spellings(manifest: &Manifest, catalog: &Catalog) -> Vec<(String, String)> {
+    use opy_rs::lookup::{LookupHit, LookupOutcome, LookupQuery, lookup};
+    let mut queue: Vec<String> = catalog
+        .enum_domains()
+        .map(|domain| domain.domain.clone())
+        .collect();
+    queue.extend(
+        manifest
+            .functions()
+            .iter()
+            .flat_map(|function| function.params.iter())
+            .filter_map(|param| param.domain.clone()),
+    );
+    let mut seen = std::collections::BTreeSet::new();
+    let mut spellings = Vec::new();
+    while let Some(name) = queue.pop() {
+        if !seen.insert(name.clone()) {
+            continue;
+        }
+        let mut query = LookupQuery::new(name);
+        query.limit = 64;
+        let LookupOutcome::Matched { results, .. } = lookup(&query) else {
+            continue;
+        };
+        for hit in results {
+            let LookupHit::EnumDomain {
+                domain,
+                members: Some(members),
+                ..
+            } = hit
+            else {
+                continue;
+            };
+            queue.push(domain.clone());
+            for member in members {
+                spellings.push((domain.clone(), member.spelling.clone()));
+                spellings.extend(
+                    member
+                        .aliases
+                        .iter()
+                        .map(|alias| (domain.clone(), alias.clone())),
+                );
+            }
+        }
+    }
+    spellings.sort();
+    spellings.dedup();
+    spellings
 }
 
 /// The base call, its trailing-default omissions, and one call per argument
@@ -394,6 +459,21 @@ pub(super) fn compare(probes: &Path, references: &Path) -> Result<(), String> {
                 },
                 String::new(),
             )
+        } else if variant == "spelling" {
+            // An enum-spelling probe is a bare `Domain.MEMBER` access. The
+            // question is whether the reference's member resolution accepts
+            // the spelling: `Unknown map 'X'`-style rejections mean the
+            // lookup advertised a spelling the reference does not have.
+            // Later rejections (`not available in OW2`) accept the spelling
+            // and fail downstream of resolution, so they classify
+            // separately and need an explicit recorded gap.
+            if reference.ok {
+                ("spelling-ok", String::new())
+            } else if reference.error.contains("Unknown ") {
+                ("unknown-spelling", reference.error.clone())
+            } else {
+                ("reference-rejected", reference.error.clone())
+            }
         } else {
             let native = compiler.compile_source_with_locale(
                 &probe.source,

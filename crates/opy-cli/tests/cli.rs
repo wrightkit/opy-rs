@@ -498,3 +498,68 @@ fn github_workflow_path_properties_are_escaped() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn lookup_prints_function_param_lines() {
+    let output = run(&["lookup", "Create HUD Text"]);
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "lookup must exit 0, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("hudText(") && stdout.contains("visibleTo"),
+        "parameter line: {stdout}"
+    );
+}
+
+#[test]
+fn lookup_json_carries_the_structured_outcome() {
+    let output = run(&["lookup", "Map.KINGSROW", "--format", "json"]);
+    assert_eq!(output.status.code(), Some(0));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("pure JSON");
+    assert_eq!(json["kind"], "matched");
+    let first = &json["results"][0];
+    assert_eq!(first["spelling"], "Map.KINGS_ROW");
+    assert_eq!(first["member"], "KINGS_ROW");
+    assert_eq!(first["matchedOn"], "opySpelling");
+}
+
+#[test]
+fn lookup_scope_filters_namespaces() {
+    let output = run(&["lookup", "Clip", "--scope", "functions", "--format", "json"]);
+    assert_eq!(output.status.code(), Some(0));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("pure JSON");
+    assert_eq!(json["scope"]["functions"], true);
+    assert_eq!(json["scope"]["enums"], false);
+    assert!(
+        json["results"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|hit| hit["hit"] == "function"),
+        "functions scope must not return enum hits: {}",
+        String::from_utf8_lossy(&output.stdout)
+    );
+}
+
+#[test]
+fn lookup_empty_query_exits_one() {
+    // clap rejects a missing QUERY argument as usage (exit 2); an explicit
+    // empty string is a lookup-level rejection (exit 1).
+    let output = run(&["lookup", ""]);
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("cannot be answered"), "stderr: {stderr}");
+}
+
+#[test]
+fn lookup_limit_bounds_results() {
+    let output = run(&["lookup", "a", "--limit", "3", "--format", "json"]);
+    assert_eq!(output.status.code(), Some(0));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("pure JSON");
+    assert_eq!(json["limit"], 3);
+    assert!(json["results"].as_array().unwrap().len() <= 3);
+}

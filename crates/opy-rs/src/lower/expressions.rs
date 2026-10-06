@@ -410,13 +410,7 @@ impl Lowerer {
                 }
             }
             if name == "Color" {
-                if let Some((red, green, blue)) = match member {
-                    "LIGHT_RED" => Some((255, 112, 122)),
-                    "LIGHT_PURPLE" => Some((210, 127, 243)),
-                    "LIGHT_VIOLET" => Some((203, 135, 255)),
-                    "LIGHT_GRAY" => Some((168, 168, 168)),
-                    _ => None,
-                } {
+                if let Some((red, green, blue)) = crate::enums::extra_color_member(member) {
                     let number = |value: i32| HirExpr::Number {
                         value: f64::from(value),
                         text: value.to_string(),
@@ -436,73 +430,34 @@ impl Lowerer {
             // signature identity (manifest `param.domain`); the member list
             // is Workshop-owned catalog content, so the member access
             // resolves as an opaque identity after validating the member
-            // against the canonical Workshop catalog.
-            let catalog_domain = match name.as_str() {
-                "Clip" => "Clipping",
-                "AsyncBehavior" => "StartRuleBehavior",
-                _ => name.as_str(),
-            };
+            // against the canonical Workshop catalog (`crate::enums` holds
+            // the OPY spelling table both this resolution and the lookup
+            // derive from).
+            let catalog_domain = crate::enums::catalog_domain(name);
             if (!policy::is_contextual_domain(name) && self.manifest.domain_identity(name))
                 || self.catalog.enum_domain(name).is_some()
                 || self.catalog.enum_domain(catalog_domain).is_some()
                 || (name == "Clip" && self.manifest.domain_identity(catalog_domain))
             {
-                let locale = Locale::new("en-US");
-                let catalog_member = super::MEMBER_SPELLING_ALIASES
-                    .iter()
-                    .find(|(domain, spelling, _)| *domain == name && *spelling == member)
-                    .map(|(.., catalog_member)| *catalog_member)
-                    .unwrap_or(member);
-                let canonical_member = self
-                    .catalog
-                    .enum_domain(catalog_domain)
-                    .and_then(|domain| {
-                        domain
-                            .members
-                            .iter()
-                            .find(|candidate| candidate.member == catalog_member)
-                            .map(|candidate| candidate.member.clone())
-                            .or_else(|| {
-                                (name == "Map").then(|| {
-                                    let normalized = catalog_member.replace('_', "");
-                                    domain
-                                        .members
-                                        .iter()
-                                        .find(|candidate| {
-                                            candidate.member.replace('_', "") == normalized
-                                        })
-                                        .map(|candidate| candidate.member.clone())
-                                })?
-                            })
-                    })
-                    .or_else(|| {
-                        if name == "Team" && member.parse::<u32>().is_ok() {
-                            self.catalog
-                                .resolve_enum_member(name, &locale, &format!("{name} {member}"))
-                                .map(|(_, member)| member)
-                        } else {
-                            None
-                        }
-                    });
-                let Some(canonical_member) = canonical_member else {
-                    self.error_at_closed_candidates(
-                        "unknown-enum-member",
-                        format!("enum '{name}' has no member '{member}'"),
-                        span,
-                        member,
-                        &crate::matcher::enum_member_candidates(
-                            &self.catalog,
-                            name,
-                            catalog_domain,
-                        ),
-                    );
-                    return HirExpr::Null { span: None };
-                };
-                return HirExpr::Enum {
-                    value_type: catalog_domain.to_string(),
-                    value: canonical_member,
-                    span: Some(span.into()),
-                };
+                match crate::enums::canonical_member(name, member, &self.catalog) {
+                    Some((domain, canonical_member)) => {
+                        return HirExpr::Enum {
+                            value_type: domain,
+                            value: canonical_member,
+                            span: Some(span.into()),
+                        };
+                    }
+                    None => {
+                        self.error_at_closed_candidates(
+                            "unknown-enum-member",
+                            format!("enum '{name}' has no member '{member}'"),
+                            span,
+                            member,
+                            &crate::matcher::enum_member_candidates(&self.catalog, name),
+                        );
+                        return HirExpr::Null { span: None };
+                    }
+                }
             }
             // Context-player member: `x`/`y`/`z` are reserved member names
             // that resolve unconditionally to the vector-component call; any
@@ -642,9 +597,6 @@ impl Lowerer {
                 span: Some(span.into()),
             };
         }
-        if name == "createWorkshopSetting" {
-            return self.lower_workshop_setting(args, span, macro_params);
-        }
         if name == "compressed" {
             return HirExpr::Call {
                 name: name.to_string(),
@@ -653,27 +605,12 @@ impl Lowerer {
                 span: Some(span.into()),
             };
         }
-        if matches!(
-            name,
-            "createWorkshopSettingBool"
-                | "createWorkshopSettingEnum"
-                | "createWorkshopSettingInt"
-                | "createWorkshopSettingFloat"
-                | "createWorkshopSettingHero"
-        ) {
-            return HirExpr::Call {
-                name: name.to_string(),
-                args: self.lower_arg_values(args, macro_params),
-                debug_source: None,
-                span: Some(span.into()),
-            };
+        if let Some(special) = special_forms::SpecialValueCall::from_name(name) {
+            return self.lower_special_call(special, name, args, span, macro_params);
         }
-        // Builtin identity and position checks run before the special forms
-        // so that a misplaced `wait`/`vect` still diagnoses its position.
-        if !self.macro_visible(name)
-            && !self.subroutine_visible(name)
-            && !super::special_forms::SPECIAL_VALUE_CALLS.contains(&name)
-        {
+        // Builtin identity and position checks run before the generic call
+        // arms so that a misplaced `wait`/`vect` still diagnoses its position.
+        if !self.macro_visible(name) && !self.subroutine_visible(name) {
             match self.manifest.resolve_function(name) {
                 Some(entry) => self.check_call_position(name, entry, position, span),
                 None => {
@@ -704,33 +641,6 @@ impl Lowerer {
             }
         }
         match name {
-            "sorted" => {
-                // The reference's special `sorted` parse path only strips a
-                // `key=` prefix inside the second argument's lambda; every
-                // other keyword spelling or position fails upstream parsing
-                // (issue #437).
-                for (index, arg) in args.iter().enumerate() {
-                    if let Some((keyword, keyword_span)) = &arg.keyword {
-                        if index != 1 || keyword != "key" {
-                            self.error_at(
-                                "unknown-keyword",
-                                format!(
-                                    "unknown keyword argument '{keyword}' for function 'sorted'"
-                                ),
-                                *keyword_span,
-                            );
-                        }
-                    }
-                }
-                HirExpr::Call {
-                    name: name.to_string(),
-                    args: self.lower_arg_values_with_lambda(args, macro_params, |index, arg| {
-                        index == 1 || arg.keyword.as_ref().is_some_and(|(name, _)| name == "key")
-                    }),
-                    debug_source: None,
-                    span: Some(span.into()),
-                }
-            }
             "vect" => {
                 // `vect` goes through the generic argument binder so its
                 // keyword forms (`vect(x=1, y=2, z=3)`) bind like any other

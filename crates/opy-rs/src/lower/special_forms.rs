@@ -1,18 +1,58 @@
 use super::*;
 
-/// The value-position call names `lower_call` resolves by name rather than
-/// through the manifest (`sorted`, `createWorkshopSetting*`). An
-/// `unknown-value` diagnostic may suggest them, so the matcher pool and
-/// the resolution sites share this list (issue #469).
-pub(crate) const SPECIAL_VALUE_CALLS: &[&str] = &[
-    "sorted",
-    "createWorkshopSetting",
-    "createWorkshopSettingBool",
-    "createWorkshopSettingEnum",
-    "createWorkshopSettingInt",
-    "createWorkshopSettingFloat",
-    "createWorkshopSettingHero",
+/// One value-position call `lower_call` resolves by name rather than
+/// through the manifest.
+#[derive(Clone, Copy)]
+pub(crate) enum SpecialValueCall {
+    /// `sorted(array, key)` — the key argument lowers as a lambda and only
+    /// the `key=` keyword spelling is accepted.
+    Sorted,
+    /// `createWorkshopSetting(type, category, name, default, sortOrder?)` —
+    /// its own arity and setting-type handling.
+    CreateWorkshopSetting,
+    /// `createWorkshopSetting{Bool,Enum,Int,Float,Hero}` — passed through
+    /// verbatim as a call.
+    SettingFactory,
+}
+
+/// The special-call spellings `lower_call` dispatches on. `crate::lookup`'s
+/// reported special-call names and the `crate::matcher` candidate pool must
+/// be exactly the spellings here — the lookup tests assert the tables
+/// agree (issue #469).
+pub(crate) const SPECIAL_VALUE_CALLS: &[(&str, SpecialValueCall)] = &[
+    ("sorted", SpecialValueCall::Sorted),
+    (
+        "createWorkshopSetting",
+        SpecialValueCall::CreateWorkshopSetting,
+    ),
+    (
+        "createWorkshopSettingBool",
+        SpecialValueCall::SettingFactory,
+    ),
+    (
+        "createWorkshopSettingEnum",
+        SpecialValueCall::SettingFactory,
+    ),
+    ("createWorkshopSettingInt", SpecialValueCall::SettingFactory),
+    (
+        "createWorkshopSettingFloat",
+        SpecialValueCall::SettingFactory,
+    ),
+    (
+        "createWorkshopSettingHero",
+        SpecialValueCall::SettingFactory,
+    ),
 ];
+
+impl SpecialValueCall {
+    /// The special call a name resolves to, when it is one.
+    pub(crate) fn from_name(name: &str) -> Option<SpecialValueCall> {
+        SPECIAL_VALUE_CALLS
+            .iter()
+            .find(|(spelling, _)| *spelling == name)
+            .map(|(_, special)| *special)
+    }
+}
 
 fn literal_number(expr: &Expr) -> Option<f64> {
     match expr {
@@ -251,6 +291,57 @@ impl Lowerer {
                 _ => self.lower_stmt(stmt, params, false, false),
             })
             .collect()
+    }
+
+    /// Dispatch a by-name special call to its lowering behavior. The match
+    /// is exhaustive over [`SPECIAL_VALUE_CALLS`] kinds, so every spelling
+    /// the table (and the lookup) reports is bound to a real handler.
+    pub(super) fn lower_special_call(
+        &mut self,
+        special: SpecialValueCall,
+        name: &str,
+        args: &[cst::CallArg],
+        span: Span,
+        macro_params: &[String],
+    ) -> HirExpr {
+        match special {
+            SpecialValueCall::CreateWorkshopSetting => {
+                self.lower_workshop_setting(args, span, macro_params)
+            }
+            SpecialValueCall::Sorted => {
+                // The reference's special `sorted` parse path only strips a
+                // `key=` prefix inside the second argument's lambda; every
+                // other keyword spelling or position fails upstream parsing
+                // (issue #437).
+                for (index, arg) in args.iter().enumerate() {
+                    if let Some((keyword, keyword_span)) = &arg.keyword {
+                        if index != 1 || keyword != "key" {
+                            self.error_at(
+                                "unknown-keyword",
+                                format!(
+                                    "unknown keyword argument '{keyword}' for function 'sorted'"
+                                ),
+                                *keyword_span,
+                            );
+                        }
+                    }
+                }
+                HirExpr::Call {
+                    name: name.to_string(),
+                    args: self.lower_arg_values_with_lambda(args, macro_params, |index, arg| {
+                        index == 1 || arg.keyword.as_ref().is_some_and(|(name, _)| name == "key")
+                    }),
+                    debug_source: None,
+                    span: Some(span.into()),
+                }
+            }
+            SpecialValueCall::SettingFactory => HirExpr::Call {
+                name: name.to_string(),
+                args: self.lower_arg_values(args, macro_params),
+                debug_source: None,
+                span: Some(span.into()),
+            },
+        }
     }
 
     pub(super) fn lower_workshop_setting(
