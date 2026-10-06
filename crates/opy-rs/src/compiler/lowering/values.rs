@@ -103,7 +103,10 @@ impl<'a> Lowering<'a> {
                 args: Vec::new(),
             },
             Expr::Enum {
-                value_type, value, ..
+                value_type,
+                value,
+                literal,
+                ..
             } => {
                 let value = match (value_type.as_str(), value.as_str()) {
                     ("Clipping", "NONE") => "DO_NOT_CLIP",
@@ -125,7 +128,11 @@ impl<'a> Lowering<'a> {
                     value_type: value_type.clone(),
                     value: value.to_string(),
                 };
-                if value_type == "Gamemode" {
+                // A `*Literal` member emits the bare display-name lookup,
+                // without the canonical wrapper (`Game Mode(...)`, `Hero(...)`).
+                if *literal {
+                    member
+                } else if value_type == "Gamemode" {
                     let member = self.push_value(member);
                     Value::Call {
                         name: "gameMode".to_string(),

@@ -115,6 +115,26 @@ const SETTING_CALLS: [(&str, &str, &str); 16] = [
     ),
 ];
 
+/// `*Literal` member spellings the reference accepts: one member per literal
+/// domain, every `onlyInOverpy` `ColorLiteral` member, and the `Color.`
+/// spelling of the same member. The `ColorLiteral.LIGHT_*` reference
+/// emissions carry an empty argument slot the canonical grammar cannot
+/// parse — the expected `unparsable` findings are recorded in
+/// `tools/overpy/probe-gaps.json` (issue #466).
+const LITERAL_MEMBER_CALLS: [(&str, &str); 11] = [
+    ("TeamLiteral.1", "g = TeamLiteral.1"),
+    ("HeroLiteral.ANA", "g = HeroLiteral.ANA"),
+    ("MapLiteral.ROUTE66", "g = MapLiteral.ROUTE66"),
+    ("GamemodeLiteral.ASSAULT", "g = GamemodeLiteral.ASSAULT"),
+    ("ButtonLiteral.JUMP", "g = ButtonLiteral.JUMP"),
+    ("ColorLiteral.WHITE", "g = ColorLiteral.WHITE"),
+    ("ColorLiteral.LIGHT_RED", "g = ColorLiteral.LIGHT_RED"),
+    ("ColorLiteral.LIGHT_PURPLE", "g = ColorLiteral.LIGHT_PURPLE"),
+    ("ColorLiteral.LIGHT_VIOLET", "g = ColorLiteral.LIGHT_VIOLET"),
+    ("ColorLiteral.LIGHT_GRAY", "g = ColorLiteral.LIGHT_GRAY"),
+    ("Color.LIGHT_RED", "g = Color.LIGHT_RED"),
+];
+
 #[derive(Debug, Serialize, Deserialize)]
 struct Probe {
     id: String,
@@ -197,6 +217,12 @@ pub(super) fn generate() -> Result<(), String> {
                 source: source(prefix, &format!("g = {call}")),
             });
         }
+    }
+    for (member, statement) in LITERAL_MEMBER_CALLS {
+        probes.push(Probe {
+            id: format!("default:{member}:base"),
+            source: source("", statement),
+        });
     }
     println!(
         "{}",
@@ -494,7 +520,22 @@ pub(super) fn compare(probes: &Path, references: &Path) -> Result<(), String> {
                             ("match", String::new())
                         }
                         (Ok(_), Ok(_)) => ("different", String::new()),
-                        (Err(error), _) | (_, Err(error)) => ("unparsable", error),
+                        (native, reference_parsed) => {
+                            // Name the failing side and carry the reference's
+                            // raw emission, so a recorded gap can pin the exact
+                            // malformed output rather than any parse failure.
+                            let mut sides = Vec::new();
+                            if let Err(error) = native {
+                                sides.push(format!("native unparsable: {error}"));
+                            }
+                            if let Err(error) = reference_parsed {
+                                sides.push(format!(
+                                    "reference unparsable: {error}; reference emission: {}",
+                                    reference.workshop.trim()
+                                ));
+                            }
+                            ("unparsable", sides.join("; "))
+                        }
                     }
                 }
             }

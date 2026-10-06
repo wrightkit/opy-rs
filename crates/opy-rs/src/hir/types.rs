@@ -682,6 +682,12 @@ pub enum Expr {
         #[serde(rename = "type")]
         value_type: String,
         value: String,
+        /// The member was written through the upstream `*Literal` receiver
+        /// (`HeroLiteral.ANA`, `GamemodeLiteral.ASSAULT`): the reference
+        /// emits the bare display-name lookup, without the canonical
+        /// wrapper (issue #466).
+        #[serde(default)]
+        literal: bool,
         #[serde(skip_serializing_if = "Option::is_none")]
         span: Option<Span>,
     },

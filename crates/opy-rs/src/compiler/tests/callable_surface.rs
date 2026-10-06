@@ -199,7 +199,7 @@ fn tabular_and_chase_macro_forms_keep_statement_semantics() {
 globalvar scores
 rule "tabular":
     @Event global
-    tabular([heroes, scores], [Hero.ANA, 3, Hero.SOLDIER_76, 8])
+    tabular([heroes, scores], [Hero.ANA, 3, Hero.SOLDIER, 8])
     stopChasing(heroes)
 "#;
     Compiler::new()

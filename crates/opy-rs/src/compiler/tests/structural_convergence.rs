@@ -440,3 +440,57 @@ fn button_to_string_stays_unwrapped_in_a_boolean_position() {
     );
     assert!(!emitted.contains("First Of(Mapped Array"), "{emitted}");
 }
+
+#[test]
+fn literal_domain_members_emit_the_reference_display_names() {
+    // Exception for `ColorLiteral.LIGHT_*` (docs/architecture/
+    // language-core.md, wrightkit/opy-rs#468). Pinned OverPy 9.7.10 emits a
+    // `*Literal` member as the bare display-name lookup of its constant
+    // table — oracle output observed for this exact source:
+    //   `TeamLiteral.1`          → `Set Global Variable(g, Team 1)`
+    //   `HeroLiteral.ANA`        → `Set Global Variable(g, Ana)`
+    //   `ColorLiteral.WHITE`     → `Set Global Variable(g, White)`
+    //   `ColorLiteral.LIGHT_RED` → `Set Global Variable(g, )`
+    //   `Color.LIGHT_RED`        → `Set Global Variable(g, Custom Color(255, 112, 122, 255))`
+    //   `GamemodeLiteral.ASSAULT`→ `Set Global Variable(g, Assault)`
+    // Literal emission skips canonical wrappers like `Game Mode(...)`:
+    // `Team 1` and `Assault` are byte-identical to the reference, while
+    // `Hero(Ana)`/`Color(White)` are the canonical forms the grammar reads
+    // back as the same members (probe: `match`). The `onlyInOverpy` empty
+    // slot is an upstream lookup failure the canonical grammar cannot parse;
+    // `opy-rs` emits the canonical `Custom Color` the `Color.` receiver
+    // produces. The builtin probe pins the reference side as `unparsable`
+    // (tools/overpy/probe-gaps.json).
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = "globalvar g\nrule \"x\":\n    @Event global\n    g = TeamLiteral.1\n    g = HeroLiteral.ANA\n    g = ColorLiteral.WHITE\n    g = ColorLiteral.LIGHT_RED\n    g = Color.LIGHT_RED\n    g = GamemodeLiteral.ASSAULT\n";
+    let hir = crate::compile(source, "source.opy", dir).expect("source must resolve");
+    let artifact = Compiler::new()
+        .expect("released workshop contract must load")
+        .compile_hir(&hir)
+        .expect("the literal members must emit");
+    for expected in [
+        "Set Global Variable(g, Team 1)",
+        "Set Global Variable(g, Hero(Ana))",
+        "Set Global Variable(g, Color(White))",
+        "Set Global Variable(g, Custom Color(255, 112, 122, 255))",
+        "Set Global Variable(g, Assault)",
+    ] {
+        assert!(
+            artifact.emitted.contains(expected),
+            "{expected}\n{emitted}",
+            emitted = artifact.emitted
+        );
+    }
+    // `Color.LIGHT_RED` is the same OverPy-only member through the `Color`
+    // receiver, where the pinned upstream itself emits `rgb(...)`: both
+    // spellings produce the one canonical color call, never an empty slot.
+    assert_eq!(
+        artifact
+            .emitted
+            .matches("Set Global Variable(g, Custom Color(255, 112, 122, 255))")
+            .count(),
+        2,
+        "{}",
+        artifact.emitted
+    );
+}

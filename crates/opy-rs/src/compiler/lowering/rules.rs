@@ -1,4 +1,5 @@
 use super::*;
+use crate::enums;
 
 impl<'a> Lowering<'a> {
     pub(in crate::compiler) fn lower_rules(&mut self) -> Result<(), IntegrationError> {
@@ -315,27 +316,16 @@ impl<'a> Lowering<'a> {
                 self.unsupported("@Team requires exactly one filter value", annotation.span)
             );
         }
-        let spelling = match argument.text.as_str() {
-            "1" => "Team 1",
-            "2" => "Team 2",
-            value => value,
-        };
-        let (_, member) = self
-            .compiler
-            .catalog
-            .resolve_enum_member("EventTeam", &Locale::new("en-US"), spelling)
-            .ok_or_else(|| {
-                self.unsupported(
-                    format!("unknown EventTeam filter '{spelling}'"),
-                    argument.span.or(annotation.span),
-                )
-            })?;
-        match member.as_str() {
-            "ALL" => Ok(EventTeam::All),
-            "TEAM_1" => Ok(EventTeam::Team1),
-            "TEAM_2" => Ok(EventTeam::Team2),
+        // Upstream `eventTeamKw` accepts exactly the keys "1", "2", "all";
+        // a `Team.X`/`Hero.X` argument reduces through the annotation
+        // normalization first (issue #466).
+        let key = enums::event_filter_key(&argument.text);
+        match key.as_str() {
+            "1" => Ok(EventTeam::Team1),
+            "2" => Ok(EventTeam::Team2),
+            "all" => Ok(EventTeam::All),
             _ => Err(self.unsupported(
-                format!("catalog EventTeam member '{member}' is not supported by canonical WIR"),
+                format!("unknown event team filter '{}'", argument.text),
                 argument.span.or(annotation.span),
             )),
         }
@@ -380,95 +370,70 @@ impl<'a> Lowering<'a> {
                 annotation.span,
             ));
         }
-        let spelling = if annotation.name == "Slot" {
-            match argument.text.as_str() {
-                value if value.parse::<u8>().is_ok() => {
-                    format!("Slot {}", value.parse::<u8>().unwrap_or_default())
-                }
-                value => value.to_string(),
+        // Upstream `eventPlayerKw` is shared between @Slot and @Hero: its
+        // keys are "all", the slot numbers "0".."11", and the `heroKw`
+        // keywords. `Team.X`/`Hero.X` arguments reduce through
+        // `upperCaseToCamelCase`, and @Hero additionally renames the legacy
+        // keywords `mccree`/`hammond` (issue #466).
+        let key = enums::event_filter_key(&argument.text);
+        let key = if annotation.name == "Hero" {
+            match key.as_str() {
+                "mccree" => "cassidy".to_string(),
+                "hammond" => "wreckingBall".to_string(),
+                _ => key,
             }
         } else {
-            argument.text.clone()
+            key
         };
-        let domain = if annotation.name == "Slot" {
-            "EventPlayer"
-        } else {
-            "Hero"
-        };
-        let locale = Locale::new("en-US");
-        let catalog_spelling = match (domain, spelling.as_str()) {
-            ("Hero", "mccree") => "CASSIDY",
-            ("Hero", "hammond") => "WRECKING_BALL",
-            ("Hero", "soldier") => "SOLDIER_76",
-            ("Hero", "domina") => "JINYU",
-            ("Hero", "dmon") => "D_MON",
-            _ => spelling.as_str(),
-        };
-        let member = self
-            .compiler
-            .catalog
-            .resolve_enum_member(domain, &locale, catalog_spelling)
-            .map(|(_, member)| member)
-            .or_else(|| {
-                (domain == "Hero")
-                    .then(|| {
-                        self.compiler
-                            .catalog
-                            .enum_domain(domain)
-                            .and_then(|domain| {
-                                domain
-                                    .members
-                                    .iter()
-                                    .find(|member| {
-                                        member.member.eq_ignore_ascii_case(catalog_spelling)
-                                            || member.spellings(&locale).iter().any(|candidate| {
-                                                candidate.eq_ignore_ascii_case(catalog_spelling)
-                                            })
-                                            || member
-                                                .member
-                                                .chars()
-                                                .filter(|c| c.is_ascii_alphanumeric())
-                                                .collect::<String>()
-                                                .eq_ignore_ascii_case(
-                                                    &catalog_spelling
-                                                        .chars()
-                                                        .filter(|c| c.is_ascii_alphanumeric())
-                                                        .collect::<String>(),
-                                                )
-                                    })
-                                    .map(|member| member.member.clone())
-                            })
-                    })
-                    .flatten()
-            })
-            .ok_or_else(|| {
+        if key == "all" {
+            return Ok(EventTarget::All);
+        }
+        if let Ok(slot) = key.parse::<u8>()
+            && slot <= 11
+        {
+            return Ok(EventTarget::Slot(slot));
+        }
+        let spelling = enums::camel_case_to_upper_case(&key);
+        // `eventPlayerKw` shares `heroKw`, which has no `MCCREE`/`HAMMOND`
+        // aliases — the filter resolves without the `Domain.MEMBER` alias
+        // table (`@Slot mccree` is a reference rejection).
+        let member =
+            enums::filter_member("Hero", &spelling, self.compiler.catalog).map_err(|error| {
+                // A `Hero.X`/`Team.X` argument spells the catalog member in
+                // `X`; probe it for a spelled-out correction before falling
+                // back to the generic message.
+                let member_part = argument
+                    .text
+                    .split_once('.')
+                    .map(|(_, member)| member)
+                    .unwrap_or(argument.text.as_str());
+                let hint = match error {
+                    enums::EnumMemberError::Misspelled(spelling) => format!(
+                        "; the OverPy spelling is '{}'",
+                        enums::upper_case_to_camel_case(spelling)
+                    ),
+                    enums::EnumMemberError::Unspellable => {
+                        "; the canonical member has no OverPy spelling".to_string()
+                    }
+                    enums::EnumMemberError::Unknown => {
+                        match enums::filter_member("Hero", member_part, self.compiler.catalog) {
+                            Err(enums::EnumMemberError::Misspelled(spelling)) => format!(
+                                "; the OverPy spelling is '{}'",
+                                enums::upper_case_to_camel_case(spelling)
+                            ),
+                            Err(enums::EnumMemberError::Unspellable) => {
+                                "; the canonical member has no OverPy spelling".to_string()
+                            }
+                            _ => String::new(),
+                        }
+                    }
+                };
                 self.unsupported(
-                    format!("unknown {domain} filter '{spelling}'"),
+                    format!("unknown event player filter '{}'{}", argument.text, hint),
                     argument.span.or(annotation.span),
                 )
             })?;
-        if domain == "EventPlayer" {
-            if member == "ALL" {
-                Ok(EventTarget::All)
-            } else if let Some(slot) = member.strip_prefix("SLOT_") {
-                let slot = slot.parse::<u8>().map_err(|_| {
-                    self.unsupported(
-                        format!("catalog EventPlayer member '{member}' is not a slot"),
-                        argument.span.or(annotation.span),
-                    )
-                })?;
-                Ok(EventTarget::Slot(slot))
-            } else {
-                Err(self.unsupported(
-                    format!(
-                        "catalog EventPlayer member '{member}' is not supported by canonical WIR"
-                    ),
-                    argument.span.or(annotation.span),
-                ))
-            }
-        } else {
-            Ok(EventTarget::Hero(member))
-        }
+        Ok(EventTarget::Hero(member))
     }
 
     fn lower_actions(

@@ -1706,9 +1706,21 @@ impl<'a> Emitter<'a> {
             );
             return;
         }
-        self.out.push_str(value_type);
+        // Reconstruction must emit the OverPy source spelling, not the
+        // canonical catalog id (`Hero.SOLDIER`, `Map.ROUTE66`, `Clip.NONE`;
+        // issue #466).
+        let Some((source_name, spelling)) = crate::enums::spelling_of_member(value_type, value)
+        else {
+            self.issue(
+                "unsupported-enum-member",
+                format!("enum member '{value_type}.{value}' has no OverPy source spelling"),
+                span,
+            );
+            return;
+        };
+        self.out.push_str(source_name);
         self.out.push('.');
-        self.out.push_str(value);
+        self.out.push_str(spelling);
     }
 
     fn emit_value_call(&mut self, name: &str, args: &[Value], span: Option<Span>) {

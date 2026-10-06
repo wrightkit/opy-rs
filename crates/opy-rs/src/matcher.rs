@@ -587,9 +587,12 @@ mod tests {
             "the catalog id is never a candidate: {ranked:?}"
         );
         assert_eq!(rank("MCCEE", &pool)[0], "MCCREE");
-        // Display names match too ("Blizzard World" names `Map.BLIZZ_WORLD`).
+        // Display names match too ("Blizzard World" names `Map.BLIZZ_WORLD`;
+        // the catalog id `BLIZZARD_WORLD` is not one).
         let map_pool = enum_member_candidates(&catalog, "Map");
-        assert_eq!(rank("blizzard world", &map_pool)[0], "BLIZZ_WORLD");
+        let ranked = rank("blizzard world", &map_pool);
+        assert_eq!(ranked[0], "BLIZZ_WORLD");
+        assert!(!ranked.iter().any(|spelling| spelling == "BLIZZARD_WORLD"));
     }
 
     /// The candidate pool is exactly the resolver's reported surface: every

@@ -64,6 +64,21 @@
       "cause": "These members resolve in the pinned reference's enum tables — the spelling is accepted — but an availability gate downstream rejects maps and gamemodes retired for OW2. The lookup advertises the spelling, which is the vocabulary contract; availability is a compile-time policy, not a name-resolution answer.",
       "owner": "opy-rs",
       "decision": "approved for the spelling contract: the probe verifies name resolution, and `Unknown map`/`Unknown gamemode` rejections still fail as `unknown-spelling`"
+    },
+    {
+      "id": "literal-onlyinoverpy-empty-slot",
+      "status": "unparsable",
+      "functions": [
+        "ColorLiteral.LIGHT_RED",
+        "ColorLiteral.LIGHT_PURPLE",
+        "ColorLiteral.LIGHT_VIOLET",
+        "ColorLiteral.LIGHT_GRAY"
+      ],
+      "variant": ":base",
+      "detail": "Set Global Variable(g, )",
+      "cause": "The reference splices the absent display-name lookup for onlyInOverpy ColorLiteral members, writing an empty argument slot (Set Global Variable(g, )) that the canonical grammar cannot parse. Native emission writes the canonical Custom Color the Color receiver produces, because an empty slot has no Workshop meaning.",
+      "owner": "opy-rs emission",
+      "decision": "pending owner approval (wrightkit/opy-rs#468); not an approved exception until recorded; pinned by compiler::tests::structural_convergence"
     }
   ]
 }
