@@ -56,13 +56,24 @@ pinned oracle. For each function it compiles the base call, each trailing or
 single omission of a defaulted argument, each argument position replaced by
 each small literal the position accepts, and the call as a Boolean argument
 and as the replacement of `.replace`, in default and `#!optimizeForSize`
-modes. The oracle compiles them all in one process; the native compiler
-compiles the same programs, and both outputs are parsed by `workshop-rs` and
-compared structurally.
+modes. Each worker compiles its oracle batch in an isolated Node process. The
+native compiler compiles the same programs, and both outputs are parsed by
+`workshop-rs` and compared structurally.
 
 ```sh
 cargo build --locked -p opy-cli --features compatibility --bin opy-compat
 python3 tools/overpy/probe_builtins.py --binary target/debug/opy-compat
+```
+
+`--jobs N` partitions the complete probe set between N independent oracle/native
+workers (default: 1). Findings are restored to generated probe order and gaps
+are classified once across the combined report, so a gap absent from one batch
+is not considered stale. CI uses two workers and the release compatibility
+binary to reduce compile and canonical-parse time. To run the same setup locally:
+
+```sh
+cargo build --locked --release -p opy-cli --features compatibility --bin opy-compat
+python3 tools/overpy/probe_builtins.py --binary target/release/opy-compat --jobs 2
 ```
 
 `--functions a,b` probes only those functions. `probe-gaps.json` records the
