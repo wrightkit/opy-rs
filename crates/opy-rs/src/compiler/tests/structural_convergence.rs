@@ -440,3 +440,49 @@ fn button_to_string_stays_unwrapped_in_a_boolean_position() {
     );
     assert!(!emitted.contains("First Of(Mapped Array"), "{emitted}");
 }
+
+#[test]
+fn literal_domain_members_emit_canonical_values() {
+    // Recorded exception (docs/architecture/language-core.md, PR
+    // wrightkit/opy-rs#468): the pinned upstream emits a `*Literal` member as
+    // the bare display-name lookup of its constant table — `TeamLiteral.1`
+    // writes `Team 1`, `HeroLiteral.ANA` writes `Ana`, `ColorLiteral.WHITE`
+    // writes `White`. The canonical grammar reads those bare names back as
+    // the same members, so the wrapped literals emitted here are
+    // structurally identical to the reference. For `onlyInOverpy` members
+    // such as `ColorLiteral.LIGHT_RED` the lookup is absent and the reference
+    // emits an empty argument slot — `Set Global Variable(g, )` — which the
+    // canonical grammar cannot parse; the canonical `Custom Color` keeps the
+    // program valid.
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = "globalvar g\nrule \"x\":\n    @Event global\n    g = TeamLiteral.1\n    g = HeroLiteral.ANA\n    g = ColorLiteral.WHITE\n    g = ColorLiteral.LIGHT_RED\n    g = Color.LIGHT_RED\n";
+    let hir = crate::compile(source, "source.opy", dir).expect("source must resolve");
+    let artifact = Compiler::new()
+        .expect("released workshop contract must load")
+        .compile_hir(&hir)
+        .expect("the literal members must emit");
+    for expected in [
+        "Set Global Variable(g, Team 1)",
+        "Set Global Variable(g, Hero(Ana))",
+        "Set Global Variable(g, Color(White))",
+        "Set Global Variable(g, Custom Color(255, 112, 122, 255))",
+    ] {
+        assert!(
+            artifact.emitted.contains(expected),
+            "{expected}\n{emitted}",
+            emitted = artifact.emitted
+        );
+    }
+    // `Color.LIGHT_RED` is the same OverPy-only member through the `Color`
+    // receiver, where the pinned upstream itself emits `rgb(...)`: both
+    // spellings produce the one canonical color call.
+    assert_eq!(
+        artifact
+            .emitted
+            .matches("Set Global Variable(g, Custom Color(255, 112, 122, 255))")
+            .count(),
+        2,
+        "{}",
+        artifact.emitted
+    );
+}

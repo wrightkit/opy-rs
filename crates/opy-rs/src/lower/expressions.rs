@@ -419,9 +419,15 @@ impl Lowerer {
                 }
             }
             if name == "Color" || name == "ColorLiteral" {
-                // `ColorLiteral` carries the four OverPy-only LIGHT_*
-                // constants alongside the catalog colors; upstream lowers
-                // them to an `rgb()` call (issue #466).
+                // The four OverPy-only LIGHT_* constants are members of the
+                // upstream `ColorLiteral` table. Through `Color.` the pinned
+                // upstream lowers them to `rgb(r, g, b, 255)`; through
+                // `ColorLiteral.` it accepts the same spellings but emits
+                // the member's display-name lookup, which `onlyInOverpy`
+                // members do not have — an empty argument slot the Workshop
+                // grammar cannot parse. Emitting the canonical `rgb` form
+                // here is a recorded exception
+                // (docs/architecture/language-core.md, issue #466).
                 if let Some((red, green, blue)) = crate::enums::extra_color_member(member) {
                     let number = |value: i32| HirExpr::Number {
                         value: f64::from(value),
