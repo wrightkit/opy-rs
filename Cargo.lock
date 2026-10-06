@@ -366,7 +366,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "opy-cli"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "clap",
  "clap_complete",
@@ -378,7 +378,7 @@ dependencies = [
 
 [[package]]
 name = "opy-provider"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "opy-rs",
  "serde",
@@ -389,7 +389,7 @@ dependencies = [
 
 [[package]]
 name = "opy-rs"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "libc",
  "libquickjs-ng-sys",
@@ -646,9 +646,9 @@ dependencies = [
 
 [[package]]
 name = "workshop-rs"
-version = "1.5.0"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "770340d28d9c890b7b590a4d672ced4290c59539d7479081ba78080a03d4b300"
+checksum = "49ac2cba4c67d19231462b7fd316175e13c306acd559d95e5fcf7ccbf61b9037"
 dependencies = [
  "aho-corasick",
  "serde",
