@@ -229,9 +229,9 @@ dependencies = [
 
 [[package]]
 name = "either"
-version = "1.18.0"
+version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "252afb9ae5eaa683babdc6a068b3f5726eb19e05070c731f9b2a23a7c3e8ed34"
+checksum = "0e9c71c2167ca323c882b99918929403426e2373ea17242ff5653e0d5e1058be"
 
 [[package]]
 name = "find-msvc-tools"
@@ -366,7 +366,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "opy-cli"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "clap",
  "clap_complete",
@@ -378,7 +378,7 @@ dependencies = [
 
 [[package]]
 name = "opy-provider"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "opy-rs",
  "serde",
@@ -389,7 +389,7 @@ dependencies = [
 
 [[package]]
 name = "opy-rs"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "libc",
  "libquickjs-ng-sys",
@@ -646,9 +646,9 @@ dependencies = [
 
 [[package]]
 name = "workshop-rs"
-version = "1.6.0"
+version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49ac2cba4c67d19231462b7fd316175e13c306acd559d95e5fcf7ccbf61b9037"
+checksum = "e26d8ff2a77a74c5426729d5513827cf8887a734afef13203f99d38eebada85e"
 dependencies = [
  "aho-corasick",
  "serde",
