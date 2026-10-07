@@ -51,6 +51,10 @@ const DIAGNOSTICS: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../opy-rs/tests/fixtures/corpus/synthetic/diagnostics/source.opy"
 );
+const RENAME_MAIN_FILE_ROOT: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/fixtures/rename-main-file"
+);
 
 struct Session {
     child: Child,
@@ -1724,6 +1728,110 @@ fn rename_refusals_are_structured() {
         "x",
     ));
     assert_eq!(outside["error"]["data"]["lpp"]["kind"], "invalidDocument");
+    session.shutdown();
+}
+
+#[test]
+fn rename_through_main_file_member_names_the_documents_to_supply() {
+    let mut session = Session::spawn();
+    session.initialize();
+    let document = |name: &str| {
+        let path = Path::new(RENAME_MAIN_FILE_ROOT).join(name);
+        let uri = file_uri(&path.to_string_lossy());
+        json!({
+            "uri": uri,
+            "languageId": "opy",
+            "version": 1,
+            "text": std::fs::read_to_string(&path).expect("fixture source"),
+        })
+    };
+
+    // A member file whose `#!mainFile` resolves on disk is analyzed under its
+    // include record; the registry's entry record for it is a redirect stub.
+    // Rename must find the symbol anyway and report the unsupplied site
+    // document, not `noSymbolAtPosition`.
+    let member = document("env/member.opy");
+    let member_uri = member["uri"].as_str().expect("member uri").to_string();
+    let partial = session.request(rename_request(
+        2,
+        json!({ member_uri.clone(): member.clone() }),
+        &member_uri,
+        4,
+        5,
+        "helper",
+    ));
+    assert_eq!(refusal_code(&partial), "rename.requiresDocument");
+    assert!(
+        partial["error"]["data"]["lpp"]["details"]["uris"]
+            .as_array()
+            .expect("uris")
+            .iter()
+            .any(|uri| uri.as_str().is_some_and(|uri| uri.ends_with("caller.opy"))),
+        "the refusal names the unsupplied site document: {partial}"
+    );
+
+    // Supplying the site documents — the project entry is not required —
+    // completes the rename across the member and the call site.
+    let caller = document("caller.opy");
+    let caller_uri = caller["uri"].as_str().expect("caller uri").to_string();
+    let renamed = session.request(rename_request(
+        3,
+        json!({
+            member_uri.clone(): member.clone(),
+            caller_uri.clone(): caller,
+        }),
+        &member_uri,
+        4,
+        5,
+        "helper",
+    ));
+    let edits = renamed["result"]["edits"].as_array().expect("edits");
+    assert_eq!(edits.len(), 2);
+    let member_edits = edits
+        .iter()
+        .find(|edit| edit["documentUri"] == member_uri)
+        .expect("member edits");
+    assert_eq!(sorted_ranges(member_edits), vec![(2, 11, 17), (4, 4, 10)]);
+    let caller_edits = edits
+        .iter()
+        .find(|edit| edit["documentUri"] == caller_uri)
+        .expect("caller edits");
+    assert_eq!(sorted_ranges(caller_edits), vec![(2, 4, 10)]);
+
+    // A `#!mainFile` file that the resolved project does not include is still
+    // a document-set problem: the refusal names the entry it resolves
+    // through.
+    let stray = document("stray.opy");
+    let stray_uri = stray["uri"].as_str().expect("stray uri").to_string();
+    let uncovered = session.request(rename_request(
+        4,
+        json!({ stray_uri.clone(): stray }),
+        &stray_uri,
+        2,
+        5,
+        "renamed",
+    ));
+    assert_eq!(refusal_code(&uncovered), "rename.requiresDocument");
+    assert!(
+        uncovered["error"]["data"]["lpp"]["details"]["missing"]
+            .as_array()
+            .expect("missing")
+            .iter()
+            .any(|uri| uri.as_str().is_some_and(|uri| uri.ends_with("main.opy"))),
+        "the refusal names the entry the file resolves through: {uncovered}"
+    );
+
+    // A position on no symbol inside a covered member still reports
+    // `noSymbolAtPosition`.
+    let blank = session.request(rename_request(
+        5,
+        json!({ member_uri.clone(): member }),
+        &member_uri,
+        1,
+        0,
+        "x",
+    ));
+    assert_eq!(refusal_code(&blank), "rename.noSymbolAtPosition");
     session.shutdown();
 }
 

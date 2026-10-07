@@ -401,8 +401,24 @@ fn rename_namespace(kind: SymbolKind) -> NameNamespace {
 }
 
 /// Whether `span` (half-open `[start, end)`) contains the point `position`.
-fn site_contains(site: &SourceLocation, file_id: u32, position: Position) -> bool {
-    site.file_id == file_id && site.start <= position && position < site.end
+fn site_contains(site: &SourceLocation, file_ids: &BTreeSet<u32>, position: Position) -> bool {
+    file_ids.contains(&site.file_id) && site.start <= position && position < site.end
+}
+
+/// Whether `file` in `outcome`'s registry carries analyzed source. Under a
+/// `#!mainFile` redirect the requested entry keeps record id 0 as a stub: the
+/// preprocessor swaps in the redirect target, so the entry's own text is
+/// never analyzed and no symbol site references id 0. A path matching only
+/// that record is not covered by the view.
+fn carries_source(
+    outcome: &opy_rs::tooling::CheckOutcome,
+    file: &opy_rs::preprocess::FileRecord,
+) -> bool {
+    file.id != 0
+        || outcome
+            .model
+            .as_ref()
+            .is_none_or(|model| model.hir.preprocessing.main_file.is_none())
 }
 
 fn refusal(code: &'static str, details: Value, message: impl Into<String>) -> HandlerError {
@@ -450,6 +466,7 @@ fn model_view(
             outcome
                 .files
                 .iter()
+                .filter(|file| carries_source(&outcome, file))
                 .any(|file| same_path(&resolved_path(&display_root, &file.path), target))
         };
         if !covers(&position_path) {
@@ -498,6 +515,21 @@ fn model_view(
             "rename.requiresDocument",
             json!({ "uri": position_document.uri, "missing": missing }),
             "the symbol resolves through sources not in the received document set",
+        ));
+    }
+    // The position document analyzed cleanly but no supplied view covers it
+    // as project content — a `#!mainFile` file whose resolved project does
+    // not include it. Name the entry it resolves through so the caller knows
+    // what to supply.
+    if let Some(model) = outcome.model.as_ref()
+        && model.hir.preprocessing.main_file.is_some()
+        && let Some(target) = outcome.files.iter().find(|file| file.id == 1)
+    {
+        let entry = path_to_file_uri(&resolved_path(&outcome.display_root, &target.path));
+        return Err(refusal(
+            "rename.requiresDocument",
+            json!({ "uri": position_document.uri, "missing": [entry] }),
+            "the position document resolves through a project entry that does not include it",
         ));
     }
     Err(no_symbol(&position_document.uri))
@@ -671,20 +703,26 @@ pub(crate) fn rename(params: Value) -> Result<Value, HandlerError> {
     let position = Position::new(params.position.line + 1, frontend_column(line, index));
 
     let position_path = document_path(position_document)?;
-    let Some(file_id) = view
+    // A document can appear in the registry more than once — as the
+    // `#!mainFile` request stub (id 0, no analyzed content) and as a real
+    // include. The position can sit on sites under any content-bearing
+    // record resolving to it.
+    let file_ids: BTreeSet<u32> = view
         .outcome
         .files
         .iter()
-        .find(|file| {
+        .filter(|file| carries_source(&view.outcome, file))
+        .filter(|file| {
             same_path(
                 &resolved_path(&view.display_root, &file.path),
                 &position_path,
             )
         })
         .map(|file| file.id)
-    else {
+        .collect();
+    if file_ids.is_empty() {
         return Err(no_symbol(&position_document.uri));
-    };
+    }
 
     // Candidate symbols whose declaration or reference spans contain the
     // position. A narrowed hit means the position sits on the authored token
@@ -695,7 +733,7 @@ pub(crate) fn rename(params: Value) -> Result<Value, HandlerError> {
         let mut narrowed = false;
         let mut contained = false;
         for site in std::iter::once(&symbol.declaration).chain(&symbol.references) {
-            if !site_contains(site, file_id, position) {
+            if !site_contains(site, &file_ids, position) {
                 continue;
             }
             contained = true;
@@ -811,6 +849,7 @@ pub(crate) fn rename(params: Value) -> Result<Value, HandlerError> {
             .outcome
             .files
             .iter()
+            .filter(|file| carries_source(&view.outcome, file))
             .any(|file| same_path(&resolved_path(&view.display_root, &file.path), &path));
         if !covered && mentions_identifier(&document.text, &name) {
             unaccounted.push(document.uri.clone());
