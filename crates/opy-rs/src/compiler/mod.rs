@@ -591,9 +591,13 @@ impl Compiler {
     /// Pair emitted Workshop `text` with the source map of its authored origin.
     /// `hir` is the program `text` was emitted from in this operation. Spans
     /// come from a second lowering that attributes macro-expanded code to its
-    /// invocation site, so diagnostics keep their spans. The map is proven
-    /// against the re-parsed text, so a program shape that differs is reported
-    /// instead of yielding displaced spans.
+    /// invocation site, so diagnostics keep their spans.
+    ///
+    /// When `text` is still this program's verbatim emission the map applies
+    /// by construction, so the proof is discharged without re-parsing. Text
+    /// rewritten by post-compile directives or hooks is instead proven against
+    /// its re-parse, so a program shape that differs is reported instead of
+    /// yielding displaced spans.
     fn mapped_text(
         &self,
         hir: &hir::Program,
@@ -606,10 +610,17 @@ impl Compiler {
         lowering.lower_declarations()?;
         lowering.lower_rules()?;
         let map = SourceMap::extract(&lowering.program);
-        let mut reparsed = workshop_rs::parser::parse(text, self.catalog, locale)
-            .map_err(|error| IntegrationError::new("source-map-parse", error.to_string(), None))?;
-        map.apply(&mut reparsed)
-            .map_err(|error| IntegrationError::new("source-map-shape", error.to_string(), None))?;
+        let verbatim_emission = workshop_rs::emitter::emit(&lowering.program, self.catalog, locale)
+            .is_ok_and(|emitted| emitted == text);
+        if !verbatim_emission {
+            let mut reparsed =
+                workshop_rs::parser::parse(text, self.catalog, locale).map_err(|error| {
+                    IntegrationError::new("source-map-parse", error.to_string(), None)
+                })?;
+            map.apply(&mut reparsed).map_err(|error| {
+                IntegrationError::new("source-map-shape", error.to_string(), None)
+            })?;
+        }
         Ok(MappedText::new(text.to_owned(), map))
     }
 
@@ -713,6 +724,31 @@ impl Compiler {
         self.compile_source_report_impl(source, main_path, root, &Locale::new(language), true)
     }
 
+    /// Compile a resolved [`crate::CompileOutcome`] into the report contract
+    /// using a catalog locale name, reusing the caller's frontend result
+    /// instead of re-running preprocessing, parsing, and lowering. This is an
+    /// advanced integration API for hosts that already ran the frontend.
+    pub fn compile_outcome_report_with_language(
+        &self,
+        outcome: crate::CompileOutcome,
+        root: &std::path::Path,
+        language: &str,
+    ) -> CompileReport {
+        self.compile_outcome_report_impl(outcome, root, &Locale::new(language), false)
+            .0
+    }
+
+    /// Like [`Self::compile_outcome_report_with_language`], and on success also
+    /// returns the mapped Workshop text of the same compile.
+    pub fn compile_outcome_report_mapped_with_language(
+        &self,
+        outcome: crate::CompileOutcome,
+        root: &std::path::Path,
+        language: &str,
+    ) -> (CompileReport, Option<MappedText>) {
+        self.compile_outcome_report_impl(outcome, root, &Locale::new(language), true)
+    }
+
     fn compile_source_report_impl(
         &self,
         source: &str,
@@ -727,6 +763,16 @@ impl Compiler {
             root,
             &std::collections::BTreeMap::new(),
         );
+        self.compile_outcome_report_impl(outcome, root, locale, mapped)
+    }
+
+    fn compile_outcome_report_impl(
+        &self,
+        outcome: crate::CompileOutcome,
+        root: &std::path::Path,
+        locale: &Locale,
+        mapped: bool,
+    ) -> (CompileReport, Option<MappedText>) {
         let catalog = self.catalog.identity();
         let compiler = CompilerIdentity::current();
         let frontend_diagnostics = outcome

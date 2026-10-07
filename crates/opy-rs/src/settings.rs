@@ -318,10 +318,11 @@ pub(crate) fn resolve_hir_settings(
     let Some(settings) = program.settings.take() else {
         return Ok(());
     };
+    let mut lowerer = crate::lower::SettingsLowerer::new(cst_program)?;
     let children = settings
         .children
         .into_iter()
-        .map(|node| resolve_hir_node(node, cst_program, &constants, &mut expander))
+        .map(|node| resolve_hir_node(node, &constants, &mut expander, &mut lowerer))
         .collect::<OpyResult<Vec<_>>>()?;
     program.settings = Some(hir::Settings {
         span: settings.span,
@@ -332,9 +333,9 @@ pub(crate) fn resolve_hir_settings(
 
 fn resolve_hir_node(
     node: hir::SettingsNode,
-    cst_program: &cst::Program,
     constants: &HashMap<String, &hir::Expr>,
     expander: &mut crate::compiler::MacroExpander<'_>,
+    lowerer: &mut crate::lower::SettingsLowerer,
 ) -> OpyResult<hir::SettingsNode> {
     match node {
         hir::SettingsNode::Group {
@@ -345,7 +346,7 @@ fn resolve_hir_node(
             name,
             children: children
                 .into_iter()
-                .map(|child| resolve_hir_node(child, cst_program, constants, expander))
+                .map(|child| resolve_hir_node(child, constants, expander, lowerer))
                 .collect::<OpyResult<Vec<_>>>()?,
             span,
         }),
@@ -357,13 +358,13 @@ fn resolve_hir_node(
                 ));
             };
             let diag_span = hir_span_to_diag_span(span);
-            let expression = crate::lower::lower_settings_expression(
-                cst_program,
-                &value,
-                span.file,
-                Position::new(span.start.line, span.start.col),
-            )
-            .map_err(|error| settings_expression_error(diag_span, error.message))?;
+            let expression = lowerer
+                .lower(
+                    &value,
+                    span.file,
+                    Position::new(span.start.line, span.start.col),
+                )
+                .map_err(|error| settings_expression_error(diag_span, error.message))?;
             let expression = expander
                 .expand_expr(&expression, &HashMap::new(), None)
                 .map_err(|error| {

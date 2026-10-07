@@ -261,7 +261,7 @@ impl Parser<'_> {
     pub(super) fn consume_annotation_args(&mut self) -> Vec<AnnotationArg> {
         let start = self.pos;
         while self.peek_kind() != TokenKind::Newline && self.peek_kind() != TokenKind::Eof {
-            self.advance();
+            self.bump();
         }
         if self.pos == start {
             return Vec::new();

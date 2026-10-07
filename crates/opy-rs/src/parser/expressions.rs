@@ -11,15 +11,10 @@ impl Parser<'_> {
     ) -> Result<Expr, ()> {
         self.skip_expression_newlines();
         let then_value = self.parse_or()?;
-        let has_newline_before_conditional = self.tokens[..self.pos].iter().any(|token| {
-            token.kind == TokenKind::Newline
-                && token.span.file == then_value.span().file
-                && token.span.start.line > then_value.span().end.line
-        });
         if self.is_ident("if")
             && !self.inside_delimiter_group()
-            && has_newline_before_conditional
             && self.peek().span.start.line != then_value.span().end.line
+            && self.newline_after_line(then_value.span().file, then_value.span().end.line)
         {
             return Ok(then_value);
         }
@@ -31,7 +26,7 @@ impl Parser<'_> {
         }
 
         let conditional_start = self.pos;
-        self.advance();
+        self.bump();
         self.skip_expression_newlines();
         let condition = self.parse_or()?;
         self.skip_expression_newlines();
@@ -43,7 +38,7 @@ impl Parser<'_> {
             self.error_at_current("expected `else` in conditional expression".to_string());
             return Err(());
         }
-        self.advance();
+        self.bump();
         // Conditional expressions are right-associative, so a chained form
         // such as `a if c else b if d else e` groups at the else branch.
         let else_value = self.parse_expr_inner(true)?;
@@ -80,7 +75,7 @@ impl Parser<'_> {
             if !self.is_ident(operator) {
                 break;
             }
-            self.advance();
+            self.bump();
             self.skip_expression_newlines();
             let right = parse_next(self)?;
             left = binary(operator, left, right);
@@ -120,9 +115,9 @@ impl Parser<'_> {
                 _ if self.is_ident("not") && self.peek_at(1).text == "in" => "not in",
                 _ => break,
             };
-            self.advance();
+            self.bump();
             if op == "not in" {
-                self.advance();
+                self.bump();
             }
             self.skip_expression_newlines();
             let right = self.parse_additive()?;
@@ -155,7 +150,7 @@ impl Parser<'_> {
                 TokenKind::Minus => "-",
                 _ => break,
             };
-            self.advance();
+            self.bump();
             self.skip_expression_newlines();
             let right = self.parse_multiplicative()?;
             left = binary(op, left, right);
@@ -178,7 +173,7 @@ impl Parser<'_> {
                 TokenKind::Percent => "%",
                 _ => break,
             };
-            self.advance();
+            self.bump();
             self.skip_expression_newlines();
             let right = self.parse_unary()?;
             left = binary(op, left, right);
@@ -214,7 +209,7 @@ impl Parser<'_> {
         let base = self.parse_postfix()?;
         self.skip_expression_newlines();
         if self.peek_kind() == TokenKind::DoubleStar {
-            self.advance();
+            self.bump();
             self.skip_expression_newlines();
             let exponent = self.parse_unary()?;
             return Ok(binary("**", base, exponent));
@@ -263,10 +258,10 @@ impl Parser<'_> {
                     };
                 }
                 TokenKind::LBracket => {
-                    self.advance();
+                    self.bump();
                     let index = self.parse_expr()?;
                     if self.peek_kind() == TokenKind::Colon {
-                        self.advance();
+                        self.bump();
                         let maximum = self.parse_expr()?;
                         let end = self.expect(TokenKind::RBracket, "']'")?.span.end;
                         let Expr::Name { name, span } = &base else {
@@ -294,7 +289,7 @@ impl Parser<'_> {
                     };
                 }
                 TokenKind::Dot => {
-                    self.advance();
+                    self.bump();
                     let member_token = self.peek().clone();
                     let member = match self.peek_kind() {
                         TokenKind::Ident | TokenKind::Number => self.advance().text,
@@ -328,7 +323,7 @@ impl Parser<'_> {
         if self.peek_kind() != TokenKind::Comma {
             return Ok(false);
         }
-        self.advance();
+        self.bump();
         self.skip_newlines();
         if self.peek_kind() == closing && !allow_trailing_comma {
             // The reference keeps the empty segment after a trailing comma
@@ -487,7 +482,7 @@ impl Parser<'_> {
                 }
             }
             TokenKind::LParen => {
-                self.advance();
+                self.bump();
                 self.skip_expression_newlines();
                 let mut expr = self.parse_expr()?;
                 self.skip_expression_newlines();
@@ -513,12 +508,12 @@ impl Parser<'_> {
                 }
                 let first = self.parse_expr()?;
                 if self.is_ident("for") {
-                    self.advance();
+                    self.bump();
                     let variable_token =
                         self.expect(TokenKind::Ident, "a comprehension variable")?;
                     self.skip_newlines();
                     let index = if self.peek_kind() == TokenKind::Comma {
-                        self.advance();
+                        self.bump();
                         self.skip_newlines();
                         let index = self.expect(TokenKind::Ident, "a comprehension index")?;
                         Some((index.text, index.span))
@@ -530,12 +525,12 @@ impl Parser<'_> {
                         self.error_at_current("expected `in` in list comprehension".to_string());
                         return Err(());
                     }
-                    self.advance();
+                    self.bump();
                     self.skip_newlines();
                     let iterable = self.parse_or()?;
                     self.skip_newlines();
                     let condition = if self.is_ident("if") {
-                        self.advance();
+                        self.bump();
                         self.skip_newlines();
                         Some(Box::new(self.parse_or()?))
                     } else {
@@ -610,19 +605,10 @@ impl Parser<'_> {
     /// Return whether the current parser position is inside `()`, `[]`, or
     /// `{}`. The token stream retains newlines, so this keeps multiline
     /// implicit concatenation scoped to syntactic grouping without adding
-    /// parser state to every delimiter path.
+    /// parser state to every delimiter path. Backed by the precomputed
+    /// `delimiter_depth` prefix table; reads are O(1).
     pub(super) fn inside_delimiter_group(&self) -> bool {
-        let mut depth = 0usize;
-        for token in &self.tokens[..self.pos] {
-            match token.kind {
-                TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace => depth += 1,
-                TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace => {
-                    depth = depth.saturating_sub(1)
-                }
-                _ => {}
-            }
-        }
-        depth != 0
+        self.delimiter_depth[self.pos] != 0
     }
 
     pub(super) fn parse_dict(&mut self) -> Result<Expr, ()> {
@@ -657,7 +643,7 @@ impl Parser<'_> {
             let param = self.expect(TokenKind::Ident, "a lambda parameter")?;
             params.push((param.text, param.span));
             if self.peek_kind() == TokenKind::Comma {
-                self.advance();
+                self.bump();
             } else {
                 break;
             }

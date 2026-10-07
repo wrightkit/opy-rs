@@ -7,6 +7,8 @@
 //! reported. The returned [`ParseOutput`] carries either a complete program
 //! or the collected errors (never both).
 
+use std::collections::HashMap;
+
 use crate::cst::{
     Annotation, AnnotationArg, CallArg, Decl, DictEntry, Event, Expr, IfBranch, Program, Rule,
     RuleEntry, Stmt, SwitchArm, TopLevel,
@@ -52,6 +54,14 @@ mod statements;
 
 struct Parser<'a> {
     tokens: &'a [Token],
+    /// Unmatched `(`/`[`/`{` count within `tokens[..i]`, so
+    /// `inside_delimiter_group` answers in O(1) instead of rescanning the
+    /// consumed prefix for every expression level.
+    delimiter_depth: Vec<u32>,
+    /// Per-file `(token index, running max start line)` for every `Newline`
+    /// token, so conditional-expression parsing can ask whether a consumed
+    /// newline starts after a given line without rescanning the prefix.
+    newline_lines: HashMap<u32, Vec<(usize, u32)>>,
     pos: usize,
     errors: Vec<OpyError>,
     allow_macro_redeclaration: bool,
@@ -67,8 +77,33 @@ struct Parser<'a> {
 
 impl<'a> Parser<'a> {
     fn new(tokens: &'a [Token], allow_macro_redeclaration: bool) -> Self {
+        let mut delimiter_depth = Vec::with_capacity(tokens.len() + 1);
+        delimiter_depth.push(0);
+        let mut depth = 0u32;
+        let mut newline_lines: HashMap<u32, Vec<(usize, u32)>> = HashMap::new();
+        for (index, token) in tokens.iter().enumerate() {
+            match token.kind {
+                TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace => depth += 1,
+                TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace => {
+                    depth = depth.saturating_sub(1)
+                }
+                _ => {}
+            }
+            delimiter_depth.push(depth);
+            if token.kind == TokenKind::Newline {
+                let entries = newline_lines.entry(token.span.file).or_default();
+                let line = token
+                    .span
+                    .start
+                    .line
+                    .max(entries.last().map_or(0, |&(_, max)| max));
+                entries.push((index, line));
+            }
+        }
         Self {
             tokens,
+            delimiter_depth,
+            newline_lines,
             pos: 0,
             errors: Vec::new(),
             allow_macro_redeclaration,
@@ -158,9 +193,28 @@ impl Parser<'_> {
         token
     }
 
+    /// Consume the current token without cloning it, for sites that move the
+    /// cursor rather than inspect the token.
+    fn bump(&mut self) {
+        if self.pos < self.tokens.len() - 1 {
+            self.pos += 1;
+        }
+    }
+
+    /// Whether the consumed prefix holds a `Newline` token in `file` whose
+    /// start line exceeds `line` — the same answer as scanning
+    /// `tokens[..self.pos]`, in O(log) via the per-file prefix maxima.
+    fn newline_after_line(&self, file: u32, line: u32) -> bool {
+        let Some(entries) = self.newline_lines.get(&file) else {
+            return false;
+        };
+        let consumed = entries.partition_point(|&(index, _)| index < self.pos);
+        consumed > 0 && entries[consumed - 1].1 > line
+    }
+
     fn skip_newlines(&mut self) {
         while self.peek_kind() == TokenKind::Newline {
-            self.advance();
+            self.bump();
         }
     }
 
@@ -361,7 +415,7 @@ impl Parser<'_> {
                 TokenKind::RBrace => depth = depth.saturating_sub(1),
                 _ => {}
             }
-            self.advance();
+            self.bump();
         }
     }
 
@@ -456,7 +510,7 @@ impl Parser<'_> {
     /// Skip to the end of the current line (error recovery).
     fn recover_line(&mut self) {
         while self.peek_kind() != TokenKind::Newline && self.peek_kind() != TokenKind::Eof {
-            self.advance();
+            self.bump();
         }
     }
 

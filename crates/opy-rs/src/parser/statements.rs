@@ -88,7 +88,7 @@ impl Parser<'_> {
     pub(super) fn parse_goto(&mut self) -> Result<Stmt, ()> {
         let start = self.advance();
         if self.is_ident("loc") {
-            self.advance();
+            self.bump();
             self.expect(TokenKind::Plus, "'+' after 'goto loc'")?;
             let offset = self.parse_expr()?;
             self.expect_statement_end("the goto target")?;
@@ -133,7 +133,7 @@ impl Parser<'_> {
             if let Ok(target) = self.parse_postfix()
                 && self.peek_kind() == TokenKind::Assign
             {
-                self.advance();
+                self.bump();
                 let value = self.parse_expr()?;
                 let end = self.expect(TokenKind::RParen, "')'")?.span.end;
                 return Ok(Stmt::Assign {
@@ -149,7 +149,7 @@ impl Parser<'_> {
         let expr = self.parse_expr()?;
         match self.peek_kind() {
             TokenKind::Assign => {
-                self.advance();
+                self.bump();
                 let value = self.parse_expr()?;
                 let end = value.span().end;
                 Ok(Stmt::Assign {
@@ -174,7 +174,7 @@ impl Parser<'_> {
                     _ => unreachable!(),
                 }
                 .to_string();
-                self.advance();
+                self.bump();
                 self.finish_augmented_assignment(expr, start, op)
             }
             TokenKind::Ident
@@ -182,7 +182,7 @@ impl Parser<'_> {
                     && self.peek_at(1).kind == TokenKind::Assign =>
             {
                 let op = self.advance().text;
-                self.advance();
+                self.bump();
                 self.finish_augmented_assignment(expr, start, op)
             }
             TokenKind::Increment | TokenKind::Decrement => {
@@ -295,7 +295,7 @@ impl Parser<'_> {
             } else if self.is_ident("else") {
                 let branch_start = self.advance();
                 if self.is_ident("if") {
-                    self.advance();
+                    self.bump();
                     let condition = self.parse_expr()?;
                     let body = self.expect_colon_body(
                         branch_start.span.start.col,
@@ -358,7 +358,7 @@ impl Parser<'_> {
             self.error_at_current("expected `in` in the for statement".to_string());
             return Err(());
         }
-        self.advance();
+        self.bump();
         let iterable = self.parse_expr()?;
         let body_indent =
             self.expect_block_indent(start.span.start.col, "':' after the for header")?;
@@ -392,7 +392,7 @@ impl Parser<'_> {
             self.error_at_current("expected `while` after the do block".to_string());
             return Err(());
         }
-        self.advance();
+        self.bump();
         let condition = self.parse_expr()?;
         if self.peek_kind() != TokenKind::Newline && self.peek_kind() != TokenKind::Eof {
             self.error_at_current("expected the end of the do-while condition".to_string());
