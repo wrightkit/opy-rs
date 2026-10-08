@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2](https://github.com/wrightkit/opy-rs/compare/opy-cli-v0.3.1...opy-cli-v0.3.2) - 2026-10-08
+
+### Added
+
+- *(lookup)* serve the @Event vocabulary through name lookup ([#482](https://github.com/wrightkit/opy-rs/pull/482))
+
 ## [0.3.0](https://github.com/wrightkit/opy-rs/compare/opy-cli-v0.2.0...opy-cli-v0.3.0) - 2026-10-06
 
 ### Added

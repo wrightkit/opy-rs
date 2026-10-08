@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2](https://github.com/wrightkit/opy-rs/compare/opy-provider-v0.3.1...opy-provider-v0.3.2) - 2026-10-08
+
+### Added
+
+- *(lookup)* serve the @Event vocabulary through name lookup ([#482](https://github.com/wrightkit/opy-rs/pull/482))
+
+### Fixed
+
+- *(provider)* resolve rename positions past the #!mainFile entry stub ([#478](https://github.com/wrightkit/opy-rs/pull/478))
+
+### Other
+
+- *(provider)* deduplicate and parallelize rename entry scan ([#483](https://github.com/wrightkit/opy-rs/pull/483))
+- *(provider)* check each effective entry once in document sets ([#480](https://github.com/wrightkit/opy-rs/pull/480))
+
 ## [0.3.1](https://github.com/wrightkit/opy-rs/compare/opy-provider-v0.3.0...opy-provider-v0.3.1) - 2026-10-07
 
 ### Other
