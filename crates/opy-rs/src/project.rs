@@ -14,9 +14,15 @@ pub struct FilesystemProject {
 impl FilesystemProject {
     /// Load an OPY project from a file entry or a project directory.
     pub fn load(path: &Path) -> Result<Self, FilesystemProjectError> {
-        let canonical_target = path
-            .canonicalize()
-            .map_err(|error| FilesystemProjectError::entry_not_found(path.to_path_buf(), error))?;
+        let canonical_target = path.canonicalize().map_err(|error| {
+            if error.kind() == io::ErrorKind::NotFound {
+                FilesystemProjectError::entry_not_found(path.to_path_buf(), error)
+            } else {
+                // Permission, loop, or name-resolution failures are not an
+                // absent entry (#484).
+                FilesystemProjectError::entry_unreadable(path.to_path_buf(), error)
+            }
+        })?;
         let selected_path = if canonical_target.is_dir() {
             default_entry(&canonical_target)?
         } else {
@@ -58,10 +64,21 @@ impl FilesystemProject {
 
 fn default_entry(directory: &Path) -> Result<PathBuf, FilesystemProjectError> {
     let candidates = [directory.join("main.opy"), directory.join("src/main.opy")];
-    candidates
-        .into_iter()
-        .find(|candidate| candidate.is_file())
-        .ok_or_else(|| FilesystemProjectError::default_entry_not_found(directory.to_path_buf()))
+    for candidate in candidates {
+        match fs::metadata(&candidate) {
+            Ok(metadata) if metadata.is_file() => return Ok(candidate),
+            // Present but not a regular file, or genuinely absent — keep
+            // looking; only a real I/O failure aborts classification (#484).
+            Ok(_) => {}
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(FilesystemProjectError::entry_unreadable(candidate, error));
+            }
+        }
+    }
+    Err(FilesystemProjectError::default_entry_not_found(
+        directory.to_path_buf(),
+    ))
 }
 
 /// Failure while loading a filesystem-backed OPY project entry.
@@ -86,11 +103,14 @@ impl FilesystemProjectError {
     }
 
     /// Whether the entry could not be resolved to a canonical filesystem path.
+    /// An `EntryNotFound` carrying a non-`NotFound` I/O cause — possible
+    /// through the public fields — reports the real category (#484).
     pub fn is_entry_not_found(&self) -> bool {
-        matches!(
-            self,
-            Self::EntryNotFound { .. } | Self::DefaultEntryNotFound { .. }
-        )
+        match self {
+            Self::EntryNotFound { source, .. } => source.kind() == io::ErrorKind::NotFound,
+            Self::DefaultEntryNotFound { .. } => true,
+            Self::EntryUnreadable { .. } => false,
+        }
     }
 }
 
@@ -125,7 +145,9 @@ impl std::error::Error for FilesystemProjectError {
 
 #[cfg(test)]
 mod tests {
-    use super::FilesystemProject;
+    use super::{FilesystemProject, FilesystemProjectError};
+    use std::io;
+    use std::path::{Path, PathBuf};
 
     #[test]
     fn directory_targets_use_the_owner_default_entry() {
@@ -135,5 +157,81 @@ mod tests {
         assert!(project.main_path().ends_with("main.opy"));
         assert_eq!(project.root(), directory.canonicalize().unwrap());
         assert!(project.source().contains("rule \"main\""));
+    }
+
+    fn scratch(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("opy-project-io-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("scratch dir");
+        dir
+    }
+
+    #[test]
+    fn absent_file_entry_is_entry_not_found() {
+        let missing = scratch("missing").join("no-such.opy");
+        let error = FilesystemProject::load(&missing).expect_err("absent entry fails");
+        assert!(error.is_entry_not_found());
+        assert!(matches!(
+            error,
+            FilesystemProjectError::EntryNotFound { .. }
+        ));
+    }
+
+    /// A symlink cycle fails canonicalization with `Filesystem loop`, not
+    /// `NotFound`: the failure must keep its real category instead of
+    /// masquerading as an absent entry (#484).
+    #[cfg(unix)]
+    #[test]
+    fn unresolvable_entry_is_not_classified_as_missing() {
+        let dir = scratch("loop");
+        let entry = dir.join("main.opy");
+        std::os::unix::fs::symlink(Path::new("loop.opy"), dir.join("loop.opy")).unwrap();
+        std::os::unix::fs::symlink(Path::new("main.opy"), &entry).unwrap();
+        let error = FilesystemProject::load(&entry).expect_err("symlink cycle fails");
+        assert!(!error.is_entry_not_found());
+        assert!(matches!(
+            error,
+            FilesystemProjectError::EntryUnreadable { .. }
+        ));
+        let source = std::error::Error::source(&error).expect("io cause preserved");
+        let io_error = source.downcast_ref::<io::Error>().expect("typed io::Error");
+        assert_ne!(io_error.kind(), io::ErrorKind::NotFound);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// `main.opy` present but unresolvable: the default-entry search must
+    /// report the I/O failure rather than `DefaultEntryNotFound` (#484).
+    #[cfg(unix)]
+    #[test]
+    fn unresolvable_default_entry_is_not_classified_as_missing() {
+        let dir = scratch("default-loop");
+        std::os::unix::fs::symlink(Path::new("main.opy"), dir.join("main.opy")).unwrap();
+        let error = FilesystemProject::load(&dir).expect_err("default entry cycle fails");
+        assert!(!error.is_entry_not_found());
+        assert!(matches!(
+            error,
+            FilesystemProjectError::EntryUnreadable { .. }
+        ));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A file that resolves but cannot be read stays `EntryUnreadable`.
+    #[cfg(unix)]
+    #[test]
+    fn unreadable_entry_reports_unreadable() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = scratch("denied");
+        let entry = dir.join("main.opy");
+        std::fs::write(&entry, "rule \"x\": @Event global\n").unwrap();
+        std::fs::set_permissions(&entry, std::fs::Permissions::from_mode(0o000)).unwrap();
+        let result = FilesystemProject::load(&entry);
+        std::fs::set_permissions(&entry, std::fs::Permissions::from_mode(0o644)).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+        let error = result.expect_err("unreadable entry fails");
+        assert!(!error.is_entry_not_found());
+        assert!(matches!(
+            error,
+            FilesystemProjectError::EntryUnreadable { .. }
+        ));
     }
 }

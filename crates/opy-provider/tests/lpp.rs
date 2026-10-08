@@ -1219,6 +1219,10 @@ fn entry_errors_follow_lpp_11_project_loading_contract() {
         missing["error"]["data"]["lpp"]["details"]["entryUri"],
         "file:///project/missing.opy"
     );
+    assert_eq!(
+        missing["error"]["data"]["lpp"]["details"]["reason"],
+        "entryNotFound"
+    );
     let unsupported = session.request(json!({
         "jsonrpc": "2.0",
         "id": 3,
@@ -1232,6 +1236,47 @@ fn entry_errors_follow_lpp_11_project_loading_contract() {
         }
     }));
     assert_eq!(unsupported["error"]["data"]["lpp"]["kind"], "invalidEntry");
+    session.shutdown();
+}
+
+/// An entry that fails to resolve for a reason other than absence maps to
+/// `entryUnreadable`, not `entryNotFound` (opy-rs#484).
+#[cfg(unix)]
+#[test]
+fn unresolvable_entry_reports_unreadable_reason() {
+    let dir = std::env::temp_dir().join(format!("opy-lpp-io-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    // A self-referential symlink fails canonicalization with ELOOP.
+    let entry = dir.join("main.opy");
+    std::os::unix::fs::symlink(std::path::Path::new("main.opy"), &entry).unwrap();
+    // file_uri() canonicalizes, which is exactly the operation under test
+    // here, so the URI is assembled by hand.
+    let uri = format!("file://{}", entry.display());
+
+    let mut session = Session::spawn();
+    session.initialize();
+    let response = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "lpp/check",
+        "params": {
+            "entry": {
+                "uri": uri,
+                "languageId": "opy",
+                "version": 7
+            }
+        }
+    }));
+    std::fs::remove_dir_all(&dir).unwrap();
+    assert_eq!(
+        response["error"]["data"]["lpp"]["kind"],
+        "projectLoadFailed"
+    );
+    assert_eq!(
+        response["error"]["data"]["lpp"]["details"]["reason"],
+        "entryUnreadable"
+    );
     session.shutdown();
 }
 

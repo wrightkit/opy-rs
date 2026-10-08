@@ -1106,14 +1106,23 @@ fn validate_target_kind(
     entry_uri: &str,
     target_kind: ProjectTargetKind,
 ) -> Result<(), HandlerError> {
-    let metadata = fs::metadata(path).map_err(|_| {
-        let (reason, message) = match target_kind {
-            ProjectTargetKind::File => ("entryNotFound", "project entry could not be loaded"),
-            ProjectTargetKind::Directory => {
-                ("targetNotFound", "project target could not be loaded")
-            }
+    let metadata = fs::metadata(path).map_err(|error| {
+        let reason = match (error.kind() == std::io::ErrorKind::NotFound, target_kind) {
+            (true, ProjectTargetKind::File) => "entryNotFound",
+            (true, ProjectTargetKind::Directory) => "targetNotFound",
+            (false, ProjectTargetKind::File) => "entryUnreadable",
+            (false, ProjectTargetKind::Directory) => "targetUnreadable",
         };
-        HandlerError::project_load_failed(entry_uri, reason, Some(entry_uri), message)
+        let target_name = match target_kind {
+            ProjectTargetKind::File => "entry",
+            ProjectTargetKind::Directory => "target",
+        };
+        HandlerError::project_load_failed(
+            entry_uri,
+            reason,
+            Some(entry_uri),
+            format!("project {target_name} could not be loaded"),
+        )
     })?;
     let matches_kind = match target_kind {
         ProjectTargetKind::File => metadata.is_file(),
