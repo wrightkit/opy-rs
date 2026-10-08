@@ -216,10 +216,14 @@ mod tests {
     }
 
     /// A file that resolves but cannot be read stays `EntryUnreadable`.
+    /// Skipped under root, which bypasses permission checks.
     #[cfg(unix)]
     #[test]
     fn unreadable_entry_reports_unreadable() {
         use std::os::unix::fs::PermissionsExt;
+        if unsafe { libc::geteuid() } == 0 {
+            return;
+        }
         let dir = scratch("denied");
         let entry = dir.join("main.opy");
         std::fs::write(&entry, "rule \"x\": @Event global\n").unwrap();
@@ -233,5 +237,22 @@ mod tests {
             error,
             FilesystemProjectError::EntryUnreadable { .. }
         ));
+    }
+
+    /// A path inside a regular file fails canonicalization with `ENOTDIR`
+    /// on every platform — the deterministic non-`NotFound` cause.
+    #[test]
+    fn entry_inside_a_file_is_not_classified_as_missing() {
+        let dir = scratch("notdir");
+        let file = dir.join("main.opy");
+        std::fs::write(&file, "rule \"x\": @Event global\n").unwrap();
+        let entry = file.join("child.opy");
+        let error = FilesystemProject::load(&entry).expect_err("ENOTDIR fails");
+        assert!(!error.is_entry_not_found());
+        assert!(matches!(
+            error,
+            FilesystemProjectError::EntryUnreadable { .. }
+        ));
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }
