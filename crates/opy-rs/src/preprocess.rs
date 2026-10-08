@@ -134,6 +134,30 @@ pub fn main_file_directive(text: &str) -> Option<String> {
     first_main_file_directive(text).map(|(value, _)| value)
 }
 
+/// The `#!include` targets declared in `text`, in source order — the same
+/// directive spellings (`"..."` or `'...'`) the preprocessor honors. Callers
+/// mapping a document set's include graph (for example a provider ordering
+/// entry checks before member fallbacks) can use this without reimplementing
+/// the directive syntax. A text that fails to lex contributes no targets.
+pub fn include_directives(text: &str) -> Vec<String> {
+    let Ok(tokens) = lex(LexInput { file_id: 0, text }) else {
+        return Vec::new();
+    };
+    tokens
+        .iter()
+        .filter(|token| token.kind == TokenKind::Directive)
+        .filter_map(|token| {
+            let text = token.text.trim();
+            let (name, rest) = text
+                .split_once(char::is_whitespace)
+                .map_or((text, ""), |pair| pair);
+            (name == "include")
+                .then(|| directives::strip_quoted(rest.trim()).map(str::to_string))
+                .flatten()
+        })
+        .collect()
+}
+
 /// Preprocess the main source text with its include root.
 pub fn preprocess(
     main_text: &str,

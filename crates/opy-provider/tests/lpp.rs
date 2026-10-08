@@ -577,18 +577,12 @@ fn document_check_deduplicates_documents_sharing_one_effective_entry() {
         .into_iter()
         .map(|member| (member, file_uri(root.join(member).to_str().expect("utf8"))))
         .collect();
-    let document_map = |inject: bool| {
+    let document_map = |members: &[&str], mutate: &dyn Fn(&str, &mut String)| {
         let mut documents = serde_json::Map::new();
-        for (member, uri) in &uris {
+        for member in members {
+            let uri = &uris[*member];
             let mut text = std::fs::read_to_string(root.join(member)).expect("fixture text");
-            if inject && *member == "env/member.opy" {
-                text.push_str("\nrule \"broken\n");
-            }
-            if inject && *member == "stray.opy" {
-                // A redirect-only document's own text is not part of the
-                // entry closure: a syntax break here is invisible.
-                text.push_str("\nrule \"stray-broken\n");
-            }
+            mutate(member, &mut text);
             documents.insert(
                 uri.clone(),
                 json!({
@@ -628,7 +622,8 @@ fn document_check_deduplicates_documents_sharing_one_effective_entry() {
     // member.opy in context — a standalone parse would have reported
     // `unknown action 'worker'` — so an empty caller result proves it was not
     // re-checked out of context.
-    let clean = check(&mut session, 2, document_map(false));
+    let all = ["main.opy", "caller.opy", "stray.opy", "env/member.opy"];
+    let clean = check(&mut session, 2, document_map(&all, &|_, _| {}));
     assert_eq!(clean.len(), 4);
     assert!(clean.iter().all(|document| document["version"] == 3));
     for document in &clean {
@@ -640,10 +635,55 @@ fn document_check_deduplicates_documents_sharing_one_effective_entry() {
         );
     }
 
-    // member's injected error aborts preprocessing before caller.opy is
-    // registered, so caller falls back to its standalone check and reports
-    // `unknown-action`. stray.opy redirects to the entry but is never parsed.
-    let broken = check(&mut session, 3, document_map(true));
+    // Ordering must not depend on paths sorting: with member's redirect
+    // removed, all three supplied documents are self entries and caller/member
+    // sort before their includer. main.opy's parse still covers them — none
+    // gets a standalone parse that would flag `worker()`.
+    let unordered = check(
+        &mut session,
+        3,
+        document_map(
+            &["main.opy", "caller.opy", "env/member.opy"],
+            &|member, text| {
+                if member == "env/member.opy" {
+                    *text = text.lines().skip(1).collect::<Vec<_>>().join("\n");
+                }
+            },
+        ),
+    );
+    assert_eq!(unordered.len(), 3);
+    for document in &unordered {
+        assert_eq!(
+            document["diagnostics"],
+            json!([]),
+            "{} reports no diagnostics",
+            document["uri"]
+        );
+    }
+
+    // A failed project check does not establish coverage: caller is
+    // registered (included before the failing member) but never analyzed, so
+    // it keeps its standalone fallback. stray redirects but is never parsed,
+    // so its own text contributes nothing.
+    let broken = check(
+        &mut session,
+        4,
+        document_map(&all, &|member, text| match member {
+            "main.opy" => {
+                *text = text.replacen(
+                    "#!include \"env/member.opy\"\n#!include \"caller.opy\"",
+                    "#!include \"caller.opy\"\n#!include \"env/member.opy\"",
+                    1,
+                );
+            }
+            "caller.opy" => {
+                text.push_str("\nrule \"bad caller\":\n    definitelyMissingAction()\n")
+            }
+            "env/member.opy" => text.push_str("\nrule \"broken\n"),
+            "stray.opy" => text.push_str("\nrule \"stray-broken\n"),
+            _ => {}
+        }),
+    );
     assert_eq!(broken.len(), 4);
     let member = find(&broken, "env/member.opy");
     assert!(
