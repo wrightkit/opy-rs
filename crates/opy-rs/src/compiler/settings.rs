@@ -3,11 +3,13 @@ use workshop_rs::source::{Position as WorkshopPosition, Span as WorkshopSpan};
 
 /// Convert resolved HIR settings into the canonical Workshop settings
 /// carrier exactly as lowering does: constant expansion, then `#!extension`
-/// merging. Shared by lowering and by `check`'s emission-acceptance pass so
-/// `check` and `compile` see the same settings tree (#411).
+/// merging, then verbatim pass-through of keys outside the settings catalog.
+/// Shared by lowering and by `check`'s emission-acceptance pass so `check`
+/// and `compile` see the same settings tree (#411). The second value lists
+/// the members passed through verbatim.
 pub(crate) fn workshop_settings(
     hir: &crate::hir::Program,
-) -> Result<Option<workshop_rs::settings::Settings>, IntegrationError> {
+) -> Result<(Option<workshop_rs::settings::Settings>, Vec<VerbatimMember>), IntegrationError> {
     let settings_constants: HashMap<String, &Expr> = hir
         .declarations
         .iter()
@@ -16,12 +18,107 @@ pub(crate) fn workshop_settings(
             _ => None,
         })
         .collect();
-    merge_extensions(
+    let mut settings = merge_extensions(
         hir.settings
             .clone()
             .map(|settings| expand_settings_constants(settings, &settings_constants)),
         &hir.preprocessing.directives,
-    )
+    )?;
+    let verbatim = settings
+        .as_mut()
+        .map(pass_through_unknown_members)
+        .unwrap_or_default();
+    Ok((settings, verbatim))
+}
+
+/// A settings member outside the catalog, emitted as `key: value`.
+pub(crate) struct VerbatimMember {
+    pub(crate) name: String,
+    pub(crate) span: Option<WorkshopSpan>,
+}
+
+/// The pinned OverPy writes a `main`, `lobby`, mode, or hero member whose key
+/// it cannot translate as `key: value` with the value as written, instead of
+/// rejecting it; projects rely on this for keys the catalog lacks, often
+/// rewriting them in a post-compile hook. Replace each such scalar member
+/// with a verbatim node.
+fn pass_through_unknown_members(
+    settings: &mut workshop_rs::settings::Settings,
+) -> Vec<VerbatimMember> {
+    use workshop_rs::settings::{PathPart, SettingsNode};
+
+    let mut verbatim = Vec::new();
+    for group in &mut settings.children {
+        let SettingsNode::Group { name, children, .. } = group else {
+            continue;
+        };
+        match name.as_str() {
+            "main" | "lobby" => {
+                pass_through_members(children, &[PathPart::Part(name)], &mut verbatim);
+            }
+            "gamemodes" => {
+                for mode in children {
+                    if let SettingsNode::Group { name, children, .. } = mode {
+                        let path = [PathPart::Part("gamemodes"), PathPart::Part(name)];
+                        pass_through_members(children, &path, &mut verbatim);
+                    }
+                }
+            }
+            "heroes" => {
+                for team in children {
+                    let SettingsNode::Group { children, .. } = team else {
+                        continue;
+                    };
+                    let team_path = [PathPart::Part("heroes"), PathPart::Team];
+                    pass_through_members(children, &team_path, &mut verbatim);
+                    for hero in children {
+                        if let SettingsNode::Group { children, .. } = hero {
+                            let path = [PathPart::Part("heroes"), PathPart::Team, PathPart::Hero];
+                            pass_through_members(children, &path, &mut verbatim);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    verbatim
+}
+
+fn pass_through_members(
+    members: &mut [workshop_rs::settings::SettingsNode],
+    path: &[workshop_rs::settings::PathPart<'_>],
+    verbatim: &mut Vec<VerbatimMember>,
+) {
+    use workshop_rs::settings::{PathPart, SettingsNode};
+
+    for member in members {
+        let value = match member {
+            SettingsNode::Number { value, .. } => {
+                workshop_rs::format::format_setting_number(*value)
+            }
+            SettingsNode::Bool { value, .. } => value.to_string(),
+            SettingsNode::String { value, .. } => value.clone(),
+            _ => continue,
+        };
+        let name = member.name().to_string();
+        // A mode's `enabled` flag is consumed by the mode header.
+        if name == "enabled" && matches!(member, SettingsNode::Bool { .. }) {
+            continue;
+        }
+        let mut full = path.to_vec();
+        full.push(PathPart::Part(&name));
+        if workshop_rs::settings::definition(&full).is_some() {
+            continue;
+        }
+        let span = member.span();
+        *member = SettingsNode::Raw {
+            name: name.clone(),
+            value,
+            span,
+        };
+        verbatim.push(VerbatimMember { name, span });
+    }
 }
 
 pub(super) fn merge_extensions(

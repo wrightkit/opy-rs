@@ -748,14 +748,22 @@ fn guessed_canonical_id_resolves_and_suggests_opy_spelling() {
 
 #[test]
 fn unknown_settings_key_names_sibling_keys_in_message() {
-    let diagnostic = first_error(concat!(
-        "settings {\n",
-        "    \"main\": {\"description\": \"t\"},\n",
-        "    \"gamemodes\": {\"ffa\": {\"scoreToWinn\": 5}}\n",
-        "}\n",
-        "rule \"a\":\n    @Event global\n    wait(1)\n",
-    ));
-    assert_eq!(diagnostic.code, "workshop-emission");
+    let diagnostic = check(
+        concat!(
+            "settings {\n",
+            "    \"main\": {\"description\": \"t\"},\n",
+            "    \"gamemodes\": {\"ffa\": {\"scoreToWinn\": 5}}\n",
+            "}\n",
+            "rule \"a\":\n    @Event global\n    wait(1)\n",
+        ),
+        "main.opy",
+        Path::new(""),
+    )
+    .diagnostics
+    .into_iter()
+    .find(|diagnostic| diagnostic.code == "settings-verbatim")
+    .expect("the unknown key produces a verbatim settings warning");
+    assert_eq!(diagnostic.severity, DiagnosticSeverity::Warning);
     assert!(
         diagnostic.message.contains("scoreToWin"),
         "settings candidates must include scoreToWin: {:?}",

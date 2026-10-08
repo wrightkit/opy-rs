@@ -206,18 +206,24 @@ pub fn check_with_overlay(
             // emission table cannot emit, so `check` never accepts a settings
             // key that `compile` would reject (#411).
             match crate::compiler::settings::workshop_settings(&hir) {
-                Ok(Some(settings)) => diagnostics.extend(
-                    workshop_rs::settings::check_emission_diagnostics(&settings)
-                        .into_iter()
-                        .map(|diagnostic| {
-                            Diagnostic::from_settings_diagnostic(
-                                diagnostic,
-                                hir.settings.as_ref(),
-                                &files,
-                            )
-                        }),
-                ),
-                Ok(None) => {}
+                Ok((settings, verbatim)) => {
+                    diagnostics.extend(verbatim.into_iter().map(|member| {
+                        Diagnostic::from_verbatim_setting(member, hir.settings.as_ref(), &files)
+                    }));
+                    if let Some(settings) = settings {
+                        diagnostics.extend(
+                            workshop_rs::settings::check_emission_diagnostics(&settings)
+                                .into_iter()
+                                .map(|diagnostic| {
+                                    Diagnostic::from_settings_diagnostic(
+                                        diagnostic,
+                                        hir.settings.as_ref(),
+                                        &files,
+                                    )
+                                }),
+                        );
+                    }
+                }
                 Err(error) => diagnostics.push(Diagnostic::from_integration_error(error, &files)),
             }
             if diagnostics
@@ -306,6 +312,34 @@ impl Diagnostic {
             severity: DiagnosticSeverity::Error,
             code: "workshop-emission".to_string(),
             message: crate::matcher::did_you_mean(error.to_string(), &candidates),
+            span: span.and_then(|span| resolve_record_span(span, files)),
+        }
+    }
+
+    /// A settings key outside the catalog that compiles to `key: value` as
+    /// written. It is accepted like upstream, but usually a misspelling.
+    fn from_verbatim_setting(
+        member: crate::compiler::settings::VerbatimMember,
+        hir_settings: Option<&crate::hir::types::Settings>,
+        files: &[FileRecord],
+    ) -> Diagnostic {
+        let anchor = workshop_rs::WorkshopError::malformed(String::new(), member.span);
+        let candidates = crate::matcher::settings_member_candidates(hir_settings, &anchor, None);
+        let message = format!(
+            "settings key '{}' is not in the Workshop settings catalog and is emitted verbatim",
+            member.name
+        );
+        let span = member.span.map(|span| {
+            Span::new(
+                span.file.index() as u32,
+                Position::new(span.start.line, span.start.col),
+                Position::new(span.end.line, span.end.col),
+            )
+        });
+        Diagnostic {
+            severity: DiagnosticSeverity::Warning,
+            code: "settings-verbatim".to_string(),
+            message: crate::matcher::did_you_mean(message, &candidates),
             span: span.and_then(|span| resolve_record_span(span, files)),
         }
     }
@@ -833,9 +867,9 @@ mod tests {
     }
 
     #[test]
-    fn settings_rejection_names_the_keys_valid_at_the_path() {
+    fn verbatim_setting_names_the_keys_valid_at_the_path() {
         // `notASetting` sits under `gamemodes.ffa`; nothing is near, so the
-        // message falls back to the bounded list of keys the path accepts
+        // warning falls back to the bounded list of keys the path accepts
         // (issue #469).
         let outcome = check_source(
             "settings {\n    \"gamemodes\": {\"ffa\": {\"notASetting\": true}}\n}\nrule \"a\":\n    @Event global\n    wait(1)\n",
@@ -843,8 +877,9 @@ mod tests {
         let diagnostic = outcome
             .diagnostics
             .iter()
-            .find(|d| d.code == "workshop-emission")
-            .expect("emission diagnostic");
+            .find(|d| d.code == "settings-verbatim")
+            .expect("verbatim settings diagnostic");
+        assert_eq!(diagnostic.severity, DiagnosticSeverity::Warning);
         assert!(
             diagnostic.message.contains("(did you mean "),
             "message: {}",
@@ -858,15 +893,16 @@ mod tests {
     }
 
     #[test]
-    fn settings_rejection_preserves_template_paths_and_percent_suffixes() {
+    fn verbatim_setting_preserves_template_paths_and_percent_suffixes() {
         let outcome = check_source(
             "settings {\n    \"main\": {\"description\": \"t\"},\n    \"gamemodes\": {},\n    \"heroes\": {\"team1\": {\"general\": {\"damageReceiveed%\": 50}}}\n}\nrule \"a\":\n    @Event global\n    wait(1)\n",
         );
         let diagnostic = outcome
             .diagnostics
             .iter()
-            .find(|d| d.code == "workshop-emission")
-            .expect("emission diagnostic");
+            .find(|d| d.code == "settings-verbatim")
+            .expect("verbatim settings diagnostic");
+        assert_eq!(diagnostic.severity, DiagnosticSeverity::Warning);
         assert!(
             diagnostic.message.contains("'damageReceived%'"),
             "message: {}",
