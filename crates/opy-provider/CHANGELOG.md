@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.3](https://github.com/wrightkit/opy-rs/compare/opy-provider-v0.3.2...opy-provider-v0.3.3) - 2026-10-08
+
+### Fixed
+
+- *(provider)* defer members reached through escaping include spellings ([#485](https://github.com/wrightkit/opy-rs/pull/485))
+
 ## [0.3.2](https://github.com/wrightkit/opy-rs/compare/opy-provider-v0.3.1...opy-provider-v0.3.2) - 2026-10-08
 
 ### Added
