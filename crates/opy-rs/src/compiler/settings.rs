@@ -37,11 +37,12 @@ pub(crate) struct VerbatimMember {
     pub(crate) span: Option<WorkshopSpan>,
 }
 
-/// The pinned OverPy writes a `main`, `lobby`, mode, or hero member whose key
-/// it cannot translate as `key: value` with the value as written, instead of
-/// rejecting it; projects rely on this for keys the catalog lacks, often
-/// rewriting them in a post-compile hook. Replace each such scalar member
-/// with a verbatim node.
+/// The pinned OverPy writes a `main`, `lobby`, mode, team `general`, or hero
+/// member whose key it cannot translate as `key: value` with the value as
+/// written, instead of rejecting it; projects rely on this for keys the
+/// catalog lacks, often rewriting them in a post-compile hook. Replace each
+/// such scalar member with a verbatim node, and lift each team's `general`
+/// members ahead of its hero groups as the pinned OverPy writes them.
 fn pass_through_unknown_members(
     settings: &mut workshop_rs::settings::Settings,
 ) -> Vec<VerbatimMember> {
@@ -69,8 +70,21 @@ fn pass_through_unknown_members(
                     let SettingsNode::Group { children, .. } = team else {
                         continue;
                     };
+                    // Any other team member is a hero name to upstream.
+                    let mut general = Vec::new();
+                    let mut rest = Vec::new();
+                    for child in std::mem::take(children) {
+                        match child {
+                            SettingsNode::Group { name, children, .. } if name == "general" => {
+                                general.extend(children);
+                            }
+                            child => rest.push(child),
+                        }
+                    }
                     let team_path = [PathPart::Part("heroes"), PathPart::Team];
-                    pass_through_members(children, &team_path, &mut verbatim);
+                    pass_through_members(&mut general, &team_path, &mut verbatim);
+                    general.extend(rest);
+                    *children = general;
                     for hero in children {
                         if let SettingsNode::Group { children, .. } = hero {
                             let path = [PathPart::Part("heroes"), PathPart::Team, PathPart::Hero];
@@ -98,12 +112,13 @@ fn pass_through_members(
                 workshop_rs::format::format_setting_number(*value)
             }
             SettingsNode::Bool { value, .. } => value.to_string(),
-            SettingsNode::String { value, .. } => value.clone(),
+            // `key: ` has no verbatim settings form.
+            SettingsNode::String { value, .. } if !value.is_empty() => value.clone(),
             _ => continue,
         };
         let name = member.name().to_string();
-        // A mode's `enabled` flag is consumed by the mode header.
-        if name == "enabled" && matches!(member, SettingsNode::Bool { .. }) {
+        // A mode's `enabled` is consumed by the mode header, never written.
+        if name == "enabled" && matches!(path, [PathPart::Part("gamemodes"), _]) {
             continue;
         }
         let mut full = path.to_vec();
@@ -228,11 +243,6 @@ fn expand_settings_node(
                 .into_iter()
                 .map(|child| expand_settings_node(child, constants))
                 .collect::<Vec<_>>();
-            let children = if matches!(name.as_str(), "team1" | "team2" | "allTeams") {
-                general_first(children)
-            } else {
-                children
-            };
             SettingsNode::Group {
                 name,
                 children,
@@ -260,25 +270,18 @@ fn settings_node_from_expr(
             .and_then(|expr| settings_node_from_expr(name, expr, constants, span)),
         Expr::Dict { entries, .. } => Some(SettingsNode::Group {
             name,
-            children: general_first(
-                entries
-                    .iter()
-                    .filter_map(|entry| {
-                        let Expr::String {
-                            value: child_name, ..
-                        } = entry.key.as_ref()
-                        else {
-                            return None;
-                        };
-                        settings_node_from_expr(
-                            child_name.clone(),
-                            &entry.value,
-                            constants,
-                            entry.span,
-                        )
-                    })
-                    .collect(),
-            ),
+            children: entries
+                .iter()
+                .filter_map(|entry| {
+                    let Expr::String {
+                        value: child_name, ..
+                    } = entry.key.as_ref()
+                    else {
+                        return None;
+                    };
+                    settings_node_from_expr(child_name.clone(), &entry.value, constants, entry.span)
+                })
+                .collect(),
             span,
         }),
         Expr::Number { value, .. } => Some(SettingsNode::Number {
@@ -453,22 +456,4 @@ fn convert_settings_span(span: HirSpan) -> WorkshopSpan {
         WorkshopPosition::new(span.start.line, span.start.col),
         WorkshopPosition::new(span.end.line, span.end.col),
     )
-}
-
-/// The hero-independent settings of a team come before its per-hero groups,
-/// as the pinned OverPy writes them.
-fn general_first(children: Vec<crate::hir::SettingsNode>) -> Vec<crate::hir::SettingsNode> {
-    use crate::hir::SettingsNode;
-    let mut general = Vec::new();
-    let mut rest = Vec::new();
-    for child in children {
-        match child {
-            SettingsNode::Group { name, children, .. } if name == "general" => {
-                general.extend(children);
-            }
-            child => rest.push(child),
-        }
-    }
-    general.extend(rest);
-    general
 }

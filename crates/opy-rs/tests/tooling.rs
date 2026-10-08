@@ -411,26 +411,29 @@ fn settings_emission_agreement_between_check_and_compile() {
         "{lines:?}"
     );
 
-    // A member with no verbatim form still fails both entry points under the
-    // same `workshop-emission` code.
-    let invalid = concat!(
-        "settings {\n",
-        "    \"main\": {\"description\": \"t\"},\n",
-        "    \"gamemodes\": {\"ffa\": {\"notASetting\": [\"x\"]}}\n",
-        "}\n",
-        "rule \"a\":\n    @Event global\n    wait(1)\n",
-    );
-    let outcome = check(invalid, "main.opy", Path::new(""));
-    assert!(outcome.model.is_none());
-    let diagnostic = outcome
-        .diagnostics
-        .iter()
-        .find(|diagnostic| diagnostic.severity == tooling::DiagnosticSeverity::Error)
-        .expect("unsupported settings key must fail check");
-    assert_eq!(diagnostic.code, "workshop-emission");
-    assert_eq!(diagnostic.span.as_ref().expect("span").path, "main.opy");
-    let compile_error = opy_rs::compile(invalid, "main.opy", Path::new("")).unwrap_err();
-    assert_eq!(compile_error.code, "workshop-emission");
+    // A member with no verbatim form, or a scalar directly under a team
+    // (upstream reads it as a hero name), still fails both entry points under
+    // the same `workshop-emission` code.
+    for member in [
+        "\"gamemodes\": {\"ffa\": {\"notASetting\": [\"x\"]}}",
+        "\"gamemodes\": {}, \"heroes\": {\"allTeams\": {\"notAHero\": 1}}",
+    ] {
+        let invalid = format!(
+            "settings {{\n    \"main\": {{\"description\": \"t\"}},\n    {member}\n}}\n\
+             rule \"a\":\n    @Event global\n    wait(1)\n"
+        );
+        let outcome = check(&invalid, "main.opy", Path::new(""));
+        assert!(outcome.model.is_none(), "{member}");
+        let diagnostic = outcome
+            .diagnostics
+            .iter()
+            .find(|diagnostic| diagnostic.severity == tooling::DiagnosticSeverity::Error)
+            .expect("unsupported settings key must fail check");
+        assert_eq!(diagnostic.code, "workshop-emission");
+        assert_eq!(diagnostic.span.as_ref().expect("span").path, "main.opy");
+        let compile_error = opy_rs::compile(&invalid, "main.opy", Path::new("")).unwrap_err();
+        assert_eq!(compile_error.code, "workshop-emission");
+    }
 
     // The inherited `gamemodes.general` key that motivated the issue passes
     // both entry points.
