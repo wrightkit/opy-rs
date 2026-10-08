@@ -4,7 +4,7 @@
 //! preprocessing, diagnostics, and compilation remain in `opy-rs`. Only the
 //! LPP envelope and source-oriented projections live here.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::{self, BufRead, BufWriter, Write};
 use std::path::{Path, PathBuf};
@@ -1165,6 +1165,26 @@ fn document_overlays(
         .collect()
 }
 
+/// The effective check entry for `document`: a first-line `#!mainFile`
+/// directive resolves to its target when the target exists on disk —
+/// documents redirecting to the same entry run the same project parse, so
+/// checking them individually would repeat that parse once per document.
+/// An unreadable or malformed redirect keeps the document as its own entry,
+/// preserving its own `main-file-*` refusal.
+fn effective_entry(document: &Document, path: &Path) -> PathBuf {
+    let Some(target) = opy_rs::preprocess::main_file_directive(&document.text) else {
+        return path.to_path_buf();
+    };
+    let candidate = path
+        .parent()
+        .map(|dir| dir.join(&target))
+        .unwrap_or_else(|| PathBuf::from(&target));
+    match std::fs::canonicalize(&candidate) {
+        Ok(canonical) if canonical.is_file() => canonical,
+        _ => path.to_path_buf(),
+    }
+}
+
 fn check_documents(documents: &BTreeMap<String, Document>) -> Result<Value, HandlerError> {
     let overlays = document_overlays(documents)?;
     let mut diagnostics_by_uri = documents
@@ -1172,18 +1192,78 @@ fn check_documents(documents: &BTreeMap<String, Document>) -> Result<Value, Hand
         .map(|uri| (uri.clone(), Vec::new()))
         .collect::<BTreeMap<String, Vec<Value>>>();
 
-    for (uri, document) in documents {
+    let mut groups: BTreeMap<PathBuf, Vec<&Document>> = BTreeMap::new();
+    for document in documents.values() {
         let path = document_path(document)?;
+        groups
+            .entry(effective_entry(document, &path))
+            .or_default()
+            .push(document);
+    }
+
+    // One project parse per effective entry. Two disciplines keep the shared
+    // parses faithful:
+    //
+    // - Coverage counts only a *completed* analysis: `CheckOutcome.files` on
+    //   a failed check is the registry reached before the failure, not a set
+    //   of analyzed documents, so only a clean outcome covers them.
+    // - Standalone fallbacks run after the includers, not in path order: a
+    //   member that sorts before its root would otherwise report
+    //   out-of-context errors the entry parse never produces.
+    let canonical =
+        |path: &Path| std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let supplied: BTreeSet<PathBuf> = documents
+        .values()
+        .filter_map(|document| document_path(document).ok())
+        .map(|path| canonical(&path))
+        .collect();
+    let mut included: BTreeSet<PathBuf> = BTreeSet::new();
+    for document in documents.values() {
+        let path = document_path(document)?;
+        let Some(base) = path.parent() else {
+            continue;
+        };
+        for target in opy_rs::preprocess::include_directives(&document.text) {
+            // `Preprocessor::include` normalizes `\` to `/` before joining —
+            // match that spelling so `.\\member.opy` marks its member too.
+            let candidate = canonical(&base.join(target.replace('\\', "/")));
+            if supplied.contains(&candidate) {
+                included.insert(candidate);
+            } else if candidate.is_dir() {
+                // `#!include dir` splices every `.opy` file in the directory.
+                for member in &supplied {
+                    if member.parent() == Some(candidate.as_path()) {
+                        included.insert(member.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    let mut deferred: Vec<&Document> = Vec::new();
+    let mut covered: BTreeSet<PathBuf> = BTreeSet::new();
+    let mut run_check = |representative: &Document,
+                         covered: &mut BTreeSet<PathBuf>|
+     -> Result<(), HandlerError> {
+        let path = document_path(representative)?;
         let root = path
             .parent()
             .map(Path::to_path_buf)
             .unwrap_or_else(|| PathBuf::from("."));
         let outcome = opy_rs::tooling::check_with_overlay(
-            &document.text,
+            &representative.text,
             &path_string(&path),
             &root,
             &overlays,
         );
+        if outcome.is_clean() {
+            covered.extend(
+                outcome
+                    .files
+                    .iter()
+                    .map(|file| canonical(&resolved_path(&outcome.display_root, &file.path))),
+            );
+        }
         for diagnostic in &outcome.diagnostics {
             let target_uri = diagnostic
                 .span
@@ -1191,7 +1271,7 @@ fn check_documents(documents: &BTreeMap<String, Document>) -> Result<Value, Hand
                 .and_then(|span| {
                     supplied_uri_for_path(documents, &outcome.display_root, &span.path)
                 })
-                .unwrap_or_else(|| uri.clone());
+                .unwrap_or_else(|| representative.uri.clone());
             let value = diagnostic_json_for_documents(documents, &outcome.display_root, diagnostic);
             let target = diagnostics_by_uri
                 .get_mut(&target_uri)
@@ -1199,6 +1279,33 @@ fn check_documents(documents: &BTreeMap<String, Document>) -> Result<Value, Hand
             if !target.contains(&value) {
                 target.push(value);
             }
+        }
+        Ok(())
+    };
+
+    for (entry, members) in groups {
+        // The entry document itself is the faithful representative when it is
+        // in the set; otherwise any member's redirect reaches the same parse.
+        let representative = members
+            .iter()
+            .copied()
+            .find(|document| document_path(document).is_ok_and(|path| same_path(&path, &entry)))
+            .unwrap_or_else(|| members[0]);
+        // A single document that is its own entry may still be another
+        // supplied document's include member; defer those until the roots —
+        // redirect groups and non-included self entries — have run.
+        let self_entry = members.len() == 1
+            && document_path(representative).is_ok_and(|path| same_path(&path, &entry));
+        if self_entry && included.contains(&canonical(&entry)) {
+            deferred.push(representative);
+        } else {
+            run_check(representative, &mut covered)?;
+        }
+    }
+    for document in deferred {
+        let path = document_path(document)?;
+        if !covered.contains(&canonical(&path)) {
+            run_check(document, &mut covered)?;
         }
     }
 

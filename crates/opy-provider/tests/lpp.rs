@@ -565,6 +565,150 @@ fn check_project_main_file_subdirectory_reports_effective_document_uris() {
 }
 
 #[test]
+fn document_check_deduplicates_documents_sharing_one_effective_entry() {
+    // `rename-main-file`: member.opy and stray.opy redirect to main.opy via
+    // first-line `#!mainFile`; caller.opy is included by main.opy and carries
+    // no directive of its own. Documents sharing one effective entry must not
+    // re-run its project parse per document, diagnostics must stay on the
+    // document that produced them, and a document already analyzed inside an
+    // entry's include closure must not get a second, out-of-context parse.
+    let root = Path::new(RENAME_MAIN_FILE_ROOT);
+    let uris: BTreeMap<&str, String> = ["main.opy", "caller.opy", "stray.opy", "env/member.opy"]
+        .into_iter()
+        .map(|member| (member, file_uri(root.join(member).to_str().expect("utf8"))))
+        .collect();
+    let document_map = |members: &[&str], mutate: &dyn Fn(&str, &mut String)| {
+        let mut documents = serde_json::Map::new();
+        for member in members {
+            let uri = &uris[*member];
+            let mut text = std::fs::read_to_string(root.join(member)).expect("fixture text");
+            mutate(member, &mut text);
+            documents.insert(
+                uri.clone(),
+                json!({
+                    "uri": uri,
+                    "languageId": "opy",
+                    "version": 3,
+                    "text": text,
+                }),
+            );
+        }
+        documents
+    };
+    let check = |session: &mut Session, id: u64, documents: serde_json::Map<String, Value>| {
+        session.request(json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": "lpp/check",
+            "params": { "documents": Value::Object(documents) },
+        }))["result"]["documents"]
+            .as_array()
+            .expect("documents")
+            .clone()
+    };
+    let find = |documents: &[Value], member: &str| -> Value {
+        documents
+            .iter()
+            .find(|document| document["uri"] == uris[member])
+            .cloned()
+            .expect("document present")
+    };
+
+    let mut session = Session::spawn();
+    session.initialize();
+
+    // Clean project: one entry parse covers main, member, and caller through
+    // the include closure. caller.opy's `worker()` resolves against
+    // member.opy in context — a standalone parse would have reported
+    // `unknown action 'worker'` — so an empty caller result proves it was not
+    // re-checked out of context.
+    let all = ["main.opy", "caller.opy", "stray.opy", "env/member.opy"];
+    let clean = check(&mut session, 2, document_map(&all, &|_, _| {}));
+    assert_eq!(clean.len(), 4);
+    assert!(clean.iter().all(|document| document["version"] == 3));
+    for document in &clean {
+        assert_eq!(
+            document["diagnostics"],
+            json!([]),
+            "{} reports no diagnostics",
+            document["uri"]
+        );
+    }
+
+    // Ordering must not depend on paths sorting: with member's redirect
+    // removed, all three supplied documents are self entries and caller/member
+    // sort before their includer. main.opy's parse still covers them — none
+    // gets a standalone parse that would flag `worker()`. The include spelling
+    // `".\\caller.opy"` is accepted by the preprocessor (`\` normalizes to
+    // `/`), so it must defer the member the same way.
+    let unordered = check(
+        &mut session,
+        3,
+        document_map(
+            &["main.opy", "caller.opy", "env/member.opy"],
+            &|member, text| match member {
+                "env/member.opy" => *text = text.lines().skip(1).collect::<Vec<_>>().join("\n"),
+                "main.opy" => {
+                    *text =
+                        text.replacen("#!include \"caller.opy\"", "#!include \".\\caller.opy\"", 1)
+                }
+                _ => {}
+            },
+        ),
+    );
+    assert_eq!(unordered.len(), 3);
+    for document in &unordered {
+        assert_eq!(
+            document["diagnostics"],
+            json!([]),
+            "{} reports no diagnostics",
+            document["uri"]
+        );
+    }
+
+    // A failed project check does not establish coverage: caller is
+    // registered (included before the failing member) but never analyzed, so
+    // it keeps its standalone fallback. stray redirects but is never parsed,
+    // so its own text contributes nothing.
+    let broken = check(
+        &mut session,
+        4,
+        document_map(&all, &|member, text| match member {
+            "main.opy" => {
+                *text = text.replacen(
+                    "#!include \"env/member.opy\"\n#!include \"caller.opy\"",
+                    "#!include \"caller.opy\"\n#!include \"env/member.opy\"",
+                    1,
+                );
+            }
+            "caller.opy" => {
+                text.push_str("\nrule \"bad caller\":\n    definitelyMissingAction()\n")
+            }
+            "env/member.opy" => text.push_str("\nrule \"broken\n"),
+            "stray.opy" => text.push_str("\nrule \"stray-broken\n"),
+            _ => {}
+        }),
+    );
+    assert_eq!(broken.len(), 4);
+    let member = find(&broken, "env/member.opy");
+    assert!(
+        member["diagnostics"]
+            .as_array()
+            .expect("diagnostics")
+            .iter()
+            .any(|diagnostic| diagnostic["severity"] == "error"),
+        "the included document's injected syntax error reports on its URI: {}",
+        member["diagnostics"]
+    );
+    assert_eq!(
+        find(&broken, "caller.opy")["diagnostics"][0]["code"],
+        "unknown-action"
+    );
+    assert_eq!(find(&broken, "stray.opy")["diagnostics"], json!([]));
+    session.shutdown();
+}
+
+#[test]
 fn check_duplicate_include_warning_keeps_its_severity() {
     let mut session = Session::spawn();
     session.initialize();
