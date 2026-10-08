@@ -2706,6 +2706,52 @@ fn lookup_results_are_deterministic_bounded_and_kind_filtered() {
     session.shutdown();
 }
 
+/// `kind: "event"` returns the `@Event` vocabulary: spelling, display
+/// name, and whether the event accepts player filters.
+#[test]
+fn lookup_events_return_the_event_vocabulary() {
+    let mut session = Session::spawn();
+    session.initialize_version("1.5");
+
+    let events = session.request(lookup_request(
+        2,
+        json!({ "languageId": "opy", "kind": "event", "limit": 20 }),
+    ));
+    let entries = events["result"]["entries"].as_array().expect("entries");
+    assert_eq!(entries.len(), 13, "the accepted @Event set: {entries:?}");
+    assert!(entries.iter().all(|entry| entry["kind"] == "event"));
+    let died = entries
+        .iter()
+        .find(|entry| entry["spelling"] == "playerDied")
+        .expect("playerDied is an event");
+    assert_eq!(died["displayName"], "Player Died");
+    assert_eq!(died["identity"], "opy:event/playerDied");
+    assert_eq!(died["event"]["acceptsFilters"], true);
+    let global = entries
+        .iter()
+        .find(|entry| entry["spelling"] == "global")
+        .expect("global is an event");
+    assert_eq!(
+        global["event"]["acceptsFilters"], false,
+        "global events reject player filters"
+    );
+    assert!(
+        entries
+            .iter()
+            .all(|entry| entry["spelling"] != "subroutine"),
+        "subroutine is not an @Event name: {entries:?}"
+    );
+
+    // The kind filter composes with a text query.
+    let queried = session.request(lookup_request(
+        3,
+        json!({ "languageId": "opy", "query": "Player Earned Elimination", "kind": "event" }),
+    ));
+    let queried_entries = queried["result"]["entries"].as_array().expect("entries");
+    assert_eq!(queried_entries[0]["spelling"], "playerEarnedElimination");
+    session.shutdown();
+}
+
 /// Params that do not match the schema are `-32602`; a language the
 /// provider does not serve is `invalidLanguage`.
 #[test]

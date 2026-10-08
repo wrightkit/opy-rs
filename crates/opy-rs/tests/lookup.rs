@@ -535,11 +535,111 @@ fn unsupported_queries_report_reasons() {
         functions: false,
         enums: false,
         settings: false,
+        events: false,
     };
     match lookup(&query) {
         LookupOutcome::Unsupported { .. } => {}
         other => panic!("an empty scope must be unsupported: {other:?}"),
     }
+}
+
+#[test]
+fn event_spelling_resolves_to_event_entry() {
+    let mut query = LookupQuery::new("playerEarnedElimination");
+    query.scope = LookupScope::EVENTS;
+    let hits = lookup(&query).results().to_vec();
+    match &hits[0] {
+        LookupHit::Event {
+            spelling,
+            accepts_filters,
+            display_name,
+            matched_on,
+        } => {
+            assert_eq!(spelling, "playerEarnedElimination");
+            assert!(accepts_filters, "player events take @Team/@Hero/@Slot");
+            assert_eq!(display_name.as_deref(), Some("Player Earned Elimination"));
+            assert_eq!(*matched_on, MatchKind::OpySpelling);
+        }
+        other => panic!("expected an event hit, got {other:?}"),
+    }
+}
+
+#[test]
+fn event_display_name_and_filters_resolve() {
+    // Display names answer with their display name.
+    let mut query = LookupQuery::new("Ongoing - Each Player");
+    query.scope = LookupScope::EVENTS;
+    let hits = lookup(&query).results().to_vec();
+    match &hits[0] {
+        LookupHit::Event {
+            spelling,
+            accepts_filters,
+            matched_on,
+            ..
+        } => {
+            assert_eq!(spelling, "eachPlayer");
+            assert!(*accepts_filters);
+            assert_eq!(*matched_on, MatchKind::DisplayName);
+        }
+        other => panic!("expected an event hit, got {other:?}"),
+    }
+    // `global` is the one event that rejects player filters.
+    let mut query = LookupQuery::new("global");
+    query.scope = LookupScope::EVENTS;
+    let hits = lookup(&query).results().to_vec();
+    assert!(
+        hits.iter().any(|hit| matches!(
+            hit,
+            LookupHit::Event { spelling, accepts_filters, .. }
+                if spelling == "global" && !accepts_filters
+        )),
+        "global must report accepts_filters=false: {hits:?}"
+    );
+}
+
+#[test]
+fn event_scope_lists_accepted_events_only() {
+    // The listing is exactly the `@Event` acceptance set: `subroutine` is
+    // a catalog event but not an OPY `@Event` name (subroutine rules use
+    // `def`), so it must not appear or resolve.
+    let mut query = LookupQuery::new("");
+    query.scope = LookupScope::EVENTS;
+    query.limit = usize::MAX;
+    let hits = lookup(&query).results().to_vec();
+    assert_eq!(hits.len(), 13, "the accepted event set: {hits:?}");
+    assert!(
+        hits.iter()
+            .all(|hit| matches!(hit, LookupHit::Event { .. })),
+        "events scope returns only event hits: {hits:?}"
+    );
+    assert!(
+        hits.iter().all(|hit| !matches!(
+            hit,
+            LookupHit::Event { spelling, .. } if spelling == "subroutine"
+        )),
+        "subroutine is not an @Event name: {hits:?}"
+    );
+
+    let mut query = LookupQuery::new("subroutine");
+    query.scope = LookupScope::EVENTS;
+    assert!(
+        lookup(&query).results().is_empty(),
+        "subroutine must not resolve under the event scope"
+    );
+}
+
+#[test]
+fn event_hits_appear_in_the_default_scope() {
+    // An unscoped query on a display name finds the event alongside the
+    // other namespaces.
+    let hits = results("Player Died");
+    assert!(
+        hits.iter().any(|hit| matches!(
+            hit,
+            LookupHit::Event { spelling, .. } if spelling == "playerDied"
+        )),
+        "events join the default search scope: {hits:?}"
+    );
 }
 
 #[test]

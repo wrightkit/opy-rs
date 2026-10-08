@@ -1183,7 +1183,7 @@ fn allocate_indices(
     Ok(allocated)
 }
 
-fn player_event_kind(name: &str) -> Option<PlayerEventKind> {
+pub(crate) fn player_event_kind(name: &str) -> Option<PlayerEventKind> {
     Some(match name {
         "playerDealtDamage" => PlayerEventKind::DealtDamage,
         "playerDealtFinalBlow" => PlayerEventKind::DealtFinalBlow,

@@ -192,12 +192,14 @@ fn cmd_lookup(args: &LookupArgs) -> ExitCode {
                 functions: false,
                 enums: false,
                 settings: false,
+                events: false,
             },
             |mut scope, arg| {
                 match arg {
                     LookupScopeArg::Functions => scope.functions = true,
                     LookupScopeArg::Enums => scope.enums = true,
                     LookupScopeArg::Settings => scope.settings = true,
+                    LookupScopeArg::Events => scope.events = true,
                 }
                 scope
             },
@@ -313,6 +315,24 @@ fn lookup_hit_line(hit: &LookupHit) -> String {
         LookupHit::SettingPath { path, matched_on } => {
             format!("settingPath {path}  [{}]", matched_on.as_str())
         }
+        LookupHit::Event {
+            spelling,
+            accepts_filters,
+            display_name,
+            matched_on,
+        } => format!(
+            "event {spelling}{}{}  [{}]",
+            if *accepts_filters {
+                ""
+            } else {
+                " (no filters)"
+            },
+            display_name
+                .as_deref()
+                .map(|name| format!("  \"{name}\""))
+                .unwrap_or_default(),
+            matched_on.as_str()
+        ),
     }
 }
 
