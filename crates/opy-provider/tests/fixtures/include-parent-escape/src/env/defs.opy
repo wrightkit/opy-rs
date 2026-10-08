@@ -1,0 +1,2 @@
+#!define FLAG \
+    false
