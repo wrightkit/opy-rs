@@ -1224,7 +1224,9 @@ fn check_documents(documents: &BTreeMap<String, Document>) -> Result<Value, Hand
             continue;
         };
         for target in opy_rs::preprocess::include_directives(&document.text) {
-            let candidate = canonical(&base.join(&target));
+            // `Preprocessor::include` normalizes `\` to `/` before joining —
+            // match that spelling so `.\\member.opy` marks its member too.
+            let candidate = canonical(&base.join(target.replace('\\', "/")));
             if supplied.contains(&candidate) {
                 included.insert(candidate);
             } else if candidate.is_dir() {

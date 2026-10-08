@@ -638,16 +638,21 @@ fn document_check_deduplicates_documents_sharing_one_effective_entry() {
     // Ordering must not depend on paths sorting: with member's redirect
     // removed, all three supplied documents are self entries and caller/member
     // sort before their includer. main.opy's parse still covers them — none
-    // gets a standalone parse that would flag `worker()`.
+    // gets a standalone parse that would flag `worker()`. The include spelling
+    // `".\\caller.opy"` is accepted by the preprocessor (`\` normalizes to
+    // `/`), so it must defer the member the same way.
     let unordered = check(
         &mut session,
         3,
         document_map(
             &["main.opy", "caller.opy", "env/member.opy"],
-            &|member, text| {
-                if member == "env/member.opy" {
-                    *text = text.lines().skip(1).collect::<Vec<_>>().join("\n");
+            &|member, text| match member {
+                "env/member.opy" => *text = text.lines().skip(1).collect::<Vec<_>>().join("\n"),
+                "main.opy" => {
+                    *text =
+                        text.replacen("#!include \"caller.opy\"", "#!include \".\\caller.opy\"", 1)
                 }
+                _ => {}
             },
         ),
     );
