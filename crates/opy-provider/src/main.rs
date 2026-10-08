@@ -989,9 +989,13 @@ fn effective_primary_source_path(project: &LoadedProject) -> Result<Option<PathB
 }
 
 fn hash_source(source: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(source.as_bytes());
-    format!("{:x}", hasher.finalize())
+    Sha256::digest(source.as_bytes())
+        .iter()
+        .fold(String::new(), |mut hex, byte| {
+            use std::fmt::Write as _;
+            let _ = write!(hex, "{byte:02x}");
+            hex
+        })
 }
 
 fn load_project(
