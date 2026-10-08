@@ -523,9 +523,13 @@ fn fixture_root() -> PathBuf {
 }
 
 fn sha256(source: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(source.as_bytes());
-    format!("{:x}", hasher.finalize())
+    Sha256::digest(source.as_bytes())
+        .iter()
+        .fold(String::new(), |mut hex, byte| {
+            use std::fmt::Write as _;
+            let _ = write!(hex, "{byte:02x}");
+            hex
+        })
 }
 
 fn rustc_version() -> String {
