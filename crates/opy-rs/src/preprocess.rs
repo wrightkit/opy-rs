@@ -125,6 +125,15 @@ pub struct PreprocessWarning {
     pub span: Span,
 }
 
+/// The `#!mainFile` redirect target declared on `text`'s first line, if any —
+/// the same directive the preprocessor honors when the text is checked as an
+/// entry. Callers grouping documents by their effective entry (for example a
+/// provider checking a document set) can use this to avoid re-running one
+/// identical project parse per document.
+pub fn main_file_directive(text: &str) -> Option<String> {
+    first_main_file_directive(text).map(|(value, _)| value)
+}
+
 /// Preprocess the main source text with its include root.
 pub fn preprocess(
     main_text: &str,

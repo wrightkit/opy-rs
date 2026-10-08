@@ -4,7 +4,7 @@
 //! preprocessing, diagnostics, and compilation remain in `opy-rs`. Only the
 //! LPP envelope and source-oriented projections live here.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::{self, BufRead, BufWriter, Write};
 use std::path::{Path, PathBuf};
@@ -1165,6 +1165,26 @@ fn document_overlays(
         .collect()
 }
 
+/// The effective check entry for `document`: a first-line `#!mainFile`
+/// directive resolves to its target when the target exists on disk —
+/// documents redirecting to the same entry run the same project parse, so
+/// checking them individually would repeat that parse once per document.
+/// An unreadable or malformed redirect keeps the document as its own entry,
+/// preserving its own `main-file-*` refusal.
+fn effective_entry(document: &Document, path: &Path) -> PathBuf {
+    let Some(target) = opy_rs::preprocess::main_file_directive(&document.text) else {
+        return path.to_path_buf();
+    };
+    let candidate = path
+        .parent()
+        .map(|dir| dir.join(&target))
+        .unwrap_or_else(|| PathBuf::from(&target));
+    match std::fs::canonicalize(&candidate) {
+        Ok(canonical) if canonical.is_file() => canonical,
+        _ => path.to_path_buf(),
+    }
+}
+
 fn check_documents(documents: &BTreeMap<String, Document>) -> Result<Value, HandlerError> {
     let overlays = document_overlays(documents)?;
     let mut diagnostics_by_uri = documents
@@ -1172,18 +1192,40 @@ fn check_documents(documents: &BTreeMap<String, Document>) -> Result<Value, Hand
         .map(|uri| (uri.clone(), Vec::new()))
         .collect::<BTreeMap<String, Vec<Value>>>();
 
-    for (uri, document) in documents {
+    let mut groups: BTreeMap<PathBuf, Vec<&Document>> = BTreeMap::new();
+    for document in documents.values() {
         let path = document_path(document)?;
+        groups
+            .entry(effective_entry(document, &path))
+            .or_default()
+            .push(document);
+    }
+
+    // One project parse per effective entry. A self-entry document already
+    // reached through another entry's include closure was parsed and analyzed
+    // in context — it is not a standalone entry and does not get a second,
+    // out-of-context parse that would report include-member constructs as
+    // errors.
+    let mut deferred: Vec<&Document> = Vec::new();
+    let mut covered: BTreeSet<PathBuf> = BTreeSet::new();
+    let mut run_check = |representative: &Document,
+                         covered: &mut BTreeSet<PathBuf>|
+     -> Result<(), HandlerError> {
+        let path = document_path(representative)?;
         let root = path
             .parent()
             .map(Path::to_path_buf)
             .unwrap_or_else(|| PathBuf::from("."));
         let outcome = opy_rs::tooling::check_with_overlay(
-            &document.text,
+            &representative.text,
             &path_string(&path),
             &root,
             &overlays,
         );
+        covered.extend(outcome.files.iter().map(|file| {
+            let resolved = resolved_path(&outcome.display_root, &file.path);
+            std::fs::canonicalize(&resolved).unwrap_or(resolved)
+        }));
         for diagnostic in &outcome.diagnostics {
             let target_uri = diagnostic
                 .span
@@ -1191,7 +1233,7 @@ fn check_documents(documents: &BTreeMap<String, Document>) -> Result<Value, Hand
                 .and_then(|span| {
                     supplied_uri_for_path(documents, &outcome.display_root, &span.path)
                 })
-                .unwrap_or_else(|| uri.clone());
+                .unwrap_or_else(|| representative.uri.clone());
             let value = diagnostic_json_for_documents(documents, &outcome.display_root, diagnostic);
             let target = diagnostics_by_uri
                 .get_mut(&target_uri)
@@ -1199,6 +1241,33 @@ fn check_documents(documents: &BTreeMap<String, Document>) -> Result<Value, Hand
             if !target.contains(&value) {
                 target.push(value);
             }
+        }
+        Ok(())
+    };
+
+    for (entry, members) in groups {
+        // The entry document itself is the faithful representative when it is
+        // in the set; otherwise any member's redirect reaches the same parse.
+        let representative = members
+            .iter()
+            .copied()
+            .find(|document| document_path(document).is_ok_and(|path| same_path(&path, &entry)))
+            .unwrap_or_else(|| members[0]);
+        let self_entry = members.len() == 1
+            && document_path(representative).is_ok_and(|path| same_path(&path, &entry));
+        if self_entry {
+            deferred.push(representative);
+        } else {
+            run_check(representative, &mut covered)?;
+        }
+    }
+    for document in deferred {
+        let path = document_path(document)?;
+        let covered_by_closure = std::fs::canonicalize(&path)
+            .map(|canonical| covered.contains(&canonical))
+            .unwrap_or_else(|_| covered.contains(&path));
+        if !covered_by_closure {
+            run_check(document, &mut covered)?;
         }
     }
 
