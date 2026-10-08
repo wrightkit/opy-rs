@@ -1198,6 +1198,24 @@ pub(crate) fn effective_entry(document: &Document, path: &Path) -> PathBuf {
     }
 }
 
+/// The lexically normalized tail of an `#!include` target: `.` segments are
+/// dropped and `name/..` pairs cancelled. A target that escapes its includer's
+/// directory can still name a supplied document under a different include base;
+/// matching the remainder by suffix is the safe approximation for deferral.
+fn include_remainder(target: &str) -> PathBuf {
+    let mut parts: Vec<&str> = Vec::new();
+    for part in target.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => {
+                parts.pop();
+            }
+            part => parts.push(part),
+        }
+    }
+    parts.into_iter().collect()
+}
+
 fn check_documents(documents: &BTreeMap<String, Document>) -> Result<Value, HandlerError> {
     let overlays = document_overlays(documents)?;
     let mut diagnostics_by_uri = documents
@@ -1239,13 +1257,34 @@ fn check_documents(documents: &BTreeMap<String, Document>) -> Result<Value, Hand
         for target in opy_rs::preprocess::include_directives(&document.text) {
             // `Preprocessor::include` normalizes `\` to `/` before joining —
             // match that spelling so `.\\member.opy` marks its member too.
-            let candidate = canonical(&base.join(target.replace('\\', "/")));
+            let target = target.replace('\\', "/");
+            let candidate = canonical(&base.join(&target));
             if supplied.contains(&candidate) {
                 included.insert(candidate);
             } else if candidate.is_dir() {
                 // `#!include dir` splices every `.opy` file in the directory.
                 for member in &supplied {
                     if member.parent() == Some(candidate.as_path()) {
+                        included.insert(member.clone());
+                    }
+                }
+            } else {
+                // `#!include "../x"` spellings can escape the includer's
+                // directory: the preprocessor resolves them against the last
+                // macro file's directory (`Preprocessor::include_base`), which
+                // this static scan cannot reproduce. Mark every supplied
+                // document the normalized remainder could name instead.
+                // Over-marking is safe — deferral only delays a document's own
+                // check, and an uncovered member still runs afterwards.
+                let remainder = include_remainder(&target);
+                if remainder.as_os_str().is_empty() {
+                    continue;
+                }
+                for member in &supplied {
+                    if member
+                        .ancestors()
+                        .any(|ancestor| ancestor.ends_with(&remainder))
+                    {
                         included.insert(member.clone());
                     }
                 }

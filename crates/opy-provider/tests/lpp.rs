@@ -55,6 +55,10 @@ const RENAME_MAIN_FILE_ROOT: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/tests/fixtures/rename-main-file"
 );
+const INCLUDE_PARENT_ESCAPE_ROOT: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/tests/fixtures/include-parent-escape/src"
+);
 
 struct Session {
     child: Child,
@@ -705,6 +709,96 @@ fn document_check_deduplicates_documents_sharing_one_effective_entry() {
         "unknown-action"
     );
     assert_eq!(find(&broken, "stray.opy")["diagnostics"], json!([]));
+    session.shutdown();
+}
+
+#[test]
+fn document_check_defers_members_reached_through_escaping_includes() {
+    // `#!include "../core.opy"` in main.opy escapes its own directory; the
+    // preprocessor resolves it against the last macro file's directory
+    // (composition/), so the real project parse still covers core.opy and
+    // member/m.opy. A literal join against the includer's directory cannot
+    // name that target — without the normalized-remainder fallback core.opy
+    // parses standalone and reports `unknown identifier 'shared'` inside
+    // member/m.opy even though the project is valid.
+    let root = Path::new(INCLUDE_PARENT_ESCAPE_ROOT);
+    let members = [
+        "main.opy",
+        "env/defs.opy",
+        "env/vars.opy",
+        "composition/boot.opy",
+        "core.opy",
+        "member/m.opy",
+    ];
+    let uris: BTreeMap<&str, String> = members
+        .into_iter()
+        .map(|member| (member, file_uri(root.join(member).to_str().expect("utf8"))))
+        .collect();
+    let documents = |subset: &[&str]| {
+        let mut documents = serde_json::Map::new();
+        for member in subset {
+            let uri = &uris[*member];
+            documents.insert(
+                uri.clone(),
+                json!({
+                    "uri": uri,
+                    "languageId": "opy",
+                    "version": 1,
+                    "text": std::fs::read_to_string(root.join(member)).expect("fixture text"),
+                }),
+            );
+        }
+        Value::Object(documents)
+    };
+    let check = |session: &mut Session, id: u64, documents: Value| {
+        session.request(json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": "lpp/check",
+            "params": { "documents": documents },
+        }))["result"]["documents"]
+            .as_array()
+            .expect("documents")
+            .clone()
+    };
+
+    let mut session = Session::spawn();
+    session.initialize();
+
+    // The full set mirrors the disk parse: every document reports clean.
+    let clean = check(&mut session, 2, documents(&members));
+    assert_eq!(clean.len(), members.len());
+    for document in &clean {
+        assert_eq!(
+            document["diagnostics"],
+            json!([]),
+            "{} reports no diagnostics",
+            document["uri"]
+        );
+    }
+
+    // Without the entry document nothing covers the members: deferral must
+    // not hide diagnostics — core.opy still parses standalone and the
+    // missing `shared` declaration surfaces on the member that uses it.
+    let orphaned: Vec<&str> = members
+        .iter()
+        .copied()
+        .filter(|member| *member != "main.opy")
+        .collect();
+    let orphaned = check(&mut session, 3, documents(&orphaned));
+    let member = orphaned
+        .iter()
+        .find(|document| document["uri"] == uris["member/m.opy"])
+        .expect("member result");
+    assert!(
+        member["diagnostics"]
+            .as_array()
+            .expect("diagnostics")
+            .iter()
+            .any(|diagnostic| diagnostic["code"] == "unknown-identifier"),
+        "the member's missing declaration still reports: {}",
+        member["diagnostics"]
+    );
     session.shutdown();
 }
 
