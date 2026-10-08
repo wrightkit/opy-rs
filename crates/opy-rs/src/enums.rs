@@ -784,9 +784,12 @@ pub(crate) fn domain_members(domain: &str, catalog: &Catalog) -> Option<Vec<Doma
         .members
         .iter()
         .filter(|entry| {
+            // NON_SOURCE_MEMBERS keys are catalog domain names; comparing
+            // against the source spelling would let a renamed or aliased
+            // domain advertise a hidden member.
             !NON_SOURCE_MEMBERS
                 .iter()
-                .any(|(d, member)| *d == source && *member == entry.member)
+                .any(|(d, member)| *d == catalog_domain(source) && *member == entry.member)
         })
         .map(|entry| {
             let rename = MEMBER_RENAMES
