@@ -142,19 +142,28 @@ fn catalog_only_spellings_name_the_valid_opy_spelling() {
 
 #[test]
 fn catalog_member_without_opy_spelling_reports_unspellable() {
-    let report = compile_member("Map.LIJIANG_TOWER_LUNAR");
-    assert_eq!(report.compile.status, CompileStatus::Failure);
-    let diagnostic = report
-        .compile
-        .diagnostics
-        .first()
-        .expect("invalid member must report a diagnostic");
-    assert_eq!(diagnostic.code, "unknown-enum-member");
-    assert_eq!(
-        diagnostic.message,
-        "enum 'Map' has no member 'LIJIANG_TOWER_LUNAR'; the canonical member has \
-         no OverPy spelling"
-    );
+    // Catalog members the pinned reference predates — the workshop-rs
+    // catalog picks them up ahead of upstream, and the spelling contract
+    // keeps rejecting them until upstream defines a spelling (issue #466).
+    for member_expr in ["Map.LIJIANG_TOWER_LUNAR", "Hero.DOCTRINE", "Map.GRIMSVOTN"] {
+        let domain = member_expr.split('.').next().unwrap();
+        let member = member_expr.split('.').nth(1).unwrap();
+        let report = compile_member(member_expr);
+        assert_eq!(report.compile.status, CompileStatus::Failure);
+        let diagnostic = report
+            .compile
+            .diagnostics
+            .first()
+            .expect("invalid member must report a diagnostic");
+        assert_eq!(diagnostic.code, "unknown-enum-member");
+        assert_eq!(
+            diagnostic.message,
+            format!(
+                "enum '{domain}' has no member '{member}'; the canonical member has \
+                 no OverPy spelling"
+            )
+        );
+    }
 }
 
 #[test]
