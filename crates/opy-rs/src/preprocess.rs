@@ -148,9 +148,7 @@ pub fn include_directives(text: &str) -> Vec<String> {
         .filter(|token| token.kind == TokenKind::Directive)
         .filter_map(|token| {
             let text = token.text.trim();
-            let (name, rest) = text
-                .split_once(char::is_whitespace)
-                .map_or((text, ""), |pair| pair);
+            let (name, rest) = text.split_once(char::is_whitespace).unwrap_or((text, ""));
             (name == "include")
                 .then(|| directives::strip_quoted(rest.trim()).map(str::to_string))
                 .flatten()
