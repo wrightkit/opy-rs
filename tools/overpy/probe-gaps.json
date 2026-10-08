@@ -15,7 +15,7 @@
       "variant": ":omit-arg",
       "cause": "Given one argument fewer for a defaulted middle parameter, the reference shifts the remaining arguments left without checking their types and writes a call with an enum in the wrong slot (Players Within Radius(Up, 3, Off, Off), a beam whose colour is None). The native compiler binds identically; canonical validation rejects the mistyped call.",
       "owner": "opy-rs binding",
-      "decision": "approved exception (project owner, wrightkit/opy-rs#366); pending the scoped canonical admission tracked by wrightkit/opy-rs#392; pinned by compiler::tests::structural_convergence",
+      "decision": "approved exception (project owner, wrightkit/opy-rs#366; canonical validation unchanged per wrightkit/workshop-rs#357); pinned by compiler::tests::structural_convergence",
       "detail": ""
     },
     {
@@ -46,7 +46,7 @@
       "detail": "EntityId",
       "cause": "The reference writes Destroy Effect(Event Player) unchecked; canonical validation requires EntityId at the entity parameter. workshop-rs#350 types Event Player as Player, ending the opaque exemption that let it pass, and ADR-0014 admits Player only at positions with recorded evidence — the real-project fixtures pass player variables here (defend.ow `Event Player.botEffects`, rework.ow `Event Player.DiamondIndicator`), never a bare Player.",
       "owner": "opy-rs",
-      "decision": "pending workshop-rs admission evidence (ADR-0014); not an approved exception — owner call outstanding (wrightkit/opy-rs#441); pinned by compiler::tests::structural_convergence"
+      "decision": "approved exception (project owner, wrightkit/opy-rs#487; workshop-rs ADR-0014, no admission evidence); pinned by compiler::tests::structural_convergence"
     },
     {
       "id": "reference-gates-ow2-unavailable-members",
@@ -78,7 +78,7 @@
       "detail": "Set Global Variable(g, )",
       "cause": "The reference splices the absent display-name lookup for onlyInOverpy ColorLiteral members, writing an empty argument slot (Set Global Variable(g, )) that the canonical grammar cannot parse. Native emission writes the canonical Custom Color the Color receiver produces, because an empty slot has no Workshop meaning.",
       "owner": "opy-rs emission",
-      "decision": "pending owner approval (wrightkit/opy-rs#468); not an approved exception until recorded; pinned by compiler::tests::structural_convergence"
+      "decision": "approved exception (project owner, wrightkit/opy-rs#468); pinned by compiler::tests::structural_convergence"
     }
   ]
 }

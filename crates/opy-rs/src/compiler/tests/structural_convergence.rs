@@ -218,6 +218,20 @@ fn an_array_for_an_object_text_parameter_stays_rejected() {
 }
 
 #[test]
+fn a_non_array_sorted_argument_stays_rejected() {
+    // The reference writes `Sorted Array(5, ...)` unchecked; canonical
+    // validation requires an Array there (wrightkit/opy-rs#446).
+    for argument in ["5", "\"bca\""] {
+        assert_rejected(
+            &format!(
+                "globalvar x\nrule \"x\":\n    @Event global\n    x = sorted({argument}, key=lambda v: v)\n"
+            ),
+            "semantic type 'Array'",
+        );
+    }
+}
+
+#[test]
 fn a_vector_that_folds_to_zero_in_a_vector_position_stays_rejected() {
     assert_rejected(
         "globalvar v\nrule \"x\":\n    @Event global\n    createEffect(getAllPlayers(), Effect.SPHERE, Color.RED, v - v, 1, EffectReeval.VISIBILITY)\n",
@@ -228,8 +242,8 @@ fn a_vector_that_folds_to_zero_in_a_vector_position_stays_rejected() {
 #[test]
 fn an_omitted_optional_argument_shifts_the_rest_but_stays_rejected() {
     // The reference moves the remaining arguments left and writes a beam whose
-    // colour is `None`; canonical validation rejects the mistyped call until
-    // the scoped admission contract lands (#392).
+    // colour is `None`; canonical validation rejects the mistyped call
+    // (wrightkit/workshop-rs#357).
     assert_rejected(
         "rule \"x\":\n    @Event eachPlayer\n    createBeam(eventPlayer, Beam.GRAPPLE, Vector.UP, Vector.UP, EffectReeval.NONE)\n",
         "semantic type 'Color'",
@@ -240,8 +254,7 @@ fn an_omitted_optional_argument_shifts_the_rest_but_stays_rejected() {
 fn a_bare_player_for_an_entity_parameter_stays_rejected() {
     // The reference writes `Destroy Effect(Event Player)` unchecked; the
     // canonical entity parameter requires EntityId and a bare Player has no
-    // admission evidence, so the rejection stays pending workshop-rs
-    // admission evidence and an owner call (probe gap
+    // admission evidence, so the owner-approved rejection stands (probe gap
     // `validation-player-for-entity-id`).
     assert_rejected(
         "rule \"x\":\n    @Event eachPlayer\n    destroyEffect(eventPlayer)\n",
