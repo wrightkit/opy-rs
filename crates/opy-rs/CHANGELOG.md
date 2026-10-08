@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2](https://github.com/wrightkit/opy-rs/compare/v0.3.1...v0.3.2) - 2026-10-08
+
+### Added
+
+- *(lookup)* serve the @Event vocabulary through name lookup ([#482](https://github.com/wrightkit/opy-rs/pull/482))
+
+### Other
+
+- *(provider)* check each effective entry once in document sets ([#480](https://github.com/wrightkit/opy-rs/pull/480))
+
 ## [0.3.1](https://github.com/wrightkit/opy-rs/compare/v0.3.0...v0.3.1) - 2026-10-07
 
 ### Other
