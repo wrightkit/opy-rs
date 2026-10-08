@@ -382,27 +382,58 @@ fn player_member_references_use_exact_member_span() {
 
 #[test]
 fn settings_emission_agreement_between_check_and_compile() {
-    // opy-rs#411: a settings key the canonical emission table cannot emit
-    // must fail `check` under the same `workshop-emission` code `compile`
-    // reports, instead of passing check and only failing inside the emitter.
-    let invalid = concat!(
+    // opy-rs#411: `check` and `compile` must agree on every settings member.
+    // A scalar key outside the catalog compiles verbatim, as the pinned
+    // OverPy writes it, and checks with a warning rather than an error.
+    let verbatim = concat!(
         "settings {\n",
         "    \"main\": {\"description\": \"t\"},\n",
-        "    \"gamemodes\": {\"ffa\": {\"notASetting\": 3}}\n",
+        "    \"gamemodes\": {\"ffa\": {\"notASetting\": 3}},\n",
+        "    \"heroes\": {\"allTeams\": {\"shion\": {\"ability2Duration\": \"500%\"}}}\n",
         "}\n",
         "rule \"a\":\n    @Event global\n    wait(1)\n",
     );
-    let outcome = check(invalid, "main.opy", Path::new(""));
-    assert!(outcome.model.is_none());
-    let diagnostic = outcome
+    let outcome = check(verbatim, "main.opy", Path::new(""));
+    assert!(outcome.model.is_some(), "{:?}", outcome.diagnostics);
+    let warnings = outcome
         .diagnostics
         .iter()
-        .find(|diagnostic| diagnostic.severity == tooling::DiagnosticSeverity::Error)
-        .expect("unsupported settings key must fail check");
-    assert_eq!(diagnostic.code, "workshop-emission");
-    assert_eq!(diagnostic.span.as_ref().expect("span").path, "main.opy");
-    let compile_error = opy_rs::compile(invalid, "main.opy", Path::new("")).unwrap_err();
-    assert_eq!(compile_error.code, "workshop-emission");
+        .map(|diagnostic| (diagnostic.severity, diagnostic.code.as_str()))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        warnings,
+        [(tooling::DiagnosticSeverity::Warning, "settings-verbatim"); 2]
+    );
+    let lines = compiled_lines(verbatim);
+    assert!(lines.contains(&"notASetting: 3".to_string()), "{lines:?}");
+    assert!(
+        lines.contains(&"ability2Duration: 500%".to_string()),
+        "{lines:?}"
+    );
+
+    // A member with no verbatim form, or a scalar directly under a team
+    // (upstream reads it as a hero name), still fails both entry points under
+    // the same `workshop-emission` code.
+    for member in [
+        "\"gamemodes\": {\"ffa\": {\"notASetting\": [\"x\"]}}",
+        "\"gamemodes\": {}, \"heroes\": {\"allTeams\": {\"notAHero\": 1}}",
+    ] {
+        let invalid = format!(
+            "settings {{\n    \"main\": {{\"description\": \"t\"}},\n    {member}\n}}\n\
+             rule \"a\":\n    @Event global\n    wait(1)\n"
+        );
+        let outcome = check(&invalid, "main.opy", Path::new(""));
+        assert!(outcome.model.is_none(), "{member}");
+        let diagnostic = outcome
+            .diagnostics
+            .iter()
+            .find(|diagnostic| diagnostic.severity == tooling::DiagnosticSeverity::Error)
+            .expect("unsupported settings key must fail check");
+        assert_eq!(diagnostic.code, "workshop-emission");
+        assert_eq!(diagnostic.span.as_ref().expect("span").path, "main.opy");
+        let compile_error = opy_rs::compile(&invalid, "main.opy", Path::new("")).unwrap_err();
+        assert_eq!(compile_error.code, "workshop-emission");
+    }
 
     // The inherited `gamemodes.general` key that motivated the issue passes
     // both entry points.
@@ -422,10 +453,9 @@ fn settings_emission_agreement_between_check_and_compile() {
 }
 
 #[test]
-fn settings_rejection_reports_a_single_candidate_suffix() {
-    // A near-miss settings key arrives from the canonical checker with its
-    // own `did you mean` already in the message; opy-rs candidate ranking
-    // replaces that suffix instead of appending a second one.
+fn misspelled_settings_key_warns_with_a_single_candidate_suffix() {
+    // A near-miss settings key compiles verbatim like upstream; `check` warns
+    // and names the canonical key once.
     let source = concat!(
         "settings {\n",
         "    \"main\": { \"descriptino\": \"x\" },\n",
@@ -433,19 +463,28 @@ fn settings_rejection_reports_a_single_candidate_suffix() {
         "}\n",
         "rule \"a\":\n    @Event global\n    wait(1)\n",
     );
-    let expected = "malformed: settings key 'main.descriptino' is outside the emission table \
-                    (did you mean 'description'?)";
+    let expected = "settings key 'descriptino' is not in the Workshop settings catalog \
+                    and is emitted verbatim (did you mean 'description'?)";
 
     let outcome = check(source, "main.opy", Path::new(""));
     let diagnostic = outcome
         .diagnostics
         .iter()
-        .find(|diagnostic| diagnostic.severity == tooling::DiagnosticSeverity::Error)
-        .expect("the misspelled key must fail check");
-    assert_eq!(diagnostic.code, "workshop-emission");
+        .find(|diagnostic| diagnostic.code == "settings-verbatim")
+        .expect("the misspelled key must warn");
+    assert_eq!(diagnostic.severity, tooling::DiagnosticSeverity::Warning);
     assert_eq!(diagnostic.message, expected);
 
-    let compile_error = opy_rs::compile(source, "main.opy", Path::new("")).unwrap_err();
-    assert_eq!(compile_error.code, "workshop-emission");
-    assert_eq!(compile_error.message, expected);
+    assert!(compiled_lines(source).contains(&"descriptino: x".to_string()));
+}
+
+fn compiled_lines(source: &str) -> Vec<String> {
+    opy_rs::Compiler::new()
+        .expect("compiler")
+        .compile_source(source, "main.opy", Path::new(""))
+        .expect("compiles")
+        .workshop
+        .lines()
+        .map(|line| line.trim().to_string())
+        .collect()
 }

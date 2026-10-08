@@ -289,7 +289,7 @@ impl<'a> Lowering<'a> {
             self.program
                 .add_file(workshop_rs::source::SourceFile::new(file.path.clone()));
         }
-        self.program.settings = super::settings::workshop_settings(self.hir)?;
+        self.program.settings = super::settings::workshop_settings(self.hir)?.0;
         Ok(())
     }
 
