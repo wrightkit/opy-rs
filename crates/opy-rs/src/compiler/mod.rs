@@ -35,6 +35,7 @@ pub(super) use backend::{expand_macros, expand_macros_attributed, reject_unlower
 pub use integration::LinkReport;
 pub(super) use integration::load_compiler_contract;
 pub(super) use lowering::Lowering;
+pub(crate) use lowering::player_event_kind;
 
 #[cfg(test)]
 mod integration_tests;

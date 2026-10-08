@@ -110,6 +110,8 @@ pub(crate) enum LookupScopeArg {
     Enums,
     /// Settings keys and value forms.
     Settings,
+    /// `@Event` spellings.
+    Events,
 }
 
 #[derive(Debug, Args)]

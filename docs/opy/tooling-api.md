@@ -169,16 +169,18 @@ uses — OPY owns no separate vocabulary copy:
 
 * Queries carry free `text` (an OPY spelling, a canonical Workshop id, a
   Workshop display name, a guessed name, or a settings path/leaf), a
-  `scope` (functions, enums, settings — all by default), and a `limit`
-  (`0` selects `DEFAULT_LIMIT`).
+  `scope` (functions, enums, settings, events — all by default), and a
+  `limit` (`0` selects `DEFAULT_LIMIT`).
 * Hits are `Function` (OPY spelling, call kind, declared receiver, ordered
   parameter facts — name, type, required/optional, default, enum domain
   with the domain's full member inventory), `EnumDomain`
   (members the domain accepts), `EnumMember` (OPY spelling → canonical
-  member id, display name, accepted aliases), or `Setting` (effective path,
+  member id, display name, accepted aliases), `Setting` (effective path,
   display name, accepted value form including enum members and numeric
-  bounds). `opy-rs` reports facts only; rendering a signature string and
-  choosing which members to inline is the caller's policy.
+  bounds), or `Event` (the `@Event` spelling — also the canonical catalog
+  id — and whether the event accepts `@Team`/`@Hero`/`@Slot` filters).
+  `opy-rs` reports facts only; rendering a signature string and choosing
+  which members to inline is the caller's policy.
 * `matchedOn` records which spelling form matched: `opySpelling`,
   `catalogId`, `displayName`, `alias`, `path`, or `near` for a best-effort
   close match.
@@ -207,7 +209,7 @@ opy-cli compile --language zh-CN <main.opy>        # catalog-declared locale
 opy-cli inspect <main.opy>                        # resolved model as JSON on stdout
 opy-cli lookup <query>                            # name → OPY spelling/parameters/member/setting
 opy-cli lookup <query> --format json              # structured lookup outcome
-opy-cli lookup <query> --scope functions|enums|settings  # repeatable namespace filter
+opy-cli lookup <query> --scope functions|enums|settings|events  # repeatable namespace filter
 opy-cli lookup <query> --limit N                  # bound the returned hits
 opy-cli completion bash|zsh|fish|powershell       # static completion from the command model
 opy-cli version                                   # crate + source implementation protocol identity

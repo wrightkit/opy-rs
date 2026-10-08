@@ -670,6 +670,7 @@ const ENUM_MEMBER_IDENTITY: &str = "opy:enum-member/";
 const SETTING_IDENTITY: &str = "opy:setting/";
 const SETTING_PATH_IDENTITY: &str = "opy:setting-path/";
 const PARAM_IDENTITY: &str = "opy:param/";
+const EVENT_IDENTITY: &str = "opy:event/";
 
 /// Map a wire `within` selector to the vocabulary scope. `callable`/`enum`
 /// values are provider-issued identities (a bare spelling is accepted for
@@ -791,6 +792,18 @@ fn lookup_entry(hit: &LookupHit, scoped: bool) -> Value {
             "kind": "settingPath",
             "spelling": path_segment(path),
             "displayName": path,
+        }),
+        LookupHit::Event {
+            spelling,
+            accepts_filters,
+            display_name,
+            ..
+        } => json!({
+            "identity": format!("{EVENT_IDENTITY}{spelling}"),
+            "kind": "event",
+            "spelling": spelling,
+            "displayName": display_name.as_deref().unwrap_or(spelling),
+            "event": { "acceptsFilters": accepts_filters },
         }),
     }
 }

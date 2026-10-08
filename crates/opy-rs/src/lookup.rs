@@ -4,9 +4,10 @@
 //!
 //! This module is the answer surface for agents; it owns no data of its own.
 //! Callable spellings and parameter facts come from the compatibility manifest,
-//! enum members and display names come from the `workshop-rs` catalog, and
-//! settings vocabulary comes from the `workshop-rs` emission table (which it
-//! expands to every effective path, including inherited per-mode keys).
+//! enum members, event entries, and display names come from the `workshop-rs`
+//! catalog, and settings vocabulary comes from the `workshop-rs` emission
+//! table (which it expands to every effective path, including inherited
+//! per-mode keys).
 //! The same scoring helpers feed the candidate lists unknown-name diagnostics
 //! carry, so lookup results and rejection diagnostics cannot drift.
 
@@ -190,6 +191,8 @@ pub struct LookupScope {
     pub enums: bool,
     /// Settings keys and value forms.
     pub settings: bool,
+    /// Rule events the `@Event` header accepts.
+    pub events: bool,
 }
 
 impl LookupScope {
@@ -198,28 +201,39 @@ impl LookupScope {
         functions: true,
         enums: true,
         settings: true,
+        events: true,
     };
     /// Callables only.
     pub const FUNCTIONS: LookupScope = LookupScope {
         functions: true,
         enums: false,
         settings: false,
+        events: false,
     };
     /// Enum domains and members only.
     pub const ENUMS: LookupScope = LookupScope {
         functions: false,
         enums: true,
         settings: false,
+        events: false,
     };
     /// Settings only.
     pub const SETTINGS: LookupScope = LookupScope {
         functions: false,
         enums: false,
         settings: true,
+        events: false,
+    };
+    /// `@Event` spellings only.
+    pub const EVENTS: LookupScope = LookupScope {
+        functions: false,
+        enums: false,
+        settings: false,
+        events: true,
     };
 
     fn any(self) -> bool {
-        self.functions || self.enums || self.settings
+        self.functions || self.enums || self.settings || self.events
     }
 }
 
@@ -411,6 +425,21 @@ pub enum LookupHit {
     SettingPath {
         /// The settings path this node represents.
         path: String,
+        /// Which spelling form matched.
+        matched_on: MatchKind,
+    },
+    /// A rule event the `@Event` header accepts. For events the OPY
+    /// spelling is also the canonical catalog id (`playerDied`,
+    /// `global`, `eachPlayer`).
+    Event {
+        /// The `@Event` spelling.
+        spelling: String,
+        /// Whether the event accepts `@Team`/`@Hero`/`@Slot` filters;
+        /// `global` events reject them.
+        accepts_filters: bool,
+        /// The English display name, when the catalog provides one.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        display_name: Option<String>,
         /// Which spelling form matched.
         matched_on: MatchKind,
     },
@@ -634,6 +663,7 @@ impl LookupHit {
                 format!("4{callable}.{}", param.name)
             }
             LookupHit::SettingPath { path, .. } => format!("5{path}"),
+            LookupHit::Event { spelling, .. } => format!("6{spelling}"),
         }
     }
 
@@ -721,6 +751,17 @@ impl LookupHit {
                 matched_on,
             },
             LookupHit::SettingPath { path, .. } => LookupHit::SettingPath { path, matched_on },
+            LookupHit::Event {
+                spelling,
+                accepts_filters,
+                display_name,
+                ..
+            } => LookupHit::Event {
+                spelling,
+                accepts_filters,
+                display_name,
+                matched_on,
+            },
         }
     }
 }
@@ -749,6 +790,7 @@ impl<'a> Index<'a> {
         index.index_functions();
         index.index_enums();
         index.index_settings();
+        index.index_events();
         index
     }
 
@@ -816,6 +858,7 @@ impl<'a> Index<'a> {
             LookupHit::Function { .. } | LookupHit::Parameter { .. } => scope.functions,
             LookupHit::EnumDomain { .. } | LookupHit::EnumMember { .. } => scope.enums,
             LookupHit::Setting { .. } | LookupHit::SettingPath { .. } => scope.settings,
+            LookupHit::Event { .. } => scope.events,
         }
     }
 
@@ -1319,6 +1362,39 @@ impl<'a> Index<'a> {
                 matched_on: MatchKind::Path,
             },
         });
+    }
+
+    /// One candidate per event the `@Event` header accepts. The
+    /// acceptance set is the lowerer's: `global`, `eachPlayer`, and the
+    /// `player_event_kind` names — the catalog's `subroutine` event is
+    /// not an `@Event` name (subroutine rules use `def`), so it is
+    /// excluded. `global` rejects player filters; the others accept
+    /// `@Team`/`@Hero`/`@Slot`.
+    fn index_events(&mut self) {
+        let locale = crate::enums::en_us();
+        for entry in self.catalog.entries_of(Kind::Event) {
+            let accepts_filters = match entry.id.as_str() {
+                "global" => false,
+                id if id == "eachPlayer" || crate::compiler::player_event_kind(id).is_some() => {
+                    true
+                }
+                _ => continue,
+            };
+            let display_name = entry.spelling(&locale).map(str::to_string);
+            let mut forms = vec![(entry.id.clone(), MatchKind::OpySpelling)];
+            for spelling in entry.spellings(&locale) {
+                forms.push((spelling.clone(), MatchKind::DisplayName));
+            }
+            self.candidates.push(Candidate {
+                forms,
+                hit: LookupHit::Event {
+                    spelling: entry.id.clone(),
+                    accepts_filters,
+                    display_name,
+                    matched_on: MatchKind::OpySpelling,
+                },
+            });
+        }
     }
 }
 

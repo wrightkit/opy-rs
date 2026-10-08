@@ -19,7 +19,7 @@ lookup.
 | Project loading | `lpp/check`, `lpp/compile` | LPP 1.1 loads from a client-selected file entry; LPP 1.2 also lets the provider select the default entry from a directory target. |
 | Rename | `lpp/rename` | Semantic rename of globals, player variables, and subroutines/`def`s across the received documents; refuses (`rename.*` refusal codes) when a site does not map to authored source or the result would not rebind identically. |
 | Edit validation | `lpp/validateEdits` | Applies a client's proposed edits and reports whether the result still checks clean, per the spec's normative rules. |
-| Lookup | `lpp/lookup` | LPP 1.5. Resolves a name guess to OPY spellings and structured facts — callable signatures, enum domains and members, settings keys and value forms — from the `opy-rs` name vocabulary. No loaded project or source document is required. |
+| Lookup | `lpp/lookup` | LPP 1.5. Resolves a name guess to OPY spellings and structured facts — callable signatures, enum domains and members, settings keys and value forms, and `@Event` rule events — from the `opy-rs` name vocabulary. No loaded project or source document is required. |
 
 Other LPP v1 capabilities are advertised as unavailable until they are
 implemented end to end.
@@ -37,6 +37,11 @@ state. The provider returns owner facts, not rendered signatures:
   members are `enumMember` entries spelled `Domain.MEMBER`.
 - Settings keys report `setting` facts: the value `type`, numeric bounds,
   and the enum domain an enum-typed key accepts.
+- Rule events (`kind: "event"`) report the `@Event` spelling — for events
+  the OPY spelling is the canonical catalog id — and an `event` fact whose
+  `acceptsFilters` says whether `@Team`/`@Hero`/`@Slot` filters apply
+  (`global` rejects them). The entry set is exactly the accepted `@Event`
+  vocabulary; `subroutine` is not an event name in OPY.
 
 `within` accepts the closed selector set: `"callable"` and `"enum"` take a
 provider-issued `identity` (`opy:callable/<name>`, `opy:enum/<domain>`), and
