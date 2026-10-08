@@ -22,8 +22,8 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::{
-    Document, HandlerError, document_path, filesystem_path, path_string, path_to_file_uri,
-    resolved_path, same_path, validate_documents,
+    Document, HandlerError, document_path, effective_entry, filesystem_path, path_string,
+    path_to_file_uri, resolved_path, same_path, validate_documents,
 };
 
 /// Diagnostics that describe sources or bindings outside a single document.
@@ -433,6 +433,47 @@ fn no_symbol(uri: &str) -> HandlerError {
     )
 }
 
+/// Evaluate `f` once per candidate, in parallel across the available cores,
+/// returning one slot per candidate in order. Each evaluation is a full
+/// project check — the dominant cost of `lpp/rename` on large document
+/// sets — and independent of every other, so parallel evaluation is
+/// observationally identical to the serial scan.
+fn evaluate_candidates<T: Send>(
+    candidates: &[&Document],
+    f: &(impl Fn(&Document) -> T + Sync),
+) -> Vec<T> {
+    let workers = std::thread::available_parallelism()
+        .map(std::num::NonZero::get)
+        .unwrap_or(1)
+        .min(candidates.len());
+    if workers <= 1 {
+        return candidates.iter().map(|document| f(document)).collect();
+    }
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let slots: Vec<std::sync::Mutex<Option<T>>> = (0..candidates.len())
+        .map(|_| std::sync::Mutex::new(None))
+        .collect();
+    std::thread::scope(|scope| {
+        for _ in 0..workers {
+            scope.spawn(|| {
+                loop {
+                    let index = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    let Some(slot) = slots.get(index) else { break };
+                    *slot.lock().expect("unpoisoned slot") = Some(f(candidates[index]));
+                }
+            });
+        }
+    });
+    slots
+        .into_iter()
+        .map(|slot| {
+            slot.into_inner()
+                .expect("unpoisoned slot")
+                .expect("every index evaluated")
+        })
+        .collect()
+}
+
 /// Pick the check whose file registry covers the position document and the
 /// most supplied documents: a document reached through `#!include` only
 /// resolves through the project that includes it, so every supplied document
@@ -448,9 +489,18 @@ fn model_view(
         .map(document_path)
         .collect::<Result<Vec<_>, _>>()?;
 
-    let mut best: Option<(ModelView, (usize, usize))> = None;
-    for (uri, document) in documents {
-        let path = document_path(document)?;
+    // Each candidate check is one full project load, so the scan is
+    // O(entries × project): past a few dozen supplied documents a serial
+    // loop outruns the client's request timeout. Two facts keep the cost
+    // bounded without changing the result: candidates sharing an
+    // effective entry (typically via `#!mainFile`) produce identical
+    // outcomes, so each unique entry is checked once; and the checks are
+    // independent — each outcome is a pure function of the document and
+    // the shared overlay — so they evaluate in parallel. Selection still
+    // runs in document order below and keeps the first strictly-best
+    // score, identical to the serial scan.
+    let evaluate = |document: &Document| {
+        let path = document_path(document).expect("paths collected above");
         let root = document_root(&path);
         let outcome = opy_rs::tooling::check_with_overlay(
             &document.text,
@@ -458,9 +508,7 @@ fn model_view(
             &root,
             overlay,
         );
-        if outcome.model.is_none() {
-            continue;
-        }
+        outcome.model.as_ref()?;
         let display_root = outcome.display_root.clone();
         let covers = |target: &Path| {
             outcome
@@ -470,9 +518,26 @@ fn model_view(
                 .any(|file| same_path(&resolved_path(&display_root, &file.path), target))
         };
         if !covers(&position_path) {
-            continue;
+            return None;
         }
         let covered_documents = document_paths.iter().filter(|path| covers(path)).count();
+        Some((outcome, display_root, covered_documents))
+    };
+    let mut representatives: Vec<(&String, &Document)> = Vec::new();
+    let mut seen_entries = std::collections::HashSet::new();
+    for ((uri, document), path) in documents.iter().zip(&document_paths) {
+        if seen_entries.insert(effective_entry(document, path)) {
+            representatives.push((uri, document));
+        }
+    }
+    let candidates: Vec<&Document> = representatives.iter().map(|(_, d)| *d).collect();
+    let evaluated = evaluate_candidates(&candidates, &evaluate);
+
+    let mut best: Option<(ModelView, (usize, usize))> = None;
+    for ((uri, _), evaluation) in representatives.iter().zip(evaluated) {
+        let Some((outcome, display_root, covered_documents)) = evaluation else {
+            continue;
+        };
         let score = (covered_documents, outcome.files.len());
         if best
             .as_ref()
@@ -482,7 +547,7 @@ fn model_view(
                 ModelView {
                     outcome,
                     display_root,
-                    entry_uri: uri.clone(),
+                    entry_uri: (*uri).clone(),
                 },
                 score,
             ));

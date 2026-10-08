@@ -1184,7 +1184,7 @@ fn document_overlays(
 /// checking them individually would repeat that parse once per document.
 /// An unreadable or malformed redirect keeps the document as its own entry,
 /// preserving its own `main-file-*` refusal.
-fn effective_entry(document: &Document, path: &Path) -> PathBuf {
+pub(crate) fn effective_entry(document: &Document, path: &Path) -> PathBuf {
     let Some(target) = opy_rs::preprocess::main_file_directive(&document.text) else {
         return path.to_path_buf();
     };
