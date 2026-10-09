@@ -1,0 +1,479 @@
+{
+ "schemaVersion": 1,
+ "pinned": "overpy@9.7.10",
+ "derivation": "heroes.values merge (__generalAndEachHero__ + filtered __eachHero__ + per-hero values) computed by the pinned compiler's own post-load task",
+ "generalKeys": [
+  "abilityCooldown%",
+  "ammoClipSize%",
+  "combatUltGen%",
+  "damageDealt%",
+  "damageReceived%",
+  "enableHeadshotsOnly",
+  "enableInfiniteAmmo",
+  "enableInfiniteUlt",
+  "enableMelee",
+  "enablePrimaryFire",
+  "enableRolePassive",
+  "enableSpawningWithUlt",
+  "enableUlt",
+  "healingDealt%",
+  "healingReceived%",
+  "health%",
+  "jumpVerticalSpeed%",
+  "movementGravity%",
+  "movementSpeed%",
+  "passiveHealthRegen",
+  "passiveUltGen%",
+  "projectileGravity%",
+  "projectileSpeed%",
+  "ultDuration%",
+  "ultGen%"
+ ],
+ "all": [
+  "combatUltGen%",
+  "damageDealt%",
+  "damageReceived%",
+  "enableAbility1",
+  "enableHeadshotsOnly",
+  "enableMelee",
+  "enablePrimaryFire",
+  "enableRolePassive",
+  "enableSpawningWithUlt",
+  "enableUlt",
+  "healingDealt%",
+  "healingReceived%",
+  "health%",
+  "jumpVerticalSpeed%",
+  "movementGravity%",
+  "movementSpeed%",
+  "passiveHealthRegen",
+  "passiveUltGen%",
+  "ultGen%"
+ ],
+ "only": {
+  "ability1Acceleration%": [
+   "pharah",
+   "winston"
+  ],
+  "ability1ChargeRate%": [
+   "doomfist"
+  ],
+  "ability1Distance%": [
+   "freja",
+   "kiriko",
+   "shion",
+   "hazard",
+   "vendetta"
+  ],
+  "ability1Duration%": [
+   "emre",
+   "mizuki",
+   "venture",
+   "juno",
+   "wuyang"
+  ],
+  "ability1EnemyKb%": [
+   "ashe"
+  ],
+  "ability1Health%": [
+   "lifeweaver"
+  ],
+  "ability1Heat%": [
+   "emre"
+  ],
+  "ability1Kb%": [
+   "brigitte",
+   "domina",
+   "dva",
+   "wreckingBall",
+   "junkrat",
+   "mauga",
+   "reinhardt",
+   "winston"
+  ],
+  "ability1RefuelScalar": [
+   "pharah"
+  ],
+  "ability1SelfKb%": [
+   "ashe"
+  ],
+  "ability2Distance%": [
+   "vendetta"
+  ],
+  "ability2Duration%": [
+   "shion",
+   "torbjorn"
+  ],
+  "ability2FuseTime%": [
+   "ashe"
+  ],
+  "ability2Healing%": [
+   "mauga"
+  ],
+  "ability2Health%": [
+   "hazard"
+  ],
+  "ability2Height%": [
+   "freja"
+  ],
+  "ability2Kb%": [
+   "emre",
+   "pharah",
+   "shion",
+   "sierra",
+   "sigma",
+   "hazard",
+   "wuyang"
+  ],
+  "ability2MaxDamage%": [
+   "moira"
+  ],
+  "ability2MaxHealing%": [
+   "moira"
+  ],
+  "ability2Quantity%": [
+   "hanzo"
+  ],
+  "ability2Speed%": [
+   "shion"
+  ],
+  "ability3Cooldown%": [
+   "wreckingBall",
+   "hanzo"
+  ],
+  "ability3Distance%": [
+   "hanzo"
+  ],
+  "ammoRegenerationTime%": [
+   "doomfist"
+  ],
+  "callMechKb%": [
+   "dva"
+  ],
+  "enableAbility3": [
+   "brigitte",
+   "wreckingBall",
+   "hanzo"
+  ],
+  "enableAutomaticFire": [
+   "ana",
+   "ashe",
+   "widowmaker"
+  ],
+  "enableInfiniteUlt": [
+   "ashe",
+   "baptiste",
+   "bastion",
+   "doomfist",
+   "emre",
+   "genji",
+   "wreckingBall",
+   "junkrat",
+   "moira",
+   "shion",
+   "soldier",
+   "torbjorn",
+   "widowmaker",
+   "winston",
+   "ramattra",
+   "venture"
+  ],
+  "enablePassive": [
+   "echo",
+   "mercy",
+   "pharah",
+   "juno"
+  ],
+  "enablePassiveUnlimitedFuel": [
+   "jetpackCat",
+   "pharah"
+  ],
+  "enablePrimaryFireFreezeStack": [
+   "mei"
+  ],
+  "enableRollOnly": [
+   "wreckingBall"
+  ],
+  "enableScoping": [
+   "ana",
+   "ashe",
+   "widowmaker"
+  ],
+  "passiveExtraFuel%": [
+   "pharah"
+  ],
+  "passiveHeal%": [
+   "domina"
+  ],
+  "passiveMaxTime%": [
+   "pharah"
+  ],
+  "passiveMaximumTime%": [
+   "pharah"
+  ],
+  "passiveRechargeRate%": [
+   "pharah"
+  ],
+  "passiveVerticalSpeed%": [
+   "pharah"
+  ],
+  "primaryFireFreezeDuration%": [
+   "mei"
+  ],
+  "primaryFireFreezeMinimum%": [
+   "mei"
+  ],
+  "primaryFireFreezeRate%": [
+   "mei"
+  ],
+  "primaryFireIgniteDamage": [
+   "mauga"
+  ],
+  "primaryFireIgniteDuration": [
+   "mauga"
+  ],
+  "primaryFireIgniteRate": [
+   "mauga"
+  ],
+  "primaryFireKb%": [
+   "junkrat",
+   "pharah",
+   "reinhardt"
+  ],
+  "primaryFireMaximumTime%": [
+   "moira"
+  ],
+  "primaryFireOrbTurnRate%": [
+   "wuyang"
+  ],
+  "primaryFireRange%": [
+   "jetpackCat",
+   "lifeweaver"
+  ],
+  "primaryFireRechargeRate%": [
+   "moira"
+  ],
+  "secondaryFireAlternateForm": [
+   "ramattra"
+  ],
+  "secondaryFireCooldown%": [
+   "bastion",
+   "brigitte",
+   "doomfist",
+   "domina",
+   "echo",
+   "freja",
+   "wreckingBall",
+   "junkerQueen",
+   "lucio",
+   "mizuki",
+   "orisa",
+   "pharah",
+   "reinhardt",
+   "roadhog",
+   "shion",
+   "sierra",
+   "sigma",
+   "soldier",
+   "sombra",
+   "ramattra",
+   "lifeweaver",
+   "venture",
+   "juno"
+  ],
+  "secondaryFireCost%": [
+   "hazard",
+   "wuyang"
+  ],
+  "secondaryFireDuration%": [
+   "freja"
+  ],
+  "secondaryFireEnergyChargeRate%": [
+   "sojourn"
+  ],
+  "secondaryFireHealth%": [
+   "lifeweaver"
+  ],
+  "secondaryFireKb%": [
+   "bastion",
+   "doomfist",
+   "junkerQueen",
+   "lucio",
+   "soldier",
+   "zarya"
+  ],
+  "secondaryFireMaximumTime%": [
+   "dva",
+   "jetpackCat",
+   "roadhog"
+  ],
+  "secondaryFireMovementSpeedPenalty%": [
+   "hazard"
+  ],
+  "secondaryFireRecallDelay%": [
+   "junkerQueen"
+  ],
+  "secondaryFireRechargeRate%": [
+   "brigitte",
+   "dva",
+   "jetpackCat",
+   "reinhardt",
+   "roadhog",
+   "sigma",
+   "wuyang",
+   "vendetta"
+  ],
+  "secondaryFireRegen%": [
+   "hazard"
+  ],
+  "selfDestructKb%": [
+   "dva"
+  ],
+  "shieldBashCooldown%": [
+   "brigitte"
+  ],
+  "shieldBashKb%": [
+   "brigitte"
+  ],
+  "solarEnergyMax%": [
+   "illari"
+  ],
+  "solarEnergyRecharge%": [
+   "illari"
+  ],
+  "spawnWithoutMech": [
+   "dva"
+  ],
+  "ultBarrierHealth%": [
+   "domina"
+  ],
+  "ultDuration%": [
+   "ashe",
+   "baptiste",
+   "bastion",
+   "doomfist",
+   "emre",
+   "genji",
+   "wreckingBall",
+   "junkrat",
+   "mauga",
+   "moira",
+   "soldier",
+   "torbjorn",
+   "widowmaker",
+   "winston",
+   "ramattra",
+   "venture"
+  ],
+  "ultFreezeMinimum%": [
+   "mei"
+  ],
+  "ultFreezeRate%": [
+   "mei"
+  ],
+  "ultHealth%": [
+   "lifeweaver"
+  ],
+  "ultKb%": [
+   "doomfist",
+   "emre",
+   "wreckingBall",
+   "roadhog",
+   "winston"
+  ],
+  "weaponsEnabled": [
+   "mercy",
+   "torbjorn",
+   "lifeweaver"
+  ]
+ },
+ "except": {
+  "ability1Cooldown%": [
+   "wreckingBall",
+   "lucio",
+   "soldier",
+   "zenyatta"
+  ],
+  "ability2Cooldown%": [
+   "bastion",
+   "zenyatta",
+   "venture"
+  ],
+  "ammoClipSize%": [
+   "brigitte",
+   "dva",
+   "freja",
+   "hanzo",
+   "kiriko",
+   "moira",
+   "reinhardt",
+   "sigma",
+   "hazard"
+  ],
+  "enableAbility2": [
+   "bastion",
+   "venture"
+  ],
+  "enableInfiniteAmmo": [
+   "brigitte",
+   "dva",
+   "freja",
+   "hanzo",
+   "kiriko",
+   "moira",
+   "reinhardt",
+   "sigma",
+   "sojourn",
+   "hazard"
+  ],
+  "enableSecondaryFire": [
+   "ana",
+   "ashe",
+   "dmon",
+   "domina",
+   "emre",
+   "hanzo",
+   "jetpackCat",
+   "junkrat",
+   "mizuki",
+   "reaper",
+   "shion",
+   "tracer",
+   "widowmaker",
+   "wuyang",
+   "vendetta"
+  ],
+  "projectileGravity%": [
+   "ana",
+   "bastion",
+   "brigitte",
+   "cassidy",
+   "doomfist",
+   "dva",
+   "echo",
+   "freja",
+   "genji",
+   "kiriko",
+   "lucio",
+   "mercy",
+   "moira",
+   "pharah",
+   "reaper",
+   "reinhardt",
+   "roadhog",
+   "sojourn",
+   "soldier",
+   "symmetra",
+   "winston",
+   "zenyatta",
+   "venture",
+   "juno",
+   "hazard"
+  ],
+  "projectileSpeed%": [
+   "brigitte",
+   "reaper",
+   "winston"
+  ]
+ }
+}

@@ -503,6 +503,356 @@ fn settings_numbers_render_like_the_pinned_oracle() {
 }
 
 #[test]
+fn hero_settings_apply_the_pinned_per_hero_schema() {
+    // opy-rs#495: the pinned schema merges hero settings per hero, so a
+    // catalogued key is only translated where it applies; elsewhere it is
+    // written fully verbatim.
+    let lines = compiled_lines(concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"heroes\": {\"allTeams\": {\n",
+        "        \"ana\": {\"ability3Cooldown%\": 50},\n",
+        "        \"wreckingBall\": {\"ability3Cooldown%\": 50},\n",
+        "        \"reinhardt\": {\"ammoClipSize%\": 50},\n",
+        "        \"mercy\": {\"ammoClipSize%\": 50},\n",
+        "        \"dva\": {\"ability2Height%\": 50},\n",
+        "        \"freja\": {\"ability2Height%\": 50}\n",
+        "    }}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    ));
+    for line in [
+        "ability3Cooldown%: 50",
+        "ammoClipSize%: 50",
+        "ability2Height%: 50",
+        "Piledriver Cooldown Time: 50%",
+        "Ammunition Clip Size Scalar: 50%",
+        "Updraft Height: 50%",
+    ] {
+        assert!(lines.contains(&line.to_string()), "{line:?} in {lines:?}");
+    }
+    for translated in [
+        "Sleep Dart Cooldown Time",
+        "Dynamite Cooldown Time",
+        "Biotic Grenade",
+    ] {
+        assert!(
+            !lines.iter().any(|line| line.contains(translated)),
+            "{translated:?} unexpectedly in {lines:?}"
+        );
+    }
+}
+
+#[test]
+fn hero_settings_rewrite_the_pinned_name_and_key_aliases() {
+    // opy-rs#495: the pinned compiler rewrites `mccree`/`hammond` hero names
+    // and `ability1KB%` member keys before its schema lookup.
+    let lines = compiled_lines(concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"heroes\": {\"allTeams\": {\n",
+        "        \"mccree\": {\"ability1Cooldown%\": 50},\n",
+        "        \"dva\": {\"ability1KB%\": 50},\n",
+        "        \"ana\": {\"ability1KB%\": 50},\n",
+        "        \"hammond\": {\"ability3Cooldown%\": 50}\n",
+        "    }}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    ));
+    for line in [
+        "Cassidy {",
+        "Combat Roll Cooldown Time: 50%",
+        "Boosters Knockback Scalar: 50%",
+        "ability1Kb%: 50",
+        "Piledriver Cooldown Time: 50%",
+    ] {
+        assert!(lines.contains(&line.to_string()), "{line:?} in {lines:?}");
+    }
+    assert!(
+        !lines.iter().any(|line| line.contains("ability1KB%")),
+        "authored spelling must not survive in {lines:?}"
+    );
+}
+
+#[test]
+fn hero_roster_lists_emit_after_hero_groups_with_canonical_names() {
+    // opy-rs#495: the pinned compiler emits `enabledHeroes`/`disabledHeroes`
+    // last inside a team block, and rewrites the same hero aliases in them.
+    let lines = compiled_lines(concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"heroes\": {\"allTeams\": {\n",
+        "        \"enabledHeroes\": [\"mccree\", \"hammond\"],\n",
+        "        \"dva\": {\"health%\": 50}\n",
+        "    }}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    ));
+    let enabled = lines
+        .iter()
+        .position(|line| line == "enabled heroes {")
+        .expect("hero list");
+    let dva = lines
+        .iter()
+        .position(|line| line == "D.Va {")
+        .expect("hero group");
+    assert!(
+        dva < enabled,
+        "hero list must follow hero groups: {lines:?}"
+    );
+    for line in ["Cassidy", "Wrecking Ball"] {
+        assert!(lines.contains(&line.to_string()), "{line:?} in {lines:?}");
+    }
+}
+
+#[test]
+fn hero_kb_rename_uses_the_pinned_assign_delete_order() {
+    // opy-rs#495: upstream rewrites `ability1KB%` via assign+delete, so the
+    // renamed member moves to the end, or collapses onto an authored
+    // `ability1Kb%` position with the source value.
+    let lines = compiled_lines(concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"heroes\": {\"allTeams\": {\n",
+        "        \"dva\": {\"ability1KB%\": 20, \"health%\": 150}\n",
+        "    }}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    ));
+    let health = lines
+        .iter()
+        .position(|line| line == "Health: 150%")
+        .expect("health member");
+    let kb = lines
+        .iter()
+        .position(|line| line == "Boosters Knockback Scalar: 20%")
+        .expect("renamed member");
+    assert!(health < kb, "renamed member must move last: {lines:?}");
+
+    let lines = compiled_lines(concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"heroes\": {\"allTeams\": {\n",
+        "        \"dva\": {\"ability1Kb%\": 10, \"health%\": 150, \"ability1KB%\": 20}\n",
+        "    }}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    ));
+    let health = lines
+        .iter()
+        .position(|line| line == "Health: 150%")
+        .expect("health member");
+    let kb = lines
+        .iter()
+        .position(|line| line == "Boosters Knockback Scalar: 20%")
+        .expect("renamed member");
+    assert!(
+        kb < health,
+        "collapsed member keeps the destination position: {lines:?}"
+    );
+    assert!(
+        !lines.iter().any(|line| line.contains("10%")),
+        "the source value wins over the authored destination: {lines:?}"
+    );
+}
+
+#[test]
+fn hero_group_rename_uses_the_pinned_assign_delete_order() {
+    // opy-rs#495: upstream renames alias hero groups via assign+delete, so a
+    // renamed group moves to the end, or collapses onto the canonical
+    // group's position with the source members.
+    let lines = compiled_lines(concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"heroes\": {\"allTeams\": {\n",
+        "        \"mccree\": {\"health%\": 50},\n",
+        "        \"ana\": {\"health%\": 150}\n",
+        "    }}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    ));
+    let ana = lines
+        .iter()
+        .position(|line| line == "Ana {")
+        .expect("ana group");
+    let cassidy = lines
+        .iter()
+        .position(|line| line == "Cassidy {")
+        .expect("renamed group");
+    assert!(ana < cassidy, "renamed group must move last: {lines:?}");
+
+    let lines = compiled_lines(concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"heroes\": {\"allTeams\": {\n",
+        "        \"mccree\": {\"health%\": 50},\n",
+        "        \"cassidy\": {\"health%\": 10}\n",
+        "    }}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    ));
+    assert_eq!(
+        lines.iter().filter(|line| **line == "Cassidy {").count(),
+        1,
+        "the canonical group collapses to one: {lines:?}"
+    );
+    assert!(
+        lines.contains(&"Health: 50%".to_string())
+            && !lines.iter().any(|line| line.contains("10%")),
+        "the source members win: {lines:?}"
+    );
+
+    // Both aliases in one team: upstream renames per alias in its fixed
+    // order, so appended groups follow that order, not authored order.
+    let lines = compiled_lines(concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"heroes\": {\"allTeams\": {\n",
+        "        \"hammond\": {\"health%\": 50},\n",
+        "        \"mccree\": {\"health%\": 60}\n",
+        "    }}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    ));
+    let cassidy = lines
+        .iter()
+        .position(|line| line == "Cassidy {")
+        .expect("cassidy group");
+    let wrecking_ball = lines
+        .iter()
+        .position(|line| line == "Wrecking Ball {")
+        .expect("wrecking ball group");
+    assert!(
+        cassidy < wrecking_ball,
+        "the mccree pass appends before the hammond pass: {lines:?}"
+    );
+}
+
+#[test]
+fn general_children_are_not_reprocessed_as_hero_members() {
+    // opy-rs#495: the flattened `general` members take only the team-level
+    // pass-through — hero-name and applicability passes must not reach them.
+    let lines = compiled_lines(concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"heroes\": {\"allTeams\": {\n",
+        "        \"general\": {\n",
+        "            \"dva\": {\"ability1KB%\": 50},\n",
+        "            \"damageDealt%\": 50\n",
+        "        },\n",
+        "        \"ana\": {\"health%\": 50}\n",
+        "    }}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    ));
+    for line in ["ability1KB%: 50", "Damage Dealt: 50%", "Health: 50%"] {
+        assert!(lines.contains(&line.to_string()), "{line:?} in {lines:?}");
+    }
+    assert!(
+        !lines
+            .iter()
+            .any(|line| line.contains("Boosters Knockback Scalar")),
+        "a nested hero dict stays verbatim: {lines:?}"
+    );
+}
+
+#[test]
+fn a_non_dict_general_yields_index_members_or_drops() {
+    // opy-rs#495: upstream iterates the value's `Object.keys`, so a string or
+    // list `general` emits index-keyed members while numbers/booleans drop.
+    let lines = compiled_lines(concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"heroes\": {\"allTeams\": {\n",
+        "        \"general\": \"ab\",\n",
+        "        \"ana\": {\"health%\": 50}\n",
+        "    }}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    ));
+    for line in ["0: a", "1: b", "Health: 50%"] {
+        assert!(lines.contains(&line.to_string()), "{line:?} in {lines:?}");
+    }
+
+    let lines = compiled_lines(concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"heroes\": {\"allTeams\": {\n",
+        "        \"general\": [10, 20],\n",
+        "        \"ana\": {\"health%\": 50}\n",
+        "    }}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    ));
+    for line in ["0: 10", "1: 20"] {
+        assert!(lines.contains(&line.to_string()), "{line:?} in {lines:?}");
+    }
+
+    let lines = compiled_lines(concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"heroes\": {\"allTeams\": {\n",
+        "        \"general\": 5,\n",
+        "        \"ana\": {\"health%\": 50}\n",
+        "    }}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    ));
+    assert!(
+        lines.contains(&"Health: 50%".to_string())
+            && !lines.iter().any(|line| line == "general: 5"),
+        "{lines:?} must drop the number member and keep the hero members"
+    );
+}
+
+#[test]
+fn both_hero_lists_in_one_team_error() {
+    // opy-rs#495: upstream rejects a team carrying both rosters.
+    let error = opy_rs::compile(
+        concat!(
+            "settings {\n",
+            "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+            "    \"heroes\": {\"allTeams\": {\n",
+            "        \"enabledHeroes\": [\"ana\"],\n",
+            "        \"disabledHeroes\": [\"genji\"]\n",
+            "    }}\n",
+            "}\n",
+            "rule \"a\":\n    @Event global\n    wait(1)\n",
+        ),
+        "main.opy",
+        Path::new(""),
+    )
+    .unwrap_err();
+    assert_eq!(error.code, "settings-hero-lists");
+    assert_eq!(
+        error.message,
+        "Cannot have both 'enabledHeroes' and 'disabledHeroes' in team 'allTeams'"
+    );
+}
+
+#[test]
+fn inapplicable_hero_key_with_enum_value_stays_verbatim() {
+    // opy-rs#495: a non-applicable key is unknown for that hero, so both the
+    // name and the value keep their authored spelling.
+    let lines = compiled_lines(concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"heroes\": {\"allTeams\": {\n",
+        "        \"ana\": {\"enableSecondaryFire\": false},\n",
+        "        \"genji\": {\"enableGenericSecondaryFire\": true}\n",
+        "    }}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    ));
+    for line in [
+        "enableSecondaryFire: false",
+        "enableGenericSecondaryFire: true",
+    ] {
+        assert!(lines.contains(&line.to_string()), "{line:?} in {lines:?}");
+    }
+}
+
+#[test]
 fn misspelled_settings_key_warns_with_a_single_candidate_suffix() {
     // A near-miss settings key compiles unchanged like upstream; `check` warns
     // and names the canonical key once.

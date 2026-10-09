@@ -14,7 +14,9 @@ settings keys cannot pass `check` and fail only inside the emitter. As in the
 pinned OverPy, a `main`, `lobby`, mode, team `general`, or hero member the
 table does not declare compiles as written: an unknown key as `key: value`
 (a list or object value as a block), and an enum key with an undeclared value
-as its localized key followed by the value. `check` reports each as a
+as its localized key followed by the value. A hero member the pinned schema
+does not apply to that hero is unknown for it and compiles fully verbatim.
+`check` reports each as a
 `unknown-setting` warning. A mode's non-Boolean `enabled` is dropped, as
 upstream does.
 `compile` continues from that resolved model through canonical WIR lowering,

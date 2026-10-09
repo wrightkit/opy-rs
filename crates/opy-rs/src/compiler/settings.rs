@@ -27,6 +27,7 @@ pub(crate) fn workshop_settings(
     let unknown = settings
         .as_mut()
         .map(pass_through_unknown_members)
+        .transpose()?
         .unwrap_or_default();
     Ok((settings, unknown))
 }
@@ -40,6 +41,73 @@ pub(crate) struct UnknownSetting {
     pub(crate) span: Option<WorkshopSpan>,
 }
 
+/// Whether the pinned OverPy schema applies a hero settings key to a
+/// specific hero. Its post-load schema merge expands
+/// `heroes.values.__generalAndEachHero__` plus the `__eachHero__` keys whose
+/// `include`/`exclude` hero filters admit the hero into that hero's `values`
+/// set; `compileCustomGameSettingsDict` then looks authored keys up in the
+/// merged set and writes the ones it cannot find back verbatim. The
+/// `data/hero_applicability.json` artifact records each merged key's
+/// applying heroes in the smaller of include/exclude form and is generated
+/// from the pinned compiler's own merge by
+/// `tools/overpy/gen_hero_applicability.cjs`.
+fn hero_setting_applies(hero: &str, key: &str) -> bool {
+    let data = applicability();
+    if data.all.iter().any(|candidate| candidate == key) {
+        return true;
+    }
+    if let Some(heroes) = data.only.get(key) {
+        return heroes.iter().any(|candidate| candidate == hero);
+    }
+    if let Some(heroes) = data.except.get(key) {
+        return !heroes.iter().any(|candidate| candidate == hero);
+    }
+    false
+}
+
+#[derive(serde::Deserialize)]
+struct HeroApplicability {
+    all: Vec<String>,
+    only: std::collections::HashMap<String, Vec<String>>,
+    except: std::collections::HashMap<String, Vec<String>>,
+}
+
+fn applicability() -> &'static HeroApplicability {
+    static DATA: std::sync::OnceLock<HeroApplicability> = std::sync::OnceLock::new();
+    DATA.get_or_init(|| {
+        serde_json::from_str(include_str!("data/hero_applicability.json"))
+            .expect("hero applicability data is valid JSON")
+    })
+}
+
+/// The pinned compiler rewrites these authored hero spellings under
+/// `heroes.<team>` — group names and hero-list elements alike — before the
+/// schema lookup (`compileCustomGameSettingsDict`). The order matters: group
+/// renames run as one pass per alias in this order.
+const HERO_NAME_ALIASES: &[(&str, &str)] = &[("mccree", "cassidy"), ("hammond", "wreckingBall")];
+
+fn canonical_hero_name(name: &str) -> &str {
+    HERO_NAME_ALIASES
+        .iter()
+        .find_map(|(alias, canonical)| (*alias == name).then_some(*canonical))
+        .unwrap_or(name)
+}
+
+fn rename_member(member: &mut workshop_rs::settings::SettingsNode, name: &str) {
+    use workshop_rs::settings::SettingsNode;
+    match member {
+        SettingsNode::Group { name: slot, .. }
+        | SettingsNode::Number { name: slot, .. }
+        | SettingsNode::Bool { name: slot, .. }
+        | SettingsNode::Flag { name: slot, .. }
+        | SettingsNode::String { name: slot, .. }
+        | SettingsNode::List { name: slot, .. }
+        | SettingsNode::Raw { name: slot, .. }
+        | SettingsNode::RawValue { name: slot, .. } => *slot = name.to_string(),
+        SettingsNode::Workshop { .. } => {}
+    }
+}
+
 /// The pinned OverPy writes a `main`, `lobby`, mode, team `general`, or hero
 /// member it cannot translate as authored instead of rejecting it: an unknown
 /// key with its value (`key: value`, a list or object as a block), and a
@@ -50,7 +118,7 @@ pub(crate) struct UnknownSetting {
 /// members ahead of its hero groups as the pinned OverPy writes them.
 fn pass_through_unknown_members(
     settings: &mut workshop_rs::settings::Settings,
-) -> Vec<UnknownSetting> {
+) -> Result<Vec<UnknownSetting>, IntegrationError> {
     use workshop_rs::settings::{PathPart, SettingsNode};
 
     let mut unknown = Vec::new();
@@ -60,7 +128,7 @@ fn pass_through_unknown_members(
         };
         match name.as_str() {
             "main" | "lobby" => {
-                pass_through_members(children, &[PathPart::Part(name)], &mut unknown);
+                pass_through_members(children, &[PathPart::Part(name)], &mut unknown, None);
             }
             "gamemodes" => {
                 for mode in children {
@@ -70,13 +138,18 @@ fn pass_through_unknown_members(
                                 || matches!(member, SettingsNode::Bool { .. })
                         });
                         let path = [PathPart::Part("gamemodes"), PathPart::Part(name)];
-                        pass_through_members(children, &path, &mut unknown);
+                        pass_through_members(children, &path, &mut unknown, None);
                     }
                 }
             }
             "heroes" => {
                 for team in children {
-                    let SettingsNode::Group { children, .. } = team else {
+                    let SettingsNode::Group {
+                        name: team_name,
+                        children,
+                        ..
+                    } = team
+                    else {
                         continue;
                     };
                     // Any other team member is a hero name to upstream.
@@ -87,31 +160,147 @@ fn pass_through_unknown_members(
                             SettingsNode::Group { name, children, .. } if name == "general" => {
                                 general.extend(children);
                             }
+                            // Upstream iterates the value's `Object.keys`: a
+                            // non-dict `general` yields index-keyed members for
+                            // strings and lists, and drops numbers/booleans.
+                            child if child.name() == "general" => match child {
+                                SettingsNode::String { value, span, .. } => {
+                                    general.extend(value.chars().enumerate().map(|(index, ch)| {
+                                        SettingsNode::Raw {
+                                            name: index.to_string(),
+                                            value: ch.to_string(),
+                                            span,
+                                        }
+                                    }));
+                                }
+                                SettingsNode::List { elements, .. } => {
+                                    general.extend(elements.iter().enumerate().map(
+                                        |(index, element)| SettingsNode::Raw {
+                                            name: index.to_string(),
+                                            value: element.value.clone(),
+                                            span: element.span,
+                                        },
+                                    ));
+                                }
+                                _ => {}
+                            },
                             child => rest.push(child),
                         }
                     }
                     let team_path = [PathPart::Part("heroes"), PathPart::Team];
-                    pass_through_members(&mut general, &team_path, &mut unknown);
-                    general.extend(rest);
-                    *children = general;
-                    for hero in children {
-                        if let SettingsNode::Group { children, .. } = hero {
-                            let path = [PathPart::Part("heroes"), PathPart::Team, PathPart::Hero];
-                            pass_through_members(children, &path, &mut unknown);
+                    pass_through_members(&mut general, &team_path, &mut unknown, None);
+                    let mut enabled = false;
+                    let mut disabled = false;
+                    for child in &rest {
+                        enabled |= child.name() == "enabledHeroes";
+                        disabled |= child.name() == "disabledHeroes";
+                    }
+                    if enabled && disabled {
+                        return Err(IntegrationError::new(
+                            "settings-hero-lists",
+                            format!(
+                                "Cannot have both 'enabledHeroes' and 'disabledHeroes' in team '{team_name}'"
+                            ),
+                            None,
+                        ));
+                    }
+                    // The pinned compiler emits `enabledHeroes`/`disabledHeroes`
+                    // after every hero group regardless of authored position.
+                    let (mut hero_lists, mut rest): (Vec<_>, Vec<_>) =
+                        rest.into_iter().partition(|child| {
+                            matches!(child, SettingsNode::List { name, .. } if matches!(
+                                name.as_str(),
+                                "enabledHeroes" | "disabledHeroes"
+                            ))
+                        });
+                    // Canonical hero-group names take upstream's assign+delete
+                    // rename: the source group lands at the destination's
+                    // position, collapsing a duplicate, or at the end of the
+                    // hero groups when the destination is absent. Upstream
+                    // runs one pass per alias in `HERO_NAME_ALIASES` order, so
+                    // appended groups follow that order, not authored order.
+                    for (alias, canonical) in HERO_NAME_ALIASES {
+                        let mut index = 0;
+                        while index < rest.len() {
+                            let SettingsNode::Group { name, .. } = &rest[index] else {
+                                index += 1;
+                                continue;
+                            };
+                            if name != alias {
+                                index += 1;
+                                continue;
+                            }
+                            let mut moved = rest.remove(index);
+                            if let SettingsNode::Group { name, .. } = &mut moved {
+                                *name = (*canonical).to_string();
+                            }
+                            match rest.iter_mut().find(|m| m.name() == *canonical) {
+                                Some(dest) => *dest = moved,
+                                None => rest.push(moved),
+                            }
                         }
                     }
+                    // The flattened `general` members are not reprocessed:
+                    // only authored hero groups and hero rosters take the
+                    // hero-name and applicability passes.
+                    for hero in rest.iter_mut().chain(hero_lists.iter_mut()) {
+                        match hero {
+                            SettingsNode::Group { name, children, .. } => {
+                                let canonical = canonical_hero_name(name).to_string();
+                                // The pinned compiler rewrites `ability1KB%`
+                                // to `ability1Kb%` inside hero settings before
+                                // the schema lookup; the rewritten member takes
+                                // the source value at the destination key's
+                                // position, collapsing a duplicate, and moves to
+                                // the end when the destination is absent.
+                                if let Some(source) =
+                                    children.iter().position(|m| m.name() == "ability1KB%")
+                                {
+                                    let mut moved = children.remove(source);
+                                    rename_member(&mut moved, "ability1Kb%");
+                                    match children.iter_mut().find(|m| m.name() == "ability1Kb%") {
+                                        Some(dest) => *dest = moved,
+                                        None => children.push(moved),
+                                    }
+                                }
+                                let path =
+                                    [PathPart::Part("heroes"), PathPart::Team, PathPart::Hero];
+                                pass_through_members(
+                                    children,
+                                    &path,
+                                    &mut unknown,
+                                    Some(canonical.as_str()),
+                                );
+                            }
+                            SettingsNode::List { name, elements, .. }
+                                if matches!(name.as_str(), "enabledHeroes" | "disabledHeroes") =>
+                            {
+                                for element in elements {
+                                    let canonical = canonical_hero_name(&element.value);
+                                    if canonical != element.value {
+                                        element.value = canonical.to_string();
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    general.extend(rest);
+                    general.extend(hero_lists);
+                    *children = general;
                 }
             }
             _ => {}
         }
     }
-    unknown
+    Ok(unknown)
 }
 
 fn pass_through_members(
     members: &mut [workshop_rs::settings::SettingsNode],
     path: &[workshop_rs::settings::PathPart<'_>],
     unknown: &mut Vec<UnknownSetting>,
+    hero: Option<&str>,
 ) {
     use workshop_rs::settings::{PathPart, SettingValueDomain, SettingsNode};
 
@@ -124,12 +313,23 @@ fn pass_through_members(
         let span = member.span();
         let mut full = path.to_vec();
         full.push(PathPart::Part(&name));
-        match workshop_rs::settings::definition(&full) {
+        let definition = workshop_rs::settings::definition(&full);
+        // A catalogued key the pinned schema does not apply to this hero is
+        // unknown for it and passes through like any other unknown key, but
+        // fully verbatim: a `RawValue` at the catalogued path would still
+        // emit the canonical name.
+        let inapplicable = definition.is_some()
+            && hero.is_some_and(|hero| !hero_setting_applies(hero, name.as_str()));
+        match definition.filter(|_| !inapplicable) {
             None => {
                 if matches!(member, SettingsNode::Raw { .. }) {
                     continue;
                 }
-                *member = written_form(member.clone());
+                *member = if inapplicable {
+                    verbatim_form(member.clone())
+                } else {
+                    written_form(member.clone())
+                };
                 unknown.push(UnknownSetting {
                     name,
                     value: None,
@@ -206,6 +406,22 @@ fn written_form(node: workshop_rs::settings::SettingsNode) -> workshop_rs::setti
             },
             None => node,
         },
+    }
+}
+
+/// The fully verbatim form of a member: like [`written_form`], but a scalar
+/// becomes `Raw` so its name is written as authored even when the key
+/// resolves in the catalog.
+fn verbatim_form(node: workshop_rs::settings::SettingsNode) -> workshop_rs::settings::SettingsNode {
+    use workshop_rs::settings::SettingsNode;
+
+    match scalar_text(&node) {
+        Some(value) => SettingsNode::Raw {
+            name: node.name().to_string(),
+            value,
+            span: node.span(),
+        },
+        None => written_form(node),
     }
 }
 
