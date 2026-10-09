@@ -467,7 +467,7 @@ impl SettingsLowerer {
         file: u32,
         origin: crate::diag::Position,
     ) -> OpyResult<HirExpr> {
-        let expression = crate::parser::parse_expression_fragment(text, file, origin)?;
+        let expression = crate::parser::parse_expression_fragment(text, file, origin, None)?;
         self.lowerer.errors.clear();
         self.lowerer.texture_used = false;
         let lowered = self

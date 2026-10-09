@@ -568,6 +568,7 @@ impl Preprocessor {
         let mut tokens = tokens;
         for token in &mut tokens {
             token.span = shift_settings_span(token.span, block.text_start);
+            token.layout = token.span;
         }
         let tokens = self.expand(tokens)?;
         Ok(SettingsBlock {
@@ -736,6 +737,41 @@ mod tests {
     }
 
     #[test]
+    fn expanded_tokens_carry_the_use_site_span() {
+        // #506: an expansion wider than its invocation must not record
+        // positions past the authored line; every expanded token attributes
+        // to the authored macro name.
+        let (pre, _) = preprocess(
+            "#!define T a_much_wider_replacement + another_token\nrule \"r\":\n    x = T\n",
+            "main.opy",
+            Path::new("."),
+        )
+        .unwrap();
+        let use_site = pre
+            .tokens
+            .iter()
+            .find(|token| token.text == "a_much_wider_replacement")
+            .expect("expanded token")
+            .span;
+        for token in pre.tokens.iter().filter(|token| {
+            matches!(
+                token.text.as_str(),
+                "a_much_wider_replacement" | "+" | "another_token"
+            )
+        }) {
+            assert_eq!(
+                token.span, use_site,
+                "{} must attribute to the use site",
+                token.text
+            );
+        }
+        // `T` sits at 3:9-3:10 in the authored source; the replacement is far
+        // wider, so shifted coordinates would have overrun the line.
+        assert_eq!(use_site.start, crate::diag::Position::new(3, 9));
+        assert_eq!(use_site.end, crate::diag::Position::new(3, 10));
+    }
+
+    #[test]
     fn function_define_substitutes_params() {
         let (pre, _) = preprocess(
             "#!define double(x) x + x\nrule \"r\":\n    y = double(3)\n",
@@ -882,23 +918,28 @@ mod tests {
     }
 
     #[test]
-    fn multiline_define_preserves_relative_expansion_spans() {
+    fn multiline_define_expanded_tokens_attribute_to_the_use_site() {
+        // #506: a multi-line expansion attributes every token to the
+        // invocation — shifted line numbers would point at unrelated
+        // authored lines.
         let (pre, _) = preprocess(
             "#!define block() A = 1\\\n    A = 2\nblock()\n",
             "main.opy",
             Path::new("."),
         )
         .expect("multiline define expansion");
+        let expected = Span::new(
+            0,
+            crate::diag::Position::new(3, 1),
+            crate::diag::Position::new(3, 6),
+        );
         let numbers: Vec<Span> = pre
             .tokens
             .iter()
             .filter(|token| token.kind == TokenKind::Number)
             .map(|token| token.span)
             .collect();
-        assert_eq!(numbers.len(), 2);
-        assert_eq!(numbers[0].start.line, 3);
-        assert_eq!(numbers[1].start.line, 4);
-        assert_eq!(numbers[1].start.col, 9);
+        assert_eq!(numbers, vec![expected; 2]);
     }
 
     #[test]

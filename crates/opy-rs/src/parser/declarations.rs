@@ -97,14 +97,14 @@ impl Parser<'_> {
             Err(()) => return false,
         };
         let Ok(body_indent) =
-            self.expect_block_indent(start.span.start.col, "':' after the enum name")
+            self.expect_block_indent(start.layout.start.col, "':' after the enum name")
         else {
             return false;
         };
         let mut members = Vec::new();
         loop {
             self.skip_newlines();
-            if self.peek_kind() == TokenKind::Eof || self.peek().span.start.col < body_indent {
+            if self.peek_kind() == TokenKind::Eof || self.peek().layout.start.col < body_indent {
                 break;
             }
             if self.peek_kind() == TokenKind::Ident {
@@ -202,7 +202,7 @@ impl Parser<'_> {
             args.insert(0, "self".to_string());
         }
         let Ok(body_indent) =
-            self.expect_block_indent(start.span.start.col, "':' after the macro signature")
+            self.expect_block_indent(start.layout.start.col, "':' after the macro signature")
         else {
             return false;
         };

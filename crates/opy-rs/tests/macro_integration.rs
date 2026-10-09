@@ -88,6 +88,22 @@ fn script_macro_helpers_surface_is_available() {
 }
 
 #[test]
+fn script_macro_multiline_output_preserves_block_structure() {
+    // #506: script expansions carry the use-site span as provenance but keep
+    // the expansion's internal layout for the parser — a collapsed layout
+    // would let `C = 2` escape the `if` body.
+    let program = compile_fixture("blockgen.opy").unwrap();
+    let opy_rs::hir::RuleEntry::Rule(rule) = &program.rules[0] else {
+        panic!("expected a rule");
+    };
+    assert_eq!(rule.actions.len(), 1);
+    let opy_rs::hir::Stmt::If { branches, .. } = &rule.actions[0] else {
+        panic!("expected an if statement, got {:?}", rule.actions[0]);
+    };
+    assert_eq!(branches[0].body.len(), 2);
+}
+
+#[test]
 fn missing_script_file_is_a_structured_diagnostic() {
     // The reference resolves the script path at the define site and fails
     // with ENOENT; the native frontend rejects with `script-not-found` at the

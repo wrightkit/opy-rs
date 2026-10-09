@@ -40,6 +40,7 @@ impl Preprocessor {
                     text: prefix,
                     raw: None,
                     span: token.span,
+                    layout: token.layout,
                 });
                 out.push(token.clone());
                 index += 1;

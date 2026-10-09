@@ -11,10 +11,17 @@ impl Parser<'_> {
     ) -> Result<Expr, ()> {
         self.skip_expression_newlines();
         let then_value = self.parse_or()?;
+        // The statement-boundary heuristic compares virtual layout lines on
+        // both sides; `then_value`'s last token is the one just consumed, and
+        // its provenance span would collapse every expanded token to the
+        // macro use site (#506 re-review).
         if self.is_ident("if")
             && !self.inside_delimiter_group()
-            && self.peek().span.start.line != then_value.span().end.line
-            && self.newline_after_line(then_value.span().file, then_value.span().end.line)
+            && self.peek().layout.start.line != self.tokens[self.pos - 1].layout.end.line
+            && self.newline_after_line(
+                self.tokens[self.pos - 1].layout.file,
+                self.tokens[self.pos - 1].layout.end.line,
+            )
         {
             return Ok(then_value);
         }
@@ -697,16 +704,19 @@ impl Parser<'_> {
                         self.errors.push(OpyError::at(
                             "parse-error",
                             "f-string interpolation cannot be empty".to_string(),
-                            Span::new(
-                                string_span.file,
-                                Position::new(
-                                    string_span.start.line,
-                                    string_span.start.col + index as u32 + 1,
+                            crate::parser::bounded_span(
+                                Span::new(
+                                    string_span.file,
+                                    Position::new(
+                                        string_span.start.line,
+                                        string_span.start.col + index as u32 + 1,
+                                    ),
+                                    Position::new(
+                                        string_span.start.line,
+                                        string_span.start.col + end as u32 + 1,
+                                    ),
                                 ),
-                                Position::new(
-                                    string_span.start.line,
-                                    string_span.start.col + end as u32 + 1,
-                                ),
+                                string_span,
                             ),
                         ));
                         return Err(());
@@ -715,10 +725,15 @@ impl Parser<'_> {
                         string_span.start.line,
                         string_span.start.col + index as u32 + 1,
                     );
-                    let parsed = parse_expression_fragment(&expression, string_span.file, origin)
-                        .map_err(|error| {
-                            self.errors.push(error);
-                        });
+                    let parsed = parse_expression_fragment(
+                        &expression,
+                        string_span.file,
+                        origin,
+                        Some(string_span),
+                    )
+                    .map_err(|error| {
+                        self.errors.push(error);
+                    });
                     let Ok(parsed) = parsed else {
                         return Err(());
                     };

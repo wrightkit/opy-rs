@@ -76,7 +76,15 @@ pub struct Token {
     /// constructs such as f-string interpolations can recover expression
     /// spans without losing provenance during preprocessing.
     pub raw: Option<String>,
+    /// Authored-source provenance. Tokens produced by macro or script
+    /// expansion carry the use-site span: the expanded text does not exist
+    /// in authored source, so the invocation is the only honest position.
     pub span: Span,
+    /// The position the indentation-sensitive parser reads for layout
+    /// decisions. It equals `span` for authored tokens; expanded tokens keep
+    /// the expansion's relative line and column structure here so blocks and
+    /// statement boundaries still resolve (#506).
+    pub(crate) layout: Span,
 }
 
 impl Token {
@@ -86,6 +94,7 @@ impl Token {
             text: text.into(),
             raw: None,
             span,
+            layout: span,
         }
     }
 }

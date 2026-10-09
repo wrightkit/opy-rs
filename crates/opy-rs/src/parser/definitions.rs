@@ -54,7 +54,7 @@ impl Parser<'_> {
                     .max(name_token_span.start.col + 1),
             ),
         );
-        let line_indent = start.span.start.col;
+        let line_indent = start.layout.start.col;
         if self
             .expect_block_indent(line_indent, "':' after the rule name")
             .is_err()
@@ -69,7 +69,7 @@ impl Parser<'_> {
         let mut actions = Vec::new();
         loop {
             self.skip_newlines();
-            if self.peek_kind() == TokenKind::Eof || self.peek().span.start.col < body_indent {
+            if self.peek_kind() == TokenKind::Eof || self.peek().layout.start.col < body_indent {
                 break;
             }
             if self.peek_kind() == TokenKind::At {
@@ -350,7 +350,7 @@ impl Parser<'_> {
             return false;
         }
         let Ok(body_indent) =
-            self.expect_block_indent(start.span.start.col, "':' after the subroutine signature")
+            self.expect_block_indent(start.layout.start.col, "':' after the subroutine signature")
         else {
             return false;
         };

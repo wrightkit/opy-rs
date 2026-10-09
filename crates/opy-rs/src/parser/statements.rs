@@ -8,10 +8,10 @@ impl Parser<'_> {
             if self.peek_kind() == TokenKind::Eof {
                 break;
             }
-            if self.peek().span.start.col < block_indent {
+            if self.peek().layout.start.col < block_indent {
                 break;
             }
-            if self.peek().span.start.col > block_indent {
+            if self.peek().layout.start.col > block_indent {
                 self.error_at_current("unexpected indentation".to_string());
                 self.recover_line();
                 continue;
@@ -247,7 +247,7 @@ impl Parser<'_> {
     }
 
     pub(super) fn parse_if(&mut self) -> Result<Stmt, ()> {
-        let indent = self.peek().span.start.col;
+        let indent = self.peek().layout.start.col;
         self.open_if_indents.push(indent);
         let stmt = self.parse_if_chain();
         self.open_if_indents.pop();
@@ -256,7 +256,7 @@ impl Parser<'_> {
 
     fn parse_if_chain(&mut self) -> Result<Stmt, ()> {
         let start = self.advance();
-        let line_indent = start.span.start.col;
+        let line_indent = start.layout.start.col;
         let condition = self.parse_expr()?;
         let body = self.expect_colon_body(line_indent, "':' after the if condition")?;
         let continued_inline_body = self.last_colon_body_continued;
@@ -278,7 +278,7 @@ impl Parser<'_> {
         loop {
             let save = self.pos;
             self.skip_newlines();
-            let column = self.peek().span.start.col;
+            let column = self.peek().layout.start.col;
             if self.peek_kind() == TokenKind::Eof
                 || column > line_indent
                 || (column != line_indent && self.open_if_indents.contains(&column))
@@ -293,7 +293,7 @@ impl Parser<'_> {
                     Err(()) => return Err(()),
                 };
                 let body = self.expect_colon_body(
-                    branch_start.span.start.col,
+                    branch_start.layout.start.col,
                     "':' after the elif condition",
                 )?;
                 branches.push(IfBranch {
@@ -307,7 +307,7 @@ impl Parser<'_> {
                     self.bump();
                     let condition = self.parse_expr()?;
                     let body = self.expect_colon_body(
-                        branch_start.span.start.col,
+                        branch_start.layout.start.col,
                         "':' after the else-if condition",
                     )?;
                     branches.push(IfBranch {
@@ -318,7 +318,7 @@ impl Parser<'_> {
                     continue;
                 }
                 let body =
-                    self.expect_colon_body(branch_start.span.start.col, "':' after `else`")?;
+                    self.expect_colon_body(branch_start.layout.start.col, "':' after `else`")?;
                 else_span = Some(branch_start.span);
                 r#else = Some(body);
                 break;
@@ -350,7 +350,7 @@ impl Parser<'_> {
         if matches!(self.peek_kind(), TokenKind::Newline | TokenKind::Eof) {
             let save = self.pos;
             self.skip_newlines();
-            if self.peek_kind() != TokenKind::Eof && self.peek().span.start.col == line_indent {
+            if self.peek_kind() != TokenKind::Eof && self.peek().layout.start.col == line_indent {
                 let statement = self.parse_statement()?;
                 self.expect_statement_end("the inline statement")?;
                 self.last_colon_body_continued = self.last_statement_continued;
@@ -386,7 +386,7 @@ impl Parser<'_> {
         self.bump();
         let iterable = self.parse_expr()?;
         let body_indent =
-            self.expect_block_indent(start.span.start.col, "':' after the for header")?;
+            self.expect_block_indent(start.layout.start.col, "':' after the for header")?;
         let body = self.parse_block(body_indent);
         Ok(Stmt::For {
             variable,
@@ -400,7 +400,7 @@ impl Parser<'_> {
         let start = self.advance();
         let condition = self.parse_expr()?;
         let body_indent =
-            self.expect_block_indent(start.span.start.col, "':' after the while condition")?;
+            self.expect_block_indent(start.layout.start.col, "':' after the while condition")?;
         let body = self.parse_block(body_indent);
         Ok(Stmt::While {
             condition,
@@ -411,7 +411,7 @@ impl Parser<'_> {
 
     pub(super) fn parse_do_while(&mut self) -> Result<Stmt, ()> {
         let start = self.advance();
-        let body_indent = self.expect_block_indent(start.span.start.col, "':' after `do`")?;
+        let body_indent = self.expect_block_indent(start.layout.start.col, "':' after `do`")?;
         let body = self.parse_block(body_indent);
         if !self.is_ident("while") {
             self.error_at_current("expected `while` after the do block".to_string());
@@ -434,14 +434,14 @@ impl Parser<'_> {
         let start = self.advance();
         let value = self.parse_expr()?;
         let body_indent =
-            self.expect_block_indent(start.span.start.col, "':' after the switch value")?;
+            self.expect_block_indent(start.layout.start.col, "':' after the switch value")?;
         let mut arms = Vec::new();
         loop {
             self.skip_newlines();
-            if self.peek_kind() == TokenKind::Eof || self.peek().span.start.col < body_indent {
+            if self.peek_kind() == TokenKind::Eof || self.peek().layout.start.col < body_indent {
                 break;
             }
-            if self.peek().span.start.col != body_indent {
+            if self.peek().layout.start.col != body_indent {
                 self.error_at_current("unexpected indentation in switch".to_string());
                 self.recover_line();
                 continue;
@@ -465,7 +465,7 @@ impl Parser<'_> {
                     body: self.parse_block(default_body_indent),
                     span: default_start.span,
                 });
-                if default_start.span.start.col != body_indent {
+                if default_start.layout.start.col != body_indent {
                     self.error_at_current("invalid default indentation".to_string());
                     return Err(());
                 }
