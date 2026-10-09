@@ -70,7 +70,14 @@ fn default_entry(directory: &Path) -> Result<PathBuf, FilesystemProjectError> {
             // Present but not a regular file, or genuinely absent — keep
             // looking; only a real I/O failure aborts classification (#484).
             Ok(_) => {}
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            // A path component that is a file (`NotADirectory`, `NotFound` on
+            // Windows) means the candidate cannot exist, like an absent one
+            // (#497); only a real I/O failure aborts classification.
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::NotFound | io::ErrorKind::NotADirectory
+                ) => {}
             Err(error) => {
                 return Err(FilesystemProjectError::entry_unreadable(candidate, error));
             }
@@ -239,8 +246,26 @@ mod tests {
         ));
     }
 
-    /// A path inside a regular file fails canonicalization with `ENOTDIR`
-    /// on every platform — the deterministic non-`NotFound` cause.
+    /// A directory holding a regular file named `src` has no default entry,
+    /// like an empty directory (#497). Unix reports `NotADirectory` for the
+    /// `src/main.opy` probe; Windows reports `NotFound` — the test asserts
+    /// only the shared outcome, verified on macOS.
+    #[test]
+    fn file_named_src_in_a_directory_is_default_entry_not_found() {
+        let dir = scratch("file-src");
+        std::fs::write(dir.join("src"), "not a directory\n").unwrap();
+        let error = FilesystemProject::load(&dir).expect_err("no default entry");
+        assert!(error.is_entry_not_found());
+        assert!(matches!(
+            error,
+            FilesystemProjectError::DefaultEntryNotFound { .. }
+        ));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A path inside a regular file fails canonicalization with `ENOTDIR` on
+    /// Unix (`NotFound` on Windows) — a deterministic non-`NotFound` cause
+    /// here; verified on macOS.
     #[test]
     fn entry_inside_a_file_is_not_classified_as_missing() {
         let dir = scratch("notdir");
