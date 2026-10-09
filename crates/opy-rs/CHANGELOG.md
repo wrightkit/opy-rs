@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.7](https://github.com/wrightkit/opy-rs/compare/v0.3.6...v0.3.7) - 2026-10-09
+
+### Fixed
+
+- *(project)* classify a path through a regular file as absent on every platform ([#501](https://github.com/wrightkit/opy-rs/pull/501))
+- *(project)* report no default entry when a path component is a file ([#511](https://github.com/wrightkit/opy-rs/pull/511))
+- *(settings)* apply hero settings keys per the pinned per-hero schema ([#509](https://github.com/wrightkit/opy-rs/pull/509))
+- *(parser)* keep the conditional boundary guard in the layout domain
+- *(preprocess)* carry expansion layout separately from provenance
+- *(preprocess)* attribute macro-expanded tokens to the use site
+
+### Other
+
+- Merge pull request #507 from wrightkit/wt-496-js-settings-numbers
+
 ## [0.3.6](https://github.com/wrightkit/opy-rs/compare/v0.3.5...v0.3.6) - 2026-10-09
 
 ### Added
