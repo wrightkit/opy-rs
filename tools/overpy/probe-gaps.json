@@ -66,6 +66,18 @@
       "decision": "approved for the spelling contract: the probe verifies name resolution, and `Unknown map`/`Unknown gamemode` rejections still fail as `unknown-spelling`"
     },
     {
+      "id": "pinned-oracle-predates-upstream-spelling",
+      "status": "unknown-spelling",
+      "functions": [
+        "Map.GRIMSVOTN"
+      ],
+      "variant": ":spelling",
+      "detail": "Unknown map 'GRIMSVOTN'",
+      "cause": "The pinned 9.7.10 reference predates upstream 9.7.17, which added `grimsvotn` to `mapKw`: `Map.GRIMSVOTN` is a real OverPy spelling current upstream accepts, so opy-rs resolves it and the lookup advertises it, while the pinned oracle still answers `Unknown map`. The pin is a stale-data artifact, not a name-resolution contract — the vocabulary contract follows current upstream spellings.",
+      "owner": "opy-rs",
+      "decision": "approved for the spelling contract: the member is admitted because current upstream defines the spelling (wrightkit/opy-rs#498, wrightkit/opy-rs#499); a future oracle re-pin past 9.7.17 makes this gap stale"
+    },
+    {
       "id": "literal-onlyinoverpy-empty-slot",
       "status": "unparsable",
       "functions": [
