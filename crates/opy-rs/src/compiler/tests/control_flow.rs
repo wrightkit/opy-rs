@@ -317,6 +317,66 @@ fn nested_switch_break_matches_upstream_noop_elision() {
 }
 
 #[test]
+fn if_chain_markers_map_to_authored_branch_keywords() {
+    // `elif`/`else`/`End` marker spans let consumers derive authored branch
+    // boundaries without knowing OPY syntax (wright lint fixes, #583).
+    let source = "globalvar total\n\nrule \"r\":\n    @Event global\n    if total == 1:\n        total = 2\n    elif total == 1:\n        total = 3\n    else:\n        total = 4\n    total = 5\n";
+    let (report, mapped) = Compiler::new()
+        .unwrap()
+        .compile_source_report_mapped_with_language(source, "source.opy", Path::new("."), "en-US");
+    assert_eq!(report.compile.status, crate::CompileStatus::Success);
+    let mapped = mapped.expect("successful compile must produce the mapped artifact");
+
+    let catalog = Catalog::builtin().unwrap();
+    let mut program =
+        workshop_rs::parser::parse(&mapped.text, &catalog, &Locale::new("en-US")).unwrap();
+    mapped.map.apply(&mut program).unwrap();
+
+    let actions = &program.rules[0].actions;
+    assert!(matches!(actions[0], workshop_rs::Action::If { .. }));
+    assert!(matches!(actions[2], workshop_rs::Action::ElseIf { .. }));
+    assert!(matches!(actions[4], workshop_rs::Action::Else));
+    assert!(matches!(actions[6], workshop_rs::Action::End));
+
+    let position = |index: usize| {
+        program
+            .action_span(0, index)
+            .unwrap_or_else(|| panic!("action {index} must carry an authored span"))
+            .start
+    };
+    assert_eq!(position(0), workshop_rs::source::Position::new(5, 5));
+    assert_eq!(position(2), workshop_rs::source::Position::new(7, 5));
+    assert_eq!(position(4), workshop_rs::source::Position::new(9, 5));
+    // The `End` marker is a zero-width span at the dedent boundary.
+    let end = program.action_span(0, 6).unwrap();
+    assert_eq!(end.start, end.end);
+    assert_eq!(end.start, workshop_rs::source::Position::new(11, 5));
+}
+
+#[test]
+fn if_chain_end_marker_at_eof_uses_the_eof_position() {
+    // A chain closed by end-of-file has no dedent token: `End` maps to a
+    // zero-width span at EOF so the final branch's extent still derives.
+    let source = "globalvar total\n\nrule \"r\":\n    @Event global\n    if total == 1:\n        total = 2\n    elif total == 1:\n        total = 3";
+    let (report, mapped) = Compiler::new()
+        .unwrap()
+        .compile_source_report_mapped_with_language(source, "source.opy", Path::new("."), "en-US");
+    assert_eq!(report.compile.status, crate::CompileStatus::Success);
+    let mapped = mapped.expect("successful compile must produce the mapped artifact");
+
+    let catalog = Catalog::builtin().unwrap();
+    let mut program =
+        workshop_rs::parser::parse(&mapped.text, &catalog, &Locale::new("en-US")).unwrap();
+    mapped.map.apply(&mut program).unwrap();
+
+    let end = program
+        .action_span(0, 4)
+        .expect("the chain's End marker must carry a span");
+    assert_eq!(end.start, end.end);
+    assert_eq!(end.start, workshop_rs::source::Position::new(8, 18));
+}
+
+#[test]
 fn size_optimization_spells_zero_and_one_as_false_and_true_where_the_parameter_allows() {
     let source = "#!optimizeForSize\nrule \"r\":\n    @Event eachPlayer\n    eventPlayer.startForcingThrottle(0, 1, 0, 0.5, 0, 1)\n";
     let hir = crate::compile(source, "source.opy", Path::new(".")).unwrap();

@@ -454,6 +454,13 @@ pub enum Stmt {
         branches: Vec<IfBranch>,
         #[serde(default)]
         r#else: Option<Vec<Stmt>>,
+        /// The authored `else` keyword span when the chain has an else branch.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        else_span: Option<Span>,
+        /// Zero-width span at the first token past the chain: the position a
+        /// Workshop `End` marker would occupy.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        end_span: Option<Span>,
         #[serde(skip_serializing_if = "Option::is_none")]
         span: Option<Span>,
     },
@@ -535,6 +542,9 @@ pub struct IfBranch {
     pub condition: Box<Expr>,
     #[serde(default)]
     pub body: Vec<Stmt>,
+    /// The authored `if`/`elif`/`else if` keyword span that opens this branch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub marker: Option<Span>,
 }
 
 impl Stmt {
