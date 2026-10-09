@@ -3,13 +3,13 @@ use workshop_rs::source::{Position as WorkshopPosition, Span as WorkshopSpan};
 
 /// Convert resolved HIR settings into the canonical Workshop settings
 /// carrier exactly as lowering does: constant expansion, then `#!extension`
-/// merging, then verbatim pass-through of keys outside the settings catalog.
+/// merging, then pass-through of members outside the settings catalog.
 /// Shared by lowering and by `check`'s emission-acceptance pass so `check`
 /// and `compile` see the same settings tree (#411). The second value lists
-/// the members passed through verbatim.
+/// the members passed through unchanged.
 pub(crate) fn workshop_settings(
     hir: &crate::hir::Program,
-) -> Result<(Option<workshop_rs::settings::Settings>, Vec<VerbatimMember>), IntegrationError> {
+) -> Result<(Option<workshop_rs::settings::Settings>, Vec<UnknownSetting>), IntegrationError> {
     let settings_constants: HashMap<String, &Expr> = hir
         .declarations
         .iter()
@@ -24,15 +24,15 @@ pub(crate) fn workshop_settings(
             .map(|settings| expand_settings_constants(settings, &settings_constants)),
         &hir.preprocessing.directives,
     )?;
-    let verbatim = settings
+    let unknown = settings
         .as_mut()
         .map(pass_through_unknown_members)
         .unwrap_or_default();
-    Ok((settings, verbatim))
+    Ok((settings, unknown))
 }
 
 /// A settings member the catalog does not declare, emitted as written.
-pub(crate) struct VerbatimMember {
+pub(crate) struct UnknownSetting {
     /// The member's key.
     pub(crate) name: String,
     /// The undeclared value of a catalogued key; `None` for an unknown key.
@@ -45,22 +45,22 @@ pub(crate) struct VerbatimMember {
 /// key with its value (`key: value`, a list or object as a block), and a
 /// catalogued enum key with a value outside its domain. Projects rely on this
 /// for settings the catalog lacks, often rewriting them in a post-compile
-/// hook. Replace each such member with its verbatim form, drop a mode's
+/// hook. Replace each such member with its written form, drop a mode's
 /// non-Boolean `enabled` as upstream does, and lift each team's `general`
 /// members ahead of its hero groups as the pinned OverPy writes them.
 fn pass_through_unknown_members(
     settings: &mut workshop_rs::settings::Settings,
-) -> Vec<VerbatimMember> {
+) -> Vec<UnknownSetting> {
     use workshop_rs::settings::{PathPart, SettingsNode};
 
-    let mut verbatim = Vec::new();
+    let mut unknown = Vec::new();
     for group in &mut settings.children {
         let SettingsNode::Group { name, children, .. } = group else {
             continue;
         };
         match name.as_str() {
             "main" | "lobby" => {
-                pass_through_members(children, &[PathPart::Part(name)], &mut verbatim);
+                pass_through_members(children, &[PathPart::Part(name)], &mut unknown);
             }
             "gamemodes" => {
                 for mode in children {
@@ -70,7 +70,7 @@ fn pass_through_unknown_members(
                                 || matches!(member, SettingsNode::Bool { .. })
                         });
                         let path = [PathPart::Part("gamemodes"), PathPart::Part(name)];
-                        pass_through_members(children, &path, &mut verbatim);
+                        pass_through_members(children, &path, &mut unknown);
                     }
                 }
             }
@@ -91,13 +91,13 @@ fn pass_through_unknown_members(
                         }
                     }
                     let team_path = [PathPart::Part("heroes"), PathPart::Team];
-                    pass_through_members(&mut general, &team_path, &mut verbatim);
+                    pass_through_members(&mut general, &team_path, &mut unknown);
                     general.extend(rest);
                     *children = general;
                     for hero in children {
                         if let SettingsNode::Group { children, .. } = hero {
                             let path = [PathPart::Part("heroes"), PathPart::Team, PathPart::Hero];
-                            pass_through_members(children, &path, &mut verbatim);
+                            pass_through_members(children, &path, &mut unknown);
                         }
                     }
                 }
@@ -105,13 +105,13 @@ fn pass_through_unknown_members(
             _ => {}
         }
     }
-    verbatim
+    unknown
 }
 
 fn pass_through_members(
     members: &mut [workshop_rs::settings::SettingsNode],
     path: &[workshop_rs::settings::PathPart<'_>],
-    verbatim: &mut Vec<VerbatimMember>,
+    unknown: &mut Vec<UnknownSetting>,
 ) {
     use workshop_rs::settings::{PathPart, SettingValueDomain, SettingsNode};
 
@@ -129,8 +129,8 @@ fn pass_through_members(
                 if matches!(member, SettingsNode::Raw { .. }) {
                     continue;
                 }
-                *member = verbatim_node(member.clone());
-                verbatim.push(VerbatimMember {
+                *member = written_form(member.clone());
+                unknown.push(UnknownSetting {
                     name,
                     value: None,
                     span,
@@ -151,12 +151,12 @@ fn pass_through_members(
                     }
                     _ => continue,
                 };
-                *member = SettingsNode::Verbatim {
+                *member = SettingsNode::RawValue {
                     name: name.clone(),
                     value: value.clone(),
                     span,
                 };
-                verbatim.push(VerbatimMember {
+                unknown.push(UnknownSetting {
                     name,
                     value: Some(value),
                     span,
@@ -169,7 +169,7 @@ fn pass_through_members(
 /// The written form of a member under an unknown key, as the pinned OverPy
 /// serializes it: scalars as `key: value`, lists as a block of bare lines,
 /// and objects as a block of their members.
-fn verbatim_node(node: workshop_rs::settings::SettingsNode) -> workshop_rs::settings::SettingsNode {
+fn written_form(node: workshop_rs::settings::SettingsNode) -> workshop_rs::settings::SettingsNode {
     use workshop_rs::settings::SettingsNode;
 
     match node {
@@ -195,11 +195,11 @@ fn verbatim_node(node: workshop_rs::settings::SettingsNode) -> workshop_rs::sett
             span,
         } => SettingsNode::Group {
             name,
-            children: children.into_iter().map(verbatim_node).collect(),
+            children: children.into_iter().map(written_form).collect(),
             span,
         },
         node => match scalar_text(&node) {
-            Some(value) => SettingsNode::Verbatim {
+            Some(value) => SettingsNode::RawValue {
                 name: node.name().to_string(),
                 value,
                 span: node.span(),

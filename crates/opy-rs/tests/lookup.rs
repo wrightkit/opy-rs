@@ -761,8 +761,8 @@ fn unknown_settings_key_names_sibling_keys_in_message() {
     )
     .diagnostics
     .into_iter()
-    .find(|diagnostic| diagnostic.code == "settings-verbatim")
-    .expect("the unknown key produces a verbatim settings warning");
+    .find(|diagnostic| diagnostic.code == "unknown-setting")
+    .expect("the unknown key produces an unknown-setting warning");
     assert_eq!(diagnostic.severity, DiagnosticSeverity::Warning);
     assert!(
         diagnostic.message.contains("scoreToWin"),

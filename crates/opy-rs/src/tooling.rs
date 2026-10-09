@@ -206,9 +206,9 @@ pub fn check_with_overlay(
             // emission table cannot emit, so `check` never accepts a settings
             // key that `compile` would reject (#411).
             match crate::compiler::settings::workshop_settings(&hir) {
-                Ok((settings, verbatim)) => {
-                    diagnostics.extend(verbatim.into_iter().map(|member| {
-                        Diagnostic::from_verbatim_setting(member, hir.settings.as_ref(), &files)
+                Ok((settings, unknown)) => {
+                    diagnostics.extend(unknown.into_iter().map(|member| {
+                        Diagnostic::from_unknown_setting(member, hir.settings.as_ref(), &files)
                     }));
                     if let Some(settings) = settings {
                         diagnostics.extend(
@@ -318,8 +318,8 @@ impl Diagnostic {
 
     /// A settings key or enum value outside the catalog that compiles as
     /// written. It is accepted like upstream, but usually a misspelling.
-    fn from_verbatim_setting(
-        member: crate::compiler::settings::VerbatimMember,
+    fn from_unknown_setting(
+        member: crate::compiler::settings::UnknownSetting,
         hir_settings: Option<&crate::hir::types::Settings>,
         files: &[FileRecord],
     ) -> Diagnostic {
@@ -327,12 +327,11 @@ impl Diagnostic {
         let candidates = crate::matcher::settings_member_candidates(hir_settings, &anchor, None);
         let message = match &member.value {
             None => format!(
-                "settings key '{}' is not in the Workshop settings catalog and is emitted verbatim",
+                "unknown settings key '{}' is passed through unchanged",
                 member.name
             ),
             Some(value) => format!(
-                "value '{value}' for settings key '{}' is not in the Workshop settings catalog \
-                 and is emitted verbatim",
+                "unknown value '{value}' for settings key '{}' is passed through unchanged",
                 member.name
             ),
         };
@@ -345,7 +344,7 @@ impl Diagnostic {
         });
         Diagnostic {
             severity: DiagnosticSeverity::Warning,
-            code: "settings-verbatim".to_string(),
+            code: "unknown-setting".to_string(),
             message: crate::matcher::did_you_mean(message, &candidates),
             span: span.and_then(|span| resolve_record_span(span, files)),
         }
@@ -874,7 +873,7 @@ mod tests {
     }
 
     #[test]
-    fn verbatim_setting_names_the_keys_valid_at_the_path() {
+    fn unknown_setting_names_the_keys_valid_at_the_path() {
         // `notASetting` sits under `gamemodes.ffa`; nothing is near, so the
         // warning falls back to the bounded list of keys the path accepts
         // (issue #469).
@@ -884,8 +883,8 @@ mod tests {
         let diagnostic = outcome
             .diagnostics
             .iter()
-            .find(|d| d.code == "settings-verbatim")
-            .expect("verbatim settings diagnostic");
+            .find(|d| d.code == "unknown-setting")
+            .expect("unknown setting diagnostic");
         assert_eq!(diagnostic.severity, DiagnosticSeverity::Warning);
         assert!(
             diagnostic.message.contains("(did you mean "),
@@ -900,15 +899,15 @@ mod tests {
     }
 
     #[test]
-    fn verbatim_setting_preserves_template_paths_and_percent_suffixes() {
+    fn unknown_setting_preserves_template_paths_and_percent_suffixes() {
         let outcome = check_source(
             "settings {\n    \"main\": {\"description\": \"t\"},\n    \"gamemodes\": {},\n    \"heroes\": {\"team1\": {\"general\": {\"damageReceiveed%\": 50}}}\n}\nrule \"a\":\n    @Event global\n    wait(1)\n",
         );
         let diagnostic = outcome
             .diagnostics
             .iter()
-            .find(|d| d.code == "settings-verbatim")
-            .expect("verbatim settings diagnostic");
+            .find(|d| d.code == "unknown-setting")
+            .expect("unknown setting diagnostic");
         assert_eq!(diagnostic.severity, DiagnosticSeverity::Warning);
         assert!(
             diagnostic.message.contains("'damageReceived%'"),

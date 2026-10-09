@@ -15,7 +15,7 @@ pinned OverPy, a `main`, `lobby`, mode, team `general`, or hero member the
 table does not declare compiles as written: an unknown key as `key: value`
 (a list or object value as a block), and an enum key with an undeclared value
 as its localized key followed by the value. `check` reports each as a
-`settings-verbatim` warning. A mode's non-Boolean `enabled` is dropped, as
+`unknown-setting` warning. A mode's non-Boolean `enabled` is dropped, as
 upstream does.
 `compile` continues from that resolved model through canonical WIR lowering,
 validation, and localized Workshop emission. A compile report retains the
@@ -160,8 +160,8 @@ Span layout: `file_id` indexes the registry, positions are 1-based
 | `value-in-action-position` / `action-in-value-position` | resolve | Action/value identity |
 | `invalid-receiver` | resolve | Receiver requirement validation |
 | `vect-arity` | resolve | `vect` arity |
-| `workshop-emission` | settings | Settings key outside the canonical emission table that has no verbatim form, or a member the emitter cannot emit |
-| `settings-verbatim` (warning) | settings | Settings key or enum value outside the canonical emission table, emitted verbatim |
+| `workshop-emission` | settings | Settings key outside the canonical emission table that has no written form, or a member the emitter cannot emit |
+| `unknown-setting` (warning) | settings | Settings key or enum value outside the canonical emission table, passed through unchanged |
 
 Parse diagnostics are reported in full (recovery collects several);
 semantic-resolution diagnostics follow the compile contract and report the

@@ -387,7 +387,7 @@ fn settings_emission_agreement_between_check_and_compile() {
     // writes it and checks with a warning rather than an error: an unknown
     // key with a scalar, empty, list, or object value, and an enum key with
     // an undeclared value.
-    let verbatim = concat!(
+    let unknown = concat!(
         "settings {\n",
         "    \"main\": {\"description\": \"t\", \"emptyKey\": \"\"},\n",
         "    \"lobby\": {\"mapRotation\": \"sometimes\"},\n",
@@ -396,7 +396,7 @@ fn settings_emission_agreement_between_check_and_compile() {
         "}\n",
         "rule \"a\":\n    @Event global\n    wait(1)\n",
     );
-    let outcome = check(verbatim, "main.opy", Path::new(""));
+    let outcome = check(unknown, "main.opy", Path::new(""));
     assert!(outcome.model.is_some(), "{:?}", outcome.diagnostics);
     let warnings = outcome
         .diagnostics
@@ -405,9 +405,9 @@ fn settings_emission_agreement_between_check_and_compile() {
         .collect::<Vec<_>>();
     assert_eq!(
         warnings,
-        [(tooling::DiagnosticSeverity::Warning, "settings-verbatim"); 6]
+        [(tooling::DiagnosticSeverity::Warning, "unknown-setting"); 6]
     );
-    let lines = compiled_lines(verbatim);
+    let lines = compiled_lines(unknown);
     for line in [
         "emptyKey:",
         "Map Rotation: sometimes",
@@ -462,7 +462,7 @@ fn settings_emission_agreement_between_check_and_compile() {
 
 #[test]
 fn misspelled_settings_key_warns_with_a_single_candidate_suffix() {
-    // A near-miss settings key compiles verbatim like upstream; `check` warns
+    // A near-miss settings key compiles unchanged like upstream; `check` warns
     // and names the canonical key once.
     let source = concat!(
         "settings {\n",
@@ -471,14 +471,13 @@ fn misspelled_settings_key_warns_with_a_single_candidate_suffix() {
         "}\n",
         "rule \"a\":\n    @Event global\n    wait(1)\n",
     );
-    let expected = "settings key 'descriptino' is not in the Workshop settings catalog \
-                    and is emitted verbatim (did you mean 'description'?)";
+    let expected = "unknown settings key 'descriptino' is passed through unchanged (did you mean 'description'?)";
 
     let outcome = check(source, "main.opy", Path::new(""));
     let diagnostic = outcome
         .diagnostics
         .iter()
-        .find(|diagnostic| diagnostic.code == "settings-verbatim")
+        .find(|diagnostic| diagnostic.code == "unknown-setting")
         .expect("the misspelled key must warn");
     assert_eq!(diagnostic.severity, tooling::DiagnosticSeverity::Warning);
     assert_eq!(diagnostic.message, expected);
