@@ -701,6 +701,31 @@ fn hero_group_rename_uses_the_pinned_assign_delete_order() {
             && !lines.iter().any(|line| line.contains("10%")),
         "the source members win: {lines:?}"
     );
+
+    // Both aliases in one team: upstream renames per alias in its fixed
+    // order, so appended groups follow that order, not authored order.
+    let lines = compiled_lines(concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"heroes\": {\"allTeams\": {\n",
+        "        \"hammond\": {\"health%\": 50},\n",
+        "        \"mccree\": {\"health%\": 60}\n",
+        "    }}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    ));
+    let cassidy = lines
+        .iter()
+        .position(|line| line == "Cassidy {")
+        .expect("cassidy group");
+    let wrecking_ball = lines
+        .iter()
+        .position(|line| line == "Wrecking Ball {")
+        .expect("wrecking ball group");
+    assert!(
+        cassidy < wrecking_ball,
+        "the mccree pass appends before the hammond pass: {lines:?}"
+    );
 }
 
 #[test]

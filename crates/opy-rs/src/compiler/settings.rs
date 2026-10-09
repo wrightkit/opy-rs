@@ -82,13 +82,15 @@ fn applicability() -> &'static HeroApplicability {
 
 /// The pinned compiler rewrites these authored hero spellings under
 /// `heroes.<team>` — group names and hero-list elements alike — before the
-/// schema lookup (`compileCustomGameSettingsDict`).
+/// schema lookup (`compileCustomGameSettingsDict`). The order matters: group
+/// renames run as one pass per alias in this order.
+const HERO_NAME_ALIASES: &[(&str, &str)] = &[("mccree", "cassidy"), ("hammond", "wreckingBall")];
+
 fn canonical_hero_name(name: &str) -> &str {
-    match name {
-        "mccree" => "cassidy",
-        "hammond" => "wreckingBall",
-        _ => name,
-    }
+    HERO_NAME_ALIASES
+        .iter()
+        .find_map(|(alias, canonical)| (*alias == name).then_some(*canonical))
+        .unwrap_or(name)
 }
 
 fn rename_member(member: &mut workshop_rs::settings::SettingsNode, name: &str) {
@@ -214,25 +216,28 @@ fn pass_through_unknown_members(
                     // Canonical hero-group names take upstream's assign+delete
                     // rename: the source group lands at the destination's
                     // position, collapsing a duplicate, or at the end of the
-                    // hero groups when the destination is absent.
-                    let mut index = 0;
-                    while index < rest.len() {
-                        let SettingsNode::Group { name, .. } = &rest[index] else {
-                            index += 1;
-                            continue;
-                        };
-                        let canonical = canonical_hero_name(name).to_string();
-                        if canonical == *name {
-                            index += 1;
-                            continue;
-                        }
-                        let mut moved = rest.remove(index);
-                        if let SettingsNode::Group { name, .. } = &mut moved {
-                            *name = canonical.clone();
-                        }
-                        match rest.iter_mut().find(|m| m.name() == canonical) {
-                            Some(dest) => *dest = moved,
-                            None => rest.push(moved),
+                    // hero groups when the destination is absent. Upstream
+                    // runs one pass per alias in `HERO_NAME_ALIASES` order, so
+                    // appended groups follow that order, not authored order.
+                    for (alias, canonical) in HERO_NAME_ALIASES {
+                        let mut index = 0;
+                        while index < rest.len() {
+                            let SettingsNode::Group { name, .. } = &rest[index] else {
+                                index += 1;
+                                continue;
+                            };
+                            if name != alias {
+                                index += 1;
+                                continue;
+                            }
+                            let mut moved = rest.remove(index);
+                            if let SettingsNode::Group { name, .. } = &mut moved {
+                                *name = (*canonical).to_string();
+                            }
+                            match rest.iter_mut().find(|m| m.name() == *canonical) {
+                                Some(dest) => *dest = moved,
+                                None => rest.push(moved),
+                            }
                         }
                     }
                     // The flattened `general` members are not reprocessed:
