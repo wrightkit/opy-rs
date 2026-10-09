@@ -433,15 +433,21 @@ impl Parser<'_> {
         match token.kind {
             TokenKind::Number => {
                 let token = self.advance();
-                let value = if let Some(hex) = token
-                    .text
-                    .strip_prefix("0x")
-                    .or_else(|| token.text.strip_prefix("0X"))
-                {
-                    u64::from_str_radix(hex, 16).map_or(f64::NAN, |value| value as f64)
-                } else {
-                    token.text.parse().unwrap_or(f64::NAN)
-                };
+                let radix = token.text.strip_prefix('0').and_then(|rest| {
+                    match rest.as_bytes().first()? {
+                        b'x' | b'X' => Some((&rest[1..], 16)),
+                        b'b' | b'B' => Some((&rest[1..], 2)),
+                        b'o' | b'O' => Some((&rest[1..], 8)),
+                        _ => None,
+                    }
+                });
+                let value = radix
+                    .and_then(|(digits, radix)| {
+                        digits.chars().try_fold(0f64, |v, c| {
+                            c.to_digit(radix).map(|d| v * radix as f64 + d as f64)
+                        })
+                    })
+                    .unwrap_or_else(|| token.text.parse().unwrap_or(f64::NAN));
                 Ok(Expr::Number {
                     value,
                     text: token.text.clone(),

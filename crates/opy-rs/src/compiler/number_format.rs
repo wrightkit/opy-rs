@@ -31,8 +31,18 @@ fn trimmed(number: f64) -> f64 {
     cut.parse().unwrap_or(number)
 }
 
-/// `Number.prototype.toString` for a finite number.
-fn javascript_text(number: f64) -> String {
+/// `Number.prototype.toString` for a number: non-finite values take the
+/// JavaScript spellings `NaN`, `Infinity`, and `-Infinity`.
+pub(crate) fn javascript_text(number: f64) -> String {
+    if number.is_nan() {
+        return "NaN".to_string();
+    }
+    if number == f64::INFINITY {
+        return "Infinity".to_string();
+    }
+    if number == f64::NEG_INFINITY {
+        return "-Infinity".to_string();
+    }
     if number == 0.0 {
         return "0".to_string();
     }

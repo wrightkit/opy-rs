@@ -471,11 +471,66 @@ fn node_from_value(
 
 fn display_value(value: &crate::compile_time::Value) -> Result<String, String> {
     match value {
-        crate::compile_time::Value::Number(value) if value.is_finite() => Ok(value.to_string()),
+        crate::compile_time::Value::Number(value) if value.is_finite() => {
+            Ok(crate::compiler::number_format::javascript_text(*value))
+        }
         crate::compile_time::Value::String(value) => Ok(value.clone()),
         crate::compile_time::Value::Bool(value) => Ok(value.to_string()),
         _ => Err("settings list can only contain primitive values".to_string()),
     }
+}
+
+/// The number literal a settings value token spells as JavaScript's
+/// `Number` reads it: decimal and exponent forms plus `0x`/`0o`/`0b`
+/// radixes, with an optional leading sign. `None` for non-number tokens.
+fn js_number_literal(text: &str) -> Option<f64> {
+    // `f64::parse` also admits spellings like `inf` and `NaN` that the pinned
+    // tokenizer reads as names, not literals; only a digit, dot, or sign can
+    // start a JavaScript number here.
+    if !text
+        .trim_start_matches(['-', '+'])
+        .chars()
+        .next()
+        .is_some_and(|c| c.is_ascii_digit() || c == '.')
+    {
+        return None;
+    }
+    // The reference's number reader requires a fraction digit before an
+    // exponent marker (`1.e5`); Rust accepts it, so gate the spelling out —
+    // an unrecognized literal keeps its authored text.
+    if !text.contains(".e") && !text.contains(".E") {
+        if let Ok(value) = text.parse::<f64>() {
+            return Some(value);
+        }
+    }
+    let (negative, rest) = if let Some(rest) = text.strip_prefix('-') {
+        (true, rest)
+    } else {
+        (false, text.strip_prefix('+').unwrap_or(text))
+    };
+    let digits = rest
+        .strip_prefix("0x")
+        .or_else(|| rest.strip_prefix("0X"))
+        .map(|digits| (digits, 16))
+        .or_else(|| {
+            rest.strip_prefix("0o")
+                .or_else(|| rest.strip_prefix("0O"))
+                .map(|digits| (digits, 8))
+        })
+        .or_else(|| {
+            rest.strip_prefix("0b")
+                .or_else(|| rest.strip_prefix("0B"))
+                .map(|digits| (digits, 2))
+        });
+    let (digits, radix) = digits?;
+    if digits.is_empty() {
+        return None;
+    }
+    let value = digits.chars().try_fold(0f64, |value, c| {
+        c.to_digit(radix)
+            .map(|digit| value * radix as f64 + digit as f64)
+    })?;
+    Some(if negative { -value } else { value })
 }
 struct Cursor<'a> {
     text: &'a str,
@@ -879,11 +934,49 @@ impl Cursor<'_> {
         Ok(())
     }
 
+    /// Read one settings number literal the way the pinned OverPy tokenizer
+    /// admits it: decimal with an optional unsigned exponent (`1e21`,
+    /// `0.5e3`), and `0x`/`0o`/`0b` integer radixes (`0x1F` is 31; #496).
+    /// An exponent marker needs a fraction digit before it (`1.e5` is the
+    /// reference's "Expected a number after '.'" error).
+    /// A signed exponent (`1e-7`, `1e+21`) is not read — the reference
+    /// tokenizer splits the sign out as an operator and errors, so leaving
+    /// the `e` behind reproduces its rejection through the object parser.
     fn parse_number(&mut self) -> OpyResult<f64> {
         let start = self.here();
         let mut text = String::new();
         if self.peek() == Some('-') {
             text.push(self.advance().unwrap());
+        }
+        if self.peek() == Some('0')
+            && matches!(self.peek_at(1), Some('x' | 'X' | 'o' | 'O' | 'b' | 'B'))
+        {
+            text.push(self.advance().unwrap());
+            let letter = self.advance().expect("radix letter is peeked");
+            text.push(letter);
+            let radix = match letter {
+                'x' | 'X' => 16,
+                'o' | 'O' => 8,
+                _ => 2,
+            };
+            let mut value = 0f64;
+            let mut digits = 0usize;
+            while let Some(c) = self.peek() {
+                let Some(digit) = c.to_digit(radix) else {
+                    break;
+                };
+                value = value * radix as f64 + digit as f64;
+                digits += 1;
+                text.push(self.advance().unwrap());
+            }
+            if digits == 0 || self.peek().is_some_and(|c| c.is_ascii_alphanumeric()) {
+                return Err(self.error_at(
+                    "settings-invalid",
+                    format!("invalid number '{text}' in settings block"),
+                    Span::new(self.file, start, self.here()),
+                ));
+            }
+            return Ok(if text.starts_with('-') { -value } else { value });
         }
         while let Some(c) = self.peek() {
             if c.is_ascii_digit() {
@@ -893,6 +986,29 @@ impl Cursor<'_> {
             }
         }
         if self.peek() == Some('.') {
+            text.push(self.advance().unwrap());
+            let mut fraction = 0usize;
+            while let Some(c) = self.peek() {
+                if c.is_ascii_digit() {
+                    text.push(self.advance().unwrap());
+                    fraction += 1;
+                } else {
+                    break;
+                }
+            }
+            // The reference requires a fraction digit before an exponent
+            // marker: `1.e5` is its "Expected a number after '.'" error.
+            if fraction == 0 && matches!(self.peek(), Some('e' | 'E')) {
+                return Err(self.error_at(
+                    "settings-invalid",
+                    format!("invalid number '{text}' in settings block"),
+                    Span::new(self.file, start, self.here()),
+                ));
+            }
+        }
+        if matches!(self.peek(), Some('e' | 'E'))
+            && self.peek_at(1).is_some_and(|c| c.is_ascii_digit())
+        {
             text.push(self.advance().unwrap());
             while let Some(c) = self.peek() {
                 if c.is_ascii_digit() {
@@ -935,7 +1051,14 @@ impl Cursor<'_> {
                         "settings list elements must not be empty".to_string(),
                     ));
                 }
-                _ => self.parse_expression_value(),
+                _ => {
+                    let value = self.parse_expression_value();
+                    // A bare list element that is a number literal writes its
+                    // `String(value)` form (`[1e21]` emits `1e+21`; #496).
+                    js_number_literal(&value)
+                        .map(crate::compiler::number_format::javascript_text)
+                        .unwrap_or(value)
+                }
             };
             let span = Span::new(self.file, start, self.here());
             elements.push(cst::SettingsListElement { value, span });
@@ -1244,6 +1367,41 @@ mod tests {
             panic!("expression-valued setting");
         };
         assert_eq!(value, "GAMEMODE_NAME\" \"GAMEMODE_VERSION");
+    }
+
+    #[test]
+    fn parse_block_reads_javascript_number_literals() {
+        // The pinned OverPy tokenizer reads exponent and `0x`/`0o`/`0b`
+        // integer forms in settings (#496).
+        let found = block(
+            "settings {\n    \"lobby\": { \"a\": 0x1F, \"b\": 0b101, \"c\": 0o17, \"d\": 1.5e21, \"e\": 12e2, \"f\": -0.5, \"g\": 2.5e1 },\n    \"gamemodes\": {}\n}\n",
+        );
+        let parsed = parse_block(&found).unwrap();
+        let cst::SettingsNode::Group { children, .. } = &parsed.children[0] else {
+            panic!("lobby group");
+        };
+        let values: Vec<f64> = children
+            .iter()
+            .map(|node| match node {
+                cst::SettingsNode::Number { value, .. } => *value,
+                other => panic!("{other:?}"),
+            })
+            .collect();
+        assert_eq!(values, [31.0, 5.0, 15.0, 1.5e21, 1200.0, -0.5, 25.0]);
+    }
+
+    #[test]
+    fn parse_block_rejects_signed_exponents_like_the_pinned_reference() {
+        // The pinned settings tokenizer splits an exponent sign out as an
+        // operator and errors (`1e-7`, `1e+21`, `-2.5e-3`; #496), and it
+        // requires a fraction digit before an exponent marker (`1.e5`).
+        for value in ["1e-7", "1e+21", "-2.5e-3", "0.5e+3", "1.e5", "0.e5"] {
+            let found = block(&format!(
+                "settings {{\n    \"lobby\": {{ \"k\": {value} }},\n    \"gamemodes\": {{}}\n}}\n"
+            ));
+            let error = parse_block(&found).unwrap_err();
+            assert_eq!(error.code, "settings-invalid", "{value}");
+        }
     }
 
     #[test]
