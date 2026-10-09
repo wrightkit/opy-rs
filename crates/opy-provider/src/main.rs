@@ -1107,7 +1107,14 @@ fn validate_target_kind(
     target_kind: ProjectTargetKind,
 ) -> Result<(), HandlerError> {
     let metadata = fs::metadata(path).map_err(|error| {
-        let reason = match (error.kind() == std::io::ErrorKind::NotFound, target_kind) {
+        // A path through a regular file names a target that does not exist
+        // (`NotADirectory` on Unix, a not-found error on Windows), so it
+        // shares the not-found reason with a genuinely absent path (#497).
+        let absent = matches!(
+            error.kind(),
+            std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory
+        );
+        let reason = match (absent, target_kind) {
             (true, ProjectTargetKind::File) => "entryNotFound",
             (true, ProjectTargetKind::Directory) => "targetNotFound",
             (false, ProjectTargetKind::File) => "entryUnreadable",
