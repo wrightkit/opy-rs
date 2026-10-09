@@ -1280,6 +1280,94 @@ fn unresolvable_entry_reports_unreadable_reason() {
     session.shutdown();
 }
 
+/// A directory whose `src` is a regular file has no default entry, so a
+/// directory target reports `targetNotFound` — the same reason as an empty
+/// directory — instead of `targetUnreadable` (opy-rs#497).
+#[test]
+fn directory_target_with_file_named_src_reports_not_found() {
+    let dir = std::env::temp_dir().join(format!("opy-lpp-file-src-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("src"), "not a directory\n").unwrap();
+    let uri = format!("file://{}", dir.canonicalize().unwrap().display());
+
+    let mut session = Session::spawn();
+    session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "lpp/initialize",
+        "params": { "protocolVersion": "1.2" },
+    }));
+    let response = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "lpp/check",
+        "params": {
+            "entry": {
+                "uri": uri,
+                "languageId": "opy",
+                "version": 7,
+                "kind": "directory"
+            }
+        }
+    }));
+    std::fs::remove_dir_all(&dir).unwrap();
+    assert_eq!(
+        response["error"]["data"]["lpp"]["kind"],
+        "projectLoadFailed"
+    );
+    assert_eq!(
+        response["error"]["data"]["lpp"]["details"]["reason"],
+        "targetNotFound"
+    );
+    session.shutdown();
+}
+
+/// A file entry addressed through a regular file names an entry that cannot
+/// exist: `file.opy/child.opy` fails metadata with `ENOTDIR` on Unix
+/// (`NotFound` on Windows) and reports `entryNotFound` — the same reason as
+/// an absent file — instead of `entryUnreadable` (opy-rs#497).
+#[test]
+fn file_entry_through_a_regular_file_reports_not_found() {
+    let dir = std::env::temp_dir().join(format!("opy-lpp-notdir-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("file.opy");
+    std::fs::write(&file, "rule \"x\": @Event global\n").unwrap();
+    let uri = format!("file://{}", file.join("child.opy").display());
+
+    let mut session = Session::spawn();
+    session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "lpp/initialize",
+        "params": { "protocolVersion": "1.2" },
+    }));
+    let response = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "lpp/check",
+        "params": {
+            "entry": {
+                "uri": uri,
+                "languageId": "opy",
+                "version": 7,
+                "kind": "file"
+            }
+        }
+    }));
+    std::fs::remove_dir_all(&dir).unwrap();
+    assert_eq!(
+        response["error"]["data"]["lpp"]["kind"],
+        "projectLoadFailed"
+    );
+    assert_eq!(
+        response["error"]["data"]["lpp"]["details"]["reason"],
+        "entryNotFound"
+    );
+    session.shutdown();
+}
+
 #[test]
 fn lifecycle_and_capability_failures_are_structured() {
     let mut session = Session::spawn();

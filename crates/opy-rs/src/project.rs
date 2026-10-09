@@ -15,7 +15,7 @@ impl FilesystemProject {
     /// Load an OPY project from a file entry or a project directory.
     pub fn load(path: &Path) -> Result<Self, FilesystemProjectError> {
         let canonical_target = path.canonicalize().map_err(|error| {
-            if error.kind() == io::ErrorKind::NotFound {
+            if is_absent(error.kind()) {
                 FilesystemProjectError::entry_not_found(path.to_path_buf(), error)
             } else {
                 // Permission, loop, or name-resolution failures are not an
@@ -62,22 +62,26 @@ impl FilesystemProject {
     }
 }
 
+/// Whether an I/O failure means the probed path cannot exist: the final
+/// component is absent (`NotFound`), or an intermediate component is a
+/// regular file (`NotADirectory` on Unix, a not-found error on Windows).
+/// Both name an entry that does not exist rather than one that failed to
+/// load (#497).
+fn is_absent(kind: io::ErrorKind) -> bool {
+    matches!(kind, io::ErrorKind::NotFound | io::ErrorKind::NotADirectory)
+}
+
 fn default_entry(directory: &Path) -> Result<PathBuf, FilesystemProjectError> {
     let candidates = [directory.join("main.opy"), directory.join("src/main.opy")];
     for candidate in candidates {
         match fs::metadata(&candidate) {
             Ok(metadata) if metadata.is_file() => return Ok(candidate),
-            // Present but not a regular file, or genuinely absent — keep
-            // looking; only a real I/O failure aborts classification (#484).
+            // Present but not a regular file, or absent — keep looking; only
+            // a real I/O failure aborts classification (#484). A regular file
+            // named `src` makes `src/main.opy` absent, so the probe reports
+            // no default entry instead of an unreadable one (#497).
             Ok(_) => {}
-            // A path component that is a file (`NotADirectory`, `NotFound` on
-            // Windows) means the candidate cannot exist, like an absent one
-            // (#497); only a real I/O failure aborts classification.
-            Err(error)
-                if matches!(
-                    error.kind(),
-                    io::ErrorKind::NotFound | io::ErrorKind::NotADirectory
-                ) => {}
+            Err(error) if is_absent(error.kind()) => {}
             Err(error) => {
                 return Err(FilesystemProjectError::entry_unreadable(candidate, error));
             }
@@ -110,11 +114,12 @@ impl FilesystemProjectError {
     }
 
     /// Whether the entry could not be resolved to a canonical filesystem path.
-    /// An `EntryNotFound` carrying a non-`NotFound` I/O cause — possible
-    /// through the public fields — reports the real category (#484).
+    /// An `EntryNotFound` carrying a non-absent I/O cause — possible
+    /// through the public fields — reports the real category (#484). A path
+    /// through a regular file counts as absent (`NotADirectory`, #497).
     pub fn is_entry_not_found(&self) -> bool {
         match self {
-            Self::EntryNotFound { source, .. } => source.kind() == io::ErrorKind::NotFound,
+            Self::EntryNotFound { source, .. } => is_absent(source.kind()),
             Self::DefaultEntryNotFound { .. } => true,
             Self::EntryUnreadable { .. } => false,
         }
@@ -246,12 +251,14 @@ mod tests {
         ));
     }
 
-    /// A directory holding a regular file named `src` has no default entry,
-    /// like an empty directory (#497). Unix reports `NotADirectory` for the
-    /// `src/main.opy` probe; Windows reports `NotFound` — the test asserts
-    /// only the shared outcome, verified on macOS.
+    /// A directory whose only `src` is a regular file has no default entry,
+    /// the same as an empty directory (#497). Verified on Unix: `src` being
+    /// a file makes the `src/main.opy` probe fail `ENOTDIR`. Windows reports
+    /// a not-found error for the same probe, which the `is_absent`
+    /// classification covers identically; CI on Windows currently runs only a
+    /// subset of tests.
     #[test]
-    fn file_named_src_in_a_directory_is_default_entry_not_found() {
+    fn file_named_src_is_default_entry_not_found() {
         let dir = scratch("file-src");
         std::fs::write(dir.join("src"), "not a directory\n").unwrap();
         let error = FilesystemProject::load(&dir).expect_err("no default entry");
@@ -263,20 +270,35 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
-    /// A path inside a regular file fails canonicalization with `ENOTDIR` on
-    /// Unix (`NotFound` on Windows) — a deterministic non-`NotFound` cause
-    /// here; verified on macOS.
+    /// An empty directory reports `DefaultEntryNotFound` — the baseline the
+    /// file-named-`src` case must match (#497).
     #[test]
-    fn entry_inside_a_file_is_not_classified_as_missing() {
+    fn empty_directory_is_default_entry_not_found() {
+        let dir = scratch("empty");
+        let error = FilesystemProject::load(&dir).expect_err("no default entry");
+        assert!(error.is_entry_not_found());
+        assert!(matches!(
+            error,
+            FilesystemProjectError::DefaultEntryNotFound { .. }
+        ));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A path inside a regular file names an entry that does not exist, so it
+    /// carries the not-found classification on every platform (#497). Verified
+    /// on Unix, where canonicalization fails `ENOTDIR`; Windows reports a
+    /// not-found error that lands in the same classification.
+    #[test]
+    fn entry_inside_a_file_is_entry_not_found() {
         let dir = scratch("notdir");
         let file = dir.join("main.opy");
         std::fs::write(&file, "rule \"x\": @Event global\n").unwrap();
         let entry = file.join("child.opy");
         let error = FilesystemProject::load(&entry).expect_err("ENOTDIR fails");
-        assert!(!error.is_entry_not_found());
+        assert!(error.is_entry_not_found());
         assert!(matches!(
             error,
-            FilesystemProjectError::EntryUnreadable { .. }
+            FilesystemProjectError::EntryNotFound { .. }
         ));
         std::fs::remove_dir_all(&dir).unwrap();
     }
