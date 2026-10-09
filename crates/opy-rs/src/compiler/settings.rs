@@ -31,17 +31,22 @@ pub(crate) fn workshop_settings(
     Ok((settings, verbatim))
 }
 
-/// A settings member outside the catalog, emitted as `key: value`.
+/// A settings member the catalog does not declare, emitted as written.
 pub(crate) struct VerbatimMember {
+    /// The member's key.
     pub(crate) name: String,
+    /// The undeclared value of a catalogued key; `None` for an unknown key.
+    pub(crate) value: Option<String>,
     pub(crate) span: Option<WorkshopSpan>,
 }
 
 /// The pinned OverPy writes a `main`, `lobby`, mode, team `general`, or hero
-/// member whose key it cannot translate as `key: value` with the value as
-/// written, instead of rejecting it; projects rely on this for keys the
-/// catalog lacks, often rewriting them in a post-compile hook. Replace each
-/// such scalar member with a verbatim node, and lift each team's `general`
+/// member it cannot translate as authored instead of rejecting it: an unknown
+/// key with its value (`key: value`, a list or object as a block), and a
+/// catalogued enum key with a value outside its domain. Projects rely on this
+/// for settings the catalog lacks, often rewriting them in a post-compile
+/// hook. Replace each such member with its verbatim form, drop a mode's
+/// non-Boolean `enabled` as upstream does, and lift each team's `general`
 /// members ahead of its hero groups as the pinned OverPy writes them.
 fn pass_through_unknown_members(
     settings: &mut workshop_rs::settings::Settings,
@@ -60,6 +65,10 @@ fn pass_through_unknown_members(
             "gamemodes" => {
                 for mode in children {
                     if let SettingsNode::Group { name, children, .. } = mode {
+                        children.retain(|member| {
+                            member.name() != "enabled"
+                                || matches!(member, SettingsNode::Bool { .. })
+                        });
                         let path = [PathPart::Part("gamemodes"), PathPart::Part(name)];
                         pass_through_members(children, &path, &mut verbatim);
                     }
@@ -104,35 +113,113 @@ fn pass_through_members(
     path: &[workshop_rs::settings::PathPart<'_>],
     verbatim: &mut Vec<VerbatimMember>,
 ) {
-    use workshop_rs::settings::{PathPart, SettingsNode};
+    use workshop_rs::settings::{PathPart, SettingValueDomain, SettingsNode};
 
     for member in members {
-        let value = match member {
-            SettingsNode::Number { value, .. } => {
-                workshop_rs::format::format_setting_number(*value)
-            }
-            SettingsNode::Bool { value, .. } => value.to_string(),
-            // `key: ` has no verbatim settings form.
-            SettingsNode::String { value, .. } if !value.is_empty() => value.clone(),
-            _ => continue,
-        };
-        let name = member.name().to_string();
-        // A mode's `enabled` is consumed by the mode header, never written.
-        if name == "enabled" && matches!(path, [PathPart::Part("gamemodes"), _]) {
+        // A mode's Boolean `enabled` is consumed by the mode header.
+        if member.name() == "enabled" && matches!(path, [PathPart::Part("gamemodes"), _]) {
             continue;
         }
+        let name = member.name().to_string();
+        let span = member.span();
         let mut full = path.to_vec();
         full.push(PathPart::Part(&name));
-        if workshop_rs::settings::definition(&full).is_some() {
-            continue;
+        match workshop_rs::settings::definition(&full) {
+            None => {
+                if matches!(member, SettingsNode::Raw { .. }) {
+                    continue;
+                }
+                *member = verbatim_node(member.clone());
+                verbatim.push(VerbatimMember {
+                    name,
+                    value: None,
+                    span,
+                });
+            }
+            Some(definition) => {
+                if !matches!(definition.domain(), SettingValueDomain::Enum { .. }) {
+                    continue;
+                }
+                let value = match member {
+                    SettingsNode::String { value, .. }
+                        if !definition.enum_members().any(|member| member.id() == value) =>
+                    {
+                        value.clone()
+                    }
+                    SettingsNode::Number { .. } | SettingsNode::Bool { .. } => {
+                        scalar_text(member).expect("scalar member")
+                    }
+                    _ => continue,
+                };
+                *member = SettingsNode::Verbatim {
+                    name: name.clone(),
+                    value: value.clone(),
+                    span,
+                };
+                verbatim.push(VerbatimMember {
+                    name,
+                    value: Some(value),
+                    span,
+                });
+            }
         }
-        let span = member.span();
-        *member = SettingsNode::Raw {
-            name: name.clone(),
-            value,
+    }
+}
+
+/// The written form of a member under an unknown key, as the pinned OverPy
+/// serializes it: scalars as `key: value`, lists as a block of bare lines,
+/// and objects as a block of their members.
+fn verbatim_node(node: workshop_rs::settings::SettingsNode) -> workshop_rs::settings::SettingsNode {
+    use workshop_rs::settings::SettingsNode;
+
+    match node {
+        SettingsNode::List {
+            name,
+            elements,
             span,
-        };
-        verbatim.push(VerbatimMember { name, span });
+        } => SettingsNode::Group {
+            name,
+            children: elements
+                .into_iter()
+                .map(|element| SettingsNode::Raw {
+                    name: element.value,
+                    value: String::new(),
+                    span: element.span,
+                })
+                .collect(),
+            span,
+        },
+        SettingsNode::Group {
+            name,
+            children,
+            span,
+        } => SettingsNode::Group {
+            name,
+            children: children.into_iter().map(verbatim_node).collect(),
+            span,
+        },
+        node => match scalar_text(&node) {
+            Some(value) => SettingsNode::Verbatim {
+                name: node.name().to_string(),
+                value,
+                span: node.span(),
+            },
+            None => node,
+        },
+    }
+}
+
+/// A scalar value as JavaScript's `String(value)` writes it.
+fn scalar_text(node: &workshop_rs::settings::SettingsNode) -> Option<String> {
+    use workshop_rs::settings::SettingsNode;
+
+    match node {
+        SettingsNode::Number { value, .. } => {
+            Some(workshop_rs::format::format_setting_number(*value))
+        }
+        SettingsNode::Bool { value, .. } => Some(value.to_string()),
+        SettingsNode::String { value, .. } => Some(value.clone()),
+        _ => None,
     }
 }
 
