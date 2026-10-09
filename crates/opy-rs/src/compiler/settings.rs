@@ -3,13 +3,13 @@ use workshop_rs::source::{Position as WorkshopPosition, Span as WorkshopSpan};
 
 /// Convert resolved HIR settings into the canonical Workshop settings
 /// carrier exactly as lowering does: constant expansion, then `#!extension`
-/// merging, then verbatim pass-through of keys outside the settings catalog.
+/// merging, then pass-through of members outside the settings catalog.
 /// Shared by lowering and by `check`'s emission-acceptance pass so `check`
 /// and `compile` see the same settings tree (#411). The second value lists
-/// the members passed through verbatim.
+/// the members passed through unchanged.
 pub(crate) fn workshop_settings(
     hir: &crate::hir::Program,
-) -> Result<(Option<workshop_rs::settings::Settings>, Vec<VerbatimMember>), IntegrationError> {
+) -> Result<(Option<workshop_rs::settings::Settings>, Vec<UnknownSetting>), IntegrationError> {
     let settings_constants: HashMap<String, &Expr> = hir
         .declarations
         .iter()
@@ -24,44 +24,53 @@ pub(crate) fn workshop_settings(
             .map(|settings| expand_settings_constants(settings, &settings_constants)),
         &hir.preprocessing.directives,
     )?;
-    let verbatim = settings
+    let unknown = settings
         .as_mut()
         .map(pass_through_unknown_members)
         .unwrap_or_default();
-    Ok((settings, verbatim))
+    Ok((settings, unknown))
 }
 
-/// A settings member outside the catalog, emitted as `key: value`.
-pub(crate) struct VerbatimMember {
+/// A settings member the catalog does not declare, emitted as written.
+pub(crate) struct UnknownSetting {
+    /// The member's key.
     pub(crate) name: String,
+    /// The undeclared value of a catalogued key; `None` for an unknown key.
+    pub(crate) value: Option<String>,
     pub(crate) span: Option<WorkshopSpan>,
 }
 
 /// The pinned OverPy writes a `main`, `lobby`, mode, team `general`, or hero
-/// member whose key it cannot translate as `key: value` with the value as
-/// written, instead of rejecting it; projects rely on this for keys the
-/// catalog lacks, often rewriting them in a post-compile hook. Replace each
-/// such scalar member with a verbatim node, and lift each team's `general`
+/// member it cannot translate as authored instead of rejecting it: an unknown
+/// key with its value (`key: value`, a list or object as a block), and a
+/// catalogued enum key with a value outside its domain. Projects rely on this
+/// for settings the catalog lacks, often rewriting them in a post-compile
+/// hook. Replace each such member with its written form, drop a mode's
+/// non-Boolean `enabled` as upstream does, and lift each team's `general`
 /// members ahead of its hero groups as the pinned OverPy writes them.
 fn pass_through_unknown_members(
     settings: &mut workshop_rs::settings::Settings,
-) -> Vec<VerbatimMember> {
+) -> Vec<UnknownSetting> {
     use workshop_rs::settings::{PathPart, SettingsNode};
 
-    let mut verbatim = Vec::new();
+    let mut unknown = Vec::new();
     for group in &mut settings.children {
         let SettingsNode::Group { name, children, .. } = group else {
             continue;
         };
         match name.as_str() {
             "main" | "lobby" => {
-                pass_through_members(children, &[PathPart::Part(name)], &mut verbatim);
+                pass_through_members(children, &[PathPart::Part(name)], &mut unknown);
             }
             "gamemodes" => {
                 for mode in children {
                     if let SettingsNode::Group { name, children, .. } = mode {
+                        children.retain(|member| {
+                            member.name() != "enabled"
+                                || matches!(member, SettingsNode::Bool { .. })
+                        });
                         let path = [PathPart::Part("gamemodes"), PathPart::Part(name)];
-                        pass_through_members(children, &path, &mut verbatim);
+                        pass_through_members(children, &path, &mut unknown);
                     }
                 }
             }
@@ -82,13 +91,13 @@ fn pass_through_unknown_members(
                         }
                     }
                     let team_path = [PathPart::Part("heroes"), PathPart::Team];
-                    pass_through_members(&mut general, &team_path, &mut verbatim);
+                    pass_through_members(&mut general, &team_path, &mut unknown);
                     general.extend(rest);
                     *children = general;
                     for hero in children {
                         if let SettingsNode::Group { children, .. } = hero {
                             let path = [PathPart::Part("heroes"), PathPart::Team, PathPart::Hero];
-                            pass_through_members(children, &path, &mut verbatim);
+                            pass_through_members(children, &path, &mut unknown);
                         }
                     }
                 }
@@ -96,43 +105,121 @@ fn pass_through_unknown_members(
             _ => {}
         }
     }
-    verbatim
+    unknown
 }
 
 fn pass_through_members(
     members: &mut [workshop_rs::settings::SettingsNode],
     path: &[workshop_rs::settings::PathPart<'_>],
-    verbatim: &mut Vec<VerbatimMember>,
+    unknown: &mut Vec<UnknownSetting>,
 ) {
-    use workshop_rs::settings::{PathPart, SettingsNode};
+    use workshop_rs::settings::{PathPart, SettingValueDomain, SettingsNode};
 
     for member in members {
-        let value = match member {
-            SettingsNode::Number { value, .. } => {
-                workshop_rs::format::format_setting_number(*value)
-            }
-            SettingsNode::Bool { value, .. } => value.to_string(),
-            // `key: ` has no verbatim settings form.
-            SettingsNode::String { value, .. } if !value.is_empty() => value.clone(),
-            _ => continue,
-        };
-        let name = member.name().to_string();
-        // A mode's `enabled` is consumed by the mode header, never written.
-        if name == "enabled" && matches!(path, [PathPart::Part("gamemodes"), _]) {
+        // A mode's Boolean `enabled` is consumed by the mode header.
+        if member.name() == "enabled" && matches!(path, [PathPart::Part("gamemodes"), _]) {
             continue;
         }
+        let name = member.name().to_string();
+        let span = member.span();
         let mut full = path.to_vec();
         full.push(PathPart::Part(&name));
-        if workshop_rs::settings::definition(&full).is_some() {
-            continue;
+        match workshop_rs::settings::definition(&full) {
+            None => {
+                if matches!(member, SettingsNode::Raw { .. }) {
+                    continue;
+                }
+                *member = written_form(member.clone());
+                unknown.push(UnknownSetting {
+                    name,
+                    value: None,
+                    span,
+                });
+            }
+            Some(definition) => {
+                if !matches!(definition.domain(), SettingValueDomain::Enum { .. }) {
+                    continue;
+                }
+                let value = match member {
+                    SettingsNode::String { value, .. }
+                        if !definition.enum_members().any(|member| member.id() == value) =>
+                    {
+                        value.clone()
+                    }
+                    SettingsNode::Number { .. } | SettingsNode::Bool { .. } => {
+                        scalar_text(member).expect("scalar member")
+                    }
+                    _ => continue,
+                };
+                *member = SettingsNode::RawValue {
+                    name: name.clone(),
+                    value: value.clone(),
+                    span,
+                };
+                unknown.push(UnknownSetting {
+                    name,
+                    value: Some(value),
+                    span,
+                });
+            }
         }
-        let span = member.span();
-        *member = SettingsNode::Raw {
-            name: name.clone(),
-            value,
+    }
+}
+
+/// The written form of a member under an unknown key, as the pinned OverPy
+/// serializes it: scalars as `key: value`, lists as a block of bare lines,
+/// and objects as a block of their members.
+fn written_form(node: workshop_rs::settings::SettingsNode) -> workshop_rs::settings::SettingsNode {
+    use workshop_rs::settings::SettingsNode;
+
+    match node {
+        SettingsNode::List {
+            name,
+            elements,
             span,
-        };
-        verbatim.push(VerbatimMember { name, span });
+        } => SettingsNode::Group {
+            name,
+            children: elements
+                .into_iter()
+                .map(|element| SettingsNode::Raw {
+                    name: element.value,
+                    value: String::new(),
+                    span: element.span,
+                })
+                .collect(),
+            span,
+        },
+        SettingsNode::Group {
+            name,
+            children,
+            span,
+        } => SettingsNode::Group {
+            name,
+            children: children.into_iter().map(written_form).collect(),
+            span,
+        },
+        node => match scalar_text(&node) {
+            Some(value) => SettingsNode::RawValue {
+                name: node.name().to_string(),
+                value,
+                span: node.span(),
+            },
+            None => node,
+        },
+    }
+}
+
+/// A scalar value as JavaScript's `String(value)` writes it.
+fn scalar_text(node: &workshop_rs::settings::SettingsNode) -> Option<String> {
+    use workshop_rs::settings::SettingsNode;
+
+    match node {
+        SettingsNode::Number { value, .. } => {
+            Some(workshop_rs::format::format_setting_number(*value))
+        }
+        SettingsNode::Bool { value, .. } => Some(value.to_string()),
+        SettingsNode::String { value, .. } => Some(value.clone()),
+        _ => None,
     }
 }
 
