@@ -40,6 +40,71 @@ pub(crate) struct UnknownSetting {
     pub(crate) span: Option<WorkshopSpan>,
 }
 
+/// Whether the pinned OverPy schema applies a hero settings key to a
+/// specific hero. Its post-load schema merge expands
+/// `heroes.values.__generalAndEachHero__` plus the `__eachHero__` keys whose
+/// `include`/`exclude` hero filters admit the hero into that hero's `values`
+/// set; `compileCustomGameSettingsDict` then looks authored keys up in the
+/// merged set and writes the ones it cannot find back verbatim. The
+/// `data/hero_applicability.json` artifact records each merged key's
+/// applying heroes in the smaller of include/exclude form and is generated
+/// from the pinned compiler's own merge by
+/// `tools/overpy/gen_hero_applicability.cjs`.
+fn hero_setting_applies(hero: &str, key: &str) -> bool {
+    let data = applicability();
+    if data.all.iter().any(|candidate| candidate == key) {
+        return true;
+    }
+    if let Some(heroes) = data.only.get(key) {
+        return heroes.iter().any(|candidate| candidate == hero);
+    }
+    if let Some(heroes) = data.except.get(key) {
+        return !heroes.iter().any(|candidate| candidate == hero);
+    }
+    false
+}
+
+#[derive(serde::Deserialize)]
+struct HeroApplicability {
+    all: Vec<String>,
+    only: std::collections::HashMap<String, Vec<String>>,
+    except: std::collections::HashMap<String, Vec<String>>,
+}
+
+fn applicability() -> &'static HeroApplicability {
+    static DATA: std::sync::OnceLock<HeroApplicability> = std::sync::OnceLock::new();
+    DATA.get_or_init(|| {
+        serde_json::from_str(include_str!("data/hero_applicability.json"))
+            .expect("hero applicability data is valid JSON")
+    })
+}
+
+/// The pinned compiler rewrites these authored hero spellings under
+/// `heroes.<team>` — group names and hero-list elements alike — before the
+/// schema lookup (`compileCustomGameSettingsDict`).
+fn canonical_hero_name(name: &str) -> &str {
+    match name {
+        "mccree" => "cassidy",
+        "hammond" => "wreckingBall",
+        _ => name,
+    }
+}
+
+fn rename_member(member: &mut workshop_rs::settings::SettingsNode, name: &str) {
+    use workshop_rs::settings::SettingsNode;
+    match member {
+        SettingsNode::Group { name: slot, .. }
+        | SettingsNode::Number { name: slot, .. }
+        | SettingsNode::Bool { name: slot, .. }
+        | SettingsNode::Flag { name: slot, .. }
+        | SettingsNode::String { name: slot, .. }
+        | SettingsNode::List { name: slot, .. }
+        | SettingsNode::Raw { name: slot, .. }
+        | SettingsNode::RawValue { name: slot, .. } => *slot = name.to_string(),
+        SettingsNode::Workshop { .. } => {}
+    }
+}
+
 /// The pinned OverPy writes a `main`, `lobby`, mode, team `general`, or hero
 /// member it cannot translate as authored instead of rejecting it: an unknown
 /// key with its value (`key: value`, a list or object as a block), and a
@@ -60,7 +125,7 @@ fn pass_through_unknown_members(
         };
         match name.as_str() {
             "main" | "lobby" => {
-                pass_through_members(children, &[PathPart::Part(name)], &mut unknown);
+                pass_through_members(children, &[PathPart::Part(name)], &mut unknown, None);
             }
             "gamemodes" => {
                 for mode in children {
@@ -70,7 +135,7 @@ fn pass_through_unknown_members(
                                 || matches!(member, SettingsNode::Bool { .. })
                         });
                         let path = [PathPart::Part("gamemodes"), PathPart::Part(name)];
-                        pass_through_members(children, &path, &mut unknown);
+                        pass_through_members(children, &path, &mut unknown, None);
                     }
                 }
             }
@@ -91,13 +156,54 @@ fn pass_through_unknown_members(
                         }
                     }
                     let team_path = [PathPart::Part("heroes"), PathPart::Team];
-                    pass_through_members(&mut general, &team_path, &mut unknown);
+                    pass_through_members(&mut general, &team_path, &mut unknown, None);
+                    // The pinned compiler emits `enabledHeroes`/`disabledHeroes`
+                    // after every hero group regardless of authored position.
+                    let (hero_lists, rest): (Vec<_>, Vec<_>) =
+                        rest.into_iter().partition(|child| {
+                            matches!(child, SettingsNode::List { name, .. } if matches!(
+                                name.as_str(),
+                                "enabledHeroes" | "disabledHeroes"
+                            ))
+                        });
                     general.extend(rest);
+                    general.extend(hero_lists);
                     *children = general;
                     for hero in children {
-                        if let SettingsNode::Group { children, .. } = hero {
-                            let path = [PathPart::Part("heroes"), PathPart::Team, PathPart::Hero];
-                            pass_through_members(children, &path, &mut unknown);
+                        match hero {
+                            SettingsNode::Group { name, children, .. } => {
+                                let canonical = canonical_hero_name(name).to_string();
+                                if canonical != *name {
+                                    *name = canonical.clone();
+                                }
+                                // The pinned compiler rewrites `ability1KB%`
+                                // to `ability1Kb%` inside hero settings
+                                // before the schema lookup.
+                                for member in children.iter_mut() {
+                                    if member.name() == "ability1KB%" {
+                                        rename_member(member, "ability1Kb%");
+                                    }
+                                }
+                                let path =
+                                    [PathPart::Part("heroes"), PathPart::Team, PathPart::Hero];
+                                pass_through_members(
+                                    children,
+                                    &path,
+                                    &mut unknown,
+                                    Some(canonical.as_str()),
+                                );
+                            }
+                            SettingsNode::List { name, elements, .. }
+                                if matches!(name.as_str(), "enabledHeroes" | "disabledHeroes") =>
+                            {
+                                for element in elements {
+                                    let canonical = canonical_hero_name(&element.value);
+                                    if canonical != element.value {
+                                        element.value = canonical.to_string();
+                                    }
+                                }
+                            }
+                            _ => {}
                         }
                     }
                 }
@@ -112,6 +218,7 @@ fn pass_through_members(
     members: &mut [workshop_rs::settings::SettingsNode],
     path: &[workshop_rs::settings::PathPart<'_>],
     unknown: &mut Vec<UnknownSetting>,
+    hero: Option<&str>,
 ) {
     use workshop_rs::settings::{PathPart, SettingValueDomain, SettingsNode};
 
@@ -124,12 +231,23 @@ fn pass_through_members(
         let span = member.span();
         let mut full = path.to_vec();
         full.push(PathPart::Part(&name));
-        match workshop_rs::settings::definition(&full) {
+        let definition = workshop_rs::settings::definition(&full);
+        // A catalogued key the pinned schema does not apply to this hero is
+        // unknown for it and passes through like any other unknown key, but
+        // fully verbatim: a `RawValue` at the catalogued path would still
+        // emit the canonical name.
+        let inapplicable = definition.is_some()
+            && hero.is_some_and(|hero| !hero_setting_applies(hero, name.as_str()));
+        match definition.filter(|_| !inapplicable) {
             None => {
                 if matches!(member, SettingsNode::Raw { .. }) {
                     continue;
                 }
-                *member = written_form(member.clone());
+                *member = if inapplicable {
+                    verbatim_form(member.clone())
+                } else {
+                    written_form(member.clone())
+                };
                 unknown.push(UnknownSetting {
                     name,
                     value: None,
@@ -206,6 +324,22 @@ fn written_form(node: workshop_rs::settings::SettingsNode) -> workshop_rs::setti
             },
             None => node,
         },
+    }
+}
+
+/// The fully verbatim form of a member: like [`written_form`], but a scalar
+/// becomes `Raw` so its name is written as authored even when the key
+/// resolves in the catalog.
+fn verbatim_form(node: workshop_rs::settings::SettingsNode) -> workshop_rs::settings::SettingsNode {
+    use workshop_rs::settings::SettingsNode;
+
+    match scalar_text(&node) {
+        Some(value) => SettingsNode::Raw {
+            name: node.name().to_string(),
+            value,
+            span: node.span(),
+        },
+        None => written_form(node),
     }
 }
 

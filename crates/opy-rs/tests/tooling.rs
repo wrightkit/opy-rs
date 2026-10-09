@@ -503,6 +503,131 @@ fn settings_numbers_render_like_the_pinned_oracle() {
 }
 
 #[test]
+fn hero_settings_apply_the_pinned_per_hero_schema() {
+    // opy-rs#495: the pinned schema merges hero settings per hero, so a
+    // catalogued key is only translated where it applies; elsewhere it is
+    // written fully verbatim.
+    let lines = compiled_lines(concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"heroes\": {\"allTeams\": {\n",
+        "        \"ana\": {\"ability3Cooldown%\": 50},\n",
+        "        \"wreckingBall\": {\"ability3Cooldown%\": 50},\n",
+        "        \"reinhardt\": {\"ammoClipSize%\": 50},\n",
+        "        \"mercy\": {\"ammoClipSize%\": 50},\n",
+        "        \"dva\": {\"ability2Height%\": 50},\n",
+        "        \"freja\": {\"ability2Height%\": 50}\n",
+        "    }}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    ));
+    for line in [
+        "ability3Cooldown%: 50",
+        "ammoClipSize%: 50",
+        "ability2Height%: 50",
+        "Piledriver Cooldown Time: 50%",
+        "Ammunition Clip Size Scalar: 50%",
+        "Updraft Height: 50%",
+    ] {
+        assert!(lines.contains(&line.to_string()), "{line:?} in {lines:?}");
+    }
+    for translated in [
+        "Sleep Dart Cooldown Time",
+        "Dynamite Cooldown Time",
+        "Biotic Grenade",
+    ] {
+        assert!(
+            !lines.iter().any(|line| line.contains(translated)),
+            "{translated:?} unexpectedly in {lines:?}"
+        );
+    }
+}
+
+#[test]
+fn hero_settings_rewrite_the_pinned_name_and_key_aliases() {
+    // opy-rs#495: the pinned compiler rewrites `mccree`/`hammond` hero names
+    // and `ability1KB%` member keys before its schema lookup.
+    let lines = compiled_lines(concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"heroes\": {\"allTeams\": {\n",
+        "        \"mccree\": {\"ability1Cooldown%\": 50},\n",
+        "        \"dva\": {\"ability1KB%\": 50},\n",
+        "        \"ana\": {\"ability1KB%\": 50},\n",
+        "        \"hammond\": {\"ability3Cooldown%\": 50}\n",
+        "    }}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    ));
+    for line in [
+        "Cassidy {",
+        "Combat Roll Cooldown Time: 50%",
+        "Boosters Knockback Scalar: 50%",
+        "ability1Kb%: 50",
+        "Piledriver Cooldown Time: 50%",
+    ] {
+        assert!(lines.contains(&line.to_string()), "{line:?} in {lines:?}");
+    }
+    assert!(
+        !lines.iter().any(|line| line.contains("ability1KB%")),
+        "authored spelling must not survive in {lines:?}"
+    );
+}
+
+#[test]
+fn hero_roster_lists_emit_after_hero_groups_with_canonical_names() {
+    // opy-rs#495: the pinned compiler emits `enabledHeroes`/`disabledHeroes`
+    // last inside a team block, and rewrites the same hero aliases in them.
+    let lines = compiled_lines(concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"heroes\": {\"allTeams\": {\n",
+        "        \"enabledHeroes\": [\"mccree\", \"hammond\"],\n",
+        "        \"dva\": {\"health%\": 50}\n",
+        "    }}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    ));
+    let enabled = lines
+        .iter()
+        .position(|line| line == "enabled heroes {")
+        .expect("hero list");
+    let dva = lines
+        .iter()
+        .position(|line| line == "D.Va {")
+        .expect("hero group");
+    assert!(
+        dva < enabled,
+        "hero list must follow hero groups: {lines:?}"
+    );
+    for line in ["Cassidy", "Wrecking Ball"] {
+        assert!(lines.contains(&line.to_string()), "{line:?} in {lines:?}");
+    }
+}
+
+#[test]
+fn inapplicable_hero_key_with_enum_value_stays_verbatim() {
+    // opy-rs#495: a non-applicable key is unknown for that hero, so both the
+    // name and the value keep their authored spelling.
+    let lines = compiled_lines(concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"heroes\": {\"allTeams\": {\n",
+        "        \"ana\": {\"enableSecondaryFire\": false},\n",
+        "        \"genji\": {\"enableGenericSecondaryFire\": true}\n",
+        "    }}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    ));
+    for line in [
+        "enableSecondaryFire: false",
+        "enableGenericSecondaryFire: true",
+    ] {
+        assert!(lines.contains(&line.to_string()), "{line:?} in {lines:?}");
+    }
+}
+
+#[test]
 fn misspelled_settings_key_warns_with_a_single_candidate_suffix() {
     // A near-miss settings key compiles unchanged like upstream; `check` warns
     // and names the canonical key once.
