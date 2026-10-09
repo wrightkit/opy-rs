@@ -929,11 +929,12 @@ impl Cursor<'_> {
         Ok(())
     }
 
-    /// Read one settings number literal as JavaScript's `Number` parses it:
-    /// decimal with an optional exponent (`1e21`, `0.5e3`), and `0x`/`0o`/`0b`
-    /// integer radixes (`0x1F` is 31; #496). A signed exponent is admitted
-    /// where the pinned OverPy rejects it (its tokenizer splits the sign out
-    /// as an operator); the written value still matches `String(value)`.
+    /// Read one settings number literal the way the pinned OverPy tokenizer
+    /// admits it: decimal with an optional unsigned exponent (`1e21`,
+    /// `0.5e3`), and `0x`/`0o`/`0b` integer radixes (`0x1F` is 31; #496).
+    /// A signed exponent (`1e-7`, `1e+21`) is not read — the reference
+    /// tokenizer splits the sign out as an operator and errors, so leaving
+    /// the `e` behind reproduces its rejection through the object parser.
     fn parse_number(&mut self) -> OpyResult<f64> {
         let start = self.here();
         let mut text = String::new();
@@ -988,14 +989,9 @@ impl Cursor<'_> {
             }
         }
         if matches!(self.peek(), Some('e' | 'E'))
-            && (self.peek_at(1).is_some_and(|c| c.is_ascii_digit())
-                || (matches!(self.peek_at(1), Some('+' | '-'))
-                    && self.peek_at(2).is_some_and(|c| c.is_ascii_digit())))
+            && self.peek_at(1).is_some_and(|c| c.is_ascii_digit())
         {
             text.push(self.advance().unwrap());
-            if matches!(self.peek(), Some('+' | '-')) {
-                text.push(self.advance().unwrap());
-            }
             while let Some(c) = self.peek() {
                 if c.is_ascii_digit() {
                     text.push(self.advance().unwrap());
@@ -1360,7 +1356,7 @@ mod tests {
         // The pinned OverPy tokenizer reads exponent and `0x`/`0o`/`0b`
         // integer forms in settings (#496).
         let found = block(
-            "settings {\n    \"lobby\": { \"a\": 0x1F, \"b\": 0b101, \"c\": 0o17, \"d\": 1.5e21, \"e\": 12e2, \"f\": -2.5e-3 },\n    \"gamemodes\": {}\n}\n",
+            "settings {\n    \"lobby\": { \"a\": 0x1F, \"b\": 0b101, \"c\": 0o17, \"d\": 1.5e21, \"e\": 12e2, \"f\": -0.5, \"g\": 2.5e1 },\n    \"gamemodes\": {}\n}\n",
         );
         let parsed = parse_block(&found).unwrap();
         let cst::SettingsNode::Group { children, .. } = &parsed.children[0] else {
@@ -1373,7 +1369,20 @@ mod tests {
                 other => panic!("{other:?}"),
             })
             .collect();
-        assert_eq!(values, [31.0, 5.0, 15.0, 1.5e21, 1200.0, -0.0025]);
+        assert_eq!(values, [31.0, 5.0, 15.0, 1.5e21, 1200.0, -0.5, 25.0]);
+    }
+
+    #[test]
+    fn parse_block_rejects_signed_exponents_like_the_pinned_reference() {
+        // The pinned settings tokenizer splits an exponent sign out as an
+        // operator and errors (`1e-7`, `1e+21`, `-2.5e-3`; #496).
+        for value in ["1e-7", "1e+21", "-2.5e-3", "0.5e+3"] {
+            let found = block(&format!(
+                "settings {{\n    \"lobby\": {{ \"k\": {value} }},\n    \"gamemodes\": {{}}\n}}\n"
+            ));
+            let error = parse_block(&found).unwrap_err();
+            assert_eq!(error.code, "settings-invalid", "{value}");
+        }
     }
 
     #[test]

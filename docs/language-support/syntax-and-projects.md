@@ -18,7 +18,7 @@
 | Conditional values: `a if condition else b` | ✅ Supported | Chained forms are right-associative. |
 | `in`, `not in`, arithmetic, comparison, boolean and unary operators | ✅ Supported | String membership uses the canonical Workshop operation. |
 | `++` and `--` postfix assignment modifiers | ✅ Supported | Statement-level global, player and single-level indexed forms are supported; prefix/embedded forms are rejected. |
-| `0x` and `0X` hexadecimal literals | ✅ Supported | Both spellings have the same numeric meaning. |
+| `0x`/`0X`, `0b`/`0B` and `0o`/`0O` integer literals | ✅ Supported | The radix spellings have the same numeric meaning as the pinned JavaScript tokenizer. |
 
 ## Assignments and declarations
 
