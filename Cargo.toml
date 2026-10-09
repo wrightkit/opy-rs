@@ -15,9 +15,7 @@ libquickjs-ng-sys = "0.13.0"
 serde = "1"
 serde_json = "1"
 sha2 = "0.10"
-# `SettingsNode::RawValue` (wrightkit/workshop-rs#396, #400) is not released
-# yet; retarget to the crates.io release that ships it.
-workshop-rs = { git = "https://github.com/wrightkit/workshop-rs.git", rev = "bb7db167004ff5d473cad77346b6f36427cbdb8c" }
+workshop-rs = "^1.10.1"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
