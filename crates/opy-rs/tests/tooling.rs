@@ -606,6 +606,129 @@ fn hero_roster_lists_emit_after_hero_groups_with_canonical_names() {
 }
 
 #[test]
+fn hero_kb_rename_uses_the_pinned_assign_delete_order() {
+    // opy-rs#495: upstream rewrites `ability1KB%` via assign+delete, so the
+    // renamed member moves to the end, or collapses onto an authored
+    // `ability1Kb%` position with the source value.
+    let lines = compiled_lines(concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"heroes\": {\"allTeams\": {\n",
+        "        \"dva\": {\"ability1KB%\": 20, \"health%\": 150}\n",
+        "    }}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    ));
+    let health = lines
+        .iter()
+        .position(|line| line == "Health: 150%")
+        .expect("health member");
+    let kb = lines
+        .iter()
+        .position(|line| line == "Boosters Knockback Scalar: 20%")
+        .expect("renamed member");
+    assert!(health < kb, "renamed member must move last: {lines:?}");
+
+    let lines = compiled_lines(concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"heroes\": {\"allTeams\": {\n",
+        "        \"dva\": {\"ability1Kb%\": 10, \"health%\": 150, \"ability1KB%\": 20}\n",
+        "    }}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    ));
+    let health = lines
+        .iter()
+        .position(|line| line == "Health: 150%")
+        .expect("health member");
+    let kb = lines
+        .iter()
+        .position(|line| line == "Boosters Knockback Scalar: 20%")
+        .expect("renamed member");
+    assert!(
+        kb < health,
+        "collapsed member keeps the destination position: {lines:?}"
+    );
+    assert!(
+        !lines.iter().any(|line| line.contains("10%")),
+        "the source value wins over the authored destination: {lines:?}"
+    );
+}
+
+#[test]
+fn general_children_are_not_reprocessed_as_hero_members() {
+    // opy-rs#495: the flattened `general` members take only the team-level
+    // pass-through — hero-name and applicability passes must not reach them.
+    let lines = compiled_lines(concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"heroes\": {\"allTeams\": {\n",
+        "        \"general\": {\n",
+        "            \"dva\": {\"ability1KB%\": 50},\n",
+        "            \"damageDealt%\": 50\n",
+        "        },\n",
+        "        \"ana\": {\"health%\": 50}\n",
+        "    }}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    ));
+    for line in ["ability1KB%: 50", "Damage Dealt: 50%", "Health: 50%"] {
+        assert!(lines.contains(&line.to_string()), "{line:?} in {lines:?}");
+    }
+    assert!(
+        !lines
+            .iter()
+            .any(|line| line.contains("Boosters Knockback Scalar")),
+        "a nested hero dict stays verbatim: {lines:?}"
+    );
+}
+
+#[test]
+fn a_non_dict_general_is_dropped() {
+    // opy-rs#495: upstream silently drops a non-dict `general` under a team.
+    let lines = compiled_lines(concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"heroes\": {\"allTeams\": {\n",
+        "        \"general\": 5,\n",
+        "        \"ana\": {\"health%\": 50}\n",
+        "    }}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    ));
+    assert!(
+        lines.contains(&"Health: 50%".to_string()),
+        "{lines:?} must still emit the hero members"
+    );
+}
+
+#[test]
+fn both_hero_lists_in_one_team_error() {
+    // opy-rs#495: upstream rejects a team carrying both rosters.
+    let error = opy_rs::compile(
+        concat!(
+            "settings {\n",
+            "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+            "    \"heroes\": {\"allTeams\": {\n",
+            "        \"enabledHeroes\": [\"ana\"],\n",
+            "        \"disabledHeroes\": [\"genji\"]\n",
+            "    }}\n",
+            "}\n",
+            "rule \"a\":\n    @Event global\n    wait(1)\n",
+        ),
+        "main.opy",
+        Path::new(""),
+    )
+    .unwrap_err();
+    assert_eq!(error.code, "settings-hero-lists");
+    assert_eq!(
+        error.message,
+        "Cannot have both 'enabledHeroes' and 'disabledHeroes' in team 'allTeams'"
+    );
+}
+
+#[test]
 fn inapplicable_hero_key_with_enum_value_stays_verbatim() {
     // opy-rs#495: a non-applicable key is unknown for that hero, so both the
     // name and the value keep their authored spelling.
