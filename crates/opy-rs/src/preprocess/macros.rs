@@ -291,7 +291,7 @@ impl Preprocessor {
             text: &replacement,
         })?;
         out.retain(|token| token.kind != TokenKind::Eof);
-        shift_expansion_spans(&mut out, use_site);
+        attribute_expansion_spans(&mut out, use_site);
         Ok(out)
     }
 
@@ -430,13 +430,15 @@ fn raw_arg_text(tokens: &[Token]) -> String {
     out
 }
 
-pub(super) fn shift_expansion_spans(tokens: &mut [Token], origin: Span) {
+/// Attribute every token produced by an expansion to the use-site span.
+/// The expanded text does not appear in authored source, so the authored
+/// macro name is the only honest provenance: offsetting tokens by the
+/// expansion's own width recorded positions past the authored line, and a
+/// multi-line expansion attributed its later tokens to unrelated authored
+/// lines (#506).
+pub(super) fn attribute_expansion_spans(tokens: &mut [Token], origin: Span) {
     for token in tokens {
-        token.span = Span::new(
-            origin.file,
-            crate::diag::shift_position(token.span.start, origin.start),
-            crate::diag::shift_position(token.span.end, origin.start),
-        );
+        token.span = origin;
     }
 }
 

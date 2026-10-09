@@ -82,7 +82,7 @@ impl Preprocessor {
             text: &indented,
         })?;
         tokens.retain(|token| token.kind != TokenKind::Eof);
-        super::macros::shift_expansion_spans(&mut tokens, use_site);
+        super::macros::attribute_expansion_spans(&mut tokens, use_site);
         Ok(tokens)
     }
 }
