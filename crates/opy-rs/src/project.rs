@@ -263,8 +263,9 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
-    /// A path inside a regular file fails canonicalization with `ENOTDIR`
-    /// on every platform — the deterministic non-`NotFound` cause.
+    /// A path inside a regular file fails canonicalization with `ENOTDIR` on
+    /// Unix (`NotFound` on Windows) — a deterministic non-`NotFound` cause
+    /// here; verified on macOS.
     #[test]
     fn entry_inside_a_file_is_not_classified_as_missing() {
         let dir = scratch("notdir");
