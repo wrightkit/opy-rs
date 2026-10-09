@@ -211,9 +211,18 @@ pub fn check_with_overlay(
                         Diagnostic::from_unknown_setting(member, hir.settings.as_ref(), &files)
                     }));
                     if let Some(settings) = settings {
+                        // workshop-rs also reports Warning entries for carried
+                        // members near a declared spelling; those members are
+                        // already covered by the `unknown-setting` warnings
+                        // above, and emission accepts them, so only errors
+                        // belong here.
                         diagnostics.extend(
                             workshop_rs::settings::check_emission_diagnostics(&settings)
                                 .into_iter()
+                                .filter(|diagnostic| {
+                                    diagnostic.severity
+                                        == workshop_rs::settings::DiagnosticSeverity::Error
+                                })
                                 .map(|diagnostic| {
                                     Diagnostic::from_settings_diagnostic(
                                         diagnostic,
