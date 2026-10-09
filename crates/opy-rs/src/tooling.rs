@@ -316,7 +316,7 @@ impl Diagnostic {
         }
     }
 
-    /// A settings key outside the catalog that compiles to `key: value` as
+    /// A settings key or enum value outside the catalog that compiles as
     /// written. It is accepted like upstream, but usually a misspelling.
     fn from_verbatim_setting(
         member: crate::compiler::settings::VerbatimMember,
@@ -325,10 +325,17 @@ impl Diagnostic {
     ) -> Diagnostic {
         let anchor = workshop_rs::WorkshopError::malformed(String::new(), member.span);
         let candidates = crate::matcher::settings_member_candidates(hir_settings, &anchor, None);
-        let message = format!(
-            "settings key '{}' is not in the Workshop settings catalog and is emitted verbatim",
-            member.name
-        );
+        let message = match &member.value {
+            None => format!(
+                "settings key '{}' is not in the Workshop settings catalog and is emitted verbatim",
+                member.name
+            ),
+            Some(value) => format!(
+                "value '{value}' for settings key '{}' is not in the Workshop settings catalog \
+                 and is emitted verbatim",
+                member.name
+            ),
+        };
         let span = member.span.map(|span| {
             Span::new(
                 span.file.index() as u32,
