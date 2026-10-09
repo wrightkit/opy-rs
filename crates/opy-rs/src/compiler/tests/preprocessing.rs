@@ -128,6 +128,26 @@ fn multiline_function_define_preserves_for_block() {
 }
 
 #[test]
+fn multiline_function_define_preserves_conditional_expressions() {
+    // #506 re-review: the conditional-expression statement-boundary guard
+    // must compare layout lines on both sides; reading the then-value's
+    // provenance span collapses expanded tokens to the use site and the
+    // guard misfires, so `expected ':' after the if condition` fails.
+    let hir = crate::compile(
+        "#!define E() A = 0\\\n    B = 0\\\n    y = B if C else D\nglobalvar A\nglobalvar B\nglobalvar C\nglobalvar D\nglobalvar y\nrule \"a\":\n    @Event global\n    E()\n",
+        "main.opy",
+        std::path::Path::new("."),
+    )
+    .expect("a conditional expression on a later expansion line must parse");
+
+    let RuleEntry::Rule(rule) = &hir.rules[0] else {
+        panic!("expected a rule");
+    };
+    assert_eq!(rule.actions.len(), 3);
+    assert!(matches!(rule.actions[2], Stmt::Assign { .. }));
+}
+
+#[test]
 fn expanded_f_string_interpolation_errors_stay_inside_the_use_site() {
     // #506: an interpolation inside an expanded string has no authored
     // extent; its derived positions clamp into the use-site span rather
