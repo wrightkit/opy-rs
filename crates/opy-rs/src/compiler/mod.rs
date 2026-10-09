@@ -23,7 +23,7 @@ mod blizzard_global;
 mod hooks;
 mod integration;
 mod lowering;
-mod number_format;
+pub(crate) mod number_format;
 mod operator_optimization;
 pub(crate) mod settings;
 mod size_optimization;

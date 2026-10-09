@@ -214,9 +214,7 @@ fn scalar_text(node: &workshop_rs::settings::SettingsNode) -> Option<String> {
     use workshop_rs::settings::SettingsNode;
 
     match node {
-        SettingsNode::Number { value, .. } => {
-            Some(workshop_rs::format::format_setting_number(*value))
-        }
+        SettingsNode::Number { value, .. } => Some(super::number_format::javascript_text(*value)),
         SettingsNode::Bool { value, .. } => Some(value.to_string()),
         SettingsNode::String { value, .. } => Some(value.clone()),
         _ => None,
@@ -503,7 +501,7 @@ fn convert_workshop_node(node: crate::hir::SettingsNode) -> workshop_rs::setting
         },
         SourceNode::Number { name, value, span } => TargetNode::Raw {
             name,
-            value: value.to_string(),
+            value: number_format::javascript_text(value),
             span: span.map(convert_settings_span),
         },
         SourceNode::Bool { name, value, span } => TargetNode::Raw {

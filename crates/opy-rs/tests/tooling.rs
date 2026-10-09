@@ -461,6 +461,48 @@ fn settings_emission_agreement_between_check_and_compile() {
 }
 
 #[test]
+fn settings_numbers_render_like_the_pinned_oracle() {
+    // opy-rs#496: the pinned OverPy writes numeric settings values with
+    // JavaScript `String(value)` semantics and reads decimal exponent forms
+    // plus `0x`/`0b`/`0o` integer literals, in scalar positions and inside
+    // list elements.
+    let source = concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"main\": {\"a\": 0b101, \"b\": 0o17, \"c\": 0x1F, \"d\": 1e21,\n",
+        "               \"e\": 0.0000001, \"f\": 123456789012345678901234, \"g\": 0.5e3,\n",
+        "               \"h\": 1.0, \"i\": 1e20, \"j\": 12e2, \"k\": 0.1,\n",
+        "               \"list\": [0b101, 0o17, 0x1F, 1e21, 0.0000001]}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    );
+    let lines = compiled_lines(source);
+    for line in [
+        "a: 5",
+        "b: 15",
+        "c: 31",
+        "d: 1e+21",
+        "e: 1e-7",
+        "f: 1.2345678901234569e+23",
+        "g: 500",
+        "h: 1",
+        "i: 100000000000000000000",
+        "j: 1200",
+        "k: 0.1",
+    ] {
+        assert!(lines.contains(&line.to_string()), "{line:?} in {lines:?}");
+    }
+    let list = lines
+        .iter()
+        .position(|line| line == "list {")
+        .expect("list block");
+    assert_eq!(
+        &lines[list + 1..list + 6],
+        ["5", "15", "31", "1e+21", "1e-7"]
+    );
+}
+
+#[test]
 fn misspelled_settings_key_warns_with_a_single_candidate_suffix() {
     // A near-miss settings key compiles unchanged like upstream; `check` warns
     // and names the canonical key once.

@@ -399,20 +399,28 @@ impl Lexer {
     fn lex_number(&mut self) -> OpyResult<()> {
         let start = self.here(1);
         let mut text = String::new();
-        if self.chars[self.pos] == '0' && matches!(self.peek(1), Some('x' | 'X')) {
+        if self.chars[self.pos] == '0'
+            && matches!(self.peek(1), Some('x' | 'X' | 'b' | 'B' | 'o' | 'O'))
+        {
             text.push('0');
             self.advance();
-            text.push(self.chars[self.pos]);
+            let letter = self.chars[self.pos];
+            text.push(letter);
             self.advance();
+            let radix = match letter {
+                'x' | 'X' => 16,
+                'o' | 'O' => 8,
+                _ => 2,
+            };
             let digits_start = self.pos;
-            while self.pos < self.chars.len() && self.chars[self.pos].is_ascii_hexdigit() {
+            while self.pos < self.chars.len() && self.chars[self.pos].is_digit(radix) {
                 text.push(self.chars[self.pos]);
                 self.advance();
             }
             if self.pos == digits_start {
                 return Err(OpyError::at(
                     "lex-error",
-                    "hexadecimal literal requires at least one hexadecimal digit",
+                    "integer radix literal requires at least one digit",
                     Span::new(self.file_id, start.start, self.here(0).start),
                 ));
             }
@@ -593,6 +601,31 @@ mod tests {
             .map(|t| t.text.as_str())
             .collect();
         assert_eq!(numbers, vec!["1", "2.5", "0.016", "100"]);
+    }
+
+    #[test]
+    fn radix_literals_lex_as_single_numbers() {
+        // The pinned OverPy tokenizer reads `0x`/`0b`/`0o` integer literals
+        // like JavaScript; they must stay one token so a settings block
+        // re-render keeps the spelling intact (opy-rs#496).
+        let tokens = lex_ok("0x1F 0b101 0o17 0X1f 0B101 0O17");
+        let numbers: Vec<&str> = tokens
+            .iter()
+            .filter(|t| t.kind == TokenKind::Number)
+            .map(|t| t.text.as_str())
+            .collect();
+        assert_eq!(
+            numbers,
+            vec!["0x1F", "0b101", "0o17", "0X1f", "0B101", "0O17"]
+        );
+    }
+
+    #[test]
+    fn radix_literal_without_digits_is_an_error() {
+        for text in ["0x", "0b", "0o"] {
+            let error = lex(LexInput { file_id: 0, text }).unwrap_err();
+            assert_eq!(error.code, "lex-error");
+        }
     }
 
     #[test]
