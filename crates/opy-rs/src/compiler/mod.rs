@@ -1344,7 +1344,9 @@ mod tests {
                 .line,
             5
         );
-        assert_eq!(artifact.wir.action_span(1, 2).unwrap().start.line, 4);
+        // The `End` marker stands at the dedent boundary — the first token
+        // after the chain — rather than the `if` keyword line.
+        assert_eq!(artifact.wir.action_span(1, 2).unwrap().start.line, 6);
     }
 
     #[test]

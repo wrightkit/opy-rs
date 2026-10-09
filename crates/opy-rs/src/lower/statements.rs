@@ -140,11 +140,14 @@ impl Lowerer {
             Stmt::If {
                 branches,
                 r#else,
+                else_span,
+                end_span,
                 span,
             } => HirStmt::If {
                 branches: branches
                     .iter()
                     .map(|branch| IfBranch {
+                        marker: Some(branch.marker.into()),
                         condition: Box::new(self.lower_expr(
                             &branch.condition,
                             macro_params,
@@ -162,6 +165,8 @@ impl Lowerer {
                 r#else: r#else
                     .as_ref()
                     .map(|body| self.lower_block(body, macro_params, breakable, false, loopable)),
+                else_span: else_span.map(Into::into),
+                end_span: Some(end_span.into()),
                 span: Some(span.into()),
             },
             Stmt::For {

@@ -268,8 +268,13 @@ impl Parser<'_> {
             ));
             return Err(());
         }
-        let mut branches = vec![IfBranch { condition, body }];
+        let mut branches = vec![IfBranch {
+            condition,
+            body,
+            marker: start.span,
+        }];
         let mut r#else = None;
+        let mut else_span = None;
         loop {
             let save = self.pos;
             self.skip_newlines();
@@ -291,7 +296,11 @@ impl Parser<'_> {
                     branch_start.span.start.col,
                     "':' after the elif condition",
                 )?;
-                branches.push(IfBranch { condition, body });
+                branches.push(IfBranch {
+                    condition,
+                    body,
+                    marker: branch_start.span,
+                });
             } else if self.is_ident("else") {
                 let branch_start = self.advance();
                 if self.is_ident("if") {
@@ -301,11 +310,16 @@ impl Parser<'_> {
                         branch_start.span.start.col,
                         "':' after the else-if condition",
                     )?;
-                    branches.push(IfBranch { condition, body });
+                    branches.push(IfBranch {
+                        condition,
+                        body,
+                        marker: branch_start.span,
+                    });
                     continue;
                 }
                 let body =
                     self.expect_colon_body(branch_start.span.start.col, "':' after `else`")?;
+                else_span = Some(branch_start.span);
                 r#else = Some(body);
                 break;
             } else {
@@ -313,9 +327,20 @@ impl Parser<'_> {
                 break;
             }
         }
+        // The chain ends where the next statement at a shallower indent (or
+        // EOF) begins; that position stands in for Workshop's explicit `End`.
+        let end_span = {
+            let save = self.pos;
+            self.skip_newlines();
+            let boundary = self.peek().span;
+            self.pos = save;
+            Span::new(boundary.file, boundary.start, boundary.start)
+        };
         Ok(Stmt::If {
             branches,
             r#else,
+            else_span,
+            end_span,
             span: start.span,
         })
     }

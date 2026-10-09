@@ -465,6 +465,7 @@ impl<'a> Lowering<'a> {
                     branches,
                     r#else: None,
                     span,
+                    ..
                 } = statement
                 && branches.len() == 1
             {
@@ -714,6 +715,7 @@ impl<'a> Lowering<'a> {
                 branches,
                 r#else,
                 span,
+                ..
             } => {
                 if let ([branch], None) = (branches.as_slice(), r#else)
                     && let Some(actions) = self.lower_terminal_if(branch, *span)?
@@ -890,6 +892,75 @@ impl<'a> Lowering<'a> {
         result
     }
 
+    /// Attribute the flattened `If`/`Else If`/`Else`/`End` markers of one
+    /// lowered `if` chain to the authored `elif`/`else`/dedent positions
+    /// instead of the `if` keyword span the blanket origin marker set.
+    /// Nested block openers consume `depth` so only this chain's markers are
+    /// matched.
+    fn mark_if_chain_origins(
+        &mut self,
+        branches: &[hir::types::IfBranch],
+        else_span: Option<HirSpan>,
+        end_span: Option<HirSpan>,
+        actions: &[ActionId],
+    ) {
+        let mut depth = 0usize;
+        let mut branch = 0usize;
+        for action in actions {
+            match self.actions.get(*action) {
+                Some(Action::If { .. }) => {
+                    if depth == 0 {
+                        // The opener's marker is the `if` keyword itself —
+                        // the first branch's marker span — so lowering paths
+                        // that bypass the statement's blanket origin still
+                        // anchor the chain head.
+                        if let Some(marker) = branches.first().and_then(|branch| branch.marker) {
+                            self.action_origins[*action] = Some(marker);
+                        }
+                        self.mark_action_argument_origins(
+                            *action,
+                            [branches
+                                .first()
+                                .and_then(|branch| branch.condition.span().copied())],
+                        );
+                    }
+                    depth += 1;
+                }
+                Some(
+                    Action::While { .. }
+                    | Action::ForGlobalVariable { .. }
+                    | Action::ForPlayerVariable { .. },
+                ) => depth += 1,
+                Some(Action::ElseIf { .. }) if depth == 1 => {
+                    branch += 1;
+                    if let Some(marker) = branches.get(branch).and_then(|branch| branch.marker) {
+                        self.action_origins[*action] = Some(marker);
+                    }
+                    self.mark_action_argument_origins(
+                        *action,
+                        [branches
+                            .get(branch)
+                            .and_then(|branch| branch.condition.span().copied())],
+                    );
+                }
+                Some(Action::Else) if depth == 1 => {
+                    if let Some(span) = else_span {
+                        self.action_origins[*action] = Some(span);
+                    }
+                }
+                Some(Action::End) => {
+                    if depth == 1
+                        && let Some(span) = end_span
+                    {
+                        self.action_origins[*action] = Some(span);
+                    }
+                    depth = depth.saturating_sub(1);
+                }
+                _ => {}
+            }
+        }
+    }
+
     fn mark_statement_argument_origins(&mut self, statement: &Stmt, actions: &[ActionId]) {
         match statement {
             Stmt::Assign { target, value, .. } => {
@@ -939,36 +1010,12 @@ impl<'a> Lowering<'a> {
                     self.mark_action_argument_origins(*action, spans);
                 }
             }
-            Stmt::If { branches, .. } => {
-                let mut depth = 0usize;
-                let mut branch = 0usize;
-                for action in actions {
-                    match self.actions.get(*action) {
-                        Some(Action::If { .. }) => {
-                            if depth == 0 {
-                                self.mark_action_argument_origins(
-                                    *action,
-                                    [branches
-                                        .first()
-                                        .and_then(|branch| branch.condition.span().copied())],
-                                );
-                            }
-                            depth += 1;
-                        }
-                        Some(Action::ElseIf { .. }) if depth == 1 => {
-                            branch += 1;
-                            self.mark_action_argument_origins(
-                                *action,
-                                [branches
-                                    .get(branch)
-                                    .and_then(|branch| branch.condition.span().copied())],
-                            );
-                        }
-                        Some(Action::End) => depth = depth.saturating_sub(1),
-                        _ => {}
-                    }
-                }
-            }
+            Stmt::If {
+                branches,
+                else_span,
+                end_span,
+                ..
+            } => self.mark_if_chain_origins(branches, *else_span, *end_span, actions),
             Stmt::While { condition, .. } => {
                 if let Some(action) = actions.first() {
                     if matches!(self.actions.get(*action), Some(Action::While { .. })) {
@@ -1242,6 +1289,8 @@ impl<'a> Lowering<'a> {
         let Stmt::If {
             branches,
             r#else,
+            else_span,
+            end_span,
             span: _,
         } = statement
         else {
@@ -1278,7 +1327,9 @@ impl<'a> Lowering<'a> {
         for (branch, body) in branches.iter().zip(lowered_branches) {
             branch_actions.push((self.lower_value(&branch.condition)?, body));
         }
-        Ok(self.push_if_actions(branch_actions, lowered_else))
+        let actions = self.push_if_actions(branch_actions, lowered_else);
+        self.mark_if_chain_origins(branches, *else_span, *end_span, &actions);
+        Ok(actions)
     }
 
     fn lower_do_while_body(
@@ -1314,12 +1365,16 @@ impl<'a> Lowering<'a> {
                     continue;
                 }
                 let Stmt::If {
-                    branches, r#else, ..
+                    branches,
+                    r#else,
+                    else_span,
+                    end_span,
+                    ..
                 } = statement
                 else {
                     unreachable!("continue-containing do-while statement must be an if")
                 };
-                let branches = branches
+                let lowered_branches = branches
                     .iter()
                     .map(|branch| {
                         Ok((
@@ -1332,7 +1387,8 @@ impl<'a> Lowering<'a> {
                     .as_ref()
                     .map(|body| self.lower_do_while_body(body))
                     .transpose()?;
-                let lowered = self.push_if_actions(branches, else_body);
+                let lowered = self.push_if_actions(lowered_branches, else_body);
+                self.mark_if_chain_origins(branches, *else_span, *end_span, &lowered);
                 self.mark_action_origins(&lowered, statement.span().copied());
                 actions.extend(lowered);
                 continue;

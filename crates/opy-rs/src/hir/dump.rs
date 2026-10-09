@@ -236,6 +236,7 @@ fn dump_stmt(statement: &Stmt, out: &mut String, level: usize) {
             branches,
             r#else,
             span,
+            ..
         } => {
             out.push_str(&format!(
                 "{}if{}\n",

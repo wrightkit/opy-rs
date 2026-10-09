@@ -171,6 +171,7 @@ fn single_if_statement(statement: &Stmt) -> Option<(&Expr, &Stmt, Option<HirSpan
         branches,
         r#else: None,
         span,
+        ..
     } = statement
     else {
         return None;

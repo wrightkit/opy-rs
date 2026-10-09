@@ -197,6 +197,11 @@ pub enum Stmt {
     If {
         branches: Vec<IfBranch>,
         r#else: Option<Vec<Stmt>>,
+        /// The span of the `else` keyword, when the chain has an else branch.
+        else_span: Option<Span>,
+        /// Zero-width span at the first token past the chain (dedent or EOF):
+        /// the position a Workshop `End` marker would occupy.
+        end_span: Span,
         span: Span,
     },
     For {
@@ -265,6 +270,8 @@ pub enum SwitchArm {
 /// One condition/body pair of an `if`.
 #[derive(Debug, Clone)]
 pub struct IfBranch {
+    /// The span of the `if`, `elif`, or `else` keyword that opens this branch.
+    pub marker: Span,
     pub condition: Expr,
     pub body: Vec<Stmt>,
 }
