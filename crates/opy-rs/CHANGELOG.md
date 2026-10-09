@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.4](https://github.com/wrightkit/opy-rs/compare/v0.3.3...v0.3.4) - 2026-10-09
+
+### Added
+
+- *(settings)* pass every unknown settings member through as upstream writes it ([#493](https://github.com/wrightkit/opy-rs/pull/493))
+
+### Fixed
+
+- *(project)* classify filesystem load failures by actual I/O cause ([#484](https://github.com/wrightkit/opy-rs/pull/484)) ([#491](https://github.com/wrightkit/opy-rs/pull/491))
+- *(lower)* exclude catalog members the pinned 9.7.10 reference predates ([#490](https://github.com/wrightkit/opy-rs/pull/490))
+- *(settings)* emit unknown settings keys verbatim like upstream ([#489](https://github.com/wrightkit/opy-rs/pull/489))
+
+### Other
+
+- *(compiler)* record the approved sorted, EntityId, and LIGHT_* exceptions ([#487](https://github.com/wrightkit/opy-rs/pull/487))
+
 ## [0.3.2](https://github.com/wrightkit/opy-rs/compare/v0.3.1...v0.3.2) - 2026-10-08
 
 ### Added
