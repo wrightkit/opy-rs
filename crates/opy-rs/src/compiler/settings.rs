@@ -158,8 +158,30 @@ fn pass_through_unknown_members(
                             SettingsNode::Group { name, children, .. } if name == "general" => {
                                 general.extend(children);
                             }
-                            // A non-dict `general` is dropped by upstream.
-                            child if child.name() == "general" => {}
+                            // Upstream iterates the value's `Object.keys`: a
+                            // non-dict `general` yields index-keyed members for
+                            // strings and lists, and drops numbers/booleans.
+                            child if child.name() == "general" => match child {
+                                SettingsNode::String { value, span, .. } => {
+                                    general.extend(value.chars().enumerate().map(|(index, ch)| {
+                                        SettingsNode::Raw {
+                                            name: index.to_string(),
+                                            value: ch.to_string(),
+                                            span,
+                                        }
+                                    }));
+                                }
+                                SettingsNode::List { elements, .. } => {
+                                    general.extend(elements.iter().enumerate().map(
+                                        |(index, element)| SettingsNode::Raw {
+                                            name: index.to_string(),
+                                            value: element.value.clone(),
+                                            span: element.span,
+                                        },
+                                    ));
+                                }
+                                _ => {}
+                            },
                             child => rest.push(child),
                         }
                     }
@@ -168,10 +190,8 @@ fn pass_through_unknown_members(
                     let mut enabled = false;
                     let mut disabled = false;
                     for child in &rest {
-                        if let SettingsNode::List { name, .. } = child {
-                            enabled |= name == "enabledHeroes";
-                            disabled |= name == "disabledHeroes";
-                        }
+                        enabled |= child.name() == "enabledHeroes";
+                        disabled |= child.name() == "disabledHeroes";
                     }
                     if enabled && disabled {
                         return Err(IntegrationError::new(
@@ -191,6 +211,30 @@ fn pass_through_unknown_members(
                                 "enabledHeroes" | "disabledHeroes"
                             ))
                         });
+                    // Canonical hero-group names take upstream's assign+delete
+                    // rename: the source group lands at the destination's
+                    // position, collapsing a duplicate, or at the end of the
+                    // hero groups when the destination is absent.
+                    let mut index = 0;
+                    while index < rest.len() {
+                        let SettingsNode::Group { name, .. } = &rest[index] else {
+                            index += 1;
+                            continue;
+                        };
+                        let canonical = canonical_hero_name(name).to_string();
+                        if canonical == *name {
+                            index += 1;
+                            continue;
+                        }
+                        let mut moved = rest.remove(index);
+                        if let SettingsNode::Group { name, .. } = &mut moved {
+                            *name = canonical.clone();
+                        }
+                        match rest.iter_mut().find(|m| m.name() == canonical) {
+                            Some(dest) => *dest = moved,
+                            None => rest.push(moved),
+                        }
+                    }
                     // The flattened `general` members are not reprocessed:
                     // only authored hero groups and hero rosters take the
                     // hero-name and applicability passes.
@@ -198,9 +242,6 @@ fn pass_through_unknown_members(
                         match hero {
                             SettingsNode::Group { name, children, .. } => {
                                 let canonical = canonical_hero_name(name).to_string();
-                                if canonical != *name {
-                                    *name = canonical.clone();
-                                }
                                 // The pinned compiler rewrites `ability1KB%`
                                 // to `ability1Kb%` inside hero settings before
                                 // the schema lookup; the rewritten member takes

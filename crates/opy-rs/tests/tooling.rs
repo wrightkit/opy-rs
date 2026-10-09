@@ -657,6 +657,53 @@ fn hero_kb_rename_uses_the_pinned_assign_delete_order() {
 }
 
 #[test]
+fn hero_group_rename_uses_the_pinned_assign_delete_order() {
+    // opy-rs#495: upstream renames alias hero groups via assign+delete, so a
+    // renamed group moves to the end, or collapses onto the canonical
+    // group's position with the source members.
+    let lines = compiled_lines(concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"heroes\": {\"allTeams\": {\n",
+        "        \"mccree\": {\"health%\": 50},\n",
+        "        \"ana\": {\"health%\": 150}\n",
+        "    }}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    ));
+    let ana = lines
+        .iter()
+        .position(|line| line == "Ana {")
+        .expect("ana group");
+    let cassidy = lines
+        .iter()
+        .position(|line| line == "Cassidy {")
+        .expect("renamed group");
+    assert!(ana < cassidy, "renamed group must move last: {lines:?}");
+
+    let lines = compiled_lines(concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"heroes\": {\"allTeams\": {\n",
+        "        \"mccree\": {\"health%\": 50},\n",
+        "        \"cassidy\": {\"health%\": 10}\n",
+        "    }}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    ));
+    assert_eq!(
+        lines.iter().filter(|line| **line == "Cassidy {").count(),
+        1,
+        "the canonical group collapses to one: {lines:?}"
+    );
+    assert!(
+        lines.contains(&"Health: 50%".to_string())
+            && !lines.iter().any(|line| line.contains("10%")),
+        "the source members win: {lines:?}"
+    );
+}
+
+#[test]
 fn general_children_are_not_reprocessed_as_hero_members() {
     // opy-rs#495: the flattened `general` members take only the team-level
     // pass-through — hero-name and applicability passes must not reach them.
@@ -685,8 +732,37 @@ fn general_children_are_not_reprocessed_as_hero_members() {
 }
 
 #[test]
-fn a_non_dict_general_is_dropped() {
-    // opy-rs#495: upstream silently drops a non-dict `general` under a team.
+fn a_non_dict_general_yields_index_members_or_drops() {
+    // opy-rs#495: upstream iterates the value's `Object.keys`, so a string or
+    // list `general` emits index-keyed members while numbers/booleans drop.
+    let lines = compiled_lines(concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"heroes\": {\"allTeams\": {\n",
+        "        \"general\": \"ab\",\n",
+        "        \"ana\": {\"health%\": 50}\n",
+        "    }}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    ));
+    for line in ["0: a", "1: b", "Health: 50%"] {
+        assert!(lines.contains(&line.to_string()), "{line:?} in {lines:?}");
+    }
+
+    let lines = compiled_lines(concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"heroes\": {\"allTeams\": {\n",
+        "        \"general\": [10, 20],\n",
+        "        \"ana\": {\"health%\": 50}\n",
+        "    }}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    ));
+    for line in ["0: 10", "1: 20"] {
+        assert!(lines.contains(&line.to_string()), "{line:?} in {lines:?}");
+    }
+
     let lines = compiled_lines(concat!(
         "settings {\n",
         "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
@@ -698,8 +774,9 @@ fn a_non_dict_general_is_dropped() {
         "rule \"a\":\n    @Event global\n    wait(1)\n",
     ));
     assert!(
-        lines.contains(&"Health: 50%".to_string()),
-        "{lines:?} must still emit the hero members"
+        lines.contains(&"Health: 50%".to_string())
+            && !lines.iter().any(|line| line == "general: 5"),
+        "{lines:?} must drop the number member and keep the hero members"
     );
 }
 
