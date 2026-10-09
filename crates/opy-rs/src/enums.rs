@@ -67,15 +67,13 @@ pub(crate) fn opy_domain(domain: &str) -> &str {
 }
 
 /// Catalog members with no reference source spelling: `LIJIANG_TOWER_LUNAR`
-/// exists in the catalog while upstream's map list has no spelling for it,
-/// and the pinned 9.7.10 reference predates `DOCTRINE` and `GRIMSVOTN`,
-/// which the workshop-rs catalog added in 1.9.0. Neither the lowerer nor
-/// the lookup exposes them to OverPy source (issue #466).
-const NON_SOURCE_MEMBERS: &[(&str, &str)] = &[
-    ("Map", "LIJIANG_TOWER_LUNAR"),
-    ("Hero", "DOCTRINE"),
-    ("Map", "GRIMSVOTN"),
-];
+/// and `DOCTRINE` exist in the workshop-rs catalog while no upstream
+/// release defines a `Domain.MEMBER` spelling for them. Neither the lowerer
+/// nor the lookup exposes them to OverPy source (issue #466). The pinned
+/// oracle never gains new data, so a member leaves this list once an
+/// upstream release spells it: `Map.GRIMSVOTN` left when 9.7.17 defined it
+/// (issue #498).
+const NON_SOURCE_MEMBERS: &[(&str, &str)] = &[("Map", "LIJIANG_TOWER_LUNAR"), ("Hero", "DOCTRINE")];
 
 /// The enum-literal receivers the pinned reference exposes: each shares the
 /// base domain's member spellings (`constantValues` builds the literal
