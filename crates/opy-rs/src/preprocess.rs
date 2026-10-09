@@ -568,6 +568,7 @@ impl Preprocessor {
         let mut tokens = tokens;
         for token in &mut tokens {
             token.span = shift_settings_span(token.span, block.text_start);
+            token.layout = token.span;
         }
         let tokens = self.expand(tokens)?;
         Ok(SettingsBlock {

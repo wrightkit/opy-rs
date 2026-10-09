@@ -167,7 +167,7 @@ impl Preprocessor {
         } else {
             (Vec::new(), index + 1)
         };
-        let mut expanded = self.expand_macro(mac, args, token.span, line_indent(tokens, index))?;
+        let mut expanded = self.expand_macro(mac, args, token, line_indent(tokens, index))?;
         self.expand_into(&mut expanded, &mut Vec::new(), 0)?;
         Ok((expanded, after))
     }
@@ -254,7 +254,7 @@ impl Preprocessor {
         &self,
         mac: &MacroDef,
         args: Vec<MacroArgument>,
-        use_site: Span,
+        use_site: &Token,
         line_indent: u32,
     ) -> OpyResult<Vec<Token>> {
         if mac.is_function && args.len() != mac.params.len() {
@@ -266,7 +266,7 @@ impl Preprocessor {
                     mac.params.len(),
                     args.len()
                 ),
-                use_site,
+                use_site.span,
             ));
         }
         if let Some(script) = &mac.script {
@@ -287,7 +287,7 @@ impl Preprocessor {
             replacement = replacement.replace('\n', &format!("\n{indent}"));
         }
         let mut out = lex(LexInput {
-            file_id: use_site.file,
+            file_id: use_site.span.file,
             text: &replacement,
         })?;
         out.retain(|token| token.kind != TokenKind::Eof);
@@ -341,12 +341,8 @@ impl Preprocessor {
                     if mac.is_function {
                         if index + 1 < tokens.len() && tokens[index + 1].kind == TokenKind::LParen {
                             let (args, after) = self.collect_args(tokens, index + 1)?;
-                            let mut expanded = self.expand_macro(
-                                mac,
-                                args,
-                                token.span,
-                                line_indent(tokens, index),
-                            )?;
+                            let mut expanded =
+                                self.expand_macro(mac, args, token, line_indent(tokens, index))?;
                             stack.push(name.clone());
                             self.expand_into(&mut expanded, stack, depth + 1)?;
                             stack.pop();
@@ -354,12 +350,8 @@ impl Preprocessor {
                             index = after;
                             continue;
                         }
-                        let mut expanded = self.expand_macro(
-                            mac,
-                            Vec::new(),
-                            token.span,
-                            line_indent(tokens, index),
-                        )?;
+                        let mut expanded =
+                            self.expand_macro(mac, Vec::new(), token, line_indent(tokens, index))?;
                         stack.push(name.clone());
                         self.expand_into(&mut expanded, stack, depth + 1)?;
                         stack.pop();
@@ -368,7 +360,7 @@ impl Preprocessor {
                         continue;
                     }
                     let mut expanded =
-                        self.expand_macro(mac, Vec::new(), token.span, line_indent(tokens, index))?;
+                        self.expand_macro(mac, Vec::new(), token, line_indent(tokens, index))?;
                     stack.push(name.clone());
                     self.expand_into(&mut expanded, stack, depth + 1)?;
                     stack.pop();
@@ -393,7 +385,7 @@ fn line_indent(tokens: &[Token], index: usize) -> u32 {
     tokens
         .get(line_start..=index)
         .and_then(|line| line.iter().find(|token| token.kind != TokenKind::Newline))
-        .map_or(0, |token| token.span.start.col.saturating_sub(1))
+        .map_or(0, |token| token.layout.start.col.saturating_sub(1))
 }
 
 fn position_offset(source: &str, position: crate::diag::Position) -> Option<usize> {
@@ -430,15 +422,23 @@ fn raw_arg_text(tokens: &[Token]) -> String {
     out
 }
 
-/// Attribute every token produced by an expansion to the use-site span.
-/// The expanded text does not appear in authored source, so the authored
-/// macro name is the only honest provenance: offsetting tokens by the
+/// Give every token produced by an expansion the use-site span as its
+/// authored provenance while keeping the expansion's relative layout for
+/// the parser. The expanded text does not appear in authored source, so
+/// the authored macro name is the only honest `span`: offsetting it by the
 /// expansion's own width recorded positions past the authored line, and a
 /// multi-line expansion attributed its later tokens to unrelated authored
-/// lines (#506).
-pub(super) fn attribute_expansion_spans(tokens: &mut [Token], origin: Span) {
+/// lines (#506). `layout` keeps the shifted coordinates anchored at the
+/// invocation's layout position because the indentation-sensitive parser
+/// reads it for block structure.
+pub(super) fn attribute_expansion_spans(tokens: &mut [Token], use_site: &Token) {
     for token in tokens {
-        token.span = origin;
+        token.layout = Span::new(
+            use_site.span.file,
+            crate::diag::shift_position(token.span.start, use_site.layout.start),
+            crate::diag::shift_position(token.span.end, use_site.layout.start),
+        );
+        token.span = use_site.span;
     }
 }
 

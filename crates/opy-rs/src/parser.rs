@@ -93,7 +93,7 @@ impl<'a> Parser<'a> {
             if token.kind == TokenKind::Newline {
                 let entries = newline_lines.entry(token.span.file).or_default();
                 let line = token
-                    .span
+                    .layout
                     .start
                     .line
                     .max(entries.last().map_or(0, |&(_, max)| max));
@@ -522,7 +522,7 @@ impl Parser<'_> {
             self.error_at_current("expected an indented block".to_string());
             return None;
         }
-        let indent = self.peek().span.start.col;
+        let indent = self.peek().layout.start.col;
         if indent <= line_indent {
             self.error_at_current("expected an indented block after ':'".to_string());
             return None;
@@ -543,7 +543,7 @@ impl Parser<'_> {
         let continued_line = self
             .tokens
             .get(self.pos.saturating_sub(1))
-            .is_some_and(|previous| self.peek().span.start.line > previous.span.end.line);
+            .is_some_and(|previous| self.peek().layout.start.line > previous.layout.end.line);
         self.last_statement_continued = continued_line;
         if matches!(self.peek_kind(), TokenKind::Newline | TokenKind::Eof) || continued_line {
             Ok(())
@@ -554,19 +554,24 @@ impl Parser<'_> {
     }
 }
 
-/// Parse one f-string expression fragment and shift its local token spans
-/// into the original source file.
+/// Parse one expression fragment and shift its local token spans into the
+/// original source file. `bounds` limits the authored provenance of the
+/// fragment's tokens: inside an expanded string the interpolation has no
+/// authored extent, so derived positions clamp into the string's span
+/// rather than fabricating columns past it (#506).
 pub(crate) fn parse_expression_fragment(
     text: &str,
     file: u32,
     origin: Position,
+    bounds: Option<Span>,
 ) -> Result<Expr, OpyError> {
     let mut tokens = crate::lexer::lex(crate::lexer::LexInput {
         file_id: file,
         text,
     })?;
     for token in &mut tokens {
-        token.span = shift_span(token.span, origin);
+        token.layout = shift_span(token.span, origin);
+        token.span = bounds.map_or(token.layout, |bounds| bounded_span(token.layout, bounds));
     }
     let mut parser = Parser::new(&tokens, false);
     let expression = parser.parse_expr().map_err(|()| {
@@ -589,6 +594,17 @@ fn shift_span(span: Span, origin: Position) -> Span {
         span.file,
         crate::diag::shift_position(span.start, origin),
         crate::diag::shift_position(span.end, origin),
+    )
+}
+
+pub(crate) fn bounded_span(span: Span, bounds: Span) -> Span {
+    if span.file != bounds.file {
+        return span;
+    }
+    Span::new(
+        span.file,
+        span.start.clamp(bounds.start, bounds.end),
+        span.end.clamp(bounds.start, bounds.end),
     )
 }
 
