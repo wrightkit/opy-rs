@@ -495,8 +495,13 @@ fn js_number_literal(text: &str) -> Option<f64> {
     {
         return None;
     }
-    if let Ok(value) = text.parse::<f64>() {
-        return Some(value);
+    // The reference's number reader requires a fraction digit before an
+    // exponent marker (`1.e5`); Rust accepts it, so gate the spelling out —
+    // an unrecognized literal keeps its authored text.
+    if !text.contains(".e") && !text.contains(".E") {
+        if let Ok(value) = text.parse::<f64>() {
+            return Some(value);
+        }
     }
     let (negative, rest) = if let Some(rest) = text.strip_prefix('-') {
         (true, rest)
@@ -932,6 +937,8 @@ impl Cursor<'_> {
     /// Read one settings number literal the way the pinned OverPy tokenizer
     /// admits it: decimal with an optional unsigned exponent (`1e21`,
     /// `0.5e3`), and `0x`/`0o`/`0b` integer radixes (`0x1F` is 31; #496).
+    /// An exponent marker needs a fraction digit before it (`1.e5` is the
+    /// reference's "Expected a number after '.'" error).
     /// A signed exponent (`1e-7`, `1e+21`) is not read — the reference
     /// tokenizer splits the sign out as an operator and errors, so leaving
     /// the `e` behind reproduces its rejection through the object parser.
@@ -980,12 +987,23 @@ impl Cursor<'_> {
         }
         if self.peek() == Some('.') {
             text.push(self.advance().unwrap());
+            let mut fraction = 0usize;
             while let Some(c) = self.peek() {
                 if c.is_ascii_digit() {
                     text.push(self.advance().unwrap());
+                    fraction += 1;
                 } else {
                     break;
                 }
+            }
+            // The reference requires a fraction digit before an exponent
+            // marker: `1.e5` is its "Expected a number after '.'" error.
+            if fraction == 0 && matches!(self.peek(), Some('e' | 'E')) {
+                return Err(self.error_at(
+                    "settings-invalid",
+                    format!("invalid number '{text}' in settings block"),
+                    Span::new(self.file, start, self.here()),
+                ));
             }
         }
         if matches!(self.peek(), Some('e' | 'E'))
@@ -1375,8 +1393,9 @@ mod tests {
     #[test]
     fn parse_block_rejects_signed_exponents_like_the_pinned_reference() {
         // The pinned settings tokenizer splits an exponent sign out as an
-        // operator and errors (`1e-7`, `1e+21`, `-2.5e-3`; #496).
-        for value in ["1e-7", "1e+21", "-2.5e-3", "0.5e+3"] {
+        // operator and errors (`1e-7`, `1e+21`, `-2.5e-3`; #496), and it
+        // requires a fraction digit before an exponent marker (`1.e5`).
+        for value in ["1e-7", "1e+21", "-2.5e-3", "0.5e+3", "1.e5", "0.e5"] {
             let found = block(&format!(
                 "settings {{\n    \"lobby\": {{ \"k\": {value} }},\n    \"gamemodes\": {{}}\n}}\n"
             ));
