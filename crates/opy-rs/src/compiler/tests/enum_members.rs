@@ -142,10 +142,11 @@ fn catalog_only_spellings_name_the_valid_opy_spelling() {
 
 #[test]
 fn catalog_member_without_opy_spelling_reports_unspellable() {
-    // Catalog members the pinned reference predates — the workshop-rs
-    // catalog picks them up ahead of upstream, and the spelling contract
-    // keeps rejecting them until upstream defines a spelling (issue #466).
-    for member_expr in ["Map.LIJIANG_TOWER_LUNAR", "Hero.DOCTRINE", "Map.GRIMSVOTN"] {
+    // Catalog members no upstream release spells — the workshop-rs catalog
+    // picks content up ahead of upstream, and the spelling contract keeps
+    // rejecting them until an upstream release defines a spelling
+    // (issue #466).
+    for member_expr in ["Map.LIJIANG_TOWER_LUNAR", "Hero.DOCTRINE"] {
         let domain = member_expr.split('.').next().unwrap();
         let member = member_expr.split('.').nth(1).unwrap();
         let report = compile_member(member_expr);
@@ -164,6 +165,28 @@ fn catalog_member_without_opy_spelling_reports_unspellable() {
             )
         );
     }
+}
+
+#[test]
+fn catalog_member_spelled_by_current_upstream_compiles() {
+    // `Map.GRIMSVOTN` postdates the pinned 9.7.10 oracle, but upstream
+    // 9.7.17 defines the spelling; a static pin never gains new data, so a
+    // member the current reference exposes compiles (issue #498).
+    let source = r#"globalvar value
+
+rule "current upstream member":
+    @Event global
+    value = Map.GRIMSVOTN
+"#;
+    let artifact = Compiler::new()
+        .expect("released Workshop contract must load")
+        .compile_source_artifact(source, "enum-spelling.opy", Path::new("."))
+        .expect("Map.GRIMSVOTN must compile");
+    assert!(
+        artifact.emitted.contains("Grímsvötn"),
+        "missing Grímsvötn: {}",
+        artifact.emitted
+    );
 }
 
 #[test]
