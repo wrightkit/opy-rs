@@ -514,6 +514,122 @@ fn an_object_under_an_enum_key_compiles_as_the_reference_block() {
 }
 
 #[test]
+fn settings_list_elements_evaluate_like_the_pinned_reference() {
+    // opy-rs#512: a list element is a settings expression the pinned
+    // evaluator folds to its `String(value)` text — `1+2` emits `3`, a
+    // nested list emits `1,2` — under unknown and catalogued keys alike.
+    for (element, emitted) in [
+        ("1+2", "3"),
+        ("1-2", "-1"),
+        ("2e3", "2000"),
+        ("-0.5", "-0.5"),
+        ("0x1F", "31"),
+        ("[1,2]", "1,2"),
+        ("1==1", "true"),
+        ("5%2", "1"),
+        ("-(1+2)", "-3"),
+        ("1 in [3]", "false"),
+        ("[1,2][0]", "1"),
+        ("abs(-1)", "1"),
+        ("min(1,2)", "1"),
+        // `and`/`or`/`not` follow the reference's truthiness: operand
+        // values, `not` on scalars and arrays, `==` equality per type.
+        ("1 and 2", "2"),
+        ("0 or 3", "3"),
+        ("{\"a\":1} or 2", "2"),
+        ("not 0", "true"),
+        ("not \"a\"", "false"),
+        ("not []", "true"),
+        ("not [1]", "false"),
+        ("1 == \"1\"", "false"),
+        ("[1]==[1]", "true"),
+    ] {
+        let source = format!(
+            "settings {{\n    \"gamemodes\": {{\"ffa\": {{\"enabled\": true, \"general\": {{\"unk\": [{element}]}}}}}}\n}}\nrule \"a\":\n    @Event global\n    wait(1)\n"
+        );
+        let lines = compiled_lines(&source);
+        let block = lines
+            .iter()
+            .position(|line| line == "unk {")
+            .unwrap_or_else(|| panic!("element {element:?} must emit a carried block: {lines:?}"));
+        assert_eq!(
+            lines[block + 1],
+            emitted,
+            "element {element:?} must emit {emitted:?}: {lines:?}"
+        );
+    }
+    // Folded elements land in carried blocks under catalogued keys too.
+    let lines = compiled_lines(concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"lobby\": {\"mapRotation\": [\"assault\", 1+2]}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    ));
+    let block = lines
+        .iter()
+        .position(|line| line == "Map Rotation {")
+        .expect("the enum key writes a display-name block");
+    assert_eq!(&lines[block + 1..block + 3], ["assault", "3"]);
+}
+
+#[test]
+fn settings_list_elements_the_reference_rejects_are_errors() {
+    // opy-rs#512: the pinned compiler rejects elements its settings
+    // evaluator cannot resolve — bare names, calls, string `+` — and its
+    // tokenizer rejects signed exponents and leading/trailing dots.
+    for (element, code) in [
+        ("abc", "settings-expression"),
+        ("e5", "settings-expression"),
+        ("vect(1, 2, 3)", "settings-expression"),
+        ("\"a\"+\"b\"", "settings-expression"),
+        ("genji", "settings-expression"),
+        ("1.e5", "settings-expression"),
+        ("1 == true", "settings-expression"),
+        ("\"a\" == true", "settings-expression"),
+        ("not {}", "settings-expression"),
+        ("\"a\" in {\"a\":1}", "settings-expression"),
+        ("[1,2][9]", "settings-expression"),
+        ("1e-7", "settings-invalid"),
+        ("2e+3", "settings-invalid"),
+        (".5", "settings-invalid"),
+        ("2.", "settings-invalid"),
+    ] {
+        let source = format!(
+            "settings {{\n    \"gamemodes\": {{\"ffa\": {{\"enabled\": true, \"general\": {{\"unk\": [{element}]}}}}}}\n}}\nrule \"a\":\n    @Event global\n    wait(1)\n"
+        );
+        let outcome = check(&source, "main.opy", Path::new(""));
+        assert!(
+            outcome.diagnostics.iter().any(|d| d.code == code),
+            "element {element:?} must fail with {code}: {:?}",
+            outcome.diagnostics
+        );
+    }
+    // The same rejections apply under a catalogued enum key: bare member
+    // names are expressions there, not literals — `[assault]` fails where
+    // `["assault"]` is carried.
+    let outcome = check(
+        concat!(
+            "settings {\n",
+            "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+            "    \"lobby\": {\"mapRotation\": [assault]}\n",
+            "}\n",
+            "rule \"a\":\n    @Event global\n    wait(1)\n",
+        ),
+        "main.opy",
+        Path::new(""),
+    );
+    assert!(
+        outcome
+            .diagnostics
+            .iter()
+            .any(|d| d.code == "settings-expression"),
+        "a bare member name under an enum key is an expression: {:?}",
+        outcome.diagnostics
+    );
+}
+
+#[test]
 fn settings_numbers_render_like_the_pinned_oracle() {
     // opy-rs#496: the pinned OverPy writes numeric settings values with
     // JavaScript `String(value)` semantics and reads decimal exponent forms

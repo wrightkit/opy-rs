@@ -24,6 +24,31 @@ pub(crate) fn evaluate(
     bindings: &HashMap<String, Value>,
     stack: &mut Vec<String>,
 ) -> Option<Value> {
+    eval(expression, constants, bindings, stack, false)
+}
+
+/// Evaluation as the pinned OverPy performs it inside `settings` values: the
+/// same constant folding as [`evaluate`], except format expressions and
+/// string concatenation are rejected and `==`/`!=` does not fold a Boolean
+/// against a non-Boolean — the reference evaluator admits literals,
+/// arithmetic, comparisons, `and`/`or`/`not`, membership (`in`), indexing,
+/// and the constant-foldable builtins (#512).
+pub(crate) fn evaluate_settings(
+    expression: &Expr,
+    constants: &HashMap<String, &Expr>,
+    bindings: &HashMap<String, Value>,
+    stack: &mut Vec<String>,
+) -> Option<Value> {
+    eval(expression, constants, bindings, stack, true)
+}
+
+fn eval(
+    expression: &Expr,
+    constants: &HashMap<String, &Expr>,
+    bindings: &HashMap<String, Value>,
+    stack: &mut Vec<String>,
+    settings: bool,
+) -> Option<Value> {
     match expression {
         Expr::Number { value, .. } => Some(Value::Number(*value)),
         Expr::String { value, .. } => Some(Value::String(value.clone())),
@@ -31,7 +56,7 @@ pub(crate) fn evaluate(
         Expr::Array { elements, .. } => Some(Value::Array(
             elements
                 .iter()
-                .map(|element| evaluate(element, constants, bindings, stack))
+                .map(|element| eval(element, constants, bindings, stack, settings))
                 .collect::<Option<Vec<_>>>()?,
         )),
         Expr::Dict { entries, .. } => Some(Value::Object(
@@ -39,8 +64,8 @@ pub(crate) fn evaluate(
                 .iter()
                 .map(|entry| {
                     Some((
-                        evaluate(&entry.key, constants, bindings, stack)?,
-                        evaluate(&entry.value, constants, bindings, stack)?,
+                        eval(&entry.key, constants, bindings, stack, settings)?,
+                        eval(&entry.value, constants, bindings, stack, settings)?,
                     ))
                 })
                 .collect::<Option<Vec<_>>>()?,
@@ -54,14 +79,17 @@ pub(crate) fn evaluate(
                 return None;
             }
             stack.push(name.clone());
-            let result = evaluate(value, constants, bindings, stack);
+            let result = eval(value, constants, bindings, stack, settings);
             stack.pop();
             result
         }
         Expr::Format { text, args, .. } => {
+            if settings {
+                return None;
+            }
             let values = args
                 .iter()
-                .map(|arg| evaluate(arg, constants, bindings, stack))
+                .map(|arg| eval(arg, constants, bindings, stack, settings))
                 .collect::<Option<Vec<_>>>()?;
             let mut result = text.clone();
             for (index, value) in values.into_iter().enumerate() {
@@ -73,8 +101,9 @@ pub(crate) fn evaluate(
             op, left, right, ..
         } => evaluate_binary(
             op,
-            evaluate(left, constants, bindings, stack)?,
-            evaluate(right, constants, bindings, stack)?,
+            eval(left, constants, bindings, stack, settings)?,
+            eval(right, constants, bindings, stack, settings)?,
+            settings,
         ),
         Expr::Conditional {
             then_value,
@@ -82,27 +111,32 @@ pub(crate) fn evaluate(
             else_value,
             ..
         } => {
-            if truthy(&evaluate(condition, constants, bindings, stack)?)? {
-                evaluate(then_value, constants, bindings, stack)
+            if truthy(&eval(condition, constants, bindings, stack, settings)?)? {
+                eval(then_value, constants, bindings, stack, settings)
             } else {
-                evaluate(else_value, constants, bindings, stack)
+                eval(else_value, constants, bindings, stack, settings)
             }
         }
         Expr::Unary { op, operand, .. } => {
-            match (op.as_str(), evaluate(operand, constants, bindings, stack)?) {
+            let operand = eval(operand, constants, bindings, stack, settings)?;
+            match (op.as_str(), operand) {
                 ("-", Value::Number(value)) => Some(Value::Number(-value)),
-                ("not", Value::Bool(value)) => Some(Value::Bool(!value)),
+                ("+", Value::Number(value)) => Some(Value::Number(value)),
+                // The reference's truthiness applies `not` to scalars and
+                // arrays, not objects (#512).
+                ("not", Value::Object(_)) => None,
+                ("not", value) => truthy(&value).map(|value| Value::Bool(!value)),
                 _ => None,
             }
         }
         Expr::Index { array, index, .. } => evaluate_index(
-            evaluate(array, constants, bindings, stack)?,
-            evaluate(index, constants, bindings, stack)?,
+            eval(array, constants, bindings, stack, settings)?,
+            eval(index, constants, bindings, stack, settings)?,
         ),
         Expr::Call { name, args, .. } => {
             let values = args
                 .iter()
-                .map(|arg| evaluate(arg, constants, bindings, stack))
+                .map(|arg| eval(arg, constants, bindings, stack, settings))
                 .collect::<Option<Vec<_>>>()?;
             evaluate_builtin(name, &values)
         }
@@ -148,10 +182,14 @@ fn evaluate_builtin(name: &str, values: &[Value]) -> Option<Value> {
     }
 }
 
-fn evaluate_binary(op: &str, left: Value, right: Value) -> Option<Value> {
+fn evaluate_binary(op: &str, left: Value, right: Value, settings: bool) -> Option<Value> {
     match (op, left, right) {
         ("+", Value::Number(left), Value::Number(right)) => Some(Value::Number(left + right)),
-        ("+", Value::String(left), Value::String(right)) => Some(Value::String(left + &right)),
+        // The settings evaluator has no string `+`; ordinary constant
+        // folding keeps it for format-style sources.
+        ("+", Value::String(left), Value::String(right)) if !settings => {
+            Some(Value::String(left + &right))
+        }
         ("-", Value::Number(left), Value::Number(right)) => Some(Value::Number(left - right)),
         ("*", Value::Number(left), Value::Number(right)) => Some(Value::Number(left * right)),
         ("/", Value::Number(left), Value::Number(right)) if right != 0.0 => {
@@ -161,10 +199,27 @@ fn evaluate_binary(op: &str, left: Value, right: Value) -> Option<Value> {
             Some(Value::Number(left % right))
         }
         ("**", Value::Number(left), Value::Number(right)) => Some(Value::Number(left.powf(right))),
-        ("and", Value::Bool(left), Value::Bool(right)) => Some(Value::Bool(left && right)),
-        ("or", Value::Bool(left), Value::Bool(right)) => Some(Value::Bool(left || right)),
+        ("<", Value::Number(left), Value::Number(right)) => Some(Value::Bool(left < right)),
+        (">", Value::Number(left), Value::Number(right)) => Some(Value::Bool(left > right)),
+        ("<=", Value::Number(left), Value::Number(right)) => Some(Value::Bool(left <= right)),
+        (">=", Value::Number(left), Value::Number(right)) => Some(Value::Bool(left >= right)),
+        // `and`/`or` return an operand like the reference's settings
+        // evaluator (`1 and 2` emits `2`, `0 or 3` emits `3`), not a
+        // Boolean coercion (#512).
+        ("and", left, right) => Some(if truthy(&left)? { right } else { left }),
+        ("or", left, right) => Some(if truthy(&left)? { left } else { right }),
+        // `==`/`!=` on a Boolean and a non-Boolean does not fold in the
+        // reference (`1 == true` and `"a" == true` are errors there; #512).
+        ("==" | "!=", left, right)
+            if settings && matches!(left, Value::Bool(_)) != matches!(right, Value::Bool(_)) =>
+        {
+            None
+        }
         ("==", left, right) => Some(Value::Bool(left == right)),
         ("!=", left, right) => Some(Value::Bool(left != right)),
+        // The reference's settings evaluator tests array membership, not
+        // JavaScript index existence.
+        ("in", left, Value::Array(values)) => Some(Value::Bool(values.contains(&left))),
         _ => None,
     }
 }
@@ -174,7 +229,9 @@ fn truthy(value: &Value) -> Option<bool> {
         Value::Bool(value) => Some(*value),
         Value::Number(value) => Some(*value != 0.0),
         Value::String(value) => Some(!value.is_empty()),
-        _ => None,
+        Value::Array(values) => Some(!values.is_empty()),
+        // The reference's `and`/`or` truthiness treats objects as falsy.
+        Value::Object(_) => Some(false),
     }
 }
 

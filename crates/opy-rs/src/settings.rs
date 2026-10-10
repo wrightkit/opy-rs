@@ -388,36 +388,88 @@ fn resolve_hir_node(
                 ));
             };
             let diag_span = hir_span_to_diag_span(span);
-            let expression = lowerer
-                .lower(
-                    &value,
-                    span.file,
-                    Position::new(span.start.line, span.start.col),
-                )
-                .map_err(|error| settings_expression_error(diag_span, error.message))?;
-            let expression = expander
-                .expand_expr(&expression, &HashMap::new(), None)
-                .map_err(|error| {
-                    let error_span = error
-                        .diagnostic
-                        .span
-                        .map(hir_span_to_diag_span)
-                        .unwrap_or(diag_span);
-                    OpyError::at(error.diagnostic.code, error.diagnostic.message, error_span)
-                })?;
-            let mut stack = Vec::new();
-            let value =
-                crate::compile_time::evaluate(&expression, constants, &HashMap::new(), &mut stack)
-                    .ok_or_else(|| {
-                        settings_expression_error(
-                            diag_span,
-                            "expression is not a compile-time value".to_string(),
-                        )
-                    })?;
+            let value = eval_settings_text(&value, span, constants, expander, lowerer, false)?;
             node_from_value(name, value, diag_span)
         }
+        // The pinned OverPy evaluates each settings list element through its
+        // expression path and errors on what it cannot resolve (#512).
+        // Evaluation is recorded on the element rather than emitted eagerly:
+        // elements under catalogued enum keys and hero lists are member
+        // names, not expressions, and only the downstream pass knows which.
+        hir::SettingsNode::List {
+            name,
+            elements,
+            span,
+        } => Ok(hir::SettingsNode::List {
+            name,
+            elements: elements
+                .into_iter()
+                .map(|mut element| {
+                    if element.evaluated.is_none()
+                        && let Some(span) = element.span
+                    {
+                        element.evaluated = eval_settings_text(
+                            &element.value,
+                            span,
+                            constants,
+                            expander,
+                            lowerer,
+                            true,
+                        )
+                        .ok()
+                        .and_then(|value| display_value(&value).ok());
+                    }
+                    element
+                })
+                .collect(),
+            span,
+        }),
         node => Ok(node),
     }
+}
+
+/// Compile an authored settings expression to a constant value: parse it as
+/// OPY, expand macros, then fold. `strict` selects the pinned settings
+/// evaluator (list elements; #512); scalar values keep the ordinary
+/// constant folder so `#!define` string composition resolves.
+fn eval_settings_text(
+    text: &str,
+    span: hir::Span,
+    constants: &HashMap<String, &hir::Expr>,
+    expander: &mut crate::compiler::MacroExpander<'_>,
+    lowerer: &mut crate::lower::SettingsLowerer,
+    strict: bool,
+) -> OpyResult<crate::compile_time::Value> {
+    let diag_span = hir_span_to_diag_span(span);
+    let expression = lowerer
+        .lower(
+            text,
+            span.file,
+            Position::new(span.start.line, span.start.col),
+        )
+        .map_err(|error| settings_expression_error(diag_span, error.message))?;
+    let expression = expander
+        .expand_expr(&expression, &HashMap::new(), None)
+        .map_err(|error| {
+            let error_span = error
+                .diagnostic
+                .span
+                .map(hir_span_to_diag_span)
+                .unwrap_or(diag_span);
+            OpyError::at(error.diagnostic.code, error.diagnostic.message, error_span)
+        })?;
+    let mut stack = Vec::new();
+    let value = if strict {
+        crate::compile_time::evaluate_settings(&expression, constants, &HashMap::new(), &mut stack)
+    } else {
+        crate::compile_time::evaluate(&expression, constants, &HashMap::new(), &mut stack)
+    };
+    value.ok_or_else(|| {
+        settings_expression_error(
+            diag_span,
+            "expression is not a compile-time value".to_string(),
+        )
+    })
 }
 
 fn hir_span_to_diag_span(span: hir::Span) -> Span {
@@ -470,8 +522,10 @@ fn node_from_value(
             elements: values
                 .into_iter()
                 .map(|value| {
+                    let value = display_value(&value)?;
                     Ok(hir::SettingsListElement {
-                        value: display_value(&value)?,
+                        evaluated: Some(value.clone()),
+                        value,
                         span: Some(span.into()),
                     })
                 })
@@ -506,8 +560,32 @@ fn display_value(value: &crate::compile_time::Value) -> Result<String, String> {
         }
         crate::compile_time::Value::String(value) => Ok(value.clone()),
         crate::compile_time::Value::Bool(value) => Ok(value.to_string()),
-        _ => Err("settings list can only contain primitive values".to_string()),
+        // JavaScript `String(value)` on containers, as the pinned evaluator
+        // writes them: arrays join their element text with commas, objects
+        // string-ify to the literal `[object Object]` (#512).
+        crate::compile_time::Value::Array(values) => values
+            .iter()
+            .map(display_value)
+            .collect::<Result<Vec<_>, _>>()
+            .map(|text| text.join(",")),
+        crate::compile_time::Value::Object(_) => Ok("[object Object]".to_string()),
+        crate::compile_time::Value::Number(_) => {
+            Err("settings list numbers must be finite".to_string())
+        }
     }
+}
+
+/// Whether a spelling that JavaScript's `Number` would read is rejected by
+/// the pinned settings tokenizer: signed exponents (`1e-7`, `2e+3`), a
+/// leading dot (`.5` — read there as member access), or a trailing dot (`2.`)
+/// (#512). Call only when `js_number_literal` already accepted the text.
+fn rejected_number_shape(text: &str) -> bool {
+    let text = text.trim();
+    text.starts_with('.')
+        || text.ends_with('.')
+        || ["e+", "e-", "E+", "E-"]
+            .iter()
+            .any(|pat| text.contains(pat))
 }
 
 /// The number literal a settings value token spells as JavaScript's
@@ -940,7 +1018,7 @@ impl Cursor<'_> {
                     value.push(self.advance().expect("peeked character exists"));
                 }
                 ']' | ',' | '}' if depth == 0 => break,
-                ')' | ']' => {
+                ')' | ']' | '}' => {
                     depth = depth.saturating_sub(1);
                     value.push(self.advance().expect("peeked character exists"));
                 }
@@ -1068,13 +1146,7 @@ impl Cursor<'_> {
         loop {
             self.skip_whitespace();
             let start = self.here();
-            let value = match self.peek() {
-                Some('"') | Some('\'') => self.parse_string_expression().ok_or_else(|| {
-                    self.error(
-                        "settings-invalid",
-                        "unterminated string in settings list".to_string(),
-                    )
-                })?,
+            let (value, expr) = match self.peek() {
                 Some(']') | Some(',') | None => {
                     return Err(self.error(
                         "settings-invalid",
@@ -1082,16 +1154,35 @@ impl Cursor<'_> {
                     ));
                 }
                 _ => {
-                    let value = self.parse_expression_value();
-                    // A bare list element that is a number literal writes its
-                    // `String(value)` form (`[1e21]` emits `1e+21`; #496).
-                    js_number_literal(&value)
-                        .map(crate::compiler::number_format::javascript_text)
-                        .unwrap_or(value)
+                    let text = self.parse_expression_value();
+                    match js_number_literal(&text) {
+                        // The reference's settings tokenizer does not read a
+                        // leading dot, a trailing dot, or a signed exponent:
+                        // `1e-7`, `2e+3`, `.5`, and `2.` are errors there, not
+                        // literals (#512).
+                        Some(_) if rejected_number_shape(&text) => {
+                            return Err(self.error(
+                                "settings-invalid",
+                                format!("unsupported number '{text}' in settings list"),
+                            ));
+                        }
+                        // A bare list element that is a number literal
+                        // writes its `String(value)` form (`[1e21]` emits
+                        // `1e+21`; #496).
+                        Some(number) => (
+                            crate::compiler::number_format::javascript_text(number),
+                            false,
+                        ),
+                        // Every other element — quoted strings included —
+                        // is an expression the pinned settings evaluator
+                        // resolves or rejects (`"a"=="a"` emits `true`;
+                        // #512).
+                        None => (text, true),
+                    }
                 }
             };
             let span = Span::new(self.file, start, self.here());
-            elements.push(cst::SettingsListElement { value, span });
+            elements.push(cst::SettingsListElement { value, expr, span });
             self.skip_whitespace();
             match self.peek() {
                 Some(',') => {

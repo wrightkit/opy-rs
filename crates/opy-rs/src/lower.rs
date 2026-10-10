@@ -846,6 +846,7 @@ fn lower_settings_node(node: &cst::SettingsNode) -> HirSettingsNode {
                 .iter()
                 .map(|element| crate::hir::types::SettingsListElement {
                     value: element.value.clone(),
+                    evaluated: (!element.expr).then(|| element.value.clone()),
                     span: Some(element.span.into()),
                 })
                 .collect(),
