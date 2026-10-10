@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.7](https://github.com/wrightkit/opy-rs/compare/opy-provider-v0.3.6...opy-provider-v0.3.7) - 2026-10-09
+
+### Fixed
+
+- *(project)* classify a path through a regular file as absent on every platform ([#501](https://github.com/wrightkit/opy-rs/pull/501))
+
 ## [0.3.4](https://github.com/wrightkit/opy-rs/compare/opy-provider-v0.3.3...opy-provider-v0.3.4) - 2026-10-09
 
 ### Fixed
