@@ -461,6 +461,32 @@ fn settings_emission_agreement_between_check_and_compile() {
 }
 
 #[test]
+fn a_list_under_an_enum_key_compiles_as_the_reference_block() {
+    // opy-rs#496: the pinned OverPy writes a list under a catalogued
+    // non-list key as a block of bare lines under the key's display name
+    // rather than erroring; `check` and `compile` agree.
+    let source = concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"lobby\": {\"mapRotation\": [\"a\", \"paused\", 1, true]}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    );
+    let outcome = check(source, "main.opy", Path::new(""));
+    assert!(
+        outcome.is_clean(),
+        "the carried block must check clean: {:?}",
+        outcome.diagnostics
+    );
+    let lines = compiled_lines(source);
+    let block = lines
+        .iter()
+        .position(|line| line == "Map Rotation {")
+        .expect("the enum key writes a display-name block");
+    assert_eq!(&lines[block + 1..block + 5], ["a", "paused", "1", "true"]);
+}
+
+#[test]
 fn settings_numbers_render_like_the_pinned_oracle() {
     // opy-rs#496: the pinned OverPy writes numeric settings values with
     // JavaScript `String(value)` semantics and reads decimal exponent forms
