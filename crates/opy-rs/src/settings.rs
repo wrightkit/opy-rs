@@ -2,8 +2,8 @@
 //!
 //! The settings block is recognized and consumed *before* lexing, so the
 //! lexer never gains global `{`/`}` tokens (meipocalypse's dict literal keeps
-//! failing as a `lex-error`). [`find_blocks`] locates a top-of-file block in
-//! each source file with a logical-line keyword scan, [`sanitize_for_lex`]
+//! failing as a `lex-error`). [`find_blocks`] locates a logical-line `settings`
+//! statement in each source file with a keyword scan, [`sanitize_for_lex`]
 //! blanks the block region out of the text handed to the lexer (newlines
 //! preserved, so positions after the block are unchanged), and [`parse_block`]
 //! turns the JSONC text into a typed [`cst::Settings`] tree with source spans.
@@ -46,9 +46,12 @@ pub struct SettingsBlock {
 
 /// Locate every `settings { ... }` block in a source text.
 ///
-/// Rules: 0 blocks -> `Ok(vec![])`; the first block must be the first
-/// non-comment construct (`settings-placement` otherwise); after `settings`
-/// a `{` or quoted external path is required;
+/// Rules: 0 blocks -> `Ok(vec![])`; `settings` is a statement when it opens a
+/// logical line — the reference checks `tokens[0]` of every parsed line with
+/// no indentation or ordering requirement — or the inline tail of a `:`-header
+/// line, which the reference parses as a nested line. A newline inside
+/// brackets continues the logical line, so `settings` there is an ordinary
+/// token. After `settings` a `{` or quoted external path is required;
 /// a second/later block is `settings-placement` at its keyword span; brace
 /// matching respects `"`/`'` strings, `\` escapes, and nesting; an
 /// unterminated block is `settings-invalid`.
@@ -58,7 +61,13 @@ pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
     let mut in_block_comment = false;
     let mut string_quote = None;
     let mut escaped = false;
-    let mut seen_first_construct = false;
+    // `line_start`: the next token would open a logical line. `tail_start`:
+    // the next token would open the inline tail of a `:`-header line.
+    // `depth`: open `(`, `[`, `{` count, which keeps a newline from ending
+    // the logical line.
+    let mut line_start = true;
+    let mut tail_start = false;
+    let mut depth = 0usize;
     while let Some(ch) = scanner.peek() {
         if scanner.advance_quoted(&mut string_quote, &mut escaped, ch) {
             continue;
@@ -74,10 +83,20 @@ pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
         }
         if matches!(ch, '"' | '\'') {
             string_quote = Some(ch);
+            line_start = false;
+            tail_start = false;
             scanner.advance_by(1);
             continue;
         }
-        if ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n' {
+        if ch == ' ' || ch == '\t' || ch == '\r' {
+            scanner.advance_by(1);
+            continue;
+        }
+        if ch == '\n' {
+            if depth == 0 {
+                line_start = true;
+                tail_start = false;
+            }
             scanner.advance_by(1);
             continue;
         }
@@ -90,29 +109,40 @@ pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
             in_block_comment = true;
             continue;
         }
-        // A construct token: the first non-comment token of a logical line.
+        match ch {
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => depth = depth.saturating_sub(1),
+            ':' if depth == 0 => {
+                tail_start = true;
+                line_start = false;
+                scanner.advance_by(1);
+                continue;
+            }
+            _ => {}
+        }
         if is_ident_start(ch) {
+            let statement_start = line_start || tail_start;
+            line_start = false;
+            tail_start = false;
             let keyword_start = scanner.here();
             let keyword_offset = scanner.char_pos;
             let word = scanner.read_word();
-            if word == "settings" && keyword_start.col == 1 {
+            if word == "settings" && statement_start {
                 let keyword_span = Span::new(file_id, keyword_start, scanner.here());
-                if seen_first_construct || !blocks.is_empty() {
+                if !blocks.is_empty() {
                     return Err(OpyError::at(
                         "settings-placement",
-                        "settings block must be the first construct in the file".to_string(),
+                        "only one settings block is supported in a file".to_string(),
                         keyword_span,
                     ));
                 }
                 let block = match_block(&mut scanner, keyword_start, keyword_offset, keyword_span)?;
                 blocks.push(block);
-                seen_first_construct = true;
-                continue;
             }
-            seen_first_construct = true;
             continue;
         }
-        seen_first_construct = true;
+        line_start = false;
+        tail_start = false;
         scanner.advance_by(1);
     }
     Ok(blocks)
@@ -1236,10 +1266,48 @@ mod tests {
     }
 
     #[test]
-    fn settings_not_first_construct_is_placement_error() {
-        let error = find_blocks("rule \"r\":\n    pass\nsettings {\n}\n", 0).unwrap_err();
-        assert_eq!(error.code, "settings-placement");
-        assert_eq!(error.span.unwrap().start.line, 3);
+    fn settings_after_constructs_is_extracted() {
+        // The pinned reference accepts `settings` as the first token of any
+        // logical line, with no ordering or indentation requirement (#513).
+        let text = "playervar score\n\nrule \"r\":\n    pass\n\nsettings {\n}\n";
+        let found = block(text);
+        assert_eq!(found.keyword_span.start.line, 6);
+
+        // An indented `settings` inside a block body is still the statement.
+        let found = block("rule \"r\":\n    pass\n    settings {\n    }\n");
+        assert_eq!(found.keyword_span.start.line, 3);
+    }
+
+    #[test]
+    fn settings_inside_brackets_is_an_ordinary_token() {
+        // Inside a bracketed expression a `settings` line start does not open
+        // a block; the text reaches the lexer and the parser rejects it.
+        let text = "globalvar g = [\n    1,\nsettings]\n";
+        assert!(find_blocks(text, 0).unwrap().is_empty());
+
+        // A `settings` mid-line after a non-colon token is not a statement.
+        assert!(
+            find_blocks("globalvar g = settings {}\n", 0)
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn settings_in_an_inline_tail_is_extracted() {
+        // The reference parses the `:` tail of a header line as a nested
+        // logical line, so its first token is a statement position (#513).
+        let found = block("rule \"r\":\n    pass\n\nrule \"t\": settings {\n}\n");
+        assert_eq!(found.keyword_span.start.line, 4);
+    }
+
+    #[test]
+    fn settings_inside_an_enum_body_is_extracted() {
+        // Recorded divergence: the reference absorbs a `settings` line inside
+        // an enum body as a member named `settings`; we extract it as the
+        // settings block (see docs/architecture/language-core.md).
+        let found = block("enum E:\n    A\n    settings {\n    }\n");
+        assert_eq!(found.keyword_span.start.line, 3);
     }
 
     #[test]
