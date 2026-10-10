@@ -1,27 +1,25 @@
 {
   "schemaVersion": 1,
   "id": "synthetic/settings-only-body-gap",
-  "category": "diagnostics",
+  "category": "compilation",
   "features": [
     "settings",
     "control-flow",
     "preprocess",
-    "known-gap"
+    "structural convergence"
   ],
   "source": "source.opy",
   "tests": {
     "source": {
-      "nativeStatus": "failure",
-      "relationship": "known-gap",
-      "ruleNames": false,
-      "diagnosticCode": "parse-error"
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": false
     },
     "compiler": {
-      "nativeStatus": "failure",
-      "relationship": "known-gap",
-      "comparison": "diagnostic-code",
-      "diagnosticCode": "parse-error",
-      "failureClass": "frontend"
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": true
     }
   }
 }

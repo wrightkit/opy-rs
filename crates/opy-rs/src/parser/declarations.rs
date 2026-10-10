@@ -96,12 +96,20 @@ impl Parser<'_> {
             Ok(name) => name,
             Err(()) => return false,
         };
-        let Ok(body_indent) =
-            self.expect_block_indent(start.layout.start.col, "':' after the enum name")
-        else {
-            return false;
-        };
+        let body_indent =
+            match self.expect_block_indent(start.layout.start.col, "':' after the enum name") {
+                Ok(body_indent) => body_indent,
+                Err(()) => return false,
+            };
         let mut members = Vec::new();
+        let Some(body_indent) = body_indent else {
+            declarations.push(Decl::Enum {
+                name,
+                members,
+                span: start.span,
+            });
+            return true;
+        };
         loop {
             self.skip_newlines();
             if self.peek_kind() == TokenKind::Eof || self.peek().layout.start.col < body_indent {
@@ -201,10 +209,19 @@ impl Parser<'_> {
         if qualified {
             args.insert(0, "self".to_string());
         }
-        let Ok(body_indent) =
-            self.expect_block_indent(start.layout.start.col, "':' after the macro signature")
-        else {
-            return false;
+        let body_indent = match self
+            .expect_block_indent(start.layout.start.col, "':' after the macro signature")
+        {
+            Ok(Some(body_indent)) => body_indent,
+            // The pinned OverPy requires a non-empty macro body even though
+            // other `:`-headed bodies may be empty (#516).
+            Ok(None) => {
+                self.error_at_current(format!(
+                    "macro '{name}' cannot be empty (use 'pass' for a no-op macro)"
+                ));
+                return false;
+            }
+            Err(()) => return false,
         };
         let body = self.parse_block(body_indent);
         if !self.allow_macro_redeclaration

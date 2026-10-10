@@ -349,20 +349,23 @@ impl Parser<'_> {
             );
             return false;
         }
-        let Ok(body_indent) =
-            self.expect_block_indent(start.layout.start.col, "':' after the subroutine signature")
-        else {
-            return false;
+        let body_indent = match self
+            .expect_block_indent(start.layout.start.col, "':' after the subroutine signature")
+        {
+            Ok(body_indent) => body_indent,
+            Err(()) => return false,
         };
         let mut directives = DirectiveState::default();
-        loop {
-            self.skip_newlines();
-            if self.peek_kind() != TokenKind::At {
-                break;
-            }
-            if !self.parse_directive(&mut directives, true) {
-                self.recover_line();
-                return false;
+        if body_indent.is_some() {
+            loop {
+                self.skip_newlines();
+                if self.peek_kind() != TokenKind::At {
+                    break;
+                }
+                if !self.parse_directive(&mut directives, true) {
+                    self.recover_line();
+                    return false;
+                }
             }
         }
         if directives.event.is_some() || !directives.conditions.is_empty() {
@@ -375,7 +378,9 @@ impl Parser<'_> {
             .find(|annotation| annotation.name == "Name")
             .and_then(|annotation| annotation.args.first())
             .map(|arg| unquote_annotation_arg(&arg.text));
-        let body = self.parse_block(body_indent);
+        let body = body_indent
+            .map(|indent| self.parse_block(indent))
+            .unwrap_or_default();
         let span = Span::new(start.span.file, start.span.start, name_span.end);
         rules.push(RuleEntry::SubroutineDef {
             name,

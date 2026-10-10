@@ -348,17 +348,13 @@ impl Parser<'_> {
     pub(super) fn parse_colon_body(&mut self, line_indent: u32) -> Result<Vec<Stmt>, ()> {
         self.last_colon_body_continued = false;
         if matches!(self.peek_kind(), TokenKind::Newline | TokenKind::Eof) {
-            let save = self.pos;
-            self.skip_newlines();
-            if self.peek_kind() != TokenKind::Eof && self.peek().layout.start.col == line_indent {
-                let statement = self.parse_statement()?;
-                self.expect_statement_end("the inline statement")?;
-                self.last_colon_body_continued = self.last_statement_continued;
-                return Ok(vec![statement]);
-            }
-            self.pos = save;
-            let body_indent = self.block_indent(line_indent).ok_or(())?;
-            Ok(self.parse_block(body_indent))
+            // A `:`-headed body may be empty: a next line at `line_indent` or
+            // shallower belongs to the enclosing block, not to this body
+            // (#516).
+            Ok(self
+                .block_indent(line_indent)
+                .map(|body_indent| self.parse_block(body_indent))
+                .unwrap_or_default())
         } else {
             let statement = self.parse_statement()?;
             self.expect_statement_end("the inline statement")?;
@@ -385,9 +381,10 @@ impl Parser<'_> {
         }
         self.bump();
         let iterable = self.parse_expr()?;
-        let body_indent =
-            self.expect_block_indent(start.layout.start.col, "':' after the for header")?;
-        let body = self.parse_block(body_indent);
+        let body = self
+            .expect_block_indent(start.layout.start.col, "':' after the for header")?
+            .map(|body_indent| self.parse_block(body_indent))
+            .unwrap_or_default();
         Ok(Stmt::For {
             variable,
             iterable,
@@ -399,9 +396,10 @@ impl Parser<'_> {
     pub(super) fn parse_while(&mut self) -> Result<Stmt, ()> {
         let start = self.advance();
         let condition = self.parse_expr()?;
-        let body_indent =
-            self.expect_block_indent(start.layout.start.col, "':' after the while condition")?;
-        let body = self.parse_block(body_indent);
+        let body = self
+            .expect_block_indent(start.layout.start.col, "':' after the while condition")?
+            .map(|body_indent| self.parse_block(body_indent))
+            .unwrap_or_default();
         Ok(Stmt::While {
             condition,
             body,
@@ -411,8 +409,10 @@ impl Parser<'_> {
 
     pub(super) fn parse_do_while(&mut self) -> Result<Stmt, ()> {
         let start = self.advance();
-        let body_indent = self.expect_block_indent(start.layout.start.col, "':' after `do`")?;
-        let body = self.parse_block(body_indent);
+        let body = self
+            .expect_block_indent(start.layout.start.col, "':' after `do`")?
+            .map(|body_indent| self.parse_block(body_indent))
+            .unwrap_or_default();
         if !self.is_ident("while") {
             self.error_at_current("expected `while` after the do block".to_string());
             return Err(());
@@ -433,8 +433,15 @@ impl Parser<'_> {
     pub(super) fn parse_switch(&mut self) -> Result<Stmt, ()> {
         let start = self.advance();
         let value = self.parse_expr()?;
-        let body_indent =
-            self.expect_block_indent(start.layout.start.col, "':' after the switch value")?;
+        let Some(body_indent) =
+            self.expect_block_indent(start.layout.start.col, "':' after the switch value")?
+        else {
+            return Ok(Stmt::Switch {
+                value,
+                arms: Vec::new(),
+                span: start.span,
+            });
+        };
         let mut arms = Vec::new();
         loop {
             self.skip_newlines();
@@ -449,9 +456,10 @@ impl Parser<'_> {
             if self.is_ident("case") {
                 let case_start = self.advance();
                 let case_value = self.parse_expr()?;
-                let case_body_indent =
-                    self.expect_block_indent(body_indent, "':' after the case value")?;
-                let body = self.parse_block(case_body_indent);
+                let body = self
+                    .expect_block_indent(body_indent, "':' after the case value")?
+                    .map(|case_body_indent| self.parse_block(case_body_indent))
+                    .unwrap_or_default();
                 arms.push(SwitchArm::Case {
                     value: case_value,
                     body,
@@ -459,10 +467,12 @@ impl Parser<'_> {
                 });
             } else if self.is_ident("default") {
                 let default_start = self.advance();
-                let default_body_indent =
-                    self.expect_block_indent(body_indent, "':' after `default`")?;
+                let body = self
+                    .expect_block_indent(body_indent, "':' after `default`")?
+                    .map(|default_body_indent| self.parse_block(default_body_indent))
+                    .unwrap_or_default();
                 arms.push(SwitchArm::Default {
-                    body: self.parse_block(default_body_indent),
+                    body,
                     span: default_start.span,
                 });
                 if default_start.layout.start.col != body_indent {
@@ -473,14 +483,6 @@ impl Parser<'_> {
                 self.error_at_current("expected `case` or `default` in switch".to_string());
                 self.recover_line();
             }
-        }
-        if arms.is_empty() {
-            self.errors.push(OpyError::at(
-                "parse-error",
-                "switch must contain at least one case or default arm".to_string(),
-                start.span,
-            ));
-            return Err(());
         }
         Ok(Stmt::Switch {
             value,

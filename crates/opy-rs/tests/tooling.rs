@@ -887,3 +887,120 @@ fn compiled_lines(source: &str) -> Vec<String> {
         .map(|line| line.trim().to_string())
         .collect()
 }
+
+#[test]
+fn empty_block_bodies_parse_like_the_pinned_oracle() {
+    // opy-rs#516: the pinned OverPy accepts an empty `:`-headed body for
+    // every block construct but `macro`. A following line at the header's
+    // indent or shallower ends the empty body; it is a sibling statement,
+    // not an inline tail.
+    for (name, source) in [
+        ("def at eof", "def f():"),
+        (
+            "def before a decl",
+            "def f():\nrule \"r\":\n    @Event global\n    pass",
+        ),
+        ("rule at eof", "rule \"r\":"),
+        ("rule before a decl", "rule \"r\":\nglobalvar h"),
+        ("enum at eof", "enum e:"),
+        (
+            "enum before a decl",
+            "enum e:\nrule \"r\":\n    @Event global\n    pass",
+        ),
+        ("if at eof", "rule \"r\":\n    @Event global\n    if g:"),
+        (
+            "for at eof",
+            "rule \"r\":\n    @Event global\n    for g in range(2):",
+        ),
+        (
+            "while at eof",
+            "rule \"r\":\n    @Event global\n    while g:",
+        ),
+        (
+            "switch at eof",
+            "rule \"r\":\n    @Event global\n    switch g:",
+        ),
+        (
+            "case at eof",
+            "rule \"r\":\n    @Event global\n    switch g:\n        case 1:",
+        ),
+        (
+            "default at eof",
+            "rule \"r\":\n    @Event global\n    switch g:\n        default:",
+        ),
+        (
+            "elif at eof",
+            "rule \"r\":\n    @Event global\n    if g:\n        pass\n    elif g:",
+        ),
+        (
+            "else at eof",
+            "rule \"r\":\n    @Event global\n    if g:\n        pass\n    else:",
+        ),
+        (
+            "do before same-indent while",
+            "rule \"r\":\n    @Event global\n    do:\n    while g",
+        ),
+        (
+            "if dedents to a sibling",
+            "rule \"r\":\n    @Event global\n    if g:\n    g = 2",
+        ),
+        (
+            "settings-only if body",
+            "rule \"r\":\n    @Event global\n    if g:\n        settings {\n            \"gamemodes\": {\"ffa\": {\"enabled\": true}}\n        }",
+        ),
+    ] {
+        let source = format!("globalvar g\n{source}");
+        let outcome = check(&source, "main.opy", Path::new(""));
+        assert!(
+            outcome.is_clean(),
+            "{name} must check clean: {:?}",
+            outcome.diagnostics
+        );
+        opy_rs::compile(&source, "main.opy", Path::new(""))
+            .unwrap_or_else(|error| panic!("{name} must compile: {error:?}"));
+    }
+
+    // The dedent-out statement is a sibling, not a body member: `if g:` gets
+    // an empty body that emits nothing and `g = 2` stays unconditional; a
+    // lone `if` whose body lowers to no actions emits nothing at all.
+    let lines = compiled_lines(concat!(
+        "globalvar g\n",
+        "rule \"r\":\n    @Event global\n    if g:\n    g = 2\n"
+    ));
+    assert!(
+        lines.contains(&"Set Global Variable(g, 2);".to_string()),
+        "the dedented statement stays: {lines:?}"
+    );
+    assert!(
+        !lines.iter().any(|line| line.starts_with("If(")),
+        "an empty lone if emits nothing: {lines:?}"
+    );
+    let lines = compiled_lines("def f():");
+    assert!(
+        lines.contains(&"0: f".to_string()),
+        "an empty def still registers the subroutine: {lines:?}"
+    );
+
+    // `macro` keeps requiring a non-empty body, and `do` still requires its
+    // `while` at the `do` indentation.
+    for (name, source) in [
+        ("macro at eof", "macro m():"),
+        (
+            "macro empty before a decl",
+            "macro m():\nrule \"r\":\n    @Event global\n    pass",
+        ),
+        ("do at eof", "rule \"r\":\n    @Event global\n    do:"),
+        (
+            "do with an indented while",
+            "rule \"r\":\n    @Event global\n    do:\n        while g",
+        ),
+    ] {
+        let source = format!("globalvar g\n{source}");
+        let outcome = check(&source, "main.opy", Path::new(""));
+        assert!(
+            !outcome.is_clean(),
+            "{name} must reject: {:?}",
+            outcome.diagnostics
+        );
+    }
+}

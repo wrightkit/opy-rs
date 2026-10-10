@@ -735,6 +735,15 @@ impl<'a> Lowering<'a> {
                     .as_ref()
                     .map(|body| self.lower_actions(body, break_target))
                     .transpose()?;
+                // A lone `if` whose body produces no actions — an empty or
+                // `pass`-only body — emits nothing in the pinned reference,
+                // while `elif`/`else` headers still emit when present (#516).
+                if let [(_, body)] = branches.as_slice()
+                    && else_body.is_none()
+                    && body.is_empty()
+                {
+                    return Ok(Vec::new());
+                }
                 Ok(self.push_if_actions(branches, else_body))
             }
             Stmt::For {

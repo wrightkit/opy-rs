@@ -514,29 +514,27 @@ impl Parser<'_> {
         }
     }
 
-    /// The indentation of the next non-empty line, which must exceed
-    /// `line_indent` (an indented block follows the colon).
+    /// The indentation of the next non-empty line when it is deeper than
+    /// `line_indent` (an indented block follows the colon), or `None` when the
+    /// body is empty. The pinned OverPy accepts empty `:`-headed bodies, so a
+    /// following line at `line_indent` or shallower — or end of input — ends
+    /// an empty body rather than erroring (#516).
     fn block_indent(&mut self, line_indent: u32) -> Option<u32> {
         self.skip_newlines();
         if self.peek_kind() == TokenKind::Eof {
-            self.error_at_current("expected an indented block".to_string());
             return None;
         }
         let indent = self.peek().layout.start.col;
-        if indent <= line_indent {
-            self.error_at_current("expected an indented block after ':'".to_string());
-            return None;
-        }
-        Some(indent)
+        (indent > line_indent).then_some(indent)
     }
 
     pub(super) fn expect_block_indent(
         &mut self,
         line_indent: u32,
         colon_context: &str,
-    ) -> Result<u32, ()> {
+    ) -> Result<Option<u32>, ()> {
         self.expect_block_colon(colon_context)?;
-        self.block_indent(line_indent).ok_or(())
+        Ok(self.block_indent(line_indent))
     }
 
     fn expect_statement_end(&mut self, what: &str) -> Result<(), ()> {
