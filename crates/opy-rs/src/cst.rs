@@ -17,7 +17,7 @@ pub struct Program {
     /// retained for the HIR-shaped parser API, while lowering uses this list
     /// for scope and visibility decisions.
     pub top_level: Vec<TopLevel>,
-    /// The parsed top-of-file `settings { ... }` block, when present (#86).
+    /// The parsed `settings { ... }` block, when present (#86).
     pub settings: Option<Settings>,
 }
 

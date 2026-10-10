@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "settings\n{\n\tmain\n\t{\n\t\tMode Name: \"Placement\"\n\t}\n\tmodes\n\t{\n\t\tDeathmatch\n\t\t{\n\t\t\tScore To Win: 7\n\t\t}\n\t}\n}\n\nvariables {\n    global:\n        0: g\n    player:\n        0: score\n}\n\nsubroutines {\n    0: helper\n    1: formatScore\n}\n\nrule (\"count\") {\n    event {\n        Player Earned Elimination;\n        All;\n        All;\n    }\n    actions {\n        Modify Player Variable(Event Player, score, Add, 2);\n        Modify Player Variable(Event Player, score, Add, 2);\n    }\n}\n",
+    "workshopExact": "settings\n{\n\tmain\n\t{\n\t\tMode Name: \"Placement\"\n\t}\n\tmodes\n\t{\n\t\tDeathmatch\n\t\t{\n\t\t\tScore To Win: 7\n\t\t}\n\t}\n}\n\nvariables {\n    global:\n        0: g\n    player:\n        0: score\n}\n\nsubroutines {\n    0: helper\n    1: formatScore\n}\n\nrule (\"count\") {\n    event {\n        Player Earned Elimination;\n        All;\n        All;\n    }\n    actions {\n        Modify Player Variable(Event Player, score, Add, 2);\n        Modify Player Variable(Event Player, score, Add, 2);\n    }\n}\n\n",
+    "workshopSha256": "b3e3b28c3b724ad163b5ca3221b82460f03da5a2791a3c682c560ce00df9a627"
+  },
+  "fixture": "synthetic/settings-after-declarations",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "7a11087e9f010d535f511424b81e98b1e0f658c185d5e8b9fdb948547eb1a32a"
+      }
+    ],
+    "sha256": "6ca91f094e77f5cec80c687a580f7672b35d7d444ba8f45398cc0799efe8112e",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

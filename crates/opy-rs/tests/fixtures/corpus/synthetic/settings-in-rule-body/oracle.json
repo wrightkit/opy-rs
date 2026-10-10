@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "settings\n{\n\tmain\n\t{\n\t\tMode Name: \"Nested\"\n\t}\n\tmodes\n\t{\n\t\tDeathmatch\n\t\t{\n\t\t\tScore To Win: 7\n\t\t}\n\t}\n}\n\nvariables {\n    player:\n        0: score\n}\n\nrule (\"count\") {\n    event {\n        Player Earned Elimination;\n        All;\n        All;\n    }\n    actions {\n        Modify Player Variable(Event Player, score, Add, 1);\n        Modify Player Variable(Event Player, score, Add, 1);\n    }\n}\n",
+    "workshopExact": "settings\n{\n\tmain\n\t{\n\t\tMode Name: \"Nested\"\n\t}\n\tmodes\n\t{\n\t\tDeathmatch\n\t\t{\n\t\t\tScore To Win: 7\n\t\t}\n\t}\n}\n\nvariables {\n    player:\n        0: score\n}\n\nrule (\"count\") {\n    event {\n        Player Earned Elimination;\n        All;\n        All;\n    }\n    actions {\n        Modify Player Variable(Event Player, score, Add, 1);\n        Modify Player Variable(Event Player, score, Add, 1);\n    }\n}\n\n",
+    "workshopSha256": "192414e3220412e84782ba498899343e28bbf785972528826e7fb86aef4a449e"
+  },
+  "fixture": "synthetic/settings-in-rule-body",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "bd3e218482387fb0e610827c627ffa73ff4b2ddbe760742daad5547ffdd68b30"
+      }
+    ],
+    "sha256": "dda3db9fba3205ca8ee7335a2c701e3f5000a234831a6c78249eeaa7861354a8",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

@@ -3,7 +3,7 @@
     "diagnostics": [
       {
         "severity": "error",
-        "text": "Error: Cannot assign to 4d array\n    | line 5, col 5, at source.opy"
+        "text": "Error: Custom game settings have already been declared\n    | line 8, col 41, at source.opy"
       }
     ],
     "exitCode": 1,
@@ -13,15 +13,15 @@
     "workshopExact": "",
     "workshopSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
   },
-  "fixture": "synthetic/indexed-assignment-4d-invalid",
+  "fixture": "synthetic/settings-second-block-invalid",
   "input": {
     "files": [
       {
         "path": "source.opy",
-        "sha256": "505b8ff1e62b3256c607995cb5bcb51b8c26d4498476f846e37d953fe38accf1"
+        "sha256": "6fe4da864060f524da382eff146fff65f7a36ae220d9fbbcc9f9fb30db4c3693"
       }
     ],
-    "sha256": "f4b0daba2e8915a0abb1d10ed82012c0205fb99dd2b2a6652d949fcc8f2829ad",
+    "sha256": "cf726875d67383e0c39d4a3de7a17bcd50f144996416fffff0d20d3e817bba5f",
     "source": "source.opy"
   },
   "oracle": {

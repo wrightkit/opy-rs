@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/settings-inline-tail-gap",
+  "category": "diagnostics",
+  "features": [
+    "settings",
+    "rules",
+    "preprocess",
+    "known-gap"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "failure",
+      "relationship": "known-gap",
+      "ruleNames": false,
+      "diagnosticCode": "parse-error"
+    },
+    "compiler": {
+      "nativeStatus": "failure",
+      "relationship": "known-gap",
+      "comparison": "diagnostic-code",
+      "diagnosticCode": "parse-error",
+      "failureClass": "frontend"
+    }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "settings\n{\n\tmain\n\t{\n\t\tMode Name: \"Placement repro\"\n\t}\n\tmodes\n\t{\n\t\tDeathmatch\n\t\t{\n\t\t\tScore To Win: 7\n\t\t}\n\t}\n}\n\nvariables {\n    player:\n        0: score\n}\n\nrule (\"Count\") {\n    event {\n        Player Earned Elimination;\n        All;\n        All;\n    }\n    actions {\n        Modify Player Variable(Event Player, score, Add, 1);\n    }\n}\n",
+    "workshopExact": "settings\n{\n\tmain\n\t{\n\t\tMode Name: \"Placement repro\"\n\t}\n\tmodes\n\t{\n\t\tDeathmatch\n\t\t{\n\t\t\tScore To Win: 7\n\t\t}\n\t}\n}\n\nvariables {\n    player:\n        0: score\n}\n\nrule (\"Count\") {\n    event {\n        Player Earned Elimination;\n        All;\n        All;\n    }\n    actions {\n        Modify Player Variable(Event Player, score, Add, 1);\n    }\n}\n\n",
+    "workshopSha256": "ffd02d70f0686eb792600962664f58b0302321a0394f71737f2c632627ef6931"
+  },
+  "fixture": "synthetic/settings-placement-513",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "6bb421c795cf48bab74ba6d683e07e5f770a228ad5bf33db1748a6b2666b4547"
+      }
+    ],
+    "sha256": "025bf13e9c37b3b6c4cd38d303a6e7821d4bba0711517fa245b0c916dd31b24f",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

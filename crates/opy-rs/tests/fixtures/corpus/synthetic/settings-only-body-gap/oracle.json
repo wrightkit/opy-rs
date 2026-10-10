@@ -1,27 +1,22 @@
 {
   "compile": {
-    "diagnostics": [
-      {
-        "severity": "error",
-        "text": "Error: Cannot assign to 4d array\n    | line 5, col 5, at source.opy"
-      }
-    ],
-    "exitCode": 1,
-    "status": "failure",
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
     "stdout": "",
-    "workshop": "",
-    "workshopExact": "",
-    "workshopSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    "workshop": "settings\n{\n\tmodes\n\t{\n\t\tDeathmatch\n\t\t{\n\t\t\tScore To Win: 7\n\t\t}\n\t}\n}\n",
+    "workshopExact": "settings\n{\n\tmodes\n\t{\n\t\tDeathmatch\n\t\t{\n\t\t\tScore To Win: 7\n\t\t}\n\t}\n}\n\n",
+    "workshopSha256": "339a572b449946e8c42609d1d5112e3744c948b1fb506a096a754870ab74bea1"
   },
-  "fixture": "synthetic/indexed-assignment-4d-invalid",
+  "fixture": "synthetic/settings-only-body-gap",
   "input": {
     "files": [
       {
         "path": "source.opy",
-        "sha256": "505b8ff1e62b3256c607995cb5bcb51b8c26d4498476f846e37d953fe38accf1"
+        "sha256": "e4ef0011cb5abdb3b9f81be53217809ec82e572a03c375996ea7b1120a513e72"
       }
     ],
-    "sha256": "f4b0daba2e8915a0abb1d10ed82012c0205fb99dd2b2a6652d949fcc8f2829ad",
+    "sha256": "748e3b9fa69f823238e3948f6dc4b1c26dd353a1918c2496b7598b51986d6482",
     "source": "source.opy"
   },
   "oracle": {

@@ -54,14 +54,22 @@ REFERENCE_FRONTIER_RULES = (
     ("Expected a ':'", "parse", "parse-error"),
     ("Content is empty", "parse", "parse-error"),
     ("Expected an action", "parse", "parse-error"),
+    ("Malformed globalvar declaration", "parse", "parse-error"),
     ("Cannot modify or assign to operator '='", "parse", "parse-error"),
     ("Expected '(' after 'lambda'", "parse", "parse-error"),
     ("Found 'if', but no 'else'", "parse", "parse-error"),
+    (
+        "Custom game settings have already been declared",
+        "preprocess",
+        "settings-placement",
+    ),
 )
 NATIVE_FRONTIER_STAGES = {
     "lex-error": "lex",
     "parse-error": "parse",
     "lambda-context": "parse",
+    "settings-placement": "preprocess",
+    "settings-invalid": "preprocess",
     "translations-invalid": "preprocess",
     "script-not-found": "preprocess",
     "do-while-placement": "semantic",
