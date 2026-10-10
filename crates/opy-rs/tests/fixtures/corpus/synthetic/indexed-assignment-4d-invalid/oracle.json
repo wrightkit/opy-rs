@@ -8,7 +8,7 @@
     ],
     "exitCode": 1,
     "status": "failure",
-    "stdout": "\u2713 Lockfile passes supply-chain policies (verified 1d ago)\nLockfile is up to date, resolution step is skipped\nProgress: resolved 1, reused 0, downloaded 0, added 0\nPackages: +1\n+\nProgress: resolved 1, reused 1, downloaded 0, added 1, done\n\ndependencies:\n+ overpy 9.7.10\n\nDone in 322ms using pnpm v11.10.0\n",
+    "stdout": "",
     "workshop": "",
     "workshopExact": "",
     "workshopSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -25,8 +25,8 @@
     "source": "source.opy"
   },
   "oracle": {
-    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
     "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
     "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
     "language": "en-US",
     "license": "GPL-3.0-only",
