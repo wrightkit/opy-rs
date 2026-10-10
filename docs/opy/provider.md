@@ -9,8 +9,8 @@ compiler; it does not expose OPY AST/HIR or Workshop WIR.
 The provider serves language id `opy` and the `opy` extension. It supports LPP
 `1.0` for document-supplied requests, LPP `1.1` for file-entry project loading,
 LPP `1.2` for provider-owned directory targets, LPP `1.3` for source identity,
-LPP `1.4` for compile artifact format negotiation, and LPP `1.5` for name
-lookup.
+LPP `1.4` for compile artifact format negotiation, LPP `1.5` for name
+lookup, and LPP `1.6` for canonical id resolution.
 
 | Capability | Method | Behavior |
 | --- | --- | --- |
@@ -20,6 +20,7 @@ lookup.
 | Rename | `lpp/rename` | Semantic rename of globals, player variables, and subroutines/`def`s across the received documents; refuses (`rename.*` refusal codes) when a site does not map to authored source or the result would not rebind identically. |
 | Edit validation | `lpp/validateEdits` | Applies a client's proposed edits and reports whether the result still checks clean, per the spec's normative rules. |
 | Lookup | `lpp/lookup` | LPP 1.5. Resolves a name guess to OPY spellings and structured facts — callable signatures, enum domains and members, settings keys and value forms, and `@Event` rule events — from the `opy-rs` name vocabulary. No loaded project or source document is required. |
+| Resolve ids | `lpp/resolveIds` | LPP 1.6. Maps canonical Workshop call and enum member ids to the OPY spellings that produce them — the reverse direction of `lpp/lookup`, answered from the same vocabulary. No loaded project or source document is required. |
 
 Other LPP v1 capabilities are advertised as unavailable until they are
 implemented end to end.
@@ -54,6 +55,26 @@ A selector naming no known scope is refused with `lookup.unknownWithin`.
 Results are deterministic and bounded: an absent `limit` applies a bound of
 20 entries. Display names are `en-US`, which is also the deterministic
 fallback for any requested `locale`.
+
+## Canonical id resolution (LPP 1.6)
+
+`lpp/resolveIds` answers from the language vocabulary alone; it ignores
+project state. `calls` takes canonical Workshop call, value, and operator
+ids and `enums` takes canonical member ids grouped by canonical domain; each
+resolved key maps to the OPY spelling — the same spelling `lpp/lookup`
+reports, minus the enum domain head on members.
+
+The spellings come from the owner's vocabulary, not from the canonical ids:
+a manifest `catalogId` link backs declared callables (`createHudText` ->
+`hudText`), the lowering table covers ids source syntax produces
+(`arrayContains` -> `in`, `elseIf` -> `elif`, `removeFromArrayByIndex` ->
+`del`), and enum members resolve through the same member table lookup
+lists (canonical `Clipping.DO_NOT_CLIP` resolves to `NONE`, the member
+spelling of the renamed `Clip` domain). Ids with no dedicated OPY
+spelling — unknown ids, assignment and index forms, compound conditionals,
+and OPY-only names like `evalOnce` that were never canonical — are omitted,
+and a request may carry at most 1024 ids counting calls and enum members
+together.
 
 ## Entry-based project loading
 
