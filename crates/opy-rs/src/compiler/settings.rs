@@ -349,12 +349,13 @@ fn pass_through_members(
                     SettingsNode::Number { .. } | SettingsNode::Bool { .. } => {
                         scalar_text(member).expect("scalar member")
                     }
-                    // A list under a catalogued non-list key is carried as a
-                    // written block, the shape the pinned reference emits
-                    // (`Map Rotation { a }`), not a kind-mismatch error
+                    // A list or object under a catalogued non-list key is
+                    // carried as a written block, the shape the pinned
+                    // reference emits (`Map Rotation { a }`,
+                    // `Map Rotation { a: 1 }`), not a kind-mismatch error
                     // (#496). The group form is what workshop-rs accepts and
                     // writes under the catalogued key's display name.
-                    SettingsNode::List { .. } => {
+                    SettingsNode::List { .. } | SettingsNode::Group { .. } => {
                         *member = written_form(member.clone());
                         continue;
                     }

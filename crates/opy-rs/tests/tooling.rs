@@ -487,6 +487,33 @@ fn a_list_under_an_enum_key_compiles_as_the_reference_block() {
 }
 
 #[test]
+fn an_object_under_an_enum_key_compiles_as_the_reference_block() {
+    // opy-rs#496: the pinned OverPy writes an object under a catalogued
+    // non-list key as a display-name block of `member: value` lines, the
+    // same carry as a list (`{"b": {"c": 2}}` -> `b { c: 2 }`).
+    let source = concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"lobby\": {\"mapRotation\": {\"a\": 1, \"b\": {\"c\": 2}}}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    );
+    let outcome = check(source, "main.opy", Path::new(""));
+    assert!(
+        outcome.is_clean(),
+        "the carried block must check clean: {:?}",
+        outcome.diagnostics
+    );
+    let lines = compiled_lines(source);
+    let block = lines
+        .iter()
+        .position(|line| line == "Map Rotation {")
+        .expect("the enum key writes a display-name block");
+    assert_eq!(&lines[block + 1..block + 4], ["a: 1", "b {", "c: 2"]);
+    assert_eq!(lines[block + 4], "}");
+}
+
+#[test]
 fn settings_numbers_render_like_the_pinned_oracle() {
     // opy-rs#496: the pinned OverPy writes numeric settings values with
     // JavaScript `String(value)` semantics and reads decimal exponent forms
