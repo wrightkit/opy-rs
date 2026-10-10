@@ -223,7 +223,7 @@ impl Parser<'_> {
             }
             Err(()) => return false,
         };
-        let body = self.parse_block(body_indent);
+        let body = self.parse_child_block(start.layout.start.col, body_indent);
         if !self.allow_macro_redeclaration
             && declarations.iter().any(|declaration| {
                 matches!(declaration, Decl::Macro { name: existing, .. } if existing == &name)

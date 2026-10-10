@@ -1004,3 +1004,128 @@ fn empty_block_bodies_parse_like_the_pinned_oracle() {
         );
     }
 }
+
+#[test]
+fn elif_else_and_do_while_tails_obey_the_enclosing_block_floor() {
+    // opy-rs#516 review: an `elif`/`else`/`while` tail attaches to an emptied
+    // `if`/`do` only while it stays inside the enclosing block — a column
+    // deeper than the enclosing header. A mid-dedent candidate still
+    // attaches; a candidate at or shallower than the header's column belongs
+    // outside and the chain ends there (pinned OverPy 9.7.10).
+    for (name, source) in [
+        (
+            "mid-dedent elif attaches",
+            "globalvar g\nrule \"r\":\n    @Event global\n    if g:\n        g = 2\n  elif g:\n        g = 1",
+        ),
+        (
+            "mid-dedent else attaches",
+            "globalvar g\nrule \"r\":\n    @Event global\n    if g:\n        g = 2\n  else:\n        g = 1",
+        ),
+        (
+            "mid-dedent do/while tail",
+            "globalvar g\nrule \"r\":\n    @Event global\n    do:\n  while g",
+        ),
+        (
+            "empty if, mid-dedent elif",
+            "globalvar g\nrule \"r\":\n    @Event global\n    if g:\n  elif g:\n        g = 1",
+        ),
+    ] {
+        let outcome = check(source, "main.opy", Path::new(""));
+        assert!(
+            outcome.is_clean(),
+            "{name} must check clean: {:?}",
+            outcome.diagnostics
+        );
+        opy_rs::compile(source, "main.opy", Path::new(""))
+            .unwrap_or_else(|error| panic!("{name} must compile: {error:?}"));
+    }
+
+    // `else:`/dedented tails at or shallower than the enclosing header's
+    // column end the construct: the reference rejects them at their real
+    // level (`__else__ outside a rule`, `no matching 'while'`).
+    for (name, source) in [
+        (
+            "else below the rule floor",
+            "globalvar g\nrule \"r\":\n    @Event global\n    if g:\nelse:\n    g = 1",
+        ),
+        (
+            "elif below the rule floor",
+            "globalvar g\nrule \"r\":\n    @Event global\n    if g:\nelif g:\n    g = 1",
+        ),
+        (
+            "do/while below the rule floor",
+            "globalvar g\nrule \"r\":\n    @Event global\n    do:\nwhile g",
+        ),
+        (
+            "else below a nested floor",
+            "globalvar g\nrule \"r\":\n    @Event global\n    for g in range(2):\n        if g:\n    else:\n        g = 1",
+        ),
+    ] {
+        let outcome = check(source, "main.opy", Path::new(""));
+        assert!(
+            !outcome.is_clean(),
+            "{name} must reject: {:?}",
+            outcome.diagnostics
+        );
+    }
+}
+
+#[test]
+fn orphan_elif_else_warns_lone_else_and_rejects_instead_of_misparsing() {
+    // opy-rs#516 review: an `elif`/`else` without a preceding `if` gets the
+    // pinned `w_lone_else` warning — but its `Else If`/`Else` marker has no
+    // canonical Workshop representation yet, so it rejects cleanly rather
+    // than parsing `else:` as a label and dropping the marker.
+    for (name, keyword, source) in [
+        (
+            "elif after a sibling",
+            "elif",
+            "globalvar g\nrule \"r\":\n    @Event global\n    if g:\n    g = 5\n    elif g:\n        g = 1",
+        ),
+        (
+            "else after a sibling",
+            "else",
+            "globalvar g\nrule \"r\":\n    @Event global\n    if g:\n    g = 5\n    else:\n        g = 1",
+        ),
+        (
+            "else if after a sibling",
+            "else",
+            "globalvar g\nrule \"r\":\n    @Event global\n    if g:\n    g = 5\n    else if g:\n        g = 1",
+        ),
+        (
+            "bare elif",
+            "elif",
+            "globalvar g\nrule \"r\":\n    @Event global\n    elif g:\n        g = 1",
+        ),
+    ] {
+        let outcome = check(source, "main.opy", Path::new(""));
+        assert!(
+            !outcome.is_clean(),
+            "{name} must reject: {:?}",
+            outcome.diagnostics
+        );
+        assert!(
+            outcome.diagnostics.iter().any(|diagnostic| {
+                diagnostic.severity == opy_rs::tooling::DiagnosticSeverity::Warning
+                    && diagnostic.code == "w_lone_else"
+                    && diagnostic.message.contains(&format!("Found '{keyword}'"))
+            }),
+            "{name} must surface the pinned w_lone_else warning: {:?}",
+            outcome.diagnostics
+        );
+        assert!(
+            outcome
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == "unsupported-construct"),
+            "{name} must reject the unrepresentable marker: {:?}",
+            outcome.diagnostics
+        );
+        // The `else` body must never compile as an unconditional statement —
+        // a silent `else:`-as-label misparse is the regression this guards.
+        assert!(
+            opy_rs::compile(source, "main.opy", Path::new("")).is_err(),
+            "{name} must fail compile"
+        );
+    }
+}

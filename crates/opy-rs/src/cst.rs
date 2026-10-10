@@ -202,6 +202,10 @@ pub enum Stmt {
         /// Zero-width span at the first token past the chain (dedent or EOF):
         /// the position a Workshop `End` marker would occupy.
         end_span: Span,
+        /// The chain began with an `elif`/`else` in statement position (no
+        /// preceding `if`): the reference emits `Else If`/`Else` markers
+        /// rather than `If` (#516).
+        orphan: bool,
         span: Span,
     },
     For {

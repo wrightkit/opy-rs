@@ -67,6 +67,9 @@ impl Parser<'_> {
         let body_indent = line_indent + 1;
         let mut directives = DirectiveState::default();
         let mut actions = Vec::new();
+        // The rule header is the enclosing floor for its action statements:
+        // `elif`/`else`/`while` tails attach only while deeper than it (#516).
+        self.block_floors.push(line_indent);
         loop {
             self.skip_newlines();
             if self.peek_kind() == TokenKind::Eof || self.peek().layout.start.col < body_indent {
@@ -83,6 +86,7 @@ impl Parser<'_> {
                 Err(()) => self.recover_line(),
             }
         }
+        self.block_floors.pop();
         rules.push(RuleEntry::Rule(Rule {
             name,
             span: Span::new(start.span.file, start.span.start, name_token_span.end),
@@ -379,7 +383,7 @@ impl Parser<'_> {
             .and_then(|annotation| annotation.args.first())
             .map(|arg| unquote_annotation_arg(&arg.text));
         let body = body_indent
-            .map(|indent| self.parse_block(indent))
+            .map(|indent| self.parse_child_block(start.layout.start.col, indent))
             .unwrap_or_default();
         let span = Span::new(start.span.file, start.span.start, name_span.end);
         rules.push(RuleEntry::SubroutineDef {
