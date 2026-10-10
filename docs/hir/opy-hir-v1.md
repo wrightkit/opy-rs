@@ -151,7 +151,10 @@ Node grammar:
   an optional `span` covering the key..value member region.
 * `group` has a `children` array; `number` carries an `f64` `value`; `bool`
   carries a boolean `value`; `string` carries a string `value`; `list` has an
-  `elements` array of `{ "value": string, "span": optional }` objects.
+  `elements` array of `{ "value": string, "evaluated": optional string,
+  "span": optional }` objects, where `value` is the authored element text
+  and `evaluated`, when present, is the display text the pinned settings
+  evaluator folds it to (`"a"` → `a`, `1+2` → `3`).
 * A valid block must contain a `gamemodes` group. Domain checks (known keys,
   known enum values, known map/hero list elements) run at validation against
   the declared emission-table contract; the table data itself is Workshop

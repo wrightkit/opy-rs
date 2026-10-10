@@ -299,7 +299,13 @@ impl SettingsNode {
 /// One element of a settings list (corpus lists are all strings).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SettingsListElement {
+    /// Literal text, or the authored expression when `evaluated` is `None`.
+    /// Catalog-enum consumers read this as a member name.
     pub value: String,
+    /// The evaluated display text, `None` while unevaluated and after a
+    /// failed expression evaluation (#512).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evaluated: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub span: Option<Span>,
 }
