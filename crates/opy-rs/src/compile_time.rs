@@ -804,7 +804,10 @@ fn evaluate_index(collection: Value, index: Value) -> Option<Value> {
                 return None;
             };
             let index = round_half_up(index);
-            if index < 0.0 || index >= values.len() as f64 {
+            // `NaN` passes neither bound but coerces to `0` in the cast
+            // below — the reference's `arr[Math.round(NaN)]` is `undefined`
+            // and stays unresolvable (#512).
+            if index.is_nan() || index < 0.0 || index >= values.len() as f64 {
                 return None;
             }
             values.into_iter().nth(index as usize)

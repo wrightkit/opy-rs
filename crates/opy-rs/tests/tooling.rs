@@ -630,6 +630,11 @@ fn settings_list_elements_the_reference_rejects_are_errors() {
         ("not {}", "settings-expression"),
         ("\"a\" in {\"a\":1}", "settings-expression"),
         ("[1,2][9]", "settings-expression"),
+        // A `NaN` index reads `arr[Math.round(NaN)]` upstream, which is
+        // `undefined` and stays unresolvable (#512).
+        ("[1,2][0x]", "settings-expression"),
+        ("[1,2][0o18]", "settings-expression"),
+        ("[1,2][12abc]", "settings-expression"),
         ("1e-7", "settings-expression"),
         ("2e+3", "settings-expression"),
         (".5", "settings-expression"),
