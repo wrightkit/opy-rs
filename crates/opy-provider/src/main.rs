@@ -22,12 +22,13 @@ use workshop_rs::program::MappedText;
 
 mod edits;
 
-const PROTOCOL_VERSIONS: [&str; 6] = ["1.0", "1.1", "1.2", "1.3", "1.4", "1.5"];
+const PROTOCOL_VERSIONS: [&str; 7] = ["1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6"];
 const PROJECT_LOADING_VERSION: &str = "1.1";
 const DIRECTORY_TARGET_VERSION: &str = "1.2";
 const SOURCE_IDENTITY_VERSION: &str = "1.3";
 const ARTIFACT_NEGOTIATION_VERSION: &str = "1.4";
 const LOOKUP_VERSION: &str = "1.5";
+const RESOLVE_IDS_VERSION: &str = "1.6";
 const SERVER_NAME: &str = "opy-provider";
 const LANGUAGE_ID: &str = "opy";
 const LANGUAGE_EXTENSIONS: [&str; 1] = ["opy"];
@@ -50,6 +51,7 @@ struct Capabilities {
     rename: bool,
     edit_validation: bool,
     lookup: bool,
+    resolve_ids: bool,
 }
 
 impl Capabilities {
@@ -62,6 +64,7 @@ impl Capabilities {
             rename: true,
             edit_validation: true,
             lookup: true,
+            resolve_ids: true,
         }
     }
 
@@ -73,6 +76,7 @@ impl Capabilities {
             "rename" => self.rename,
             "editValidation" => self.edit_validation,
             "lookup" => self.lookup,
+            "resolveIds" => self.resolve_ids,
             _ => false,
         }
     }
@@ -97,6 +101,9 @@ impl Capabilities {
         if version_at_least(protocol_version, LOOKUP_VERSION) {
             capabilities["lookup"] = json!(self.lookup);
         }
+        if version_at_least(protocol_version, RESOLVE_IDS_VERSION) {
+            capabilities["resolveIds"] = json!(self.resolve_ids);
+        }
         capabilities
     }
 }
@@ -104,7 +111,11 @@ impl Capabilities {
 /// The minimum protocol version a method capability can be negotiated at,
 /// when the method does not exist in earlier sessions.
 fn capability_min_version(capability: &str) -> Option<&'static str> {
-    (capability == "lookup").then_some(LOOKUP_VERSION)
+    Some(match capability {
+        "lookup" => LOOKUP_VERSION,
+        "resolveIds" => RESOLVE_IDS_VERSION,
+        _ => return None,
+    })
 }
 
 fn capability_for(method: &str) -> Option<&'static str> {
@@ -118,6 +129,7 @@ fn capability_for(method: &str) -> Option<&'static str> {
         "lpp/rename" => "rename",
         "lpp/validateEdits" => "editValidation",
         "lpp/lookup" => "lookup",
+        "lpp/resolveIds" => "resolveIds",
         _ => return None,
     })
 }
@@ -271,8 +283,23 @@ struct LookupWithinParam {
     value: String,
 }
 
+/// `lpp/resolveIds` params (LPP 1.6 `resolve-ids.md` §22.1).
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ResolveIdsParams {
+    language_id: String,
+    #[serde(default)]
+    calls: Vec<String>,
+    #[serde(default)]
+    enums: BTreeMap<String, Vec<String>>,
+}
+
 /// The bound applied when an `lpp/lookup` request omits `limit`.
 const DEFAULT_LOOKUP_LIMIT: u64 = 20;
+
+/// The most ids (calls plus enum members, duplicates counted) one
+/// `lpp/resolveIds` request may carry (`resolve-ids.md` §22.1).
+const RESOLVE_IDS_MAX_IDS: usize = 1024;
 
 #[derive(Debug)]
 struct LoadedProject {
@@ -479,6 +506,7 @@ impl Server {
             "lpp/rename" => edits::rename(params),
             "lpp/validateEdits" => edits::validate_edits(params),
             "lpp/lookup" => self.lookup(params),
+            "lpp/resolveIds" => self.resolve_ids(params),
             _ => Err(HandlerError::Standard {
                 code: -32601,
                 message: "Method not found",
@@ -657,6 +685,42 @@ impl Server {
                 message: reason,
             }),
         }
+    }
+
+    /// `lpp/resolveIds` — answered from the language vocabulary alone
+    /// (`resolve-ids.md` §22.1): the request carries no target and a loaded
+    /// project is never required. Ids with no dedicated OPY spelling are
+    /// omitted rather than guessed.
+    fn resolve_ids(&self, value: Value) -> Result<Value, HandlerError> {
+        let params: ResolveIdsParams =
+            serde_json::from_value(value).map_err(|_| HandlerError::invalid_params())?;
+        if params.language_id != LANGUAGE_ID {
+            return Err(invalid_language(&params.language_id));
+        }
+        let total_ids = params.calls.len() + params.enums.values().map(Vec::len).sum::<usize>();
+        if total_ids > RESOLVE_IDS_MAX_IDS {
+            return Err(HandlerError::invalid_params());
+        }
+        let calls: BTreeMap<&String, &str> = params
+            .calls
+            .iter()
+            .filter_map(|id| opy_rs::lookup::call_spelling(id).map(|spelling| (id, spelling)))
+            .collect();
+        let enums: BTreeMap<&String, BTreeMap<&String, &str>> = params
+            .enums
+            .iter()
+            .filter_map(|(domain, members)| {
+                let resolved: BTreeMap<&String, &str> = members
+                    .iter()
+                    .filter_map(|member| {
+                        opy_rs::lookup::enum_member_spelling(domain, member)
+                            .map(|spelling| (member, spelling))
+                    })
+                    .collect();
+                (!resolved.is_empty()).then_some((domain, resolved))
+            })
+            .collect();
+        Ok(json!({ "calls": calls, "enums": enums }))
     }
 }
 

@@ -3036,3 +3036,343 @@ fn lookup_validates_params() {
     );
     session.shutdown();
 }
+
+// -- lpp/resolveIds (LPP 1.6) -------------------------------------------------
+
+fn resolve_ids_request(id: i64, params: Value) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": "lpp/resolveIds",
+        "params": params,
+    })
+}
+
+/// `resolveIds` is negotiated only at LPP 1.6: the capability is absent at
+/// 1.5 and an `lpp/resolveIds` request there is `capabilityUnavailable`.
+#[test]
+fn resolve_ids_capability_is_negotiated_at_1_6() {
+    let mut session = Session::spawn();
+    let initialized = session.initialize_version("1.5");
+    assert_eq!(initialized["result"]["protocolVersion"], "1.5");
+    assert_eq!(
+        initialized["result"]["capabilities"]["resolveIds"],
+        Value::Null,
+        "resolveIds is not advertised before 1.6"
+    );
+    let response = session.request(resolve_ids_request(
+        2,
+        json!({ "languageId": "opy", "calls": ["applyImpulse"] }),
+    ));
+    assert_eq!(response["error"]["code"], -32000);
+    assert_eq!(
+        response["error"]["data"]["lpp"]["kind"],
+        "capabilityUnavailable"
+    );
+    assert_eq!(
+        response["error"]["data"]["lpp"]["details"],
+        json!({ "capability": "resolveIds", "method": "lpp/resolveIds" })
+    );
+    session.shutdown();
+
+    let mut session = Session::spawn();
+    let initialized = session.initialize_version("1.6");
+    assert_eq!(initialized["result"]["protocolVersion"], "1.6");
+    assert_eq!(initialized["result"]["capabilities"]["resolveIds"], true);
+    session.shutdown();
+}
+
+/// An `lpp/resolveIds` answer comes from the language vocabulary — the
+/// session never loads a project — and every spelling it reports agrees
+/// with what `lpp/lookup` reports for the same canonical id.
+#[test]
+fn resolve_ids_answers_from_vocabulary_without_a_project() {
+    let mut session = Session::spawn();
+    session.initialize_version("1.6");
+
+    let response = session.request(resolve_ids_request(
+        2,
+        json!({
+            "languageId": "opy",
+            "calls": [
+                "applyImpulse",
+                "setStatusEffect",
+                // Canonical ids whose OPY spellings differ from the id
+                // (`createHudText` -> `hudText`) — the answer must come
+                // from the manifest link, not from the id itself.
+                "createHudText",
+                "lastCreatedEntity",
+                "isButtonHeld",
+            ],
+            "enums": {
+                "Status": ["STUNNED"],
+                "Map": ["ROUTE_66"],
+                "Clipping": ["DO_NOT_CLIP"],
+            },
+        }),
+    ));
+    let result = &response["result"];
+    for (id, spelling) in result["calls"].as_object().expect("calls map") {
+        // The resolved spelling is one `lpp/lookup` reports when queried
+        // with the canonical id.
+        let lookup = session.request(lookup_request(
+            100,
+            json!({ "languageId": "opy", "query": id, "limit": 10 }),
+        ));
+        let spellings: Vec<&str> = lookup["result"]["entries"]
+            .as_array()
+            .expect("entries")
+            .iter()
+            .filter_map(|entry| entry["spelling"].as_str())
+            .collect();
+        assert!(
+            spellings.contains(&spelling.as_str().expect("spelling")),
+            "{id} resolved to {spelling}, absent from lookup entries {spellings:?}"
+        );
+    }
+    assert_eq!(result["calls"]["applyImpulse"], "applyImpulse");
+    assert_eq!(result["calls"]["setStatusEffect"], "setStatusEffect");
+    assert_eq!(result["calls"]["createHudText"], "hudText");
+    assert_eq!(result["calls"]["lastCreatedEntity"], "getLastCreatedEntity");
+    assert_eq!(result["calls"]["isButtonHeld"], "isHoldingButton");
+
+    // Enum member spellings agree with `lpp/lookup`: the `Domain.MEMBER`
+    // spelling — under the domain's OPY name (`Clipping` -> `Clip`) — is
+    // itself a spelling lookup reports.
+    let enums = result["enums"].as_object().expect("enums map");
+    let mut request_id = 200;
+    for (domain, members) in enums {
+        let opy_domain = match domain.as_str() {
+            "Clipping" => "Clip",
+            other => other,
+        };
+        for (member, spelling) in members.as_object().expect("member map") {
+            let full = format!("{opy_domain}.{}", spelling.as_str().expect("s"));
+            let lookup = session.request(lookup_request(
+                request_id,
+                json!({ "languageId": "opy", "query": full, "limit": 10 }),
+            ));
+            request_id += 1;
+            let spellings: Vec<&str> = lookup["result"]["entries"]
+                .as_array()
+                .expect("entries")
+                .iter()
+                .filter_map(|entry| entry["spelling"].as_str())
+                .collect();
+            assert!(
+                spellings.contains(&full.as_str()),
+                "{domain}.{member} resolved to {spelling}; lookup has {spellings:?}"
+            );
+        }
+    }
+    assert_eq!(enums["Status"]["STUNNED"], "STUNNED");
+    assert_eq!(enums["Map"]["ROUTE_66"], "ROUTE66");
+    assert_eq!(enums["Clipping"]["DO_NOT_CLIP"], "NONE");
+    session.shutdown();
+}
+
+/// Operators, delimited statements, and the member-call forms the manifest
+/// marks `special-lowering` spell to source syntax, not bare call names.
+#[test]
+fn resolve_ids_spells_operators_and_source_forms() {
+    let mut session = Session::spawn();
+    session.initialize_version("1.6");
+
+    let response = session.request(resolve_ids_request(
+        2,
+        json!({
+            "languageId": "opy",
+            "calls": [
+                "add", "subtract", "multiply", "divide", "modulo",
+                "raiseToPower", "==", "!=", "<", "<=", ">", ">=",
+                "and", "or", "not", "arrayContains",
+                "appendToArray", "removeFromArray", "removeFromArrayByValue",
+                "removeFromArrayByIndex", "mappedArray", "sortedArray",
+                "isTrueForAll", "isTrueForAny",
+                "abort", "skip", "if", "elseIf", "else", "while",
+                "forGlobalVariable", "forPlayerVariable",
+            ],
+        }),
+    ));
+    let calls = &response["result"]["calls"];
+    let expected = json!({
+        "add": "+", "subtract": "-", "multiply": "*", "divide": "/",
+        "modulo": "%", "raiseToPower": "**",
+        "==": "==", "!=": "!=", "<": "<", "<=": "<=", ">": ">", ">=": ">=",
+        "and": "and", "or": "or", "not": "not", "arrayContains": "in",
+        "appendToArray": "append", "removeFromArray": "exclude",
+        "removeFromArrayByValue": "remove", "removeFromArrayByIndex": "del",
+        "mappedArray": "map", "sortedArray": "sorted",
+        "isTrueForAll": "all", "isTrueForAny": "any",
+        "abort": "return", "skip": "goto",
+        "if": "if", "elseIf": "elif", "else": "else", "while": "while",
+        "forGlobalVariable": "for", "forPlayerVariable": "for",
+    });
+    assert_eq!(*calls, expected);
+    session.shutdown();
+}
+
+/// Ids with no dedicated OPY spelling — unknown ids, canonical-only forms
+/// (assignments, index access, ternary), non-canonical source names
+/// (`evalOnce`, `all`), and members of domains the source language does
+/// not spell — are omitted rather than guessed.
+#[test]
+fn resolve_ids_omits_unspelled_and_unknown_ids() {
+    let mut session = Session::spawn();
+    session.initialize_version("1.6");
+
+    let response = session.request(resolve_ids_request(
+        2,
+        json!({
+            "languageId": "opy",
+            "calls": [
+                "notAnId",
+                // An OPY spelling, not a canonical id: `evaluateOnce` is
+                // the canonical name of `evalOnce`.
+                "evalOnce",
+                // OPY-only builtins that lower elsewhere are not ids.
+                "all", "log", "getPlayers",
+                // Canonical forms with no dedicated source spelling.
+                "end", "setGlobalVariable", "globalVariable",
+                "callSubroutine", "valueInArray", "firstOf",
+                "ifThenElse", "roundToInteger", "loopIf",
+            ],
+            "enums": {
+                "Status": ["STUNNED", "NO_SUCH_MEMBER"],
+                // `Rounding` selects between round/ceil/floor — not
+                // spelled as a source enum.
+                "Rounding": ["DOWN"],
+                "NoSuchDomain": ["ANY"],
+            },
+        }),
+    ));
+    let result = &response["result"];
+    assert_eq!(result["calls"], json!({}));
+    assert_eq!(
+        result["enums"],
+        json!({ "Status": { "STUNNED": "STUNNED" } }),
+        "unspelled members and unspelled domains are omitted"
+    );
+    session.shutdown();
+}
+
+/// An empty request resolves to empty maps; the same request answers
+/// identically twice.
+#[test]
+fn resolve_ids_empty_and_deterministic() {
+    let mut session = Session::spawn();
+    session.initialize_version("1.6");
+
+    let empty = session.request(resolve_ids_request(2, json!({ "languageId": "opy" })));
+    assert_eq!(empty["result"], json!({ "calls": {}, "enums": {} }));
+
+    let params = json!({
+        "languageId": "opy",
+        "calls": ["applyImpulse", "appendToArray"],
+        "enums": { "Status": ["STUNNED"] },
+    });
+    let first = session.request(resolve_ids_request(3, params.clone()));
+    let second = session.request(resolve_ids_request(4, params));
+    assert_eq!(first["result"], second["result"]);
+    session.shutdown();
+}
+
+/// Params that do not match the schema are `-32602`; a language the
+/// provider does not serve is `invalidLanguage`.
+#[test]
+fn resolve_ids_validates_params() {
+    let mut session = Session::spawn();
+    session.initialize_version("1.6");
+
+    let mut id = 2;
+    let mut invalid_params = |session: &mut Session, params: Value| {
+        id += 1;
+        session.request(resolve_ids_request(id, params))["error"]["code"]
+            .as_i64()
+            .expect("error code")
+    };
+    assert_eq!(
+        invalid_params(&mut session, json!({ "calls": ["applyImpulse"] })),
+        -32602
+    );
+    assert_eq!(
+        invalid_params(&mut session, json!({ "languageId": "opy", "calls": [1] })),
+        -32602
+    );
+    assert_eq!(
+        invalid_params(
+            &mut session,
+            json!({ "languageId": "opy", "calls": "applyImpulse" })
+        ),
+        -32602
+    );
+    assert_eq!(
+        invalid_params(
+            &mut session,
+            json!({ "languageId": "opy", "enums": ["Status"] })
+        ),
+        -32602
+    );
+    assert_eq!(
+        invalid_params(
+            &mut session,
+            json!({ "languageId": "opy", "enums": { "Status": "STUNNED" } })
+        ),
+        -32602
+    );
+
+    let wrong_language = session.request(resolve_ids_request(
+        20,
+        json!({ "languageId": "x-demo-lang" }),
+    ));
+    assert_eq!(
+        wrong_language["error"]["data"]["lpp"]["kind"],
+        "invalidLanguage"
+    );
+    assert_eq!(
+        wrong_language["error"]["data"]["lpp"]["details"]["languageId"],
+        "x-demo-lang"
+    );
+    session.shutdown();
+}
+
+/// At most 1024 ids per request, counting calls and enum members together
+/// with duplicates; over the bound is `-32602`, never truncated.
+#[test]
+fn resolve_ids_bounds_the_total_ids() {
+    let mut session = Session::spawn();
+    session.initialize_version("1.6");
+
+    let at_bound = session.request(resolve_ids_request(
+        2,
+        json!({
+            "languageId": "opy",
+            "calls": vec!["applyImpulse"; 1024],
+        }),
+    ));
+    assert_eq!(
+        at_bound["result"]["calls"],
+        json!({ "applyImpulse": "applyImpulse" }),
+        "exactly 1024 ids are served"
+    );
+
+    let over_bound = session.request(resolve_ids_request(
+        3,
+        json!({
+            "languageId": "opy",
+            "calls": vec!["applyImpulse"; 1025],
+        }),
+    ));
+    assert_eq!(over_bound["error"]["code"], -32602);
+
+    let split_over_bound = session.request(resolve_ids_request(
+        4,
+        json!({
+            "languageId": "opy",
+            "calls": vec!["applyImpulse"; 1000],
+            "enums": { "Status": vec!["STUNNED"; 25] },
+        }),
+    ));
+    assert_eq!(split_over_bound["error"]["code"], -32602);
+    session.shutdown();
+}

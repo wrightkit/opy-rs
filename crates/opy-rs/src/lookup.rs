@@ -12,6 +12,7 @@
 //! carry, so lookup results and rejection diagnostics cannot drift.
 
 use serde::Serialize;
+use std::sync::OnceLock;
 use workshop_rs::catalog::{Catalog, Kind};
 use workshop_rs::settings::{self, PathPart, SettingValueDomain};
 
@@ -639,6 +640,156 @@ pub fn lookup(query: &LookupQuery) -> LookupOutcome {
 /// Lookup with a default query (all namespaces, `DEFAULT_LIMIT`).
 pub fn lookup_str(text: &str) -> LookupOutcome {
     lookup(&LookupQuery::new(text))
+}
+
+// ---------------------------------------------------------------------------
+// lpp/resolveIds — canonical Workshop id → OPY spelling (issue #515)
+// ---------------------------------------------------------------------------
+
+/// Canonical call ids whose OPY spelling is source syntax rather than a
+/// manifest-declared callable name: every entry inverts an accepted OPY
+/// surface form (`compiler::lowering` emits the canonical id from this
+/// spelling). Several spellings may lower to one canonical id; the table
+/// records the dedicated form (`x += v` sugar aside, `appendToArray` is
+/// spelled `append`, the `chase*` player calls `chaseAtRate`/
+/// `chaseOverTime`).
+///
+/// Canonical ids absent here and unclaimed by a manifest `catalogId` have
+/// no dedicated OPY spelling and stay unresolved: assignments and member
+/// writes (`setGlobalVariable`, `assignMember`), declared names
+/// (`globalVariable`, `playerVariable`, `callSubroutine`, `memberAccess`),
+/// the dedent marker (`end`), literal, index, member-access, and ternary
+/// forms (`array`, `emptyArray`, `valueInArray`, `firstOf`, `ifThenElse`),
+/// lambda binders (`currentArrayElement`, `currentArrayIndex`), compound
+/// conditionals (`abortIf`, `loopIf`, `skipIf`, `loopIfConditionIsTrue`,
+/// `__abortIfConditionIsTrue__`), and spellings an argument selects
+/// (`roundToInteger`).
+const SYNTAX_SPELLINGS: &[(&str, &str)] = &[
+    // Operators the lowerer emits for OPY operator syntax.
+    ("add", "+"),
+    ("subtract", "-"),
+    ("multiply", "*"),
+    ("divide", "/"),
+    ("modulo", "%"),
+    ("raiseToPower", "**"),
+    ("==", "=="),
+    ("!=", "!="),
+    ("<", "<"),
+    ("<=", "<="),
+    (">", ">"),
+    (">=", ">="),
+    ("and", "and"),
+    ("or", "or"),
+    ("not", "not"),
+    ("-", "-"),
+    ("arrayContains", "in"),
+    // Member calls and special forms the manifest marks `special-lowering`
+    // (it claims no `catalogId`, but each canonical id still has exactly
+    // one dedicated OPY spelling).
+    ("appendToArray", "append"),
+    ("removeFromArray", "exclude"),
+    ("removeFromArrayByIndex", "del"),
+    ("removeFromArrayByValue", "remove"),
+    ("mappedArray", "map"),
+    ("sortedArray", "sorted"),
+    ("isTrueForAll", "all"),
+    ("isTrueForAny", "any"),
+    ("__xComponentOf__", "x"),
+    ("__yComponentOf__", "y"),
+    ("__zComponentOf__", "z"),
+    // Statements and reserved context values.
+    ("abort", "return"),
+    ("skip", "goto"),
+    ("break", "break"),
+    ("continue", "continue"),
+    ("if", "if"),
+    ("elseIf", "elif"),
+    ("else", "else"),
+    ("while", "while"),
+    ("forGlobalVariable", "for"),
+    ("forPlayerVariable", "for"),
+    ("__forPlayerVariable__", "for"),
+    ("eventPlayer", "eventPlayer"),
+    ("attacker", "attacker"),
+    ("victim", "victim"),
+    ("localPlayer", "localPlayer"),
+    ("hostPlayer", "hostPlayer"),
+    ("true", "true"),
+    ("false", "false"),
+    ("null", "null"),
+    // Canonical direction constants the language spells as `Vector` enum
+    // members rather than bare calls.
+    ("up", "Vector.UP"),
+    ("down", "Vector.DOWN"),
+    ("left", "Vector.LEFT"),
+    ("right", "Vector.RIGHT"),
+    ("forward", "Vector.FORWARD"),
+    ("backward", "Vector.BACKWARD"),
+    // The variable-kind target the manifest cannot claim for one spelling.
+    ("chasePlayerVariableAtRate", "chaseAtRate"),
+    ("chasePlayerVariableOverTime", "chaseOverTime"),
+    ("stopChasingPlayerVariable", "stopChasingVariable"),
+];
+
+/// The bundled catalog, loaded once — `Catalog::builtin` reparses the
+/// data on every call, which a `resolveIds` request paying per id cannot
+/// afford.
+fn resolve_catalog() -> Option<&'static Catalog> {
+    static CATALOG: OnceLock<Option<Catalog>> = OnceLock::new();
+    CATALOG.get_or_init(|| Catalog::builtin().ok()).as_ref()
+}
+
+/// `lpp/resolveIds` backing: the OPY spelling a canonical Workshop action,
+/// value, or operator id compiles from — the manifest `catalogId` link for
+/// declared callables, else [`SYNTAX_SPELLINGS`] for the ids source syntax
+/// produces. `None` when no dedicated OPY spelling exists or the id is
+/// unknown.
+pub fn call_spelling(canonical_id: &str) -> Option<&'static str> {
+    let manifest = Manifest::builtin().ok()?;
+    let catalog = resolve_catalog()?;
+    // A manifest entry's canonical identity is its `catalogId`, or — when
+    // it declares none — its own `id` when that id is a canonical call
+    // (`startRule`); a `catalogId`-free source name that is not a canonical
+    // id (`log`, `all`) claims nothing.
+    let is_canonical = |id: &str| {
+        catalog.entry(Kind::Value, id).is_some() || catalog.entry(Kind::Action, id).is_some()
+    };
+    // Distinct spellings may share one canonical id (`getPlayers` and
+    // `getAllPlayers` both claim `allPlayers`): prefer the entry whose own
+    // id is the canonical name, matching `resolve_call_entry` in
+    // `compiler::reconstruct`.
+    manifest
+        .functions()
+        .iter()
+        .filter(|function| match function.catalog_id.as_deref() {
+            Some(catalog_id) => catalog_id == canonical_id,
+            None => function.id == canonical_id && is_canonical(canonical_id),
+        })
+        .min_by_key(|function| function.id.as_str() != canonical_id)
+        .map(|function| function.id.as_str())
+        .or_else(|| {
+            SYNTAX_SPELLINGS
+                .iter()
+                .find_map(|(id, spelling)| (*id == canonical_id).then_some(*spelling))
+        })
+}
+
+/// `lpp/resolveIds` backing: the OPY member spelling for a canonical enum
+/// `domain`/`member` pair — the member half of the `Domain.MEMBER`
+/// spelling `lpp/lookup` reports. `None` for unknown pairs, for domains
+/// and members the reference does not spell in source, and for OPY-only
+/// members with no canonical id.
+pub fn enum_member_spelling<'a>(domain: &'a str, member: &'a str) -> Option<&'a str> {
+    let catalog = resolve_catalog()?;
+    let enum_domain = catalog.enum_domain(domain)?;
+    if !enum_domain
+        .members
+        .iter()
+        .any(|entry| entry.member == member)
+    {
+        return None;
+    }
+    crate::enums::spelling_of_member(domain, member).map(|(_, member)| member)
 }
 
 // ---------------------------------------------------------------------------
@@ -1793,5 +1944,70 @@ mod tests {
             )),
             "listed members report their spelling form: {results:?}"
         );
+    }
+
+    /// `call_spelling` reports a spelling for every canonical call id a
+    /// manifest entry claims, and the reported spelling is one of the
+    /// claiming entries — never a canonical id itself when the language
+    /// spells it differently (`createHudText` -> `hudText`).
+    #[test]
+    fn call_spelling_reports_an_accepted_spelling() {
+        let manifest = Manifest::builtin().expect("bundled manifest");
+        for function in manifest.functions() {
+            let Some(catalog_id) = function.catalog_id.as_deref() else {
+                continue;
+            };
+            let spelling = call_spelling(catalog_id)
+                .unwrap_or_else(|| panic!("{catalog_id} claims no spelling"));
+            let claims = manifest.functions().iter().any(|entry| {
+                entry.id == spelling && entry.catalog_id.as_deref() == Some(catalog_id)
+            });
+            assert!(
+                claims,
+                "{catalog_id} resolved to {spelling}, which does not claim it"
+            );
+        }
+    }
+
+    /// `SYNTAX_SPELLINGS` entries resolve, and ids that are not canonical
+    /// calls — source-only spellings like `evalOnce` or `all` — resolve
+    /// nothing.
+    #[test]
+    fn call_spelling_answers_only_canonical_ids() {
+        for (canonical_id, spelling) in SYNTAX_SPELLINGS {
+            assert_eq!(
+                call_spelling(canonical_id),
+                Some(*spelling),
+                "{canonical_id}"
+            );
+        }
+        for id in [
+            "evalOnce",
+            "all",
+            "log",
+            "getPlayers",
+            "end",
+            "valueInArray",
+            "setGlobalVariable",
+            "notAnId",
+        ] {
+            assert_eq!(call_spelling(id), None, "{id} must not resolve");
+        }
+    }
+
+    /// `enum_member_spelling` reports the member half of the same
+    /// `Domain.MEMBER` spelling `lpp/lookup` reports — renamed domains and
+    /// members included — and nothing for unknown or non-source pairs.
+    #[test]
+    fn enum_member_spelling_matches_the_member_table() {
+        assert_eq!(enum_member_spelling("Status", "STUNNED"), Some("STUNNED"));
+        assert_eq!(enum_member_spelling("Map", "ROUTE_66"), Some("ROUTE66"));
+        assert_eq!(
+            enum_member_spelling("Clipping", "DO_NOT_CLIP"),
+            Some("NONE")
+        );
+        assert_eq!(enum_member_spelling("Status", "NO_SUCH_MEMBER"), None);
+        assert_eq!(enum_member_spelling("Rounding", "DOWN"), None);
+        assert_eq!(enum_member_spelling("NoSuchDomain", "ANY"), None);
     }
 }
