@@ -479,14 +479,6 @@ impl SettingsLowerer {
         let lowered = self
             .lowerer
             .lower_expr(&expression, &[], CallPosition::Value);
-        // The pinned settings evaluator folds `min(1, 2, 3)` to `1` through
-        // variadic JavaScript builtins; its object walk performs no arity
-        // validation, so the diagnostic must not reject the call here
-        // (#512). Other errors — unknown identifiers, member misses — still
-        // surface.
-        self.lowerer
-            .errors
-            .retain(|error| error.code != "invalid-arity");
         self.lowerer
             .errors
             .first()

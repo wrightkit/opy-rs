@@ -52,7 +52,8 @@ impl<'a> Lowering<'a> {
                     crate::compile_time::Value::Array(_)
                     | crate::compile_time::Value::Object(_)
                     | crate::compile_time::Value::Vector(_)
-                    | crate::compile_time::Value::Number(_) => {}
+                    | crate::compile_time::Value::Number(_)
+                    | crate::compile_time::Value::Null => {}
                 }
             }
         }

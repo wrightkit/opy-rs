@@ -20,7 +20,12 @@ emits `3`, `["a"]` emits `a`); an element it cannot resolve is a
 `settings-expression` error wherever the list is written, catalogued keys
 included. Strings pass the pinned `__customString__` check on any path — a
 `{n}`/`{}` formatter without an argument errors (`["{0}"]`, `"x{0}y"`), and
-a dictionary key that does not evaluate to a string errors (`[{1:2}]`). A hero member the pinned schema does not apply to that hero is
+a dictionary key that does not evaluate to a string errors (`[{1:2}]`).
+`min`/`max` are the pinned variadic builtins — `min(a, b, c)` re-associates
+to `min(a, min(b, c))` — while every other builtin keeps its fixed arity
+(`[round(1.5, 2)]` errors). `null` substitutes as `0` inside a format
+expression and is falsy upstream, but a bare `null` value — or an `and`/`or`
+result that stays `null` — is a `settings-expression` error. A hero member the pinned schema does not apply to that hero is
 unknown for it and compiles fully verbatim. A `settings.workshop` member
 follows the pinned workshop contract: `true`/`false` emit as the compile
 target's `On`/`Off` text, a number-like value emits its number text, a

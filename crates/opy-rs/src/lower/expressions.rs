@@ -868,10 +868,12 @@ impl Lowerer {
         macro_params: &[String],
     ) -> (Vec<HirExpr>, Option<String>) {
         let mut slots: Vec<Option<HirExpr>> = vec![None; entry.params.len()];
+        let mut overflow = Vec::new();
         let mut selector = None;
         let mut has_keyword = false;
         let mut binding_error = false;
         let contextual = policy::contextual_domain(&entry.id);
+        let variadic = policy::variadic(&entry.id);
 
         // Keyword spellings resolve through the declared parameter names
         // (alternate spellings included) — generic binding, no per-spelling
@@ -991,7 +993,11 @@ impl Lowerer {
                                 Some(self.lower_call_arg_value(entry, index, arg, macro_params));
                         }
                     } else {
-                        self.lower_expr(&arg.value, macro_params, CallPosition::Value);
+                        overflow.push(self.lower_expr(
+                            &arg.value,
+                            macro_params,
+                            CallPosition::Value,
+                        ));
                     }
                 }
             }
@@ -1001,8 +1007,9 @@ impl Lowerer {
         // reference's "takes N arguments, received M" rejection. A binding
         // error already reported (duplicate keyword, unknown keyword, …)
         // suppresses the secondary arity noise, matching the reference's
-        // first-error behavior.
-        if !binding_error && args.len() > entry.params.len() {
+        // first-error behavior. `min`/`max` are the reference's variadic
+        // builtins and re-associate overflow instead of rejecting (#512).
+        if !binding_error && !variadic && args.len() > entry.params.len() {
             self.check_arity(entry, args.len(), arg_span(args));
         }
 
@@ -1071,6 +1078,31 @@ impl Lowerer {
                     }
                 },
             }
+        }
+
+        // Variadic overflow re-associates into nested two-argument calls —
+        // `min(a, b, c)` lowers as `min(a, min(b, c))`, the reference's
+        // optimizer shape (#512).
+        if variadic && !overflow.is_empty() {
+            let mut tail = Vec::with_capacity(overflow.len() + 1);
+            tail.push(bound.pop().unwrap_or(HirExpr::Null { span: None }));
+            tail.append(&mut overflow);
+            let last = tail.pop().expect("overflow is non-empty");
+            let mut nested = HirExpr::Call {
+                name: entry.id.clone(),
+                args: vec![tail.pop().expect("a bound tail precedes overflow"), last],
+                debug_source: None,
+                span: None,
+            };
+            while let Some(arg) = tail.pop() {
+                nested = HirExpr::Call {
+                    name: entry.id.clone(),
+                    args: vec![arg, nested],
+                    debug_source: None,
+                    span: None,
+                };
+            }
+            bound.push(nested);
         }
 
         // Variable-required parameters (the chase family's first argument)

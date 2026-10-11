@@ -796,6 +796,156 @@ fn settings_values_follow_the_reference_string_contracts() {
 }
 
 #[test]
+fn settings_variadic_builtins_fold_all_arguments() {
+    // opy-rs#512: `min`/`max` are the pinned reference's variadic
+    // builtins — `min(a, b, c)` re-associates to `min(a, min(b, c))` — so
+    // every argument reaches the fold. Expected values prove the
+    // trailing arguments are used (`min(5, 1, 0)` is `0`, not `1`).
+    for (element, emitted) in [
+        ("min(5, 1, 0)", "0"),
+        ("min(1, 2, 3)", "1"),
+        ("max(1, 2, 3)", "3"),
+        ("max(1, 2, 3, 4, 5)", "5"),
+        ("min(5, 4, 3, 2, 1)", "1"),
+        ("max(1, 2, 3) + 10", "13"),
+        ("\"{0}\".format(max(1, 2, 3))", "3"),
+    ] {
+        let source = format!(
+            "settings {{\n    \"gamemodes\": {{\"ffa\": {{\"enabled\": true, \"general\": {{\"unk\": [{element}]}}}}}}\n}}\nrule \"a\":\n    @Event global\n    wait(1)\n"
+        );
+        let lines = compiled_lines(&source);
+        let block = lines
+            .iter()
+            .position(|line| line == "unk {")
+            .unwrap_or_else(|| panic!("element {element:?} must emit: {lines:?}"));
+        assert_eq!(
+            lines[block + 1],
+            emitted,
+            "element {element:?} must emit {emitted:?}: {lines:?}"
+        );
+    }
+    // The same folding applies to scalar settings values.
+    let source = concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true, \"general\": {\"unk\": max(1, 2, 3)}}}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    );
+    assert!(compiled_lines(source).contains(&"unk: 3".to_string()));
+    // Every other builtin keeps its fixed arity: the reference rejects
+    // overflow ("Function 'round' takes 1 arguments, received 2") and
+    // missing arguments ("Missing argument 'value' for function 'min'")
+    // on both scalar and list paths.
+    for expression in [
+        "\"unk\": round(1.5, 2)",
+        "\"unk\": sqrt(4, 9)",
+        "\"unk\": abs(-1, -2)",
+        "\"unk\": [floor(1.5, 2)]",
+        "\"unk\": [len([1], [2])]",
+        "\"unk\": [min(1)]",
+        "\"unk\": [min()]",
+        "\"unk\": [max()]",
+        "\"unk\": [max(1)]",
+        "\"unk\": [\"abc\".charAt(1, 2)]",
+        "\"unk\": [\"abcdef\".substring(1, 2, 3)]",
+    ] {
+        let source = format!(
+            "settings {{\n    \"gamemodes\": {{\"ffa\": {{\"enabled\": true, \"general\": {{{expression}}}}}}}\n}}\nrule \"a\":\n    @Event global\n    wait(1)\n",
+        );
+        let outcome = check(&source, "main.opy", Path::new(""));
+        assert!(
+            outcome
+                .diagnostics
+                .iter()
+                .any(|d| d.code == "settings-expression"),
+            "{expression:?} must fail: {:?}",
+            outcome.diagnostics
+        );
+    }
+}
+
+#[test]
+fn settings_null_formats_zero_and_stays_rejected_elsewhere() {
+    // opy-rs#512: `null` substitutes as `0` inside a folded format
+    // expression, both in scalar and list positions.
+    for (expression, emitted) in [
+        ("\"unk\": \"{0}\".format(null)", "unk: 0"),
+        ("\"unk\": [\"{0}\".format(null)]", "0"),
+        ("\"unk\": [\"x{0}y\".format(null)]", "x0y"),
+        ("\"unk\": [\"{0}{1}\".format(null, 5)]", "05"),
+    ] {
+        let source = format!(
+            "settings {{\n    \"gamemodes\": {{\"ffa\": {{\"enabled\": true, \"general\": {{{expression}}}}}}}\n}}\nrule \"a\":\n    @Event global\n    wait(1)\n",
+        );
+        let lines = compiled_lines(&source);
+        let position = lines
+            .iter()
+            .position(|line| line.starts_with("unk"))
+            .unwrap_or_else(|| panic!("{expression:?} must emit: {lines:?}"));
+        let rendered = if lines[position].starts_with("unk:") {
+            lines[position].clone()
+        } else {
+            lines[position + 1].clone()
+        };
+        assert_eq!(
+            rendered, emitted,
+            "{expression:?} must emit {emitted:?}: {lines:?}"
+        );
+    }
+    // `null` is falsy upstream: `not`, `or`, `==`-against-Boolean, and
+    // the conditional fold all see it; `and`/`or` results that stay
+    // `null` are still unhandled, as is a bare `null` value.
+    for (element, emitted) in [
+        ("not null", "true"),
+        ("not (not null)", "false"),
+        ("null or 1", "1"),
+        ("null == false", "true"),
+        ("null == true", "false"),
+        ("null != false", "false"),
+        ("null == null", "true"),
+        ("(1 if null else 2)", "2"),
+    ] {
+        let source = format!(
+            "settings {{\n    \"gamemodes\": {{\"ffa\": {{\"enabled\": true, \"general\": {{\"unk\": [{element}]}}}}}}\n}}\nrule \"a\":\n    @Event global\n    wait(1)\n"
+        );
+        let lines = compiled_lines(&source);
+        let block = lines
+            .iter()
+            .position(|line| line == "unk {")
+            .unwrap_or_else(|| panic!("element {element:?} must emit: {lines:?}"));
+        assert_eq!(
+            lines[block + 1],
+            emitted,
+            "element {element:?} must emit {emitted:?}: {lines:?}"
+        );
+    }
+    for expression in [
+        "\"unk\": null",
+        "\"unk\": [null]",
+        "\"unk\": [null + 1]",
+        "\"unk\": [null == 1]",
+        "\"unk\": [null and 1]",
+        "\"unk\": [1 and null]",
+        "\"unk\": [null or null]",
+        "\"unk\": [\"{0}\".format(true)]",
+        "\"unk\": [\"{0}\".format(false)]",
+    ] {
+        let source = format!(
+            "settings {{\n    \"gamemodes\": {{\"ffa\": {{\"enabled\": true, \"general\": {{{expression}}}}}}}\n}}\nrule \"a\":\n    @Event global\n    wait(1)\n"
+        );
+        let outcome = check(&source, "main.opy", Path::new(""));
+        assert!(
+            outcome
+                .diagnostics
+                .iter()
+                .any(|d| d.code == "settings-expression"),
+            "{expression:?} must fail: {:?}",
+            outcome.diagnostics
+        );
+    }
+}
+
+#[test]
 fn settings_workshop_members_follow_the_pinned_contract() {
     // opy-rs#512: the pinned compiler classifies each `settings.workshop`
     // member — a `Bool` emits its `On`/`Off` text, a number-like value its

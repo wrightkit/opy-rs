@@ -19,6 +19,9 @@ pub(crate) enum Value {
     /// A `vect(x, y, z)` value: only `distance`/`magnitude`-family folds
     /// and the `.x`/`.y`/`.z` component reads consume it (#512).
     Vector(Vec<Value>),
+    /// JavaScript `null`: formattable as `0` upstream, and unhandled as a
+    /// settings value anywhere else (#512).
+    Null,
 }
 
 pub(crate) fn evaluate(
@@ -75,6 +78,9 @@ fn eval(
         }
         Expr::String { value, .. } => Some(Value::String(value.clone())),
         Expr::Bool { value, .. } => Some(Value::Bool(*value)),
+        // `null` is a formattable `0` upstream and unhandled elsewhere; it
+        // stays unresolvable outside settings eval (#512).
+        Expr::Null { .. } => settings.then_some(Value::Null),
         Expr::Array { elements, .. } => Some(Value::Array(
             elements
                 .iter()
@@ -771,8 +777,9 @@ fn evaluate_binary(op: &str, left: Value, right: Value, settings: bool) -> Optio
 
 /// The pinned evaluator's `isDefinitelyTruthy`/`isDefinitelyFalsy`:
 /// numbers are truthy when nonzero (`NaN` included), strings when
-/// non-empty, and arrays by their first element. Objects are neither —
-/// `not {}` and `{} and x` do not fold (#512).
+/// non-empty, `null` is falsy, and arrays classify by their first
+/// element. Objects are neither — `not {}` and `{} and x` do not fold
+/// (#512).
 fn truthiness(value: &Value) -> Option<bool> {
     match value {
         Value::Bool(value) => Some(*value),
@@ -780,6 +787,7 @@ fn truthiness(value: &Value) -> Option<bool> {
         Value::String(value) => Some(!value.is_empty()),
         Value::Array(values) if values.is_empty() => Some(false),
         Value::Array(values) => truthiness(&values[0]),
+        Value::Null => Some(false),
         Value::Object(_) | Value::Vector(_) => None,
     }
 }
@@ -795,6 +803,7 @@ fn values_equal(left: &Value, right: &Value) -> bool {
         }
         (Value::String(left), Value::String(right)) => left == right,
         (Value::Bool(left), Value::Bool(right)) => left == right,
+        (Value::Null, Value::Null) => true,
         (Value::Array(left), Value::Array(right)) | (Value::Vector(left), Value::Vector(right)) => {
             left.len() == right.len()
                 && left
@@ -928,6 +937,8 @@ fn format_substitute(value: &Value) -> Option<String> {
     match value {
         Value::Number(value) if value.abs() <= NUMBER_LIMIT => Some(workshop_number_text(*value)),
         Value::String(value) => Some(value.clone()),
+        // `null` substitutes as `0` upstream (#512).
+        Value::Null => Some("0".to_string()),
         // Arrays display their first element only (#512).
         Value::Array(values) if values.is_empty() => Some(String::new()),
         Value::Array(values) => format_substitute(&values[0]),

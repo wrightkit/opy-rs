@@ -571,10 +571,10 @@ fn node_from_value(
         },
         // A `vect` AST has no settings object form upstream — the
         // reference reports it unhandled (#512).
-        crate::compile_time::Value::Vector(_) => {
+        crate::compile_time::Value::Vector(_) | crate::compile_time::Value::Null => {
             return Err(settings_expression_error(
                 span,
-                "compile-time vector is not a settings value".to_string(),
+                "compile-time value is not a settings value".to_string(),
             ));
         }
     };
@@ -604,8 +604,8 @@ fn display_value(value: &crate::compile_time::Value) -> Result<String, String> {
             .collect::<Result<Vec<_>, _>>()
             .map(|text| text.join(",")),
         crate::compile_time::Value::Object(_) => Ok("[object Object]".to_string()),
-        crate::compile_time::Value::Vector(_) => {
-            Err("compile-time vector is not a settings value".to_string())
+        crate::compile_time::Value::Vector(_) | crate::compile_time::Value::Null => {
+            Err("compile-time value is not a settings value".to_string())
         }
     }
 }
