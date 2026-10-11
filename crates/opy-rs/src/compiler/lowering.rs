@@ -285,12 +285,12 @@ impl<'a> Lowering<'a> {
         }
     }
 
-    pub(super) fn copy_files(&mut self) -> Result<(), IntegrationError> {
+    pub(super) fn copy_files(&mut self, locale: &Locale) -> Result<(), IntegrationError> {
         for file in &self.hir.files {
             self.program
                 .add_file(workshop_rs::source::SourceFile::new(file.path.clone()));
         }
-        self.program.settings = super::settings::workshop_settings(self.hir)?.0;
+        self.program.settings = super::settings::workshop_settings(self.hir, locale)?.0;
         Ok(())
     }
 

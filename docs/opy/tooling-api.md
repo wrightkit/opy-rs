@@ -19,7 +19,12 @@ expressions the pinned evaluator folds to their `String(value)` text (`1+2`
 emits `3`, `["a"]` emits `a`); an element it cannot resolve is a
 `settings-expression` error wherever the list is written, catalogued keys
 included. A hero member the pinned schema does not apply to that hero is
-unknown for it and compiles fully verbatim.
+unknown for it and compiles fully verbatim. A `settings.workshop` member
+follows the pinned workshop contract: `true`/`false` emit as the compile
+target's `On`/`Off` text, a number-like value emits its number text, a
+single-element list emits `[element]`, and a hero name resolves to its
+localized display name; any other value is a `settings-expression` or
+`settings-workshop-value` error.
 `check` reports each as a
 `unknown-setting` warning. A mode's non-Boolean `enabled` is dropped, as
 upstream does.

@@ -1,0 +1,41 @@
+{
+ "schemaVersion": 1,
+ "pinned": "overpy@9.7.10",
+ "derivation": "customGameSettingsKw __on__/__off__ locale maps extracted from the pinned compiler bundle; settings.workshop bool members emit these tokens upstream",
+ "tokens": {
+  "__on__": {
+   "en-US": "On",
+   "de-DE": "Ein",
+   "es-ES": "Activado",
+   "es-MX": "Activado",
+   "fr-FR": "Activé",
+   "ja-JP": "ON",
+   "ko-KR": "활성화",
+   "pl-PL": "Wł.",
+   "pt-BR": "Ligado",
+   "ru-RU": "Вкл.",
+   "th-TH": "เปิด",
+   "tr-TR": "Açık",
+   "zh-CN": "开启",
+   "zh-TW": "開啟",
+   "it-IT": "On"
+  },
+  "__off__": {
+   "en-US": "Off",
+   "de-DE": "Aus",
+   "es-ES": "Desactivado",
+   "es-MX": "No",
+   "fr-FR": "Désactivé",
+   "ja-JP": "OFF",
+   "ko-KR": "비활성화",
+   "pl-PL": "Wył.",
+   "pt-BR": "Desligado",
+   "ru-RU": "Откл.",
+   "th-TH": "ปิด",
+   "tr-TR": "Kapalı",
+   "zh-CN": "关闭",
+   "zh-TW": "關閉",
+   "it-IT": "Off"
+  }
+ }
+}

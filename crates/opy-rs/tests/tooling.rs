@@ -675,6 +675,142 @@ fn settings_list_elements_the_reference_rejects_are_errors() {
 }
 
 #[test]
+fn settings_workshop_members_follow_the_pinned_contract() {
+    // opy-rs#512: the pinned compiler classifies each `settings.workshop`
+    // member — a `Bool` emits its `On`/`Off` text, a number-like value its
+    // number text, a single-element list its evaluated element, and a hero
+    // name its localized display name; anything else is an error.
+    let lines = compiled_lines(concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"workshop\": {\"foo\": [1+2], \"flag\": false, \"on\": true,\n",
+        "        \"hero\": \"dva\", \"num\": \"3.5\", \"frac\": 5%0, \"arr\": [[1,2]]}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    ));
+    let block = lines
+        .iter()
+        .position(|line| line == "workshop {")
+        .expect("the workshop group must emit");
+    assert_eq!(
+        &lines[block + 1..block + 8],
+        [
+            "foo: [3]",
+            "flag: Off",
+            "on: On",
+            "hero: D.Va",
+            "num: 3.5",
+            "frac: NaN",
+            "arr: [1,2]"
+        ]
+    );
+    // Member text localizes with the compile target like the pinned
+    // compiler's `__on__`/`__off__` and hero-name translations (#512).
+    let lines = opy_rs::Compiler::new()
+        .expect("compiler")
+        .compile_source_with_language(
+            concat!(
+                "settings {\n",
+                "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+                "    \"workshop\": {\"flag\": true, \"h\": \"wreckingBall\"}\n",
+                "}\n",
+                "rule \"a\":\n    @Event global\n    wait(1)\n",
+            ),
+            "main.opy",
+            Path::new(""),
+            "fr-FR",
+        )
+        .expect("compiles")
+        .workshop
+        .lines()
+        .map(|line| line.trim().to_string())
+        .collect::<Vec<_>>();
+    assert!(
+        lines.contains(&"flag: Activé".to_string()) && lines.contains(&"h: Bouldozer".to_string()),
+        "workshop members must localize like the pinned compiler: {lines:?}"
+    );
+    // Empty and multi-element lists fail the pinned length check;
+    // unresolved expressions, objects, and non-hero strings fail its
+    // member-value check.
+    for (member, code) in [
+        ("\"x\": [1,2]", "settings-workshop-value"),
+        ("\"x\": []", "settings-workshop-value"),
+        ("\"x\": \"a\"", "settings-workshop-value"),
+        ("\"x\": \"Genji\"", "settings-workshop-value"),
+        ("\"x\": {\"a\": 1}", "settings-workshop-value"),
+        ("\"x\": [abc]", "settings-expression"),
+    ] {
+        let source = format!(
+            "settings {{\n    \"gamemodes\": {{\"ffa\": {{\"enabled\": true}}}},\n    \"workshop\": {{{member}}}\n}}\nrule \"a\":\n    @Event global\n    wait(1)\n"
+        );
+        let outcome = check(&source, "main.opy", Path::new(""));
+        assert!(
+            outcome.diagnostics.iter().any(|d| d.code == code),
+            "workshop member {member:?} must fail with {code}: {:?}",
+            outcome.diagnostics
+        );
+    }
+}
+
+#[test]
+fn catalogued_list_keys_reject_elements_the_reference_cannot_resolve() {
+    // opy-rs#512: a catalogued non-enum list key (`enabledMaps`,
+    // `disabledHeroes`, ...) is not a verbatim carry — an element the
+    // settings evaluator cannot resolve is a `settings-expression` error,
+    // not a silent fallback to the authored text.
+    for (key, element) in [
+        ("enabledMaps", "kingsRow"),
+        ("enabledMaps", "abc"),
+        ("disabledHeroes", "genji"),
+    ] {
+        let source = format!(
+            "settings {{\n    \"gamemodes\": {{\"skirmish\": {{\"enabled\": true, \"{key}\": [{element}]}}}}\n}}\nrule \"a\":\n    @Event global\n    wait(1)\n"
+        );
+        let outcome = check(&source, "main.opy", Path::new(""));
+        assert!(
+            outcome
+                .diagnostics
+                .iter()
+                .any(|d| d.code == "settings-expression"),
+            "{key}: [{element}] must fail with settings-expression: {:?}",
+            outcome.diagnostics
+        );
+    }
+    // Team-level hero rosters reject unresolved elements the same way.
+    let outcome = check(
+        concat!(
+            "settings {\n",
+            "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+            "    \"heroes\": {\"team1\": {\"disabledHeroes\": [genji]}}\n",
+            "}\n",
+            "rule \"a\":\n    @Event global\n    wait(1)\n",
+        ),
+        "main.opy",
+        Path::new(""),
+    );
+    assert!(
+        outcome
+            .diagnostics
+            .iter()
+            .any(|d| d.code == "settings-expression"),
+        "a bare hero name in a team roster is an expression: {:?}",
+        outcome.diagnostics
+    );
+    // A resolvable element still emits its evaluated text — a quoted map
+    // name resolves to its localized display name.
+    let lines = compiled_lines(concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"skirmish\": {\"enabled\": true, \"enabledMaps\": [\"kingsRow\"]}}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    ));
+    assert!(
+        lines.iter().any(|line| line.contains("King's Row")),
+        "an evaluated map member must emit its display name: {lines:?}"
+    );
+}
+
+#[test]
 fn settings_scalar_values_evaluate_like_the_pinned_reference() {
     // opy-rs#512: scalar settings values go through the same pinned
     // evaluator as list elements — `String(value)` emission, including

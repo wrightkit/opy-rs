@@ -213,7 +213,10 @@ pub fn check_with_overlay(
             // path the compiler uses and report every member the canonical
             // emission table cannot emit, so `check` never accepts a settings
             // key that `compile` would reject (#411).
-            match crate::compiler::settings::workshop_settings(&hir) {
+            match crate::compiler::settings::workshop_settings(
+                &hir,
+                &workshop_rs::catalog::Locale::new("en-US"),
+            ) {
                 Ok((settings, unknown)) => {
                     diagnostics.extend(unknown.into_iter().map(|member| {
                         Diagnostic::from_unknown_setting(member, hir.settings.as_ref(), &files)
