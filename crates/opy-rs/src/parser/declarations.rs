@@ -128,28 +128,48 @@ impl Parser<'_> {
                     ));
                 }
                 members.push((member.text, member_span));
+                // The reference names the member from the line's first token
+                // and takes the value from the first `=` on the line; the
+                // rest of the member line is ignored, so `settings { ... }`
+                // is a member named `settings`, not a settings block (#517).
+                let mut bracket = 0usize;
+                loop {
+                    match self.peek_kind() {
+                        TokenKind::Eof => break,
+                        TokenKind::Newline | TokenKind::Assign if bracket == 0 => break,
+                        TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace => bracket += 1,
+                        TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace => {
+                            bracket = bracket.saturating_sub(1)
+                        }
+                        _ => {}
+                    }
+                    self.bump();
+                }
+                if bracket != 0 {
+                    self.error_at_current("unclosed bracket in the enum member line".to_string());
+                    self.recover_line();
+                    continue;
+                }
                 if self.peek_kind() == TokenKind::Assign {
                     self.bump();
                     if self.parse_expr().is_err() {
                         self.recover_line();
                         continue;
                     }
+                    if self.peek_kind() == TokenKind::Comma {
+                        self.bump();
+                    }
+                    if !matches!(self.peek_kind(), TokenKind::Newline | TokenKind::Eof) {
+                        self.error_at_current("expected ',' after the enum member".to_string());
+                        self.recover_line();
+                        continue;
+                    }
                 }
-            } else {
-                self.error_at_current("expected an enum member name".to_string());
-                self.recover_line();
                 continue;
             }
-            if self.peek_kind() == TokenKind::Comma {
-                self.bump();
-            } else {
-                // A member must end the line (or be comma-separated).
-                if self.peek_kind() != TokenKind::Newline && self.peek_kind() != TokenKind::Eof {
-                    self.error_at_current("expected ',' after the enum member".to_string());
-                    self.recover_line();
-                    continue;
-                }
-            }
+            self.error_at_current("expected an enum member name".to_string());
+            self.recover_line();
+            continue;
         }
         declarations.push(Decl::Enum {
             name,

@@ -1023,6 +1023,32 @@ mod tests {
     }
 
     #[test]
+    fn enum_member_lines_ignore_the_tail_like_the_reference() {
+        // The reference names each member from the line's first token and
+        // takes the value from the first `=` on the line; everything else on
+        // a member line is ignored (#517).
+        let program = parse_ok(
+            "enum E:\n    A, B\n    settings {\n        \"k\": 1\n    }\n    C junk = 2\n",
+        );
+        let Decl::Enum { members, .. } = &program.declarations[0] else {
+            panic!("expected enum");
+        };
+        assert_eq!(
+            members
+                .iter()
+                .map(|(name, _)| name.as_str())
+                .collect::<Vec<_>>(),
+            ["A", "settings", "C"]
+        );
+
+        let program = parse_ok("enum E: settings {}\n");
+        let Decl::Enum { members, .. } = &program.declarations[0] else {
+            panic!("expected enum");
+        };
+        assert_eq!(members[0].0, "settings");
+    }
+
+    #[test]
     fn parses_multi_line_array() {
         let program = parse_ok(
             "globalvar p\nrule \"r\":\n    @Event global\n    p = [\n        vect(1, 0, 0),\n        vect(2, 0, 0),\n    ]\n",
