@@ -51,10 +51,14 @@ pub struct SettingsBlock {
 /// no indentation or ordering requirement — or the inline tail of a `:`-header
 /// line, which the reference parses as a nested line. A newline inside
 /// brackets continues the logical line, so `settings` there is an ordinary
-/// token. After `settings` a `{` or quoted external path is required;
-/// a second/later block is `settings-placement` at its keyword span; brace
-/// matching respects `"`/`'` strings, `\` escapes, and nesting; an
-/// unterminated block is `settings-invalid`.
+/// token. One exception: the reference walks an enum body's logical lines
+/// itself and names each member from the line's first token, so `settings`
+/// inside an enum domain — the `:` tail and every following logical line
+/// indented deeper than the `enum` header — is an enum member, never a
+/// statement (#517). After `settings` a `{` or quoted external path is
+/// required; a second/later block is `settings-placement` at its keyword
+/// span; brace matching respects `"`/`'` strings, `\` escapes, and nesting;
+/// an unterminated block is `settings-invalid`.
 pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
     let mut scanner = Cursor::new(text, file_id, Position::new(1, 1));
     let mut blocks = Vec::new();
@@ -68,6 +72,13 @@ pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
     let mut line_start = true;
     let mut tail_start = false;
     let mut depth = 0usize;
+    // `line_indent`: the current logical line's leading whitespace, counted
+    // like the reference (a tab is 4). `enum_indent`: the indentation of the
+    // enclosing `enum` header, while its body domain is open.
+    // `first_word_is_enum`: this logical line opened with `enum`.
+    let mut line_indent = 0usize;
+    let mut enum_indent: Option<usize> = None;
+    let mut first_word_is_enum = false;
     while let Some(ch) = scanner.peek() {
         if scanner.advance_quoted(&mut string_quote, &mut escaped, ch) {
             continue;
@@ -81,6 +92,17 @@ pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
             }
             continue;
         }
+        if line_start
+            && !matches!(ch, ' ' | '\t' | '\r' | '\n')
+            && !(ch == '#' && scanner.peek_at(1) == Some('!'))
+            && enum_indent.is_some_and(|indent| line_indent <= indent)
+        {
+            // A logical line — including a `#` comment line, which the
+            // reference counts — beginning at or below the enum header's
+            // indentation closes the enum domain; a `#!` directive produces
+            // no logical line and leaves it untouched.
+            enum_indent = None;
+        }
         if matches!(ch, '"' | '\'') {
             string_quote = Some(ch);
             line_start = false;
@@ -89,6 +111,13 @@ pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
             continue;
         }
         if ch == ' ' || ch == '\t' || ch == '\r' {
+            if line_start {
+                line_indent += if ch == '\t' {
+                    4
+                } else {
+                    usize::from(ch == ' ')
+                };
+            }
             scanner.advance_by(1);
             continue;
         }
@@ -96,11 +125,16 @@ pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
             if depth == 0 {
                 line_start = true;
                 tail_start = false;
+                line_indent = 0;
+                first_word_is_enum = false;
             }
             scanner.advance_by(1);
             continue;
         }
         if ch == '#' {
+            if scanner.peek_at(1) != Some('!') {
+                line_start = false;
+            }
             scanner.skip_to_eol();
             continue;
         }
@@ -115,6 +149,9 @@ pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
             ':' if depth == 0 => {
                 tail_start = true;
                 line_start = false;
+                if first_word_is_enum && enum_indent.is_none() {
+                    enum_indent = Some(line_indent);
+                }
                 scanner.advance_by(1);
                 continue;
             }
@@ -122,12 +159,16 @@ pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
         }
         if is_ident_start(ch) {
             let statement_start = line_start || tail_start;
+            let line_head = line_start;
             line_start = false;
             tail_start = false;
             let keyword_start = scanner.here();
             let keyword_offset = scanner.char_pos;
             let word = scanner.read_word();
-            if word == "settings" && statement_start {
+            if line_head && word == "enum" {
+                first_word_is_enum = true;
+            }
+            if word == "settings" && statement_start && enum_indent.is_none() {
                 let keyword_span = Span::new(file_id, keyword_start, scanner.here());
                 if !blocks.is_empty() {
                     return Err(OpyError::at(
@@ -140,6 +181,9 @@ pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
                 blocks.push(block);
             }
             continue;
+        }
+        if line_start && enum_indent.is_some_and(|indent| line_indent <= indent) {
+            enum_indent = None;
         }
         line_start = false;
         tail_start = false;
@@ -1428,11 +1472,62 @@ mod tests {
     }
 
     #[test]
-    fn settings_inside_an_enum_body_is_extracted() {
-        // Recorded divergence: the reference absorbs a `settings` line inside
-        // an enum body as a member named `settings`; we extract it as the
-        // settings block (see docs/architecture/language-core.md).
-        let found = block("enum E:\n    A\n    settings {\n    }\n");
+    fn settings_inside_an_enum_body_is_a_member() {
+        // The reference walks enum child lines itself and names each member
+        // from the line's first token, so a `settings` line inside an enum
+        // body — or the `:` tail — is a member, never a settings statement
+        // (#517).
+        for text in [
+            "enum E:\n    A\n    settings {\n        \"gamemodes\": {}\n    }\n",
+            "enum E:\n    settings {\n        \"gamemodes\": {}\n    }\n    A\n",
+            "enum E: settings {\n    \"gamemodes\": {}\n}\n",
+            "enum E:\n    settings\n    A\n",
+            "enum E:\n    settings = 5\n    A\n",
+            "enum E:\n    settings {\n    }\n",
+        ] {
+            assert!(find_blocks(text, 0).unwrap().is_empty(), "{text}");
+        }
+    }
+
+    #[test]
+    fn settings_after_the_enum_domain_is_extracted() {
+        // The enum body ends at the first logical line at or below the enum
+        // header's indentation — including a `#` comment line, which the
+        // reference counts as a logical line.
+        let found = block("enum E:\n    A\nsettings {\n}\n");
+        assert_eq!(found.keyword_span.start.line, 3);
+
+        let found = block("enum E:\n    A\n# comment ends the body\n    settings {\n    }\n");
+        assert_eq!(found.keyword_span.start.line, 4);
+
+        // A `#!` directive line produces no logical line and leaves the enum
+        // body open.
+        assert!(
+            find_blocks(
+                "enum E:\n    A\n#!mainFile m.opy\n    settings {\n    }\n",
+                0
+            )
+            .unwrap()
+            .is_empty()
+        );
+    }
+
+    #[test]
+    fn enum_member_lines_do_not_reopen_the_domain() {
+        // A member line starting with `enum` is still a member line; it does
+        // not open a nested enum domain (#517).
+        assert!(
+            find_blocks("enum E:\n    enum F:\n    settings {\n    }\n", 0)
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn settings_inside_other_bodies_is_still_extracted() {
+        // Outside an enum domain the statement position still extracts,
+        // inside rule/def/if bodies as well as in `:` tails (#513).
+        let found = block("rule \"r\":\n    if x:\n        settings {\n        }\n");
         assert_eq!(found.keyword_span.start.line, 3);
     }
 

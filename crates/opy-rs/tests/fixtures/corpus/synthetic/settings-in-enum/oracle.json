@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "settings\n{\n\tmodes\n\t{\n\t\tDeathmatch\n\t\t{\n\t\t\tScore To Win: 9\n\t\t}\n\t}\n}\n\nvariables {\n    global:\n        0: g\n}\n\nrule (\"probe\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(g, 1);\n    }\n}\n",
+    "workshopExact": "settings\n{\n\tmodes\n\t{\n\t\tDeathmatch\n\t\t{\n\t\t\tScore To Win: 9\n\t\t}\n\t}\n}\n\nvariables {\n    global:\n        0: g\n}\n\nrule (\"probe\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(g, 1);\n    }\n}\n\n",
+    "workshopSha256": "da41a01749ee667dbc6a21b8988486a36a91f96c5658e3a1e67a414cd8e23d2f"
+  },
+  "fixture": "synthetic/settings-in-enum",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "2e92b6c2ad673371a7318e715122870c88c1cfa673cca5b13ef7e73463765242"
+      }
+    ],
+    "sha256": "6e10a4c383fffe2eecb6c9245f1b032bf7d4e7d9e050c9ae0cf3383acfb4c4f7",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}
