@@ -561,10 +561,16 @@ impl Preprocessor {
     /// token stream is processed, so this pass is the point where `#!define`
     /// values become visible to the settings parser.
     pub(super) fn expand_settings(&self, block: SettingsBlock) -> OpyResult<SettingsBlock> {
-        let tokens = lex(LexInput {
+        // A block that does not lex — an empty radix literal such as `0x`,
+        // which the pinned tokenizer still reads as one word token — carries
+        // no expandable content either; the raw text reaches the settings
+        // parser so those elements can emit `NaN` (#512).
+        let Ok(tokens) = lex(LexInput {
             file_id: block.content_file,
             text: &block.text,
-        })?;
+        }) else {
+            return Ok(block);
+        };
         let mut tokens = tokens;
         for token in &mut tokens {
             token.span = shift_settings_span(token.span, block.text_start);

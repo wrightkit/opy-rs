@@ -514,6 +514,241 @@ fn an_object_under_an_enum_key_compiles_as_the_reference_block() {
 }
 
 #[test]
+fn settings_list_elements_evaluate_like_the_pinned_reference() {
+    // opy-rs#512: a list element is a settings expression the pinned
+    // evaluator folds to its `String(value)` text — `1+2` emits `3`, a
+    // nested list emits `1,2` — under unknown and catalogued keys alike.
+    for (element, emitted) in [
+        ("1+2", "3"),
+        ("1-2", "-1"),
+        ("2e3", "2000"),
+        ("-0.5", "-0.5"),
+        ("0x1F", "31"),
+        ("[1,2]", "1,2"),
+        ("1==1", "true"),
+        ("5%2", "1"),
+        ("-(1+2)", "-3"),
+        ("1 in [3]", "false"),
+        ("[1,2][0]", "1"),
+        ("abs(-1)", "1"),
+        ("min(1,2)", "1"),
+        // `and`/`or`/`not` follow the reference's truthiness: operand
+        // values, `not` on scalars and arrays, `==` equality per type.
+        ("1 and 2", "2"),
+        ("0 or 3", "3"),
+        ("{\"a\":1} or 2", "2"),
+        ("not 0", "true"),
+        ("not \"a\"", "false"),
+        ("not []", "true"),
+        ("not [1]", "false"),
+        ("1 == \"1\"", "false"),
+        ("[1]==[1]", "true"),
+        // Foldable builtins reproduce the reference's fdlibm results and
+        // variadic `min`/`max` (#512).
+        ("tan(1)", "1.5574077246549023"),
+        ("acosDeg(0.5)", "0.018277045187202516"),
+        ("min(1, 2, 3)", "1"),
+        ("sqrt(-1)", "0"),
+        // Foldable member calls take the receiver as their first
+        // argument upstream (#512).
+        ("\"abc\".charAt(1)", "b"),
+        ("\"abc\".charAt(1.9)", "b"),
+        ("\"abcdef\".substring(1, 2)", "bc"),
+        ("\"a-b-c\".replace(\"-\", \"+\")", "a+b+c"),
+        ("[1,2,3].slice(0, 2)", "1,2"),
+        ("[1,2,3].slice(-1, 2)", "1"),
+        ("[1,2,3].index(2)", "1"),
+        ("[1,2,3].index(9)", "-1"),
+        ("[1,2,3].last()", "3"),
+        ("[1,2].concat(3)", "1,2,3"),
+        ("[1,2].concat([3,4])", "1,2,3,4"),
+        ("[1,2,3].exclude(1)", "2,3"),
+        ("[1,2,3].exclude([1,2])", "3"),
+        // `vect`-family folds: components, products, magnitudes (#512).
+        ("vect(1,2,3).x", "1"),
+        ("vect(1,2,3).z", "3"),
+        ("distance(vect(0,0,0), vect(3,4,0))", "5"),
+        ("magnitude(vect(3,4,0))", "5"),
+        ("dotProduct(vect(1,2,3), vect(4,5,6))", "32"),
+        // Format braces are literal text upstream — `{{`/`}}` are not
+        // unescaped (#512).
+        ("\"{{0}}\".format(5)", "{{0}}"),
+        ("\"{{}}\".format(5)", "{{}}"),
+    ] {
+        let source = format!(
+            "settings {{\n    \"gamemodes\": {{\"ffa\": {{\"enabled\": true, \"general\": {{\"unk\": [{element}]}}}}}}\n}}\nrule \"a\":\n    @Event global\n    wait(1)\n"
+        );
+        let lines = compiled_lines(&source);
+        let block = lines
+            .iter()
+            .position(|line| line == "unk {")
+            .unwrap_or_else(|| panic!("element {element:?} must emit a carried block: {lines:?}"));
+        assert_eq!(
+            lines[block + 1],
+            emitted,
+            "element {element:?} must emit {emitted:?}: {lines:?}"
+        );
+    }
+    // Folded elements land in carried blocks under catalogued keys too.
+    let lines = compiled_lines(concat!(
+        "settings {\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+        "    \"lobby\": {\"mapRotation\": [\"assault\", 1+2]}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    ));
+    let block = lines
+        .iter()
+        .position(|line| line == "Map Rotation {")
+        .expect("the enum key writes a display-name block");
+    assert_eq!(&lines[block + 1..block + 3], ["assault", "3"]);
+}
+
+#[test]
+fn settings_list_elements_the_reference_rejects_are_errors() {
+    // opy-rs#512: the pinned compiler rejects elements its settings
+    // evaluator cannot resolve — bare names, calls, string `+` — and
+    // elements its tokenizer splits or rejects, like signed exponents and
+    // leading/trailing dots, fail evaluation the same way.
+    for (element, code) in [
+        ("abc", "settings-expression"),
+        ("e5", "settings-expression"),
+        ("vect(1, 2, 3)", "settings-expression"),
+        (
+            "crossProduct(vect(1,0,0), vect(0,1,0))",
+            "settings-expression",
+        ),
+        (
+            "vectorTowards(vect(1,2,3), vect(4,6,3))",
+            "settings-expression",
+        ),
+        ("\"a\"+\"b\"", "settings-expression"),
+        ("genji", "settings-expression"),
+        ("1.e5", "settings-expression"),
+        ("1 == true", "settings-expression"),
+        ("\"a\" == true", "settings-expression"),
+        ("not {}", "settings-expression"),
+        ("\"a\" in {\"a\":1}", "settings-expression"),
+        ("[1,2][9]", "settings-expression"),
+        ("1e-7", "settings-expression"),
+        ("2e+3", "settings-expression"),
+        (".5", "settings-expression"),
+        ("2.", "settings-expression"),
+    ] {
+        let source = format!(
+            "settings {{\n    \"gamemodes\": {{\"ffa\": {{\"enabled\": true, \"general\": {{\"unk\": [{element}]}}}}}}\n}}\nrule \"a\":\n    @Event global\n    wait(1)\n"
+        );
+        let outcome = check(&source, "main.opy", Path::new(""));
+        assert!(
+            outcome.diagnostics.iter().any(|d| d.code == code),
+            "element {element:?} must fail with {code}: {:?}",
+            outcome.diagnostics
+        );
+    }
+    // The same rejections apply under a catalogued enum key: bare member
+    // names are expressions there, not literals — `[assault]` fails where
+    // `["assault"]` is carried.
+    let outcome = check(
+        concat!(
+            "settings {\n",
+            "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+            "    \"lobby\": {\"mapRotation\": [assault]}\n",
+            "}\n",
+            "rule \"a\":\n    @Event global\n    wait(1)\n",
+        ),
+        "main.opy",
+        Path::new(""),
+    );
+    assert!(
+        outcome
+            .diagnostics
+            .iter()
+            .any(|d| d.code == "settings-expression"),
+        "a bare member name under an enum key is an expression: {:?}",
+        outcome.diagnostics
+    );
+}
+
+#[test]
+fn settings_scalar_values_evaluate_like_the_pinned_reference() {
+    // opy-rs#512: scalar settings values go through the same pinned
+    // evaluator as list elements — `String(value)` emission, including
+    // `NaN`/`Infinity` for non-finite results.
+    for (value, emitted) in [
+        ("1+2", "unk: 3"),
+        ("5%0", "unk: NaN"),
+        ("5/0", "unk: 0"),
+        ("Infinity", "unk: Infinity"),
+        ("-Infinity", "unk: -Infinity"),
+        ("1_000", "unk: NaN"),
+        ("0x", "unk: NaN"),
+        ("0xZZ", "unk: NaN"),
+        ("12abc", "unk: NaN"),
+        ("0o18", "unk: NaN"),
+        ("0o17", "unk: 15"),
+        ("0b11", "unk: 3"),
+        // `0x` is the one lenient prefix upstream: `parseInt(name, 16)`
+        // reads a hex prefix, so `0x1FZ` is 31 while `0X1FZ` — converted
+        // by `Number` — is `NaN` (#512).
+        ("0x1FZ", "unk: 31"),
+        ("0X1FZ", "unk: NaN"),
+        ("1e", "unk: NaN"),
+        ("1e5", "unk: 100000"),
+        ("1 . 5", "unk: 1.5"),
+        ("1_000.5", "unk: NaN"),
+        ("12@x", "unk: NaN"),
+        ("-(1+2)", "unk: -3"),
+        ("\"a\".charAt(0)", "unk: a"),
+        ("[1,2].last()", "unk: 2"),
+        ("[1,2][0]", "unk: 1"),
+        ("{\"a\":1}[\"a\"]", "unk: 1"),
+        ("1 in [3]", "unk: false"),
+        ("1 not in [1]", "unk: false"),
+        ("true and 2", "unk: 2"),
+        ("\"a\" \"b\"", "unk: ab"),
+        ("2**10", "unk: 1024"),
+        ("min(1,2,3)", "unk: 1"),
+        ("vect(1,2,3).x", "unk: 1"),
+    ] {
+        let source = format!(
+            "settings {{\n    \"gamemodes\": {{\"ffa\": {{\"enabled\": true, \"general\": {{\"unk\": {value}}}}}}}\n}}\nrule \"a\":\n    @Event global\n    wait(1)\n"
+        );
+        let lines = compiled_lines(&source);
+        assert!(
+            lines.iter().any(|line| line == emitted),
+            "value {value:?} must emit {emitted:?}: {lines:?}"
+        );
+    }
+    for (value, code) in [
+        ("abc", "settings-expression"),
+        ("\"a\"+\"b\"", "settings-expression"),
+        ("2.", "settings-expression"),
+        (".5", "settings-expression"),
+        ("1e-7", "settings-expression"),
+        ("2e+3", "settings-expression"),
+        ("1.e5", "settings-expression"),
+        ("5.5.5", "settings-expression"),
+        ("{\"a\":1}.a", "settings-expression"),
+        ("enabled", "settings-expression"),
+        ("truex", "settings-expression"),
+        ("NaN", "settings-expression"),
+        ("null", "settings-expression"),
+        ("undefined", "settings-expression"),
+        ("vect(1,2,3)", "settings-expression"),
+    ] {
+        let source = format!(
+            "settings {{\n    \"gamemodes\": {{\"ffa\": {{\"enabled\": true, \"general\": {{\"unk\": {value}}}}}}}\n}}\nrule \"a\":\n    @Event global\n    wait(1)\n"
+        );
+        let outcome = check(&source, "main.opy", Path::new(""));
+        assert!(
+            outcome.diagnostics.iter().any(|d| d.code == code),
+            "value {value:?} must fail with {code}: {:?}",
+            outcome.diagnostics
+        );
+    }
+}
+
+#[test]
 fn settings_numbers_render_like_the_pinned_oracle() {
     // opy-rs#496: the pinned OverPy writes numeric settings values with
     // JavaScript `String(value)` semantics and reads decimal exponent forms

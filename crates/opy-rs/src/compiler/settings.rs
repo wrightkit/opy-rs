@@ -18,7 +18,7 @@ pub(crate) fn workshop_settings(
             _ => None,
         })
         .collect();
-    let mut settings = merge_extensions(
+    let (mut settings, evals) = merge_extensions(
         hir.settings
             .clone()
             .map(|settings| expand_settings_constants(settings, &settings_constants)),
@@ -26,7 +26,7 @@ pub(crate) fn workshop_settings(
     )?;
     let unknown = settings
         .as_mut()
-        .map(pass_through_unknown_members)
+        .map(|settings| pass_through_unknown_members(settings, &evals))
         .transpose()?
         .unwrap_or_default();
     Ok((settings, unknown))
@@ -118,6 +118,7 @@ fn rename_member(member: &mut workshop_rs::settings::SettingsNode, name: &str) {
 /// members ahead of its hero groups as the pinned OverPy writes them.
 fn pass_through_unknown_members(
     settings: &mut workshop_rs::settings::Settings,
+    evals: &EvalMap,
 ) -> Result<Vec<UnknownSetting>, IntegrationError> {
     use workshop_rs::settings::{PathPart, SettingsNode};
 
@@ -128,7 +129,7 @@ fn pass_through_unknown_members(
         };
         match name.as_str() {
             "main" | "lobby" => {
-                pass_through_members(children, &[PathPart::Part(name)], &mut unknown, None);
+                pass_through_members(children, &[PathPart::Part(name)], &mut unknown, None, evals)?;
             }
             "gamemodes" => {
                 for mode in children {
@@ -138,7 +139,7 @@ fn pass_through_unknown_members(
                                 || matches!(member, SettingsNode::Bool { .. })
                         });
                         let path = [PathPart::Part("gamemodes"), PathPart::Part(name)];
-                        pass_through_members(children, &path, &mut unknown, None);
+                        pass_through_members(children, &path, &mut unknown, None, evals)?;
                     }
                 }
             }
@@ -174,13 +175,13 @@ fn pass_through_unknown_members(
                                     }));
                                 }
                                 SettingsNode::List { elements, .. } => {
-                                    general.extend(elements.iter().enumerate().map(
-                                        |(index, element)| SettingsNode::Raw {
+                                    for (index, element) in elements.iter().enumerate() {
+                                        general.push(SettingsNode::Raw {
                                             name: index.to_string(),
-                                            value: element.value.clone(),
+                                            value: list_element_text(element, evals)?,
                                             span: element.span,
-                                        },
-                                    ));
+                                        });
+                                    }
                                 }
                                 _ => {}
                             },
@@ -188,7 +189,7 @@ fn pass_through_unknown_members(
                         }
                     }
                     let team_path = [PathPart::Part("heroes"), PathPart::Team];
-                    pass_through_members(&mut general, &team_path, &mut unknown, None);
+                    pass_through_members(&mut general, &team_path, &mut unknown, None, evals)?;
                     let mut enabled = false;
                     let mut disabled = false;
                     for child in &rest {
@@ -270,16 +271,16 @@ fn pass_through_unknown_members(
                                     &path,
                                     &mut unknown,
                                     Some(canonical.as_str()),
-                                );
+                                    evals,
+                                )?;
                             }
                             SettingsNode::List { name, elements, .. }
                                 if matches!(name.as_str(), "enabledHeroes" | "disabledHeroes") =>
                             {
                                 for element in elements {
-                                    let canonical = canonical_hero_name(&element.value);
-                                    if canonical != element.value {
-                                        element.value = canonical.to_string();
-                                    }
+                                    let text = list_element_text(element, evals)?;
+                                    let canonical = canonical_hero_name(&text);
+                                    element.value = canonical.to_string();
                                 }
                             }
                             _ => {}
@@ -296,12 +297,48 @@ fn pass_through_unknown_members(
     Ok(unknown)
 }
 
+/// The source span of each list element the settings evaluator could not
+/// resolve, keyed by the converted element span (#512). Such an element is
+/// an error wherever the list is written.
+pub(super) type EvalMap = HashMap<(u32, u32, u32, u32), HirSpan>;
+
+fn eval_key(span: &WorkshopSpan) -> (u32, u32, u32, u32) {
+    (span.start.line, span.start.col, span.end.line, span.end.col)
+}
+
+/// The emitted text of a settings list element: the display text the
+/// element already carries (evaluated for expressions, authored for
+/// literals). An authored expression the evaluator could not resolve is an
+/// error, as the pinned compiler rejects it wherever the list appears
+/// (#512).
+fn list_element_text(
+    element: &workshop_rs::settings::SettingsListElement,
+    evals: &EvalMap,
+) -> Result<String, IntegrationError> {
+    match element
+        .span
+        .as_ref()
+        .and_then(|span| evals.get(&eval_key(span)))
+    {
+        Some(&span) => Err(IntegrationError::new(
+            "settings-expression",
+            format!(
+                "settings list element '{}' is not a compile-time value",
+                element.value
+            ),
+            Some(span),
+        )),
+        None => Ok(element.value.clone()),
+    }
+}
+
 fn pass_through_members(
     members: &mut [workshop_rs::settings::SettingsNode],
     path: &[workshop_rs::settings::PathPart<'_>],
     unknown: &mut Vec<UnknownSetting>,
     hero: Option<&str>,
-) {
+    evals: &EvalMap,
+) -> Result<(), IntegrationError> {
     use workshop_rs::settings::{PathPart, SettingValueDomain, SettingsNode};
 
     for member in members {
@@ -326,9 +363,9 @@ fn pass_through_members(
                     continue;
                 }
                 *member = if inapplicable {
-                    verbatim_form(member.clone())
+                    verbatim_form(member.clone(), evals)?
                 } else {
-                    written_form(member.clone())
+                    written_form(member.clone(), evals)?
                 };
                 unknown.push(UnknownSetting {
                     name,
@@ -356,7 +393,7 @@ fn pass_through_members(
                     // (#496). The group form is what workshop-rs accepts and
                     // writes under the catalogued key's display name.
                     SettingsNode::List { .. } | SettingsNode::Group { .. } => {
-                        *member = written_form(member.clone());
+                        *member = written_form(member.clone(), evals)?;
                         continue;
                     }
                     _ => continue,
@@ -374,38 +411,50 @@ fn pass_through_members(
             }
         }
     }
+    Ok(())
 }
 
 /// The written form of a member under an unknown key, as the pinned OverPy
 /// serializes it: scalars as `key: value`, lists as a block of bare lines,
-/// and objects as a block of their members.
-fn written_form(node: workshop_rs::settings::SettingsNode) -> workshop_rs::settings::SettingsNode {
+/// and objects as a block of their members. List elements write their
+/// evaluated expression value (#512).
+fn written_form(
+    node: workshop_rs::settings::SettingsNode,
+    evals: &EvalMap,
+) -> Result<workshop_rs::settings::SettingsNode, IntegrationError> {
     use workshop_rs::settings::SettingsNode;
 
-    match node {
+    Ok(match node {
         SettingsNode::List {
             name,
             elements,
             span,
-        } => SettingsNode::Group {
-            name,
-            children: elements
-                .into_iter()
-                .map(|element| SettingsNode::Raw {
-                    name: element.value,
+        } => {
+            let mut children = Vec::with_capacity(elements.len());
+            for element in elements {
+                let span = element.span;
+                children.push(SettingsNode::Raw {
+                    name: list_element_text(&element, evals)?,
                     value: String::new(),
-                    span: element.span,
-                })
-                .collect(),
-            span,
-        },
+                    span,
+                });
+            }
+            SettingsNode::Group {
+                name,
+                children,
+                span,
+            }
+        }
         SettingsNode::Group {
             name,
             children,
             span,
         } => SettingsNode::Group {
             name,
-            children: children.into_iter().map(written_form).collect(),
+            children: children
+                .into_iter()
+                .map(|child| written_form(child, evals))
+                .collect::<Result<_, _>>()?,
             span,
         },
         node => match scalar_text(&node) {
@@ -416,22 +465,25 @@ fn written_form(node: workshop_rs::settings::SettingsNode) -> workshop_rs::setti
             },
             None => node,
         },
-    }
+    })
 }
 
 /// The fully verbatim form of a member: like [`written_form`], but a scalar
 /// becomes `Raw` so its name is written as authored even when the key
 /// resolves in the catalog.
-fn verbatim_form(node: workshop_rs::settings::SettingsNode) -> workshop_rs::settings::SettingsNode {
+fn verbatim_form(
+    node: workshop_rs::settings::SettingsNode,
+    evals: &EvalMap,
+) -> Result<workshop_rs::settings::SettingsNode, IntegrationError> {
     use workshop_rs::settings::SettingsNode;
 
     match scalar_text(&node) {
-        Some(value) => SettingsNode::Raw {
+        Some(value) => Ok(SettingsNode::Raw {
             name: node.name().to_string(),
             value,
             span: node.span(),
-        },
-        None => written_form(node),
+        }),
+        None => written_form(node, evals),
     }
 }
 
@@ -450,7 +502,7 @@ fn scalar_text(node: &workshop_rs::settings::SettingsNode) -> Option<String> {
 pub(super) fn merge_extensions(
     settings: Option<crate::hir::Settings>,
     directives: &[crate::hir::DirectiveRecord],
-) -> Result<Option<workshop_rs::settings::Settings>, IntegrationError> {
+) -> Result<(Option<workshop_rs::settings::Settings>, EvalMap), IntegrationError> {
     let mut extension_nodes: Vec<workshop_rs::settings::SettingsNode> = Vec::new();
     for directive in directives
         .iter()
@@ -493,16 +545,18 @@ pub(super) fn merge_extensions(
             span: span.map(convert_settings_span),
         });
     }
+    let (settings, evals) = settings
+        .map(convert_settings)
+        .map(|(settings, evals)| (Some(settings), evals))
+        .unwrap_or_default();
     if extension_nodes.is_empty() {
-        return Ok(settings.map(convert_settings));
+        return Ok((settings, evals));
     }
 
-    let mut settings = settings
-        .map(convert_settings)
-        .unwrap_or(workshop_rs::settings::Settings {
-            span: None,
-            children: Vec::new(),
-        });
+    let mut settings = settings.unwrap_or(workshop_rs::settings::Settings {
+        span: None,
+        children: Vec::new(),
+    });
     if let Some(workshop_rs::settings::SettingsNode::Group { children, .. }) = settings
         .children
         .iter_mut()
@@ -522,7 +576,7 @@ pub(super) fn merge_extensions(
                 span: None,
             });
     }
-    Ok(Some(settings))
+    Ok((Some(settings), evals))
 }
 
 pub(super) fn expand_settings_constants(
@@ -614,18 +668,25 @@ fn settings_node_from_expr(
     }
 }
 
-pub(super) fn convert_settings(settings: crate::hir::Settings) -> workshop_rs::settings::Settings {
-    workshop_rs::settings::Settings {
+pub(super) fn convert_settings(
+    settings: crate::hir::Settings,
+) -> (workshop_rs::settings::Settings, EvalMap) {
+    let mut evals = EvalMap::new();
+    let settings = workshop_rs::settings::Settings {
         span: settings.span.map(convert_settings_span),
         children: settings
             .children
             .into_iter()
-            .map(convert_settings_node)
+            .map(|node| convert_settings_node(node, &mut evals))
             .collect(),
-    }
+    };
+    (settings, evals)
 }
 
-fn convert_settings_node(node: crate::hir::SettingsNode) -> workshop_rs::settings::SettingsNode {
+fn convert_settings_node(
+    node: crate::hir::SettingsNode,
+    evals: &mut EvalMap,
+) -> workshop_rs::settings::SettingsNode {
     use crate::hir::SettingsNode as SourceNode;
     use workshop_rs::settings::{SettingsListElement, SettingsNode as TargetNode};
 
@@ -646,7 +707,7 @@ fn convert_settings_node(node: crate::hir::SettingsNode) -> workshop_rs::setting
             children: children
                 .into_iter()
                 .map(|child| escape_main_string(&name, child))
-                .map(convert_settings_node)
+                .map(|child| convert_settings_node(child, evals))
                 .collect(),
             name,
             span: span.map(convert_settings_span),
@@ -683,9 +744,22 @@ fn convert_settings_node(node: crate::hir::SettingsNode) -> workshop_rs::setting
             name,
             elements: elements
                 .into_iter()
-                .map(|element| SettingsListElement {
-                    value: element.value,
-                    span: element.span.map(convert_settings_span),
+                .map(|element| {
+                    let hir_span = element.span;
+                    let span = hir_span.map(convert_settings_span);
+                    if element.evaluated.is_none()
+                        && let (Some(span), Some(hir_span)) = (span.as_ref(), hir_span)
+                    {
+                        evals.insert(eval_key(span), hir_span);
+                    }
+                    // Catalogued list keys (`enabledMaps`, hero rosters) read
+                    // the display text the evaluator produced (#512); the
+                    // element's authored text only survives through the
+                    // verbatim `workshop` group.
+                    SettingsListElement {
+                        value: element.evaluated.unwrap_or(element.value),
+                        span,
+                    }
                 })
                 .collect(),
             span: span.map(convert_settings_span),

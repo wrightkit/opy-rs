@@ -74,7 +74,12 @@ pub enum SettingsNode {
 /// One element of a settings list.
 #[derive(Debug, Clone)]
 pub struct SettingsListElement {
+    /// Literal text (string content, normalized number) or, when `expr` is
+    /// set, expression source to be evaluated like the pinned settings
+    /// evaluator does (#512).
     pub value: String,
+    /// `value` is an expression to evaluate, not literal text.
+    pub expr: bool,
     pub span: Span,
 }
 

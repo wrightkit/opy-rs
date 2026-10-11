@@ -388,36 +388,88 @@ fn resolve_hir_node(
                 ));
             };
             let diag_span = hir_span_to_diag_span(span);
-            let expression = lowerer
-                .lower(
-                    &value,
-                    span.file,
-                    Position::new(span.start.line, span.start.col),
-                )
-                .map_err(|error| settings_expression_error(diag_span, error.message))?;
-            let expression = expander
-                .expand_expr(&expression, &HashMap::new(), None)
-                .map_err(|error| {
-                    let error_span = error
-                        .diagnostic
-                        .span
-                        .map(hir_span_to_diag_span)
-                        .unwrap_or(diag_span);
-                    OpyError::at(error.diagnostic.code, error.diagnostic.message, error_span)
-                })?;
-            let mut stack = Vec::new();
-            let value =
-                crate::compile_time::evaluate(&expression, constants, &HashMap::new(), &mut stack)
-                    .ok_or_else(|| {
-                        settings_expression_error(
-                            diag_span,
-                            "expression is not a compile-time value".to_string(),
-                        )
-                    })?;
+            let value = eval_settings_text(&value, span, constants, expander, lowerer, true)?;
             node_from_value(name, value, diag_span)
         }
+        // The pinned OverPy evaluates each settings list element through its
+        // expression path and errors on what it cannot resolve (#512).
+        // Evaluation is recorded on the element rather than emitted eagerly:
+        // elements under catalogued enum keys and hero lists are member
+        // names, not expressions, and only the downstream pass knows which.
+        hir::SettingsNode::List {
+            name,
+            elements,
+            span,
+        } => Ok(hir::SettingsNode::List {
+            name,
+            elements: elements
+                .into_iter()
+                .map(|mut element| {
+                    if element.evaluated.is_none()
+                        && let Some(span) = element.span
+                    {
+                        element.evaluated = eval_settings_text(
+                            &element.value,
+                            span,
+                            constants,
+                            expander,
+                            lowerer,
+                            true,
+                        )
+                        .ok()
+                        .and_then(|value| display_value(&value).ok());
+                    }
+                    element
+                })
+                .collect(),
+            span,
+        }),
         node => Ok(node),
     }
+}
+
+/// Compile an authored settings expression to a constant value: parse it as
+/// OPY, expand macros, then fold. `strict` selects the pinned settings
+/// evaluator — scalars and list elements both evaluate through it upstream
+/// (#512).
+fn eval_settings_text(
+    text: &str,
+    span: hir::Span,
+    constants: &HashMap<String, &hir::Expr>,
+    expander: &mut crate::compiler::MacroExpander<'_>,
+    lowerer: &mut crate::lower::SettingsLowerer,
+    strict: bool,
+) -> OpyResult<crate::compile_time::Value> {
+    let diag_span = hir_span_to_diag_span(span);
+    let expression = lowerer
+        .lower(
+            text,
+            span.file,
+            Position::new(span.start.line, span.start.col),
+        )
+        .map_err(|error| settings_expression_error(diag_span, error.message))?;
+    let expression = expander
+        .expand_expr(&expression, &HashMap::new(), None)
+        .map_err(|error| {
+            let error_span = error
+                .diagnostic
+                .span
+                .map(hir_span_to_diag_span)
+                .unwrap_or(diag_span);
+            OpyError::at(error.diagnostic.code, error.diagnostic.message, error_span)
+        })?;
+    let mut stack = Vec::new();
+    let value = if strict {
+        crate::compile_time::evaluate_settings(&expression, constants, &HashMap::new(), &mut stack)
+    } else {
+        crate::compile_time::evaluate(&expression, constants, &HashMap::new(), &mut stack)
+    };
+    value.ok_or_else(|| {
+        settings_expression_error(
+            diag_span,
+            "expression is not a compile-time value".to_string(),
+        )
+    })
 }
 
 fn hir_span_to_diag_span(span: hir::Span) -> Span {
@@ -442,19 +494,13 @@ fn node_from_value(
     span: Span,
 ) -> OpyResult<hir::SettingsNode> {
     let node = match value {
-        crate::compile_time::Value::Number(value) if value.is_finite() => {
-            hir::SettingsNode::Number {
-                name,
-                value,
-                span: Some(span.into()),
-            }
-        }
-        crate::compile_time::Value::Number(_) => {
-            return Err(settings_expression_error(
-                span,
-                "compile-time number is not finite".to_string(),
-            ));
-        }
+        // `String(numValue)` writes `NaN`/`Infinity` literally upstream —
+        // `x: 5%0` is `x: NaN` and `x: Infinity` is `x: Infinity` (#512).
+        crate::compile_time::Value::Number(value) => hir::SettingsNode::Number {
+            name,
+            value,
+            span: Some(span.into()),
+        },
         crate::compile_time::Value::String(value) => hir::SettingsNode::String {
             name,
             value,
@@ -470,8 +516,10 @@ fn node_from_value(
             elements: values
                 .into_iter()
                 .map(|value| {
+                    let value = display_value(&value)?;
                     Ok(hir::SettingsListElement {
-                        value: display_value(&value)?,
+                        evaluated: Some(value.clone()),
+                        value,
                         span: Some(span.into()),
                     })
                 })
@@ -495,73 +543,103 @@ fn node_from_value(
                 .collect::<OpyResult<Vec<_>>>()?,
             span: Some(span.into()),
         },
+        // A `vect` AST has no settings object form upstream — the
+        // reference reports it unhandled (#512).
+        crate::compile_time::Value::Vector(_) => {
+            return Err(settings_expression_error(
+                span,
+                "compile-time vector is not a settings value".to_string(),
+            ));
+        }
     };
     Ok(node)
 }
 
 fn display_value(value: &crate::compile_time::Value) -> Result<String, String> {
     match value {
-        crate::compile_time::Value::Number(value) if value.is_finite() => {
+        // `String(value)` writes `NaN`/`Infinity` literally, as the pinned
+        // evaluator does for `%` results and unparsed number tokens (#512).
+        crate::compile_time::Value::Number(value) => {
             Ok(crate::compiler::number_format::javascript_text(*value))
         }
         crate::compile_time::Value::String(value) => Ok(value.clone()),
         crate::compile_time::Value::Bool(value) => Ok(value.to_string()),
-        _ => Err("settings list can only contain primitive values".to_string()),
+        // JavaScript `String(value)` on containers, as the pinned evaluator
+        // writes them: arrays join their element text with commas, objects
+        // string-ify to the literal `[object Object]` (#512).
+        crate::compile_time::Value::Array(values) => values
+            .iter()
+            .map(display_value)
+            .collect::<Result<Vec<_>, _>>()
+            .map(|text| text.join(",")),
+        crate::compile_time::Value::Object(_) => Ok("[object Object]".to_string()),
+        crate::compile_time::Value::Vector(_) => {
+            Err("compile-time vector is not a settings value".to_string())
+        }
     }
 }
 
-/// The number literal a settings value token spells as JavaScript's
-/// `Number` reads it: decimal and exponent forms plus `0x`/`0o`/`0b`
-/// radixes, with an optional leading sign. `None` for non-number tokens.
-fn js_number_literal(text: &str) -> Option<f64> {
-    // `f64::parse` also admits spellings like `inf` and `NaN` that the pinned
-    // tokenizer reads as names, not literals; only a digit, dot, or sign can
-    // start a JavaScript number here.
-    if !text
-        .trim_start_matches(['-', '+'])
-        .chars()
-        .next()
-        .is_some_and(|c| c.is_ascii_digit() || c == '.')
+/// The number a settings list element spells when the pinned tokenizer
+/// reads it as one number token. The reference's word characters are
+/// `[A-Za-z0-9_@$]` (no `.` — `1.5` is `1 . 5` merged by the parser, not a
+/// token), so a digit-led word like `1_000`, `12abc`, `0o18`, or `5e` is
+/// one number token that `Number` converts to `NaN`. `0x` is the one
+/// lenient prefix: the reference rewrites it through `parseInt(name, 16)`
+/// which reads a hex *prefix*, so `0x1FZ` is 31 while `0x`/`0xZZ` are
+/// `NaN`. `0X`/`0o`/`0b` go through `Number` — all digits must be valid
+/// (`0o17` is 15, `0o18` and `0X1FZ` are `NaN`; #512).
+/// `None` when the element is not such a token (a dot, a sign, or a signed
+/// exponent like `1e-7` are separate tokens upstream and take the
+/// expression path).
+fn js_number_value(text: &str) -> Option<f64> {
+    if !text.starts_with(|c: char| c.is_ascii_digit())
+        || !text
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '@' | '$'))
     {
         return None;
     }
-    // The reference's number reader requires a fraction digit before an
-    // exponent marker (`1.e5`); Rust accepts it, so gate the spelling out —
-    // an unrecognized literal keeps its authored text.
-    if !text.contains(".e") && !text.contains(".E") {
-        if let Ok(value) = text.parse::<f64>() {
-            return Some(value);
+    // `parseInt(name, 16)`: reads the hex prefix; `NaN` without digits.
+    if let Some(digits) = text.strip_prefix("0x") {
+        let mut value = 0f64;
+        let mut seen = false;
+        for c in digits.chars() {
+            let Some(digit) = c.to_digit(16) else { break };
+            value = value * 16.0 + digit as f64;
+            seen = true;
         }
+        return Some(if seen { value } else { f64::NAN });
     }
-    let (negative, rest) = if let Some(rest) = text.strip_prefix('-') {
-        (true, rest)
-    } else {
-        (false, text.strip_prefix('+').unwrap_or(text))
-    };
-    let digits = rest
-        .strip_prefix("0x")
-        .or_else(|| rest.strip_prefix("0X"))
+    let strict_radix = text
+        .strip_prefix("0X")
         .map(|digits| (digits, 16))
         .or_else(|| {
-            rest.strip_prefix("0o")
-                .or_else(|| rest.strip_prefix("0O"))
+            text.strip_prefix("0o")
+                .or_else(|| text.strip_prefix("0O"))
                 .map(|digits| (digits, 8))
         })
         .or_else(|| {
-            rest.strip_prefix("0b")
-                .or_else(|| rest.strip_prefix("0B"))
+            text.strip_prefix("0b")
+                .or_else(|| text.strip_prefix("0B"))
                 .map(|digits| (digits, 2))
         });
-    let (digits, radix) = digits?;
-    if digits.is_empty() {
-        return None;
+    if let Some((digits, radix)) = strict_radix {
+        return Some(
+            (!digits.is_empty())
+                .then(|| {
+                    digits.chars().try_fold(0f64, |value, c| {
+                        c.to_digit(radix)
+                            .map(|digit| value * radix as f64 + digit as f64)
+                    })
+                })
+                .flatten()
+                .unwrap_or(f64::NAN),
+        );
     }
-    let value = digits.chars().try_fold(0f64, |value, c| {
-        c.to_digit(radix)
-            .map(|digit| value * radix as f64 + digit as f64)
-    })?;
-    Some(if negative { -value } else { value })
+    // Whole-token `Number(text)`: unparseable tails yield `NaN`.
+    Some(text.parse::<f64>().unwrap_or(f64::NAN))
 }
+
 struct Cursor<'a> {
     text: &'a str,
     pos: usize,
@@ -817,7 +895,11 @@ impl Cursor<'_> {
     }
 
     /// Parse one value; returns the built node (name placeholder) and the
-    /// position after it.
+    /// position after it. A scalar literal, list, or group that is followed
+    /// by anything but a member terminator is re-read as one expression —
+    /// the pinned evaluator compiles each value as a single expression, so
+    /// `"a".charAt(0)`, `[1,2].last()`, `1 in [3]`, and word tails like
+    /// `1_000` all evaluate there rather than splitting (#512).
     fn parse_value(&mut self) -> OpyResult<(cst::SettingsNode, Position)> {
         let start = self.here();
         let ch = self.peek();
@@ -840,24 +922,16 @@ impl Cursor<'_> {
                 self.expect_word("false")?;
                 Some(ScalarValue::Bool(false))
             }
-            Some(c) if c.is_ascii_digit() || c == '-' => {
+            Some(c) if c.is_ascii_digit() => Some(ScalarValue::Number(self.parse_number()?)),
+            // `-` starts a number only before a digit; `-(1+2)` and
+            // `-Infinity` are expressions upstream.
+            Some('-') if self.peek_at(1).is_some_and(|c| c.is_ascii_digit()) => {
                 Some(ScalarValue::Number(self.parse_number()?))
             }
             _ => None,
         };
         let node = if let Some(scalar) = scalar {
-            self.skip_inline_whitespace();
-            if self.is_expression_continuation() {
-                self.pos = saved.0;
-                self.char_pos = saved.1;
-                self.line = saved.2;
-                self.col = saved.3;
-                cst::SettingsNode::Raw {
-                    name: String::new(),
-                    value: self.parse_expression_value(),
-                    span: Span::new(self.file, start, self.here()),
-                }
-            } else {
+            if !self.is_expression_continuation() {
                 let span = Span::new(self.file, start, self.here());
                 match scalar {
                     ScalarValue::String(value) => cst::SettingsNode::String {
@@ -876,23 +950,57 @@ impl Cursor<'_> {
                         span,
                     },
                 }
+            } else {
+                self.pos = saved.0;
+                self.char_pos = saved.1;
+                self.line = saved.2;
+                self.col = saved.3;
+                cst::SettingsNode::Raw {
+                    name: String::new(),
+                    value: self.parse_expression_value(),
+                    span: Span::new(self.file, start, self.here()),
+                }
             }
         } else {
             match ch {
                 Some('[') => {
                     let elements = self.parse_list()?;
-                    cst::SettingsNode::List {
-                        name: String::new(),
-                        elements,
-                        span: Span::new(self.file, start, self.here()),
+                    if self.is_expression_continuation() {
+                        self.pos = saved.0;
+                        self.char_pos = saved.1;
+                        self.line = saved.2;
+                        self.col = saved.3;
+                        cst::SettingsNode::Raw {
+                            name: String::new(),
+                            value: self.parse_expression_value(),
+                            span: Span::new(self.file, start, self.here()),
+                        }
+                    } else {
+                        cst::SettingsNode::List {
+                            name: String::new(),
+                            elements,
+                            span: Span::new(self.file, start, self.here()),
+                        }
                     }
                 }
                 Some('{') => {
                     let (children, _) = self.parse_object()?;
-                    cst::SettingsNode::Group {
-                        name: String::new(),
-                        children,
-                        span: Span::new(self.file, start, self.here()),
+                    if self.is_expression_continuation() {
+                        self.pos = saved.0;
+                        self.char_pos = saved.1;
+                        self.line = saved.2;
+                        self.col = saved.3;
+                        cst::SettingsNode::Raw {
+                            name: String::new(),
+                            value: self.parse_expression_value(),
+                            span: Span::new(self.file, start, self.here()),
+                        }
+                    } else {
+                        cst::SettingsNode::Group {
+                            name: String::new(),
+                            children,
+                            span: Span::new(self.file, start, self.here()),
+                        }
                     }
                 }
                 _ => {
@@ -940,7 +1048,7 @@ impl Cursor<'_> {
                     value.push(self.advance().expect("peeked character exists"));
                 }
                 ']' | ',' | '}' if depth == 0 => break,
-                ')' | ']' => {
+                ')' | ']' | '}' => {
                     depth = depth.saturating_sub(1);
                     value.push(self.advance().expect("peeked character exists"));
                 }
@@ -967,11 +1075,14 @@ impl Cursor<'_> {
     /// Read one settings number literal the way the pinned OverPy tokenizer
     /// admits it: decimal with an optional unsigned exponent (`1e21`,
     /// `0.5e3`), and `0x`/`0o`/`0b` integer radixes (`0x1F` is 31; #496).
-    /// An exponent marker needs a fraction digit before it (`1.e5` is the
-    /// reference's "Expected a number after '.'" error).
-    /// A signed exponent (`1e-7`, `1e+21`) is not read — the reference
-    /// tokenizer splits the sign out as an operator and errors, so leaving
-    /// the `e` behind reproduces its rejection through the object parser.
+    /// The read stops where the reference's word token would split off an
+    /// operator: a `.` needs digits on both sides (`1.5` joins, `2.`/`1.e5`
+    /// split at the dot), and an exponent marker needs a fraction digit
+    /// before it plus an unsigned digit run after it (`1e-7` keeps its `e`
+    /// for the expression path). A radix prefix without digits reads as
+    /// `NaN` (`0x`, like `parseInt("0x", 16)`), and any leftover word tail
+    /// (`0x1FZ`, `1_000`) makes the whole value an expression through the
+    /// continuation check in `parse_value` (#512).
     fn parse_number(&mut self) -> OpyResult<f64> {
         let start = self.here();
         let mut text = String::new();
@@ -999,13 +1110,10 @@ impl Cursor<'_> {
                 digits += 1;
                 text.push(self.advance().unwrap());
             }
-            if digits == 0 || self.peek().is_some_and(|c| c.is_ascii_alphanumeric()) {
-                return Err(self.error_at(
-                    "settings-invalid",
-                    format!("invalid number '{text}' in settings block"),
-                    Span::new(self.file, start, self.here()),
-                ));
-            }
+            // `Number("0x")`/`parseInt("0x", 16)` is `NaN`; a word tail is
+            // left for `is_expression_continuation` to send to the
+            // expression path (`0x1FZ` is 31 there, `0xZZ` is `NaN`; #512).
+            let value = if digits == 0 { f64::NAN } else { value };
             return Ok(if text.starts_with('-') { -value } else { value });
         }
         while let Some(c) = self.peek() {
@@ -1015,25 +1123,19 @@ impl Cursor<'_> {
                 break;
             }
         }
-        if self.peek() == Some('.') {
+        // `.` joins the literal only between digits — `1.5` is one number
+        // upstream while `2.` and `-.5` split the dot into member access.
+        if self.peek() == Some('.')
+            && text.chars().any(|c| c.is_ascii_digit())
+            && self.peek_at(1).is_some_and(|c| c.is_ascii_digit())
+        {
             text.push(self.advance().unwrap());
-            let mut fraction = 0usize;
             while let Some(c) = self.peek() {
                 if c.is_ascii_digit() {
                     text.push(self.advance().unwrap());
-                    fraction += 1;
                 } else {
                     break;
                 }
-            }
-            // The reference requires a fraction digit before an exponent
-            // marker: `1.e5` is its "Expected a number after '.'" error.
-            if fraction == 0 && matches!(self.peek(), Some('e' | 'E')) {
-                return Err(self.error_at(
-                    "settings-invalid",
-                    format!("invalid number '{text}' in settings block"),
-                    Span::new(self.file, start, self.here()),
-                ));
             }
         }
         if matches!(self.peek(), Some('e' | 'E'))
@@ -1068,13 +1170,7 @@ impl Cursor<'_> {
         loop {
             self.skip_whitespace();
             let start = self.here();
-            let value = match self.peek() {
-                Some('"') | Some('\'') => self.parse_string_expression().ok_or_else(|| {
-                    self.error(
-                        "settings-invalid",
-                        "unterminated string in settings list".to_string(),
-                    )
-                })?,
+            let (value, expr) = match self.peek() {
                 Some(']') | Some(',') | None => {
                     return Err(self.error(
                         "settings-invalid",
@@ -1082,16 +1178,25 @@ impl Cursor<'_> {
                     ));
                 }
                 _ => {
-                    let value = self.parse_expression_value();
-                    // A bare list element that is a number literal writes its
-                    // `String(value)` form (`[1e21]` emits `1e+21`; #496).
-                    js_number_literal(&value)
-                        .map(crate::compiler::number_format::javascript_text)
-                        .unwrap_or(value)
+                    let text = self.parse_expression_value();
+                    match js_number_value(&text) {
+                        // A bare list element that is a number token writes
+                        // its `String(value)` form (`[1e21]` emits `1e+21`,
+                        // `[1_000]` emits `NaN`; #496, #512).
+                        Some(number) => (
+                            crate::compiler::number_format::javascript_text(number),
+                            false,
+                        ),
+                        // Every other element — quoted strings included —
+                        // is an expression the pinned settings evaluator
+                        // resolves or rejects (`"a"=="a"` emits `true`;
+                        // #512).
+                        None => (text, true),
+                    }
                 }
             };
             let span = Span::new(self.file, start, self.here());
-            elements.push(cst::SettingsListElement { value, span });
+            elements.push(cst::SettingsListElement { value, expr, span });
             self.skip_whitespace();
             match self.peek() {
                 Some(',') => {
@@ -1163,28 +1268,18 @@ impl Cursor<'_> {
         Some(value)
     }
 
-    fn skip_inline_whitespace(&mut self) {
-        while matches!(self.peek(), Some(' ' | '\t' | '\r')) {
-            self.advance();
-        }
-    }
-
+    /// Whether anything but a member terminator (`,`, `}`, or the end of
+    /// the block) follows the value just parsed. The pinned evaluator
+    /// compiles each settings value as one expression, so a suffix like
+    /// `.charAt(0)`, `[0]`, `in [3]`, `and 2`, or a word tail (`1_000`,
+    /// `0x1FZ`) means the value is an expression, not the parsed literal
+    /// (#512). Lookahead only; does not move the cursor.
     fn is_expression_continuation(&self) -> bool {
-        if matches!(
-            self.peek(),
-            Some('+' | '-' | '*' | '/' | '%' | '<' | '>' | '=')
-        ) {
-            return true;
-        }
-        ["and", "or", "if"].iter().any(|word| {
-            self.text[self.pos..]
-                .strip_prefix(word)
-                .is_some_and(|rest| {
-                    rest.chars().next().is_none_or(|character| {
-                        !character.is_ascii_alphanumeric() && character != '_'
-                    })
-                })
-        })
+        self.text[self.pos..]
+            .trim_start()
+            .chars()
+            .next()
+            .is_some_and(|c| c != ',' && c != '}')
     }
 }
 
@@ -1459,16 +1554,23 @@ mod tests {
     }
 
     #[test]
-    fn parse_block_rejects_signed_exponents_like_the_pinned_reference() {
-        // The pinned settings tokenizer splits an exponent sign out as an
-        // operator and errors (`1e-7`, `1e+21`, `-2.5e-3`; #496), and it
-        // requires a fraction digit before an exponent marker (`1.e5`).
+    fn parse_block_routes_signed_exponents_to_the_expression_path() {
+        // The pinned settings tokenizer splits an exponent sign or a
+        // fraction-less dot out as an operator, so `1e-7`, `1e+21`,
+        // `-2.5e-3`, and `1.e5` are expressions — the parser keeps them
+        // raw and the settings evaluator rejects them downstream (#512).
         for value in ["1e-7", "1e+21", "-2.5e-3", "0.5e+3", "1.e5", "0.e5"] {
             let found = block(&format!(
                 "settings {{\n    \"lobby\": {{ \"k\": {value} }},\n    \"gamemodes\": {{}}\n}}\n"
             ));
-            let error = parse_block(&found).unwrap_err();
-            assert_eq!(error.code, "settings-invalid", "{value}");
+            let parsed = parse_block(&found).unwrap();
+            let cst::SettingsNode::Group { children, .. } = &parsed.children[0] else {
+                panic!("lobby group");
+            };
+            let cst::SettingsNode::Raw { value: raw, .. } = &children[0] else {
+                panic!("{value} must parse as a raw expression: {children:?}");
+            };
+            assert_eq!(raw, value);
         }
     }
 

@@ -455,6 +455,12 @@ impl SettingsLowerer {
         let mut lowerer = Lowerer::new(manifest, catalog);
         lowerer.current_order = program.top_level.len();
         lowerer.allow_dict_literal = true;
+        // Bare `Infinity` resolves as a constant so settings evaluation can
+        // fold it like the pinned JavaScript global (#512); `NaN`, `null`,
+        // and `undefined` stay unresolved as they are upstream.
+        lowerer
+            .constant_declarations
+            .insert("Infinity".to_string(), 0);
         lowerer.collect_symbols(program);
         Ok(Self { lowerer })
     }
@@ -473,6 +479,14 @@ impl SettingsLowerer {
         let lowered = self
             .lowerer
             .lower_expr(&expression, &[], CallPosition::Value);
+        // The pinned settings evaluator folds `min(1, 2, 3)` to `1` through
+        // variadic JavaScript builtins; its object walk performs no arity
+        // validation, so the diagnostic must not reject the call here
+        // (#512). Other errors — unknown identifiers, member misses — still
+        // surface.
+        self.lowerer
+            .errors
+            .retain(|error| error.code != "invalid-arity");
         self.lowerer
             .errors
             .first()
@@ -846,6 +860,7 @@ fn lower_settings_node(node: &cst::SettingsNode) -> HirSettingsNode {
                 .iter()
                 .map(|element| crate::hir::types::SettingsListElement {
                     value: element.value.clone(),
+                    evaluated: (!element.expr).then(|| element.value.clone()),
                     span: Some(element.span.into()),
                 })
                 .collect(),
