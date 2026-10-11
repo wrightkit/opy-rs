@@ -543,6 +543,37 @@ fn settings_list_elements_evaluate_like_the_pinned_reference() {
         ("not [1]", "false"),
         ("1 == \"1\"", "false"),
         ("[1]==[1]", "true"),
+        // Foldable builtins reproduce the reference's fdlibm results and
+        // variadic `min`/`max` (#512).
+        ("tan(1)", "1.5574077246549023"),
+        ("acosDeg(0.5)", "0.018277045187202516"),
+        ("min(1, 2, 3)", "1"),
+        ("sqrt(-1)", "0"),
+        // Foldable member calls take the receiver as their first
+        // argument upstream (#512).
+        ("\"abc\".charAt(1)", "b"),
+        ("\"abc\".charAt(1.9)", "b"),
+        ("\"abcdef\".substring(1, 2)", "bc"),
+        ("\"a-b-c\".replace(\"-\", \"+\")", "a+b+c"),
+        ("[1,2,3].slice(0, 2)", "1,2"),
+        ("[1,2,3].slice(-1, 2)", "1"),
+        ("[1,2,3].index(2)", "1"),
+        ("[1,2,3].index(9)", "-1"),
+        ("[1,2,3].last()", "3"),
+        ("[1,2].concat(3)", "1,2,3"),
+        ("[1,2].concat([3,4])", "1,2,3,4"),
+        ("[1,2,3].exclude(1)", "2,3"),
+        ("[1,2,3].exclude([1,2])", "3"),
+        // `vect`-family folds: components, products, magnitudes (#512).
+        ("vect(1,2,3).x", "1"),
+        ("vect(1,2,3).z", "3"),
+        ("distance(vect(0,0,0), vect(3,4,0))", "5"),
+        ("magnitude(vect(3,4,0))", "5"),
+        ("dotProduct(vect(1,2,3), vect(4,5,6))", "32"),
+        // Format braces are literal text upstream — `{{`/`}}` are not
+        // unescaped (#512).
+        ("\"{{0}}\".format(5)", "{{0}}"),
+        ("\"{{}}\".format(5)", "{{}}"),
     ] {
         let source = format!(
             "settings {{\n    \"gamemodes\": {{\"ffa\": {{\"enabled\": true, \"general\": {{\"unk\": [{element}]}}}}}}\n}}\nrule \"a\":\n    @Event global\n    wait(1)\n"
@@ -576,12 +607,21 @@ fn settings_list_elements_evaluate_like_the_pinned_reference() {
 #[test]
 fn settings_list_elements_the_reference_rejects_are_errors() {
     // opy-rs#512: the pinned compiler rejects elements its settings
-    // evaluator cannot resolve — bare names, calls, string `+` — and its
-    // tokenizer rejects signed exponents and leading/trailing dots.
+    // evaluator cannot resolve — bare names, calls, string `+` — and
+    // elements its tokenizer splits or rejects, like signed exponents and
+    // leading/trailing dots, fail evaluation the same way.
     for (element, code) in [
         ("abc", "settings-expression"),
         ("e5", "settings-expression"),
         ("vect(1, 2, 3)", "settings-expression"),
+        (
+            "crossProduct(vect(1,0,0), vect(0,1,0))",
+            "settings-expression",
+        ),
+        (
+            "vectorTowards(vect(1,2,3), vect(4,6,3))",
+            "settings-expression",
+        ),
         ("\"a\"+\"b\"", "settings-expression"),
         ("genji", "settings-expression"),
         ("1.e5", "settings-expression"),
@@ -590,10 +630,10 @@ fn settings_list_elements_the_reference_rejects_are_errors() {
         ("not {}", "settings-expression"),
         ("\"a\" in {\"a\":1}", "settings-expression"),
         ("[1,2][9]", "settings-expression"),
-        ("1e-7", "settings-invalid"),
-        ("2e+3", "settings-invalid"),
-        (".5", "settings-invalid"),
-        ("2.", "settings-invalid"),
+        ("1e-7", "settings-expression"),
+        ("2e+3", "settings-expression"),
+        (".5", "settings-expression"),
+        ("2.", "settings-expression"),
     ] {
         let source = format!(
             "settings {{\n    \"gamemodes\": {{\"ffa\": {{\"enabled\": true, \"general\": {{\"unk\": [{element}]}}}}}}\n}}\nrule \"a\":\n    @Event global\n    wait(1)\n"
@@ -627,6 +667,85 @@ fn settings_list_elements_the_reference_rejects_are_errors() {
         "a bare member name under an enum key is an expression: {:?}",
         outcome.diagnostics
     );
+}
+
+#[test]
+fn settings_scalar_values_evaluate_like_the_pinned_reference() {
+    // opy-rs#512: scalar settings values go through the same pinned
+    // evaluator as list elements — `String(value)` emission, including
+    // `NaN`/`Infinity` for non-finite results.
+    for (value, emitted) in [
+        ("1+2", "unk: 3"),
+        ("5%0", "unk: NaN"),
+        ("5/0", "unk: 0"),
+        ("Infinity", "unk: Infinity"),
+        ("-Infinity", "unk: -Infinity"),
+        ("1_000", "unk: NaN"),
+        ("0x", "unk: NaN"),
+        ("0xZZ", "unk: NaN"),
+        ("12abc", "unk: NaN"),
+        ("0o18", "unk: NaN"),
+        ("0o17", "unk: 15"),
+        ("0b11", "unk: 3"),
+        // `0x` is the one lenient prefix upstream: `parseInt(name, 16)`
+        // reads a hex prefix, so `0x1FZ` is 31 while `0X1FZ` — converted
+        // by `Number` — is `NaN` (#512).
+        ("0x1FZ", "unk: 31"),
+        ("0X1FZ", "unk: NaN"),
+        ("1e", "unk: NaN"),
+        ("1e5", "unk: 100000"),
+        ("1 . 5", "unk: 1.5"),
+        ("1_000.5", "unk: NaN"),
+        ("12@x", "unk: NaN"),
+        ("-(1+2)", "unk: -3"),
+        ("\"a\".charAt(0)", "unk: a"),
+        ("[1,2].last()", "unk: 2"),
+        ("[1,2][0]", "unk: 1"),
+        ("{\"a\":1}[\"a\"]", "unk: 1"),
+        ("1 in [3]", "unk: false"),
+        ("1 not in [1]", "unk: false"),
+        ("true and 2", "unk: 2"),
+        ("\"a\" \"b\"", "unk: ab"),
+        ("2**10", "unk: 1024"),
+        ("min(1,2,3)", "unk: 1"),
+        ("vect(1,2,3).x", "unk: 1"),
+    ] {
+        let source = format!(
+            "settings {{\n    \"gamemodes\": {{\"ffa\": {{\"enabled\": true, \"general\": {{\"unk\": {value}}}}}}}\n}}\nrule \"a\":\n    @Event global\n    wait(1)\n"
+        );
+        let lines = compiled_lines(&source);
+        assert!(
+            lines.iter().any(|line| line == emitted),
+            "value {value:?} must emit {emitted:?}: {lines:?}"
+        );
+    }
+    for (value, code) in [
+        ("abc", "settings-expression"),
+        ("\"a\"+\"b\"", "settings-expression"),
+        ("2.", "settings-expression"),
+        (".5", "settings-expression"),
+        ("1e-7", "settings-expression"),
+        ("2e+3", "settings-expression"),
+        ("1.e5", "settings-expression"),
+        ("5.5.5", "settings-expression"),
+        ("{\"a\":1}.a", "settings-expression"),
+        ("enabled", "settings-expression"),
+        ("truex", "settings-expression"),
+        ("NaN", "settings-expression"),
+        ("null", "settings-expression"),
+        ("undefined", "settings-expression"),
+        ("vect(1,2,3)", "settings-expression"),
+    ] {
+        let source = format!(
+            "settings {{\n    \"gamemodes\": {{\"ffa\": {{\"enabled\": true, \"general\": {{\"unk\": {value}}}}}}}\n}}\nrule \"a\":\n    @Event global\n    wait(1)\n"
+        );
+        let outcome = check(&source, "main.opy", Path::new(""));
+        assert!(
+            outcome.diagnostics.iter().any(|d| d.code == code),
+            "value {value:?} must fail with {code}: {:?}",
+            outcome.diagnostics
+        );
+    }
 }
 
 #[test]

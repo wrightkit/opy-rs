@@ -99,16 +99,19 @@ fn multiline_define_string_composition_resolves_in_settings() {
 }
 
 #[test]
-fn object_defines_chain_and_string_composition_resolve_before_emission() {
+fn object_defines_chain_resolves_and_string_composition_fails_like_the_reference() {
+    // A `#!define` chain expands into the settings expression the pinned
+    // evaluator sees: a bare string or `number*number` resolves, while an
+    // expanded `string + string` composition fails the reference's
+    // `String(value)` conversion the same as a literal `"a"+"b"` (#512).
     let source = source_with_settings(
         r##"#!define BASE 3
 #!define SCALE(value) value*2
 #!define DOUBLE SCALE(BASE)
 #!define TITLE "hello"
-#!define FULL_TITLE TITLE + " world"
 settings {
     "main": {
-        "description": FULL_TITLE
+        "description": TITLE
     },
     "gamemodes": {},
     "heroes": {
@@ -128,7 +131,7 @@ settings {
     };
     assert!(matches!(
         &main[0],
-        SettingsNode::String { value, .. } if value == "hello world"
+        SettingsNode::String { value, .. } if value == "hello"
     ));
     let heroes = match &settings.children[2] {
         SettingsNode::Group { children, .. } => children,
@@ -148,7 +151,7 @@ settings {
     ));
 
     let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
-    assert!(artifact.emitted.contains("Description: \"hello world\""));
+    assert!(artifact.emitted.contains("Description: \"hello\""));
     assert!(artifact.emitted.contains("Health: 6%"));
     let parsed = workshop_rs::parser::parse(
         &artifact.emitted,
@@ -157,6 +160,19 @@ settings {
     )
     .unwrap();
     assert!(equivalent(&super::canonical_program(&artifact), &parsed));
+
+    let source = source_with_settings(
+        r##"#!define TITLE "hello"
+#!define FULL_TITLE TITLE + " world"
+settings {
+    "main": {
+        "description": FULL_TITLE
+    },
+    "gamemodes": {}
+}"##,
+    );
+    let error = crate::compile(&source, "source.opy", Path::new(".")).unwrap_err();
+    assert_eq!(error.code, "settings-expression");
 }
 
 #[test]

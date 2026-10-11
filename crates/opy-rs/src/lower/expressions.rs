@@ -583,6 +583,25 @@ impl Lowerer {
                 };
             }
         }
+        // `number . number` merges into one literal upstream — the
+        // reference builds `Number("a.b")` when both sides of `.` read as
+        // numbers (`1 . 5` is `1.5`, `1.5abc` is `NaN`). The receiver must
+        // be a bare number word token: `5.5 . 5` errors upstream because
+        // `5.5` is already an AST there, so a dotted or signed text stays
+        // a member access here (#512).
+        if let Expr::Number { text, .. } = receiver
+            && text.starts_with(|c: char| c.is_ascii_digit())
+            && text
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '@' | '$'))
+            && member.starts_with(|c: char| c.is_ascii_digit())
+        {
+            return HirExpr::Number {
+                value: format!("{text}.{member}").parse().unwrap_or(f64::NAN),
+                text: format!("{text}.{member}"),
+                span: Some(span.into()),
+            };
+        }
         if self.player_visible(member) {
             return HirExpr::PlayerVar {
                 player: Box::new(self.lower_expr(receiver, macro_params, CallPosition::Value)),

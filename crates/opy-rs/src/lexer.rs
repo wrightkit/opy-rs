@@ -198,8 +198,10 @@ impl Lexer {
                             self.advance();
                             self.push_token(TokenKind::DoubleStarAssign, "**=", start);
                         } else {
+                            let start = self.here(2);
                             self.advance();
-                            self.single(TokenKind::DoubleStar)
+                            self.advance();
+                            self.push_token(TokenKind::DoubleStar, "**", start);
                         }
                     } else {
                         self.lex_two(TokenKind::Star, TokenKind::StarAssign, '=')
@@ -408,6 +410,7 @@ impl Lexer {
     fn lex_number(&mut self) -> OpyResult<()> {
         let start = self.here(1);
         let mut text = String::new();
+        let mut signed_exponent = false;
         if self.chars[self.pos] == '0'
             && matches!(self.peek(1), Some('x' | 'X' | 'b' | 'B' | 'o' | 'O'))
         {
@@ -421,60 +424,66 @@ impl Lexer {
                 'o' | 'O' => 8,
                 _ => 2,
             };
-            let digits_start = self.pos;
             while self.pos < self.chars.len() && self.chars[self.pos].is_digit(radix) {
                 text.push(self.chars[self.pos]);
                 self.advance();
             }
-            if self.pos == digits_start {
-                return Err(OpyError::at(
-                    "lex-error",
-                    "integer radix literal requires at least one digit",
-                    Span::new(self.file_id, start.start, self.here(0).start),
-                ));
-            }
-            self.push_token(TokenKind::Number, text, start);
-            return Ok(());
-        }
-        while self.pos < self.chars.len() && self.chars[self.pos].is_ascii_digit() {
-            text.push(self.chars[self.pos]);
-            self.advance();
-        }
-        if self.pos < self.chars.len()
-            && self.chars[self.pos] == '.'
-            && self.peek(1).is_some_and(|c| c.is_ascii_digit())
-        {
-            text.push('.');
-            self.advance();
+        } else {
             while self.pos < self.chars.len() && self.chars[self.pos].is_ascii_digit() {
                 text.push(self.chars[self.pos]);
                 self.advance();
             }
-        }
-        // Optional exponent (not exercised by the corpus, supported for
-        // completeness of the number surface).
-        if self.pos < self.chars.len()
-            && (self.chars[self.pos] == 'e' || self.chars[self.pos] == 'E')
-        {
-            let mut lookahead = self.pos + 1;
-            if lookahead < self.chars.len()
-                && (self.chars[lookahead] == '+' || self.chars[lookahead] == '-')
+            if self.pos < self.chars.len()
+                && self.chars[self.pos] == '.'
+                && self.peek(1).is_some_and(|c| c.is_ascii_digit())
             {
-                lookahead += 1;
-            }
-            if lookahead < self.chars.len() && self.chars[lookahead].is_ascii_digit() {
-                text.push('e');
+                text.push('.');
                 self.advance();
-                if self.pos < self.chars.len()
-                    && (self.chars[self.pos] == '+' || self.chars[self.pos] == '-')
-                {
-                    text.push(self.chars[self.pos]);
-                    self.advance();
-                }
                 while self.pos < self.chars.len() && self.chars[self.pos].is_ascii_digit() {
                     text.push(self.chars[self.pos]);
                     self.advance();
                 }
+            }
+            // Optional exponent (not exercised by the corpus, supported for
+            // completeness of the number surface).
+            if self.pos < self.chars.len()
+                && (self.chars[self.pos] == 'e' || self.chars[self.pos] == 'E')
+            {
+                let mut lookahead = self.pos + 1;
+                if lookahead < self.chars.len()
+                    && (self.chars[lookahead] == '+' || self.chars[lookahead] == '-')
+                {
+                    lookahead += 1;
+                }
+                if lookahead < self.chars.len() && self.chars[lookahead].is_ascii_digit() {
+                    text.push('e');
+                    self.advance();
+                    if self.pos < self.chars.len()
+                        && (self.chars[self.pos] == '+' || self.chars[self.pos] == '-')
+                    {
+                        text.push(self.chars[self.pos]);
+                        self.advance();
+                        signed_exponent = true;
+                    }
+                    while self.pos < self.chars.len() && self.chars[self.pos].is_ascii_digit() {
+                        text.push(self.chars[self.pos]);
+                        self.advance();
+                    }
+                }
+            }
+        }
+        // The pinned tokenizer reads a digit-led run of word characters as
+        // one token — `1_000`, `12abc`, `5e`, `0xZZ`, `0o18`, `12@x` — and
+        // `Number` converts the whole text later, so those spell `NaN`
+        // there (`isVarChar` admits `@`/`$` too; #512). A sign ends the
+        // word upstream, so `1e-7` stays split.
+        if !signed_exponent {
+            while self.pos < self.chars.len()
+                && (self.chars[self.pos].is_ascii_alphanumeric()
+                    || matches!(self.chars[self.pos], '_' | '@' | '$'))
+            {
+                text.push(self.chars[self.pos]);
+                self.advance();
             }
         }
         self.push_token(TokenKind::Number, text, start);
@@ -630,10 +639,13 @@ mod tests {
     }
 
     #[test]
-    fn radix_literal_without_digits_is_an_error() {
+    fn radix_literal_without_digits_is_a_word_token() {
+        // The pinned tokenizer reads `0x`/`0b`/`0o` as single word tokens
+        // that `Number` converts to `NaN`; they are not lexer errors.
         for text in ["0x", "0b", "0o"] {
-            let error = lex(LexInput { file_id: 0, text }).unwrap_err();
-            assert_eq!(error.code, "lex-error");
+            let tokens = lex_ok(text);
+            assert_eq!(tokens[0].kind, TokenKind::Number);
+            assert_eq!(tokens[0].text, text);
         }
     }
 
