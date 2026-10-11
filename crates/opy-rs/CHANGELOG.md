@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.9](https://github.com/wrightkit/opy-rs/compare/v0.3.8...v0.3.9) - 2026-10-11
+
+### Fixed
+
+- *(parser)* accept empty block bodies like the pinned oracle ([#521](https://github.com/wrightkit/opy-rs/pull/521))
+- *(settings)* carry a list under a catalogued enum key as the reference block ([#520](https://github.com/wrightkit/opy-rs/pull/520))
+
 ## [0.3.8](https://github.com/wrightkit/opy-rs/compare/v0.3.7...v0.3.8) - 2026-10-10
 
 ### Fixed
