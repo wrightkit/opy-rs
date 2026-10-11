@@ -67,6 +67,9 @@ impl Parser<'_> {
         let body_indent = line_indent + 1;
         let mut directives = DirectiveState::default();
         let mut actions = Vec::new();
+        // The rule header is the enclosing floor for its action statements:
+        // `elif`/`else`/`while` tails attach only while deeper than it (#516).
+        self.block_floors.push(line_indent);
         loop {
             self.skip_newlines();
             if self.peek_kind() == TokenKind::Eof || self.peek().layout.start.col < body_indent {
@@ -83,6 +86,7 @@ impl Parser<'_> {
                 Err(()) => self.recover_line(),
             }
         }
+        self.block_floors.pop();
         rules.push(RuleEntry::Rule(Rule {
             name,
             span: Span::new(start.span.file, start.span.start, name_token_span.end),
@@ -349,20 +353,23 @@ impl Parser<'_> {
             );
             return false;
         }
-        let Ok(body_indent) =
-            self.expect_block_indent(start.layout.start.col, "':' after the subroutine signature")
-        else {
-            return false;
+        let body_indent = match self
+            .expect_block_indent(start.layout.start.col, "':' after the subroutine signature")
+        {
+            Ok(body_indent) => body_indent,
+            Err(()) => return false,
         };
         let mut directives = DirectiveState::default();
-        loop {
-            self.skip_newlines();
-            if self.peek_kind() != TokenKind::At {
-                break;
-            }
-            if !self.parse_directive(&mut directives, true) {
-                self.recover_line();
-                return false;
+        if body_indent.is_some() {
+            loop {
+                self.skip_newlines();
+                if self.peek_kind() != TokenKind::At {
+                    break;
+                }
+                if !self.parse_directive(&mut directives, true) {
+                    self.recover_line();
+                    return false;
+                }
             }
         }
         if directives.event.is_some() || !directives.conditions.is_empty() {
@@ -375,7 +382,9 @@ impl Parser<'_> {
             .find(|annotation| annotation.name == "Name")
             .and_then(|annotation| annotation.args.first())
             .map(|arg| unquote_annotation_arg(&arg.text));
-        let body = self.parse_block(body_indent);
+        let body = body_indent
+            .map(|indent| self.parse_child_block(start.layout.start.col, indent))
+            .unwrap_or_default();
         let span = Span::new(start.span.file, start.span.start, name_span.end);
         rules.push(RuleEntry::SubroutineDef {
             name,

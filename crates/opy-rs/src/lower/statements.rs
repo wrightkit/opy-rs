@@ -142,33 +142,47 @@ impl Lowerer {
                 r#else,
                 else_span,
                 end_span,
+                orphan,
                 span,
-            } => HirStmt::If {
-                branches: branches
-                    .iter()
-                    .map(|branch| IfBranch {
-                        marker: Some(branch.marker.into()),
-                        condition: Box::new(self.lower_expr(
-                            &branch.condition,
-                            macro_params,
-                            CallPosition::Value,
-                        )),
-                        body: self.lower_block(
-                            &branch.body,
-                            macro_params,
-                            breakable,
-                            false,
-                            loopable,
-                        ),
-                    })
-                    .collect(),
-                r#else: r#else
-                    .as_ref()
-                    .map(|body| self.lower_block(body, macro_params, breakable, false, loopable)),
-                else_span: else_span.map(Into::into),
-                end_span: Some(end_span.into()),
-                span: Some(span.into()),
-            },
+            } => {
+                // Orphan `elif`/`else` markers emit `Else If`/`Else` without a
+                // preceding `If` in the reference; canonical Workshop actions
+                // cannot carry unbalanced markers yet, so this stays a
+                // diagnosed rejection rather than a silent mis-emit (#516).
+                if *orphan {
+                    self.error_at(
+                        "unsupported-construct",
+                        "elif/else without a preceding 'if' cannot emit the reference's orphan marker".to_string(),
+                        *span,
+                    );
+                }
+                HirStmt::If {
+                    branches: branches
+                        .iter()
+                        .map(|branch| IfBranch {
+                            marker: Some(branch.marker.into()),
+                            condition: Box::new(self.lower_expr(
+                                &branch.condition,
+                                macro_params,
+                                CallPosition::Value,
+                            )),
+                            body: self.lower_block(
+                                &branch.body,
+                                macro_params,
+                                breakable,
+                                false,
+                                loopable,
+                            ),
+                        })
+                        .collect(),
+                    r#else: r#else.as_ref().map(|body| {
+                        self.lower_block(body, macro_params, breakable, false, loopable)
+                    }),
+                    else_span: else_span.map(Into::into),
+                    end_span: Some(end_span.into()),
+                    span: Some(span.into()),
+                }
+            }
             Stmt::For {
                 variable,
                 iterable,

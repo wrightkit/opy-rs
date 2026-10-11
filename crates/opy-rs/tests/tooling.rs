@@ -940,3 +940,245 @@ fn compiled_lines(source: &str) -> Vec<String> {
         .map(|line| line.trim().to_string())
         .collect()
 }
+
+#[test]
+fn empty_block_bodies_parse_like_the_pinned_oracle() {
+    // opy-rs#516: the pinned OverPy accepts an empty `:`-headed body for
+    // every block construct but `macro`. A following line at the header's
+    // indent or shallower ends the empty body; it is a sibling statement,
+    // not an inline tail.
+    for (name, source) in [
+        ("def at eof", "def f():"),
+        (
+            "def before a decl",
+            "def f():\nrule \"r\":\n    @Event global\n    pass",
+        ),
+        ("rule at eof", "rule \"r\":"),
+        ("rule before a decl", "rule \"r\":\nglobalvar h"),
+        ("enum at eof", "enum e:"),
+        (
+            "enum before a decl",
+            "enum e:\nrule \"r\":\n    @Event global\n    pass",
+        ),
+        ("if at eof", "rule \"r\":\n    @Event global\n    if g:"),
+        (
+            "for at eof",
+            "rule \"r\":\n    @Event global\n    for g in range(2):",
+        ),
+        (
+            "while at eof",
+            "rule \"r\":\n    @Event global\n    while g:",
+        ),
+        (
+            "switch at eof",
+            "rule \"r\":\n    @Event global\n    switch g:",
+        ),
+        (
+            "case at eof",
+            "rule \"r\":\n    @Event global\n    switch g:\n        case 1:",
+        ),
+        (
+            "default at eof",
+            "rule \"r\":\n    @Event global\n    switch g:\n        default:",
+        ),
+        (
+            "elif at eof",
+            "rule \"r\":\n    @Event global\n    if g:\n        pass\n    elif g:",
+        ),
+        (
+            "else at eof",
+            "rule \"r\":\n    @Event global\n    if g:\n        pass\n    else:",
+        ),
+        (
+            "do before same-indent while",
+            "rule \"r\":\n    @Event global\n    do:\n    while g",
+        ),
+        (
+            "if dedents to a sibling",
+            "rule \"r\":\n    @Event global\n    if g:\n    g = 2",
+        ),
+        (
+            "settings-only if body",
+            "rule \"r\":\n    @Event global\n    if g:\n        settings {\n            \"gamemodes\": {\"ffa\": {\"enabled\": true}}\n        }",
+        ),
+    ] {
+        let source = format!("globalvar g\n{source}");
+        let outcome = check(&source, "main.opy", Path::new(""));
+        assert!(
+            outcome.is_clean(),
+            "{name} must check clean: {:?}",
+            outcome.diagnostics
+        );
+        opy_rs::compile(&source, "main.opy", Path::new(""))
+            .unwrap_or_else(|error| panic!("{name} must compile: {error:?}"));
+    }
+
+    // The dedent-out statement is a sibling, not a body member: `if g:` gets
+    // an empty body that emits nothing and `g = 2` stays unconditional; a
+    // lone `if` whose body lowers to no actions emits nothing at all.
+    let lines = compiled_lines(concat!(
+        "globalvar g\n",
+        "rule \"r\":\n    @Event global\n    if g:\n    g = 2\n"
+    ));
+    assert!(
+        lines.contains(&"Set Global Variable(g, 2);".to_string()),
+        "the dedented statement stays: {lines:?}"
+    );
+    assert!(
+        !lines.iter().any(|line| line.starts_with("If(")),
+        "an empty lone if emits nothing: {lines:?}"
+    );
+    let lines = compiled_lines("def f():");
+    assert!(
+        lines.contains(&"0: f".to_string()),
+        "an empty def still registers the subroutine: {lines:?}"
+    );
+
+    // `macro` keeps requiring a non-empty body, and `do` still requires its
+    // `while` at the `do` indentation.
+    for (name, source) in [
+        ("macro at eof", "macro m():"),
+        (
+            "macro empty before a decl",
+            "macro m():\nrule \"r\":\n    @Event global\n    pass",
+        ),
+        ("do at eof", "rule \"r\":\n    @Event global\n    do:"),
+        (
+            "do with an indented while",
+            "rule \"r\":\n    @Event global\n    do:\n        while g",
+        ),
+    ] {
+        let source = format!("globalvar g\n{source}");
+        let outcome = check(&source, "main.opy", Path::new(""));
+        assert!(
+            !outcome.is_clean(),
+            "{name} must reject: {:?}",
+            outcome.diagnostics
+        );
+    }
+}
+
+#[test]
+fn elif_else_and_do_while_tails_obey_the_enclosing_block_floor() {
+    // opy-rs#516 review: an `elif`/`else`/`while` tail attaches to an emptied
+    // `if`/`do` only while it stays inside the enclosing block — a column
+    // deeper than the enclosing header. A mid-dedent candidate still
+    // attaches; a candidate at or shallower than the header's column belongs
+    // outside and the chain ends there (pinned OverPy 9.7.10).
+    for (name, source) in [
+        (
+            "mid-dedent elif attaches",
+            "globalvar g\nrule \"r\":\n    @Event global\n    if g:\n        g = 2\n  elif g:\n        g = 1",
+        ),
+        (
+            "mid-dedent else attaches",
+            "globalvar g\nrule \"r\":\n    @Event global\n    if g:\n        g = 2\n  else:\n        g = 1",
+        ),
+        (
+            "mid-dedent do/while tail",
+            "globalvar g\nrule \"r\":\n    @Event global\n    do:\n  while g",
+        ),
+        (
+            "empty if, mid-dedent elif",
+            "globalvar g\nrule \"r\":\n    @Event global\n    if g:\n  elif g:\n        g = 1",
+        ),
+    ] {
+        let outcome = check(source, "main.opy", Path::new(""));
+        assert!(
+            outcome.is_clean(),
+            "{name} must check clean: {:?}",
+            outcome.diagnostics
+        );
+        opy_rs::compile(source, "main.opy", Path::new(""))
+            .unwrap_or_else(|error| panic!("{name} must compile: {error:?}"));
+    }
+
+    // `else:`/dedented tails at or shallower than the enclosing header's
+    // column end the construct: the reference rejects them at their real
+    // level (`__else__ outside a rule`, `no matching 'while'`).
+    for (name, source) in [
+        (
+            "else below the rule floor",
+            "globalvar g\nrule \"r\":\n    @Event global\n    if g:\nelse:\n    g = 1",
+        ),
+        (
+            "elif below the rule floor",
+            "globalvar g\nrule \"r\":\n    @Event global\n    if g:\nelif g:\n    g = 1",
+        ),
+        (
+            "do/while below the rule floor",
+            "globalvar g\nrule \"r\":\n    @Event global\n    do:\nwhile g",
+        ),
+        (
+            "else below a nested floor",
+            "globalvar g\nrule \"r\":\n    @Event global\n    for g in range(2):\n        if g:\n    else:\n        g = 1",
+        ),
+    ] {
+        let outcome = check(source, "main.opy", Path::new(""));
+        assert!(
+            !outcome.is_clean(),
+            "{name} must reject: {:?}",
+            outcome.diagnostics
+        );
+    }
+}
+
+#[test]
+fn orphan_elif_else_warns_lone_else_and_rejects_instead_of_misparsing() {
+    // opy-rs#516 review: an `elif`/`else` without a preceding `if` gets the
+    // pinned `w_lone_else` warning — but its `Else If`/`Else` marker has no
+    // canonical Workshop representation yet, so it rejects cleanly rather
+    // than parsing `else:` as a label and dropping the marker.
+    for (name, keyword, source) in [
+        (
+            "elif after a sibling",
+            "elif",
+            "globalvar g\nrule \"r\":\n    @Event global\n    if g:\n    g = 5\n    elif g:\n        g = 1",
+        ),
+        (
+            "else after a sibling",
+            "else",
+            "globalvar g\nrule \"r\":\n    @Event global\n    if g:\n    g = 5\n    else:\n        g = 1",
+        ),
+        (
+            "else if after a sibling",
+            "else",
+            "globalvar g\nrule \"r\":\n    @Event global\n    if g:\n    g = 5\n    else if g:\n        g = 1",
+        ),
+        (
+            "bare elif",
+            "elif",
+            "globalvar g\nrule \"r\":\n    @Event global\n    elif g:\n        g = 1",
+        ),
+    ] {
+        let outcome = check(source, "main.opy", Path::new(""));
+        assert!(
+            !outcome.is_clean(),
+            "{name} must reject: {:?}",
+            outcome.diagnostics
+        );
+        assert!(
+            outcome.diagnostics.iter().any(|diagnostic| {
+                diagnostic.severity == opy_rs::tooling::DiagnosticSeverity::Warning
+                    && diagnostic.code == "w_lone_else"
+                    && diagnostic.message.contains(&format!("Found '{keyword}'"))
+            }),
+            "{name} must surface the pinned w_lone_else warning: {:?}",
+            outcome.diagnostics
+        );
+        assert!(
+            outcome
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.code == "unsupported-construct"),
+            "{name} must reject the unrepresentable marker: {:?}",
+            outcome.diagnostics
+        );
+        // The `else` body must never compile as an unconditional statement —
+        // a silent `else:`-as-label misparse is the regression this guards.
+        assert!(
+            opy_rs::compile(source, "main.opy", Path::new("")).is_err(),
+            "{name} must fail compile"
+        );
+    }
+}

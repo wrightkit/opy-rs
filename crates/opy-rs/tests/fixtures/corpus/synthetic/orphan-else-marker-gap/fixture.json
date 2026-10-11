@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/orphan-else-marker-gap",
+  "category": "compilation",
+  "features": [
+    "control-flow",
+    "structural convergence",
+    "negative diagnostic"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "failure",
+      "relationship": "known-gap",
+      "ruleNames": false,
+      "diagnosticCode": "unsupported-construct"
+    },
+    "compiler": {
+      "nativeStatus": "failure",
+      "relationship": "known-gap",
+      "comparison": "diagnostic-code",
+      "diagnosticCode": "unsupported-construct",
+      "failureClass": "frontend"
+    }
+  }
+}

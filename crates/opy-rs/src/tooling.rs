@@ -43,14 +43,21 @@ use crate::hir::types::{
 };
 use crate::preprocess::{FileRecord, PreprocessOutcome, PreprocessWarning, Preprocessed};
 
-fn visible_warnings(preprocessed: &Preprocessed) -> impl Iterator<Item = &PreprocessWarning> {
-    preprocessed.warnings.iter().filter(|warning| {
-        !preprocessed
-            .preprocessing
-            .suppressed_warnings
-            .iter()
-            .any(|code| code == &warning.code)
-    })
+fn visible_warnings<'a>(
+    preprocessed: &'a Preprocessed,
+    parse_warnings: &'a [PreprocessWarning],
+) -> impl Iterator<Item = &'a PreprocessWarning> {
+    preprocessed
+        .warnings
+        .iter()
+        .chain(parse_warnings)
+        .filter(|warning| {
+            !preprocessed
+                .preprocessing
+                .suppressed_warnings
+                .iter()
+                .any(|code| code == &warning.code)
+        })
 }
 
 /// The outcome of [`check`]: structured diagnostics plus the resolved model.
@@ -140,10 +147,11 @@ pub fn check_with_overlay(
         &preprocessed.tokens,
         preprocessed.preprocessing.allow_macro_redeclaration,
     );
+    let parse_warnings = parsed.warnings;
     let Some(mut program) = parsed.program else {
         // The parser recovers at statement boundaries; every collected error
         // is reported (the compile pipeline reads only the first).
-        let mut diagnostics = visible_warnings(&preprocessed)
+        let mut diagnostics = visible_warnings(&preprocessed, &parse_warnings)
             .map(|warning| Diagnostic::from_warning(warning, &files))
             .collect::<Vec<_>>();
         diagnostics.extend(
@@ -161,7 +169,7 @@ pub fn check_with_overlay(
         match crate::settings::parse_block(block) {
             Ok(parsed_settings) => program.settings = Some(parsed_settings),
             Err(error) => {
-                let mut diagnostics = visible_warnings(&preprocessed)
+                let mut diagnostics = visible_warnings(&preprocessed, &parse_warnings)
                     .map(|warning| Diagnostic::from_warning(warning, &files))
                     .collect::<Vec<_>>();
                 diagnostics.push(Diagnostic::from_error(error, &files));
@@ -193,7 +201,7 @@ pub fn check_with_overlay(
         &preprocessed.preprocessing,
     ) {
         Ok(mut hir) => {
-            let mut diagnostics = visible_warnings(&preprocessed)
+            let mut diagnostics = visible_warnings(&preprocessed, &parse_warnings)
                 .map(|warning| Diagnostic::from_warning(warning, &files))
                 .collect::<Vec<_>>();
             hir.preprocessing = preprocessed.preprocessing;
@@ -254,7 +262,7 @@ pub fn check_with_overlay(
             }
         }
         Err(error) => {
-            let mut diagnostics = visible_warnings(&preprocessed)
+            let mut diagnostics = visible_warnings(&preprocessed, &parse_warnings)
                 .map(|warning| Diagnostic::from_warning(warning, &files))
                 .collect::<Vec<_>>();
             diagnostics.push(Diagnostic::from_error(error, &files));

@@ -23,6 +23,10 @@ pub struct ParseOutput {
     pub program: Option<Program>,
     /// Every structured error collected during the parse.
     pub errors: Vec<OpyError>,
+    /// Source-attributed warnings collected during the parse (for example the
+    /// pinned reference's `w_lone_else`). They surface through the same
+    /// diagnostic channel as preprocessing warnings (#516).
+    pub warnings: Vec<crate::preprocess::PreprocessWarning>,
 }
 
 /// Parse an expanded token stream into a CST program.
@@ -34,15 +38,18 @@ pub fn parse(tokens: &[Token]) -> ParseOutput {
 pub fn parse_with_options(tokens: &[Token], allow_macro_redeclaration: bool) -> ParseOutput {
     let mut parser = Parser::new(tokens, allow_macro_redeclaration);
     let program = parser.parse_program();
+    let warnings = parser.warnings;
     if parser.errors.is_empty() {
         ParseOutput {
             program: Some(program),
             errors: Vec::new(),
+            warnings,
         }
     } else {
         ParseOutput {
             program: None,
             errors: parser.errors,
+            warnings,
         }
     }
 }
@@ -69,6 +76,13 @@ struct Parser<'a> {
     last_colon_body_continued: bool,
     /// Columns of the `if` statements whose branches are being parsed.
     open_if_indents: Vec<u32>,
+    /// Columns of the block-opening headers enclosing the statement being
+    /// parsed. An `elif`/`else`/`while` tail attaches to an emptied `if`/`do`
+    /// only while its column stays deeper than the nearest enclosing header —
+    /// a line at or shallower than it belongs outside the block (#516).
+    block_floors: Vec<u32>,
+    /// Source-attributed warnings collected during the parse.
+    warnings: Vec<crate::preprocess::PreprocessWarning>,
     /// Set once a `workshop-source` diagnostic has been reported; later
     /// Workshop-looking constructs are skipped silently so a pasted Workshop
     /// script produces one diagnostic instead of a cascade.
@@ -110,6 +124,8 @@ impl<'a> Parser<'a> {
             last_statement_continued: false,
             last_colon_body_continued: false,
             open_if_indents: Vec::new(),
+            block_floors: Vec::new(),
+            warnings: Vec::new(),
             workshop_source_reported: false,
         }
     }
@@ -514,29 +530,27 @@ impl Parser<'_> {
         }
     }
 
-    /// The indentation of the next non-empty line, which must exceed
-    /// `line_indent` (an indented block follows the colon).
+    /// The indentation of the next non-empty line when it is deeper than
+    /// `line_indent` (an indented block follows the colon), or `None` when the
+    /// body is empty. The pinned OverPy accepts empty `:`-headed bodies, so a
+    /// following line at `line_indent` or shallower — or end of input — ends
+    /// an empty body rather than erroring (#516).
     fn block_indent(&mut self, line_indent: u32) -> Option<u32> {
         self.skip_newlines();
         if self.peek_kind() == TokenKind::Eof {
-            self.error_at_current("expected an indented block".to_string());
             return None;
         }
         let indent = self.peek().layout.start.col;
-        if indent <= line_indent {
-            self.error_at_current("expected an indented block after ':'".to_string());
-            return None;
-        }
-        Some(indent)
+        (indent > line_indent).then_some(indent)
     }
 
     pub(super) fn expect_block_indent(
         &mut self,
         line_indent: u32,
         colon_context: &str,
-    ) -> Result<u32, ()> {
+    ) -> Result<Option<u32>, ()> {
         self.expect_block_colon(colon_context)?;
-        self.block_indent(line_indent).ok_or(())
+        Ok(self.block_indent(line_indent))
     }
 
     fn expect_statement_end(&mut self, what: &str) -> Result<(), ()> {
