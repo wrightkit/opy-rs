@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.9](https://github.com/wrightkit/opy-rs/compare/v0.3.8...v0.3.9) - 2026-10-11
+
+### Added
+
+- *(provider)* serve lpp/resolveIds over LPP 1.6 ([#519](https://github.com/wrightkit/opy-rs/pull/519))
+
+### Fixed
+
+- *(settings)* tolerate future workshop-rs settings variants in renames ([#524](https://github.com/wrightkit/opy-rs/pull/524))
+- *(parser)* accept empty block bodies like the pinned oracle ([#521](https://github.com/wrightkit/opy-rs/pull/521))
+- *(settings)* carry a list under a catalogued enum key as the reference block ([#520](https://github.com/wrightkit/opy-rs/pull/520))
+
 ## [0.3.8](https://github.com/wrightkit/opy-rs/compare/v0.3.7...v0.3.8) - 2026-10-10
 
 ### Fixed
