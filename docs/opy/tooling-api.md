@@ -14,8 +14,24 @@ settings keys cannot pass `check` and fail only inside the emitter. As in the
 pinned OverPy, a `main`, `lobby`, mode, team `general`, or hero member the
 table does not declare compiles as written: an unknown key as `key: value`
 (a list or object value as a block), and an enum key with an undeclared value
-as its localized key followed by the value. A hero member the pinned schema
-does not apply to that hero is unknown for it and compiles fully verbatim.
+as its localized key followed by the value. List elements are settings
+expressions the pinned evaluator folds to their `String(value)` text (`1+2`
+emits `3`, `["a"]` emits `a`); an element it cannot resolve is a
+`settings-expression` error wherever the list is written, catalogued keys
+included. Strings pass the pinned `__customString__` check on any path — a
+`{n}`/`{}` formatter without an argument errors (`["{0}"]`, `"x{0}y"`), and
+a dictionary key that does not evaluate to a string errors (`[{1:2}]`).
+`min`/`max` are the pinned variadic builtins — `min(a, b, c)` re-associates
+to `min(a, min(b, c))` — while every other builtin keeps its fixed arity
+(`[round(1.5, 2)]` errors). `null` substitutes as `0` inside a format
+expression and is falsy upstream, but a bare `null` value — or an `and`/`or`
+result that stays `null` — is a `settings-expression` error. A hero member the pinned schema does not apply to that hero is
+unknown for it and compiles fully verbatim. A `settings.workshop` member
+follows the pinned workshop contract: `true`/`false` emit as the compile
+target's `On`/`Off` text, a number-like value emits its number text, a
+single-element list emits `[element]`, and a hero name resolves to its
+localized display name; any other value is a `settings-expression` or
+`settings-workshop-value` error.
 `check` reports each as a
 `unknown-setting` warning. A mode's non-Boolean `enabled` is dropped, as
 upstream does.

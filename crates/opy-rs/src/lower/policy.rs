@@ -84,6 +84,14 @@ pub(crate) fn member_receiver_requirement(member_id: &str) -> Option<ReceiverReq
     }
 }
 
+/// `min`/`max` are the pinned reference's variadic builtins: positional
+/// arguments past the declared pair re-associate into nested two-argument
+/// calls upstream rather than hitting the arity rejection every other
+/// builtin takes (#512).
+pub(crate) fn variadic(function_id: &str) -> bool {
+    matches!(function_id, "min" | "max")
+}
+
 /// The parameter indices of `function_id` that must bind a variable
 /// reference (a global or player variable): the chase family's first
 /// argument selects the global/player emission form. Typed policy keyed on

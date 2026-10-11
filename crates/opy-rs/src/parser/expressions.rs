@@ -433,21 +433,42 @@ impl Parser<'_> {
         match token.kind {
             TokenKind::Number => {
                 let token = self.advance();
-                let radix = token.text.strip_prefix('0').and_then(|rest| {
-                    match rest.as_bytes().first()? {
-                        b'x' | b'X' => Some((&rest[1..], 16)),
-                        b'b' | b'B' => Some((&rest[1..], 2)),
-                        b'o' | b'O' => Some((&rest[1..], 8)),
-                        _ => None,
-                    }
-                });
-                let value = radix
-                    .and_then(|(digits, radix)| {
-                        digits.chars().try_fold(0f64, |v, c| {
-                            c.to_digit(radix).map(|d| v * radix as f64 + d as f64)
+                // `0x` is the one lenient prefix upstream: the reference
+                // rewrites it through `parseInt(name, 16)`, which reads a
+                // hex *prefix* — `0x1FZ` is 31, `0x`/`0xZZ` are `NaN`. The
+                // other radixes go through `Number` and need the whole
+                // tail (`0o17` is 15, `0o18`/`0X1FZ` are `NaN`; #512).
+                let value = if let Some(digits) = token.text.strip_prefix("0x") {
+                    let mut seen = false;
+                    let value =
+                        digits
+                            .chars()
+                            .take_while(|c| c.is_ascii_hexdigit())
+                            .fold(0f64, |v, c| {
+                                seen = true;
+                                v * 16.0 + c.to_digit(16).unwrap_or_default() as f64
+                            });
+                    if seen { value } else { f64::NAN }
+                } else {
+                    let radix = token.text.strip_prefix('0').and_then(|rest| {
+                        match rest.as_bytes().first()? {
+                            b'X' => Some((&rest[1..], 16)),
+                            b'b' | b'B' => Some((&rest[1..], 2)),
+                            b'o' | b'O' => Some((&rest[1..], 8)),
+                            _ => None,
+                        }
+                    });
+                    radix
+                        .and_then(|(digits, radix)| {
+                            // `Number("0x")` is `NaN`, not `0` (#512).
+                            (!digits.is_empty()).then(|| {
+                                digits.chars().try_fold(0f64, |v, c| {
+                                    c.to_digit(radix).map(|d| v * radix as f64 + d as f64)
+                                })
+                            })?
                         })
-                    })
-                    .unwrap_or_else(|| token.text.parse().unwrap_or(f64::NAN));
+                        .unwrap_or_else(|| token.text.parse().unwrap_or(f64::NAN))
+                };
                 Ok(Expr::Number {
                     value,
                     text: token.text.clone(),

@@ -5,10 +5,13 @@ use workshop_rs::source::{Position as WorkshopPosition, Span as WorkshopSpan};
 /// carrier exactly as lowering does: constant expansion, then `#!extension`
 /// merging, then pass-through of members outside the settings catalog.
 /// Shared by lowering and by `check`'s emission-acceptance pass so `check`
-/// and `compile` see the same settings tree (#411). The second value lists
+/// and `compile` see the same settings tree (#411). `locale` is the compile
+/// target: `settings.workshop` members carry localized `On`/`Off` and hero
+/// display names like the pinned compiler (#512). The second value lists
 /// the members passed through unchanged.
 pub(crate) fn workshop_settings(
     hir: &crate::hir::Program,
+    locale: &Locale,
 ) -> Result<(Option<workshop_rs::settings::Settings>, Vec<UnknownSetting>), IntegrationError> {
     let settings_constants: HashMap<String, &Expr> = hir
         .declarations
@@ -18,15 +21,16 @@ pub(crate) fn workshop_settings(
             _ => None,
         })
         .collect();
-    let mut settings = merge_extensions(
+    let (mut settings, evals) = merge_extensions(
         hir.settings
             .clone()
             .map(|settings| expand_settings_constants(settings, &settings_constants)),
         &hir.preprocessing.directives,
+        locale,
     )?;
     let unknown = settings
         .as_mut()
-        .map(pass_through_unknown_members)
+        .map(|settings| pass_through_unknown_members(settings, &evals))
         .transpose()?
         .unwrap_or_default();
     Ok((settings, unknown))
@@ -121,6 +125,7 @@ fn rename_member(member: &mut workshop_rs::settings::SettingsNode, name: &str) {
 /// members ahead of its hero groups as the pinned OverPy writes them.
 fn pass_through_unknown_members(
     settings: &mut workshop_rs::settings::Settings,
+    evals: &EvalMap,
 ) -> Result<Vec<UnknownSetting>, IntegrationError> {
     use workshop_rs::settings::{PathPart, SettingsNode};
 
@@ -131,7 +136,7 @@ fn pass_through_unknown_members(
         };
         match name.as_str() {
             "main" | "lobby" => {
-                pass_through_members(children, &[PathPart::Part(name)], &mut unknown, None);
+                pass_through_members(children, &[PathPart::Part(name)], &mut unknown, None, evals)?;
             }
             "gamemodes" => {
                 for mode in children {
@@ -141,7 +146,7 @@ fn pass_through_unknown_members(
                                 || matches!(member, SettingsNode::Bool { .. })
                         });
                         let path = [PathPart::Part("gamemodes"), PathPart::Part(name)];
-                        pass_through_members(children, &path, &mut unknown, None);
+                        pass_through_members(children, &path, &mut unknown, None, evals)?;
                     }
                 }
             }
@@ -177,13 +182,13 @@ fn pass_through_unknown_members(
                                     }));
                                 }
                                 SettingsNode::List { elements, .. } => {
-                                    general.extend(elements.iter().enumerate().map(
-                                        |(index, element)| SettingsNode::Raw {
+                                    for (index, element) in elements.iter().enumerate() {
+                                        general.push(SettingsNode::Raw {
                                             name: index.to_string(),
-                                            value: element.value.clone(),
+                                            value: list_element_text(element, evals)?,
                                             span: element.span,
-                                        },
-                                    ));
+                                        });
+                                    }
                                 }
                                 _ => {}
                             },
@@ -191,7 +196,7 @@ fn pass_through_unknown_members(
                         }
                     }
                     let team_path = [PathPart::Part("heroes"), PathPart::Team];
-                    pass_through_members(&mut general, &team_path, &mut unknown, None);
+                    pass_through_members(&mut general, &team_path, &mut unknown, None, evals)?;
                     let mut enabled = false;
                     let mut disabled = false;
                     for child in &rest {
@@ -273,16 +278,16 @@ fn pass_through_unknown_members(
                                     &path,
                                     &mut unknown,
                                     Some(canonical.as_str()),
-                                );
+                                    evals,
+                                )?;
                             }
                             SettingsNode::List { name, elements, .. }
                                 if matches!(name.as_str(), "enabledHeroes" | "disabledHeroes") =>
                             {
                                 for element in elements {
-                                    let canonical = canonical_hero_name(&element.value);
-                                    if canonical != element.value {
-                                        element.value = canonical.to_string();
-                                    }
+                                    let text = list_element_text(element, evals)?;
+                                    let canonical = canonical_hero_name(&text);
+                                    element.value = canonical.to_string();
                                 }
                             }
                             _ => {}
@@ -293,10 +298,76 @@ fn pass_through_unknown_members(
                     *children = general;
                 }
             }
+            // An uncatalogued top-level group stays verbatim: upstream
+            // rejects the key, and keeping authored node shapes lets the
+            // emission table fail it as before. `check_surviving_lists`
+            // below still errors a failed evaluation in a list it holds
+            // (#512).
             _ => {}
         }
     }
+    check_surviving_lists(&settings.children, evals)?;
     Ok(unknown)
+}
+
+/// A failed evaluation errors wherever the list is written (#512): every
+/// `List` still carried after the passes above — a catalogued non-enum key
+/// like `enabledMaps`, a hero roster, or an odd carried shape — passes its
+/// elements through the same check the written-form paths apply.
+fn check_surviving_lists(
+    members: &[workshop_rs::settings::SettingsNode],
+    evals: &EvalMap,
+) -> Result<(), IntegrationError> {
+    use workshop_rs::settings::SettingsNode;
+    for member in members {
+        match member {
+            SettingsNode::List { elements, .. } => {
+                for element in elements {
+                    list_element_text(element, evals)?;
+                }
+            }
+            SettingsNode::Group { children, .. } | SettingsNode::Workshop { children, .. } => {
+                check_surviving_lists(children, evals)?;
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+/// The source span of each list element the settings evaluator could not
+/// resolve, keyed by the converted element span (#512). Such an element is
+/// an error wherever the list is written.
+pub(super) type EvalMap = HashMap<(u32, u32, u32, u32), HirSpan>;
+
+fn eval_key(span: &WorkshopSpan) -> (u32, u32, u32, u32) {
+    (span.start.line, span.start.col, span.end.line, span.end.col)
+}
+
+/// The emitted text of a settings list element: the display text the
+/// element already carries (evaluated for expressions, authored for
+/// literals). An authored expression the evaluator could not resolve is an
+/// error, as the pinned compiler rejects it wherever the list appears
+/// (#512).
+fn list_element_text(
+    element: &workshop_rs::settings::SettingsListElement,
+    evals: &EvalMap,
+) -> Result<String, IntegrationError> {
+    match element
+        .span
+        .as_ref()
+        .and_then(|span| evals.get(&eval_key(span)))
+    {
+        Some(&span) => Err(IntegrationError::new(
+            "settings-expression",
+            format!(
+                "settings list element '{}' is not a compile-time value",
+                element.value
+            ),
+            Some(span),
+        )),
+        None => Ok(element.value.clone()),
+    }
 }
 
 fn pass_through_members(
@@ -304,7 +375,8 @@ fn pass_through_members(
     path: &[workshop_rs::settings::PathPart<'_>],
     unknown: &mut Vec<UnknownSetting>,
     hero: Option<&str>,
-) {
+    evals: &EvalMap,
+) -> Result<(), IntegrationError> {
     use workshop_rs::settings::{PathPart, SettingValueDomain, SettingsNode};
 
     for member in members {
@@ -329,9 +401,9 @@ fn pass_through_members(
                     continue;
                 }
                 *member = if inapplicable {
-                    verbatim_form(member.clone())
+                    verbatim_form(member.clone(), evals)?
                 } else {
-                    written_form(member.clone())
+                    written_form(member.clone(), evals)?
                 };
                 unknown.push(UnknownSetting {
                     name,
@@ -359,7 +431,7 @@ fn pass_through_members(
                     // (#496). The group form is what workshop-rs accepts and
                     // writes under the catalogued key's display name.
                     SettingsNode::List { .. } | SettingsNode::Group { .. } => {
-                        *member = written_form(member.clone());
+                        *member = written_form(member.clone(), evals)?;
                         continue;
                     }
                     _ => continue,
@@ -377,38 +449,50 @@ fn pass_through_members(
             }
         }
     }
+    Ok(())
 }
 
 /// The written form of a member under an unknown key, as the pinned OverPy
 /// serializes it: scalars as `key: value`, lists as a block of bare lines,
-/// and objects as a block of their members.
-fn written_form(node: workshop_rs::settings::SettingsNode) -> workshop_rs::settings::SettingsNode {
+/// and objects as a block of their members. List elements write their
+/// evaluated expression value (#512).
+fn written_form(
+    node: workshop_rs::settings::SettingsNode,
+    evals: &EvalMap,
+) -> Result<workshop_rs::settings::SettingsNode, IntegrationError> {
     use workshop_rs::settings::SettingsNode;
 
-    match node {
+    Ok(match node {
         SettingsNode::List {
             name,
             elements,
             span,
-        } => SettingsNode::Group {
-            name,
-            children: elements
-                .into_iter()
-                .map(|element| SettingsNode::Raw {
-                    name: element.value,
+        } => {
+            let mut children = Vec::with_capacity(elements.len());
+            for element in elements {
+                let span = element.span;
+                children.push(SettingsNode::Raw {
+                    name: list_element_text(&element, evals)?,
                     value: String::new(),
-                    span: element.span,
-                })
-                .collect(),
-            span,
-        },
+                    span,
+                });
+            }
+            SettingsNode::Group {
+                name,
+                children,
+                span,
+            }
+        }
         SettingsNode::Group {
             name,
             children,
             span,
         } => SettingsNode::Group {
             name,
-            children: children.into_iter().map(written_form).collect(),
+            children: children
+                .into_iter()
+                .map(|child| written_form(child, evals))
+                .collect::<Result<_, _>>()?,
             span,
         },
         node => match scalar_text(&node) {
@@ -419,22 +503,25 @@ fn written_form(node: workshop_rs::settings::SettingsNode) -> workshop_rs::setti
             },
             None => node,
         },
-    }
+    })
 }
 
 /// The fully verbatim form of a member: like [`written_form`], but a scalar
 /// becomes `Raw` so its name is written as authored even when the key
 /// resolves in the catalog.
-fn verbatim_form(node: workshop_rs::settings::SettingsNode) -> workshop_rs::settings::SettingsNode {
+fn verbatim_form(
+    node: workshop_rs::settings::SettingsNode,
+    evals: &EvalMap,
+) -> Result<workshop_rs::settings::SettingsNode, IntegrationError> {
     use workshop_rs::settings::SettingsNode;
 
     match scalar_text(&node) {
-        Some(value) => SettingsNode::Raw {
+        Some(value) => Ok(SettingsNode::Raw {
             name: node.name().to_string(),
             value,
             span: node.span(),
-        },
-        None => written_form(node),
+        }),
+        None => written_form(node, evals),
     }
 }
 
@@ -453,7 +540,8 @@ fn scalar_text(node: &workshop_rs::settings::SettingsNode) -> Option<String> {
 pub(super) fn merge_extensions(
     settings: Option<crate::hir::Settings>,
     directives: &[crate::hir::DirectiveRecord],
-) -> Result<Option<workshop_rs::settings::Settings>, IntegrationError> {
+    locale: &Locale,
+) -> Result<(Option<workshop_rs::settings::Settings>, EvalMap), IntegrationError> {
     let mut extension_nodes: Vec<workshop_rs::settings::SettingsNode> = Vec::new();
     for directive in directives
         .iter()
@@ -496,16 +584,19 @@ pub(super) fn merge_extensions(
             span: span.map(convert_settings_span),
         });
     }
+    let (settings, evals) = settings
+        .map(|settings| convert_settings(settings, locale))
+        .transpose()?
+        .map(|(settings, evals)| (Some(settings), evals))
+        .unwrap_or_default();
     if extension_nodes.is_empty() {
-        return Ok(settings.map(convert_settings));
+        return Ok((settings, evals));
     }
 
-    let mut settings = settings
-        .map(convert_settings)
-        .unwrap_or(workshop_rs::settings::Settings {
-            span: None,
-            children: Vec::new(),
-        });
+    let mut settings = settings.unwrap_or(workshop_rs::settings::Settings {
+        span: None,
+        children: Vec::new(),
+    });
     if let Some(workshop_rs::settings::SettingsNode::Group { children, .. }) = settings
         .children
         .iter_mut()
@@ -525,7 +616,7 @@ pub(super) fn merge_extensions(
                 span: None,
             });
     }
-    Ok(Some(settings))
+    Ok((Some(settings), evals))
 }
 
 pub(super) fn expand_settings_constants(
@@ -617,28 +708,40 @@ fn settings_node_from_expr(
     }
 }
 
-pub(super) fn convert_settings(settings: crate::hir::Settings) -> workshop_rs::settings::Settings {
-    workshop_rs::settings::Settings {
+pub(super) fn convert_settings(
+    settings: crate::hir::Settings,
+    locale: &Locale,
+) -> Result<(workshop_rs::settings::Settings, EvalMap), IntegrationError> {
+    let mut evals = EvalMap::new();
+    let settings = workshop_rs::settings::Settings {
         span: settings.span.map(convert_settings_span),
         children: settings
             .children
             .into_iter()
-            .map(convert_settings_node)
-            .collect(),
-    }
+            .map(|node| convert_settings_node(node, &mut evals, locale))
+            .collect::<Result<_, _>>()?,
+    };
+    Ok((settings, evals))
 }
 
-fn convert_settings_node(node: crate::hir::SettingsNode) -> workshop_rs::settings::SettingsNode {
+fn convert_settings_node(
+    node: crate::hir::SettingsNode,
+    evals: &mut EvalMap,
+    locale: &Locale,
+) -> Result<workshop_rs::settings::SettingsNode, IntegrationError> {
     use crate::hir::SettingsNode as SourceNode;
     use workshop_rs::settings::{SettingsListElement, SettingsNode as TargetNode};
 
-    match node {
+    Ok(match node {
         SourceNode::Group {
             name,
             children,
             span,
         } if name == "workshop" => TargetNode::Workshop {
-            children: children.into_iter().map(convert_workshop_node).collect(),
+            children: children
+                .into_iter()
+                .map(|child| convert_workshop_node(child, locale))
+                .collect::<Result<_, _>>()?,
             span: span.map(convert_settings_span),
         },
         SourceNode::Group {
@@ -649,8 +752,8 @@ fn convert_settings_node(node: crate::hir::SettingsNode) -> workshop_rs::setting
             children: children
                 .into_iter()
                 .map(|child| escape_main_string(&name, child))
-                .map(convert_settings_node)
-                .collect(),
+                .map(|child| convert_settings_node(child, evals, locale))
+                .collect::<Result<_, _>>()?,
             name,
             span: span.map(convert_settings_span),
         },
@@ -686,14 +789,27 @@ fn convert_settings_node(node: crate::hir::SettingsNode) -> workshop_rs::setting
             name,
             elements: elements
                 .into_iter()
-                .map(|element| SettingsListElement {
-                    value: element.value,
-                    span: element.span.map(convert_settings_span),
+                .map(|element| {
+                    let hir_span = element.span;
+                    let span = hir_span.map(convert_settings_span);
+                    if element.evaluated.is_none()
+                        && let (Some(span), Some(hir_span)) = (span.as_ref(), hir_span)
+                    {
+                        evals.insert(eval_key(span), hir_span);
+                    }
+                    // Catalogued list keys (`enabledMaps`, hero rosters) read
+                    // the display text the evaluator produced (#512). The
+                    // authored text only remains for a spanless element no
+                    // evaluation recorded.
+                    SettingsListElement {
+                        value: element.evaluated.unwrap_or(element.value),
+                        span,
+                    }
                 })
                 .collect(),
             span: span.map(convert_settings_span),
         },
-    }
+    })
 }
 
 /// `main.modeName` and `main.description` are the settings strings the pinned
@@ -714,54 +830,183 @@ fn escape_main_string(group: &str, node: crate::hir::SettingsNode) -> crate::hir
     }
 }
 
-fn convert_workshop_node(node: crate::hir::SettingsNode) -> workshop_rs::settings::SettingsNode {
+/// A `settings.workshop` member as the pinned compiler writes it
+/// (#512): the value was already evaluated, then the member classifier
+/// emits localized `On`/`Off` for booleans, the number text for numbers, a
+/// single-element list as `[element]`, the localized hero display name for a
+/// `heroKw` key, and rejects everything else.
+fn convert_workshop_node(
+    node: crate::hir::SettingsNode,
+    locale: &Locale,
+) -> Result<workshop_rs::settings::SettingsNode, IntegrationError> {
     use crate::hir::SettingsNode as SourceNode;
     use workshop_rs::settings::SettingsNode as TargetNode;
 
     match node {
-        SourceNode::Group {
-            name,
-            children,
+        SourceNode::Group { name, span, .. } => Err(IntegrationError::new(
+            "settings-workshop-value",
+            format!("invalid value '[object Object]' for workshop setting '{name}'"),
             span,
-        } => TargetNode::Group {
-            name,
-            children: children.into_iter().map(convert_workshop_node).collect(),
-            span: span.map(convert_settings_span),
-        },
-        SourceNode::Number { name, value, span } => TargetNode::Raw {
+        )),
+        SourceNode::Number { name, value, span } => Ok(TargetNode::Raw {
             name,
             value: number_format::javascript_text(value),
             span: span.map(convert_settings_span),
-        },
-        SourceNode::Bool { name, value, span } => TargetNode::Raw {
+        }),
+        SourceNode::Bool { name, value, span } => Ok(TargetNode::Raw {
             name,
-            value: value.to_string(),
+            value: workshop_bool_text(value, locale).to_string(),
             span: span.map(convert_settings_span),
-        },
+        }),
         SourceNode::String { name, value, span } | SourceNode::Raw { name, value, span } => {
-            TargetNode::Raw {
+            let value = if is_number_text(&value) {
+                value
+            } else if let Some(display) = workshop_hero_name(&value, locale) {
+                display
+            } else {
+                return Err(IntegrationError::new(
+                    "settings-workshop-value",
+                    format!("invalid value '{value}' for workshop setting '{name}'"),
+                    span,
+                ));
+            };
+            Ok(TargetNode::Raw {
                 name,
                 value,
                 span: span.map(convert_settings_span),
-            }
+            })
         }
         SourceNode::List {
             name,
             elements,
             span,
-        } => TargetNode::Raw {
-            name,
-            value: format!(
-                "[{}]",
-                elements
-                    .into_iter()
-                    .map(|element| element.value)
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            span: span.map(convert_settings_span),
-        },
+        } => {
+            // The pinned compiler writes a workshop member list as
+            // `[element]`; any other arity is an invalid value (#512).
+            let [element] = elements.as_slice() else {
+                return Err(IntegrationError::new(
+                    "settings-workshop-value",
+                    format!("invalid value for workshop setting '{name}', must be of length 1"),
+                    span,
+                ));
+            };
+            match element.evaluated.as_ref() {
+                Some(text) => Ok(TargetNode::Raw {
+                    name,
+                    value: format!("[{text}]"),
+                    span: span.map(convert_settings_span),
+                }),
+                None => Err(IntegrationError::new(
+                    "settings-expression",
+                    format!(
+                        "settings list element '{}' is not a compile-time value",
+                        element.value
+                    ),
+                    element.span,
+                )),
+            }
+        }
     }
+}
+
+/// Whether `text` satisfies the pinned compiler's `isNumber` check on a
+/// `settings.workshop` member: a non-blank string `parseInt` or
+/// `parseFloat` reads a numeric prefix from (`"3"`, `"3abc"`, `"Infinity"`,
+/// and `"0x10"` pass; `"a"` and `"NaN"` do not; #512).
+fn is_number_text(text: &str) -> bool {
+    let text = text.trim_start();
+    if text.is_empty() {
+        return false;
+    }
+    js_int_prefix(text) || js_float_prefix(text)
+}
+
+/// `parseInt(text)` reads an optional sign, a `0x` hex prefix, or a decimal
+/// digit prefix; `NaN` without one digit.
+fn js_int_prefix(text: &str) -> bool {
+    let unsigned = text.strip_prefix(['+', '-']).unwrap_or(text);
+    match unsigned
+        .strip_prefix("0x")
+        .or_else(|| unsigned.strip_prefix("0X"))
+    {
+        Some(hex) => hex.starts_with(|c: char| c.is_ascii_hexdigit()),
+        None => unsigned.starts_with(|c: char| c.is_ascii_digit()),
+    }
+}
+
+/// `parseFloat(text)` reads an optional sign, `Infinity`, or a decimal
+/// mantissa (`5.`, `.5`, `5e3` all read a prefix); `NaN` without one digit.
+fn js_float_prefix(text: &str) -> bool {
+    let unsigned = text.strip_prefix(['+', '-']).unwrap_or(text);
+    if unsigned.starts_with("Infinity") {
+        return true;
+    }
+    let mut chars = unsigned.chars().peekable();
+    let mut digits = false;
+    while matches!(chars.peek(), Some(c) if c.is_ascii_digit()) {
+        digits = true;
+        chars.next();
+    }
+    if matches!(chars.peek(), Some('.')) {
+        chars.next();
+        while matches!(chars.peek(), Some(c) if c.is_ascii_digit()) {
+            digits = true;
+            chars.next();
+        }
+    }
+    digits
+}
+
+/// The pinned compiler's `On`/`Off` text for a `settings.workshop` boolean —
+/// its `__on__`/`__off__` `customGameSettingsKw` translations, recorded in
+/// `data/workshop_tokens.json` (#512).
+fn workshop_bool_text(value: bool, locale: &Locale) -> &'static str {
+    static TOKENS: std::sync::OnceLock<
+        std::collections::BTreeMap<String, std::collections::BTreeMap<String, String>>,
+    > = std::sync::OnceLock::new();
+    let tokens = TOKENS
+        .get_or_init(|| {
+            #[derive(serde::Deserialize)]
+            struct Tokens {
+                tokens:
+                    std::collections::BTreeMap<String, std::collections::BTreeMap<String, String>>,
+            }
+            serde_json::from_str::<Tokens>(include_str!("data/workshop_tokens.json"))
+                .expect("workshop token data is valid JSON")
+                .tokens
+        })
+        .get(if value { "__on__" } else { "__off__" })
+        .expect("workshop token data carries __on__ and __off__");
+    tokens
+        .get(locale.as_str())
+        .or_else(|| {
+            tokens
+                .iter()
+                .find(|(known, _)| known.eq_ignore_ascii_case(locale.as_str()))
+                .map(|(_, text)| text)
+        })
+        .or_else(|| tokens.get("en-US"))
+        .expect("workshop token data carries en-US")
+}
+
+/// The localized display name of a `heroKw` key, or `None` when `text` is not
+/// one — the pinned compiler's `value in heroKw` member check (#512).
+fn workshop_hero_name(text: &str, locale: &Locale) -> Option<String> {
+    gameplay_catalog().hero_by_id(text).and_then(|hero| {
+        let names = hero.name().value();
+        names
+            .get(locale.as_str())
+            .or_else(|| names.get("en-US"))
+            .map(str::to_string)
+    })
+}
+
+fn gameplay_catalog() -> &'static workshop_rs::gameplay::GameplayCatalog {
+    static CATALOG: std::sync::OnceLock<workshop_rs::gameplay::GameplayCatalog> =
+        std::sync::OnceLock::new();
+    CATALOG.get_or_init(|| {
+        workshop_rs::gameplay::data::builtin().expect("builtin gameplay catalog parses")
+    })
 }
 
 fn convert_settings_span(span: HirSpan) -> WorkshopSpan {

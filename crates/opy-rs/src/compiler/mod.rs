@@ -493,7 +493,7 @@ impl Compiler {
         reject_unlowered_directives(hir)?;
         let expanded_hir = expand_macros(hir)?;
         let mut lowering = Lowering::new(self, &expanded_hir);
-        lowering.copy_files()?;
+        lowering.copy_files(locale)?;
         lowering.lower_declarations()?;
         lowering.lower_rules()?;
         let translation_files = lowering.translation_files();
@@ -607,7 +607,7 @@ impl Compiler {
     ) -> Result<MappedText, IntegrationError> {
         let expanded = expand_macros_attributed(hir)?;
         let mut lowering = Lowering::new(self, &expanded);
-        lowering.copy_files()?;
+        lowering.copy_files(locale)?;
         lowering.lower_declarations()?;
         lowering.lower_rules()?;
         let map = SourceMap::extract(&lowering.program);
