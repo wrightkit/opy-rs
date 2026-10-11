@@ -212,7 +212,9 @@ pub fn check_with_overlay(
             // Settings are Workshop-bound data: convert them through the same
             // path the compiler uses and report every member the canonical
             // emission table cannot emit, so `check` never accepts a settings
-            // key that `compile` would reject (#411).
+            // key that `compile` would reject (#411). The locale only selects
+            // emitted text (workshop `On`/`Off`, hero names), never validity,
+            // so `en-US` preserves the compile-time parity invariant here.
             match crate::compiler::settings::workshop_settings(
                 &hir,
                 &workshop_rs::catalog::Locale::new("en-US"),

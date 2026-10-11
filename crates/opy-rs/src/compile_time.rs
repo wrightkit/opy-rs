@@ -90,8 +90,15 @@ fn eval(
             entries
                 .iter()
                 .map(|entry| {
+                    let key = eval(&entry.key, constants, bindings, stack, settings)?;
+                    // The pinned settings reader requires dictionary keys
+                    // to evaluate to strings ("Dictionary key must be a
+                    // string literal, got '1' of type number"; #512).
+                    if settings && !matches!(key, Value::String(_)) {
+                        return None;
+                    }
                     Some((
-                        eval(&entry.key, constants, bindings, stack, settings)?,
+                        key,
                         eval(&entry.value, constants, bindings, stack, settings)?,
                     ))
                 })
@@ -256,12 +263,16 @@ fn evaluate_builtin(name: &str, values: &[Value]) -> Option<Value> {
         // range (#512).
         "charAt" => match values {
             [Value::String(text), index] => {
-                let index = number(index)?.max(0.0);
+                // `Math.max` keeps NaN, which fails the upstream bounds
+                // test and yields `""` — `f64::max` would clamp it to 0.
+                let index = js_max(0.0, number(index)?);
                 if index.is_nan() || index >= text.encode_utf16().count() as f64 {
                     return Some(Value::String(String::new()));
                 }
                 let unit = text.encode_utf16().nth(index as usize)?;
-                Some(Value::String(char::from_u32(unit as u32)?.to_string()))
+                // A lone surrogate emits the replacement character
+                // upstream, not an error.
+                Some(Value::String(String::from_utf16_lossy(&[unit])))
             }
             _ => None,
         },
@@ -454,20 +465,28 @@ fn evaluate_builtin(name: &str, values: &[Value]) -> Option<Value> {
             [Value::String(text)] => Some(Value::Number(text.chars().count() as f64)),
             _ => None,
         },
-        // `.substring(string, start, length)` clamps both numbers at 0
-        // and reads UTF-16 units (#512).
+        // `.substring(string, start, length)` reads UTF-16 units as
+        // `str.substring(start, start + length)` upstream: `Math.max`
+        // keeps NaN (which `substring` then reads as 0), ends clamp into
+        // the string, and inverted bounds swap (#512).
         "substring" => match values {
             [Value::String(text), start, length] => {
-                let start = number(start)?.max(0.0);
-                let length = number(length)?.max(0.0);
-                if start.is_nan() || length.is_nan() {
-                    return None;
-                }
                 let units: Vec<u16> = text.encode_utf16().collect();
-                let end = (start + length).min(units.len() as f64) as usize;
-                let start = (start as usize).min(units.len());
+                let start = js_max(0.0, number(start)?);
+                let end = start + js_max(0.0, number(length)?);
+                let clamp = |index: f64| {
+                    if index.is_nan() {
+                        0.0
+                    } else {
+                        index.min(units.len() as f64)
+                    }
+                };
+                let (mut lo, mut hi) = (clamp(start), clamp(end));
+                if lo > hi {
+                    std::mem::swap(&mut lo, &mut hi);
+                }
                 Some(Value::String(String::from_utf16_lossy(
-                    &units[start..end.max(start)],
+                    &units[lo as usize..hi as usize],
                 )))
             }
             _ => None,
@@ -828,66 +847,80 @@ fn evaluate_index(collection: Value, index: Value) -> Option<Value> {
 /// splices, the first array element, or `0` for null-like gaps; any other
 /// argument leaves a formatter and fails the fold (#512).
 fn evaluate_format(text: &str, args: &[Value]) -> Option<Value> {
+    let chars: Vec<char> = text.chars().collect();
     let mut output = String::new();
     let mut unnumbered = 0usize;
     let mut numbered = false;
-    let mut unnumbered_args = 0usize;
-    let mut chars = text.chars().peekable();
-    while let Some(character) = chars.next() {
-        match character {
-            // Doubled braces are literal text upstream — the reference
-            // emits `{{0}}` verbatim rather than unescaping to `{0}`.
-            '{' if chars.peek() == Some(&'{') => {
-                chars.next();
-                output.push_str("{{");
+    let mut index = 0;
+    while index < chars.len() {
+        if chars[index] == '{' {
+            // `{{digits}}` is a literal escape upstream — `{{` does not
+            // escape a following arg, so `{{}` opens an unnumbered
+            // formatter like `{}` does (#512).
+            if let Some(length) = brace_escape_len(&chars[index..]) {
+                output.extend(&chars[index..index + length]);
+                index += length;
+                continue;
             }
-            '{' => {
-                if chars.peek() == Some(&'}') {
-                    chars.next();
-                    unnumbered += 1;
-                    unnumbered_args += 1;
-                    output.push_str(&format_substitute(args.get(unnumbered_args - 1)?)?);
-                    continue;
-                }
-                let mut index_text = String::new();
-                let mut closed = false;
-                for character in chars.by_ref() {
-                    if character == '}' {
-                        closed = true;
-                        break;
-                    }
-                    index_text.push(character);
-                }
-                if closed
-                    && !index_text.is_empty()
-                    && index_text.chars().all(|c| c.is_ascii_digit())
-                {
+            // `\{(\d*)\}` — digits-only braces are a formatter.
+            if let Some((digits, length)) = format_arg_len(&chars[index..]) {
+                index += length;
+                if let Some(digits) = digits {
                     numbered = true;
-                    let index = index_text.parse::<usize>().ok()?;
-                    output.push_str(&format_substitute(args.get(index)?)?);
+                    let argument = digits.parse::<usize>().ok()?;
+                    output.push_str(&format_substitute(args.get(argument)?)?);
                 } else {
-                    output.push('{');
-                    output.push_str(&index_text);
-                    if closed {
-                        output.push('}');
-                    }
+                    unnumbered += 1;
+                    output.push_str(&format_substitute(args.get(unnumbered - 1)?)?);
                 }
+                continue;
             }
-            '}' if chars.peek() == Some(&'}') => {
-                chars.next();
-                output.push_str("}}");
-            }
-            character => output.push(character),
         }
+        output.push(chars[index]);
+        index += 1;
     }
     // Numbered and unnumbered formatters must not mix, and unnumbered
     // formatters require exactly one argument each — the reference errors
     // in both cases. Extra arguments with numbered formatters (or none at
-    // all) are dropped silently (`"{{0}}".format(5)` emits `{0}`; #512).
-    if numbered && unnumbered > 0 || unnumbered_args != args.len() && unnumbered > 0 {
+    // all) are dropped silently (`"{{0}}".format(5)` emits `{{0}}`; #512).
+    if numbered && unnumbered > 0 || unnumbered > 0 && unnumbered != args.len() {
         return None;
     }
     Some(Value::String(output))
+}
+
+/// The length of an upstream `\{\{(\d*)\}\}` escape at `chars[0]`, when the
+/// doubled braces wrap only digits.
+fn brace_escape_len(chars: &[char]) -> Option<usize> {
+    if chars.len() < 4 || chars[0] != '{' || chars[1] != '{' {
+        return None;
+    }
+    let mut index = 2;
+    while index < chars.len() && chars[index].is_ascii_digit() {
+        index += 1;
+    }
+    (index + 1 < chars.len() && chars[index] == '}' && chars[index + 1] == '}').then_some(index + 2)
+}
+
+/// A `\{(\d*)\}` formatter at `chars[0]`: its digits (`None` for `{}`) and
+/// the match length.
+fn format_arg_len(chars: &[char]) -> Option<(Option<String>, usize)> {
+    let mut index = 1;
+    while index < chars.len() && chars[index].is_ascii_digit() {
+        index += 1;
+    }
+    if index >= chars.len() || chars[index] != '}' {
+        return None;
+    }
+    let digits: String = chars[1..index].iter().collect();
+    Some(((!digits.is_empty()).then_some(digits), index + 1))
+}
+
+/// Every settings string the pinned reference accepts passes its
+/// `__customString__` check: a `{n}`/`{}` formatter without an argument is
+/// an error (#512).
+pub(crate) fn has_unbound_formatters(text: &str) -> bool {
+    evaluate_format(text, &[]).is_none()
 }
 
 /// The text an argument contributes inside a folded format expression.

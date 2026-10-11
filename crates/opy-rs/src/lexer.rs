@@ -359,14 +359,10 @@ impl Lexer {
                         codepoint = codepoint * 16 + digit_value;
                         self.advance();
                     }
-                    let Some(decoded) = char::from_u32(codepoint) else {
-                        return Err(OpyError::at(
-                            "lex-error",
-                            "Unicode escape does not name a Unicode scalar value",
-                            Span::new(self.file_id, escape_start.start, self.here(0).start),
-                        ));
-                    };
-                    value.push(decoded);
+                    // JS strings are UTF-16 and hold lone surrogates;
+                    // every observable downstream use (indexing, emission)
+                    // sees them as U+FFFD, so decode them to it directly.
+                    value.push(char::from_u32(codepoint).unwrap_or('\u{FFFD}'));
                     continue;
                 }
                 value.push(decode_string_escape(escaped));

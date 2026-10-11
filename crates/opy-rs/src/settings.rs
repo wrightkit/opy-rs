@@ -424,6 +424,24 @@ fn resolve_hir_node(
                 .collect(),
             span,
         }),
+        // A literal string still passes the pinned `__customString__`
+        // check upstream — `{n}`/`{}` formatters without arguments are an
+        // error even outside `.format(...)` calls (#512).
+        hir::SettingsNode::String { name, value, span } => {
+            if crate::compile_time::has_unbound_formatters(&value) {
+                let Some(span) = span else {
+                    return Err(OpyError::new(
+                        "settings-expression",
+                        "settings value has no source span",
+                    ));
+                };
+                return Err(settings_expression_error(
+                    hir_span_to_diag_span(span),
+                    format!("settings string '{value}' has format arguments"),
+                ));
+            }
+            Ok(hir::SettingsNode::String { name, value, span })
+        }
         node => Ok(node),
     }
 }
@@ -501,11 +519,19 @@ fn node_from_value(
             value,
             span: Some(span.into()),
         },
-        crate::compile_time::Value::String(value) => hir::SettingsNode::String {
-            name,
-            value,
-            span: Some(span.into()),
-        },
+        crate::compile_time::Value::String(value) => {
+            if crate::compile_time::has_unbound_formatters(&value) {
+                return Err(settings_expression_error(
+                    span,
+                    format!("settings string '{value}' has format arguments"),
+                ));
+            }
+            hir::SettingsNode::String {
+                name,
+                value,
+                span: Some(span.into()),
+            }
+        }
         crate::compile_time::Value::Bool(value) => hir::SettingsNode::Bool {
             name,
             value,
@@ -562,7 +588,12 @@ fn display_value(value: &crate::compile_time::Value) -> Result<String, String> {
         crate::compile_time::Value::Number(value) => {
             Ok(crate::compiler::number_format::javascript_text(*value))
         }
-        crate::compile_time::Value::String(value) => Ok(value.clone()),
+        crate::compile_time::Value::String(value) => {
+            if crate::compile_time::has_unbound_formatters(value) {
+                return Err(format!("settings string '{value}' has format arguments"));
+            }
+            Ok(value.clone())
+        }
         crate::compile_time::Value::Bool(value) => Ok(value.to_string()),
         // JavaScript `String(value)` on containers, as the pinned evaluator
         // writes them: arrays join their element text with commas, objects

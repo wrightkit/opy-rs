@@ -675,6 +675,127 @@ fn settings_list_elements_the_reference_rejects_are_errors() {
 }
 
 #[test]
+fn settings_strings_with_unbound_formatters_are_errors() {
+    // opy-rs#512: every settings string passes the pinned
+    // `__customString__` check — a `{n}`/`{}` formatter without an
+    // argument errors ("Too few arguments in .format()") whether the
+    // string sits in a list element, is evaluated, or is written
+    // literally.
+    for element in [
+        "\"{0}\"",
+        "\"x{0}y\"",
+        "\"{0}{1}\"",
+        "\"{5}\"",
+        "\"{0}{0}\"",
+        "\"{}\"",
+        "\"{}{}\"",
+        "\"{{}\"",
+        "\"{}}\"",
+    ] {
+        let source = format!(
+            "settings {{\n    \"gamemodes\": {{\"ffa\": {{\"enabled\": true, \"general\": {{\"unk\": [{element}]}}}}}}\n}}\nrule \"a\":\n    @Event global\n    wait(1)\n"
+        );
+        let outcome = check(&source, "main.opy", Path::new(""));
+        assert!(
+            outcome
+                .diagnostics
+                .iter()
+                .any(|d| d.code == "settings-expression"),
+            "element {element:?} must fail: {:?}",
+            outcome.diagnostics
+        );
+    }
+    // A literal scalar string with a formatter is rejected the same way.
+    let outcome = check(
+        concat!(
+            "settings {\n",
+            "    \"gamemodes\": {\"ffa\": {\"enabled\": true, \"general\": {\"unk\": \"{0}\"}}}\n",
+            "}\n",
+            "rule \"a\":\n    @Event global\n    wait(1)\n",
+        ),
+        "main.opy",
+        Path::new(""),
+    );
+    assert!(
+        outcome
+            .diagnostics
+            .iter()
+            .any(|d| d.code == "settings-expression"),
+        "a literal formatter string must fail: {:?}",
+        outcome.diagnostics
+    );
+    // Escaped `{{...}}` and non-formatter braces emit verbatim.
+    for (element, emitted) in [
+        ("\"{{0}}\"", "{{0}}"),
+        ("\"a{b}c\"", "a{b}c"),
+        ("\"{\"", "{"),
+        ("\"}\"", "}"),
+    ] {
+        let source = format!(
+            "settings {{\n    \"gamemodes\": {{\"ffa\": {{\"enabled\": true, \"general\": {{\"unk\": [{element}]}}}}}}\n}}\nrule \"a\":\n    @Event global\n    wait(1)\n"
+        );
+        let lines = compiled_lines(&source);
+        let block = lines
+            .iter()
+            .position(|line| line == "unk {")
+            .unwrap_or_else(|| panic!("element {element:?} must emit: {lines:?}"));
+        assert_eq!(
+            lines[block + 1],
+            emitted,
+            "element {element:?} must emit {emitted:?}: {lines:?}"
+        );
+    }
+}
+
+#[test]
+fn settings_values_follow_the_reference_string_contracts() {
+    // opy-rs#512: dictionary keys must evaluate to strings upstream
+    // ("Dictionary key must be a string literal, got '1' of type
+    // number"), while a string-keyed dictionary still emits its
+    // `[object Object]` text.
+    for element in ["{1:2}", "{true:2}", "{\"a\":1,1:2}"] {
+        let source = format!(
+            "settings {{\n    \"gamemodes\": {{\"ffa\": {{\"enabled\": true, \"general\": {{\"unk\": [{element}]}}}}}}\n}}\nrule \"a\":\n    @Event global\n    wait(1)\n"
+        );
+        let outcome = check(&source, "main.opy", Path::new(""));
+        assert!(
+            outcome
+                .diagnostics
+                .iter()
+                .any(|d| d.code == "settings-expression"),
+            "element {element:?} must fail: {:?}",
+            outcome.diagnostics
+        );
+    }
+    // `Math.max(0, i)` keeps NaN upstream: `charAt(NaN)` is `""` and a
+    // NaN `substring` bound reads as 0, so `substring(2, NaN)` swaps to
+    // `(0, 2)`. A lone surrogate emits the replacement character.
+    for (element, emitted) in [
+        ("{\"a\":2}", "[object Object]"),
+        ("\"abc\".charAt(0x)", ""),
+        ("\"abc\".charAt(9)", ""),
+        ("\"abcdef\".substring(0x, 2)", ""),
+        ("\"abcdef\".substring(2, 0x)", "ab"),
+        ("\"abcdef\".substring(4, 2)", "ef"),
+        ("\"a\\uD800b\".charAt(1)", "\u{FFFD}"),
+    ] {
+        let source = format!(
+            "settings {{\n    \"gamemodes\": {{\"ffa\": {{\"enabled\": true, \"general\": {{\"unk\": [{element}]}}}}}}\n}}\nrule \"a\":\n    @Event global\n    wait(1)\n"
+        );
+        let lines = compiled_lines(&source);
+        let block = lines
+            .iter()
+            .position(|line| line == "unk {")
+            .unwrap_or_else(|| panic!("element {element:?} must emit: {lines:?}"));
+        assert_eq!(
+            lines[block + 1],
+            emitted,
+            "element {element:?} must emit {emitted:?}: {lines:?}"
+        );
+    }
+}
+
+#[test]
 fn settings_workshop_members_follow_the_pinned_contract() {
     // opy-rs#512: the pinned compiler classifies each `settings.workshop`
     // member — a `Bool` emits its `On`/`Off` text, a number-like value its

@@ -18,7 +18,9 @@ as its localized key followed by the value. List elements are settings
 expressions the pinned evaluator folds to their `String(value)` text (`1+2`
 emits `3`, `["a"]` emits `a`); an element it cannot resolve is a
 `settings-expression` error wherever the list is written, catalogued keys
-included. A hero member the pinned schema does not apply to that hero is
+included. Strings pass the pinned `__customString__` check on any path — a
+`{n}`/`{}` formatter without an argument errors (`["{0}"]`, `"x{0}y"`), and
+a dictionary key that does not evaluate to a string errors (`[{1:2}]`). A hero member the pinned schema does not apply to that hero is
 unknown for it and compiles fully verbatim. A `settings.workshop` member
 follows the pinned workshop contract: `true`/`false` emit as the compile
 target's `On`/`Off` text, a number-like value emits its number text, a
