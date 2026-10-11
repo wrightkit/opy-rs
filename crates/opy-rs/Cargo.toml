@@ -10,6 +10,7 @@ description = "Standalone OverPy-compatible .opy implementation with parsing, to
 workspace = true
 
 [dependencies]
+libm.workspace = true
 libquickjs-ng-sys.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
