@@ -298,12 +298,12 @@ fn pass_through_unknown_members(
                     *children = general;
                 }
             }
-            // An uncatalogued top-level group is carried verbatim like an
-            // unknown key; its members still take the pass-through check so
-            // a failed evaluation in a list they hold errors (#512).
-            name => {
-                pass_through_members(children, &[PathPart::Part(name)], &mut unknown, None, evals)?
-            }
+            // An uncatalogued top-level group stays verbatim: upstream
+            // rejects the key, and keeping authored node shapes lets the
+            // emission table fail it as before. `check_surviving_lists`
+            // below still errors a failed evaluation in a list it holds
+            // (#512).
+            _ => {}
         }
     }
     check_surviving_lists(&settings.children, evals)?;

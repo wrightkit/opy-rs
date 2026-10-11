@@ -76,7 +76,16 @@ fn eval(
             }
             Some(Value::Number(*value))
         }
-        Expr::String { value, .. } => Some(Value::String(value.clone())),
+        Expr::String { value, .. } => {
+            // The pinned compiler arity-checks every `__customString__`
+            // literal the evaluator touches, not only emitted strings —
+            // an unbound `{n}`/`{}` errors as an operand too (#512).
+            // `Expr::Format` carries its template separately.
+            if settings && has_unbound_formatters(value) {
+                return None;
+            }
+            Some(Value::String(value.clone()))
+        }
         Expr::Bool { value, .. } => Some(Value::Bool(*value)),
         // `null` is a formattable `0` upstream and unhandled elsewhere; it
         // stays unresolvable outside settings eval (#512).
@@ -144,27 +153,37 @@ fn eval(
             settings,
         ),
         Expr::Conditional {
-            then_value,
+            then_value: then_expr,
             condition,
-            else_value,
+            else_value: else_expr,
             ..
         } => {
             // The pinned compiler resolves every operand before folding, so
             // an unresolvable untaken branch still fails the expression.
             let condition = eval(condition, constants, bindings, stack, settings)?;
-            let then_value = eval(then_value, constants, bindings, stack, settings)?;
-            let else_value = eval(else_value, constants, bindings, stack, settings)?;
-            // The settings evaluator's conditional has no fold for a
-            // condition it cannot call truthy or falsy — `1 if {} else 2`
-            // and `1 if [] else 2` error upstream (#512).
-            if matches!(condition, Value::Object(_))
-                || matches!(&condition, Value::Array(values) if values.is_empty())
-            {
+            let then_value = eval(then_expr, constants, bindings, stack, settings)?;
+            let else_value = eval(else_expr, constants, bindings, stack, settings)?;
+            // `[]` crashes the pinned `__ifThenElse__` fold before it can
+            // reach any rule, so it rejects unconditionally (#512).
+            if matches!(&condition, Value::Array(values) if values.is_empty()) {
+                return None;
+            }
+            // `areAstsAlwaysEqual` folds equal branches upstream before an
+            // unclassifiable condition rejects — `1 if {} else 1` emits
+            // `1`, while `1 if {} else 2` leaves `__ifThenElse__` standing
+            // and the settings walk rejects it. The compare is on folded
+            // AST names, so literal leaves must share a spelling (`1` and
+            // `1.0` do not fold even inside a container; #512).
+            if same_spelling(then_expr, else_expr) && values_equal(&then_value, &else_value) {
+                return Some(then_value);
+            }
+            if matches!(condition, Value::Object(_)) {
                 return None;
             }
             match truthiness(&condition) {
+                Some(true) => Some(then_value),
                 Some(false) => Some(else_value),
-                Some(true) | None => Some(then_value),
+                None => None,
             }
         }
         Expr::Unary { op, operand, .. } => {
@@ -440,6 +459,12 @@ fn evaluate_builtin(name: &str, values: &[Value]) -> Option<Value> {
                     return Some(Value::Array(Vec::new()));
                 }
                 let mut start = round_half_up(number(start)?);
+                // `arr.slice(start, start + count)` with a `NaN` bound is
+                // `[]` upstream — the `as usize` cast below would coerce
+                // `NaN` to `0` (#512).
+                if start.is_nan() || count.is_nan() {
+                    return Some(Value::Array(Vec::new()));
+                }
                 if start < 0.0 {
                     count += start;
                     start = 0.0;
@@ -556,7 +581,15 @@ fn evaluate_binary(op: &str, left: Value, right: Value, settings: bool) -> Optio
     let is_zero = |value: &Value| matches!(value, Value::Number(number) if *number == 0.0);
     let is_one = |value: &Value| matches!(value, Value::Number(number) if *number == 1.0);
     let is_bool = |value: &Value| matches!(value, Value::Bool(_));
-    let is_literal = |value: &Value| matches!(value, Value::Number(_) | Value::String(_));
+    // `astIsLiteral(vect)` holds when every component is literal upstream,
+    // so `==`/`!=` fold literal vector compares (#512).
+    let is_literal = |value: &Value| match value {
+        Value::Number(_) | Value::String(_) => true,
+        Value::Vector(components) => components
+            .iter()
+            .all(|component| matches!(component, Value::Number(_) | Value::String(_))),
+        _ => false,
+    };
     let is_falsy = |value: &Value| truthiness(value) == Some(false);
     let folded = |result: f64| (result.abs() <= NUMBER_LIMIT).then_some(Value::Number(result));
     match op {
@@ -788,7 +821,48 @@ fn truthiness(value: &Value) -> Option<bool> {
         Value::Array(values) if values.is_empty() => Some(false),
         Value::Array(values) => truthiness(&values[0]),
         Value::Null => Some(false),
-        Value::Object(_) | Value::Vector(_) => None,
+        Value::Object(_) => None,
+        // `isDefinitelyTruthy(vect)` holds when any component is truthy and
+        // a vector is never `isDefinitelyFalsy` upstream, so `vect(0,0,0)`
+        // stays unclassified rather than falsy (#512).
+        Value::Vector(components) => components
+            .iter()
+            .any(|component| truthiness(component) == Some(true))
+            .then_some(true),
+    }
+}
+
+/// Whether two expressions can be `areAstsAlwaysEqual` upstream: literal
+/// leaves compare folded-AST names, so number literals count only when
+/// spelled identically. Shapes without authored spelling (folded
+/// expressions, strings, booleans) defer to `values_equal` (#512).
+fn same_spelling(left: &Expr, right: &Expr) -> bool {
+    match (left, right) {
+        (Expr::Number { text: a, .. }, Expr::Number { text: b, .. }) => a == b,
+        (Expr::Array { elements: a, .. }, Expr::Array { elements: b, .. }) => {
+            a.len() == b.len() && a.iter().zip(b.iter()).all(|(a, b)| same_spelling(a, b))
+        }
+        (Expr::Dict { entries: a, .. }, Expr::Dict { entries: b, .. }) => {
+            a.len() == b.len()
+                && a.iter().zip(b.iter()).all(|(a, b)| {
+                    same_spelling(&a.key, &b.key) && same_spelling(&a.value, &b.value)
+                })
+        }
+        (
+            Expr::Vector {
+                x: ax,
+                y: ay,
+                z: az,
+                ..
+            },
+            Expr::Vector {
+                x: bx,
+                y: by,
+                z: bz,
+                ..
+            },
+        ) => same_spelling(ax, bx) && same_spelling(ay, by) && same_spelling(az, bz),
+        _ => true,
     }
 }
 

@@ -574,6 +574,20 @@ fn settings_list_elements_evaluate_like_the_pinned_reference() {
         // unescaped (#512).
         ("\"{{0}}\".format(5)", "{{0}}"),
         ("\"{{}}\".format(5)", "{{}}"),
+        // A `vect` is `isDefinitelyTruthy` on any truthy component and
+        // never falsy, literal vectors compare by `astIsLiteral`, an
+        // unclassifiable condition folds equal branches, and a `NaN`
+        // slice bound yields `[]` (#512).
+        ("vect(1,2,3) and 5", "5"),
+        ("vect(0,0,0) or 5", "5"),
+        ("not vect(1,2,3)", "false"),
+        ("not not vect(1,0,0)", "true"),
+        ("vect(1,0,0) == vect(0,1,0)", "false"),
+        ("vect(1,0,0) != vect(0,1,0)", "true"),
+        ("1 if vect(0,0,0) else 1", "1"),
+        ("1 if {} else 1", "1"),
+        ("len([1,2].slice(0, 0x))", "0"),
+        ("len([1,2,3].slice(-1, 0x))", "0"),
     ] {
         let source = format!(
             "settings {{\n    \"gamemodes\": {{\"ffa\": {{\"enabled\": true, \"general\": {{\"unk\": [{element}]}}}}}}\n}}\nrule \"a\":\n    @Event global\n    wait(1)\n"
@@ -639,6 +653,20 @@ fn settings_list_elements_the_reference_rejects_are_errors() {
         ("2e+3", "settings-expression"),
         (".5", "settings-expression"),
         ("2.", "settings-expression"),
+        // An unclassifiable conditional leaves `__ifThenElse__` standing
+        // upstream — `[]` even crashes its fold — and equal branches fold
+        // only with identical literal spellings (`1`/`1.0` differ; #512).
+        ("1 if vect(0,0,0) else 2", "settings-expression"),
+        ("1 if vect(0,0,0) else 1.0", "settings-expression"),
+        ("[1] if vect(0,0,0) else [1.0]", "settings-expression"),
+        ("1 if {} else 2", "settings-expression"),
+        ("1 if [] else 2", "settings-expression"),
+        ("1 if [] else 1", "settings-expression"),
+        // A truthy-component `vect` is not an `or`/`not` operand upstream;
+        // a falsy-component vector stays unclassified (#512).
+        ("vect(1,0,0) or 5", "settings-expression"),
+        ("vect(0,0,0) and 5", "settings-expression"),
+        ("not vect(0,0,0)", "settings-expression"),
     ] {
         let source = format!(
             "settings {{\n    \"gamemodes\": {{\"ffa\": {{\"enabled\": true, \"general\": {{\"unk\": [{element}]}}}}}}\n}}\nrule \"a\":\n    @Event global\n    wait(1)\n"
@@ -724,6 +752,33 @@ fn settings_strings_with_unbound_formatters_are_errors() {
         "a literal formatter string must fail: {:?}",
         outcome.diagnostics
     );
+    // The arity check applies to every literal the evaluator touches, so
+    // a formatter string errors as an operand too — `in`, `==`, `not`, a
+    // method receiver, a dict key, or a condition (#512).
+    for element in [
+        "\"{0}\" in [\"x\"]",
+        "\"{0}\" in []",
+        "\"{0}\" == \"x\"",
+        "\"{}\" == \"x\"",
+        "not \"{0}\"",
+        "\"{0}\".charAt(0)",
+        "{\"{0}\":1}",
+        "1 if \"{0}\" else 2",
+        "\"x{9}y\" == \"z\"",
+    ] {
+        let source = format!(
+            "settings {{\n    \"gamemodes\": {{\"ffa\": {{\"enabled\": true, \"general\": {{\"unk\": [{element}]}}}}}}\n}}\nrule \"a\":\n    @Event global\n    wait(1)\n"
+        );
+        let outcome = check(&source, "main.opy", Path::new(""));
+        assert!(
+            outcome
+                .diagnostics
+                .iter()
+                .any(|d| d.code == "settings-expression"),
+            "operand element {element:?} must fail: {:?}",
+            outcome.diagnostics
+        );
+    }
     // Escaped `{{...}}` and non-formatter braces emit verbatim.
     for (element, emitted) in [
         ("\"{{0}}\"", "{{0}}"),
@@ -1078,6 +1133,56 @@ fn catalogued_list_keys_reject_elements_the_reference_cannot_resolve() {
     assert!(
         lines.iter().any(|line| line.contains("King's Row")),
         "an evaluated map member must emit its display name: {lines:?}"
+    );
+}
+
+#[test]
+fn settings_uncatalogued_top_level_groups_still_reject() {
+    // opy-rs#512: a top-level group the catalog does not declare stays
+    // verbatim — upstream rejects the key ("Unknown key 'gamemodes0'") —
+    // so its members keep failing the emission table instead of being
+    // rewritten into an emittable pass-through form.
+    for (key, name) in [
+        (
+            "\"gamemodes0\": {\"ffa\": {\"enabledMaps\": [\"kingsRow\"]}}",
+            "'enabledMaps'",
+        ),
+        ("\"toplevel\": {\"a\": 1}", "'a'"),
+        ("\"toplevel\": {\"a\": [1+2]}", "'a'"),
+    ] {
+        let source = format!(
+            "settings {{\n    \"gamemodes\": {{\"ffa\": {{\"enabled\": true}}}},\n    {key}\n}}\nrule \"a\":\n    @Event global\n    wait(1)\n"
+        );
+        let outcome = check(&source, "main.opy", Path::new(""));
+        assert!(
+            outcome
+                .diagnostics
+                .iter()
+                .any(|d| d.code == "workshop-emission" && d.message.contains(name)),
+            "{key:?} must fail the emission table: {:?}",
+            outcome.diagnostics
+        );
+    }
+    // A failed evaluation inside the group is still a
+    // `settings-expression`: the surviving-list check walks it verbatim.
+    let outcome = check(
+        concat!(
+            "settings {\n",
+            "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
+            "    \"toplevel\": {\"a\": [abc]}\n",
+            "}\n",
+            "rule \"a\":\n    @Event global\n    wait(1)\n",
+        ),
+        "main.opy",
+        Path::new(""),
+    );
+    assert!(
+        outcome
+            .diagnostics
+            .iter()
+            .any(|d| d.code == "settings-expression"),
+        "a failed eval inside an uncatalogued group is an error: {:?}",
+        outcome.diagnostics
     );
 }
 
