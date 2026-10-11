@@ -104,7 +104,10 @@ fn rename_member(member: &mut workshop_rs::settings::SettingsNode, name: &str) {
         | SettingsNode::List { name: slot, .. }
         | SettingsNode::Raw { name: slot, .. }
         | SettingsNode::RawValue { name: slot, .. } => *slot = name.to_string(),
-        SettingsNode::Workshop { .. } => {}
+        // `Workshop` carries no member name, and a settings variant the
+        // pinned workshop-rs release adds later (a verbatim group marker)
+        // must not fail this build before its handling lands here.
+        _ => {}
     }
 }
 
