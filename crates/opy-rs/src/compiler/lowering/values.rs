@@ -961,6 +961,9 @@ impl<'a> Lowering<'a> {
                     if function.id == "getAllPlayers" {
                         return Ok(self.lower_all_players());
                     }
+                    if function.id == "len" {
+                        return self.lower_len_call(args, span);
+                    }
                     let lowered_args = self.lower_values(args)?;
                     Value::Call {
                         name: catalog_id.clone(),
@@ -1885,6 +1888,51 @@ impl<'a> Lowering<'a> {
             }
             _ => false,
         }
+    }
+
+    /// `len(x)` is `Count Of(x)`, except that the pinned reference rewrites
+    /// `len(<player-set builtin>)` to the matching `Number Of …` value under
+    /// `enableOptimization` (`src/compiler/functions/len.ts`,
+    /// overpy@9.7.10). The rewrite matches the lowered canonical call, so
+    /// `getAllPlayers()` and constant/macro indirections qualify through the
+    /// call they expand to.
+    fn lower_len_call(
+        &mut self,
+        args: &[Expr],
+        span: Option<HirSpan>,
+    ) -> Result<ValueId, IntegrationError> {
+        let [array] = args else {
+            return Err(self.unsupported("len requires exactly one argument", span));
+        };
+        let array = self.lower_value(array)?;
+        let rewrite = if self.optimization_state_at(span.as_ref()).enabled {
+            match self.value(array) {
+                Value::Call { name, args } => {
+                    Self::len_player_set_call(name).map(|name| (name, args.clone()))
+                }
+                _ => None,
+            }
+        } else {
+            None
+        };
+        Ok(match rewrite {
+            Some((name, args)) => self.push_call(name, args),
+            None => self.push_call("countOf", vec![array]),
+        })
+    }
+
+    /// `len(<player-set>)` → specialized `Number Of …` call — the pinned
+    /// reference's `len.ts` table (overpy@9.7.10), keyed by canonical
+    /// Workshop call name.
+    fn len_player_set_call(call_name: &str) -> Option<&'static str> {
+        Some(match call_name {
+            "allPlayers" => "numberOfPlayers",
+            "getLivingPlayers" => "getNumberOfLivingPlayers",
+            "getDeadPlayers" => "getNumberOfDeadPlayers",
+            "getPlayersOnObjective" => "getNumberOfPlayersOnObjective",
+            "getPlayersOnHero" => "getNumberOfHeroes",
+            _ => return None,
+        })
     }
 
     fn lower_array_callback(
