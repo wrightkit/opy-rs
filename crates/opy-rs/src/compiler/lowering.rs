@@ -1352,7 +1352,7 @@ fn implicit_player_index(name: &str) -> u32 {
     }
 }
 
-fn big_letters(value: &str) -> String {
+pub(crate) fn big_letters(value: &str) -> String {
     let mut output = String::with_capacity(value.len());
     let mut converted = false;
     for character in value.chars() {
@@ -1390,7 +1390,7 @@ fn big_letter(character: char) -> Option<char> {
     })
 }
 
-fn fullwidth(value: &str) -> String {
+pub(crate) fn fullwidth(value: &str) -> String {
     value
         .chars()
         .map(|character| match character {
@@ -1410,7 +1410,7 @@ fn fullwidth(value: &str) -> String {
         .collect()
 }
 
-fn case_sensitive(value: &str) -> String {
+pub(crate) fn case_sensitive(value: &str) -> String {
     let mut output = value.replace('æ', "\u{04d5}").replace("nj", "\u{01cc}");
     output = output.replace(" a ", " ａ ");
     output.chars().map(case_sensitive_character).collect()

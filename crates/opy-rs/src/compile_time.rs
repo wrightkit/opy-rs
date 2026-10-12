@@ -87,6 +87,19 @@ fn eval(
             Some(Value::String(value.clone()))
         }
         Expr::Bool { value, .. } => Some(Value::Bool(*value)),
+        // A `w`/`b`/`c` literal is a `__customString__` upstream whose text
+        // tokens the modifier rewrites; the settings object walk reads the
+        // rewritten string like a plain one (#530). `l`/`t` build AST kinds
+        // the walk rejects, so they stay unresolvable.
+        Expr::StringModifier {
+            modifier, value, ..
+        } if settings => {
+            let template = modifier_template(modifier, value)?;
+            if has_unbound_formatters(&template) {
+                return None;
+            }
+            Some(Value::String(template))
+        }
         // `null` is a formattable `0` upstream and unhandled elsewhere; it
         // stays unresolvable outside settings eval (#512).
         Expr::Null { .. } => settings.then_some(Value::Null),
@@ -1004,6 +1017,56 @@ fn format_arg_len(chars: &[char]) -> Option<(Option<String>, usize)> {
 /// an error (#512).
 pub(crate) fn has_unbound_formatters(text: &str) -> bool {
     evaluate_format(text, &[]).is_none()
+}
+
+/// The template a `w`/`b`/`c` literal carries upstream: the modifier
+/// rewrites `type:"text"` tokens only, so `{n}`/`{}` formatters survive for
+/// `.format` to bind while `{{n}}` escapes rewrite with the text (#530).
+/// `b` must rewrite at least one character — the reference rejects the
+/// literal otherwise. Other modifiers build AST kinds the settings walk
+/// does not handle (`l`, `t`) and stay unresolvable.
+pub(crate) fn modifier_template(modifier: &str, value: &str) -> Option<String> {
+    if !matches!(modifier, "b" | "c" | "w") {
+        return None;
+    }
+    let chars: Vec<char> = value.chars().collect();
+    let mut output = String::with_capacity(value.len());
+    // Once `b` rewrites a character the rest of the text passes through;
+    // the flag spans text runs like the reference's token walk.
+    let mut big_letter_done = false;
+    let mut text = |run: &[char]| {
+        let run: String = run.iter().collect();
+        match modifier {
+            "b" if big_letter_done => run,
+            "b" => {
+                let rewritten = crate::compiler::big_letters(&run);
+                big_letter_done = rewritten != run;
+                rewritten
+            }
+            "c" => crate::compiler::case_sensitive(&run),
+            _ => crate::compiler::fullwidth(&run),
+        }
+    };
+    let mut run_start = 0;
+    let mut index = 0;
+    while index < chars.len() {
+        if chars[index] == '{' {
+            if let Some(length) = brace_escape_len(&chars[index..]) {
+                index += length;
+                continue;
+            }
+            if let Some((_, length)) = format_arg_len(&chars[index..]) {
+                output.push_str(&text(&chars[run_start..index]));
+                output.extend(&chars[index..index + length]);
+                index += length;
+                run_start = index;
+                continue;
+            }
+        }
+        index += 1;
+    }
+    output.push_str(&text(&chars[run_start..]));
+    (modifier != "b" || big_letter_done).then_some(output)
 }
 
 /// The text an argument contributes inside a folded format expression.

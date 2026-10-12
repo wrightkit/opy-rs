@@ -244,6 +244,74 @@ settings {
 }
 
 #[test]
+fn custom_string_modifiers_resolve_as_settings_text() {
+    // opy-rs#530: `w`/`b`/`c`/`f` literals are `__customString__` upstream
+    // whose text tokens the modifier rewrites; the settings object walk
+    // reads the rewritten text like a plain string, and `.format` binds the
+    // `{n}`/`{}` formatters that survive the rewrite.
+    let cases = [
+        ("w\"Free for all\"", "Ｆｒｅｅ\u{2001}ｆｏｒ\u{2001}ａｌｌ"),
+        ("b\"Free for all\"", "FrΕe for all"),
+        ("c\"Free for all\"", "Fṛẹẹ ƒοṛ ạII"),
+        ("f\"Free for all\"", "Free for all"),
+        ("f\"abc{1 + 1}def\"", "abc2def"),
+        ("w\"a{0}b\".format(\"x\")", "ａxｂ"),
+        ("w\"a{}b\".format(\"x\")", "ａxｂ"),
+        ("w\"{{0}}\"", "｛｛０｝｝"),
+    ];
+    for (value, expected) in cases {
+        let source = source_with_settings(&format!(
+            "settings {{\n    \"main\": {{\"modeName\": {value}}},\n    \"gamemodes\": {{}}\n}}"
+        ));
+        let artifact = Compiler::new()
+            .expect("released Workshop contract must load")
+            .compile_source_artifact(&source, "issue-530.opy", Path::new("."))
+            .unwrap_or_else(|error| panic!("{value} must resolve in settings: {error}"));
+        assert!(
+            artifact
+                .emitted
+                .contains(&format!("Mode Name: \"{expected}\"")),
+            "{value} must emit {expected}: {}",
+            artifact.emitted
+        );
+    }
+}
+
+#[test]
+fn unsupported_string_modifiers_stay_unresolvable_in_settings() {
+    // `l`/`t` build AST kinds the pinned settings walk rejects; an unbound
+    // formatter template, a `b` literal that rewrites no character, a
+    // missing `.format` argument, and `.format` on an f-string are all
+    // rejected upstream too.
+    let cases = [
+        "l\"err\"",
+        "t\"err\"",
+        "w\"a{0}b\"",
+        "b\"??\"",
+        "w\"a{0}b\".format()",
+        "f\"a{1}b\".format(9)",
+    ];
+    for value in cases {
+        let source = source_with_settings(&format!(
+            "settings {{\n    \"main\": {{\"modeName\": {value}}},\n    \"gamemodes\": {{}}\n}}"
+        ));
+        let report = Compiler::new()
+            .expect("released Workshop contract must load")
+            .compile_source_report(&source, "issue-530.opy", Path::new("."));
+        assert_eq!(
+            report.compile.status,
+            CompileStatus::Failure,
+            "{value} must not resolve in settings"
+        );
+        assert_eq!(
+            report.compile.diagnostics.first().map(|d| d.code.as_str()),
+            Some("settings-expression"),
+            "{value} must fail as a settings-expression"
+        );
+    }
+}
+
+#[test]
 fn unresolved_expression_valued_setting_is_a_frontend_error() {
     let source = "settings {\n    \"lobby\": {\n        \"modeName\": GAMEMODE_NAME\" \"GAMEMODE_VERSION,\n    },\n    \"gamemodes\": {}\n}\nrule \"r\":\n    @Event global\n    pass\n";
     let error = crate::compile(source, "source.opy", Path::new(".")).unwrap_err();

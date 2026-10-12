@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/settings-string-modifiers-530",
+  "category": "synthetic",
+  "features": [
+    "settings",
+    "syntax/string-modifiers",
+    "expressions/format"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": true
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": true
+    }
+  }
+}

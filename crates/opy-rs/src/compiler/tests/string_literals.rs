@@ -126,6 +126,22 @@ fn named_string_entities_reach_canonical_custom_strings() {
 }
 
 #[test]
+fn modifier_format_binds_the_surviving_formatters() {
+    // opy-rs#530: `.format` on a `w`/`b`/`c` literal binds the `{n}`/`{}`
+    // formatters that survive the text rewrite, like a plain string.
+    let source =
+        "globalvar g\nrule \"r\":\n    @Event global\n    g = w\"a{0}b\".format(getMatchTime())\n";
+    let hir = crate::compile(source, "issue-530.opy", Path::new(".")).unwrap();
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+
+    assert!(
+        artifact
+            .emitted
+            .contains("Set Global Variable(g, Custom String(\"ａ{0}ｂ\", Match Time))")
+    );
+}
+
+#[test]
 fn named_string_entities_reach_formatted_custom_strings() {
     let source = r#"globalvar value
 rule "formatted entities":
