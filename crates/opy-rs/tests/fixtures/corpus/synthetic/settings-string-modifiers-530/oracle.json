@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "settings\n{\n\tmain\n\t{\n\t\tMode Name: \"\uff26\uff52\uff45\uff45\u2001\uff46\uff4f\uff52\u2001\uff41\uff4c\uff4c\"\n\t\tDescription: \"\uff41x\uff42\"\n\t}\n\tmodes\n\t{\n\t\tDeathmatch\n\t\t{\n\t\t\tenabled maps\n\t\t\t{\n\t\t\t\tWorkshop Island\n\t\t\t}\n\t\t}\n\t}\n}\n\nvariables {\n    global:\n        0: value\n}\n\nrule (\"issue 530 string-modifier settings\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(value, Custom String(\"\uff41{0}\uff42\", Match Time));\n    }\n}\n",
+    "workshopExact": "settings\n{\n\tmain\n\t{\n\t\tMode Name: \"\uff26\uff52\uff45\uff45\u2001\uff46\uff4f\uff52\u2001\uff41\uff4c\uff4c\"\n\t\tDescription: \"\uff41x\uff42\"\n\t}\n\tmodes\n\t{\n\t\tDeathmatch\n\t\t{\n\t\t\tenabled maps\n\t\t\t{\n\t\t\t\tWorkshop Island\n\t\t\t}\n\t\t}\n\t}\n}\n\nvariables {\n    global:\n        0: value\n}\n\nrule (\"issue 530 string-modifier settings\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(value, Custom String(\"\uff41{0}\uff42\", Match Time));\n    }\n}\n\n",
+    "workshopSha256": "e9d3a59bb541705e270712b02a7364b12a42f0a364555e56951644e59d3a5319"
+  },
+  "fixture": "synthetic/settings-string-modifiers-530",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "42212e0df3e5da4eefa9f6df1979aff31ad2101b3d111975d9954a4302905c4f"
+      }
+    ],
+    "sha256": "e64e4cea3553ec5ea503b94e44f4845c035aa22df3e7d5076863567b7dbcdaa2",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

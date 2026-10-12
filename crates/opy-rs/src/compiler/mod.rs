@@ -36,6 +36,7 @@ pub use integration::LinkReport;
 pub(super) use integration::load_compiler_contract;
 pub(super) use lowering::Lowering;
 pub(crate) use lowering::player_event_kind;
+pub(crate) use lowering::{big_letters, case_sensitive, fullwidth};
 
 #[cfg(test)]
 mod integration_tests;

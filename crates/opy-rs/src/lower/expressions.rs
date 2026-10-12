@@ -1347,32 +1347,46 @@ impl Lowerer {
         }
         // `.format` on a string literal is the format special form; it is
         // also a declared member value, so position misuse diagnoses here.
-        if let Expr::String { value, .. } = receiver {
-            if name == "format" {
-                if args.iter().any(|arg| arg.keyword.is_some()) {
-                    for arg in args {
-                        if let Some((keyword, span)) = &arg.keyword {
-                            self.error_at(
-                                "keyword-unsupported",
-                                format!(
-                                    "function 'format' does not accept keyword \
-                                     arguments ('{keyword}')"
-                                ),
-                                *span,
-                            );
-                        }
+        // A `w`/`b`/`c` literal's receiver is its rewritten text upstream —
+        // the modifier transforms text tokens only, then `.format` binds
+        // the surviving `{n}`/`{}` formatters (`w"a{0}b".format("x")` emits
+        // `ａxｂ`; #530). `f`-string and unsupported-modifier receivers keep
+        // the manifest member path.
+        let format_text = if name == "format" {
+            match receiver {
+                Expr::String { value, .. } => Some(value.clone()),
+                Expr::StringModifier {
+                    modifier, value, ..
+                } => crate::compile_time::modifier_template(&modifier.to_string(), value),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        if let Some(format_text) = format_text {
+            if args.iter().any(|arg| arg.keyword.is_some()) {
+                for arg in args {
+                    if let Some((keyword, span)) = &arg.keyword {
+                        self.error_at(
+                            "keyword-unsupported",
+                            format!(
+                                "function 'format' does not accept keyword \
+                                 arguments ('{keyword}')"
+                            ),
+                            *span,
+                        );
                     }
                 }
-                let lowered: Vec<HirExpr> = self.lower_arg_values(args, macro_params);
-                if let Some(entry) = self.manifest.resolve_member("format") {
-                    self.check_call_position("format", entry, position, span);
-                }
-                return HirExpr::Format {
-                    text: value.clone(),
-                    args: lowered,
-                    span: Some(span.into()),
-                };
             }
+            let lowered: Vec<HirExpr> = self.lower_arg_values(args, macro_params);
+            if let Some(entry) = self.manifest.resolve_member("format") {
+                self.check_call_position("format", entry, position, span);
+            }
+            return HirExpr::Format {
+                text: format_text,
+                args: lowered,
+                span: Some(span.into()),
+            };
         }
         // Member calls resolve through the manifest (identity,
         // explicit-argument signatures, keyword binding); enforced receiver

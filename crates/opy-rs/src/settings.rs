@@ -989,11 +989,14 @@ impl Cursor<'_> {
                 })?;
                 Some(ScalarValue::String(value))
             }
-            Some('t') => {
+            // `true`/`false` only when the text spells the literal —
+            // `f`/`t` also open string modifiers (`f"..."`, `t"..."`)
+            // that the pinned compiler reads as expressions (#530).
+            Some('t') if self.text[self.pos..].starts_with("true") => {
                 self.expect_word("true")?;
                 Some(ScalarValue::Bool(true))
             }
-            Some('f') => {
+            Some('f') if self.text[self.pos..].starts_with("false") => {
                 self.expect_word("false")?;
                 Some(ScalarValue::Bool(false))
             }
