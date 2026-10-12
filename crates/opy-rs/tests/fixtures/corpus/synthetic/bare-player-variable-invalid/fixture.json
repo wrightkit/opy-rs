@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/bare-player-variable-invalid",
+  "category": "diagnostics",
+  "features": [
+    "player variables",
+    "name resolution",
+    "negative diagnostic"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "failure",
+      "relationship": "match",
+      "ruleNames": false,
+      "diagnosticCode": "unknown-identifier"
+    },
+    "compiler": {
+      "nativeStatus": "failure",
+      "relationship": "match",
+      "comparison": "diagnostic-code",
+      "diagnosticCode": "unknown-identifier",
+      "failureClass": "frontend"
+    }
+  }
+}
