@@ -412,6 +412,29 @@ fn pass_through_members(
                 });
             }
             Some(definition) => {
+                // The pinned compiler's `__bool*` value domains write their
+                // non-`true` member for every authored value except the
+                // boolean `true` itself (`providedSettings[key] === true`):
+                // `"off"`/`"on"` strings, numbers, and containers all emit
+                // the Off/No member (#531). `Raw`/`RawValue` members carry
+                // expression text the pinned evaluator rejects the same
+                // way, so they keep their diagnostic.
+                if matches!(definition.domain(), SettingValueDomain::Boolean)
+                    && matches!(
+                        member,
+                        SettingsNode::String { .. }
+                            | SettingsNode::Number { .. }
+                            | SettingsNode::List { .. }
+                            | SettingsNode::Group { .. }
+                    )
+                {
+                    *member = SettingsNode::Bool {
+                        name,
+                        value: false,
+                        span,
+                    };
+                    continue;
+                }
                 if !matches!(definition.domain(), SettingValueDomain::Enum { .. }) {
                     continue;
                 }
