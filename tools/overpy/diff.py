@@ -51,6 +51,7 @@ REFERENCE_FRONTIER_RULES = (
     ),
     ("Expected variable for 1st argument", "semantic", "invalid-range-binder"),
     ("Unknown member", "semantic", "unknown-member"),
+    ("Unknown function name", "semantic", "unknown-identifier"),
     ("Expected a ':'", "parse", "parse-error"),
     ("Content is empty", "parse", "parse-error"),
     ("Expected an action", "parse", "parse-error"),

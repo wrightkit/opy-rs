@@ -1370,6 +1370,26 @@ mod tests {
     }
 
     #[test]
+    fn a_bare_player_variable_name_is_an_unknown_identifier() {
+        // A bare name resolves only to a global variable or function in the
+        // pinned reference; a declared `playervar` is reachable only through
+        // the `player.name` member form, so the bare name rejects
+        // ("Unknown function name 'target'" upstream) with the structured
+        // `unknown-identifier` diagnostic (#532).
+        for statement in [
+            "target = eventPlayer",
+            "eventPlayer.setMoveSpeed(target)",
+            "for target in range(3):\n        pass",
+        ] {
+            let error = compile_error(
+                &format!("playervar target\nrule \"r\":\n    @Event eachPlayer\n    {statement}\n"),
+                4,
+            );
+            assert_eq!(error.code, "unknown-identifier", "statement: {statement}");
+        }
+    }
+
+    #[test]
     fn rule_prefix_template_is_global_and_subroutine_identity_is_preserved() {
         let text = "rule \"before\":\n    pass\ndef source_name():\n    @Name \"Friendly\"\n    pass\nrule \"after\":\n    pass\n";
         let tokens = lex(LexInput { file_id: 0, text }).expect("lexes");

@@ -279,12 +279,10 @@ impl Lowerer {
                 name: name.to_string(),
                 span: Some(span.into()),
             },
-            _ if self.player_visible(name) => HirExpr::PlayerVar {
-                player: Box::new(HirExpr::EventPlayer { span: None }),
-                name: name.to_string(),
-                member_span: None,
-                span: Some(span.into()),
-            },
+            // A `playervar` name is not a bare-name resolution target: the
+            // pinned reference reaches player variables only through the
+            // `player.name` member form and diagnoses a bare name as an
+            // unknown identifier (#532).
             _ if self.constant_visible(name) => HirExpr::Constant {
                 name: name.to_string(),
                 span: Some(span.into()),
