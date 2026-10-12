@@ -171,6 +171,11 @@ fn catalog_backed_receiver_calls_match_the_pinned_oracle() {
 }
 
 #[test]
+fn len_player_set_counts_match_the_pinned_oracle() {
+    assert_matches_oracle("len-player-sets");
+}
+
+#[test]
 fn catalog_backed_contextual_chase_calls_match_the_pinned_oracle() {
     let artifact = compile_fixture("chase-condition-agentlab");
     assert!(
