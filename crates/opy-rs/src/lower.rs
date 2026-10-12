@@ -939,6 +939,34 @@ fn context_player_expr(name: &str, span: Option<Span>) -> Option<HirExpr> {
     }
 }
 
+/// The bare-spelled values a call with an empty argument list resolves to:
+/// upstream `funcKw` entries with `args === null` produce the same AST
+/// whether written bare or as `name()` (#529). These are the context
+/// players and the `true`/`false`/`null` literals; the remaining
+/// bare-spelled names (`healer`, `healee`, the `eventDamage` family, and
+/// `ruleCondition`) are manifest functions and resolve through the
+/// manifest path instead. `RULE_CONDITION` is a constant spelling, not a
+/// `funcKw` name, so `RULE_CONDITION()` stays rejected like the reference.
+fn bare_spelled_value_expr(name: &str, span: Option<Span>) -> Option<HirExpr> {
+    if let Some(player) = context_player_expr(name, span) {
+        return Some(player);
+    }
+    match name {
+        "true" => Some(HirExpr::Bool {
+            value: true,
+            span: span.map(Into::into),
+        }),
+        "false" => Some(HirExpr::Bool {
+            value: false,
+            span: span.map(Into::into),
+        }),
+        "null" => Some(HirExpr::Null {
+            span: span.map(Into::into),
+        }),
+        _ => None,
+    }
+}
+
 /// The declaration namespace an identifier would occupy: `globalvar`,
 /// `playervar`, or `subroutine`/`def`. The pinned upstream compiler reserves
 /// a different name set per namespace, so a name refused for a `globalvar`
@@ -2469,6 +2497,66 @@ mod tests {
             std::path::Path::new(""),
         )
         .expect("the upstream spellings compile");
+    }
+
+    #[test]
+    fn bare_spelled_values_accept_an_empty_call_form() {
+        // The reference produces the same AST for a `funcKw`
+        // `args === null` name whether written bare or as `name()` (#529):
+        // the context players and the `true`/`false`/`null` literals.
+        for (name, expect) in [
+            ("attacker", "call"),
+            ("victim", "call"),
+            ("localPlayer", "call"),
+            ("eventPlayer", "event-player"),
+            ("hostPlayer", "host-player"),
+            ("true", "bool"),
+            ("false", "bool"),
+            ("null", "null"),
+        ] {
+            let value = lowered_value(&action_source(&format!("g = {name}()")));
+            match expect {
+                "call" => assert!(
+                    matches!(&value, HirExpr::Call { name: n, args, .. } if n == name && args.is_empty()),
+                    "{name}() must lower like the bare name, got {value:?}"
+                ),
+                "event-player" => assert!(
+                    matches!(&value, HirExpr::EventPlayer { .. }),
+                    "eventPlayer() must lower like the bare name, got {value:?}"
+                ),
+                "host-player" => assert!(
+                    matches!(&value, HirExpr::HostPlayer { .. }),
+                    "hostPlayer() must lower like the bare name, got {value:?}"
+                ),
+                "bool" => assert!(
+                    matches!(&value, HirExpr::Bool { value: v, .. } if *v == (name == "true")),
+                    "{name}() must lower to the literal, got {value:?}"
+                ),
+                _ => assert!(
+                    matches!(&value, HirExpr::Null { .. }),
+                    "null() must lower to the literal, got {value:?}"
+                ),
+            }
+        }
+
+        // Arguments are rejected like the manifest zero-parameter path.
+        for statement in ["g = attacker(1)", "g = null(1)", "g = eventPlayer(1)"] {
+            let error = compile_error(&action_source(statement), 4);
+            assert_eq!(error.code, "invalid-arity", "{statement}");
+        }
+
+        // In statement position a bare-spelled value diagnoses like any
+        // other value function, not as an unknown action.
+        for statement in ["attacker()", "eventPlayer()", "true()"] {
+            let error = compile_error(&action_source(statement), 4);
+            assert_eq!(error.code, "value-in-action-position", "{statement}");
+        }
+
+        // `RULE_CONDITION` is a constant spelling, not a `funcKw` name:
+        // the reference rejects `RULE_CONDITION()` and so does the call
+        // form here.
+        let error = compile_error(&action_source("g = RULE_CONDITION()"), 4);
+        assert_eq!(error.code, "unknown-value");
     }
 
     #[test]

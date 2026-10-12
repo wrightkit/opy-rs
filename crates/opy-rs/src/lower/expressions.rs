@@ -676,6 +676,40 @@ impl Lowerer {
             match self.manifest.resolve_function(name) {
                 Some(entry) => self.check_call_position(name, entry, position, span),
                 None => {
+                    // A bare-spelled value called with an empty argument
+                    // list resolves exactly like its bare form (`attacker()`
+                    // is `attacker`): the reference produces the same AST
+                    // for `funcKw` `args === null` names in either spelling
+                    // (#529). Position and arity checks mirror the manifest
+                    // zero-parameter path — a value in statement position is
+                    // `value-in-action-position`, an argument is
+                    // `invalid-arity`.
+                    if let Some(bare) = bare_spelled_value_expr(name, Some(span)) {
+                        match position {
+                            CallPosition::Statement => self.error_at(
+                                "value-in-action-position",
+                                format!("value function '{name}' cannot be used as an action"),
+                                span,
+                            ),
+                            CallPosition::ForIterable => self.error_at(
+                                "invalid-iterable",
+                                format!("for-loop iterable '{name}' must be a range(...) call"),
+                                span,
+                            ),
+                            _ => {}
+                        }
+                        if !args.is_empty() {
+                            self.error_at(
+                                "invalid-arity",
+                                format!(
+                                    "value '{name}' expects exactly 0 arguments but got {}",
+                                    args.len()
+                                ),
+                                arg_span(args),
+                            );
+                        }
+                        return bare;
+                    }
                     let (code, message) = match position {
                         CallPosition::Statement => {
                             ("unknown-action", format!("unknown action '{name}'"))

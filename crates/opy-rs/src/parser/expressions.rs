@@ -499,6 +499,23 @@ impl Parser<'_> {
                         span: Span::new(token.span.file, token.span.start, string.span.end),
                     });
                 }
+                // `true()`, `false()`, `null()` are accepted by the
+                // reference: `funcKw` `args === null` names produce the
+                // same AST bare or called with an empty argument list
+                // (#529). Keep the literal's spelling as the callee so
+                // the lowerer resolves the zero-argument form like the
+                // bare literal and rejects arguments like any other
+                // bare-spelled value; `None` is not a reference spelling,
+                // so `None()` resolves through the same path and stays
+                // rejected.
+                if matches!(token.text.as_str(), "true" | "false" | "None" | "null")
+                    && self.peek_kind() == TokenKind::LParen
+                {
+                    return Ok(Expr::Name {
+                        name: token.text.clone(),
+                        span: token.span,
+                    });
+                }
                 match token.text.as_str() {
                     "true" => Ok(Expr::Bool {
                         value: true,
