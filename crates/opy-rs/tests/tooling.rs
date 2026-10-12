@@ -514,6 +514,43 @@ fn an_object_under_an_enum_key_compiles_as_the_reference_block() {
 }
 
 #[test]
+fn non_true_values_under_boolean_keys_emit_the_pinned_off_member() {
+    // opy-rs#531: the pinned compiler's `__bool*` value domains write
+    // their non-`true` member for every authored value except `true`
+    // itself (`providedSettings[key] === true`): `"off"` and `"on"`
+    // strings, numbers, and containers all emit Off/No rather than
+    // failing the member's value kind.
+    let source = concat!(
+        "settings {\n",
+        "    \"main\": {\"description\": \"t\"},\n",
+        "    \"lobby\": {\"allowPlayersInQueue\": \"off\", \"swapTeamsAfterMatch\": \"on\"},\n",
+        "    \"gamemodes\": {\"ffa\": {\"enabledMaps\": [\"workshopIsland\"]},\n",
+        "        \"general\": {\"heroLimit\": \"off\", \"enableHeroSwitching\": \"off\",\n",
+        "            \"enableCompetitiveRules\": \"on\", \"enablePerks\": 1,\n",
+        "            \"enableRandomHeroes\": [true]}}\n",
+        "}\n",
+        "rule \"a\":\n    @Event global\n    wait(1)\n",
+    );
+    let outcome = check(source, "main.opy", Path::new(""));
+    assert!(
+        outcome.is_clean(),
+        "non-boolean values under boolean keys must check clean: {:?}",
+        outcome.diagnostics
+    );
+    let lines = compiled_lines(source);
+    for line in [
+        "Allow Players Who Are In Queue: No",
+        "Swap Teams After Match: No",
+        "Allow Hero Switching: Off",
+        "Competitive Rules: Off",
+        "Enable Perks: Off",
+        "Respawn As Random Hero: Off",
+    ] {
+        assert!(lines.contains(&line.to_string()), "{line:?} in {lines:?}");
+    }
+}
+
+#[test]
 fn settings_list_elements_evaluate_like_the_pinned_reference() {
     // opy-rs#512: a list element is a settings expression the pinned
     // evaluator folds to its `String(value)` text — `1+2` emits `3`, a
