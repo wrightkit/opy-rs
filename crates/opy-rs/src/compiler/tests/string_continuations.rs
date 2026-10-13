@@ -32,8 +32,10 @@ fn backslash_continued_string_reaches_the_expected_canonical_value() {
         panic!("debug text must lower to a canonical value call");
     };
     assert_eq!(text_name, "customString");
+    // Literal `debug` arguments splice into the format text like the
+    // reference, so the continued string lands inline after `= `.
     assert!(matches!(
-        &text_args[1],
-        Value::String(value) if value == "one\ntwo"
+        &text_args[0],
+        Value::String(value) if value.contains("= one\ntwo")
     ));
 }

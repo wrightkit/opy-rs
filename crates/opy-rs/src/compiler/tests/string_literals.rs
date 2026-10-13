@@ -37,9 +37,11 @@ fn minimized_regression_reaches_canonical_debug_string() {
         panic!("debug text must lower to a canonical value call");
     };
     assert_eq!(text_name, "customString");
+    // The reference splices literal string arguments into the debug format
+    // text, so the concatenated literal must appear inline after `= `.
     assert!(matches!(
-        &text_args[1],
-        Value::String(value) if value == "onetwo"
+        &text_args[0],
+        Value::String(value) if value.contains("= onetwo")
     ));
 }
 
@@ -155,5 +157,82 @@ rule "formatted entities":
         artifact
             .emitted
             .contains("Custom String(\"■ {0}\", Match Time)")
+    );
+}
+
+#[test]
+fn string_addition_folds_to_a_canonical_string() {
+    // Documented deviation: the reference emits
+    // `Add(Custom String, Custom String)` for `"a" + "b"`, a call the
+    // canonical catalog's `add` domain rejects. opy-rs folds to the literal
+    // instead, which stays canonical and produces the same runtime text.
+    let source = "globalvar g\nrule \"r\":\n    @Event global\n    g.append(\"x\" + \"y\")\n";
+    let hir = crate::compile(source, "concat.opy", Path::new(".")).unwrap();
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+    assert!(
+        artifact.emitted.contains("Custom String(\"xy\")"),
+        "{}",
+        artifact.emitted
+    );
+}
+
+#[test]
+fn debug_splices_a_plain_string_argument_like_the_pinned_reference() {
+    // `debug("lit")` merges the `__customString__` argument into the HUD
+    // label upstream instead of leaving a `{0}` slot.
+    let source = "globalvar g\nrule \"r\":\n    @Event eachPlayer\n    debug(\"lit\")\n";
+    let hir = crate::compile(source, "debug-literal.opy", Path::new(".")).unwrap();
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+    assert!(artifact.emitted.contains("= lit"), "{}", artifact.emitted);
+    assert!(!artifact.emitted.contains("= {0}"), "{}", artifact.emitted);
+}
+
+#[test]
+fn unbound_format_placeholders_in_plain_strings_are_an_error() {
+    // The pinned `__customString__` check rejects `{n}`/`{}` formatters when
+    // the string carries fewer arguments than required.
+    for literal in ["{0}", "{}", "a{9}b", "a{}{}b"] {
+        let source =
+            format!("globalvar g\nrule \"r\":\n    @Event global\n    g = \"{literal}\"\n");
+        let hir = crate::compile(&source, "unbound.opy", Path::new(".")).unwrap();
+        let result = Compiler::new().unwrap().compile_hir(&hir);
+        assert!(result.is_err(), "\"{literal}\" must be rejected");
+    }
+}
+
+#[test]
+fn format_arity_mismatches_are_an_error() {
+    // `.format` fails when `{n}` indexes an argument that does not exist,
+    // when `{}` does not get exactly one argument each, and when numbered
+    // and unnumbered formatters mix.
+    for (text, count) in [
+        ("\"x{0}{1}y\"", 1),
+        ("\"x{2}y\"", 1),
+        ("\"x{}y\"", 2),
+        ("\"a{2}{}\"", 4),
+    ] {
+        let args = (0..count)
+            .map(|index| index.to_string())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let source =
+            format!("globalvar g\nrule \"r\":\n    @Event global\n    g = {text}.format({args})\n");
+        let hir = crate::compile(&source, "format-arity.opy", Path::new(".")).unwrap();
+        let result = Compiler::new().unwrap().compile_hir(&hir);
+        assert!(result.is_err(), "{text}.format({args}) must be rejected");
+    }
+}
+
+#[test]
+fn f_string_interpolations_expand_active_defines() {
+    // The reference re-expands `#!define` text macros inside f-string
+    // interpolations: `f"{S}!{N}={M(6)}"` sees `"a"`, `7`, and `6+1`.
+    let source = "#!define S \"a\"\n#!define N 7\n#!define M(x) x+1\nglobalvar g\nrule \"r\":\n    @Event global\n    g = f\"{S}!{N}={M(6)}\"\n";
+    let hir = crate::compile(source, "fdefine.opy", Path::new(".")).unwrap();
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+    assert!(
+        artifact.emitted.contains("Custom String(\"a!7=7\")"),
+        "{}",
+        artifact.emitted
     );
 }

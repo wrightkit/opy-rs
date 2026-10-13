@@ -44,6 +44,9 @@ impl<'a> Lowering<'a> {
                         return Ok(self.push_number(value));
                     }
                     crate::compile_time::Value::String(value) => {
+                        if let Some(error) = format_arity_error(&value, 0) {
+                            return Err(self.unsupported(error, span));
+                        }
                         return Ok(self.lower_custom_string(value));
                     }
                     crate::compile_time::Value::Bool(value) => {
@@ -60,6 +63,9 @@ impl<'a> Lowering<'a> {
         let value = match expr {
             Expr::Number { value, .. } => Value::Number(*value),
             Expr::String { value, .. } => {
+                if let Some(error) = format_arity_error(value, 0) {
+                    return Err(self.unsupported(error, span));
+                }
                 return Ok(self.lower_custom_string(value.clone()));
             }
             Expr::Bool { value, .. } => Value::Bool(*value),
@@ -211,7 +217,13 @@ impl<'a> Lowering<'a> {
                 }
             }
             Expr::Format { text, args, .. } => {
+                if let Some(error) = format_arity_error(text, args.len()) {
+                    return Err(self.unsupported(error, span));
+                }
                 let (format_text, dynamic_args) = self.fold_format_constants(text, args);
+                if let Some(error) = format_arity_error(&format_text, dynamic_args.len()) {
+                    return Err(self.unsupported(error, span));
+                }
                 if dynamic_args.is_empty() {
                     let value = format_text;
                     return Ok(self.lower_custom_string(value));
@@ -1311,20 +1323,45 @@ impl<'a> Lowering<'a> {
                 value,
                 span,
             } => {
-                let value = match modifier.as_str() {
-                    "b" => big_letters(value),
-                    "c" => case_sensitive(value),
-                    "w" => fullwidth(value),
-                    _ => {
-                        return Err(self.unsupported(
-                            format!(
-                                "string modifier '{modifier}' is not currently representable in canonical WIR"
-                            ),
-                            *span,
-                        ));
+                if let Some(error) = format_arity_error(value, 0) {
+                    return Err(self.unsupported(error, *span));
+                }
+                // Combined modifiers apply in the reference's fixed pipeline
+                // order; `p` is a no-op and `f`/`t`/`l` stay unsupported at
+                // this stage.
+                if modifier
+                    .chars()
+                    .any(|c| !matches!(c, 'f' | 'p' | 'b' | 'w' | 'c'))
+                {
+                    return Err(self.unsupported(
+                        format!(
+                            "string modifier '{modifier}' is not currently representable in canonical WIR"
+                        ),
+                        *span,
+                    ));
+                }
+                let mut rewritten = value.clone();
+                for step in ['b', 'w', 'c'] {
+                    if !modifier.contains(step) {
+                        continue;
                     }
-                };
-                return Ok(self.lower_custom_string(value));
+                    rewritten = match step {
+                        'b' => {
+                            if !rewritten.chars().any(|c| big_letter(c).is_some()) {
+                                return Err(self.unsupported(
+                                    format!(
+                                        "Could not convert the string \"{value}\" to big letters. The string must have one of the following chars: 'aAbBeEhHiIkKmMnNoOpPtTxXyYzZ. '"
+                                    ),
+                                    *span,
+                                ));
+                            }
+                            big_letters(&rewritten)
+                        }
+                        'w' => fullwidth(&rewritten),
+                        _ => case_sensitive(&rewritten),
+                    };
+                }
+                return Ok(self.lower_custom_string(rewritten));
             }
             _ => {
                 return Err(self.unsupported(

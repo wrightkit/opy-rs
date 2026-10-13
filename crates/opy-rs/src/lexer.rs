@@ -337,21 +337,22 @@ impl Lexer {
                     value.push(codepoint);
                     continue;
                 }
-                if escaped == 'u' {
+                if escaped == 'x' || escaped == 'u' {
+                    let digits = if escaped == 'x' { 2 } else { 4 };
                     self.advance();
                     let mut codepoint = 0_u32;
-                    for _ in 0..4 {
+                    for _ in 0..digits {
                         let Some(digit) = self.chars.get(self.pos).copied() else {
                             return Err(OpyError::at(
                                 "lex-error",
-                                "Unicode escape requires four hexadecimal digits",
+                                format!("expected {digits} hexadecimal digits after '\\{escaped}'"),
                                 Span::new(self.file_id, escape_start.start, self.here(0).start),
                             ));
                         };
                         let Some(digit_value) = digit.to_digit(16) else {
                             return Err(OpyError::at(
                                 "lex-error",
-                                "Unicode escape requires four hexadecimal digits",
+                                format!("expected {digits} hexadecimal digits after '\\{escaped}'"),
                                 Span::new(self.file_id, escape_start.start, self.here(1).end),
                             ));
                         };
@@ -365,7 +366,14 @@ impl Lexer {
                     value.push(char::from_u32(codepoint).unwrap_or('\u{FFFD}'));
                     continue;
                 }
-                value.push(decode_string_escape(escaped));
+                let Some(decoded) = decode_string_escape(escaped) else {
+                    return Err(OpyError::at(
+                        "lex-error",
+                        format!("unknown escape sequence '\\{escaped}'"),
+                        Span::new(self.file_id, escape_start.start, self.here(1).end),
+                    ));
+                };
+                value.push(decoded);
                 self.advance();
                 continue;
             }
@@ -564,16 +572,24 @@ pub fn is_identifier(text: &str) -> bool {
     characters.next().is_some_and(is_ident_start) && characters.all(is_ident_continue)
 }
 
-pub(crate) fn decode_string_escape(character: char) -> char {
-    match character {
+/// Decode one single-character escape from the pinned reference's table
+/// (`\" \' \\ \n \r \b \f \t \z`). `\x`, `\u`, and `\&name;` are
+/// multi-character escapes handled by their callers; anything outside the
+/// table is rejected upstream ("Unknown escape sequence"), so `None`
+/// signals an unknown escape to callers that can diagnose it.
+pub(crate) fn decode_string_escape(character: char) -> Option<char> {
+    Some(match character {
         'n' => '\n',
         't' => '\t',
         'r' => '\r',
+        'b' => '\u{8}',
+        'f' => '\u{c}',
+        'z' => '\u{ad}',
         '\\' => '\\',
         '"' => '"',
         '\'' => '\'',
-        other => other,
-    }
+        _ => return None,
+    })
 }
 
 /// Whether `c` may start an OPY identifier.
@@ -797,6 +813,67 @@ mod tests {
     }
 
     #[test]
+    fn reference_control_escapes_decode() {
+        // The pinned OverPy table adds `\b`, `\f`, and `\z` (soft hyphen)
+        // beside the familiar escapes.
+        let string = lex_ok(r#""\b\f\z""#)
+            .into_iter()
+            .find(|token| token.kind == TokenKind::String)
+            .expect("string token");
+        assert_eq!(string.text, "\u{8}\u{c}\u{ad}");
+        assert_eq!(string.raw.as_deref(), Some(r"\b\f\z"));
+    }
+
+    #[test]
+    fn hex_escapes_decode_two_digits() {
+        let string = lex_ok(r#""\x41\x7a""#)
+            .into_iter()
+            .find(|token| token.kind == TokenKind::String)
+            .expect("string token");
+        assert_eq!(string.text, "Az");
+        assert_eq!(string.raw.as_deref(), Some(r"\x41\x7a"));
+    }
+
+    #[test]
+    fn malformed_hex_escapes_are_lex_errors() {
+        for source in [r#""\x"#, r#""\x4""#, r#""\xzz""#] {
+            let error = lex(LexInput {
+                file_id: 0,
+                text: source,
+            })
+            .expect_err("malformed hex escape unexpectedly lexed");
+            assert_eq!(error.code, "lex-error");
+            assert_eq!(error.span.unwrap().start, Position::new(1, 2));
+        }
+    }
+
+    #[test]
+    fn unknown_string_escapes_are_lex_errors() {
+        // The pinned reference rejects anything outside its escape table
+        // ("Unknown escape sequence '\q'") rather than silently dropping
+        // the backslash.
+        for source in [r#""\q""#, r#""\0""#, r#""\v""#, r#""\a""#] {
+            let error = lex(LexInput {
+                file_id: 0,
+                text: source,
+            })
+            .expect_err("unknown escape unexpectedly lexed");
+            assert_eq!(error.code, "lex-error");
+            assert_eq!(error.span.unwrap().start, Position::new(1, 2));
+        }
+    }
+
+    #[test]
+    fn backslash_newline_inside_a_string_is_a_lex_error() {
+        let error = lex(LexInput {
+            file_id: 0,
+            text: "\"a\\\nb\"",
+        })
+        .expect_err("backslash-newline unexpectedly lexed");
+        assert_eq!(error.code, "lex-error");
+    }
+
+    #[test]
     fn malformed_unicode_escapes_are_lex_errors() {
         for source in [r#""\u"#, r#""\u12G4"#, r#""\u{1F600}"#] {
             let error = lex(LexInput {
@@ -805,7 +882,7 @@ mod tests {
             })
             .expect_err("malformed Unicode escape unexpectedly lexed");
             assert_eq!(error.code, "lex-error");
-            assert!(error.message.contains("Unicode escape"));
+            assert!(error.message.contains("hexadecimal digits"));
             assert_eq!(error.span.unwrap().start, Position::new(1, 2));
         }
     }

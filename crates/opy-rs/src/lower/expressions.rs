@@ -126,11 +126,28 @@ impl Lowerer {
                 interpolations,
                 span,
             } => {
-                if *modifier == 'f' {
-                    if let Some(format_text) = format_text {
+                if modifier.contains('f')
+                    && let Some(format_text) = format_text
+                {
+                    // Combined modifiers transform the format text only, in
+                    // the reference's fixed order; `p` is a no-op.
+                    let mut text = format_text.clone();
+                    let mut transformed = true;
+                    for step in ['b', 'w', 'c'] {
+                        if modifier.contains(step) {
+                            match crate::compile_time::modifier_template(&step.to_string(), &text) {
+                                Some(next) => text = next,
+                                None => {
+                                    transformed = false;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if transformed {
                         if !interpolations.is_empty() {
                             return HirExpr::Format {
-                                text: format_text.clone(),
+                                text,
                                 args: interpolations
                                     .iter()
                                     .map(|expr| {
@@ -140,14 +157,25 @@ impl Lowerer {
                                 span: Some(span.into()),
                             };
                         }
-                        return HirExpr::String {
-                            value: format_text.clone(),
+                        let remaining: String = modifier
+                            .chars()
+                            .filter(|c| matches!(c, 't' | 'l'))
+                            .collect();
+                        if remaining.is_empty() {
+                            return HirExpr::String {
+                                value: text,
+                                span: Some(span.into()),
+                            };
+                        }
+                        return HirExpr::StringModifier {
+                            modifier: remaining,
+                            value: text,
                             span: Some(span.into()),
                         };
                     }
                 }
                 HirExpr::StringModifier {
-                    modifier: modifier.to_string(),
+                    modifier: modifier.clone(),
                     value: value.clone(),
                     span: Some(span.into()),
                 }
@@ -1384,7 +1412,7 @@ impl Lowerer {
                 Expr::String { value, .. } => Some(value.clone()),
                 Expr::StringModifier {
                     modifier, value, ..
-                } => crate::compile_time::modifier_template(&modifier.to_string(), value),
+                } => crate::compile_time::modifier_template(modifier, value),
                 _ => None,
             }
         } else {

@@ -619,7 +619,10 @@ fn evaluate_binary(op: &str, left: Value, right: Value, settings: bool) -> Optio
                 return Some(left);
             }
             // The settings evaluator has no string `+`; ordinary constant
-            // folding keeps it for `#!define` composition.
+            // folding keeps it for `#!define` composition. The reference
+            // instead emits `Add(Custom String, Custom String)` — a call the
+            // canonical catalog's `add` domain rejects — so the fold is a
+            // deliberate, canonical-valid deviation, not oracle output.
             if !settings && let (Value::String(left), Value::String(right)) = (&left, &right) {
                 return Some(Value::String(left.clone() + right));
             }
@@ -1026,9 +1029,22 @@ pub(crate) fn has_unbound_formatters(text: &str) -> bool {
 /// literal otherwise. Other modifiers build AST kinds the settings walk
 /// does not handle (`l`, `t`) and stay unresolvable.
 pub(crate) fn modifier_template(modifier: &str, value: &str) -> Option<String> {
-    if !matches!(modifier, "b" | "c" | "w") {
+    if modifier.is_empty() || !modifier.chars().all(|c| matches!(c, 'b' | 'c' | 'w')) {
         return None;
     }
+    let mut text = value.to_string();
+    // Combinations apply in the reference's fixed pipeline order
+    // (f → t → b → w → c), not in source order; `b` fails when no
+    // convertible character survives, which the caller reports upstream.
+    for step in ['b', 'w', 'c'] {
+        if modifier.contains(step) {
+            text = modifier_template_step(step, &text)?;
+        }
+    }
+    Some(text)
+}
+
+fn modifier_template_step(step: char, value: &str) -> Option<String> {
     let chars: Vec<char> = value.chars().collect();
     let mut output = String::with_capacity(value.len());
     // Once `b` rewrites a character the rest of the text passes through;
@@ -1036,14 +1052,14 @@ pub(crate) fn modifier_template(modifier: &str, value: &str) -> Option<String> {
     let mut big_letter_done = false;
     let mut text = |run: &[char]| {
         let run: String = run.iter().collect();
-        match modifier {
-            "b" if big_letter_done => run,
-            "b" => {
+        match step {
+            'b' if big_letter_done => run,
+            'b' => {
                 let rewritten = crate::compiler::big_letters(&run);
                 big_letter_done = rewritten != run;
                 rewritten
             }
-            "c" => crate::compiler::case_sensitive(&run),
+            'c' => crate::compiler::case_sensitive(&run),
             _ => crate::compiler::fullwidth(&run),
         }
     };
@@ -1066,7 +1082,7 @@ pub(crate) fn modifier_template(modifier: &str, value: &str) -> Option<String> {
         index += 1;
     }
     output.push_str(&text(&chars[run_start..]));
-    (modifier != "b" || big_letter_done).then_some(output)
+    (step != 'b' || big_letter_done).then_some(output)
 }
 
 /// The text an argument contributes inside a folded format expression.

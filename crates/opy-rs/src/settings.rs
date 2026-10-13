@@ -222,7 +222,7 @@ fn match_block(
             };
             scanner.advance_by(1);
             if escaped {
-                path.push(decode_string_escape(ch));
+                path.push(decode_string_escape(ch).unwrap_or(ch));
                 escaped = false;
             } else if ch == '\\' {
                 escaped = true;
@@ -1318,7 +1318,7 @@ impl Cursor<'_> {
             }
             if ch == '\\' {
                 let escaped = self.advance()?;
-                value.push(decode_string_escape(escaped));
+                value.push(decode_string_escape(escaped).unwrap_or(escaped));
             } else {
                 value.push(ch);
             }

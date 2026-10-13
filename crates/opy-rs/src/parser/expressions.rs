@@ -483,7 +483,7 @@ impl Parser<'_> {
                 }
                 if is_string_modifier(&token.text) && self.peek_kind() == TokenKind::String {
                     let string = self.advance();
-                    let (format_text, interpolations) = if token.text == "f" {
+                    let (format_text, interpolations) = if token.text.contains('f') {
                         let raw = string.raw.as_deref().unwrap_or(&string.text);
                         let (format_text, interpolations) =
                             self.parse_f_string(raw, string.span)?;
@@ -492,7 +492,7 @@ impl Parser<'_> {
                         (None, Vec::new())
                     };
                     return Ok(Expr::StringModifier {
-                        modifier: token.text.chars().next().unwrap_or_default(),
+                        modifier: token.text,
                         value: string.text,
                         format_text,
                         interpolations,
@@ -772,6 +772,7 @@ impl Parser<'_> {
                         string_span.file,
                         origin,
                         Some(string_span),
+                        self.defines,
                     )
                     .map_err(|error| {
                         self.errors.push(error);
@@ -821,23 +822,39 @@ impl Parser<'_> {
                         index = name_end + 1;
                         continue;
                     }
-                    if chars[index + 1] == 'u'
-                        && index + 6 <= chars.len()
-                        && chars[index + 2..index + 6]
-                            .iter()
-                            .all(|character| character.is_ascii_hexdigit())
-                    {
-                        let codepoint = chars[index + 2..index + 6]
+                    if matches!(chars[index + 1], 'x' | 'u') {
+                        let escaped = chars[index + 1];
+                        let digits = if escaped == 'x' { 2 } else { 4 };
+                        let digits_start = index + 2;
+                        if digits_start + digits > chars.len()
+                            || !chars[digits_start..digits_start + digits]
+                                .iter()
+                                .all(|character| character.is_ascii_hexdigit())
+                        {
+                            self.errors.push(OpyError::at(
+                                "lex-error",
+                                format!("expected {digits} hexadecimal digits after '\\{escaped}'"),
+                                string_span,
+                            ));
+                            return Err(());
+                        }
+                        let codepoint = chars[digits_start..digits_start + digits]
                             .iter()
                             .filter_map(|character| character.to_digit(16))
                             .fold(0_u32, |value, digit| value * 16 + digit);
-                        if let Some(decoded) = char::from_u32(codepoint) {
-                            text.push(decoded);
-                            index += 6;
-                            continue;
-                        }
+                        text.push(char::from_u32(codepoint).unwrap_or('\u{FFFD}'));
+                        index = digits_start + digits;
+                        continue;
                     }
-                    text.push(decode_string_escape(chars[index + 1]));
+                    let Some(decoded) = decode_string_escape(chars[index + 1]) else {
+                        self.errors.push(OpyError::at(
+                            "lex-error",
+                            format!("unknown escape sequence '\\{}'", chars[index + 1]),
+                            string_span,
+                        ));
+                        return Err(());
+                    };
+                    text.push(decoded);
                     index += 2;
                 }
                 character => {

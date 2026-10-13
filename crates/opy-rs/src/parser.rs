@@ -36,7 +36,17 @@ pub fn parse(tokens: &[Token]) -> ParseOutput {
 
 /// Parse with the global redeclaration policy observed by the pinned oracle.
 pub fn parse_with_options(tokens: &[Token], allow_macro_redeclaration: bool) -> ParseOutput {
-    let mut parser = Parser::new(tokens, allow_macro_redeclaration);
+    parse_with_macros(tokens, allow_macro_redeclaration, &[])
+}
+
+/// Parse with the `#!define` macro table the preprocessor left live; the
+/// reference re-expands those defines inside f-string interpolations.
+pub(crate) fn parse_with_macros(
+    tokens: &[Token],
+    allow_macro_redeclaration: bool,
+    defines: &[crate::preprocess::macros::MacroDef],
+) -> ParseOutput {
+    let mut parser = Parser::new(tokens, allow_macro_redeclaration, defines);
     let program = parser.parse_program();
     let warnings = parser.warnings;
     if parser.errors.is_empty() {
@@ -87,10 +97,17 @@ struct Parser<'a> {
     /// Workshop-looking constructs are skipped silently so a pasted Workshop
     /// script produces one diagnostic instead of a cascade.
     workshop_source_reported: bool,
+    /// `#!define` macros still live at parse time; f-string interpolation
+    /// fragments re-expand them like the reference does.
+    defines: &'a [crate::preprocess::macros::MacroDef],
 }
 
 impl<'a> Parser<'a> {
-    fn new(tokens: &'a [Token], allow_macro_redeclaration: bool) -> Self {
+    fn new(
+        tokens: &'a [Token],
+        allow_macro_redeclaration: bool,
+        defines: &'a [crate::preprocess::macros::MacroDef],
+    ) -> Self {
         let mut delimiter_depth = Vec::with_capacity(tokens.len() + 1);
         delimiter_depth.push(0);
         let mut depth = 0u32;
@@ -127,6 +144,7 @@ impl<'a> Parser<'a> {
             block_floors: Vec::new(),
             warnings: Vec::new(),
             workshop_source_reported: false,
+            defines,
         }
     }
 }
@@ -578,16 +596,18 @@ pub(crate) fn parse_expression_fragment(
     file: u32,
     origin: Position,
     bounds: Option<Span>,
+    defines: &[crate::preprocess::macros::MacroDef],
 ) -> Result<Expr, OpyError> {
+    let text = crate::preprocess::macros::expand_define_text(text, defines)?;
     let mut tokens = crate::lexer::lex(crate::lexer::LexInput {
         file_id: file,
-        text,
+        text: &text,
     })?;
     for token in &mut tokens {
         token.layout = shift_span(token.span, origin);
         token.span = bounds.map_or(token.layout, |bounds| bounded_span(token.layout, bounds));
     }
-    let mut parser = Parser::new(&tokens, false);
+    let mut parser = Parser::new(&tokens, false, defines);
     let expression = parser.parse_expr().map_err(|()| {
         parser.errors.first().cloned().unwrap_or_else(|| {
             OpyError::at(
@@ -623,7 +643,13 @@ pub(crate) fn bounded_span(span: Span, bounds: Span) -> Span {
 }
 
 fn is_string_modifier(text: &str) -> bool {
-    matches!(text, "f" | "w" | "l" | "b" | "c" | "t")
+    // The reference accepts any non-empty combination of modifier letters
+    // before a string literal (`fw"a{x}"`, `p"plain"`); unknown identifiers
+    // like `var"x"` still reject because they contain other characters.
+    !text.is_empty()
+        && text
+            .chars()
+            .all(|c| matches!(c, 'f' | 'w' | 'l' | 'b' | 'c' | 't' | 'p'))
 }
 
 #[cfg(test)]

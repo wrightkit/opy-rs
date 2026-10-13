@@ -1368,7 +1368,7 @@ pub(crate) fn big_letters(value: &str) -> String {
     output
 }
 
-fn big_letter(character: char) -> Option<char> {
+pub(crate) fn big_letter(character: char) -> Option<char> {
     Some(match character {
         'a' | 'A' => 'Α',
         'b' | 'B' => 'Β',
@@ -1446,6 +1446,62 @@ fn case_sensitive_character(character: char) -> char {
         'z' => 'ẓ',
         _ => character,
     }
+}
+
+/// The pinned `__customString__`/`.format` arity check: `{n}` requires at
+/// least `n + 1` arguments (extra arguments are ignored), `{}` requires
+/// exactly one argument each, and mixing both kinds is an error. `{{`/`}}`
+/// escapes and brace groups that are not placeholders (`{0a}`, `{x}`, a
+/// dangling `{`) are literal text. Returns the oracle's diagnostic.
+fn format_arity_error(text: &str, arg_count: usize) -> Option<String> {
+    let mut numbered_max: Option<usize> = None;
+    let mut unnumbered = 0usize;
+    let chars: Vec<char> = text.chars().collect();
+    let mut index = 0;
+    while index < chars.len() {
+        if chars[index] == '{' {
+            if chars.get(index + 1) == Some(&'{') {
+                index += 2;
+                continue;
+            }
+            let Some(close) = chars[index + 1..].iter().position(|c| *c == '}') else {
+                break;
+            };
+            let inner: String = chars[index + 1..index + 1 + close].iter().collect();
+            if inner.is_empty() {
+                unnumbered += 1;
+                index += 2 + close;
+                continue;
+            }
+            if !inner.is_empty() && inner.chars().all(|c| c.is_ascii_digit()) {
+                let placeholder = inner.parse::<usize>().unwrap_or(usize::MAX);
+                numbered_max = Some(numbered_max.map_or(placeholder, |max| max.max(placeholder)));
+                index += 2 + close;
+                continue;
+            }
+            index += 1;
+            continue;
+        }
+        index += 1;
+    }
+    if numbered_max.is_some() && unnumbered > 0 {
+        return Some(
+            "Cannot use both numbered and unnumbered formatters in a custom string".to_string(),
+        );
+    }
+    if let Some(max) = numbered_max {
+        let expected = max + 1;
+        if arg_count < expected {
+            return Some(format!(
+                "Too few arguments in .format() function: expected {expected}, got {arg_count}"
+            ));
+        }
+    } else if unnumbered != arg_count {
+        return Some(format!(
+            "Too few arguments in .format() function: expected {unnumbered}, got {arg_count}"
+        ));
+    }
+    None
 }
 
 fn canonical_format_text(text: &str) -> String {

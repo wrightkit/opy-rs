@@ -323,19 +323,37 @@ impl<'a> Lowering<'a> {
         } else {
             value
         };
+        // The reference splices literal string and null arguments into the
+        // `debug` format text; numbers fold the same way downstream at
+        // emission, while every other value keeps its `{0}` slot.
+        let constant_text = match self.value(array_text) {
+            Value::String(text) => Some(text.clone()),
+            Value::Null => Some("0".to_string()),
+            _ => None,
+        };
         let debug_label_text = debug_source
             .map(str::to_string)
             .unwrap_or_else(|| debug_expr_text(expr));
         let debug_label = canonical_debug_text(&debug_label_text);
-        let debug_prefix = format!("{debug_label}\u{2028}= {{0}}");
+        let debug_slot = constant_text.as_deref().unwrap_or("{0}");
+        let debug_prefix = format!("{debug_label}\u{2028}= {debug_slot}");
         let inline_padding = 128 - debug_prefix.chars().count() - "{1}".chars().count();
         let padding_text = self.push_value(Value::String(" ".repeat(170 - inline_padding)));
         let padding = self.push_call("customString", vec![padding_text]);
+        let padding_slot = if constant_text.is_some() {
+            "{0}"
+        } else {
+            "{1}"
+        };
         let debug_label = self.push_value(Value::String(format!(
-            "{debug_prefix}{}{{1}}",
+            "{debug_prefix}{}{padding_slot}",
             " ".repeat(inline_padding)
         )));
-        let text = self.push_call("customString", vec![debug_label, array_text, padding]);
+        let text = if constant_text.is_some() {
+            self.push_call("customString", vec![debug_label, padding])
+        } else {
+            self.push_call("customString", vec![debug_label, array_text, padding])
+        };
         let all_players = self.lower_all_players();
         let null_value = self.push_value(Value::Null);
         let null_value_2 = self.push_value(Value::Null);

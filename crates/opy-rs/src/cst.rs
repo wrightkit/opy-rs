@@ -346,10 +346,13 @@ pub enum Expr {
         span: Span,
     },
     StringModifier {
-        modifier: char,
+        /// The modifier letters; the reference accepts combinations like
+        /// `fw` and applies them in a fixed pipeline order.
+        modifier: String,
         value: String,
         /// The decoded f-string template, with interpolation placeholders
-        /// normalized to `{0}`, `{1}`, …; present only for modifier `f`.
+        /// normalized to `{0}`, `{1}`, …; present when `f` is among the
+        /// modifiers.
         format_text: Option<String>,
         /// Expressions parsed from f-string interpolation regions, in source
         /// order. Their spans point into the original string literal.
