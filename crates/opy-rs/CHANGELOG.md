@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.11](https://github.com/wrightkit/opy-rs/compare/v0.3.10...v0.3.11) - 2026-10-13
+
+### Fixed
+
+- *(compiler)* rewrite len() over player-set builtins like the pinned reference ([#538](https://github.com/wrightkit/opy-rs/pull/538))
+- *(opy-rs)* accept string-modifier literals as settings values ([#536](https://github.com/wrightkit/opy-rs/pull/536))
+- *(lower)* resolve bare-spelled values in empty call form ([#535](https://github.com/wrightkit/opy-rs/pull/535))
+- *(lower)* reject a bare playervar name like the pinned compiler ([#534](https://github.com/wrightkit/opy-rs/pull/534))
+- *(settings)* accept non-boolean values under boolean catalogued keys ([#533](https://github.com/wrightkit/opy-rs/pull/533))
+- *(deps)* migrate sha2 to 0.11 ([#492](https://github.com/wrightkit/opy-rs/pull/492))
+- *(settings)* absorb settings inside an enum body as a member ([#526](https://github.com/wrightkit/opy-rs/pull/526))
+
 ## [0.3.10](https://github.com/wrightkit/opy-rs/compare/v0.3.9...v0.3.10) - 2026-10-11
 
 ### Fixed

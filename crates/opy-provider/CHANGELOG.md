@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.11](https://github.com/wrightkit/opy-rs/compare/opy-provider-v0.3.10...opy-provider-v0.3.11) - 2026-10-13
+
+### Fixed
+
+- *(deps)* migrate sha2 to 0.11 ([#492](https://github.com/wrightkit/opy-rs/pull/492))
+
 ## [0.3.9](https://github.com/wrightkit/opy-rs/compare/opy-provider-v0.3.8...opy-provider-v0.3.9) - 2026-10-11
 
 ### Added
