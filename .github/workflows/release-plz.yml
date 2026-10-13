@@ -66,8 +66,8 @@ jobs:
         with:
           ref: ${{ needs.release-context.outputs.opy_release_tag }}
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
+      - name: Set up Rust
+        uses: wrightkit/.github/.github/actions/setup-rust@main
         with:
           toolchain: stable
           targets: ${{ matrix.target }}

@@ -25,7 +25,7 @@ jobs:
           - stable
           - 1.85.0
 
-    uses: wrightkit/.github/.github/workflows/rust-quality.yml@a83d0f1b4cbcb5b81fb0426e3a5aea1db0899fb5
+    uses: wrightkit/.github/.github/workflows/rust-quality.yml@main
     with:
       toolchain: ${{ matrix.toolchain }}
       cache-shared-key: linux-quality
@@ -40,21 +40,12 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
+      - name: Set up Rust
+        uses: wrightkit/.github/.github/actions/setup-rust@main
         with:
           toolchain: stable
-
-      - name: Restore Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: linux-quality
+          cache-shared-key: linux-quality
           cache-targets: false
-          cache-all-crates: false
-          cache-workspace-crates: false
-          cache-bin: false
-          save-if: false
-          cache-on-failure: false
 
       - name: Build public compiler CLI
         run: cargo build --locked -p opy-cli --bin opy-cli
@@ -123,21 +114,14 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v7
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@master
+      - name: Set up Rust
+        uses: wrightkit/.github/.github/actions/setup-rust@main
         with:
           toolchain: stable
           components: clippy, rustfmt
-      - name: Restore Rust cache
-        uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: macro-runtime-${{ runner.os }}
+          cache-shared-key: macro-runtime-${{ runner.os }}
           cache-targets: false
-          cache-all-crates: false
-          cache-workspace-crates: false
-          cache-bin: false
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-          cache-on-failure: false
+          cache-save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Run internal macro runtime tests
         run: cargo test --locked -p opy-rs --lib macro_js::tests
