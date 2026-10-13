@@ -1042,7 +1042,7 @@ mod tests {
         assert_eq!(
             members
                 .iter()
-                .map(|(name, _)| name.as_str())
+                .map(|(name, _, _)| name.as_str())
                 .collect::<Vec<_>>(),
             ["BUFF", "DEBUFF", "MECH"]
         );
@@ -1062,7 +1062,7 @@ mod tests {
         assert_eq!(
             members
                 .iter()
-                .map(|(name, _)| name.as_str())
+                .map(|(name, _, _)| name.as_str())
                 .collect::<Vec<_>>(),
             ["A", "settings", "C"]
         );

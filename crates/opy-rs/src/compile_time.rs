@@ -159,6 +159,13 @@ fn eval(
         }
         Expr::Binary {
             op, left, right, ..
+        } if matches!(op.as_str(), "in" | "not in") => {
+            let needle = eval(left, constants, bindings, stack, settings)?;
+            let haystack = eval(right, constants, bindings, stack, settings)?;
+            evaluate_membership(op, left, right, &needle, &haystack, constants)
+        }
+        Expr::Binary {
+            op, left, right, ..
         } => evaluate_binary(
             op,
             eval(left, constants, bindings, stack, settings)?,
@@ -643,6 +650,16 @@ fn evaluate_binary(op: &str, left: Value, right: Value, settings: bool) -> Optio
             None
         }
         "*" => {
+            // String repetition folds like `+`: the reference emits
+            // `Multiply(Custom String, n)`, a call the canonical catalog's
+            // `multiply` domain rejects. Folding to the repeated literal is a
+            // deliberate, canonical-valid deviation. The fold must run before
+            // the `is_one`/`is_zero` peepholes because `"a" * 0` is `""`, not
+            // the numeric `0` those arms would return. Fractional or oversized
+            // counts stay unfolded to error like the reference.
+            if !settings && let Some(repeated) = fold_string_repetition(&left, &right) {
+                return Some(repeated);
+            }
             if let (Value::Number(left), Value::Number(right)) = (&left, &right)
                 && let result @ Some(_) = folded(left * right)
             {
@@ -805,23 +822,62 @@ fn evaluate_binary(op: &str, left: Value, right: Value, settings: bool) -> Optio
             }
             None
         }
-        // Membership tests array contents structurally; `x in y` on a
-        // non-array does not fold (`[[1]] in [[1],[2]]` is an index read
-        // upstream, handled by `Expr::Index`; #512).
-        "in" => match right {
-            Value::Array(values) => Some(Value::Bool(
-                values.iter().any(|value| values_equal(value, &left)),
-            )),
-            _ => None,
-        },
-        "not in" => match right {
-            Value::Array(values) => Some(Value::Bool(
-                !values.iter().any(|value| values_equal(value, &left)),
-            )),
+        _ => None,
+    }
+}
+
+/// Membership folds as the pinned `__arrayContains__`: an
+/// `areAstsAlwaysEqual` hit folds (`1` does not match `1.0` because the
+/// AST names differ); a literal needle over an all-literal array misses
+/// (`False`), and anything else stays unevaluated so the emitter can
+/// reproduce the upstream literal-element filter and `Equals` reduction.
+/// The elements' `Expr`s come from an `Expr::Array` literal or a constant
+/// that resolves to one — evaluated arrays without source expressions
+/// cannot compare by spelling and refuse to fold (#512).
+fn evaluate_membership(
+    op: &str,
+    left: &Expr,
+    right: &Expr,
+    needle: &Value,
+    haystack: &Value,
+    constants: &HashMap<String, &Expr>,
+) -> Option<Value> {
+    let Value::Array(elements) = haystack else {
+        return None;
+    };
+    let element_exprs = match right {
+        Expr::Array { elements, .. } => Some(elements.as_slice()),
+        Expr::Constant { name, .. } => match constants.get(name) {
+            Some(Expr::Array { elements, .. }) => Some(elements.as_slice()),
             _ => None,
         },
         _ => None,
+    }?;
+    if element_exprs.len() != elements.len() {
+        return None;
     }
+    if element_exprs
+        .iter()
+        .zip(elements)
+        .any(|(expr, element)| same_spelling(expr, left) && values_equal(element, needle))
+    {
+        return Some(Value::Bool(op == "in"));
+    }
+    let literal = |value: &Value| match value {
+        Value::Number(_) | Value::String(_) => true,
+        Value::Vector(components) => components
+            .iter()
+            .all(|component| matches!(component, Value::Number(_) | Value::String(_))),
+        _ => false,
+    };
+    // A non-literal needle keeps `Array Contains` standing upstream, and a
+    // literal needle with surviving elements reduces to `Equals` or a
+    // filtered array — neither shape is expressible here, so only the
+    // exhausted filter folds.
+    if literal(needle) && elements.iter().all(literal) {
+        return Some(Value::Bool(op == "not in"));
+    }
+    None
 }
 
 /// The pinned evaluator's `isDefinitelyTruthy`/`isDefinitelyFalsy`:
@@ -880,6 +936,28 @@ fn same_spelling(left: &Expr, right: &Expr) -> bool {
         ) => same_spelling(ax, bx) && same_spelling(ay, by) && same_spelling(az, bz),
         _ => true,
     }
+}
+
+/// Upper bound on a folded string repetition so `"x" * 1e9` does not
+/// materialize a huge literal; oversized repeats stay unfolded and fail
+/// canonical validation like any other non-canonical `Multiply` call.
+const STRING_REPEAT_LIMIT: usize = 8192;
+
+fn fold_string_repetition(left: &Value, right: &Value) -> Option<Value> {
+    let (text, count) = match (left, right) {
+        (Value::String(text), Value::Number(count))
+        | (Value::Number(count), Value::String(text)) => (text, count),
+        _ => return None,
+    };
+    if count.fract() != 0.0 {
+        return None;
+    }
+    // Python repeat semantics: a non-positive count yields the empty string.
+    let count = count.max(0.0) as usize;
+    if text.len().saturating_mul(count) > STRING_REPEAT_LIMIT {
+        return None;
+    }
+    Some(Value::String(text.repeat(count)))
 }
 
 /// The pinned `areAstsAlwaysEqual`: structural equality where numbers

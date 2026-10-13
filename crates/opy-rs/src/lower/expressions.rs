@@ -366,19 +366,26 @@ impl Lowerer {
                 "AsyncBehavior" => "StartRuleBehavior",
                 other => other,
             };
-            // Custom enum member: folds to its numeric constant. A member
-            // missing from a custom enum falls through to a builtin domain
-            // of the same name, matching the reference's per-member lookup.
+            // Custom enum member: folds to its constant or inlines the
+            // explicit value expression. A member missing from a custom
+            // enum falls through to a builtin domain of the same name,
+            // matching the reference's per-member lookup.
             if self.enum_visible(enum_name) {
                 let members = self
                     .enums
                     .get(enum_name)
-                    .expect("enum span and members agree");
-                if let Some(index) = members.iter().position(|candidate| candidate == member) {
-                    return HirExpr::Number {
-                        value: index as f64,
-                        text: index.to_string(),
-                        span: Some(span.into()),
+                    .expect("enum span and members agree")
+                    .clone();
+                if let Some(entry) = members.iter().find(|entry| entry.name == member) {
+                    return match &entry.value {
+                        EnumMemberValue::Number(value) => HirExpr::Number {
+                            value: *value,
+                            text: crate::compiler::number_format::javascript_text(*value),
+                            span: Some(span.into()),
+                        },
+                        EnumMemberValue::Expr(expr) => {
+                            self.lower_expr(&expr.clone(), macro_params, CallPosition::Value)
+                        }
                     };
                 }
                 self.error_at_closed_candidates(
@@ -386,7 +393,9 @@ impl Lowerer {
                     format!("enum '{name}' has no member '{member}'"),
                     span,
                     member,
-                    &crate::matcher::bare_candidates(members.iter().cloned()),
+                    &crate::matcher::bare_candidates(
+                        members.iter().map(|entry| entry.name.clone()),
+                    ),
                 );
                 return HirExpr::Null { span: None };
             }

@@ -177,6 +177,33 @@ fn string_addition_folds_to_a_canonical_string() {
 }
 
 #[test]
+fn string_multiplication_folds_to_a_canonical_string() {
+    // Documented deviation: the reference emits
+    // `Multiply(Custom String("a"), 3)` for `"a" * 3`, a call the canonical
+    // catalog's `multiply` domain rejects. opy-rs folds the repetition to a
+    // literal instead, which stays canonical and produces the same runtime
+    // text.
+    let source = "globalvar g\nrule \"r\":\n    @Event global\n    g = \"a\" * 3\n    g = \"ab\" * 0\n    g = 2 * \"z\"\n";
+    let hir = crate::compile(source, "strmul.opy", Path::new(".")).unwrap();
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+    assert!(
+        artifact.emitted.contains("Custom String(\"aaa\")"),
+        "{}",
+        artifact.emitted
+    );
+    assert!(
+        artifact.emitted.contains("Custom String(\"\")"),
+        "{}",
+        artifact.emitted
+    );
+    assert!(
+        artifact.emitted.contains("Custom String(\"zz\")"),
+        "{}",
+        artifact.emitted
+    );
+}
+
+#[test]
 fn debug_splices_a_plain_string_argument_like_the_pinned_reference() {
     // `debug("lit")` merges the `__customString__` argument into the HUD
     // label upstream instead of leaving a `{0}` slot.

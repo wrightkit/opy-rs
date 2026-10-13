@@ -119,7 +119,7 @@ impl Parser<'_> {
                 let member = self.advance();
                 let member_span = member.span;
                 if !self.allow_macro_redeclaration
-                    && members.iter().any(|(name, _)| name == &member.text)
+                    && members.iter().any(|(name, _, _)| name == &member.text)
                 {
                     self.errors.push(OpyError::at(
                         "macro-redeclaration",
@@ -127,7 +127,7 @@ impl Parser<'_> {
                         member_span,
                     ));
                 }
-                members.push((member.text, member_span));
+                members.push((member.text, None, member_span));
                 // The reference names the member from the line's first token
                 // and takes the value from the first `=` on the line; the
                 // rest of the member line is ignored, so `settings { ... }`
@@ -152,9 +152,17 @@ impl Parser<'_> {
                 }
                 if self.peek_kind() == TokenKind::Assign {
                     self.bump();
-                    if self.parse_expr().is_err() {
-                        self.recover_line();
-                        continue;
+                    match self.parse_expr() {
+                        Ok(value) => {
+                            members
+                                .last_mut()
+                                .expect("the enum member was just pushed")
+                                .1 = Some(value);
+                        }
+                        Err(()) => {
+                            self.recover_line();
+                            continue;
+                        }
                     }
                     if self.peek_kind() == TokenKind::Comma {
                         self.bump();

@@ -135,9 +135,10 @@ impl Lowerer {
                 }
                 Decl::Enum { name, members, .. } => {
                     self.enum_declarations.entry(name.clone()).or_insert(order);
-                    self.enums.entry(name.clone()).or_insert_with(|| {
-                        members.iter().map(|(member, _)| member.clone()).collect()
-                    });
+                    if !self.enums.contains_key(name) {
+                        let resolved = self.enum_members(members);
+                        self.enums.insert(name.clone(), resolved);
+                    }
                 }
                 Decl::Macro { name, .. } => {
                     self.macro_declarations.entry(name.clone()).or_insert(order);
@@ -201,5 +202,129 @@ impl Lowerer {
             HirExpr::Number { text, .. } if text == "0" => None,
             other => Some(Box::new(other.clone())),
         }
+    }
+
+    /// Resolves one enum's members following the reference's `lastIntValue`
+    /// semantics: a bare member takes the running counter, `= <number>`
+    /// reseeds the counter at `value + 1`, `= -<number>` yields `-value + 1`
+    /// for the next bare member only, and any other explicit expression is
+    /// stored for inlining while breaking the numeric chain.
+    fn enum_members(&mut self, members: &[(String, Option<Expr>, Span)]) -> Vec<EnumMember> {
+        let mut counter = EnumCounter::Number(0.0);
+        let mut previous: Option<&Expr> = None;
+        members
+            .iter()
+            .map(|(name, value, span)| {
+                let resolved = match value {
+                    Some(expr) => {
+                        counter = match expr {
+                            Expr::Number { value, .. } => EnumCounter::Number(value + 1.0),
+                            Expr::Unary { op, operand, .. }
+                                if op == "-" && matches!(operand.as_ref(), Expr::Number { .. }) =>
+                            {
+                                let Expr::Number { value, .. } = operand.as_ref() else {
+                                    unreachable!()
+                                };
+                                EnumCounter::Negated(*value)
+                            }
+                            _ => EnumCounter::Other,
+                        };
+                        previous = Some(expr);
+                        EnumMemberValue::Expr(expr.clone())
+                    }
+                    None => {
+                        let next = match counter {
+                            EnumCounter::Number(next) => {
+                                counter = EnumCounter::Number(next + 1.0);
+                                Some(next)
+                            }
+                            EnumCounter::Negated(inner) => {
+                                counter = EnumCounter::Number(-inner + 2.0);
+                                Some(-inner + 1.0)
+                            }
+                            EnumCounter::Other => {
+                                self.error_at(
+                                    "enum-increment",
+                                    format!(
+                                        "cannot auto-increment enum member, as last value was {}",
+                                        enum_value_display(previous)
+                                    ),
+                                    *span,
+                                );
+                                counter = EnumCounter::Number(0.0);
+                                None
+                            }
+                        };
+                        previous = None;
+                        next.map_or(EnumMemberValue::Number(0.0), EnumMemberValue::Number)
+                    }
+                };
+                EnumMember {
+                    name: name.clone(),
+                    value: resolved,
+                }
+            })
+            .collect()
+    }
+}
+
+/// Renders an enum member's explicit value the way the reference's
+/// `functionNameToString` describes the breaking predecessor in its
+/// `Cannot auto-increment` error.
+fn enum_value_display(value: Option<&Expr>) -> String {
+    let Some(expr) = value else {
+        return "function 'unknown'".to_string();
+    };
+    let binary = |op: &str| -> String {
+        let operand = match op {
+            "+" => "'+' or '+='",
+            "-" => "'-' or '-='",
+            "*" => "'*' or '*='",
+            "/" => "'/' or '/='",
+            "%" => "'%' or '%='",
+            "**" => "'**' or '**='",
+            "in" => "'in'",
+            "and" => "'and'",
+            "or" => "'or'",
+            "not" => "'not'",
+            "==" => "'=='",
+            "!=" => "'!='",
+            ">" => "'>'",
+            ">=" => "'>='",
+            "<" => "'<'",
+            "<=" => "'<='",
+            _ => return format!("function '{op}'"),
+        };
+        format!("operator {operand}")
+    };
+    match expr {
+        Expr::Number { value, .. } => {
+            format!(
+                "number '{}'",
+                crate::compiler::number_format::javascript_text(*value)
+            )
+        }
+        Expr::String { .. } | Expr::StringModifier { .. } => {
+            "function '__customString__'".to_string()
+        }
+        Expr::Bool { .. } => "function 'bool'".to_string(),
+        Expr::Null { .. } => "function 'null'".to_string(),
+        Expr::Array { .. } | Expr::Comprehension { .. } => "function '__array__'".to_string(),
+        Expr::Dict { .. } => "function '__dict__'".to_string(),
+        Expr::Lambda { .. } => "function 'lambda'".to_string(),
+        Expr::Call { name, .. } | Expr::ReceiverCall { name, .. } => format!("function '{name}'"),
+        Expr::Name { name, .. } => format!("global variable '{name}'"),
+        Expr::Member { receiver, .. } => match receiver.as_ref() {
+            Expr::Name { name, .. } => format!("enum '{name}'"),
+            _ => "function 'member'".to_string(),
+        },
+        Expr::Type { name, .. } => format!("function '{name}'"),
+        Expr::Index { .. } => "function 'valueInArray'".to_string(),
+        Expr::Binary { op, .. } => binary(op),
+        Expr::Conditional { .. } => "function 'condition'".to_string(),
+        Expr::Unary { op, .. } => match op.as_str() {
+            "-" => "function '__negate__'".to_string(),
+            other => binary(other),
+        },
     }
 }

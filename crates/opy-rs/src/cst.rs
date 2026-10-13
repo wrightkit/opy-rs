@@ -109,10 +109,12 @@ pub enum Decl {
         /// The exact span of the declared identifier token.
         name_span: Span,
     },
-    /// A user-defined `enum`; members fold to numeric constants.
+    /// A user-defined `enum`; members fold to numeric constants unless an
+    /// explicit `= value` supplies a different expression.
     Enum {
         name: String,
-        members: Vec<(String, Span)>,
+        /// `(name, explicit `= expression`, member span)` per member.
+        members: Vec<(String, Option<Expr>, Span)>,
         span: Span,
     },
     /// A source-level constant declared with `macro name = expression`.
