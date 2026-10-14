@@ -1,132 +1,51 @@
 # opy-rs
 
-`opy-rs` is a standalone Rust compiler and library for the OverPy (`.opy`)
-language. It parses, checks, compiles, and inspects OverPy projects independently
-of external Node.js runtimes.
+`opy-rs` is a standalone Rust compiler and library for the
+[OverPy](https://github.com/Zezombye/overpy) (`.opy`) language for Overwatch
+Workshop. It checks, compiles, and inspects OverPy projects with no Node.js
+required.
 
-Downstream tools such as Wright integrate with `opy-rs` through native Rust APIs
-or as a Language Provider Protocol (LPP) process for extended linting, analysis,
-and editor support.
+## Features
 
-`opy-rs` owns OverPy syntax, preprocessing, macros, semantic resolution,
-compiler lowering, diagnostics, source mapping, and source reconstruction. Shared
-Workshop semantics, catalog identities, and emission remain delegated to
-`workshop-rs`.
+- Preprocessor with object and function macros (`#!define`) and includes
+  (`#!include`).
+- `__script__("...")` JavaScript macros, run in an embedded runtime.
+- Diagnostics with precise source locations across includes.
+- Symbol and reference queries for editors and tools.
+- Compilation to Workshop code, with clear errors for unsupported syntax.
 
-```text
-OPY source
-   ↓
-opy-rs parsing, preprocessing, and semantic HIR
-   ↓
-OPY semantic model / HIR
-   ↓
-opy-rs compiler + reconstruction logic
-   ↓
-workshop-rs canonical WIR / validation / emission
-   ↓
-Workshop text
+`opy-rs` follows the OverPy language and adds no dialect of its own. Compiled
+output matches the upstream OverPy compiler structurally (see
+[`docs/language-support.md`](docs/language-support.md)).
+
+## Install
+
+```sh
+cargo install --path crates/opy-cli
 ```
 
-The reverse path reconstructs OverPy source from canonical Workshop structures.
-This keeps `opy-rs` focused on OverPy language behavior while reusing the shared
-Workshop semantic model.
-
-## Key features
-
-- Source analysis: lexer, preprocessor, parser, and semantic HIR with precise
-  source-spanned diagnostics across includes.
-- Macros and preprocessing: full support for object and function macros
-  (`#!define`), file inclusions (`#!include`), and settings directives.
-- Embedded JavaScript macros: executes `__script__("...")` blocks inside an
-  embedded QuickJS-NG runtime without requiring Node.js.
-- Semantic tooling: symbol inspection, reference queries, and AST-aware source
-  checks.
-- Workshop code generation: direct lowering to canonical `workshop-rs` WIR with
-  explicit error reporting for unsupported syntax.
-- Verified compatibility: validated against corpus fixtures, reference snapshots,
-  and differential tests.
-
-## CLI and library
-
-The standalone CLI exposes both Workshop-independent tooling and the bounded
-Workshop compiler surface:
+## Usage
 
 ```sh
 opy-cli check main.opy
 opy-cli compile main.opy
-opy-cli compile --format json main.opy
 opy-cli inspect main.opy
-opy-cli completion bash
-opy-cli version
 ```
 
-The first-party LPP process is available as `opy-provider`; it supports LPP
-1.1 entry-based OPY project requests so clients do not need to enumerate
-includes:
-
-```sh
-cargo run --release -p opy-provider
-```
-
-See the [provider contract](docs/opy/provider.md) for its capabilities and
-artifact format.
-
-The Rust library surface, including the bounded Workshop compiler, lives in
-`crates/opy-rs`; `opy-cli` is the standalone executable surface. See the
-[tooling API reference](docs/opy/tooling-api.md) and
-[current architecture routing](docs/architecture/README.md) for the durable boundary.
-
-## Compatibility
-
-For the declared support surface, compiled output converges structurally on
-the pinned upstream OverPy output: rule order, element identities, control
-flow, conditions, values, variable names and indices, and element cost match
-when both outputs are parsed as canonical Workshop programs. Formatting,
-whitespace, and comments are not compared. Support claims are backed by the
-canonical [language-support contract](docs/language-support.md), the corpus,
-and pinned OverPy reference results.
-
-> [!IMPORTANT]
-> `opy-rs` follows the OverPy language. It does not introduce a WrightKit-only
-> OPY dialect.
-
-The current source forms and explicit limits are maintained in the [canonical
-human-readable support contract](docs/language-support.md) and its user-facing
-detail pages.
-
-## Relationship with Wright
-
-`opy-rs` can be used independently. Wright adds a unified product layer across
-OverPy, DEL/OSTW, and raw Workshop and may consume `opy-rs` through native Rust
-APIs and/or the Language Provider Protocol depending on the integration path.
-Wright-specific lint, analysis, agent, CI, LSP, and orchestration behavior does
-not belong in this repository unless it exposes a missing OverPy semantic
-capability that `opy-rs` itself should own.
-
-## Validation
-
-```sh
-cargo fmt --all -- --check
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test --workspace --all-targets --all-features
-python3 -m unittest discover -s tools/overpy/tests
-```
-
-CI additionally exercises the JavaScript macro runtime on macOS and Windows.
-Oracle-dependent compatibility probes run separately from the normal Rust and
-Python test suites.
+For editors and other tools, `opy-provider` runs `opy-rs` as a
+[Language Provider Protocol](https://github.com/wrightkit/language-provider-protocol)
+process; [Wright](https://github.com/wrightkit/wright) uses it for lint and
+analysis. The library API is documented in [`docs/opy/tooling-api.md`](docs/opy/tooling-api.md).
 
 ## Documentation
 
-Current architecture, compatibility tests, APIs, HIR, source mapping, and
-maintainer references are indexed in [`docs/README.md`](docs/README.md).
+See [`docs/README.md`](docs/README.md) for the language support contract,
+architecture, and compatibility details.
 
 ## Contributing
 
-This repository is part of the WrightKit multi-repository workspace. Follow the
-workspace-level `AGENTS.md` first, then this repository's local rules.
+Read [`AGENTS.md`](AGENTS.md) first.
 
 ## License
 
-`opy-rs` is distributed under the GNU Affero General Public License v3.0 or
-later. See [`LICENSE`](LICENSE).
+AGPL-3.0-or-later. See [`LICENSE`](LICENSE).
