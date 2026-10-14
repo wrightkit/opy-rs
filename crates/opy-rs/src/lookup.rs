@@ -324,6 +324,10 @@ pub enum MatchKind {
     Alias,
     /// A settings path (e.g. `gamemodes.ffa.scoreToWin`).
     Path,
+    /// The opaque handle type the callable produces (e.g. `HealthPoolId`):
+    /// a type-name query reaches the callables whose catalog entry returns
+    /// that type, not only the calls that consume it.
+    ProducedType,
     /// No form matched exactly; the hit is the closest near-spelling.
     Near,
 }
@@ -337,6 +341,7 @@ impl MatchKind {
             MatchKind::DisplayName => "displayName",
             MatchKind::Alias => "alias",
             MatchKind::Path => "path",
+            MatchKind::ProducedType => "producedType",
             MatchKind::Near => "near",
         }
     }
@@ -976,7 +981,12 @@ impl<'a> Index<'a> {
                                 None => (crate::matcher::score(&query.text, form), false),
                             }
                         } else {
-                            (crate::matcher::score(&query.text, form), false)
+                            // A produced-type form always reports the
+                            // relation it matched, near or exact.
+                            (
+                                crate::matcher::score(&query.text, form),
+                                *kind == MatchKind::ProducedType,
+                            )
                         };
                         scored.map(|s| {
                             // A raw (case-insensitive) hit reports the form
@@ -1184,6 +1194,16 @@ impl<'a> Index<'a> {
                     }
                     for spelling in entry.spellings(&locale) {
                         forms.push((spelling.clone(), MatchKind::DisplayName));
+                    }
+                    for produced in entry
+                        .return_type()
+                        .into_iter()
+                        .flat_map(|return_type| return_type.split('|'))
+                    {
+                        let produced = produced.trim();
+                        if is_handle_type(produced) {
+                            forms.push((produced.to_string(), MatchKind::ProducedType));
+                        }
                     }
                 }
             }
@@ -1547,6 +1567,15 @@ impl<'a> Index<'a> {
             });
         }
     }
+}
+
+/// The catalog's opaque handle types are exactly the `…Id` types:
+/// `getLastCreated*`/`getLast*` values return them and the calls that
+/// consume the handle declare them as parameter types. Other semantic
+/// types stay unindexed as produced forms so a query like `player` or
+/// `vector` does not match every callable returning one.
+fn is_handle_type(type_name: &str) -> bool {
+    type_name.ends_with("Id")
 }
 
 /// The function an alias resolves to, through its declared kind.
@@ -2009,5 +2038,47 @@ mod tests {
         assert_eq!(enum_member_spelling("Status", "NO_SUCH_MEMBER"), None);
         assert_eq!(enum_member_spelling("Rounding", "DOWN"), None);
         assert_eq!(enum_member_spelling("NoSuchDomain", "ANY"), None);
+    }
+
+    /// A type-name query reaches the producer of every catalog handle type
+    /// (`…Id`): the (type, producer) pairs are derived from catalog return
+    /// types, so a catalog update extending the family extends the check
+    /// (issue #546).
+    #[test]
+    fn every_produced_handle_type_reaches_its_producer() {
+        let catalog = Catalog::builtin().expect("bundled catalog");
+        let mut producers: Vec<(String, String)> = Vec::new();
+        for entry in catalog.entries_of(Kind::Value) {
+            let Some(return_type) = entry.return_type() else {
+                continue;
+            };
+            for part in return_type.split('|') {
+                let part = part.trim();
+                if is_handle_type(part) {
+                    producers.push((part.to_string(), entry.id.clone()));
+                }
+            }
+        }
+        producers.sort();
+        producers.dedup();
+        assert!(
+            !producers.is_empty(),
+            "the catalog declares handle-type producers"
+        );
+        for (handle_type, canonical_id) in producers {
+            let spelling = call_spelling(&canonical_id).unwrap_or_else(|| {
+                panic!("{canonical_id} produces {handle_type} but spells nothing in OPY")
+            });
+            let mut query = LookupQuery::new(&handle_type);
+            query.limit = 10;
+            let hits = lookup(&query).results().to_vec();
+            assert!(
+                hits.iter().any(|hit| matches!(
+                    hit,
+                    LookupHit::Function { spelling: s, .. } if s == spelling
+                )),
+                "'{handle_type}' must return producer '{spelling}' in the first 10 results: {hits:?}"
+            );
+        }
     }
 }

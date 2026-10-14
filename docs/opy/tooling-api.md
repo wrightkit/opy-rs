@@ -207,8 +207,10 @@ uses — OPY owns no separate vocabulary copy:
   `opy-rs` reports facts only; rendering a signature string and choosing
   which members to inline is the caller's policy.
 * `matchedOn` records which spelling form matched: `opySpelling`,
-  `catalogId`, `displayName`, `alias`, `path`, or `near` for a best-effort
-  close match.
+  `catalogId`, `displayName`, `alias`, `path`, `producedType` (the query
+  named an opaque `…Id` handle type the callable returns, e.g.
+  `HealthPoolId` reaches `getLastCreatedHealthPool`), or `near` for a
+  best-effort close match.
 * `LookupOutcome::Unsupported` reports queries outside the served surface
   (empty text, empty scope, a non-`en-US` display-name locale — localized
   names stay `workshop-rs`-owned).
