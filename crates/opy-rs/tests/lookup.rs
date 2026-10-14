@@ -486,6 +486,119 @@ fn settings_paths_match_segment_by_segment() {
 }
 
 #[test]
+fn handle_type_query_names_its_producer() {
+    // Issue #546: a query naming the opaque handle type — or the phrases an
+    // agent searches for it — must reach the callable producing it, not only
+    // the calls that consume it.
+    for query in ["HealthPoolId", "health pool", "health pool id"] {
+        let mut lookup_query = LookupQuery::new(query);
+        lookup_query.limit = 10;
+        let hits = lookup(&lookup_query).results().to_vec();
+        let producer = hits.iter().find_map(|hit| match hit {
+            LookupHit::Function {
+                spelling,
+                matched_on,
+                ..
+            } if spelling == "getLastCreatedHealthPool" => Some(*matched_on),
+            _ => None,
+        });
+        assert_eq!(
+            producer,
+            Some(MatchKind::ProducedType),
+            "'{query}' must reach the HealthPoolId producer in its first 10 hits: {hits:?}"
+        );
+    }
+}
+
+fn hit_key(hit: &LookupHit) -> String {
+    match hit {
+        LookupHit::Function { spelling, .. }
+        | LookupHit::EnumMember { spelling, .. }
+        | LookupHit::Event { spelling, .. } => spelling.clone(),
+        LookupHit::EnumDomain { domain, .. } => format!("domain:{domain}"),
+        LookupHit::Setting { path, .. } | LookupHit::SettingPath { path, .. } => {
+            format!("setting:{path}")
+        }
+        LookupHit::Parameter {
+            callable, param, ..
+        } => format!("{callable}.{}", param.name),
+    }
+}
+
+#[test]
+fn producer_hits_preserve_the_surrounding_order() {
+    // Issue #546: existing results keep their order where the producer is
+    // newly inserted — filtering `producedType` hits out of the answer must
+    // restore the pre-change sequence for the issue's queries.
+    for (query, expected) in [
+        (
+            "health pool",
+            vec![
+                "getHealth",
+                "Health.NORMAL",
+                "domain:Health",
+                "setting:heroes.<team>.<hero>.health%",
+                "setting:heroes.<team>.health%",
+                "heal",
+                "ModifyHealth.HEAL",
+                "addHealthPool",
+                "removeHealthPool",
+            ],
+        ),
+        (
+            "HealthPoolId",
+            vec![
+                "getHealth",
+                "Health.NORMAL",
+                "domain:Health",
+                "setting:heroes.<team>.<hero>.health%",
+                "setting:heroes.<team>.health%",
+                "heal",
+                "ModifyHealth.HEAL",
+                "addHealthPool",
+                "getHealthOfType",
+            ],
+        ),
+        (
+            "health pool id",
+            vec![
+                "getHealth",
+                "Health.NORMAL",
+                "domain:Health",
+                "setting:heroes.<team>.<hero>.health%",
+                "setting:heroes.<team>.health%",
+                "heal",
+                "ModifyHealth.HEAL",
+                "addHealthPool",
+                "getHealthOfType",
+            ],
+        ),
+    ] {
+        let mut lookup_query = LookupQuery::new(query);
+        lookup_query.limit = 10;
+        let hits = lookup(&lookup_query).results().to_vec();
+        let non_producer: Vec<String> = hits
+            .iter()
+            .filter(|hit| {
+                !matches!(
+                    hit,
+                    LookupHit::Function {
+                        matched_on: MatchKind::ProducedType,
+                        ..
+                    }
+                )
+            })
+            .map(hit_key)
+            .collect();
+        assert_eq!(
+            non_producer,
+            expected[..non_producer.len()],
+            "'{query}' non-producer hits must keep their order: {hits:?}"
+        );
+    }
+}
+
+#[test]
 fn scope_filters_to_one_namespace() {
     let mut query = LookupQuery::new("Clip");
     query.scope = LookupScope::FUNCTIONS;
