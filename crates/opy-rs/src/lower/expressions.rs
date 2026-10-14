@@ -1162,12 +1162,14 @@ impl Lowerer {
         (bound, selector)
     }
 
-    /// Lower one call argument's value; the contextual-domain parameter (the
-    /// `chase` form's `ChaseReeval` member) is recorded as a pending enum
-    /// without validating the domain — it resolves only against the concrete
-    /// domain selected by the call's keyword selector (issue #110). Outside
-    /// that signature context `ChaseReeval` never resolves because it is not
-    /// a declared enum domain.
+    /// Lower one call argument's value. Two domain-aware resolutions apply:
+    /// the contextual-domain parameter (the `chase` form's `ChaseReeval`
+    /// member) is recorded as a pending enum without validating the domain —
+    /// it resolves only against the concrete domain selected by the call's
+    /// keyword selector (issue #110), and outside that signature context
+    /// `ChaseReeval` never resolves because it is not a declared enum domain;
+    /// and a number literal bound to a `Team` parameter resolves to the
+    /// `Team.{n}` member its text spells (issue #528).
     pub(super) fn lower_call_arg_value(
         &mut self,
         entry: &Function,
@@ -1198,6 +1200,31 @@ impl Lowerer {
                             };
                         }
                     }
+                }
+            }
+        }
+        // A bare number in a `Team` parameter spells the team member like
+        // `Team.{n}`: the pinned compiler writes the number through
+        // unchecked (its `Team` parameter type is not a `constantValues`
+        // domain, so the mistyped-argument branch is an empty
+        // pass-through), while canonical validation has no `Number`→`Team`
+        // admission evidence under workshop-rs ADR-0014. `opy-rs` emits
+        // the canonical member of the same intent — `getLivingPlayers(2)`
+        // emits `All Living Players(Team 2)` — recorded as an approved
+        // exception in docs/architecture/language-core.md (issue #528). A
+        // number that spells no `Team.{n}` member keeps the literal and
+        // stays rejected at canonical validation.
+        if entry.params[param_index].domain.as_deref() == Some("Team") {
+            if let Expr::Number { text, span, .. } = &arg.value {
+                if let Some((domain, member)) =
+                    crate::enums::canonical_member("Team", text, &self.catalog)
+                {
+                    return HirExpr::Enum {
+                        value_type: domain,
+                        value: member,
+                        literal: false,
+                        span: Some((*span).into()),
+                    };
                 }
             }
         }
