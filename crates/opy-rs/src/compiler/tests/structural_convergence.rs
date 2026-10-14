@@ -263,6 +263,64 @@ fn a_bare_player_for_an_entity_parameter_stays_rejected() {
 }
 
 #[test]
+fn a_numeric_literal_in_a_team_position_emits_the_canonical_member() {
+    // Approved exception (docs/architecture/language-core.md,
+    // wrightkit/opy-rs#528): the reference's `Team` parameter type is not a
+    // `constantValues` domain, so its type-mismatch branch is an empty
+    // pass-through — `getLivingPlayers(2)` writes `All Living Players(2)`
+    // verbatim, and `getLivingPlayers(3)`/`(-1)`/`(2.5)`/`(eventPlayer)` write
+    // the same unchecked values. Canonical validation has no `Number`→`Team`
+    // admission evidence (workshop-rs ADR-0014), so a literal that spells a
+    // `Team.{n}` member resolves to the canonical member — the same `2` →
+    // `Team 2` mapping the reference's own `@Team` annotation applies.
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let source = "rule \"x\":\n    @Event eachPlayer\n    @Team 2\n    eventPlayer.setMoveSpeed(len(getLivingPlayers(2)))\n    eventPlayer.moveToTeam(2)\n    setTeamScore(2, 5)\n    declareTeamVictory(2)\n";
+    let hir = crate::compile(source, "source.opy", dir).expect("source must resolve");
+    let artifact = Compiler::new()
+        .expect("released workshop contract must load")
+        .compile_hir(&hir)
+        .expect("numeric team literals must emit canonical members");
+    for expected in [
+        "Ongoing - Each Player;\n        Team 2;",
+        "Set Move Speed(Event Player, Number Of Living Players(Team 2))",
+        "Move Player to Team(Event Player, Team 2, -1)",
+        "Set Team Score(Team 2, 5)",
+        "Declare Team Victory(Team 2)",
+    ] {
+        assert!(
+            artifact.emitted.contains(expected),
+            "{expected}\n{}",
+            artifact.emitted
+        );
+    }
+    // Keyword binding resolves the same way.
+    let source = "globalvar g\nrule \"x\":\n    @Event eachPlayer\n    g = getPlayersInRadius(eventPlayer.getPosition(), 5, team = 2)\n";
+    let hir = crate::compile(source, "source.opy", dir).expect("source must resolve");
+    let artifact = Compiler::new()
+        .expect("released workshop contract must load")
+        .compile_hir(&hir)
+        .expect("a keyword-bound numeric team literal must emit the member");
+    assert!(
+        artifact
+            .emitted
+            .contains("Players Within Radius(Position Of(Event Player), 5, Team 2, Off)"),
+        "{}",
+        artifact.emitted
+    );
+    // A number that spells no `Team.{n}` member stays a number and keeps
+    // the declared-type rejection — the same exception family, one side of
+    // the boundary already covered by `Team.{n}` spellings.
+    for argument in ["0", "3", "-1", "2.5"] {
+        assert_rejected(
+            &format!(
+                "globalvar g\nrule \"x\":\n    @Event eachPlayer\n    g = getLivingPlayers({argument})\n"
+            ),
+            "semantic type 'Team'",
+        );
+    }
+}
+
+#[test]
 fn a_non_finite_log_fold_keeps_the_pre_fold_expansion() {
     // The reference writes `-Infinity`/`NaN`, which the canonical grammar
     // cannot parse; pending wrightkit/workshop-rs#358 the call keeps emitting
