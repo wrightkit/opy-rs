@@ -46,10 +46,6 @@ their `regressions` entries only identify minimized `.opy` files excluded from
 the full-project source digest. The complete project remains the integration
 test.
 
-`census/workshop-feature-census` contains opaque Workshop feature IDs used by
-the OPY-side consumer test. Catalog definitions, validation, and emission
-remain owned by `workshop-rs`.
-
 Imported source files retain their applicable license, attribution, immutable
 source revision, redistribution status, and file hashes. These concrete
 records protect licensing and reproducibility; they do not define a generic
