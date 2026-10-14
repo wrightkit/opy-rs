@@ -97,9 +97,9 @@ spelling beyond upstream needs an approved, recorded exception (#410).
 pinned oracle's `funcKw` argument tables — the tables upstream `parseArgs`
 uses to bind `name=` keyword arguments. Any name divergence both rejects
 upstream-valid code and accepts upstream-invalid code, so the audit fails on
-any unexplained mismatch. Entries whose names cannot track upstream
-(`special-lowering` parsing, `keywordArgs: false`, `unbounded` variadics)
-are exempt by the recorded reason on the manifest entry.
+any unexplained mismatch. Only the few entries in the script's `EXEMPT`
+table are skipped, each with its recorded reason; special-lowering and
+no-keyword entries are compared like the rest.
 
 ```sh
 pnpm install --dir tools/overpy/oracle
