@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/null-call-argument",
+  "category": "synthetic",
+  "features": [
+    "null literal",
+    "name resolution"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": true
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "normalized-output"
+    }
+  }
+}

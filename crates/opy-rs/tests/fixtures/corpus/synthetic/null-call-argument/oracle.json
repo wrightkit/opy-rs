@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "rule (\"x\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Damage(Event Player, Null, 10);\n    }\n}\n",
+    "workshopExact": "rule (\"x\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Damage(Event Player, Null, 10);\n    }\n}\n\n",
+    "workshopSha256": "45a00b5db1041529b8a302ff4b1ea3dd1aa3c461c6a78c1e359ee3e63f0f585f"
+  },
+  "fixture": "synthetic/null-call-argument",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "fff7152b0d54280b18bd81624683ddeeb29c39d050ec6a74d6004d7444f02162"
+      }
+    ],
+    "sha256": "96d828762f1a3c68a59554c2b703533dd9e0422943cb8f9aea07656563cfe408",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}
