@@ -251,6 +251,14 @@ fn format_arity_mismatches_are_an_error() {
 }
 
 #[test]
+fn format_without_placeholders_ignores_extra_arguments() {
+    let source = "globalvar g\nrule \"r\":\n    @Event global\n    g = \"s\".format(3, 3, 3)\n";
+    let hir = crate::compile(source, "format-extra.opy", Path::new(".")).unwrap();
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+    assert!(artifact.emitted.contains("Custom String(\"s\")"));
+}
+
+#[test]
 fn f_string_interpolations_expand_active_defines() {
     // The reference re-expands `#!define` text macros inside f-string
     // interpolations: `f"{S}!{N}={M(6)}"` sees `"a"`, `7`, and `6+1`.

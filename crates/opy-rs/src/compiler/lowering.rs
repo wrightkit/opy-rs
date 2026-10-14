@@ -1620,7 +1620,7 @@ fn case_sensitive_character(character: char) -> char {
 
 /// The pinned `__customString__`/`.format` arity check: `{n}` requires at
 /// least `n + 1` arguments (extra arguments are ignored), `{}` requires
-/// exactly one argument each, and mixing both kinds is an error. `{{`/`}}`
+/// exactly one argument each, a text without placeholders accepts any count, and mixing both kinds is an error. `{{`/`}}`
 /// escapes and brace groups that are not placeholders (`{0a}`, `{x}`, a
 /// dangling `{`) are literal text. Returns the oracle's diagnostic.
 fn format_arity_error(text: &str, arg_count: usize) -> Option<String> {
@@ -1666,7 +1666,7 @@ fn format_arity_error(text: &str, arg_count: usize) -> Option<String> {
                 "Too few arguments in .format() function: expected {expected}, got {arg_count}"
             ));
         }
-    } else if unnumbered != arg_count {
+    } else if unnumbered > 0 && unnumbered != arg_count {
         return Some(format!(
             "Too few arguments in .format() function: expected {unnumbered}, got {arg_count}"
         ));
