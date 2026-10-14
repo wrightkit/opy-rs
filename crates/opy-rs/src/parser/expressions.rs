@@ -505,10 +505,8 @@ impl Parser<'_> {
                 // (#529). Keep the literal's spelling as the callee so
                 // the lowerer resolves the zero-argument form like the
                 // bare literal and rejects arguments like any other
-                // bare-spelled value; `None` is not a reference spelling,
-                // so `None()` resolves through the same path and stays
-                // rejected.
-                if matches!(token.text.as_str(), "true" | "false" | "None" | "null")
+                // bare-spelled value.
+                if matches!(token.text.as_str(), "true" | "false" | "null")
                     && self.peek_kind() == TokenKind::LParen
                 {
                     return Ok(Expr::Name {
@@ -525,7 +523,7 @@ impl Parser<'_> {
                         value: false,
                         span: token.span,
                     }),
-                    "None" | "null" => Ok(Expr::Null { span: token.span }),
+                    "null" => Ok(Expr::Null { span: token.span }),
                     _ => Ok(Expr::Name {
                         name: token.text.clone(),
                         span: token.span,

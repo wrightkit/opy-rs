@@ -1,0 +1,39 @@
+{
+  "compile": {
+    "diagnostics": [
+      {
+        "severity": "error",
+        "text": "Error: Unknown function name 'None'\n    | line 4, col 25, at source.opy"
+      }
+    ],
+    "exitCode": 1,
+    "status": "failure",
+    "stdout": "",
+    "workshop": "",
+    "workshopExact": "",
+    "workshopSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "fixture": "synthetic/none-call-argument-invalid",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "82dbfa0e5cee5599ae67b89f2cc7924f2525b8aec32303772af5a96801e78a89"
+      }
+    ],
+    "sha256": "b6de5985ccabf7f38d9c270afb772d3c6a2eb98bdeddee5ecb5a242f635a9b99",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}
