@@ -347,6 +347,24 @@ pub(crate) fn settings_member_candidates(
     };
     let mut path = Vec::new();
     match find_settings_node(&hir_settings.children, &mut path, &span) {
+        // A member directly under `heroes.<team>` occupies a hero-name
+        // slot: the pinned compiler resolves the name through
+        // `tows(key, heroKw)` before reading its value, so no leaf key is
+        // valid there — a `generalKeys` member is valid under the team's
+        // `general` group instead (#545). Anything else keeps the owner's
+        // hero-name suggestion.
+        Some(SettingsMatch::Member { path, name })
+            if matches!(path.as_slice(), [PathPart::Part("heroes"), PathPart::Team]) =>
+        {
+            if crate::compiler::settings::general_hero_keys()
+                .iter()
+                .any(|key| key == name)
+            {
+                vec!["general".to_string()]
+            } else {
+                suggestion.into_iter().map(str::to_string).collect()
+            }
+        }
         // A leaf member: the key either resolves (the value or kind is the
         // problem) or is itself outside the emission table.
         Some(SettingsMatch::Member { path, name }) => {

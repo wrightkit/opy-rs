@@ -55,7 +55,7 @@ pub(crate) struct UnknownSetting {
 /// applying heroes in the smaller of include/exclude form and is generated
 /// from the pinned compiler's own merge by
 /// `tools/overpy/gen_hero_applicability.cjs`.
-fn hero_setting_applies(hero: &str, key: &str) -> bool {
+pub(crate) fn hero_setting_applies(hero: &str, key: &str) -> bool {
     let data = applicability();
     if data.all.iter().any(|candidate| candidate == key) {
         return true;
@@ -69,8 +69,27 @@ fn hero_setting_applies(hero: &str, key: &str) -> bool {
     false
 }
 
+/// The keys the pinned compiler declares under `heroes.<team>.general`
+/// (`generalKeys` in `data/hero_applicability.json`). A `general` key
+/// placed directly under a team occupies a hero-name position (#545);
+/// diagnostics name `general` as the valid location.
+pub(crate) fn general_hero_keys() -> &'static [String] {
+    &applicability().general_keys
+}
+
+/// Whether `name` resolves to a hero under `heroes.<team>` — the pinned
+/// compiler's `tows(key, heroKw)` lookup applied to the canonical alias,
+/// like the group-name path.
+fn resolves_to_hero(name: &str) -> bool {
+    gameplay_catalog()
+        .hero_by_id(canonical_hero_name(name))
+        .is_some()
+}
+
 #[derive(serde::Deserialize)]
 struct HeroApplicability {
+    #[serde(rename = "generalKeys")]
+    general_keys: Vec<String>,
     all: Vec<String>,
     only: std::collections::HashMap<String, Vec<String>>,
     except: std::collections::HashMap<String, Vec<String>>,
@@ -221,6 +240,53 @@ fn pass_through_unknown_members(
                                 "enabledHeroes" | "disabledHeroes"
                             ))
                         });
+                    // Every other team member resolves as a hero name to
+                    // upstream: `tows(key, heroKw)` runs before its value is
+                    // read, so a member whose name is no hero fails the same
+                    // lookup a misspelled hero group does — carrying it as an
+                    // empty group lands that `unknown hero` rejection on the
+                    // member's span (#545). A hero name carrying a list
+                    // iterates the list's `Object.keys` upstream — index-keyed
+                    // members like the non-dict `general` above — and keeps
+                    // its authored name so the alias rename below still
+                    // applies; any other leaf shape dereferences a scalar
+                    // upstream, so it stays verbatim for the emission table
+                    // to reject.
+                    for member in &mut rest {
+                        match member {
+                            SettingsNode::List {
+                                name,
+                                elements,
+                                span,
+                            } if resolves_to_hero(name) => {
+                                let mut children = Vec::with_capacity(elements.len());
+                                for (index, element) in elements.iter().enumerate() {
+                                    children.push(SettingsNode::Raw {
+                                        name: index.to_string(),
+                                        value: list_element_text(element, evals)?,
+                                        span: element.span,
+                                    });
+                                }
+                                *member = SettingsNode::Group {
+                                    name: std::mem::take(name),
+                                    children,
+                                    span: *span,
+                                };
+                            }
+                            member
+                                if matches!(member, SettingsNode::Group { .. })
+                                    || resolves_to_hero(member.name()) => {}
+                            member => {
+                                let name = member.name().to_string();
+                                let span = member.span();
+                                *member = SettingsNode::Group {
+                                    name,
+                                    children: Vec::new(),
+                                    span,
+                                };
+                            }
+                        }
+                    }
                     // Canonical hero-group names take upstream's assign+delete
                     // rename: the source group lands at the destination's
                     // position, collapsing a duplicate, or at the end of the
@@ -290,6 +356,9 @@ fn pass_through_unknown_members(
                                     element.value = canonical.to_string();
                                 }
                             }
+                            // Non-group members left are hero-named leaves the
+                            // normalization above kept verbatim for the
+                            // emission table to reject.
                             _ => {}
                         }
                     }

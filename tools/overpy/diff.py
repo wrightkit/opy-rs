@@ -64,6 +64,11 @@ REFERENCE_FRONTIER_RULES = (
         "preprocess",
         "settings-placement",
     ),
+    (
+        "No match found for keyword",
+        "lowering",
+        "workshop-emission",
+    ),
 )
 NATIVE_FRONTIER_STAGES = {
     "lex-error": "lex",
@@ -80,6 +85,7 @@ NATIVE_FRONTIER_STAGES = {
     "random-indexed-delete": "lowering",
     "duplicate-rule-name": "semantic",
     "unknown-member": "semantic",
+    "workshop-emission": "lowering",
 }
 NATIVE_FRONTIER_CONSTRUCTS = {
     "lambda-context": "parse-error",

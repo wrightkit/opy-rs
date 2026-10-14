@@ -332,6 +332,160 @@ fn hero_general_settings_are_emitted_at_team_scope() {
 }
 
 #[test]
+fn general_keys_reject_directly_under_teams_and_accept_under_general() {
+    // opy-rs#545: the pinned compiler resolves every `heroes.<team>` member
+    // name through `tows(key, heroKw)` before the value is read, so each of
+    // the `generalKeys` declared for `heroes.<team>.general` is rejected
+    // when placed directly under a team and accepted beneath `general`.
+    let compiler = Compiler::new().expect("compiler loads");
+    let general_keys = crate::compiler::settings::general_hero_keys();
+    assert_eq!(general_keys.len(), 25, "the pinned generalKeys inventory");
+    // `__percent__` keys take numbers; every `__bool*` domain accepts `true`
+    // upstream (`providedSettings[key] === true`). A group of misplaced
+    // members rejects each individually, so one source per team still names
+    // every key.
+    let member_list = |keys: &[String]| {
+        keys.iter()
+            .map(|key| {
+                let value = if key.ends_with('%') { "50" } else { "true" };
+                format!("\"{key}\": {value}")
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    for team in ["allTeams", "team1", "team2"] {
+        let direct = source_with_settings(&format!(
+            "settings {{ \"gamemodes\": {{}}, \"heroes\": {{ \"{team}\": {{ {} }} }} }}",
+            member_list(general_keys)
+        ));
+        let report = compiler.compile_source_report(&direct, "issue-545.opy", Path::new("."));
+        assert_eq!(
+            report.compile.status,
+            CompileStatus::Failure,
+            "{team} general keys directly under the team must reject"
+        );
+        // `check` and `compile` share the emission-acceptance pass (#411).
+        let outcome = crate::tooling::check(&direct, "issue-545.opy", Path::new("."));
+        for key in general_keys {
+            let needle = format!("'{key}'");
+            assert!(
+                report.compile.diagnostics.iter().any(|diagnostic| {
+                    diagnostic.code == "workshop-emission" && diagnostic.message.contains(&needle)
+                }),
+                "{team}.{key} must reject at the emission boundary: {:?}",
+                report.compile.diagnostics
+            );
+            assert!(
+                outcome.diagnostics.iter().any(|diagnostic| {
+                    diagnostic.code == "workshop-emission" && diagnostic.message.contains(&needle)
+                }),
+                "check must report the same rejection for {team}.{key}: {:?}",
+                outcome.diagnostics
+            );
+        }
+
+        let nested = source_with_settings(&format!(
+            "settings {{ \"gamemodes\": {{}}, \"heroes\": {{ \"{team}\": {{ \"general\": {{ {} }} }} }} }}",
+            member_list(general_keys)
+        ));
+        compiler
+            .compile_source_artifact(&nested, "issue-545.opy", Path::new("."))
+            .unwrap_or_else(|error| panic!("{team}.general must compile: {error}"));
+    }
+}
+
+#[test]
+fn general_keys_compile_under_a_concrete_hero() {
+    // The same keys stay accepted under an authored hero group, where the
+    // pinned compiler looks them up in the hero's merged schema — keys the
+    // schema does not apply to that hero are written back verbatim, which
+    // upstream also accepts.
+    let compiler = Compiler::new().expect("compiler loads");
+    let catalog = workshop_rs::gameplay::data::builtin().expect("gameplay catalog");
+    for (index, key) in crate::compiler::settings::general_hero_keys()
+        .iter()
+        .enumerate()
+    {
+        let team = ["allTeams", "team1", "team2"][index % 3];
+        let value = if key.ends_with('%') { "50" } else { "true" };
+        let hero = catalog
+            .heroes()
+            .iter()
+            .map(|hero| hero.id().as_str())
+            .find(|id| crate::compiler::settings::hero_setting_applies(id, key))
+            .unwrap_or("mei");
+        let source = source_with_settings(&format!(
+            "settings {{ \"gamemodes\": {{}}, \"heroes\": {{ \"{team}\": {{ \"{hero}\": {{ \"{key}\": {value} }} }} }} }}"
+        ));
+        compiler
+            .compile_source_artifact(&source, "issue-545.opy", Path::new("."))
+            .unwrap_or_else(|error| panic!("{team}.{hero}.{key} must compile: {error}"));
+    }
+}
+
+#[test]
+fn misplaced_general_key_names_general_as_the_valid_location() {
+    // #545 asks the rejection to name the valid location: a catalogued
+    // `general` key at the hero-name position suggests the `general` group.
+    let source = source_with_settings(
+        "settings { \"gamemodes\": {}, \"heroes\": { \"allTeams\": { \"health%\": 100 } } }",
+    );
+    let report = Compiler::new()
+        .expect("compiler loads")
+        .compile_source_report(&source, "issue-545.opy", Path::new("."));
+    assert_eq!(report.compile.status, CompileStatus::Failure);
+    let diagnostic = report
+        .compile
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.code == "workshop-emission")
+        .expect("the emission rejection");
+    assert!(
+        diagnostic.message.contains("health%"),
+        "the rejected key must be named: {}",
+        diagnostic.message
+    );
+    assert!(
+        diagnostic.message.contains("general"),
+        "the valid location must be named: {}",
+        diagnostic.message
+    );
+}
+
+#[test]
+fn hero_named_leaves_and_lists_follow_the_reference_traversal() {
+    // #545 lands a leaf in the same hero-name resolution upstream applies
+    // to every `heroes.<team>` member: a hero name carrying a list iterates
+    // `Object.keys` (index-keyed members), while a hero name carrying a
+    // scalar dereferences it and fails.
+    let compiler = Compiler::new().expect("compiler loads");
+    let list = source_with_settings(
+        "settings { \"gamemodes\": {}, \"heroes\": { \"allTeams\": { \"mei\": [1, 2] } } }",
+    );
+    let artifact = compiler
+        .compile_source_artifact(&list, "issue-545.opy", Path::new("."))
+        .expect("a hero-named list compiles as index-keyed members");
+    assert!(artifact.emitted.contains("Mei {"));
+    assert!(artifact.emitted.contains("0: 1"));
+    assert!(artifact.emitted.contains("1: 2"));
+
+    let scalar = source_with_settings(
+        "settings { \"gamemodes\": {}, \"heroes\": { \"allTeams\": { \"mei\": 5 } } }",
+    );
+    let report = compiler.compile_source_report(&scalar, "issue-545.opy", Path::new("."));
+    assert_eq!(report.compile.status, CompileStatus::Failure);
+    assert!(
+        report
+            .compile
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "workshop-emission"),
+        "a hero-named scalar must reject at the emission boundary: {:?}",
+        report.compile.diagnostics
+    );
+}
+
+#[test]
 fn compiled_settings_are_queryable_through_the_canonical_consumer_api() {
     let source = source_with_settings(
         r#"settings {

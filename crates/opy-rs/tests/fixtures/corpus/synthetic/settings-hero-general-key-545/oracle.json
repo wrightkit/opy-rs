@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "settings\n{\n\tmain\n\t{\n\t\tDescription: \"opy-rs#545 general keys inside general and a hero\"\n\t}\n\tmodes\n\t{\n\t\tSkirmish\n\t\t{\n\t\t}\n\t}\n\theroes\n\t{\n\t\tGeneral\n\t\t{\n\t\t\tHealth: 100%\n\t\t\tPassive Health Regeneration: Off\n\t\t\tWidowmaker\n\t\t\t{\n\t\t\t\tPassive Health Regeneration: Off\n\t\t\t}\n\t\t}\n\t\tTeam 1\n\t\t{\n\t\t\tDamage Received: 50%\n\t\t}\n\t\tTeam 2\n\t\t{\n\t\t\tReceive Headshots Only: On\n\t\t}\n\t}\n}\n",
+    "workshopExact": "settings\n{\n\tmain\n\t{\n\t\tDescription: \"opy-rs#545 general keys inside general and a hero\"\n\t}\n\tmodes\n\t{\n\t\tSkirmish\n\t\t{\n\t\t}\n\t}\n\theroes\n\t{\n\t\tGeneral\n\t\t{\n\t\t\tHealth: 100%\n\t\t\tPassive Health Regeneration: Off\n\t\t\tWidowmaker\n\t\t\t{\n\t\t\t\tPassive Health Regeneration: Off\n\t\t\t}\n\t\t}\n\t\tTeam 1\n\t\t{\n\t\t\tDamage Received: 50%\n\t\t}\n\t\tTeam 2\n\t\t{\n\t\t\tReceive Headshots Only: On\n\t\t}\n\t}\n}\n\n",
+    "workshopSha256": "0180f93c37c2389a27025e924202fdbebe55c49df181b4df71ab237b00faf025"
+  },
+  "fixture": "synthetic/settings-hero-general-key-545",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "073efb729041d880a096d350536a9ed372ad15dc6212e44a5067d3bee8535498"
+      }
+    ],
+    "sha256": "8007eeda96d21189ba1c714c31810684314bad179d326dd96e81c313a6da3457",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "889d9749d1def17f146548cbddb94ea1ab015847",
+    "gitHead": "1e2688954302a402d076944b46db07efb14d7b61",
+    "integrity": "sha512-oX17nauJcPTaKIrRFY/rD0Rl8atqFUVv9Hg2TKH+A68/fC8+ZO344Mkd1A/Y0oOVp1hr5tktMBjzMEDDnMEYUw==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.10.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.10"
+  },
+  "schemaVersion": 1
+}

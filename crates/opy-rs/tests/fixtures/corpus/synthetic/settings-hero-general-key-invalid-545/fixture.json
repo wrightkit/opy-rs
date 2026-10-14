@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/settings-hero-general-key-invalid-545",
+  "category": "synthetic",
+  "features": [
+    "settings",
+    "rules"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "failure",
+      "relationship": "match",
+      "ruleNames": false,
+      "diagnosticCode": "workshop-emission"
+    },
+    "compiler": {
+      "nativeStatus": "failure",
+      "relationship": "match",
+      "comparison": "diagnostic-code",
+      "diagnosticCode": "workshop-emission",
+      "failureClass": "frontend"
+    }
+  }
+}
