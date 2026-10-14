@@ -321,7 +321,7 @@ fn texture_setup_and_formatted_named_entities_match_pinned_features() {
 
 #[test]
 fn aliased_member_lowers_to_the_canonical_catalog_identity() {
-    let source = "globalvar value\nrule \"r\":\n    @Event eachPlayer\n    @Condition eventPlayer.getHero() == None\n    value = eventPlayer.getHero()\n";
+    let source = "globalvar value\nrule \"r\":\n    @Event eachPlayer\n    @Condition eventPlayer.getHero() == null\n    value = eventPlayer.getHero()\n";
     let hir = crate::compile(source, "source.opy", Path::new(".")).expect("frontend resolves");
     let artifact = Compiler::new()
         .expect("compiler loads")

@@ -104,7 +104,6 @@ pub fn reconstruct_with(
 const RESERVED_NAMES: &[&str] = &[
     "true",
     "false",
-    "None",
     "null",
     "eventPlayer",
     "rule",
@@ -1600,7 +1599,7 @@ impl<'a> Emitter<'a> {
                 self.out.push_str(if *value { "true" } else { "false" });
             }
             Value::Null => {
-                self.out.push_str("None");
+                self.out.push_str("null");
             }
             Value::Array(elements) => {
                 self.out.push('[');
@@ -2111,6 +2110,25 @@ mod tests {
         assert!(!source.contains("getRealPlayersInRadius"));
 
         let reparsed = compile_to_program(&source, "players-in-radius.opy");
+        assert!(workshop_rs::roundtrip::equivalent(&program, &reparsed));
+    }
+
+    #[test]
+    fn null_values_reconstruct_with_the_null_spelling() {
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("g", 0));
+        program.rule(
+            Rule::new("main", Event::Global).action(Action::SetGlobalVariable {
+                variable: "g".into(),
+                value: Value::Null,
+            }),
+        );
+
+        let source = reconstruct(&program).expect("null should reconstruct");
+        assert!(source.contains("g = null"), "{source}");
+        assert!(!source.contains("None"), "{source}");
+
+        let reparsed = compile_to_program(&source, "null.opy");
         assert!(workshop_rs::roundtrip::equivalent(&program, &reparsed));
     }
 
