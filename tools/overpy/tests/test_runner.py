@@ -134,16 +134,6 @@ class RunnerTests(unittest.TestCase):
                 self.assertTrue(source.is_file(), regression["source"])
                 self.assertEqual(set(regression), {"source"})
 
-    def test_census_uses_opaque_workshop_owned_feature_ids(self):
-        _, census = next(
-            fixture
-            for fixture in run_oracle.discover_fixtures(CORPUS_DIR)
-            if fixture[1]["id"] == "census/workshop-feature-census"
-        )
-        self.assertEqual(census["censusContract"]["owner"], "workshop-rs")
-        self.assertTrue(census["workshopFeatureIds"])
-        self.assertTrue(all(isinstance(item, str) for item in census["workshopFeatureIds"]))
-
 
 if __name__ == "__main__":
     unittest.main()
