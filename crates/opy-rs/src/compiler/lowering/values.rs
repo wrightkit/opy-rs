@@ -44,6 +44,9 @@ impl<'a> Lowering<'a> {
                         return Ok(self.push_number(value));
                     }
                     crate::compile_time::Value::String(value) => {
+                        if let Some(error) = format_arity_error(&value, 0) {
+                            return Err(self.unsupported(error, span));
+                        }
                         return Ok(self.lower_custom_string(value));
                     }
                     crate::compile_time::Value::Bool(value) => {
@@ -60,6 +63,9 @@ impl<'a> Lowering<'a> {
         let value = match expr {
             Expr::Number { value, .. } => Value::Number(*value),
             Expr::String { value, .. } => {
+                if let Some(error) = format_arity_error(value, 0) {
+                    return Err(self.unsupported(error, span));
+                }
                 return Ok(self.lower_custom_string(value.clone()));
             }
             Expr::Bool { value, .. } => Value::Bool(*value),
@@ -211,7 +217,13 @@ impl<'a> Lowering<'a> {
                 }
             }
             Expr::Format { text, args, .. } => {
+                if let Some(error) = format_arity_error(text, args.len()) {
+                    return Err(self.unsupported(error, span));
+                }
                 let (format_text, dynamic_args) = self.fold_format_constants(text, args);
+                if let Some(error) = format_arity_error(&format_text, dynamic_args.len()) {
+                    return Err(self.unsupported(error, span));
+                }
                 if dynamic_args.is_empty() {
                     let value = format_text;
                     return Ok(self.lower_custom_string(value));
@@ -273,23 +285,55 @@ impl<'a> Lowering<'a> {
             Expr::Binary {
                 op, left, right, ..
             } => {
+                // `__arrayContains__` upstream: an `areAstsAlwaysEqual` hit
+                // folds true; a literal needle filters literal elements and
+                // folds `False` on empty, an `Equals` on a single survivor,
+                // or a reduced `Array Contains` otherwise (#512).
                 if self.optimization_state_at(span.as_ref()).enabled
                     && matches!(op.as_str(), "in" | "not in")
+                    && let Expr::Array { elements, .. } = right.as_ref()
                 {
-                    if let Expr::Array { elements, .. } = right.as_ref() {
-                        if elements
-                            .iter()
-                            .any(|elem| literal_key_matches(elem, left.as_ref()))
-                        {
-                            return Ok(self.push_value(Value::Bool(op == "in")));
+                    let finish = |this: &mut Self, id: ValueId| {
+                        if op == "not in" {
+                            this.push_call("not", vec![id])
+                        } else {
+                            id
                         }
-                        let strict = self.strict_optimization_active(expr);
-                        if is_membership_literal(left.as_ref(), strict)
-                            && elements
-                                .iter()
-                                .all(|elem| is_membership_literal(elem, strict))
-                        {
-                            return Ok(self.push_value(Value::Bool(op == "not in")));
+                    };
+                    if elements
+                        .iter()
+                        .any(|elem| membership_equal(elem, left.as_ref()))
+                    {
+                        let folded = self.push_value(Value::Bool(true));
+                        return Ok(finish(self, folded));
+                    }
+                    let strict = self.strict_optimization_active(expr);
+                    if is_membership_literal(left.as_ref(), strict) {
+                        let survivors: Vec<&Expr> = elements
+                            .iter()
+                            .filter(|elem| !is_membership_literal(elem, strict))
+                            .collect();
+                        match survivors.len() {
+                            0 => {
+                                let folded = self.push_value(Value::Bool(false));
+                                return Ok(finish(self, folded));
+                            }
+                            1 => {
+                                let needle = self.lower_value(left)?;
+                                let element = self.lower_value(survivors[0])?;
+                                let equals = self.push_call("==", vec![needle, element]);
+                                return Ok(finish(self, equals));
+                            }
+                            _ => {
+                                let mut survivor_ids = Vec::with_capacity(survivors.len());
+                                for elem in survivors {
+                                    survivor_ids.push(self.lower_value(elem)?);
+                                }
+                                let array = self.lower_array(survivor_ids);
+                                let needle = self.lower_value(left)?;
+                                let contains = self.push_call("arrayContains", vec![array, needle]);
+                                return Ok(finish(self, contains));
+                            }
                         }
                     }
                 }
@@ -1311,20 +1355,45 @@ impl<'a> Lowering<'a> {
                 value,
                 span,
             } => {
-                let value = match modifier.as_str() {
-                    "b" => big_letters(value),
-                    "c" => case_sensitive(value),
-                    "w" => fullwidth(value),
-                    _ => {
-                        return Err(self.unsupported(
-                            format!(
-                                "string modifier '{modifier}' is not currently representable in canonical WIR"
-                            ),
-                            *span,
-                        ));
+                if let Some(error) = format_arity_error(value, 0) {
+                    return Err(self.unsupported(error, *span));
+                }
+                // Combined modifiers apply in the reference's fixed pipeline
+                // order; `p` is a no-op and `f`/`t`/`l` stay unsupported at
+                // this stage.
+                if modifier
+                    .chars()
+                    .any(|c| !matches!(c, 'f' | 'p' | 'b' | 'w' | 'c'))
+                {
+                    return Err(self.unsupported(
+                        format!(
+                            "string modifier '{modifier}' is not currently representable in canonical WIR"
+                        ),
+                        *span,
+                    ));
+                }
+                let mut rewritten = value.clone();
+                for step in ['b', 'w', 'c'] {
+                    if !modifier.contains(step) {
+                        continue;
                     }
-                };
-                return Ok(self.lower_custom_string(value));
+                    rewritten = match step {
+                        'b' => {
+                            if !rewritten.chars().any(|c| big_letter(c).is_some()) {
+                                return Err(self.unsupported(
+                                    format!(
+                                        "Could not convert the string \"{value}\" to big letters. The string must have one of the following chars: 'aAbBeEhHiIkKmMnNoOpPtTxXyYzZ. '"
+                                    ),
+                                    *span,
+                                ));
+                            }
+                            big_letters(&rewritten)
+                        }
+                        'w' => fullwidth(&rewritten),
+                        _ => case_sensitive(&rewritten),
+                    };
+                }
+                return Ok(self.lower_custom_string(rewritten));
             }
             _ => {
                 return Err(self.unsupported(

@@ -12,12 +12,10 @@
 // that receiver slot as a param (for example `.toArray`) carry a recorded
 // exemption instead.
 //
-// A manifest entry is exempt when it records why its names cannot track
-// upstream: `catalogLink: "special-lowering"` (the binder parses the call
-// itself), `keywordArgs: false` (no keywords are accepted at all), or
-// `unbounded` (a variadic form the fixed upstream arg list does not model).
-// Any other divergence, an `alternateNames` spelling beyond upstream, or a
-// manifest entry with no upstream counterpart fails the audit.
+// Every entry is compared. The only exemptions are the entries in `EXEMPT`,
+// whose names cannot be compared positionally, each with its reason. Any other
+// divergence, an `alternateNames` spelling beyond upstream, or a manifest entry
+// with no upstream counterpart fails the audit.
 const fs = require("fs");
 const path = require("path");
 const { loadFuncKw } = require("./oracle_func_kw.cjs");
@@ -26,6 +24,14 @@ const manifest = JSON.parse(
   fs.readFileSync(path.join(__dirname, "../../crates/opy-rs/src/manifest/data/manifest.json"), "utf8"),
 );
 
+const EXEMPT = {
+  async: "no upstream funcKw entry; the binder parses `async(subroutine, behavior)` itself",
+  chase: "upstream funcKw lists `rateOrDuration`; the call is spelled `rate=` or `duration=`",
+  raycast: "upstream binds raycast keywords without checking names (`foo=` compiles); `include`/`exclude` are accepted aliases",
+  toArray: "`__enumType__` models the receiver's enum slot, not a call argument",
+  format: "variadic template call; upstream models it as (string, value)",
+};
+
 loadFuncKw((funcKw) => {
   const divergent = [];
   const unmapped = [];
@@ -33,8 +39,7 @@ loadFuncKw((funcKw) => {
   let checked = 0;
   for (const fn of manifest.functions) {
     const member = fn.kind.startsWith("member");
-    const recorded =
-      fn.catalogLink === "special-lowering" || fn.keywordArgs === false || fn.unbounded === true;
+    const recorded = Object.hasOwn(EXEMPT, fn.id);
     const bases = [fn.id, fn.catalogId].filter(Boolean);
     const keys = [...bases, ...bases.map((base) => `__${base}__`)].map((key) =>
       member ? `.${key}` : key,

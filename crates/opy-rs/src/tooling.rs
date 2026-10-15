@@ -143,9 +143,10 @@ pub fn check_with_overlay(
             return CheckOutcome::failure(diagnostics, files, display_root);
         }
     };
-    let parsed = crate::parser::parse_with_options(
+    let parsed = crate::parser::parse_with_macros(
         &preprocessed.tokens,
         preprocessed.preprocessing.allow_macro_redeclaration,
+        &preprocessed.text_macros,
     );
     let parse_warnings = parsed.warnings;
     let Some(mut program) = parsed.program else {
@@ -482,7 +483,7 @@ impl SemanticModel {
                     name: name.clone(),
                     members: members
                         .iter()
-                        .map(|(member, span)| EnumMember {
+                        .map(|(member, _, span)| EnumMember {
                             name: member.clone(),
                             span: resolve_span(*span, &hir.files)
                                 .expect("every token span resolves through the file registry"),

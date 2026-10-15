@@ -1,16 +1,17 @@
 use super::directives::strip_quoted;
 use super::*;
 
-pub(super) struct MacroDef {
-    pub(super) name: String,
-    pub(super) params: Vec<String>,
-    pub(super) body_text: String,
+#[derive(Debug, Clone)]
+pub(crate) struct MacroDef {
+    pub(crate) name: String,
+    pub(crate) params: Vec<String>,
+    pub(crate) body_text: String,
     /// True when the body came from a `#!define name(args) value` form.
-    pub(super) is_function: bool,
+    pub(crate) is_function: bool,
     /// True when the replacement spans multiple source lines.
     pub(super) is_multiline: bool,
     /// The resolved `__script__` backing, when the replacement is one.
-    pub(super) script: Option<ScriptMacro>,
+    pub(crate) script: Option<ScriptMacro>,
 }
 
 pub(super) struct MacroArgument {
@@ -442,7 +443,213 @@ pub(super) fn attribute_expansion_spans(tokens: &mut [Token], use_site: &Token) 
     }
 }
 
-fn replace_identifier(source: &str, identifier: &str, replacement: &str) -> String {
+/// Expand `#!define` text macros inside a string-interpolation fragment.
+/// The reference re-tokenizes `{expr}` regions with the active define
+/// table, so `f"{S}!"` observes the same `S` replacement as source-level
+/// code — token-level expansion also means a define name inside a nested
+/// string literal (`f"{'S'}"`) is literal text, not a macro use, so
+/// quoted regions are skipped. `__script__` macros stay unexpanded: they
+/// need the script runtime, which the parser does not drive.
+pub(crate) fn expand_define_text(text: &str, macros: &[MacroDef]) -> Result<String, OpyError> {
+    if macros.is_empty() {
+        return Ok(text.to_string());
+    }
+    let mut out = text.to_string();
+    for _ in 0..64 {
+        let mut changed = false;
+        for mac in macros {
+            if mac.script.is_some() {
+                continue;
+            }
+            let next = if mac.is_function {
+                expand_function_define(&out, mac)
+            } else {
+                replace_identifier_unquoted(&out, &mac.name, &mac.body_text)
+            };
+            if next != out {
+                out = next;
+                changed = true;
+            }
+        }
+        if !changed {
+            return Ok(out);
+        }
+    }
+    Err(OpyError::new(
+        "macro-recursion",
+        "macro expansion exceeded the recursion limit (possible recursive define)",
+    ))
+}
+
+/// Index just past the quoted literal starting at `chars[start]` (which is
+/// `'` or `"`), honoring backslash escapes; `chars.len()` when the literal
+/// is unterminated.
+fn quoted_literal_end(chars: &[char], start: usize) -> usize {
+    let quote = chars[start];
+    let mut index = start + 1;
+    while index < chars.len() {
+        match chars[index] {
+            '\\' => index += 2,
+            character if character == quote => return index + 1,
+            _ => index += 1,
+        }
+    }
+    chars.len()
+}
+
+/// [`replace_identifier`] restricted to positions outside quoted string
+/// literals: upstream define expansion is token-level, so occurrences
+/// inside a nested literal are literal text.
+fn replace_identifier_unquoted(source: &str, identifier: &str, replacement: &str) -> String {
+    let source_chars: Vec<char> = source.chars().collect();
+    let identifier_chars: Vec<char> = identifier.chars().collect();
+    if identifier_chars.is_empty() {
+        return source.to_string();
+    }
+    let mut result = String::with_capacity(source.len());
+    let mut index = 0;
+    while index < source_chars.len() {
+        if matches!(source_chars[index], '"' | '\'') {
+            let end = quoted_literal_end(&source_chars, index);
+            result.extend(&source_chars[index..end]);
+            index = end;
+            continue;
+        }
+        let end = index + identifier_chars.len();
+        if end <= source_chars.len()
+            && source_chars[index..end] == identifier_chars
+            && !index
+                .checked_sub(1)
+                .and_then(|position| source_chars.get(position).copied())
+                .is_some_and(crate::lexer::is_ident_continue)
+            && !source_chars
+                .get(end)
+                .is_some_and(|character| crate::lexer::is_ident_continue(*character))
+        {
+            result.push_str(replacement);
+            index = end;
+        } else {
+            result.push(source_chars[index]);
+            index += 1;
+        }
+    }
+    result
+}
+
+/// Apply one function-like define occurrence to `text`: find `name(` at an
+/// identifier boundary, split the balanced call arguments, substitute them
+/// into the body like [`Preprocessor::expand_macro`], and splice the result.
+fn expand_function_define(text: &str, mac: &MacroDef) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let name: Vec<char> = mac.name.chars().collect();
+    let mut index = 0;
+    while index < chars.len() {
+        if matches!(chars[index], '"' | '\'') {
+            // A macro name inside a nested string literal is literal text.
+            index = quoted_literal_end(&chars, index);
+            continue;
+        }
+        let end = index + name.len();
+        if end <= chars.len()
+            && chars[index..end] == name[..]
+            && !index
+                .checked_sub(1)
+                .and_then(|position| chars.get(position).copied())
+                .is_some_and(crate::lexer::is_ident_continue)
+            && !chars
+                .get(end)
+                .is_some_and(|character| crate::lexer::is_ident_continue(*character))
+        {
+            let mut cursor = end;
+            while chars.get(cursor).is_some_and(|c| c.is_whitespace()) {
+                cursor += 1;
+            }
+            if chars.get(cursor) != Some(&'(') {
+                index = end;
+                continue;
+            }
+            // Collect the balanced `(...)` argument text, honoring nested
+            // parens and quoted literals with backslash escapes.
+            let mut depth = 0usize;
+            let mut quote: Option<char> = None;
+            let mut escaped = false;
+            let mut close = None;
+            for (position, character) in chars.iter().enumerate().skip(cursor) {
+                if let Some(active) = quote {
+                    if escaped {
+                        escaped = false;
+                    } else if *character == '\\' {
+                        escaped = true;
+                    } else if *character == active {
+                        quote = None;
+                    }
+                    continue;
+                }
+                match character {
+                    '"' | '\'' => quote = Some(*character),
+                    '(' => depth += 1,
+                    ')' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            close = Some(position);
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            let Some(close) = close else {
+                return text.to_string();
+            };
+            let inner: String = chars[cursor + 1..close].iter().collect();
+            let mut args = Vec::new();
+            let mut depth = 0usize;
+            let mut quote: Option<char> = None;
+            let mut escaped = false;
+            let mut start = 0;
+            for (offset, character) in inner.char_indices() {
+                if let Some(active) = quote {
+                    if escaped {
+                        escaped = false;
+                    } else if character == '\\' {
+                        escaped = true;
+                    } else if character == active {
+                        quote = None;
+                    }
+                    continue;
+                }
+                match character {
+                    '"' | '\'' => quote = Some(character),
+                    '(' | '[' | '{' => depth += 1,
+                    ')' | ']' | '}' => depth = depth.saturating_sub(1),
+                    ',' if depth == 0 => {
+                        args.push(inner[start..offset].trim().to_string());
+                        start = offset + 1;
+                    }
+                    _ => {}
+                }
+            }
+            args.push(inner[start..].trim().to_string());
+            if args == [String::new()] {
+                args.clear();
+            }
+            let mut replacement = mac.body_text.clone();
+            for (position, param) in mac.params.iter().enumerate() {
+                let argument = args.get(position).cloned().unwrap_or_default();
+                replacement = replace_identifier(&replacement, param, &argument);
+            }
+            let mut out = String::with_capacity(text.len() + replacement.len());
+            out.extend(&chars[..index]);
+            out.push_str(&replacement);
+            out.extend(&chars[close + 1..]);
+            return out;
+        }
+        index += 1;
+    }
+    text.to_string()
+}
+
+pub(crate) fn replace_identifier(source: &str, identifier: &str, replacement: &str) -> String {
     let source_chars: Vec<char> = source.chars().collect();
     let identifier_chars: Vec<char> = identifier.chars().collect();
     if identifier_chars.is_empty() {

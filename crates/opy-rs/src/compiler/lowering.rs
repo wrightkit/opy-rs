@@ -1261,8 +1261,178 @@ fn is_literal_key(expr: &hir::Expr) -> bool {
     )
 }
 
+/// `areAstsAlwaysEqual` on HIR for membership folds: literal leaves compare
+/// by authored spelling (`1` and `1.0` are distinct ASTs upstream), and
+/// compound shapes recurse so `a[1]` is not `a[1.0]` (#512).
+fn membership_equal(left: &hir::Expr, right: &hir::Expr) -> bool {
+    use hir::Expr;
+    match (left, right) {
+        (Expr::Number { text: a, .. }, Expr::Number { text: b, .. }) => a == b,
+        (Expr::String { value: a, .. }, Expr::String { value: b, .. }) => a == b,
+        (Expr::Bool { value: a, .. }, Expr::Bool { value: b, .. }) => a == b,
+        (Expr::Null { .. }, Expr::Null { .. })
+        | (Expr::HostPlayer { .. }, Expr::HostPlayer { .. })
+        | (Expr::EventPlayer { .. }, Expr::EventPlayer { .. }) => true,
+        (
+            Expr::Enum {
+                value_type: at,
+                value: av,
+                ..
+            },
+            Expr::Enum {
+                value_type: bt,
+                value: bv,
+                ..
+            },
+        ) => at == bt && av == bv,
+        (
+            Expr::Vector {
+                x: ax,
+                y: ay,
+                z: az,
+                ..
+            },
+            Expr::Vector {
+                x: bx,
+                y: by,
+                z: bz,
+                ..
+            },
+        ) => membership_equal(ax, bx) && membership_equal(ay, by) && membership_equal(az, bz),
+        (Expr::Array { elements: a, .. }, Expr::Array { elements: b, .. }) => {
+            a.len() == b.len() && a.iter().zip(b).all(|(a, b)| membership_equal(a, b))
+        }
+        (Expr::Dict { entries: a, .. }, Expr::Dict { entries: b, .. }) => {
+            a.len() == b.len()
+                && a.iter().zip(b.iter()).all(|(a, b)| {
+                    membership_equal(&a.key, &b.key) && membership_equal(&a.value, &b.value)
+                })
+        }
+        (Expr::GlobalVar { name: a, .. }, Expr::GlobalVar { name: b, .. })
+        | (Expr::Local { name: a, .. }, Expr::Local { name: b, .. })
+        | (Expr::Constant { name: a, .. }, Expr::Constant { name: b, .. }) => a == b,
+        (
+            Expr::PlayerVar {
+                player: ap,
+                name: an,
+                ..
+            },
+            Expr::PlayerVar {
+                player: bp,
+                name: bn,
+                ..
+            },
+        ) => an == bn && membership_equal(ap, bp),
+        (
+            Expr::Index {
+                array: aa,
+                index: ai,
+                ..
+            },
+            Expr::Index {
+                array: ba,
+                index: bi,
+                ..
+            },
+        ) => membership_equal(aa, ba) && membership_equal(ai, bi),
+        (
+            Expr::Member {
+                receiver: ar,
+                member: am,
+                ..
+            },
+            Expr::Member {
+                receiver: br,
+                member: bm,
+                ..
+            },
+        ) => am == bm && membership_equal(ar, br),
+        (
+            Expr::Call {
+                name: an, args: aa, ..
+            },
+            Expr::Call {
+                name: bn, args: ba, ..
+            },
+        ) => {
+            an == bn
+                && aa.len() == ba.len()
+                && aa.iter().zip(ba).all(|(a, b)| membership_equal(a, b))
+        }
+        (
+            Expr::ReceiverCall {
+                receiver: ar,
+                name: an,
+                args: aa,
+                ..
+            },
+            Expr::ReceiverCall {
+                receiver: br,
+                name: bn,
+                args: ba,
+                ..
+            },
+        ) => {
+            an == bn
+                && aa.len() == ba.len()
+                && membership_equal(ar, br)
+                && aa.iter().zip(ba).all(|(a, b)| membership_equal(a, b))
+        }
+        (
+            Expr::Unary {
+                op: ao,
+                operand: ax,
+                ..
+            },
+            Expr::Unary {
+                op: bo,
+                operand: bx,
+                ..
+            },
+        ) => ao == bo && membership_equal(ax, bx),
+        (
+            Expr::Binary {
+                op: ao,
+                left: al,
+                right: ar,
+                ..
+            },
+            Expr::Binary {
+                op: bo,
+                left: bl,
+                right: br,
+                ..
+            },
+        ) => ao == bo && membership_equal(al, bl) && membership_equal(ar, br),
+        _ => false,
+    }
+}
+
+/// `astIsLiteral` on HIR for membership folds: numbers, strings and
+/// localized text, enum constants, and literal vectors — not booleans,
+/// `null`, or arrays, whose catalog entries carry no `isLiteral` flag.
+/// Strings and format texts count only outside strict optimization, like
+/// the reference's single-argument `__customString__` exception (#512).
 fn is_membership_literal(expr: &hir::Expr, strict: bool) -> bool {
-    is_literal_key(expr) && (!strict || !matches!(expr, hir::Expr::String { .. }))
+    match expr {
+        hir::Expr::Number { .. } | hir::Expr::Enum { .. } => true,
+        hir::Expr::String { .. } => !strict,
+        hir::Expr::Format { args, .. } => args.is_empty() && !strict,
+        hir::Expr::Vector { x, y, z, .. } => {
+            is_membership_literal(x, strict)
+                && is_membership_literal(y, strict)
+                && is_membership_literal(z, strict)
+        }
+        hir::Expr::Call { name, args, .. } => match name.as_str() {
+            "customString" => args.len() == 1 && !strict,
+            "localizedString" => true,
+            "vect" | "rgb" | "customColor" => {
+                args.iter().all(|arg| is_membership_literal(arg, strict))
+            }
+            _ => false,
+        },
+        _ => false,
+    }
 }
 
 /// Canonical call heads the pinned reference does not wrap in
@@ -1368,7 +1538,7 @@ pub(crate) fn big_letters(value: &str) -> String {
     output
 }
 
-fn big_letter(character: char) -> Option<char> {
+pub(crate) fn big_letter(character: char) -> Option<char> {
     Some(match character {
         'a' | 'A' => 'Α',
         'b' | 'B' => 'Β',
@@ -1446,6 +1616,67 @@ fn case_sensitive_character(character: char) -> char {
         'z' => 'ẓ',
         _ => character,
     }
+}
+
+/// The pinned `__customString__`/`.format` arity check: `{n}` requires at
+/// least `n + 1` arguments (extra arguments are ignored), `{}` requires
+/// exactly one argument each, a text without placeholders accepts any count, and mixing both kinds is an error. `{{`/`}}`
+/// escapes and brace groups that are not placeholders (`{0a}`, `{x}`, a
+/// dangling `{`) are literal text. Returns the oracle's diagnostic.
+fn format_arity_error(text: &str, arg_count: usize) -> Option<String> {
+    let mut numbered_max: Option<usize> = None;
+    let mut unnumbered = 0usize;
+    let chars: Vec<char> = text.chars().collect();
+    let mut index = 0;
+    while index < chars.len() {
+        if chars[index] == '{' {
+            if chars.get(index + 1) == Some(&'{') {
+                index += 2;
+                continue;
+            }
+            let Some(close) = chars[index + 1..].iter().position(|c| *c == '}') else {
+                break;
+            };
+            let inner: String = chars[index + 1..index + 1 + close].iter().collect();
+            if inner.is_empty() {
+                unnumbered += 1;
+                index += 2 + close;
+                continue;
+            }
+            if !inner.is_empty() && inner.chars().all(|c| c.is_ascii_digit()) {
+                let placeholder = inner.parse::<usize>().unwrap_or(usize::MAX);
+                numbered_max = Some(numbered_max.map_or(placeholder, |max| max.max(placeholder)));
+                index += 2 + close;
+                continue;
+            }
+            index += 1;
+            continue;
+        }
+        index += 1;
+    }
+    if numbered_max.is_some() && unnumbered > 0 {
+        return Some(
+            "Cannot use both numbered and unnumbered formatters in a custom string".to_string(),
+        );
+    }
+    if let Some(max) = numbered_max {
+        // `arg_count <= max` is `arg_count < max + 1` without the overflow:
+        // a placeholder at or above usize::MAX (or one too large to parse,
+        // which maps to usize::MAX) must reject rather than panic. The
+        // oracle computes `max + 1` as a JS number, so the message renders
+        // the same f64 value it would print.
+        if arg_count <= max {
+            let expected = max as f64 + 1.0;
+            return Some(format!(
+                "Too few arguments in .format() function: expected {expected}, got {arg_count}"
+            ));
+        }
+    } else if unnumbered > 0 && unnumbered != arg_count {
+        return Some(format!(
+            "Too few arguments in .format() function: expected {unnumbered}, got {arg_count}"
+        ));
+    }
+    None
 }
 
 fn canonical_format_text(text: &str) -> String {

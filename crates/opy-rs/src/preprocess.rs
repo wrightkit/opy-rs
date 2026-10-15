@@ -51,7 +51,7 @@ use crate::lexer::{LexInput, Token, TokenKind, lex};
 use crate::settings::SettingsBlock;
 
 mod directives;
-mod macros;
+pub(crate) mod macros;
 mod project;
 mod scripts;
 
@@ -99,6 +99,10 @@ pub struct Preprocessed {
     pub tokens: Vec<Token>,
     /// The recorded defines in definition order.
     pub defines: Vec<DefineRecord>,
+    /// The live `#!define` macro table at the end of preprocessing; the
+    /// parser re-expands these inside f-string interpolations, which the
+    /// token-level pass cannot see.
+    pub(crate) text_macros: Vec<macros::MacroDef>,
     /// The project `settings { ... }` block, when present (#86).
     pub settings: Option<SettingsBlock>,
     /// Warnings emitted while composing the project.
@@ -367,6 +371,7 @@ pub fn preprocess_with_overlay_outcome(
         Preprocessed {
             tokens,
             defines: pre.defines,
+            text_macros: pre.macros,
             settings: pre.settings,
             warnings: pre.warnings.clone(),
             post_compile_hook: pre.post_compile_hook,

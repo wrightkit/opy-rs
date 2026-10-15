@@ -43,6 +43,7 @@ REFERENCE_FRONTIER_RULES = (
     ("Do/While loops can only be at the beginning", "semantic", "do-while-placement"),
     ("Rule name was already declared", "semantic", "duplicate-rule-name"),
     ("Cannot assign to 4d array", "semantic", "four-dimensional-assignment"),
+    ("Cannot auto-increment enum member", "semantic", "enum-increment"),
     ("Cannot delete index of 4d array", "semantic", "four-dimensional-delete"),
     (
         "Cannot delete from 2d array with a random index",
@@ -86,6 +87,7 @@ NATIVE_FRONTIER_STAGES = {
     "duplicate-rule-name": "semantic",
     "unknown-member": "semantic",
     "workshop-emission": "lowering",
+    "enum-increment": "semantic",
 }
 NATIVE_FRONTIER_CONSTRUCTS = {
     "lambda-context": "parse-error",

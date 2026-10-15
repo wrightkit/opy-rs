@@ -159,6 +159,13 @@ fn eval(
         }
         Expr::Binary {
             op, left, right, ..
+        } if matches!(op.as_str(), "in" | "not in") => {
+            let needle = eval(left, constants, bindings, stack, settings)?;
+            let haystack = eval(right, constants, bindings, stack, settings)?;
+            evaluate_membership(op, left, right, &needle, &haystack, constants)
+        }
+        Expr::Binary {
+            op, left, right, ..
         } => evaluate_binary(
             op,
             eval(left, constants, bindings, stack, settings)?,
@@ -619,7 +626,10 @@ fn evaluate_binary(op: &str, left: Value, right: Value, settings: bool) -> Optio
                 return Some(left);
             }
             // The settings evaluator has no string `+`; ordinary constant
-            // folding keeps it for `#!define` composition.
+            // folding keeps it for `#!define` composition. The reference
+            // instead emits `Add(Custom String, Custom String)` — a call the
+            // canonical catalog's `add` domain rejects — so the fold is a
+            // deliberate, canonical-valid deviation, not oracle output.
             if !settings && let (Value::String(left), Value::String(right)) = (&left, &right) {
                 return Some(Value::String(left.clone() + right));
             }
@@ -640,6 +650,16 @@ fn evaluate_binary(op: &str, left: Value, right: Value, settings: bool) -> Optio
             None
         }
         "*" => {
+            // String repetition folds like `+`: the reference emits
+            // `Multiply(Custom String, n)`, a call the canonical catalog's
+            // `multiply` domain rejects. Folding to the repeated literal is a
+            // deliberate, canonical-valid deviation. The fold must run before
+            // the `is_one`/`is_zero` peepholes because `"a" * 0` is `""`, not
+            // the numeric `0` those arms would return. Fractional or oversized
+            // counts stay unfolded to error like the reference.
+            if !settings && let Some(repeated) = fold_string_repetition(&left, &right) {
+                return Some(repeated);
+            }
             if let (Value::Number(left), Value::Number(right)) = (&left, &right)
                 && let result @ Some(_) = folded(left * right)
             {
@@ -802,23 +822,62 @@ fn evaluate_binary(op: &str, left: Value, right: Value, settings: bool) -> Optio
             }
             None
         }
-        // Membership tests array contents structurally; `x in y` on a
-        // non-array does not fold (`[[1]] in [[1],[2]]` is an index read
-        // upstream, handled by `Expr::Index`; #512).
-        "in" => match right {
-            Value::Array(values) => Some(Value::Bool(
-                values.iter().any(|value| values_equal(value, &left)),
-            )),
-            _ => None,
-        },
-        "not in" => match right {
-            Value::Array(values) => Some(Value::Bool(
-                !values.iter().any(|value| values_equal(value, &left)),
-            )),
+        _ => None,
+    }
+}
+
+/// Membership folds as the pinned `__arrayContains__`: an
+/// `areAstsAlwaysEqual` hit folds (`1` does not match `1.0` because the
+/// AST names differ); a literal needle over an all-literal array misses
+/// (`False`), and anything else stays unevaluated so the emitter can
+/// reproduce the upstream literal-element filter and `Equals` reduction.
+/// The elements' `Expr`s come from an `Expr::Array` literal or a constant
+/// that resolves to one — evaluated arrays without source expressions
+/// cannot compare by spelling and refuse to fold (#512).
+fn evaluate_membership(
+    op: &str,
+    left: &Expr,
+    right: &Expr,
+    needle: &Value,
+    haystack: &Value,
+    constants: &HashMap<String, &Expr>,
+) -> Option<Value> {
+    let Value::Array(elements) = haystack else {
+        return None;
+    };
+    let element_exprs = match right {
+        Expr::Array { elements, .. } => Some(elements.as_slice()),
+        Expr::Constant { name, .. } => match constants.get(name) {
+            Some(Expr::Array { elements, .. }) => Some(elements.as_slice()),
             _ => None,
         },
         _ => None,
+    }?;
+    if element_exprs.len() != elements.len() {
+        return None;
     }
+    if element_exprs
+        .iter()
+        .zip(elements)
+        .any(|(expr, element)| same_spelling(expr, left) && values_equal(element, needle))
+    {
+        return Some(Value::Bool(op == "in"));
+    }
+    let literal = |value: &Value| match value {
+        Value::Number(_) | Value::String(_) => true,
+        Value::Vector(components) => components
+            .iter()
+            .all(|component| matches!(component, Value::Number(_) | Value::String(_))),
+        _ => false,
+    };
+    // A non-literal needle keeps `Array Contains` standing upstream, and a
+    // literal needle with surviving elements reduces to `Equals` or a
+    // filtered array — neither shape is expressible here, so only the
+    // exhausted filter folds.
+    if literal(needle) && elements.iter().all(literal) {
+        return Some(Value::Bool(op == "not in"));
+    }
+    None
 }
 
 /// The pinned evaluator's `isDefinitelyTruthy`/`isDefinitelyFalsy`:
@@ -877,6 +936,28 @@ fn same_spelling(left: &Expr, right: &Expr) -> bool {
         ) => same_spelling(ax, bx) && same_spelling(ay, by) && same_spelling(az, bz),
         _ => true,
     }
+}
+
+/// Upper bound on a folded string repetition so `"x" * 1e9` does not
+/// materialize a huge literal; oversized repeats stay unfolded and fail
+/// canonical validation like any other non-canonical `Multiply` call.
+const STRING_REPEAT_LIMIT: usize = 8192;
+
+fn fold_string_repetition(left: &Value, right: &Value) -> Option<Value> {
+    let (text, count) = match (left, right) {
+        (Value::String(text), Value::Number(count))
+        | (Value::Number(count), Value::String(text)) => (text, count),
+        _ => return None,
+    };
+    if count.fract() != 0.0 {
+        return None;
+    }
+    // Python repeat semantics: a non-positive count yields the empty string.
+    let count = count.max(0.0) as usize;
+    if text.len().saturating_mul(count) > STRING_REPEAT_LIMIT {
+        return None;
+    }
+    Some(Value::String(text.repeat(count)))
 }
 
 /// The pinned `areAstsAlwaysEqual`: structural equality where numbers
@@ -1026,9 +1107,22 @@ pub(crate) fn has_unbound_formatters(text: &str) -> bool {
 /// literal otherwise. Other modifiers build AST kinds the settings walk
 /// does not handle (`l`, `t`) and stay unresolvable.
 pub(crate) fn modifier_template(modifier: &str, value: &str) -> Option<String> {
-    if !matches!(modifier, "b" | "c" | "w") {
+    if modifier.is_empty() || !modifier.chars().all(|c| matches!(c, 'b' | 'c' | 'w')) {
         return None;
     }
+    let mut text = value.to_string();
+    // Combinations apply in the reference's fixed pipeline order
+    // (f → t → b → w → c), not in source order; `b` fails when no
+    // convertible character survives, which the caller reports upstream.
+    for step in ['b', 'w', 'c'] {
+        if modifier.contains(step) {
+            text = modifier_template_step(step, &text)?;
+        }
+    }
+    Some(text)
+}
+
+fn modifier_template_step(step: char, value: &str) -> Option<String> {
     let chars: Vec<char> = value.chars().collect();
     let mut output = String::with_capacity(value.len());
     // Once `b` rewrites a character the rest of the text passes through;
@@ -1036,14 +1130,14 @@ pub(crate) fn modifier_template(modifier: &str, value: &str) -> Option<String> {
     let mut big_letter_done = false;
     let mut text = |run: &[char]| {
         let run: String = run.iter().collect();
-        match modifier {
-            "b" if big_letter_done => run,
-            "b" => {
+        match step {
+            'b' if big_letter_done => run,
+            'b' => {
                 let rewritten = crate::compiler::big_letters(&run);
                 big_letter_done = rewritten != run;
                 rewritten
             }
-            "c" => crate::compiler::case_sensitive(&run),
+            'c' => crate::compiler::case_sensitive(&run),
             _ => crate::compiler::fullwidth(&run),
         }
     };
@@ -1066,7 +1160,7 @@ pub(crate) fn modifier_template(modifier: &str, value: &str) -> Option<String> {
         index += 1;
     }
     output.push_str(&text(&chars[run_start..]));
-    (modifier != "b" || big_letter_done).then_some(output)
+    (step != 'b' || big_letter_done).then_some(output)
 }
 
 /// The text an argument contributes inside a folded format expression.

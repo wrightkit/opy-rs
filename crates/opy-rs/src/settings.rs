@@ -222,7 +222,10 @@ fn match_block(
             };
             scanner.advance_by(1);
             if escaped {
-                path.push(decode_string_escape(ch));
+                // Settings paths decode escapes leniently like the
+                // reference: an unknown escape keeps the escaped
+                // character instead of hard-erroring.
+                path.push(decode_string_escape(ch).unwrap_or(ch));
                 escaped = false;
             } else if ch == '\\' {
                 escaped = true;
@@ -1318,7 +1321,9 @@ impl Cursor<'_> {
             }
             if ch == '\\' {
                 let escaped = self.advance()?;
-                value.push(decode_string_escape(escaped));
+                // Lenient like the reference: unknown escapes keep the
+                // escaped character rather than failing the settings value.
+                value.push(decode_string_escape(escaped).unwrap_or(escaped));
             } else {
                 value.push(ch);
             }

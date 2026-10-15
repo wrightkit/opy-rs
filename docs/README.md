@@ -48,6 +48,8 @@ compatibility pointers rather than separate architecture authorities.
   oracle boundaries, source attribution, and licensing policy.
 - [OverPy compatibility harness](../tools/overpy/README.md): tests/snapshots and
   differential testing.
+- [Compiler resource baseline](benchmarks/compiler-resources.md): manual,
+  provenance-linked timing, RSS, and mechanism-count evidence.
 
 Tests describe implementation completeness; they do not
 narrow the established upstream core-language scope.

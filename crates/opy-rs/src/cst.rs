@@ -109,10 +109,12 @@ pub enum Decl {
         /// The exact span of the declared identifier token.
         name_span: Span,
     },
-    /// A user-defined `enum`; members fold to numeric constants.
+    /// A user-defined `enum`; members fold to numeric constants unless an
+    /// explicit `= value` supplies a different expression.
     Enum {
         name: String,
-        members: Vec<(String, Span)>,
+        /// `(name, explicit `= expression`, member span)` per member.
+        members: Vec<(String, Option<Expr>, Span)>,
         span: Span,
     },
     /// A source-level constant declared with `macro name = expression`.
@@ -346,10 +348,13 @@ pub enum Expr {
         span: Span,
     },
     StringModifier {
-        modifier: char,
+        /// The modifier letters; the reference accepts combinations like
+        /// `fw` and applies them in a fixed pipeline order.
+        modifier: String,
         value: String,
         /// The decoded f-string template, with interpolation placeholders
-        /// normalized to `{0}`, `{1}`, …; present only for modifier `f`.
+        /// normalized to `{0}`, `{1}`, …; present when `f` is among the
+        /// modifiers.
         format_text: Option<String>,
         /// Expressions parsed from f-string interpolation regions, in source
         /// order. Their spans point into the original string literal.

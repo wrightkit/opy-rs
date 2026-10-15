@@ -969,10 +969,12 @@ impl<'a> OperatorOptimizer<'a> {
         }
     }
 
+    /// The reference's `astIsLiteral`: numbers, literal vectors, enum
+    /// constants and text — but not booleans, `null`, or arrays, whose
+    /// catalog entries carry no `isLiteral` flag.
     fn literal(&self, value: &Value) -> bool {
         match value {
-            Value::Number(_) | Value::Bool(_) | Value::Null | Value::Enum { .. } => true,
-            Value::Array(elements) => elements.iter().all(|element| self.literal(element)),
+            Value::Number(_) | Value::Enum { .. } => true,
             Value::Vector { x, y, z } => self.literal(x) && self.literal(y) && self.literal(z),
             Value::String(_) => !self.strict,
             Value::Call { name, args } if name == "customString" => args.len() == 1 && !self.strict,
@@ -1295,10 +1297,12 @@ fn mentions_element(value: &Value) -> bool {
     }
 }
 
-/// An `Array(...)` call is the array literal it constructs.
+/// An `Array(...)` or `Empty Array` call is the array literal it constructs.
 fn literal_array(value: Value) -> Value {
     match value {
-        Value::Call { name, args } if name == "array" => Value::Array(args),
+        Value::Call { name, args } if matches!(name.as_str(), "array" | "emptyArray") => {
+            Value::Array(args)
+        }
         other => other,
     }
 }

@@ -60,6 +60,36 @@ enum CallPosition {
     MacroBody,
 }
 
+/// A custom-enum member with its resolved constant or the explicit source
+/// expression that the reference inlines at each use site.
+#[derive(Debug, Clone)]
+enum EnumMemberValue {
+    Number(f64),
+    Expr(Expr),
+}
+
+/// A resolved custom-enum member.
+#[derive(Debug, Clone)]
+struct EnumMember {
+    name: String,
+    value: EnumMemberValue,
+}
+
+/// The auto-increment state of a custom enum while its members are
+/// collected. The reference tracks `lastIntValue` the same way: `= n`
+/// reseeds the counter at `n + 1`, `= -n` yields `-n + 1` for the next
+/// bare member, and any other explicit value breaks the numeric chain.
+#[derive(Debug, Clone, Copy)]
+enum EnumCounter {
+    Number(f64),
+    /// `= -<number>` keeps the negated literal so the next bare member
+    /// resolves to `-n + 1`.
+    Negated(f64),
+    /// The previous member had a non-numeric explicit value; the next
+    /// bare member is a hard error.
+    Other,
+}
+
 /// The lowerer's symbol context, built from the CST declarations.
 struct Lowerer {
     global_declarations: HashMap<String, usize>,
@@ -68,7 +98,7 @@ struct Lowerer {
     subroutine_definitions: Vec<(String, usize)>,
     constant_declarations: HashMap<String, usize>,
     macro_declarations: HashMap<String, usize>,
-    enums: HashMap<String, Vec<String>>,
+    enums: HashMap<String, Vec<EnumMember>>,
     enum_declarations: HashMap<String, usize>,
     locals: Vec<String>,
     current_order: usize,
@@ -473,7 +503,7 @@ impl SettingsLowerer {
         file: u32,
         origin: crate::diag::Position,
     ) -> OpyResult<HirExpr> {
-        let expression = crate::parser::parse_expression_fragment(text, file, origin, None)?;
+        let expression = crate::parser::parse_expression_fragment(text, file, origin, None, &[])?;
         self.lowerer.errors.clear();
         self.lowerer.texture_used = false;
         let lowered = self

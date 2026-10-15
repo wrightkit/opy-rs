@@ -79,6 +79,12 @@ pub(super) fn merge(parts: Vec<Token>) -> (Vec<Token>, bool) {
                 let text = format!("{number:.2}").replace(".00", "");
                 push_text(&mut merged, Token::Text(text));
             }
+            // A bare string is the materialized `__customString__` literal:
+            // the reference splices its content into the parent's text.
+            Value::String(text) => {
+                changed = true;
+                push_text(&mut merged, Token::Text(text));
+            }
             other => merged.push(Token::Argument(other)),
         }
     }
