@@ -446,8 +446,10 @@ pub(super) fn attribute_expansion_spans(tokens: &mut [Token], use_site: &Token) 
 /// Expand `#!define` text macros inside a string-interpolation fragment.
 /// The reference re-tokenizes `{expr}` regions with the active define
 /// table, so `f"{S}!"` observes the same `S` replacement as source-level
-/// code. `__script__` macros stay unexpanded: they need the script runtime,
-/// which the parser does not drive.
+/// code — token-level expansion also means a define name inside a nested
+/// string literal (`f"{'S'}"`) is literal text, not a macro use, so
+/// quoted regions are skipped. `__script__` macros stay unexpanded: they
+/// need the script runtime, which the parser does not drive.
 pub(crate) fn expand_define_text(text: &str, macros: &[MacroDef]) -> Result<String, OpyError> {
     if macros.is_empty() {
         return Ok(text.to_string());
@@ -462,7 +464,7 @@ pub(crate) fn expand_define_text(text: &str, macros: &[MacroDef]) -> Result<Stri
             let next = if mac.is_function {
                 expand_function_define(&out, mac)
             } else {
-                replace_identifier(&out, &mac.name, &mac.body_text)
+                replace_identifier_unquoted(&out, &mac.name, &mac.body_text)
             };
             if next != out {
                 out = next;
@@ -479,6 +481,61 @@ pub(crate) fn expand_define_text(text: &str, macros: &[MacroDef]) -> Result<Stri
     ))
 }
 
+/// Index just past the quoted literal starting at `chars[start]` (which is
+/// `'` or `"`), honoring backslash escapes; `chars.len()` when the literal
+/// is unterminated.
+fn quoted_literal_end(chars: &[char], start: usize) -> usize {
+    let quote = chars[start];
+    let mut index = start + 1;
+    while index < chars.len() {
+        match chars[index] {
+            '\\' => index += 2,
+            character if character == quote => return index + 1,
+            _ => index += 1,
+        }
+    }
+    chars.len()
+}
+
+/// [`replace_identifier`] restricted to positions outside quoted string
+/// literals: upstream define expansion is token-level, so occurrences
+/// inside a nested literal are literal text.
+fn replace_identifier_unquoted(source: &str, identifier: &str, replacement: &str) -> String {
+    let source_chars: Vec<char> = source.chars().collect();
+    let identifier_chars: Vec<char> = identifier.chars().collect();
+    if identifier_chars.is_empty() {
+        return source.to_string();
+    }
+    let mut result = String::with_capacity(source.len());
+    let mut index = 0;
+    while index < source_chars.len() {
+        if matches!(source_chars[index], '"' | '\'') {
+            let end = quoted_literal_end(&source_chars, index);
+            result.extend(&source_chars[index..end]);
+            index = end;
+            continue;
+        }
+        let end = index + identifier_chars.len();
+        if end <= source_chars.len()
+            && source_chars[index..end] == identifier_chars
+            && !index
+                .checked_sub(1)
+                .and_then(|position| source_chars.get(position).copied())
+                .is_some_and(crate::lexer::is_ident_continue)
+            && !source_chars
+                .get(end)
+                .is_some_and(|character| crate::lexer::is_ident_continue(*character))
+        {
+            result.push_str(replacement);
+            index = end;
+        } else {
+            result.push(source_chars[index]);
+            index += 1;
+        }
+    }
+    result
+}
+
 /// Apply one function-like define occurrence to `text`: find `name(` at an
 /// identifier boundary, split the balanced call arguments, substitute them
 /// into the body like [`Preprocessor::expand_macro`], and splice the result.
@@ -487,6 +544,11 @@ fn expand_function_define(text: &str, mac: &MacroDef) -> String {
     let name: Vec<char> = mac.name.chars().collect();
     let mut index = 0;
     while index < chars.len() {
+        if matches!(chars[index], '"' | '\'') {
+            // A macro name inside a nested string literal is literal text.
+            index = quoted_literal_end(&chars, index);
+            continue;
+        }
         let end = index + name.len();
         if end <= chars.len()
             && chars[index..end] == name[..]
@@ -507,13 +569,18 @@ fn expand_function_define(text: &str, mac: &MacroDef) -> String {
                 continue;
             }
             // Collect the balanced `(...)` argument text, honoring nested
-            // parens and quoted literals.
+            // parens and quoted literals with backslash escapes.
             let mut depth = 0usize;
             let mut quote: Option<char> = None;
+            let mut escaped = false;
             let mut close = None;
             for (position, character) in chars.iter().enumerate().skip(cursor) {
                 if let Some(active) = quote {
-                    if *character == active {
+                    if escaped {
+                        escaped = false;
+                    } else if *character == '\\' {
+                        escaped = true;
+                    } else if *character == active {
                         quote = None;
                     }
                     continue;
@@ -538,10 +605,15 @@ fn expand_function_define(text: &str, mac: &MacroDef) -> String {
             let mut args = Vec::new();
             let mut depth = 0usize;
             let mut quote: Option<char> = None;
+            let mut escaped = false;
             let mut start = 0;
             for (offset, character) in inner.char_indices() {
                 if let Some(active) = quote {
-                    if character == active {
+                    if escaped {
+                        escaped = false;
+                    } else if character == '\\' {
+                        escaped = true;
+                    } else if character == active {
                         quote = None;
                     }
                     continue;

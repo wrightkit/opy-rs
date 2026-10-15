@@ -289,6 +289,40 @@ fn format_without_placeholders_ignores_extra_arguments() {
 }
 
 #[test]
+fn f_string_defines_do_not_expand_inside_nested_literals() {
+    // Define expansion is token-level upstream, so `S` inside the nested
+    // literal `'S'` is text, not a macro use.
+    let source = "#!define S 7\nglobalvar g\nrule \"r\":\n    @Event global\n    g = f\"{'S'}\"\n";
+    let hir = crate::compile(source, "fnested.opy", Path::new(".")).unwrap();
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+    assert!(
+        artifact.emitted.contains("\"S\""),
+        "got: {}",
+        artifact.emitted
+    );
+    assert!(
+        !artifact.emitted.contains("\"7\""),
+        "the define must not rewrite inside the nested literal: {}",
+        artifact.emitted
+    );
+}
+
+#[test]
+fn f_string_function_defines_split_escaped_quote_arguments() {
+    // `P('x\'y', 'z')` must split its arguments on the top-level comma:
+    // the escaped quote does not close the literal early, and the two
+    // string arguments then fold to `x'yz` like any `a + b` concat.
+    let source = "#!define P(a,b) a+b\nglobalvar g\nrule \"r\":\n    @Event global\n    g = f\"{P('x\\'y','z')}\"\n";
+    let hir = crate::compile(source, "fescaped.opy", Path::new(".")).unwrap();
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+    assert!(
+        artifact.emitted.contains("x'yz"),
+        "the escaped-quote argument must survive expansion: {}",
+        artifact.emitted
+    );
+}
+
+#[test]
 fn f_string_interpolations_expand_active_defines() {
     // The reference re-expands `#!define` text macros inside f-string
     // interpolations: `f"{S}!{N}={M(6)}"` sees `"a"`, `7`, and `6+1`.
