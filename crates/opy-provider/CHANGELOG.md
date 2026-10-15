@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.12](https://github.com/wrightkit/opy-rs/compare/opy-provider-v0.3.11...opy-provider-v0.3.12) - 2026-10-15
+
+### Other
+
+- update Cargo.lock dependencies
+
 ## [0.3.11](https://github.com/wrightkit/opy-rs/compare/opy-provider-v0.3.10...opy-provider-v0.3.11) - 2026-10-13
 
 ### Fixed
