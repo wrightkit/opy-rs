@@ -251,6 +251,36 @@ fn format_arity_mismatches_are_an_error() {
 }
 
 #[test]
+fn format_arity_huge_placeholder_rejects_without_overflow() {
+    // A numbered placeholder at or beyond the `usize` range — including one
+    // too large to parse, which maps to usize::MAX — overflows `max + 1`.
+    // The oracle computes expected = max + 1 as a JS number and prints its
+    // f64 form; the check compares `arg_count <= max` so no arithmetic
+    // overflow occurs and the diagnostic still rejects the call.
+    let source = "globalvar g\nrule \"r\":\n    @Event global\n    g = \"{18446744073709551615}x\".format()\n";
+    let hir = crate::compile(source, "format-overflow.opy", Path::new(".")).unwrap();
+    let error = Compiler::new()
+        .unwrap()
+        .compile_hir(&hir)
+        .err()
+        .expect("a usize::MAX placeholder must be rejected");
+    assert!(
+        error
+            .to_string()
+            .contains("Too few arguments in .format() function"),
+        "the rejection must be the arity diagnostic, got: {error}"
+    );
+    // A 20+-digit placeholder that cannot even parse as usize rejects the
+    // same way instead of silently skipping the check.
+    let source = "globalvar g\nrule \"r\":\n    @Event global\n    g = \"{99999999999999999999}x\".format()\n";
+    let hir = crate::compile(source, "format-overflow2.opy", Path::new(".")).unwrap();
+    assert!(
+        Compiler::new().unwrap().compile_hir(&hir).is_err(),
+        "an unparseable placeholder must be rejected"
+    );
+}
+
+#[test]
 fn format_without_placeholders_ignores_extra_arguments() {
     let source = "globalvar g\nrule \"r\":\n    @Event global\n    g = \"s\".format(3, 3, 3)\n";
     let hir = crate::compile(source, "format-extra.opy", Path::new(".")).unwrap();

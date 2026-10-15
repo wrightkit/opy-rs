@@ -1660,8 +1660,13 @@ fn format_arity_error(text: &str, arg_count: usize) -> Option<String> {
         );
     }
     if let Some(max) = numbered_max {
-        let expected = max + 1;
-        if arg_count < expected {
+        // `arg_count <= max` is `arg_count < max + 1` without the overflow:
+        // a placeholder at or above usize::MAX (or one too large to parse,
+        // which maps to usize::MAX) must reject rather than panic. The
+        // oracle computes `max + 1` as a JS number, so the message renders
+        // the same f64 value it would print.
+        if arg_count <= max {
+            let expected = max as f64 + 1.0;
             return Some(format!(
                 "Too few arguments in .format() function: expected {expected}, got {arg_count}"
             ));
