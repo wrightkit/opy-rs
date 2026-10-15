@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.13](https://github.com/wrightkit/opy-rs/compare/v0.3.12...v0.3.13) - 2026-10-15
+
+### Fixed
+
+- *(opy-rs)* converge audit findings on the pinned overpy@9.7.10 oracle ([#552](https://github.com/wrightkit/opy-rs/pull/552))
+
 ## [0.3.12](https://github.com/wrightkit/opy-rs/compare/v0.3.11...v0.3.12) - 2026-10-15
 
 ### Added
