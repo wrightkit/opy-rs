@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.12](https://github.com/wrightkit/opy-rs/compare/v0.3.11...v0.3.12) - 2026-10-15
+
+### Added
+
+- *(lookup)* reach handle-type producers from type-name queries ([#549](https://github.com/wrightkit/opy-rs/pull/549))
+
+### Fixed
+
+- *(compiler)* reject general keys placed directly under hero teams ([#550](https://github.com/wrightkit/opy-rs/pull/550))
+- *(compiler)* accept numeric Team literals in Team positions ([#548](https://github.com/wrightkit/opy-rs/pull/548))
+- *(parser)* reject Python-style None; only null is a null literal ([#547](https://github.com/wrightkit/opy-rs/pull/547))
+
+### Other
+
+- *(corpus)* accept closed semantic-wir gap for overpy-parabola
+- *(opy)* remove placeholder Workshop census fixture
+
 ## [0.3.11](https://github.com/wrightkit/opy-rs/compare/v0.3.10...v0.3.11) - 2026-10-13
 
 ### Fixed
