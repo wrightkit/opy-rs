@@ -72,3 +72,8 @@ narrow the established upstream core-language scope.
 > Source-language behavior is implemented directly by `opy-rs`; canonical raw
 > Workshop concepts remain owned by `workshop-rs`. Wright/provider integration
 > does not redefine either language boundary.
+
+## Maintenance
+
+- [Lessons](LESSONS.md): short queue of reusable failure classes from merged
+  work, pruned once promoted into tests or standards.
