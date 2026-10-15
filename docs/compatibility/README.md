@@ -7,6 +7,9 @@ for `opy-rs`.
   oracle role, invocation, and upstream surfaces used for compatibility work.
 - [Source and licensing policy](source-policy.md): clean-room/source-attribution,
   fixture, pinning, and distribution rules.
+- [Audit re-verification checklist](audit-reverification.md): procedure for
+  independently re-verifying the 2026-10 adversarial audit findings against
+  the pinned oracle.
 
 The compatibility target remains observable OverPy behavior, not upstream
 internal architecture. Current support is established by executable tests and
