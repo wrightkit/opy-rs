@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.14](https://github.com/wrightkit/opy-rs/compare/opy-cli-v0.3.13...opy-cli-v0.3.14) - 2026-10-16
+
+### Other
+
+- *(opy-rs)* strip dead comments and fix audit-flagged traps ([#561](https://github.com/wrightkit/opy-rs/pull/561))
+
 ## [0.3.12](https://github.com/wrightkit/opy-rs/compare/opy-cli-v0.3.11...opy-cli-v0.3.12) - 2026-10-15
 
 ### Other
