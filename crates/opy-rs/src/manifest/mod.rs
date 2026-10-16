@@ -400,8 +400,6 @@ impl Manifest {
         functions: Vec<Function>,
         aliases: Vec<Alias>,
     ) -> Result<(), ManifestError> {
-        // Probe ids must be unique and must record the accept probes the
-        // entries reference.
         let mut probes: HashMap<&str, &Probe> = HashMap::new();
         for probe in &self.probes {
             if probes.insert(&probe.id, probe).is_some() {
@@ -409,9 +407,6 @@ impl Manifest {
             }
         }
 
-        // Functions: unique ids, member-only receiver/kind combinations,
-        // declared enum domains, declared enum-default members, and probe
-        // evidence that records acceptance.
         for function in functions {
             if self.by_function.contains_key(&function.id) {
                 return Err(ManifestError(format!(
@@ -517,8 +512,6 @@ impl Manifest {
             self.functions.push(function);
         }
 
-        // Aliases: unique sources, declared targets of the matching class,
-        // no collision with declared function ids.
         for alias in aliases {
             if self.alias_by_source.contains_key(&alias.source) {
                 return Err(ManifestError(format!(
@@ -739,7 +732,6 @@ mod tests {
         // rewrite (the `build` path), so the data pipeline is reproducible.
         let canonical = canonicalize(MANIFEST_DATA, PROBES_DATA).expect("canonicalizes");
         assert_eq!(canonical, MANIFEST_DATA, "manifest.json must be canonical");
-        // Idempotency: re-canonicalizing the canonical form is byte-stable.
         assert_eq!(
             canonicalize(&canonical, PROBES_DATA).expect("re-canonicalizes"),
             canonical
@@ -759,15 +751,12 @@ mod tests {
             mutate(&mut file);
             Manifest::load(&serde_json::to_string(&file).unwrap(), PROBES_DATA)
         }
-        // duplicate function id
         let error = mutate(|file| file.functions.push(file.functions[0].clone()))
             .expect_err("duplicate function id must fail");
         assert!(error.0.contains("duplicate function id"));
-        // A direct catalog link must be explicit about being canonical.
         let error = mutate(|file| file.functions[0].catalog_link = CatalogLink::CatalogGap)
             .expect_err("canonical catalog id must not carry a gap reason");
         assert!(error.0.contains("catalogLink"));
-        // entry without evidence
         let error = mutate(|file| file.functions[0].evidence.clear())
             .expect_err("missing evidence must fail");
         assert!(error.0.contains("no oracle probe evidence"));
@@ -819,7 +808,6 @@ mod tests {
         let member = manifest.resolve_member("getCurrentHero").expect("alias");
         assert_eq!(member.id, "getHero");
         assert!(member.kind.is_value());
-        // Unknown names stay unresolved.
         assert!(manifest.resolve_function("frobnicate").is_none());
         assert!(manifest.resolve_member("frobnicate").is_none());
     }

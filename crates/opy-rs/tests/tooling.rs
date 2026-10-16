@@ -29,7 +29,6 @@ fn multi_file_project_checks_and_resolves_end_to_end() {
     );
     let model = outcome.model.expect("a clean project resolves");
 
-    // File registry: main file (id 0) plus one entry per include.
     assert_eq!(outcome.files.len(), 2);
     assert_eq!(outcome.files[0].id, 0);
     assert_eq!(outcome.files[1].path, "shared/defs.opy");
@@ -60,7 +59,6 @@ fn multi_file_project_checks_and_resolves_end_to_end() {
         opy_rs::hir::types::RuleEntry::SubroutineDef { name, .. } if name == "finish"
     )));
 
-    // Macro-expansion provenance: the #!define is recorded with its site.
     assert_eq!(model.defines().len(), 1);
     assert_eq!(model.defines()[0].name, "SCALE");
 
@@ -69,7 +67,6 @@ fn multi_file_project_checks_and_resolves_end_to_end() {
     assert_eq!(model.enums()[0].name, "Direction");
     assert_eq!(model.enums()[0].members.len(), 2);
 
-    // Symbols: bindings from both files with declaration provenance.
     let total = model.symbol("total").expect("globalvar from the include");
     assert_eq!(total.kind, SymbolKind::Global);
     assert_eq!(total.declaration.path, "shared/defs.opy");
@@ -134,7 +131,6 @@ fn multi_file_project_checks_and_resolves_end_to_end() {
     assert_eq!(reset.references[0].start.line, 11);
     assert_eq!(model.symbol("doubleIt").expect("macro").references.len(), 1);
 
-    // Span → (file id, path, line/col) provenance, and span-based lookup.
     let main_reference = total
         .references
         .iter()
@@ -249,7 +245,6 @@ fn workshop_script_source_reports_exactly_one_diagnostic() {
 
 #[test]
 fn include_failures_are_stable_and_source_located() {
-    // Missing include names the directive site.
     let outcome = check(
         "#!include \"nope.opy\"\n",
         "main.opy",
@@ -259,7 +254,6 @@ fn include_failures_are_stable_and_source_located() {
     assert_eq!(diagnostic.code, "include-not-found");
     assert_eq!(diagnostic.span.as_ref().expect("span").start.line, 1);
 
-    // An include cycle is detected through the tooling API too.
     let dir = std::env::temp_dir().join(format!("opy-tooling-cycle-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("a.opy"), "#!include \"b.opy\"\n").unwrap();

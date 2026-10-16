@@ -150,8 +150,6 @@ pub fn check_with_overlay(
     );
     let parse_warnings = parsed.warnings;
     let Some(mut program) = parsed.program else {
-        // The parser recovers at statement boundaries; every collected error
-        // is reported (the compile pipeline reads only the first).
         let mut diagnostics = visible_warnings(&preprocessed, &parse_warnings)
             .map(|warning| Diagnostic::from_warning(warning, &files))
             .collect::<Vec<_>>();
@@ -163,9 +161,6 @@ pub fn check_with_overlay(
         );
         return CheckOutcome::failure(diagnostics, files, display_root);
     };
-    // Parse the extracted settings block into the CST; expression values are
-    // resolved after ordinary CST-to-HIR lowering so they use the shared OPY
-    // semantic path (#86, #188).
     if let Some(block) = &preprocessed.settings {
         match crate::settings::parse_block(block) {
             Ok(parsed_settings) => program.settings = Some(parsed_settings),
@@ -210,12 +205,9 @@ pub fn check_with_overlay(
                 diagnostics.push(Diagnostic::from_error(error, &files));
                 return CheckOutcome::failure(diagnostics, files, display_root);
             }
-            // Settings are Workshop-bound data: convert them through the same
-            // path the compiler uses and report every member the canonical
-            // emission table cannot emit, so `check` never accepts a settings
-            // key that `compile` would reject (#411). The locale only selects
-            // emitted text (workshop `On`/`Off`, hero names), never validity,
-            // so `en-US` preserves the compile-time parity invariant here.
+            // The locale only selects emitted text (workshop `On`/`Off`,
+            // hero names), never validity, so a fixed `en-US` preserves the
+            // compile-time parity invariant.
             match crate::compiler::settings::workshop_settings(
                 &hir,
                 &workshop_rs::catalog::Locale::new("en-US"),
@@ -259,10 +251,6 @@ pub fn check_with_overlay(
                 diagnostics,
                 model: Some(SemanticModel::build(hir, &program)),
                 files,
-                // The directive was parsed, validated, and recorded by
-                // preprocessing; the frontend never executes the hook (real hook
-                // execution receives the final Workshop text and is
-                // lowering-dependent, issue #8).
                 post_compile_hook: preprocessed.post_compile_hook,
                 display_root,
             }
@@ -373,7 +361,6 @@ impl Diagnostic {
         }
     }
 
-    /// A settings-conversion failure at the Workshop integration boundary.
     fn from_integration_error(
         error: crate::compiler::IntegrationError,
         files: &[FileRecord],
@@ -562,8 +549,6 @@ impl SemanticModel {
             .map(|file| file.path.as_str())
     }
 
-    /// Index every program-scope binding, then attach resolved reference
-    /// sites by name/kind.
     fn index_symbols(&mut self) {
         for decl in &self.hir.declarations {
             let (kind, name, span) = match decl {
@@ -844,12 +829,10 @@ mod tests {
         let model = outcome.model.expect("clean project");
         let total = model.symbol("total").expect("symbol by name");
         assert_eq!(total.kind, SymbolKind::Global);
-        // The declaration site answers span lookup…
         let at_decl = model
             .symbol_at(total.declaration.to_span())
             .expect("symbol at declaration span");
         assert_eq!(at_decl.name, "total");
-        // …and so does a reference site.
         let at_ref = model
             .symbol_at(total.references[0].to_span())
             .expect("symbol at reference span");
@@ -941,10 +924,6 @@ mod tests {
 
     #[test]
     fn check_reports_every_parse_error() {
-        // The parser recovers at statement boundaries; check collects all
-        // parse diagnostics (compile reads only the first). The two rules
-        // missing their colon and the stray directive line yield three
-        // parse-error diagnostics.
         let outcome = check_source("rule \"a\"\n    @Event global\nrule \"b\"\n");
         assert!(!outcome.is_clean());
         assert!(outcome.model.is_none());
@@ -1002,7 +981,6 @@ mod tests {
             .expect("unknown-member diagnostic");
         assert_eq!(diagnostic.span.as_ref().unwrap().start.line, 4);
 
-        // The upstream spellings stay clean.
         let outcome = check_source(
             "globalvar g\nrule \"r\":\n    @Event eachPlayer\n    g = getTankHeroes()\n    g = getLastCreatedEntity()\n    g = evalOnce(1)\n    g = eventPlayer.isHoldingButton(Button.PRIMARY_FIRE)\n    destroyAllHudTexts()\n",
         );

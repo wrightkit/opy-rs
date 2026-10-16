@@ -724,8 +724,6 @@ impl Server {
     }
 }
 
-// -- lpp/lookup -------------------------------------------------------------
-
 /// The identity prefixes the provider issues and accepts back as `within`
 /// values (`name-lookup.md` §21.2: clients must not parse identities).
 const CALLABLE_IDENTITY: &str = "opy:callable/";

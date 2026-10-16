@@ -105,7 +105,6 @@ rule "strict membership":
         .compile_hir(&hir)
         .expect("hir lowers");
 
-    // Safe identical-AST string fold is preserved:
     assert!(
         artifact
             .emitted
@@ -117,7 +116,6 @@ rule "strict membership":
             .contains("Set Global Variable(safe_not_in, False);")
     );
 
-    // Non-matching string membership under strict optimization is NOT folded, retaining runtime membership:
     assert!(artifact.emitted.contains(
         "Set Global Variable(runtime_in, Array Contains(Array(Custom String(\"**\"), Custom String(\"%%\")), Custom String(\"am\")));"
     ));
@@ -125,7 +123,6 @@ rule "strict membership":
         "Set Global Variable(runtime_not_in, Not(Array Contains(Array(Custom String(\"**\"), Custom String(\"%%\")), Custom String(\"am\"))));"
     ));
 
-    // Numbers are still safe to fold under strict optimization:
     assert!(
         artifact
             .emitted

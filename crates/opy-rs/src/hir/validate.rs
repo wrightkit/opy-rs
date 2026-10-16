@@ -25,7 +25,6 @@ use super::types::{
 };
 use super::visit::{self, Visitor};
 
-/// Declaration `kind` values understood by this consumer.
 const DECLARATION_KINDS: &[&str] = &[
     "globalVariable",
     "playerVariable",
@@ -33,7 +32,6 @@ const DECLARATION_KINDS: &[&str] = &[
     "constant",
     "macro",
 ];
-/// Statement `kind` values understood by this consumer.
 const STMT_KINDS: &[&str] = &[
     "expr",
     "assign",
@@ -51,7 +49,6 @@ const STMT_KINDS: &[&str] = &[
     "callSubroutine",
     "pass",
 ];
-/// Expression `kind` values understood by this consumer.
 const EXPR_KINDS: &[&str] = &[
     "number",
     "string",
@@ -82,10 +79,8 @@ const EXPR_KINDS: &[&str] = &[
     "index",
     "format",
 ];
-/// Settings node `kind` values understood by this consumer.
 const SETTINGS_NODE_KINDS: &[&str] = &["group", "number", "bool", "string", "raw", "list"];
 
-/// Declared names, collected before reference validation.
 struct NameTables<'a> {
     globals: Vec<&'a str>,
     players: Vec<&'a str>,
@@ -153,8 +148,6 @@ pub(crate) fn check_envelope(value: &Value) -> Result<(), HirError> {
     Ok(())
 }
 
-/// Validate structural invariants over a typed program: provenance, spans,
-/// identifier uniqueness, and reference resolution.
 pub(crate) fn validate_program(program: &Program) -> Result<(), HirError> {
     let mut seen_files = std::collections::HashSet::new();
     for file in &program.files {

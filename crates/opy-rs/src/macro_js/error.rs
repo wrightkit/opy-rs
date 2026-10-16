@@ -33,15 +33,15 @@ impl fmt::Display for ScriptError {
     }
 }
 
-/// Errors produced by macro or hook execution.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum MacroError {
-    /// The script threw an exception.
     Script(ScriptError),
     /// The script completed without throwing, but its completion value is not
     /// a string. `type_name` is the ECMAScript `typeof` of the value; the
     /// rendered message matches the OverPy reference (`src/quickjs.ts`).
-    InvalidResult { type_name: String },
+    InvalidResult {
+        type_name: String,
+    },
     /// Engine setup failure (runtime/context creation, builtin helper install).
     Internal(String),
 }

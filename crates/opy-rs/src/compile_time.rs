@@ -210,7 +210,6 @@ fn eval(
             let operand = eval(operand, constants, bindings, stack, settings)?;
             match (op.as_str(), operand) {
                 ("-", Value::Number(value)) => Some(Value::Number(-value)),
-                // Unary `+` passes its operand through unchanged.
                 ("+", value) => Some(value),
                 ("not", value) => truthiness(&value).map(|value| Value::Bool(!value)),
                 _ => None,
@@ -1039,7 +1038,6 @@ fn evaluate_format(text: &str, args: &[Value]) -> Option<Value> {
                 index += length;
                 continue;
             }
-            // `\{(\d*)\}` — digits-only braces are a formatter.
             if let Some((digits, length)) = format_arg_len(&chars[index..]) {
                 index += length;
                 if let Some(digits) = digits {
@@ -1186,9 +1184,6 @@ pub(crate) fn display(value: Value) -> Option<String> {
     }
 }
 
-/// Numbers substituted into text keep two decimals, as Workshop displays
-/// them: `2.5` becomes `2.50`, and a value that rounds to an integer drops
-/// its fraction.
 /// Rounds halves toward positive infinity, as the pinned reference does.
 pub(crate) fn round_half_up(value: f64) -> f64 {
     let floor = value.floor();

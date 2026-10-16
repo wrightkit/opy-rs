@@ -40,7 +40,6 @@ use crate::diag::{OpyError, OpyResult, Span};
 use crate::manifest::{Function, FunctionKind, Manifest, Param, ParamDefault};
 use workshop_rs::catalog::Catalog;
 
-/// The protocol envelope this frontend produces.
 const PROTOCOL_NAME: &str = "wright/opy-hir";
 
 /// The call-position context of an expression being lowered; builtin
@@ -68,7 +67,6 @@ enum EnumMemberValue {
     Expr(Expr),
 }
 
-/// A resolved custom-enum member.
 #[derive(Debug, Clone)]
 struct EnumMember {
     name: String,
@@ -90,7 +88,6 @@ enum EnumCounter {
     Other,
 }
 
-/// The lowerer's symbol context, built from the CST declarations.
 struct Lowerer {
     global_declarations: HashMap<String, usize>,
     player_declarations: HashMap<String, usize>,
@@ -103,9 +100,7 @@ struct Lowerer {
     locals: Vec<String>,
     current_order: usize,
     allow_dict_literal: bool,
-    /// The authoritative builtin semantic table (issue #109).
     manifest: &'static Manifest,
-    /// The canonical Workshop catalog linked by the manifest.
     catalog: Catalog,
     texture_used: bool,
     setup_tags: bool,
@@ -833,7 +828,6 @@ fn lower_annotations(annotations: &[cst::Annotation]) -> Vec<HirAnnotation> {
         .collect()
 }
 
-/// Map a parsed CST settings block onto the protocol settings tree (#86).
 fn lower_settings(settings: &cst::Settings) -> HirSettings {
     HirSettings {
         span: Some(settings.span.into()),
@@ -928,23 +922,14 @@ impl Lowerer {
     }
 }
 
-/// The keyword spellings a parameter accepts (its name plus alternates).
 fn keyword_spellings(param: &Param) -> Vec<String> {
     let mut spellings = vec![param.name.clone()];
     spellings.extend(param.alternate_names.iter().cloned());
     spellings
 }
 
-/// The source span covering a call's argument list (the start of the first
-/// argument through the last argument).
-fn arg_span(args: &[CallArg]) -> Span {
-    args.first().map(CallArg::span).unwrap_or_else(|| {
-        Span::new(
-            0,
-            crate::diag::Position::new(1, 1),
-            crate::diag::Position::new(1, 1),
-        )
-    })
+fn arg_span(args: &[CallArg], fallback: Span) -> Span {
+    args.first().map(CallArg::span).unwrap_or(fallback)
 }
 
 /// Lower a source-level player context value without adding a new HIR node
@@ -1290,9 +1275,6 @@ mod tests {
 
     #[test]
     fn receiver_calls_lower_to_receiver_call_hir() {
-        // `eventPlayer.setMoveSpeed(100)` lowers to a ReceiverCall on the
-        // event player, and `target.setMoveSpeed(50)` to a ReceiverCall on a
-        // global-variable receiver (#104).
         let hir = lower_ok(
             "globalvar target\nrule \"r\":\n    @Event eachPlayer\n    eventPlayer.setMoveSpeed(100)\n    target.setMoveSpeed(50)\n",
         );
@@ -1404,9 +1386,6 @@ mod tests {
 
     #[test]
     fn context_player_non_component_members_stay_player_variables() {
-        // A declared player variable still resolves as a player-variable
-        // reference, an uppercase default var is not a component access, and
-        // an undeclared member keeps the unknown-member diagnostic.
         let value = lowered_value(
             "globalvar g\nplayervar pos\nrule \"r\":\n    @Event eachPlayer\n    g = eventPlayer.pos\n",
         );
@@ -1499,9 +1478,6 @@ mod tests {
 
     #[test]
     fn receiver_call_values_lower_in_conditions() {
-        // `@Condition eventPlayer.isAlive()` lowers to a ReceiverCall value;
-        // `eventPlayer.teleport(eventPlayer.getPosition())` nests a receiver
-        // call inside another receiver call's arguments (#104).
         let hir = lower_ok(
             "rule \"r\":\n    @Event eachPlayer\n    @Condition eventPlayer.isAlive()\n    eventPlayer.teleport(eventPlayer.getPosition())\n",
         );
@@ -1536,8 +1512,6 @@ mod tests {
 
     #[test]
     fn format_string_receiver_stays_a_format_node() {
-        // `.format()` on a string receiver is unaffected by the receiver-call
-        // path (existing supported form).
         let hir = lower_ok(
             "rule \"r\":\n    @Event global\n    print(\"{} points\".format(len([1, 2])))\n",
         );
@@ -1560,7 +1534,6 @@ mod tests {
         }
     }
 
-    /// Lower one rule action and return the assignment's value expression.
     fn lowered_value(source: &str) -> HirExpr {
         let program = crate::compile(source, "test.opy", std::path::Path::new(""))
             .unwrap_or_else(|error| panic!("compile failed: {error}"));
@@ -1648,9 +1621,6 @@ mod tests {
         assert_eq!(error.code, "unknown-texture-member");
     }
 
-    // --- Builtin semantic manifest coverage (#109) ---
-
-    /// Assert a compile failure has the given code at the given line.
     fn compile_error(source: &str, line: u32) -> OpyError {
         let error = crate::compile(source, "test.opy", std::path::Path::new(""))
             .expect_err("expected a compile failure");
@@ -1662,8 +1632,6 @@ mod tests {
     fn action_source(statement: &str) -> String {
         format!("globalvar g\nrule \"r\":\n    @Event global\n    {statement}\n")
     }
-
-    // --- Shared did-you-mean candidates on rejected names (#469) ---
 
     #[test]
     fn unknown_action_names_the_nearest_spellings_in_message() {
@@ -1913,8 +1881,6 @@ mod tests {
         assert_eq!(error.code, "value-in-action-position");
     }
 
-    // --- Named/keyword argument binding and chase call context (#110) ---
-
     /// Compile a program and return the lowered first action's expression
     /// (the statement expression, or the value of a leading assignment).
     fn first_action_expr(source: &str) -> HirExpr {
@@ -2056,7 +2022,6 @@ mod tests {
         );
         assert_eq!(error.code, "invalid-argument");
 
-        // A variable first argument binds (positive case).
         crate::compile(
             &action_source("chaseAtRate(g, 0, 2, ChaseRateReeval.NONE)"),
             "test.opy",
@@ -2087,7 +2052,6 @@ mod tests {
         let positional = without_spans(&first_action_expr(&action_source("wait(1)")));
         assert_eq!(keyword, positional);
 
-        // Out-of-order keywords bind by name.
         let keyword = without_spans(&first_action_expr(&action_source(
             "wait(waitBehavior=Wait.IGNORE_CONDITION, time=2)",
         )));
@@ -2103,12 +2067,10 @@ mod tests {
 
     #[test]
     fn keyword_binding_diagnostics_are_structured_and_source_located() {
-        // Unknown keyword name.
         let error = compile_error(&action_source("chaseOverTime(g, 10, bogus=1)"), 4);
         assert_eq!(error.code, "unknown-keyword");
         assert!(error.message.contains("bogus"));
 
-        // Duplicate (positional slot filled again by keyword).
         let error = compile_error(
             &action_source(
                 "chaseOverTime(g, 10, 3, ChaseTimeReeval.NONE, \
@@ -2118,11 +2080,9 @@ mod tests {
         );
         assert_eq!(error.code, "duplicate-argument");
 
-        // Positional after keyword.
         let error = compile_error(&action_source("chaseOverTime(g, duration=3, 5)"), 4);
         assert_eq!(error.code, "positional-after-keyword");
 
-        // Missing required argument (reference: "Missing argument 'duration'").
         let error = compile_error(&action_source("chaseOverTime(g, 10)"), 4);
         assert_eq!(error.code, "missing-argument");
 
@@ -2244,7 +2204,6 @@ mod tests {
             assert_eq!(error.code, "lambda-context", "statement: {statement}");
         }
 
-        // Bare lambdas still bind.
         crate::compile(
             &action_source("g = sorted([1, 2], key=lambda v: -v)"),
             "test.opy",
@@ -2318,7 +2277,6 @@ mod tests {
         assert_eq!(error.code, "invalid-receiver");
         assert!(error.message.contains("format"));
 
-        // Positive cases: assignable receivers and string literals compile.
         crate::compile(
             &action_source("g.append(1)\n    g.remove(1)"),
             "test.opy",
@@ -2368,14 +2326,11 @@ mod tests {
             serde_json::from_str(crate::manifest::MANIFEST_DATA).unwrap();
         for function in file["functions"].as_array_mut().unwrap() {
             match function["id"].as_str().unwrap() {
-                // Strip the chase family's variable-argument markers.
                 "chase" | "chaseAtRate" | "chaseOverTime" => {
                     for param in function["params"].as_array_mut().unwrap() {
                         param.as_object_mut().unwrap().remove("variable");
                     }
                 }
-                // Reclassify the enforced receivers to an unenforced
-                // category.
                 "append" | "remove" | "format" => {
                     function["receiver"] = "Any".into();
                 }
@@ -2395,7 +2350,6 @@ mod tests {
             .expect("mutated metadata still validates"),
         ));
 
-        // The chase family still rejects a non-variable first argument…
         for call in [
             "chase(10, 10, rate=2, ChaseReeval.NONE)",
             "chaseAtRate(10, 0, 2, ChaseRateReeval.NONE)",
@@ -2405,12 +2359,9 @@ mod tests {
                 .expect_err("the chase family still requires a variable");
             assert_eq!(error.code, "invalid-argument", "{call}");
         }
-        // …and still accepts a variable.
         lower_with_manifest(&action_source("chaseOverTime(g, 10, 3)"), manifest)
             .expect("a variable first argument compiles");
 
-        // `.append`/`.remove` still reject a non-assignable receiver and
-        // `.format` a non-string receiver.
         for call in ["3.append(1)", "3.remove(1)", "print(3.format(\"{}\"))"] {
             let error = lower_with_manifest(&action_source(call), manifest)
                 .expect_err("the enforced receiver requirement still rejects");
@@ -2421,8 +2372,6 @@ mod tests {
         lower_with_manifest(&action_source("g = \"{}\".format(1)"), manifest)
             .expect("a string-literal receiver compiles");
 
-        // Conversely, the mutated markers create no new enforcement:
-        // `wait`'s first argument and `getPosition`'s receiver are accepted.
         lower_with_manifest(&action_source("wait(1)"), manifest)
             .expect("`wait`'s first argument is not variable-required");
         lower_with_manifest(
@@ -2540,7 +2489,6 @@ mod tests {
             assert_eq!(error.code, "unknown-member", "{axis}()");
         }
 
-        // The upstream spellings still resolve.
         crate::compile(
             "globalvar g\nrule \"r\":\n    @Event eachPlayer\n    g = evalOnce(1)\n    g = getLastCreatedEntity()\n    g = getLastCreatedText()\n    g = getTankHeroes()\n    g = getDamageHeroes()\n    g = getSupportHeroes()\n    g = eventPlayer.isHoldingButton(Button.PRIMARY_FIRE)\n    destroyAllHudTexts()\n",
             "test.opy",
@@ -2712,8 +2660,6 @@ mod tests {
                 "the binder resolves to the implicit global 'I', got {variable:?}"
             );
             assert!(!body.is_empty(), "the loop body lowers");
-            // The binder use in the body resolves too: `total += I` has a
-            // GlobalVar operand.
             let HirStmt::Assign { value, .. } = &body[0] else {
                 panic!("expected an assignment in the body");
             };

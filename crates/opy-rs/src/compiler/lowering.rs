@@ -2016,9 +2016,6 @@ fn split_filtered_word(text: &[char], head: &str, tail: &str, standalone: bool) 
     result
 }
 
-/// The last word is `r i gg e r` with optional whitespace between the letters
-/// except the two `g`,
-/// ending at a word boundary; the soft hyphen follows the `i` and its whitespace.
 /// The canonical Workshop value for an OverPy setting function, and its
 /// parameter count without the trailing sort order.
 fn workshop_setting_call(name: &str) -> (&str, usize) {
@@ -2031,6 +2028,9 @@ fn workshop_setting_call(name: &str) -> (&str, usize) {
     }
 }
 
+/// The last word is `r i gg e r` with optional whitespace between the letters
+/// except the two `g`,
+/// ending at a word boundary; the soft hyphen follows the `i` and its whitespace.
 fn split_spaced_rigger(text: &[char]) -> Vec<char> {
     let mut result = Vec::with_capacity(text.len() + 1);
     let mut index = 0;

@@ -77,7 +77,6 @@ fn fixtures_root() -> PathBuf {
     workspace_root().join("crates/opy-rs/tests/fixtures/corpus")
 }
 
-/// Recursively collect `fixture.json` paths under `root`, sorted.
 fn discover_fixtures(root: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
     let mut stack = vec![root.to_path_buf()];
@@ -98,7 +97,6 @@ fn discover_fixtures(root: &Path) -> Vec<PathBuf> {
     out
 }
 
-/// Load a fixture manifest, returning its source-test expectation.
 fn load_fixture(path: &Path) -> (String, String, String, String, bool, Option<String>) {
     let manifest: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap())
         .unwrap_or_else(|error| panic!("cannot parse {}: {error}", path.display()));
@@ -276,7 +274,6 @@ fn native_and_reference_agree_on_the_corpus() {
             "compileStatus": reference_status.as_deref(),
         });
 
-        // Status determination against the fixture manifest.
         let expect_resolve = expected_native_status == "success";
         let status = if native_ok == expect_resolve {
             if expect_resolve {
@@ -294,7 +291,6 @@ fn native_and_reference_agree_on_the_corpus() {
         };
         let skipped = !snapshot_present;
 
-        // Pinned diagnostic codes must match exactly.
         let mut detail = Vec::new();
         if let (Some(expected_code), Err(error)) = (&expected_diagnostic_code, &native) {
             if error.code != expected_code.as_str() {

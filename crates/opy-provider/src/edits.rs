@@ -619,7 +619,6 @@ fn verify_rename(
         )
     };
 
-    // Apply the edits to produce each document's post-rename text.
     let mut edited = BTreeMap::new();
     for (uri, tokens) in sites {
         let document = &documents[uri];
@@ -858,8 +857,6 @@ pub(crate) fn rename(params: Value) -> Result<Value, HandlerError> {
         ));
     }
 
-    // Collect the declaration plus every reference site of the same-name
-    // symbols in the rename group.
     let mut sites: BTreeMap<String, Vec<SiteToken>> = BTreeMap::new();
     let mut missing: Vec<String> = Vec::new();
     for symbol in model

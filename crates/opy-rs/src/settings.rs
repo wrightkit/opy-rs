@@ -347,8 +347,6 @@ pub fn parse_block(block: &SettingsBlock) -> OpyResult<cst::Settings> {
         let (children, _) = parser.parse_object()?;
         children
     } else {
-        // The block's own braces delimit the root object; the text between
-        // them parses as its members.
         parser.parse_members(true)?
     };
     parser.skip_whitespace();
@@ -826,7 +824,6 @@ impl Cursor<'_> {
     }
 }
 
-/// Primitive JSONC values before classification as typed settings nodes.
 enum ScalarValue {
     String(String),
     Bool(bool),
@@ -1241,7 +1238,7 @@ impl Cursor<'_> {
     }
 
     fn parse_list(&mut self) -> OpyResult<Vec<cst::SettingsListElement>> {
-        self.advance(); // '['
+        self.advance();
         let mut elements = Vec::new();
         self.skip_whitespace();
         if self.peek() == Some(']') {
@@ -1366,7 +1363,6 @@ impl Cursor<'_> {
     }
 }
 
-/// Attach the key name and a key..value span to a parsed value node.
 fn build_node(
     key: String,
     node: cst::SettingsNode,
@@ -1451,7 +1447,6 @@ mod tests {
         let found = block(text);
         assert_eq!(found.keyword_span.start.line, 6);
 
-        // An indented `settings` inside a block body is still the statement.
         let found = block("rule \"r\":\n    pass\n    settings {\n    }\n");
         assert_eq!(found.keyword_span.start.line, 3);
     }
@@ -1575,7 +1570,6 @@ mod tests {
         assert_eq!(lines.len(), 5);
         assert_eq!(lines[3], "rule \"r\":");
         assert_eq!(lines[4], "    pass");
-        // The rule keyword is at the same char offset as in the original.
         assert_eq!(sanitized.find("rule"), text.find("rule"));
     }
 
@@ -1606,7 +1600,6 @@ mod tests {
 
     #[test]
     fn non_object_after_settings_is_invalid() {
-        // `settings [..]` is rejected at extraction (a `{` is required).
         let error = find_blocks("settings [1, 2]\n", 0).unwrap_err();
         assert_eq!(error.code, "settings-invalid");
     }

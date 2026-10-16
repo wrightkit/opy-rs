@@ -503,8 +503,6 @@ impl Preprocessor {
         Ok(())
     }
 
-    /// Load an external custom-game-settings object relative to the owning
-    /// source file. Open-document overlays take precedence over the filesystem.
     pub(super) fn resolve_settings_source(
         &mut self,
         mut block: SettingsBlock,
@@ -1019,7 +1017,6 @@ mod tests {
         .unwrap();
         let block = pre.settings.expect("settings block extracted");
         assert!(block.text.contains("gamemodes"));
-        // The block never enters the token stream.
         assert!(
             !pre.tokens.iter().any(|t| t.text.contains("gamemodes")),
             "settings content must not be lexed"

@@ -296,17 +296,6 @@ impl Preprocessor {
         Ok(out)
     }
 
-    /// Expand a script macro: run the resolved script through the bounded
-    /// runtime with the call-site arguments injected, then lex the string
-    /// completion value back into the token stream at the use site.
-    ///
-    /// Argument text is reconstructed from the call-site tokens (see
-    /// [`raw_arg_text`]); the reference injects the raw source text, and the
-    /// reconstruction is JavaScript-value-equivalent to it (string literals
-    /// are re-quoted with JSON escaping, so quoting-style differences are
-    /// unobservable to the script). The reference's per-line indentation rule
-    /// is applied to the expansion text before lexing; the frontend parser
-    /// never consumes indentation, so this is preserved in the text only.
     fn expand_into(
         &self,
         tokens: &mut Vec<Token>,
@@ -536,9 +525,6 @@ fn replace_identifier_unquoted(source: &str, identifier: &str, replacement: &str
     result
 }
 
-/// Apply one function-like define occurrence to `text`: find `name(` at an
-/// identifier boundary, split the balanced call arguments, substitute them
-/// into the body like [`Preprocessor::expand_macro`], and splice the result.
 fn expand_function_define(text: &str, mac: &MacroDef) -> String {
     let chars: Vec<char> = text.chars().collect();
     let name: Vec<char> = mac.name.chars().collect();
@@ -568,8 +554,6 @@ fn expand_function_define(text: &str, mac: &MacroDef) -> String {
                 index = end;
                 continue;
             }
-            // Collect the balanced `(...)` argument text, honoring nested
-            // parens and quoted literals with backslash escapes.
             let mut depth = 0usize;
             let mut quote: Option<char> = None;
             let mut escaped = false;

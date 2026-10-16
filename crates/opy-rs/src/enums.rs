@@ -66,6 +66,11 @@ pub(crate) fn opy_domain(domain: &str) -> &str {
         .unwrap_or(domain)
 }
 
+struct NonSourceMember {
+    catalog_domain: &'static str,
+    member: &'static str,
+}
+
 /// Catalog members with no reference source spelling: `LIJIANG_TOWER_LUNAR`
 /// and `DOCTRINE` exist in the workshop-rs catalog while no upstream
 /// release defines a `Domain.MEMBER` spelling for them. Neither the lowerer
@@ -73,7 +78,16 @@ pub(crate) fn opy_domain(domain: &str) -> &str {
 /// oracle never gains new data, so a member leaves this list once an
 /// upstream release spells it: `Map.GRIMSVOTN` left when 9.7.17 defined it
 /// (issue #498).
-const NON_SOURCE_MEMBERS: &[(&str, &str)] = &[("Map", "LIJIANG_TOWER_LUNAR"), ("Hero", "DOCTRINE")];
+const NON_SOURCE_MEMBERS: &[NonSourceMember] = &[
+    NonSourceMember {
+        catalog_domain: "Map",
+        member: "LIJIANG_TOWER_LUNAR",
+    },
+    NonSourceMember {
+        catalog_domain: "Hero",
+        member: "DOCTRINE",
+    },
+];
 
 /// The enum-literal receivers the pinned reference exposes: each shares the
 /// base domain's member spellings (`constantValues` builds the literal
@@ -115,7 +129,6 @@ struct MemberRename {
 }
 
 const MEMBER_RENAMES: &[MemberRename] = &[
-    // Upstream map member spellings differ from the canonical map ids.
     MemberRename {
         domain: "Map",
         opy: "BLIZZ_WORLD",
@@ -376,7 +389,6 @@ const MEMBER_RENAMES: &[MemberRename] = &[
         catalog: "WORKSHOPISLANDNIGHT",
         alias: false,
     },
-    // `Gamemode` members follow the same camel-to-snake convention.
     MemberRename {
         domain: "Gamemode",
         opy: "ASSAULT_BALANCED_OVERWATCH",
@@ -503,14 +515,12 @@ const MEMBER_RENAMES: &[MemberRename] = &[
         catalog: "YETIHUNTER",
         alias: false,
     },
-    // `HudPosition.ACTUALLY_LEFT` is an upstream alias that emits `Left`.
     MemberRename {
         domain: "HudPosition",
         opy: "ACTUALLY_LEFT",
         catalog: "LEFT",
         alias: true,
     },
-    // `Clip` members rename onto `Clipping` catalog members.
     MemberRename {
         domain: "Clip",
         opy: "NONE",
@@ -553,7 +563,6 @@ const MEMBER_RENAMES: &[MemberRename] = &[
         catalog: "VISIBLE_TO_STRING_AND_COLOR",
         alias: false,
     },
-    // Upstream hero member spellings differ from the canonical hero ids.
     MemberRename {
         domain: "Hero",
         opy: "DOMINA",
@@ -572,7 +581,6 @@ const MEMBER_RENAMES: &[MemberRename] = &[
         catalog: "SOLDIER_76",
         alias: false,
     },
-    // Legacy upstream hero spellings the reference still accepts.
     MemberRename {
         domain: "Hero",
         opy: "MCCREE",
@@ -748,7 +756,7 @@ pub(crate) fn member_rejection(domain: &str, member: &str) -> EnumMemberError {
     }
     if NON_SOURCE_MEMBERS
         .iter()
-        .any(|&(hidden_domain, hidden)| hidden_domain == catalog_domain && hidden == member)
+        .any(|h| h.catalog_domain == catalog_domain && h.member == member)
     {
         return EnumMemberError::Unspellable;
     }
@@ -782,12 +790,9 @@ pub(crate) fn domain_members(domain: &str, catalog: &Catalog) -> Option<Vec<Doma
         .members
         .iter()
         .filter(|entry| {
-            // NON_SOURCE_MEMBERS keys are catalog domain names; comparing
-            // against the source spelling would let a renamed or aliased
-            // domain advertise a hidden member.
             !NON_SOURCE_MEMBERS
                 .iter()
-                .any(|(d, member)| *d == catalog_domain(source) && *member == entry.member)
+                .any(|h| h.catalog_domain == catalog_domain(source) && h.member == entry.member)
         })
         .map(|entry| {
             let rename = MEMBER_RENAMES
@@ -841,7 +846,7 @@ pub(crate) fn spelling_of_member<'a>(
     if NON_SOURCE_DOMAINS.contains(&catalog_domain)
         || NON_SOURCE_MEMBERS
             .iter()
-            .any(|&(hidden_domain, hidden)| hidden_domain == catalog_domain && hidden == member)
+            .any(|h| h.catalog_domain == catalog_domain && h.member == member)
     {
         return None;
     }

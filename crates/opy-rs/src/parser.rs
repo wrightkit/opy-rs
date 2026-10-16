@@ -71,31 +71,20 @@ mod statements;
 
 struct Parser<'a> {
     tokens: &'a [Token],
-    /// Unmatched `(`/`[`/`{` count within `tokens[..i]`, so
-    /// `inside_delimiter_group` answers in O(1) instead of rescanning the
-    /// consumed prefix for every expression level.
     delimiter_depth: Vec<u32>,
-    /// Per-file `(token index, running max start line)` for every `Newline`
-    /// token, so conditional-expression parsing can ask whether a consumed
-    /// newline starts after a given line without rescanning the prefix.
     newline_lines: HashMap<u32, Vec<(usize, u32)>>,
     pos: usize,
     errors: Vec<OpyError>,
     allow_macro_redeclaration: bool,
     last_statement_continued: bool,
     last_colon_body_continued: bool,
-    /// Columns of the `if` statements whose branches are being parsed.
     open_if_indents: Vec<u32>,
     /// Columns of the block-opening headers enclosing the statement being
     /// parsed. An `elif`/`else`/`while` tail attaches to an emptied `if`/`do`
     /// only while its column stays deeper than the nearest enclosing header —
     /// a line at or shallower than it belongs outside the block (#516).
     block_floors: Vec<u32>,
-    /// Source-attributed warnings collected during the parse.
     warnings: Vec<crate::preprocess::PreprocessWarning>,
-    /// Set once a `workshop-source` diagnostic has been reported; later
-    /// Workshop-looking constructs are skipped silently so a pasted Workshop
-    /// script produces one diagnostic instead of a cascade.
     workshop_source_reported: bool,
     /// `#!define` macros still live at parse time; f-string interpolation
     /// fragments re-expand them like the reference does.
@@ -178,7 +167,6 @@ fn is_opy_word(text: &str) -> bool {
     )
 }
 
-/// The `workshop-source` detail for `{`/`}` brace scaffolding.
 const BRACE_BLOCKS: &str = "a `{`/`}` brace block; OPY blocks open with `:` and indentation";
 
 fn is_binary_operator(kind: TokenKind) -> bool {
@@ -227,17 +215,12 @@ impl Parser<'_> {
         token
     }
 
-    /// Consume the current token without cloning it, for sites that move the
-    /// cursor rather than inspect the token.
     fn bump(&mut self) {
         if self.pos < self.tokens.len() - 1 {
             self.pos += 1;
         }
     }
 
-    /// Whether the consumed prefix holds a `Newline` token in `file` whose
-    /// start line exceeds `line` — the same answer as scanning
-    /// `tokens[..self.pos]`, in O(log) via the per-file prefix maxima.
     fn newline_after_line(&self, file: u32, line: u32) -> bool {
         let Some(entries) = self.newline_lines.get(&file) else {
             return false;
@@ -329,8 +312,6 @@ impl Parser<'_> {
         self.errors.push(OpyError::at("parse-error", message, span));
     }
 
-    // ---- Workshop-script detection ----
-    //
     // Raw Workshop script shares no surface syntax with OPY: it opens blocks
     // with `{`/`}` braces, terminates statements with `;`, and calls actions
     // through space-separated multi-word names such as `Set Player
@@ -339,8 +320,6 @@ impl Parser<'_> {
     // the construct is skipped instead of cascading a generic parse error
     // per following token (issue #420).
 
-    /// The Workshop-script tell in the construct starting at the current
-    /// position: `(span, detail)` when the line cannot be OPY.
     pub(super) fn workshop_construct(&self, top_level: bool) -> Option<(Span, String)> {
         let mut end = self.pos;
         while !matches!(self.tokens[end].kind, TokenKind::Newline | TokenKind::Eof) {
@@ -366,7 +345,6 @@ impl Parser<'_> {
             return None;
         }
         match first.kind {
-            // `}` can never start an OPY construct.
             TokenKind::RBrace => {
                 return Some((
                     first.span,
@@ -423,8 +401,6 @@ impl Parser<'_> {
         None
     }
 
-    /// Report the file's one `workshop-source` diagnostic; later constructs
-    /// are skipped silently.
     pub(super) fn report_workshop_source(&mut self, span: Span, detail: &str) {
         if self.workshop_source_reported {
             return;
@@ -437,8 +413,6 @@ impl Parser<'_> {
         ));
     }
 
-    /// Consume the rest of the construct's line; when it opened a `{` block,
-    /// keep consuming until the matching `}` (or EOF).
     pub(super) fn skip_workshop_construct(&mut self) {
         let mut depth = 0u32;
         loop {
@@ -464,8 +438,6 @@ impl Parser<'_> {
         }
         self.expect(TokenKind::Colon, colon_context).map(|_| ())
     }
-
-    // ---- program ----
 
     fn parse_program(&mut self) -> Program {
         let mut declarations = Vec::new();
@@ -541,7 +513,6 @@ impl Parser<'_> {
         false
     }
 
-    /// Skip to the end of the current line (error recovery).
     fn recover_line(&mut self) {
         while self.peek_kind() != TokenKind::Newline && self.peek_kind() != TokenKind::Eof {
             self.bump();
@@ -869,9 +840,6 @@ mod tests {
 
     #[test]
     fn workshop_script_source_reports_one_diagnostic() {
-        // opy-rs#420: pasted Workshop script is a different language surface.
-        // It must produce one `workshop-source` diagnostic at the first
-        // construct instead of a per-line `parse-error` cascade.
         let errors = parse_err(concat!(
             "rule \"workshop style\" {\n",
             "    event {\n",
@@ -894,11 +862,9 @@ mod tests {
     #[test]
     fn workshop_script_forms_report_once() {
         for source in [
-            // `rule("name")` + `;` statements + `Ident {` headers.
             "rule(\"x\") {\n    event {\n        Ongoing - Global;\n    }\n}\n",
-            // A `;`-terminated statement inside an OPY rule.
+            // A `;` tell fires inside an OPY rule body, not just at top level.
             "rule \"r\":\n    @Event global\n    Ongoing - Global;\n",
-            // An `ident {` section header at top level.
             "actions {\n    Wait(1);\n}\n",
             // `if`-with-braces is a brace-block tell, not a mistyped colon.
             "rule \"r\":\n    @Event global\n    if x == 1 {\n        pass\n    }\n",
@@ -952,9 +918,6 @@ mod tests {
 
     #[test]
     fn workshop_style_action_call_reports_once() {
-        // `Set Player Variable(...)` is the multi-word Workshop action shape;
-        // it only flags at top level, where a bare-identifier line is never a
-        // valid OPY declaration.
         let errors = parse_err("Set Player Variable(eventPlayer, score, 1)\n");
         assert_eq!(errors.len(), 1, "expected one diagnostic, got {errors:?}");
         let error = &errors[0];
@@ -967,7 +930,6 @@ mod tests {
 
     #[test]
     fn ordinary_syntax_errors_keep_their_diagnostics() {
-        // #420: a plain OPY syntax error keeps its code, message, and span.
         let errors = parse_err("rule no_quotes:\n");
         assert_eq!(errors.len(), 1);
         assert_eq!(errors[0].code, "parse-error");
@@ -1235,8 +1197,6 @@ mod tests {
 
     #[test]
     fn parses_receiver_calls() {
-        // `eventPlayer.setMoveSpeed(100)` is a receiver call: postfix `.`
-        // member access followed by call arguments (#104).
         let program =
             parse_ok("rule \"r\":\n    @Event eachPlayer\n    eventPlayer.setMoveSpeed(100)\n");
         let RuleEntry::Rule(rule) = &program.rules[0] else {
@@ -1345,7 +1305,6 @@ mod tests {
 
     #[test]
     fn non_name_keyword_lhs_is_a_parse_error() {
-        // `f(1 = 2)` is not a call argument form; rejected explicitly.
         let errors = parse_err("rule \"r\":\n    @Event global\n    debug(1 = 2)\n");
         assert!(!errors.is_empty());
         assert_eq!(errors[0].code, "parse-error");
@@ -1353,8 +1312,6 @@ mod tests {
 
     #[test]
     fn parses_member_call_on_call_result() {
-        // `getPlayersInRadius(...).setStatusEffect(...)`: member access
-        // followed by call arguments on a call result stays a receiver call.
         let program = parse_ok(
             "rule \"r\":\n    @Event eachPlayer\n    getPlayersInRadius(eventPlayer, 10).setStatusEffect(eventPlayer, 30)\n",
         );
@@ -1383,8 +1340,6 @@ mod tests {
 
     #[test]
     fn member_without_call_is_not_a_call() {
-        // `eventPlayer.moveSpeed` alone (no parentheses) stays a member
-        // access; only a following `(` turns it into a receiver call.
         let program =
             parse_ok("rule \"r\":\n    @Event eachPlayer\n    x = eventPlayer.moveSpeed\n");
         let RuleEntry::Rule(rule) = &program.rules[0] else {

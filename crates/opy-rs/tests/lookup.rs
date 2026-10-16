@@ -766,10 +766,6 @@ fn lookup_outcome_serializes_camel_case() {
     assert!(first.get("displayName").is_some() || first.get("domain").is_some());
 }
 
-// ---------------------------------------------------------------------------
-// Candidate-bearing diagnostics
-// ---------------------------------------------------------------------------
-
 fn first_error(source: &str) -> opy_rs::tooling::Diagnostic {
     check(source, "main.opy", Path::new(""))
         .diagnostics

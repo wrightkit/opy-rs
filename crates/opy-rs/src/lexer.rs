@@ -28,7 +28,6 @@ pub enum TokenKind {
     Indent(u32),
     /// End of file.
     Eof,
-    // Punctuation and operators.
     LParen,
     RParen,
     LBracket,
@@ -226,7 +225,6 @@ impl Lexer {
         Ok(self.tokens)
     }
 
-    /// `#` starts a `#!` directive (captured as one token) or a comment.
     fn lex_hash(&mut self) {
         if self.peek(1) == Some('!') {
             let start = self.here(2);
@@ -448,8 +446,6 @@ impl Lexer {
                     self.advance();
                 }
             }
-            // Optional exponent (not exercised by the corpus, supported for
-            // completeness of the number surface).
             if self.pos < self.chars.len()
                 && (self.chars[self.pos] == 'e' || self.chars[self.pos] == 'E')
             {
@@ -511,7 +507,6 @@ impl Lexer {
         self.push_token(kind, text, start);
     }
 
-    /// Two-char operator where the second char may be `=`.
     fn lex_two(&mut self, plain: TokenKind, assign: TokenKind, second: char) {
         let start = self.here(1);
         let (kind, text) = if self.peek(1) == Some(second) {

@@ -39,7 +39,6 @@ pub(super) fn slot(name: &str, index: usize) -> Option<Slot> {
 
 fn is_boolean_slot(name: &str, index: usize) -> bool {
     match name {
-        // Waits, skips, arithmetic, player statistics and abilities.
         "wait"
         | "skip"
         | "setMatchTime"
@@ -70,7 +69,6 @@ fn is_boolean_slot(name: &str, index: usize) -> bool {
         "max" | "min" | "randomInteger" => index <= 1,
         "slice" => matches!(index, 1 | 2),
         "vector" => index <= 2,
-        // Chase destinations and rates.
         "chaseAtRate" | "chaseOverTime" => matches!(index, 1 | 2),
         "setAbilityCharge" | "setAbilityCooldown" | "setAbilityResource" | "createDummyBot" => {
             index == 2
@@ -78,7 +76,6 @@ fn is_boolean_slot(name: &str, index: usize) -> bool {
         "setAmmo" | "setMaxAmmo" => matches!(index, 1 | 2),
         "setStatusEffect" | "createInWorldText" => index == 3,
         "startForcingThrottle" => (1..=6).contains(&index),
-        // Effects and HUD.
         "createEffect" => index == 4,
         "createHudText" => index == 5,
         _ => false,

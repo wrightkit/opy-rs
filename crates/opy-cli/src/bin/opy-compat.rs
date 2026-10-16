@@ -308,7 +308,6 @@ where
     })
 }
 
-/// Structural identity of two parsed programs; see [`structural`].
 fn structurally_identical(native: &workshop_rs::Program, reference: &workshop_rs::Program) -> bool {
     structural::differences(native, reference).is_empty()
 }

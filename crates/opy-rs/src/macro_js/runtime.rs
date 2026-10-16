@@ -56,8 +56,6 @@ pub(crate) struct MacroRuntime {
 }
 
 impl MacroRuntime {
-    /// Creates a runtime with the given resource limits and an empty helper
-    /// set.
     pub(crate) fn new(limits: Limits) -> Self {
         Self {
             limits,
@@ -65,14 +63,11 @@ impl MacroRuntime {
         }
     }
 
-    /// Replaces the helper surface (constant objects) used by subsequent
-    /// invocations.
     #[cfg(test)]
     pub(crate) fn set_helpers(&mut self, helpers: Helpers) {
         self.helpers = helpers;
     }
 
-    /// The configured resource limits.
     /// Executes a macro script.
     ///
     /// `source` is the script's text (the file content the frontend resolved
@@ -122,8 +117,6 @@ impl MacroRuntime {
         self.execute(&prologue, source, script_name, self.limits.hook_time_budget)
     }
 
-    /// Shared invocation path: builds the full script text, runs it on a fresh
-    /// engine, and maps the outcome.
     fn execute(
         &self,
         prologue: &str,

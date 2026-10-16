@@ -577,7 +577,6 @@ impl Lowerer {
                     span: Some(span.into()),
                 };
             }
-            // A module member used without a call (`random.uniform` alone).
             if name == "random" {
                 self.error_at(
                     "unsupported-member",
@@ -740,7 +739,7 @@ impl Lowerer {
                                     "value '{name}' expects exactly 0 arguments but got {}",
                                     args.len()
                                 ),
-                                arg_span(args),
+                                arg_span(args, span),
                             );
                         }
                         return bare;
@@ -778,7 +777,7 @@ impl Lowerer {
                 // manifest signature; the result must fill exactly the three
                 // declared parameters (x, y, z).
                 let (bound, _) = match self.manifest.resolve_function(name) {
-                    Some(entry) => self.bind_args(entry, args, macro_params),
+                    Some(entry) => self.bind_args(entry, args, span, macro_params),
                     None => (self.lower_arg_values(args, macro_params), None),
                 };
                 if bound.len() < 3 {
@@ -868,7 +867,7 @@ impl Lowerer {
                                 span: Some(span.into()),
                             };
                         }
-                        let (bound, selector) = self.bind_args(entry, args, macro_params);
+                        let (bound, selector) = self.bind_args(entry, args, span, macro_params);
                         let (call_name, bound) =
                             self.resolve_contextual_domain(entry, bound, selector.as_deref());
                         HirExpr::Call {
@@ -934,6 +933,7 @@ impl Lowerer {
         &mut self,
         entry: &Function,
         args: &[cst::CallArg],
+        call_span: Span,
         macro_params: &[String],
     ) -> (Vec<HirExpr>, Option<String>) {
         let mut slots: Vec<Option<HirExpr>> = vec![None; entry.params.len()];
@@ -944,9 +944,6 @@ impl Lowerer {
         let contextual = policy::contextual_domain(&entry.id);
         let variadic = policy::variadic(&entry.id);
 
-        // Keyword spellings resolve through the declared parameter names
-        // (alternate spellings included) — generic binding, no per-spelling
-        // branches.
         let mut by_spelling: HashMap<&str, usize> = HashMap::new();
         for (index, param) in entry.params.iter().enumerate() {
             by_spelling.insert(param.name.as_str(), index);
@@ -1079,7 +1076,7 @@ impl Lowerer {
         // first-error behavior. `min`/`max` are the reference's variadic
         // builtins and re-associate overflow instead of rejecting (#512).
         if !binding_error && !variadic && args.len() > entry.params.len() {
-            self.check_arity(entry, args.len(), arg_span(args));
+            self.check_arity(entry, args.len(), arg_span(args, call_span));
         }
 
         // Unbound parameters: declared defaults fill; required parameters
@@ -1141,7 +1138,7 @@ impl Lowerer {
                                 "missing argument '{}' for function '{}'",
                                 param.name, entry.id
                             ),
-                            arg_span(args),
+                            arg_span(args, call_span),
                         );
                         bound.push(HirExpr::Null { span: None });
                     }
@@ -1190,7 +1187,7 @@ impl Lowerer {
                             index + 1,
                             entry.id
                         ),
-                        arg_span(args),
+                        arg_span(args, call_span),
                     );
                 }
             }
@@ -1459,7 +1456,7 @@ impl Lowerer {
             Some(entry) => {
                 self.check_call_position(name, entry, position, span);
                 self.check_receiver(receiver, entry, span);
-                let (bound, _) = self.bind_args(entry, args, macro_params);
+                let (bound, _) = self.bind_args(entry, args, span, macro_params);
                 (entry.id.clone(), bound)
             }
             None => {
@@ -1473,7 +1470,6 @@ impl Lowerer {
                 (name.to_string(), self.lower_arg_values(args, macro_params))
             }
         };
-        // `eventPlayer.member(...)` → receiver call on the event player.
         if let Expr::Name { name: root, .. } = receiver {
             if matches!(
                 root.as_str(),
@@ -1494,7 +1490,6 @@ impl Lowerer {
                 };
             }
         }
-        // Any other receiver: resolve it and keep the receiver call.
         HirExpr::ReceiverCall {
             receiver: Box::new(self.lower_expr(receiver, macro_params, CallPosition::Value)),
             name: member_name,
@@ -1503,8 +1498,6 @@ impl Lowerer {
         }
     }
 
-    /// Check a builtin entry against its call position: action/value
-    /// identity and for-iterable context.
     pub(super) fn check_call_position(
         &mut self,
         name: &str,
@@ -1591,7 +1584,6 @@ impl Lowerer {
         }
     }
 
-    /// Check a builtin call's argument count against its declared arity.
     pub(super) fn check_arity(&mut self, entry: &Function, got: usize, span: Span) {
         let (min, max) = entry.arity_bounds();
         let valid = got >= min && max.is_none_or(|max| got <= max);

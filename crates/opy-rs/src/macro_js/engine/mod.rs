@@ -10,7 +10,6 @@ pub(crate) enum Completion {
     NonString(&'static str),
 }
 
-/// Engine-level failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum EngineError {
     /// The script threw; `message` is the exception message and `stack` the
