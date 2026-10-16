@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/team-numeric-literal",
+  "category": "synthetic",
+  "features": [
+    "workshop enums",
+    "numeric literal spellings",
+    "assignments"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": true
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "known-gap",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": false,
+      "semanticDifferenceSha256": "0287b86f1ab4e61c32157948210e38c7573981839400ff396fb089c0a23534ca"
+    }
+  }
+}

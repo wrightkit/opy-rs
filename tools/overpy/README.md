@@ -78,11 +78,15 @@ python3 tools/overpy/probe_builtins.py --binary target/release/opy-compat --jobs
 
 `--functions a,b` probes only those functions. `probe-gaps.json` records the
 differences that remain, each with its cause and owner; a difference outside
-it, or a recorded gap that matches nothing, fails the run. The report lists
-the manifest functions without a valid sample call, which are the special-
-lowering entries and those whose arguments are ids created by another call.
-A probe the oracle rejects and the native compiler accepts is diagnostics
-parity and is only counted.
+it, or a recorded gap that matches nothing, fails the run. Each gap must
+discriminate by variant or detail, so a function list alone cannot swallow a
+divergence class. The report lists the manifest functions without a valid
+sample call, which are the special-lowering entries and those whose arguments
+are ids created by another call. A canonical probe the oracle rejects and the
+native compiler accepts is an acceptance gap and fails like any unexplained
+difference; the same outcome on a generated candidate (`arg*=` substitutions,
+`omit-*` omissions, `in-boolean`/`in-replacement` wrappers) is invalid probe
+input, reported under `probe-input` with the oracle's rejection reason.
 
 Every accepted spelling is also compared against the oracle's name
 resolution: functions without a sample call and every alias source get a

@@ -1,0 +1,39 @@
+{
+  "compile": {
+    "diagnostics": [
+      {
+        "severity": "error",
+        "text": "Error: Unhandled global variable 'g' in custom game settings, expected dict, array, string, number or boolean\n    | line 5, col 21, at source.opy"
+      }
+    ],
+    "exitCode": 1,
+    "status": "failure",
+    "stdout": "",
+    "workshop": "",
+    "workshopExact": "",
+    "workshopSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "fixture": "synthetic/settings-expression-invalid",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "3d4ae7e382f9bb6137cfe439ac9e53d1848735ed14e02ae1bd0b350ef2393ee4"
+      }
+    ],
+    "sha256": "97c94feb4f81c3fd724339fd560c95e0fd57fba3da9b8661245c9558f0212eb2",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "5a7d0e294b8cad73b9701987bb584d0551d7fa4d",
+    "gitHead": "ec763c1d245aa5485ef61af5b2bda4975bce4877",
+    "integrity": "sha512-C5F6btT5yn19BvHuE0bjMuSd/2esebBabmpL4SYLQFuJ4IdouVOKEoMLLuJFAyNc0Phwrolblj5GDkDGYR0ofg==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.17.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.17"
+  },
+  "schemaVersion": 1
+}

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/enum-spellings",
+  "category": "synthetic",
+  "features": [
+    "workshop enums",
+    "assignments"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": true
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": true
+    }
+  }
+}

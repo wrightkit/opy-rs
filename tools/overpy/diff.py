@@ -51,7 +51,14 @@ REFERENCE_FRONTIER_RULES = (
         "unsupported-integration-surface",
     ),
     ("Expected variable for 1st argument", "semantic", "invalid-range-binder"),
+    ("Missing argument", "semantic", "missing-argument"),
+    ("Cannot use '", "semantic", "rule-event-gate"),
     ("Unknown member", "semantic", "unknown-member"),
+    ("Unknown hero", "semantic", "unknown-enum-member"),
+    ("Unknown map", "semantic", "unknown-enum-member"),
+    ("Unknown team", "semantic", "unknown-enum-member"),
+    ("Unknown gamemode", "semantic", "unknown-enum-member"),
+    ("Unknown clip", "semantic", "unknown-enum-member"),
     ("Unknown function name", "semantic", "unknown-identifier"),
     ("Expected a ':'", "parse", "parse-error"),
     ("Content is empty", "parse", "parse-error"),
@@ -70,6 +77,8 @@ REFERENCE_FRONTIER_RULES = (
         "lowering",
         "workshop-emission",
     ),
+    ("must be an integer", "lowering", "workshop-emission"),
+    ("in custom game settings, expected", "semantic", "settings-expression"),
 )
 NATIVE_FRONTIER_STAGES = {
     "lex-error": "lex",
@@ -200,6 +209,23 @@ def load_compiler_expectations(
                 raise DiffError(f"{fixture}: semantic-wir match requires equivalence")
             if case["relationship"] == "known-gap" and semantic_equivalent:
                 raise DiffError(f"{fixture}: semantic-wir known-gap requires non-equivalence")
+            # A recorded gap pins the exact differences it was approved for;
+            # a second divergence in the same fixture cannot hide behind it.
+            pin = case.get("semanticDifferenceSha256")
+            if semantic_equivalent:
+                if pin is not None:
+                    raise DiffError(
+                        f"{fixture}: semanticDifferenceSha256 requires a recorded gap"
+                    )
+            elif not isinstance(pin, str) or not re.fullmatch(r"[0-9a-f]{64}", pin):
+                raise DiffError(
+                    f"{fixture}: a recorded semantic-wir gap must pin its "
+                    "differences with semanticDifferenceSha256"
+                )
+        elif "semanticDifferenceSha256" in case:
+            raise DiffError(
+                f"{fixture}: semanticDifferenceSha256 requires a semantic-wir comparison"
+            )
         if comparison == "diagnostic-code":
             if not isinstance(case.get("diagnosticCode"), str) or not case["diagnosticCode"]:
                 raise DiffError(f"{fixture}: diagnostic-code requires diagnosticCode")
@@ -632,6 +658,7 @@ def compare_compiler_fixture(
     native_compile = producer["compile"]
     expected_status = expectation["nativeStatus"]
     native_status = native_compile["status"]
+    oracle_status = oracle["compile"]["status"]
     stages = [
         stage(
             "compile-status",
@@ -640,7 +667,7 @@ def compare_compiler_fixture(
             producer=native_status,
         )
     ]
-    if oracle["compile"]["status"] == "failure" and native_status == "failure":
+    if oracle_status == "failure" and native_status == "failure":
         reference_frontier = reference_failure_frontier(oracle)
         native_frontier = native_failure_frontier(producer)
         if reference_frontier is None or native_frontier is None:
@@ -704,14 +731,40 @@ def compare_compiler_fixture(
                 and semantic.get("algorithm")
                 == "opy-rs::structural-identity"
             )
-            equivalent = semantic.get("equivalent") is True
+            equivalent = semantic.get("equivalent")
+            differences = semantic.get("differences")
+            # A comparison is coherent only when its verdict and its recorded
+            # evidence agree: `equivalent` claims the two programs converge
+            # exactly when no structural difference was recorded. A comparator
+            # that reports equivalence over a non-empty difference list, or a
+            # gap with no difference to show, is comparing something other
+            # than the two programs it names.
+            consistent = (
+                equivalent is True
+                and (differences is None or differences == [])
+            ) or (
+                equivalent is False
+                and isinstance(differences, list)
+                and bool(differences)
+            )
             reference_error = semantic.get("referenceError")
             reference_parsed = reference_error is None
+            differences_sha256 = (
+                _sha256(json.dumps(differences, sort_keys=True, separators=(",", ":")))
+                if isinstance(differences, list)
+                else None
+            )
+            difference_pin = expectation.get("semanticDifferenceSha256")
+            pin_matches = (
+                difference_pin is None or differences_sha256 == difference_pin
+            )
             comparison_matches = (
                 reference_parsed
                 and input_matches
                 and reference_matches
                 and algorithm_matches
+                and consistent
+                and pin_matches
                 and equivalent == expectation["semanticEquivalent"]
             )
             expected_equivalent = expectation["semanticEquivalent"]
@@ -732,6 +785,8 @@ def compare_compiler_fixture(
                     referenceInputSha256=semantic.get("referenceInputSha256"),
                     equivalent=semantic.get("equivalent"),
                     differences=semantic.get("differences", []),
+                    differencesSha256=differences_sha256,
+                    expectedDifferences=difference_pin,
                     expectedEquivalent=expected_equivalent,
                     referenceError=reference_error,
                 )
@@ -821,6 +876,18 @@ def compare_compiler_fixture(
                 if expectation["relationship"] != "match"
                 else "regression"
             )
+    if expectation["relationship"] == "match" and oracle_status != native_status:
+        # Acceptance itself diverged inside a fixture that claims parity;
+        # no comparison stage may turn that into a match.
+        stages.append(
+            stage(
+                "acceptance-status",
+                "regression",
+                oracle=oracle_status,
+                producer=native_status,
+            )
+        )
+        status = "unexpected-divergence"
     inconclusive_reason = next(
         (
             item.get("reason") or item.get("referenceError")
@@ -901,6 +968,7 @@ def build_compiler_report(results: list[dict[str, Any]]) -> dict[str, Any]:
             "source-visible",
             "diagnostic-code",
             "compiler-contract",
+            "acceptance-status",
         ],
     )
 

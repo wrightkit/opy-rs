@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/enum-catalog-spelling-gap",
+  "category": "synthetic",
+  "features": [
+    "workshop enums",
+    "assignments"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "known-gap",
+      "ruleNames": false
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "known-gap",
+      "comparison": "compiler-contract"
+    }
+  }
+}

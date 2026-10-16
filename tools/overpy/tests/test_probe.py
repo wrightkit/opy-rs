@@ -1,6 +1,7 @@
 import json
 import subprocess
 import sys
+import tempfile
 import unittest
 from collections import Counter
 from pathlib import Path
@@ -25,7 +26,7 @@ class ProbeClassificationTests(unittest.TestCase):
     ]
 
     def test_a_finding_belongs_to_the_first_matching_gap(self):
-        explained, unexplained, stale = probe_builtins.classify(
+        explained, unexplained, generated, stale = probe_builtins.classify(
             [
                 finding("native-rejects", "default:createBeam:omit-arg4"),
                 finding("different", "size:min:arg0=false"),
@@ -34,17 +35,17 @@ class ProbeClassificationTests(unittest.TestCase):
         )
         self.assertEqual(len(explained["omission"]), 1)
         self.assertEqual(len(explained["folds"]), 1)
-        self.assertEqual((unexplained, stale), ([], []))
+        self.assertEqual((unexplained, generated, stale), ([], [], []))
 
     def test_an_unmatched_finding_is_unexplained_and_an_unused_gap_is_stale(self):
-        _, unexplained, stale = probe_builtins.classify(
+        _, unexplained, _, stale = probe_builtins.classify(
             [finding("different", "default:sqrt:base")], self.GAPS
         )
         self.assertEqual([f["id"] for f in unexplained], ["default:sqrt:base"])
         self.assertEqual(stale, ["omission", "folds"])
 
     def test_an_unrelated_rejection_stays_unexplained(self):
-        _, unexplained, _ = probe_builtins.classify(
+        _, unexplained, _, _ = probe_builtins.classify(
             [
                 finding("native-rejects", "default:sqrt:base"),
                 finding("native-rejects", "default:sqrt:omit-arg0"),
@@ -53,8 +54,70 @@ class ProbeClassificationTests(unittest.TestCase):
         )
         self.assertEqual(len(unexplained), 2)
 
+    def test_native_accepts_on_a_canonical_probe_is_unexplained(self):
+        # The oracle rejected a declared call form that opy-rs accepts; that
+        # is an acceptance gap and must fail, not be silently counted.
+        _, unexplained, generated, _ = probe_builtins.classify(
+            [finding("native-accepts", "default:healer:base")], self.GAPS
+        )
+        self.assertEqual([f["id"] for f in unexplained], ["default:healer:base"])
+        self.assertEqual(generated, [])
+
+    def test_native_accepts_on_generated_candidates_is_probe_input(self):
+        # `arg*=`, `omit-*` and `in-*` variants generate candidate inputs the
+        # generator cannot prove valid; a reference rejection there is not an
+        # acceptance-parity claim.
+        _, unexplained, generated, _ = probe_builtins.classify(
+            [
+                finding("native-accepts", "default:wait:arg0=null"),
+                finding("native-accepts", "default:createBeam:omit-arg4"),
+                finding("native-accepts", "size:min:in-boolean"),
+                finding("native-accepts", "default:f:in-replacement"),
+            ],
+            self.GAPS,
+        )
+        self.assertEqual(unexplained, [])
+        self.assertEqual(len(generated), 4)
+
+    def test_a_recorded_gap_can_explain_a_native_accepts_finding(self):
+        gaps = self.GAPS + [
+            {
+                "id": "accepts",
+                "status": "native-accepts",
+                "functions": ["healer"],
+                "variant": ":base",
+            }
+        ]
+        explained, unexplained, generated, _ = probe_builtins.classify(
+            [finding("native-accepts", "default:healer:base")], gaps
+        )
+        self.assertEqual(len(explained["accepts"]), 1)
+        self.assertEqual(unexplained, [])
+        self.assertEqual(generated, [])
+
+    def test_a_gap_must_discriminate_beyond_status_and_functions(self):
+        # A gap with no variant or detail would explain any finding on its
+        # functions — including classes it was never approved for.
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "gaps.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "gaps": [
+                            {
+                                "id": "broad",
+                                "status": "native-accepts",
+                                "functions": ["healer"],
+                            }
+                        ]
+                    }
+                )
+            )
+            with self.assertRaises(RuntimeError):
+                probe_builtins.load_gaps(path)
+
     def test_recorded_gaps_are_well_formed(self):
-        gaps = json.loads(probe_builtins.GAPS.read_text(encoding="utf-8"))["gaps"]
+        gaps = probe_builtins.load_gaps()
         for gap in gaps:
             self.assertTrue({"id", "status", "functions", "cause", "owner", "decision"} <= gap.keys())
             self.assertIsInstance(gap["functions"], list)
@@ -112,6 +175,46 @@ class ProbeExecutionTests(unittest.TestCase):
         self.assertEqual(
             probe_builtins.compare_probes(Path("native"), [], 2),
             {"probes": 0, "counts": {}, "findings": []},
+        )
+
+    def test_reference_rejections_stay_attached_to_findings(self):
+        # An unexplained acceptance divergence must report what the pinned
+        # oracle rejected, not just that it rejected.
+        def run(command, **kwargs):
+            if command[0] == "node":
+                Path(command[-1]).write_text(
+                    json.dumps(
+                        {
+                            "default:f:base": {
+                                "ok": False,
+                                "error": "OpyError: Unknown function 'f'",
+                            },
+                            "default:g:base": {"ok": True, "workshop": "x"},
+                        }
+                    )
+                )
+                return subprocess.CompletedProcess(command, 0, "", "")
+            report = {
+                "probes": 2,
+                "counts": {"native-accepts": 1, "match": 1},
+                "findings": [
+                    {"id": "default:f:base", "status": "native-accepts", "detail": ""},
+                ],
+            }
+            return subprocess.CompletedProcess(command, 0, json.dumps(report), "")
+
+        selected = [
+            {"id": "default:f:base", "source": "g = f()"},
+            {"id": "default:g:base", "source": "g = g()"},
+        ]
+        with tempfile.TemporaryDirectory() as temporary:
+            with patch.object(probe_builtins, "run", side_effect=run):
+                report = probe_builtins.compare_batch(
+                    Path("native"), selected, Path(temporary) / "batch"
+                )
+        self.assertEqual(
+            report["findings"][0]["referenceError"],
+            "OpyError: Unknown function 'f'",
         )
 
 
