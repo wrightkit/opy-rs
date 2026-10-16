@@ -54,7 +54,8 @@ The core may be developed from:
 `crates/opy-rs/src/compiler/blizzard_global.rs` contains compact, opy-rs-owned
 compatibility facts for Blizzard Global glyph widths, spacing characters, and
 the cased-progress glyph substitutions. The facts are independently represented
-from observed output of the pinned OverPy 9.7.10 oracle; they are not copied
+from observed output of the OverPy oracle pinned at the time (`9.7.10`); they
+are not copied
 from `src/data/opy/blizzardGlobal.ts` or another upstream source file. The
 lowering algorithms remain native Rust code in `compiler/lowering.rs`.
 
@@ -156,12 +157,17 @@ when the oracle is absent.
   differs. Historical claims stay interpretable because every result records
   the exact pinned identity.
 * **Settings data newer than the pin.** Hero/settings schema data newer than
-  the pin (e.g. dmon/domina/mizuki/vendetta) is unavailable to fixtures until
-  a demonstrated need triggers the upgrade.
-* **Unresolved upstream questions.** Whether a post-9.7.13 OverPy adds `"""`
-  docstrings, `#!obfuscate`, custom `_hp_*` members, or inline `if` without
-  `else` is unverified; the version-sensitivity matrix must be re-run before
-  any new acceptance is claimed.
+  the pin is unavailable to fixtures until a demonstrated need triggers the
+  upgrade. Under the 9.7.17 pin (wrightkit/opy-rs#498), upstream re-slotted
+  Roadhog's Take a Breather from `secondaryFire` to `ability2`; opy-rs still
+  emits the 9.7.10 ability names — a recorded pending exception
+  (wrightkit/opy-rs#565).
+* **Resolved upstream questions (verified at the 9.7.17 pin).** `"""`
+  docstrings, `#!obfuscate`, and custom `_hp_*` members remain rejected;
+  inline `if` without `else` was already accepted at 9.7.10. New 9.7.17
+  behavior: `#!translations` compilation writes `<main>.<lang>.po` template
+  files next to the source, and `Impulse.CANCEL_CONTRARY_MOTION` warns
+  `w_cancel_contrary_motion` in `applyImpulse`.
 * **Round-trip boundary.** Emitted `settings` sections are deliberately not
   reparseable by the Workshop source implementation; a `.ws` decompiler is a non-goal for
   `opy-rs` (Workshop → OPY decompilation is deferred to the `workshop-rs`

@@ -5,6 +5,9 @@
 # Pinned oracle installs (pnpm install --dir tools/overpy/oracle)
 tools/overpy/oracle/node_modules/
 tools/overpy/oracle/.funckw-*/
+# The pinned oracle (overpy 9.7.17) writes <main>.<lang>.po templates next
+# to the source when compiling #!translations fixtures.
+crates/opy-rs/tests/fixtures/corpus/**/*.po
 # Python harness caches
 __pycache__/
 *.pyc

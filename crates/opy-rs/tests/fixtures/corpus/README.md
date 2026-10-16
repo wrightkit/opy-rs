@@ -2,7 +2,7 @@
 
 This directory contains OPY inputs and pinned OverPy results used by the
 source and compiler differential tests. Each fixture is ordinary test data:
-the native implementation runs against the input, the pinned OverPy 9.7.10
+the native implementation runs against the input, the pinned OverPy 9.7.17
 result provides the reference behavior, and the runners assert the declared
 relationship.
 

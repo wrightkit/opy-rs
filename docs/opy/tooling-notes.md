@@ -8,7 +8,7 @@ contract is in [`tools/overpy/README.md`](../../tools/overpy/README.md).
 * Python 3 (stdlib only, no pip dependencies).
 * For oracle execution only: Node + pnpm
   (`pnpm install --dir tools/overpy/oracle`, which resolves the pinned
-  `overpy@9.7.10` by integrity hash). No Node toolchain is needed to run
+  `overpy@9.7.17` by integrity hash). No Node toolchain is needed to run
   the harness tests or the fixture snapshot checks, and the Rust crates are
   never required here.
 

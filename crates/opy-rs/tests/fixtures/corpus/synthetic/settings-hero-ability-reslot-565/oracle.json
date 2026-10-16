@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "settings\n{\n\tmain\n\t{\n\t\tDescription: \"opy-rs#565 roadhog secondaryFire/ability2 reslot\"\n\t}\n\tmodes\n\t{\n\t\tSkirmish\n\t\t{\n\t\t}\n\t}\n\theroes\n\t{\n\t\tGeneral\n\t\t{\n\t\t\tRoadhog\n\t\t\t{\n\t\t\t\tsecondaryFireCooldown%: 50\n\t\t\t\tTake a Breather Cooldown Time: 50%\n\t\t\t\tTake a Breather: Off\n\t\t\t}\n\t\t}\n\t}\n}\n",
+    "workshopExact": "settings\n{\n\tmain\n\t{\n\t\tDescription: \"opy-rs#565 roadhog secondaryFire/ability2 reslot\"\n\t}\n\tmodes\n\t{\n\t\tSkirmish\n\t\t{\n\t\t}\n\t}\n\theroes\n\t{\n\t\tGeneral\n\t\t{\n\t\t\tRoadhog\n\t\t\t{\n\t\t\t\tsecondaryFireCooldown%: 50\n\t\t\t\tTake a Breather Cooldown Time: 50%\n\t\t\t\tTake a Breather: Off\n\t\t\t}\n\t\t}\n\t}\n}\n\n",
+    "workshopSha256": "36124cd35071616cc67ce17eda7030c1acd02afb74f0a9f34c06d14f2f0a35ab"
+  },
+  "fixture": "synthetic/settings-hero-ability-reslot-565",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "114247e12fe73fbe7f7c7da868dc99b1e8a4d8efffabc2d7ec2810bb5c2a9f81"
+      }
+    ],
+    "sha256": "afd5bedb4804941da263cdecded6620339d88c49da572c9b1a1a599891379138",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "5a7d0e294b8cad73b9701987bb584d0551d7fa4d",
+    "gitHead": "ec763c1d245aa5485ef61af5b2bda4975bce4877",
+    "integrity": "sha512-C5F6btT5yn19BvHuE0bjMuSd/2esebBabmpL4SYLQFuJ4IdouVOKEoMLLuJFAyNc0Phwrolblj5GDkDGYR0ofg==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.17.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.17"
+  },
+  "schemaVersion": 1
+}

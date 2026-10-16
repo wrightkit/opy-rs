@@ -8,7 +8,7 @@
 | `#!allowMacroRedeclaration` | ✅ Supported | Duplicate-definition policy is explicit in preprocessing state. |
 | `#!mainFile`, `#!include`, `#!excludeVariablesInCompilation` | ✅ Supported | File selection, include closure and output filtering are separate operations. |
 | `#!rulePrefix` and `#!rulePrefixTemplate` | ✅ Supported | Rule names are transformed before lowering. |
-| Optimization controls such as `#!enableOptimizations`, `#!disableOptimizations`, `#!optimizeForSize`, `#!optimizeForSizeAggressive` and `#!optimizeStrict` | ✅ Supported | Optimization state is scoped to source spans; size, aggressive skip, strict-folding and wait-duration effects are lowered. Under `#!optimizeForSize`, `0`, `1`, `Null` and zero-vector arguments are spelled as `False`, `True` and `Null` per parameter as pinned OverPy 9.7.10 does, encoded in typed Rust (`tools/overpy/gen_literal_flags.cjs` records the upstream flags that a test checks the policy against); without it authored literals are kept. The emitted structure converges on upstream, and the Bastion `main.opy` and `externalMain.opy` structural gate reports no differences; the internal optimizer implementation is not a contract. |
+| Optimization controls such as `#!enableOptimizations`, `#!disableOptimizations`, `#!optimizeForSize`, `#!optimizeForSizeAggressive` and `#!optimizeStrict` | ✅ Supported | Optimization state is scoped to source spans; size, aggressive skip, strict-folding and wait-duration effects are lowered. Under `#!optimizeForSize`, `0`, `1`, `Null` and zero-vector arguments are spelled as `False`, `True` and `Null` per parameter as pinned OverPy 9.7.17 does, encoded in typed Rust (`tools/overpy/gen_literal_flags.cjs` records the upstream flags that a test checks the policy against); without it authored literals are kept; in `<=`/`>=`/`<`/`>` rule conditions the 9.7.17 reference keeps the literal `1` where the earlier pin rewrote it to `True`, a recorded pending exception (wrightkit/opy-rs#564). The emitted structure converges on upstream apart from recorded exceptions, and the Bastion `main.opy` and `externalMain.opy` structural gate reports no unrecorded differences; the internal optimizer implementation is not a contract. |
 | Replacement directives such as `#!replace0By*`, `#!replace1ByMatchRound`, team and empty-string replacements | ✅ Supported | Observable replacements are lowered when size optimization is active and are excluded from Workshop-setting constructors, matching the pinned upstream boundary. |
 | `#!extension` | ✅ Supported | The extension name is checked against the canonical Workshop schema. |
 | `#!disableInspector`, `#!excludeVariablesInCompilation`, `#!setupTags`, `#!setupTx`, `#!globalvarInitRuleName` and `#!playervarInitRuleName` | ✅ Supported | Inspector/setup rules, output declaration filtering and generated initialization rule names affect forward Workshop output. |
@@ -37,7 +37,7 @@
 
 `opy-cli compile --language` and the `Compiler` language-selection APIs emit
 localized Workshop source through the canonical `workshop-rs` catalog. The
-supported pinned OverPy 9.7.10 output locales are:
+supported pinned OverPy 9.7.17 output locales are:
 
 `de-DE`, `en-US`, `es-ES`, `es-MX`, `fr-FR`, `it-IT`, `ja-JP`, `ko-KR`,
 `pl-PL`, `pt-BR`, `ru-RU`, `th-TH`, `tr-TR`, `zh-CN`, and `zh-TW`.
