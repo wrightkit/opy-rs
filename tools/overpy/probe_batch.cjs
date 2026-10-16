@@ -15,7 +15,14 @@ async function main() {
       const compiled = await overpy.compile(probe.source, "en-US", process.cwd(), "probe.opy");
       references[probe.id] = { ok: true, workshop: compiled.result };
     } catch (error) {
-      references[probe.id] = { ok: false, error: String(error).split("\n")[0] };
+      const text = String(error).split("\n")[0];
+      // A source rejection always surfaces as OpyError. Anything else is a
+      // harness or oracle fault that must abort the run, not be recorded as
+      // a rejection the downstream comparison could misread as parity.
+      if (!text.startsWith("OpyError:")) {
+        throw new Error(`probe ${probe.id} failed outside source rejection: ${text}`);
+      }
+      references[probe.id] = { ok: false, error: text };
     }
   }
   fs.writeFileSync(referencesPath, JSON.stringify(references));

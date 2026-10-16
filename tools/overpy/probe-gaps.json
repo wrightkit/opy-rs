@@ -79,6 +79,19 @@
       "cause": "The reference splices the absent display-name lookup for onlyInOverpy ColorLiteral members, writing an empty argument slot (Set Global Variable(g, )) that the canonical grammar cannot parse. Native emission writes the canonical Custom Color the Color receiver produces, because an empty slot has no Workshop meaning.",
       "owner": "opy-rs emission",
       "decision": "approved exception (project owner, wrightkit/opy-rs#468); pinned by compiler::tests::structural_convergence"
+    },
+    {
+      "id": "catalog-member-id-not-in-reference-domain",
+      "status": "native-accepts",
+      "functions": [
+        "createInWorldText",
+        "createProgressBarInWorldText"
+      ],
+      "variant": ":base",
+      "detail": "DO_NOT_CLIP",
+      "cause": "The lowerer resolves catalog member ids verbatim, so `Clipping.DO_NOT_CLIP` compiles natively. Upstream spells the domain `Clip` and has no `DO_NOT_CLIP` member on `Clipping`, so the reference rejects `Unknown member 'DO_NOT_CLIP' of 'Clipping'`; the same member compiles upstream as `Clip.NONE`.",
+      "owner": "opy-rs binding",
+      "decision": "approved acceptance superset (verbatim catalog-id resolution, crates/opy-rs/src/enums.rs DOMAIN_RENAMES note; the spelling is hidden from lookup by enum_member_spelling); pinned by compiler tests and the enum-catalog-spelling-gap corpus fixture"
     }
   ]
 }

@@ -1,5 +1,6 @@
 import copy
 import json
+import shutil
 import sys
 import tempfile
 import unittest
@@ -51,6 +52,13 @@ class DiffTests(unittest.TestCase):
         path = root / result["fixture"] / "result.json"
         path.parent.mkdir(parents=True)
         path.write_text(json.dumps(result), encoding="utf-8")
+
+    def copy_fixture(self, root: Path, fixture: str) -> Path:
+        source = CORPUS_DIR / fixture
+        target = root / fixture
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(source, target)
+        return target
 
     def test_matching_result_has_distinct_stages(self):
         result = copy.deepcopy(self.oracle)
@@ -371,6 +379,249 @@ class DiffTests(unittest.TestCase):
             )
         self.assertEqual(report_result["status"], "match")
 
+    def test_compiler_oracle_status_flip_is_not_parity(self):
+        # A `match` fixture whose recorded reference rejects what the native
+        # side expects to reject — or accepts what it accepts — is an
+        # acceptance divergence; a wrong oracle double must not let a
+        # contract stage report parity.
+        fixture = "synthetic/diagnostics"
+        with tempfile.TemporaryDirectory() as temporary:
+            corpus = Path(temporary) / "corpus"
+            target = self.copy_fixture(corpus, fixture)
+            oracle_path = target / "oracle.json"
+            oracle = json.loads(oracle_path.read_text(encoding="utf-8"))
+            result = copy.deepcopy(oracle)
+            oracle["compile"]["status"] = "success"
+            oracle["compile"]["exitCode"] = 0
+            oracle_path.write_text(json.dumps(oracle), encoding="utf-8")
+
+            result["compile"]["failureClass"] = "frontend"
+            result["compile"]["diagnostics"] = [
+                {"severity": "error", "code": "parse-error", "text": "native"}
+            ]
+            results = Path(temporary) / "results"
+            self.write_result(results, result)
+            report_result = diff.compare_compiler_fixture(
+                corpus,
+                fixture,
+                results,
+                diff.load_compiler_expectations(corpus),
+            )
+        self.assertEqual(report_result["status"], "unexpected-divergence")
+        self.assertIn("acceptance-status", report_result["regressionStages"])
+
+    def test_compiler_oracle_rejection_is_not_semantic_parity(self):
+        # A comparator that only trusted its own `equivalent` verdict would
+        # call this a match; the reference-side failure must stay visible.
+        fixture = "synthetic/expressions-values"
+        with tempfile.TemporaryDirectory() as temporary:
+            corpus = Path(temporary) / "corpus"
+            target = self.copy_fixture(corpus, fixture)
+            oracle_path = target / "oracle.json"
+            oracle = json.loads(oracle_path.read_text(encoding="utf-8"))
+            result = copy.deepcopy(oracle)
+            result["compatibility"] = {
+                "schemaVersion": 1,
+                "semanticWIR": {
+                    "schemaVersion": 1,
+                    "algorithm": "opy-rs::structural-identity",
+                    "inputSha256": oracle["input"]["sha256"],
+                    "referenceInputSha256": oracle["input"]["sha256"],
+                    "equivalent": True,
+                    "differences": [],
+                },
+            }
+            oracle["compile"]["status"] = "failure"
+            oracle["compile"]["exitCode"] = 1
+            oracle["compile"]["diagnostics"] = [
+                {"severity": "error", "text": "Error: broken"}
+            ]
+            oracle["compile"]["workshopExact"] = ""
+            oracle["compile"]["workshop"] = ""
+            oracle_path.write_text(json.dumps(oracle), encoding="utf-8")
+
+            results = Path(temporary) / "results"
+            self.write_result(results, result)
+            report_result = diff.compare_compiler_fixture(
+                corpus,
+                fixture,
+                results,
+                diff.load_compiler_expectations(corpus),
+            )
+        self.assertEqual(report_result["status"], "unexpected-divergence")
+        self.assertIn("acceptance-status", report_result["regressionStages"])
+
+    def test_semantic_wir_verdict_must_match_its_recorded_differences(self):
+        # An `equivalent` verdict over a non-empty difference list is a
+        # comparator claiming parity while seeing divergence; a `False`
+        # verdict with no recorded difference claims a gap it cannot show.
+        fixture = "synthetic/expressions-values"
+        oracle = json.loads(
+            (CORPUS_DIR / fixture / "oracle.json").read_text(encoding="utf-8")
+        )
+        base = {
+            "schemaVersion": 1,
+            "algorithm": "opy-rs::structural-identity",
+            "inputSha256": oracle["input"]["sha256"],
+            "referenceInputSha256": oracle["input"]["sha256"],
+        }
+        for equivalent, differences in (
+            (True, [{"path": "Rule.actions.[0]"}]),
+            (False, []),
+        ):
+            with self.subTest(equivalent=equivalent, differences=differences):
+                result = copy.deepcopy(oracle)
+                result["compatibility"] = {
+                    "schemaVersion": 1,
+                    "semanticWIR": {
+                        **base,
+                        "equivalent": equivalent,
+                        "differences": differences,
+                    },
+                }
+                with tempfile.TemporaryDirectory() as temporary:
+                    root = Path(temporary)
+                    self.write_result(root, result)
+                    report_result = diff.compare_compiler_fixture(
+                        CORPUS_DIR,
+                        fixture,
+                        root,
+                        diff.load_compiler_expectations(),
+                    )
+                self.assertEqual(report_result["status"], "regression")
+
+    def test_a_known_gap_still_needs_recorded_differences(self):
+        # `synthetic/preprocessing` records an approved divergence; a
+        # comparator that reports non-equivalence without a difference to
+        # show must not satisfy the gap.
+        fixture = "synthetic/preprocessing"
+        oracle = json.loads(
+            (CORPUS_DIR / fixture / "oracle.json").read_text(encoding="utf-8")
+        )
+        result = copy.deepcopy(oracle)
+        result["compatibility"] = {
+            "schemaVersion": 1,
+            "semanticWIR": {
+                "schemaVersion": 1,
+                "algorithm": "opy-rs::structural-identity",
+                "inputSha256": oracle["input"]["sha256"],
+                "referenceInputSha256": oracle["input"]["sha256"],
+                "equivalent": False,
+                "differences": [],
+            },
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write_result(root, result)
+            report_result = diff.compare_compiler_fixture(
+                CORPUS_DIR,
+                fixture,
+                root,
+                diff.load_compiler_expectations(),
+            )
+        self.assertEqual(report_result["status"], "regression")
+        self.assertIn("semantic-wir", report_result["regressionStages"])
+
+    def _preprocessing_result(self, oracle: dict, differences: list) -> dict:
+        result = copy.deepcopy(oracle)
+        result["compatibility"] = {
+            "schemaVersion": 1,
+            "semanticWIR": {
+                "schemaVersion": 1,
+                "algorithm": "opy-rs::structural-identity",
+                "inputSha256": oracle["input"]["sha256"],
+                "referenceInputSha256": oracle["input"]["sha256"],
+                "equivalent": False,
+                "differences": differences,
+            },
+        }
+        return result
+
+    def test_semantic_wir_gap_pin_matches_its_recorded_differences(self):
+        # Re-pinning an approved gap binds it to exactly the differences it
+        # recorded: the same list still satisfies the known-gap declaration.
+        fixture = "synthetic/preprocessing"
+        differences = [{"path": "Rule.actions.[0]", "index": 0}]
+        with tempfile.TemporaryDirectory() as temporary:
+            corpus = Path(temporary) / "corpus"
+            target = self.copy_fixture(corpus, fixture)
+            manifest_path = target / "fixture.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["tests"]["compiler"]["semanticDifferenceSha256"] = (
+                diff._sha256(
+                    json.dumps(differences, sort_keys=True, separators=(",", ":"))
+                )
+            )
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+            oracle = json.loads(
+                (target / "oracle.json").read_text(encoding="utf-8")
+            )
+            results = Path(temporary) / "results"
+            self.write_result(
+                results, self._preprocessing_result(oracle, differences)
+            )
+            report_result = diff.compare_compiler_fixture(
+                corpus,
+                fixture,
+                results,
+                diff.load_compiler_expectations(corpus),
+            )
+        self.assertEqual(report_result["status"], "known-gap")
+
+    def test_semantic_wir_gap_pin_rejects_an_added_divergence(self):
+        # The recorded exception covers only the differences it pinned; a
+        # second divergence in the same fixture cannot hide behind it.
+        fixture = "synthetic/preprocessing"
+        oracle = json.loads(
+            (CORPUS_DIR / fixture / "oracle.json").read_text(encoding="utf-8")
+        )
+        result = self._preprocessing_result(
+            oracle, [{"path": "Rule.actions.[0]", "index": 0}]
+        )
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write_result(root, result)
+            report_result = diff.compare_compiler_fixture(
+                CORPUS_DIR,
+                fixture,
+                root,
+                diff.load_compiler_expectations(),
+            )
+        self.assertEqual(report_result["status"], "regression")
+        self.assertIn("semantic-wir", report_result["regressionStages"])
+
+    def test_semantic_wir_gap_requires_a_difference_pin(self):
+        # `semanticEquivalent: false` without the pinned difference list is an
+        # unnamed exception and must be rejected at load time; the pin is
+        # meaningless on an equivalent fixture or another comparison.
+        for edit in ("drop-pin", "pin-equivalent", "pin-other-comparison"):
+            with self.subTest(edit=edit):
+                with tempfile.TemporaryDirectory() as temporary:
+                    corpus = Path(temporary) / "corpus"
+                    fixture = (
+                        "synthetic/preprocessing"
+                        if edit != "pin-other-comparison"
+                        else "synthetic/basic-rule"
+                    )
+                    target = self.copy_fixture(corpus, fixture)
+                    manifest_path = target / "fixture.json"
+                    manifest = json.loads(
+                        manifest_path.read_text(encoding="utf-8")
+                    )
+                    compiler = manifest["tests"]["compiler"]
+                    if edit == "drop-pin":
+                        del compiler["semanticDifferenceSha256"]
+                    elif edit == "pin-equivalent":
+                        compiler["semanticEquivalent"] = True
+                    else:
+                        compiler["semanticDifferenceSha256"] = "0" * 64
+                    manifest_path.write_text(
+                        json.dumps(manifest), encoding="utf-8"
+                    )
+                    with self.assertRaises(diff.DiffError):
+                        diff.load_compiler_expectations(corpus)
+
     def test_compiler_report_declares_compiler_stages(self):
         report = diff.build_compiler_report([])
         self.assertEqual(
@@ -383,6 +634,7 @@ class DiffTests(unittest.TestCase):
                 "source-visible",
                 "diagnostic-code",
                 "compiler-contract",
+                "acceptance-status",
             ],
         )
 

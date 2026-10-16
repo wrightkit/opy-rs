@@ -184,11 +184,12 @@ pub(super) fn generate() -> Result<(), String> {
                 format!("g = \"s\".replace(\"s\", \"s\", {})", base.text),
             ));
         }
+        let event = rule_event(function);
         for (variant, statement) in statements {
             for (mode, prefix) in [("default", ""), ("size", "#!optimizeForSize\n")] {
                 probes.push(Probe {
                     id: format!("{mode}:{}:{variant}", function.id),
-                    source: source(prefix, &statement),
+                    source: source(prefix, event, &statement),
                 });
             }
         }
@@ -207,21 +208,21 @@ pub(super) fn generate() -> Result<(), String> {
     for (domain, spelling) in enum_spellings(manifest, &catalog) {
         probes.push(Probe {
             id: format!("default:{domain}.{spelling}:spelling"),
-            source: source("", &format!("g = {domain}.{spelling}")),
+            source: source("", "eachPlayer", &format!("g = {domain}.{spelling}")),
         });
     }
     for (function, variant, call) in SETTING_CALLS {
         for (mode, prefix) in [("default", ""), ("size", "#!optimizeForSize\n")] {
             probes.push(Probe {
                 id: format!("{mode}:{function}:{variant}"),
-                source: source(prefix, &format!("g = {call}")),
+                source: source(prefix, "eachPlayer", &format!("g = {call}")),
             });
         }
     }
     for (member, statement) in LITERAL_MEMBER_CALLS {
         probes.push(Probe {
             id: format!("default:{member}:base"),
-            source: source("", statement),
+            source: source("", "eachPlayer", statement),
         });
     }
     println!(
@@ -236,9 +237,26 @@ struct Call {
     text: String,
 }
 
-fn source(prefix: &str, statement: &str) -> String {
+/// Rule events under which the reference admits the event-bound values that
+/// `eachPlayer` gates out: upstream rejects `healer`/`healee` without a
+/// healing event, so probing them under `eachPlayer` can never produce
+/// reference output to compare against.
+const EVENT_SCOPED_VALUES: [(&str, &str); 2] = [
+    ("healer", "playerDealtHealing"),
+    ("healee", "playerReceivedHealing"),
+];
+
+fn rule_event(function: &Function) -> &str {
+    EVENT_SCOPED_VALUES
+        .iter()
+        .find(|(name, _)| *name == function.id)
+        .map(|(_, event)| *event)
+        .unwrap_or("eachPlayer")
+}
+
+fn source(prefix: &str, event: &str, statement: &str) -> String {
     format!(
-        "{prefix}globalvar g\nplayervar p\n\nrule \"probe\":\n    @Event eachPlayer\n    {statement}\n"
+        "{prefix}globalvar g\nplayervar p\n\nrule \"probe\":\n    @Event {event}\n    {statement}\n"
     )
 }
 
@@ -254,7 +272,7 @@ fn name_probe(name: &str, member: bool) -> Probe {
     };
     Probe {
         id: format!("default:{name}:name"),
-        source: source("", &format!("g = {call}")),
+        source: source("", "eachPlayer", &format!("g = {call}")),
     }
 }
 
@@ -510,7 +528,7 @@ pub(super) fn compare(probes: &Path, references: &Path) -> Result<(), String> {
             match (reference.ok, native) {
                 (false, _) if unknown_spelling => ("unknown-spelling", String::new()),
                 (false, Err(_)) => ("both-reject", String::new()),
-                (false, Ok(_)) => ("native-accepts", String::new()),
+                (false, Ok(_)) => ("native-accepts", reference.error.clone()),
                 (true, Err(error)) => ("native-rejects", error.to_string()),
                 (true, Ok(artifact)) => {
                     match (parse(&artifact.emitted), parse(&reference.workshop)) {

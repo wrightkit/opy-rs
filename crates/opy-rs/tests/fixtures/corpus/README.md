@@ -25,7 +25,10 @@ corpus/<category>/<name>/
 - `tests.source` with the native source status, reference relationship, rule
   name comparison flag, and stable diagnostic code when applicable;
 - `tests.compiler` with the native compiler status, relationship, comparison
-  contract, and diagnostic details when applicable.
+  contract, and diagnostic details when applicable; a `semantic-wir` gap
+  additionally pins the exact recorded differences in
+  `semanticDifferenceSha256`, so a divergence the record does not cover
+  fails instead of hiding behind the approved gap.
 
 There is one manifest per fixture. The manifest does not contain Issue/PR
 history, run timing, generic verification records, or generated reports.

@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/enum-spelling-invalid",
+  "category": "diagnostics",
+  "features": [
+    "workshop enums",
+    "assignments",
+    "negative diagnostic"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "failure",
+      "relationship": "match",
+      "ruleNames": false,
+      "diagnosticCode": "unknown-enum-member"
+    },
+    "compiler": {
+      "nativeStatus": "failure",
+      "relationship": "match",
+      "comparison": "diagnostic-code",
+      "diagnosticCode": "unknown-enum-member",
+      "failureClass": "frontend"
+    }
+  }
+}
