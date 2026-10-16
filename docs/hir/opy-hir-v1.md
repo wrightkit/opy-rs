@@ -72,7 +72,7 @@ Every payload is a JSON object with the following top-level fields.
 {
   "name": "opy-rs",
   "version": "0.1.0",
-  "source implementation": "overpy@9.7.10"
+  "source implementation": "overpy@9.7.17"
 }
 ```
 
@@ -82,8 +82,8 @@ Every payload is a JSON object with the following top-level fields.
   version) the producer translated from, so compatibility evidence can name
   the reference. The opy-rs native source implementation records its own identity here
   (`LANGUAGE_NAME` = `opy-rs`, version = the crate version); the
-  pinned reference identity is `overpy@9.7.10` (content commit
-  `889d9749d1def17f146548cbddb94ea1ab015847`, see
+  pinned reference identity is `overpy@9.7.17` (content commit
+  `5a7d0e294b8cad73b9701987bb584d0551d7fa4d`, see
   [`docs/compatibility/upstream-references.md`](../compatibility/upstream-references.md)).
 
 ### 2.3 `files`

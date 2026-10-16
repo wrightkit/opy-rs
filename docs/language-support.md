@@ -4,10 +4,10 @@ This page is the user-facing support contract for `opy-rs`. It describes the
 OverPy source forms that can be used today, the limits of bounded support, and
 the capabilities that are intentionally outside the current compiler boundary.
 
-The compatibility reference is the npm package `overpy@9.7.10`. Its byte-
-verified content commit is `889d9749d1def17f146548cbddb94ea1ab015847`
-(`v9.7.10`); the package metadata also records `gitHead`
-`1e2688954302a402d076944b46db07efb14d7b61`, which is retained as package
+The compatibility reference is the npm package `overpy@9.7.17`. Its byte-
+verified content commit is `5a7d0e294b8cad73b9701987bb584d0551d7fa4d`
+(`v9.7.17`); the package metadata also records `gitHead`
+`ec763c1d245aa5485ef61af5b2bda4975bce4877`, which is retained as package
 metadata and is not the content commit. Both identities are recorded in
 `tools/overpy/oracle/oracle-metadata.json` and each oracle snapshot. The
 reference is used as an independent behavior oracle; its implementation and

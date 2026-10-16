@@ -9,7 +9,7 @@ then remove it here. The procedure is the `wrightkit-retro` skill in
 ### Semantic acceptance and emission need oracle evidence in both directions
 
 - **Rule:** Before changing what a construct accepts, rejects, or emits, run
-  the minimal case through the pinned OverPy oracle (`overpy@9.7.10`) in both
+  the minimal case through the pinned OverPy oracle (`overpy@9.7.17`) in both
   directions — what it accepts and what it rejects — and record any intentional
   divergence as an approved exception. Do not infer behavior from the Workshop
   catalog, a sibling spelling, or a plausible reading of upstream source.
