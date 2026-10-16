@@ -45,7 +45,6 @@ pub(crate) const SPECIAL_VALUE_CALLS: &[(&str, SpecialValueCall)] = &[
 ];
 
 impl SpecialValueCall {
-    /// The special call a name resolves to, when it is one.
     pub(crate) fn from_name(name: &str) -> Option<SpecialValueCall> {
         SPECIAL_VALUE_CALLS
             .iter()
@@ -293,9 +292,6 @@ impl Lowerer {
             .collect()
     }
 
-    /// Dispatch a by-name special call to its lowering behavior. The match
-    /// is exhaustive over [`SPECIAL_VALUE_CALLS`] kinds, so every spelling
-    /// the table (and the lookup) reports is bound to a real handler.
     pub(super) fn lower_special_call(
         &mut self,
         special: SpecialValueCall,

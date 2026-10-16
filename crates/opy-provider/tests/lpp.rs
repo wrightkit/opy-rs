@@ -765,7 +765,6 @@ fn document_check_defers_members_reached_through_escaping_includes() {
     let mut session = Session::spawn();
     session.initialize();
 
-    // The full set mirrors the disk parse: every document reports clean.
     let clean = check(&mut session, 2, documents(&members));
     assert_eq!(clean.len(), members.len());
     for document in &clean {
@@ -1737,8 +1736,6 @@ fn macro_definition_spans_stay_in_the_shared_lowering() {
     assert_eq!(span.start.line, 4);
 }
 
-// ---------- lpp/rename + lpp/validateEdits (issue #403) ----------
-
 const RENAME_MAIN_URI: &str = "file:///project/main.opy";
 const RENAME_DEFS_URI: &str = "file:///project/shared/defs.opy";
 
@@ -1900,7 +1897,6 @@ fn rename_global_covers_declaration_and_references_across_documents() {
     assert_eq!(defs["version"], 5);
     assert_eq!(sorted_ranges(defs), vec![(0, 10, 19), (5, 4, 13)]);
 
-    // The applied edits keep the project clean and only move identifiers.
     let edited_main = apply_text_edits(RENAME_MAIN, main);
     let edited_defs = apply_text_edits(RENAME_DEFS, defs);
     assert_eq!(edited_main, RENAME_MAIN.replace("scoreBank", "vault"));
@@ -1999,7 +1995,6 @@ fn rename_refusals_are_structured() {
     ));
     assert_eq!(refusal_code(&reserved), "rename.invalidName");
 
-    // Positions with no symbol: a blank line, and an unknown name.
     let blank = session.request(rename_request(4, documents(), RENAME_MAIN_URI, 1, 0, "x"));
     assert_eq!(refusal_code(&blank), "rename.noSymbolAtPosition");
     let whitespace = session.request(rename_request(5, documents(), RENAME_MAIN_URI, 5, 1, "x"));
@@ -2342,7 +2337,6 @@ fn validate_edits_applies_normative_rules() {
         })
     };
 
-    // A clean identifier swap validates and echoes the document version.
     let valid = validate(
         &mut session,
         2,
@@ -2683,8 +2677,6 @@ fn rename_refuses_upstream_reserved_names_per_namespace() {
     session.shutdown();
 }
 
-// -- lpp/lookup (LPP 1.5) ---------------------------------------------------
-
 fn lookup_request(id: i64, params: Value) -> Value {
     json!({
         "jsonrpc": "2.0",
@@ -2969,7 +2961,6 @@ fn lookup_events_return_the_event_vocabulary() {
         "subroutine is not an @Event name: {entries:?}"
     );
 
-    // The kind filter composes with a text query.
     let queried = session.request(lookup_request(
         3,
         json!({ "languageId": "opy", "query": "Player Earned Elimination", "kind": "event" }),
@@ -3036,8 +3027,6 @@ fn lookup_validates_params() {
     );
     session.shutdown();
 }
-
-// -- lpp/resolveIds (LPP 1.6) -------------------------------------------------
 
 fn resolve_ids_request(id: i64, params: Value) -> Value {
     json!({

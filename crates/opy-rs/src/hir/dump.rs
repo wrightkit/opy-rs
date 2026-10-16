@@ -464,7 +464,6 @@ fn dump_settings_node(node: &SettingsNode, out: &mut String, level: usize) {
     }
 }
 
-/// Render an expression in a compact, deterministic form.
 fn render_expr(expr: &Expr, out: &mut String) {
     match expr {
         Expr::Number { value, .. } => out.push_str(&format_number(*value)),

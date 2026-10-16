@@ -187,8 +187,6 @@ impl<'a> Emitter<'a> {
             }
         }
     }
-    // ---- diagnostics ----
-
     fn issue(&mut self, code: &'static str, message: impl Into<String>, span: Option<Span>) {
         self.issues.push(ReconstructIssue {
             code,
@@ -204,8 +202,6 @@ impl<'a> Emitter<'a> {
             self.program.rule_span(rule_index),
         );
     }
-
-    // ---- table validation ----
 
     fn validate_tables(&mut self) {
         if self.program.settings.is_some() {
@@ -510,14 +506,11 @@ impl<'a> Emitter<'a> {
         Some((rule_index, rule))
     }
 
-    // ---- emission ----
-
     fn emit_program(&mut self, layout: &RuleLayout) {
         let global_initializers = self.collect_initializers(layout.global_init, true);
         let player_initializers = self.collect_initializers(layout.player_init, false);
         self.check_initializer_slot(&global_initializers);
 
-        // Declarations.
         self.emit_variable_declarations(true, &global_initializers);
         self.emit_variable_declarations(false, &player_initializers);
         if self.program.subroutines.is_empty() {
@@ -531,7 +524,6 @@ impl<'a> Emitter<'a> {
             self.out.push('\n');
         }
 
-        // Subroutine bodies.
         for (rule_index, rule) in &layout.sub_rules {
             if rule.disabled {
                 self.report_disabled_rule(*rule_index, &rule.name);
@@ -555,7 +547,6 @@ impl<'a> Emitter<'a> {
             self.out.push('\n');
         }
 
-        // Rules.
         for (rule_index, rule) in &layout.normal_rules {
             if rule.disabled {
                 self.report_disabled_rule(*rule_index, &rule.name);
@@ -1560,8 +1551,6 @@ impl<'a> Emitter<'a> {
                 .any(|candidate| candidate.member == member)
         })
     }
-
-    // ---- value emission ----
 
     fn emit_value(&mut self, value: &Value, span: Option<Span>) {
         match value {

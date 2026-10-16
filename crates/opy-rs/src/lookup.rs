@@ -647,9 +647,7 @@ pub fn lookup_str(text: &str) -> LookupOutcome {
     lookup(&LookupQuery::new(text))
 }
 
-// ---------------------------------------------------------------------------
 // lpp/resolveIds — canonical Workshop id → OPY spelling (issue #515)
-// ---------------------------------------------------------------------------
 
 /// Canonical call ids whose OPY spelling is source syntax rather than a
 /// manifest-declared callable name: every entry inverts an accepted OPY
@@ -670,7 +668,6 @@ pub fn lookup_str(text: &str) -> LookupOutcome {
 /// `__abortIfConditionIsTrue__`), and spellings an argument selects
 /// (`roundToInteger`).
 const SYNTAX_SPELLINGS: &[(&str, &str)] = &[
-    // Operators the lowerer emits for OPY operator syntax.
     ("add", "+"),
     ("subtract", "-"),
     ("multiply", "*"),
@@ -702,7 +699,6 @@ const SYNTAX_SPELLINGS: &[(&str, &str)] = &[
     ("__xComponentOf__", "x"),
     ("__yComponentOf__", "y"),
     ("__zComponentOf__", "z"),
-    // Statements and reserved context values.
     ("abort", "return"),
     ("skip", "goto"),
     ("break", "break"),
@@ -796,10 +792,6 @@ pub fn enum_member_spelling<'a>(domain: &'a str, member: &'a str) -> Option<&'a 
     }
     crate::enums::spelling_of_member(domain, member).map(|(_, member)| member)
 }
-
-// ---------------------------------------------------------------------------
-// The search index — spellings projected from manifest + catalog data
-// ---------------------------------------------------------------------------
 
 struct ScoredHit {
     score: u32,
@@ -1023,8 +1015,6 @@ impl<'a> Index<'a> {
         }
     }
 
-    // -- within scopes -----------------------------------------------------
-
     /// The child candidates of one `within` scope, or `None` when `within`
     /// names no scope the index knows.
     fn children(&self, within: &LookupWithin) -> Option<Vec<Candidate>> {
@@ -1173,8 +1163,6 @@ impl<'a> Index<'a> {
                 .collect(),
         )
     }
-
-    // -- functions --------------------------------------------------------
 
     fn index_functions(&mut self) {
         let locale = crate::enums::en_us();
@@ -1358,8 +1346,6 @@ impl<'a> Index<'a> {
         }
     }
 
-    // -- enums ------------------------------------------------------------
-
     fn index_enums(&mut self) {
         for domain in self.lookup_domains() {
             let members = crate::enums::domain_members(&domain, self.catalog);
@@ -1463,8 +1449,6 @@ impl<'a> Index<'a> {
         }
         domains
     }
-
-    // -- settings ---------------------------------------------------------
 
     fn index_settings(&mut self) {
         for definition in settings::definitions() {

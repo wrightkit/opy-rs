@@ -201,10 +201,6 @@ pub fn compile_with_overlay_outcome(
                 .as_ref()
                 .map(tooling::SourceLocation::to_span),
         });
-    // The directive was parsed, validated, and recorded by preprocessing; the
-    // source implementation never executes the hook (real hook execution receives the
-    // final Workshop text and is lowering-dependent, issue #8 — see
-    // `PostCompileHookRecord`).
     let post_compile_hook = outcome.post_compile_hook.map(|hook| PostCompileHookRecord {
         script: hook.path,
         source: hook.source,

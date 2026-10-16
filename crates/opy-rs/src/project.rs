@@ -18,8 +18,6 @@ impl FilesystemProject {
             if is_absent(error.kind()) {
                 FilesystemProjectError::entry_not_found(path.to_path_buf(), error)
             } else {
-                // Permission, loop, or name-resolution failures are not an
-                // absent entry (#484).
                 FilesystemProjectError::entry_unreadable(path.to_path_buf(), error)
             }
         })?;
@@ -76,10 +74,6 @@ fn default_entry(directory: &Path) -> Result<PathBuf, FilesystemProjectError> {
     for candidate in candidates {
         match fs::metadata(&candidate) {
             Ok(metadata) if metadata.is_file() => return Ok(candidate),
-            // Present but not a regular file, or absent — keep looking; only
-            // a real I/O failure aborts classification (#484). A regular file
-            // named `src` makes `src/main.opy` absent, so the probe reports
-            // no default entry instead of an unreadable one (#497).
             Ok(_) => {}
             Err(error) if is_absent(error.kind()) => {}
             Err(error) => {

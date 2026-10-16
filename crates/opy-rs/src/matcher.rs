@@ -157,10 +157,6 @@ fn alias_target<'a>(
     }
 }
 
-// ---------------------------------------------------------------------------
-// Ranking — fold both sides to lowercase alphanumerics, then score
-// ---------------------------------------------------------------------------
-
 /// Fold a spelling or phrase to a comparable form: lowercase letters and
 /// digits only; `_`, `.`, `:`, `%`, and whitespace are dropped. The
 /// lookup (`crate::lookup`) folds through this same function.
@@ -323,10 +319,6 @@ pub(crate) fn did_you_mean(message: String, ranked: &[String]) -> String {
         format!("{message} (did you mean '{first}', {others}?)")
     }
 }
-
-// ---------------------------------------------------------------------------
-// Settings candidates — the keys or members valid at the rejected path
-// ---------------------------------------------------------------------------
 
 /// The candidates a settings-emission rejection carries: the leaf keys or
 /// enum members valid at the rejected member's path, resolved by walking
