@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 use serde_json::{Value, json};
@@ -3363,5 +3363,752 @@ fn resolve_ids_bounds_the_total_ids() {
         }),
     ));
     assert_eq!(split_over_bound["error"]["code"], -32602);
+    session.shutdown();
+}
+
+// ---------------------------------------------------------------------------
+// Provider/core outcome parity (opy-rs#559)
+//
+// `lpp/check` and `lpp/compile` are owner-side projections of the standalone
+// core outcomes: on the same inputs they must agree with
+// `opy_rs::tooling::check` / `compile_with_overlay_outcome` (plus
+// `Compiler::compile_outcome_report_*` for the artifact) rather than
+// re-deriving the effective entry, the analysis, or the source identity —
+// the divergences fixed in #257, #456, and #480. These tests replay the core
+// pipeline over the inputs each request carries and compare the wire result
+// on document identity and processing order plus every diagnostic's code,
+// severity, message, and effective source location. Only the LPP
+// presentation differs: `file://` URIs and 0-based UTF-16 positions.
+// ---------------------------------------------------------------------------
+
+/// A diagnostic view shared by `tooling::Diagnostic` (check) and
+/// `CompileDiagnostic` (compile) so one expectation serves both.
+trait CoreDiagnostic {
+    fn severity(&self) -> &'static str;
+    fn code(&self) -> &str;
+    fn message(&self) -> &str;
+    fn span(&self) -> Option<&opy_rs::tooling::SourceLocation>;
+}
+
+impl CoreDiagnostic for opy_rs::tooling::Diagnostic {
+    fn severity(&self) -> &'static str {
+        self.severity.as_str()
+    }
+    fn code(&self) -> &str {
+        &self.code
+    }
+    fn message(&self) -> &str {
+        &self.message
+    }
+    fn span(&self) -> Option<&opy_rs::tooling::SourceLocation> {
+        self.span.as_ref()
+    }
+}
+
+impl CoreDiagnostic for opy_rs::CompileDiagnostic {
+    fn severity(&self) -> &'static str {
+        self.severity.as_str()
+    }
+    fn code(&self) -> &str {
+        &self.code
+    }
+    fn message(&self) -> &str {
+        &self.message
+    }
+    fn span(&self) -> Option<&opy_rs::tooling::SourceLocation> {
+        self.span.as_ref()
+    }
+}
+
+/// The absolute path a core file-registry display path resolves to under
+/// `display_root` (the provider's `resolved_path`).
+fn core_path(display_root: &Path, display_path: &str) -> PathBuf {
+    let path = Path::new(display_path);
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        display_root.join(path)
+    }
+}
+
+/// The expected `file://` URI of a core display path.
+fn core_uri(display_root: &Path, display_path: &str) -> String {
+    file_uri(
+        core_path(display_root, display_path)
+            .to_str()
+            .expect("utf8 path"),
+    )
+}
+
+/// The UTF-16 `character` an LPP position reports for a 1-based frontend
+/// column within `line` (`\t` spans four frontend columns). This is the
+/// conformance projection the wire format fixes, recomputed here so the
+/// tests verify the provider's presentation rather than trusting it.
+fn utf16_character(line: &str, column: u32) -> u32 {
+    let mut units = 0u32;
+    let mut current = 1u32;
+    for ch in line.chars() {
+        if current >= column {
+            break;
+        }
+        units += ch.len_utf16() as u32;
+        current += if ch == '\t' { 4 } else { 1 };
+    }
+    units
+}
+
+/// The expected LPP range of a resolved core location, projected from the
+/// real source text under `display_root`; a span-less diagnostic reports
+/// the document origin like the provider's `unwrap_or(0)` fallback.
+fn expected_range(
+    display_root: &Path,
+    location: Option<&opy_rs::tooling::SourceLocation>,
+) -> Value {
+    let Some(location) = location else {
+        return json!({
+            "start": { "line": 0, "character": 0 },
+            "end": { "line": 0, "character": 0 },
+        });
+    };
+    let text = std::fs::read_to_string(core_path(display_root, &location.path))
+        .expect("registry file reads");
+    let position = |line: u32, col: u32| {
+        let character = text
+            .lines()
+            .nth(line.saturating_sub(1) as usize)
+            .map(|line| utf16_character(line, col))
+            .unwrap_or_else(|| col.saturating_sub(1));
+        json!({ "line": line.saturating_sub(1), "character": character })
+    };
+    json!({
+        "start": position(location.start.line, location.start.col),
+        "end": position(location.end.line, location.end.col),
+    })
+}
+
+/// The expected `documents` payload for an entry-mode check or compile: one
+/// document per file-registry entry in registry order (the observable
+/// processing order), each carrying the entry version, and every core
+/// diagnostic attributed to the document its span names — a diagnostic
+/// whose span resolves to no registry path lands on the first document.
+fn expected_entry_documents<D: CoreDiagnostic>(
+    entry_version: i64,
+    files: &[opy_rs::preprocess::FileRecord],
+    display_root: &Path,
+    diagnostics: &[D],
+) -> Vec<Value> {
+    let mut paths: Vec<String> = files.iter().map(|file| file.path.clone()).collect();
+    assert!(
+        !paths.is_empty(),
+        "the core file registry always keeps file id 0"
+    );
+    paths.dedup();
+    let mut entries: Vec<Vec<Value>> = paths.iter().map(|_| Vec::new()).collect();
+    for diagnostic in diagnostics {
+        let index = diagnostic
+            .span()
+            .and_then(|span| paths.iter().position(|path| path == &span.path))
+            .unwrap_or(0);
+        entries[index].push(json!({
+            "range": expected_range(display_root, diagnostic.span()),
+            "severity": diagnostic.severity(),
+            "code": diagnostic.code(),
+            "message": diagnostic.message(),
+            "source": "opy",
+        }));
+    }
+    paths
+        .iter()
+        .zip(entries)
+        .map(|(path, diagnostics)| {
+            json!({
+                "uri": core_uri(display_root, path),
+                "version": entry_version,
+                "diagnostics": diagnostics,
+            })
+        })
+        .collect()
+}
+
+/// The `sourceIdentity` the provider must report: the SHA-256 of the
+/// *effective* primary source — the `#!mainFile` target's text when the
+/// loaded entry redirects, the entry text itself otherwise.
+fn expected_source_identity(project: &opy_rs::FilesystemProject) -> String {
+    let effective = opy_rs::preprocess::main_file_directive(project.source())
+        .and_then(|target| {
+            let path = project.root().join(target).canonicalize().ok()?;
+            std::fs::read_to_string(path).ok()
+        })
+        .unwrap_or_else(|| project.source().to_owned());
+    use sha2::Digest as _;
+    let digest = sha2::Sha256::digest(effective.as_bytes());
+    let mut hex = String::new();
+    for byte in digest {
+        use std::fmt::Write as _;
+        let _ = write!(hex, "{byte:02x}");
+    }
+    hex
+}
+
+/// `lpp/check` on a filesystem entry must project the standalone core check:
+/// the document list follows the file registry the check produced (identity
+/// and processing order, including the `#!mainFile` effective entry), and
+/// every diagnostic keeps its code, severity, message, and effective
+/// location. A provider that rechecked the loaded file directly, flattened
+/// severities, or resolved display paths against the wrong root diverges
+/// from the computed expectation here.
+#[test]
+fn entry_check_projects_the_core_check_outcome() {
+    let mut session = Session::spawn();
+    session.initialize();
+    let mut id = 1;
+    for (name, entry) in [
+        ("clean single file", BASIC_RULE),
+        ("failure before a model exists", DIAGNOSTICS),
+        ("tab and supplementary-plane columns", DIAGNOSTIC_POSITIONS),
+        ("warning severity survives", DUPLICATE_INCLUDE),
+        ("multi-file include closure", MULTI_FILE_MAIN),
+        ("directory-include processing order", CLEAN_MULTI_FILE_MAIN),
+        ("#!mainFile redirect", MAIN_FILE_ENTRY),
+        (
+            "#!mainFile redirect into a subdirectory",
+            MAIN_FILE_SUBDIR_ENTRY,
+        ),
+        (
+            "#!mainFile redirect with a failing effective entry",
+            MAIN_FILE_ERROR_ENTRY,
+        ),
+    ] {
+        id += 1;
+        // Replay the exact load and check the provider performs.
+        let path = Path::new(entry).canonicalize().expect("fixture entry");
+        let project = opy_rs::FilesystemProject::load(&path).expect("project loads");
+        let outcome = opy_rs::tooling::check(
+            project.source(),
+            &project.main_path().to_string_lossy(),
+            project.root(),
+        );
+
+        let checked = session.request(json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": "lpp/check",
+            "params": {
+                "entry": {
+                    "uri": file_uri(entry),
+                    "languageId": "opy",
+                    "version": 7,
+                }
+            },
+        }));
+        assert_eq!(
+            checked["result"]["documents"],
+            json!(expected_entry_documents(
+                7,
+                &outcome.files,
+                &outcome.display_root,
+                &outcome.diagnostics,
+            )),
+            "{name}: lpp/check must match the core check outcome"
+        );
+    }
+    session.shutdown();
+}
+
+/// Failures before a model exists stay faithful in both request shapes: an
+/// include member's errors land on that member's document, a required
+/// source that cannot be loaded maps to the project load failure instead of
+/// a documents payload (the registry reached before the failure is not a
+/// completed analysis), and the same failure on the documents surface keeps
+/// the core diagnostic on the supplied document.
+#[test]
+fn entry_check_projects_include_failures_and_load_errors() {
+    let dir = std::env::temp_dir().join(format!("opy-lpp-parity-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("scratch dir");
+
+    let mut session = Session::spawn();
+    session.initialize();
+
+    // A broken include member reports on its own document, not the entry's.
+    let broken = dir.join("broken-include");
+    std::fs::create_dir_all(&broken).expect("fixture dir");
+    std::fs::write(
+        broken.join("main.opy"),
+        "#!include \"lib.opy\"\nrule \"main\":\n    @Event global\n    pass\n",
+    )
+    .expect("main fixture");
+    std::fs::write(broken.join("lib.opy"), "rule \"broken\"\n    pass\n").expect("include fixture");
+    let main = broken.join("main.opy");
+    let project = opy_rs::FilesystemProject::load(&main).expect("project loads");
+    let outcome = opy_rs::tooling::check(
+        project.source(),
+        &project.main_path().to_string_lossy(),
+        project.root(),
+    );
+    let checked = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "lpp/check",
+        "params": {
+            "entry": {
+                "uri": file_uri(main.to_str().expect("utf8")),
+                "languageId": "opy",
+                "version": 7,
+            }
+        },
+    }));
+    assert_eq!(
+        checked["result"]["documents"],
+        json!(expected_entry_documents(
+            7,
+            &outcome.files,
+            &outcome.display_root,
+            &outcome.diagnostics,
+        )),
+        "an include member's diagnostics must land on the member document"
+    );
+
+    // A missing include is a project load failure, not a documents payload.
+    let missing = dir.join("missing-include");
+    std::fs::create_dir_all(&missing).expect("fixture dir");
+    std::fs::write(
+        missing.join("main.opy"),
+        "#!include \"gone.opy\"\nrule \"main\":\n    @Event global\n    pass\n",
+    )
+    .expect("main fixture");
+    let main = missing.join("main.opy");
+    let project = opy_rs::FilesystemProject::load(&main).expect("project loads");
+    let outcome = opy_rs::tooling::check(
+        project.source(),
+        &project.main_path().to_string_lossy(),
+        project.root(),
+    );
+    // Premise: the core check reports a required-source failure, so the
+    // provider must surface the load failure rather than project documents.
+    assert!(
+        outcome
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.code == "include-not-found"),
+        "fixture premise: the core check reports include-not-found"
+    );
+    let refused = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "lpp/check",
+        "params": {
+            "entry": {
+                "uri": file_uri(main.to_str().expect("utf8")),
+                "languageId": "opy",
+                "version": 7,
+            }
+        },
+    }));
+    assert_eq!(refused["error"]["data"]["lpp"]["kind"], "projectLoadFailed");
+    assert_eq!(
+        refused["error"]["data"]["lpp"]["details"]["reason"],
+        "requiredSourceUnavailable"
+    );
+
+    // On the documents surface the same failure keeps its core diagnostic on
+    // the supplied document — failure context the provider must not drop.
+    let path = main.canonicalize().expect("main path");
+    let uri = format!("file://{}", path.to_string_lossy());
+    let text = std::fs::read_to_string(&main).expect("main text");
+    let overlays = BTreeMap::from([(path.to_string_lossy().into_owned(), text.clone())]);
+    let outcome = opy_rs::tooling::check_with_overlay(
+        &text,
+        &path.to_string_lossy(),
+        missing.as_path(),
+        &overlays,
+    );
+    let checked = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 4,
+        "method": "lpp/check",
+        "params": {
+            "documents": {
+                &uri: {
+                    "uri": &uri,
+                    "languageId": "opy",
+                    "version": 4,
+                    "text": &text,
+                },
+            },
+        },
+    }));
+    let expected: Vec<Value> = outcome
+        .diagnostics
+        .iter()
+        .map(|diagnostic| {
+            json!({
+                "range": expected_range(&outcome.display_root, diagnostic.span.as_ref()),
+                "severity": diagnostic.severity.as_str(),
+                "code": diagnostic.code,
+                "message": diagnostic.message,
+                "source": "opy",
+            })
+        })
+        .collect();
+    assert_eq!(
+        checked["result"]["documents"],
+        json!([{ "uri": uri, "version": 4, "diagnostics": expected }]),
+        "documents-mode check keeps the core failure diagnostic"
+    );
+
+    std::fs::remove_dir_all(&dir).expect("scratch cleanup");
+    session.shutdown();
+}
+
+/// A documents-set `lpp/check` must agree with the core outcomes the set
+/// resolves to: one project analysis per effective entry (`#!mainFile`
+/// deduplicates members), coverage credited only on a *completed* check —
+/// a file registry captured before a failure is not analysis — and include
+/// members ordered after their includers, never checked out of context.
+#[test]
+fn document_set_check_projects_the_core_check_outcome() {
+    let root = Path::new(RENAME_MAIN_FILE_ROOT);
+    let members = ["main.opy", "caller.opy", "stray.opy", "env/member.opy"];
+    let paths: BTreeMap<&str, PathBuf> = members
+        .iter()
+        .map(|member| (*member, root.join(member).canonicalize().expect("fixture")))
+        .collect();
+    let uris: BTreeMap<&str, String> = paths
+        .iter()
+        .map(|(member, path)| (*member, file_uri(path.to_str().expect("utf8"))))
+        .collect();
+    let texts = |mutate: &dyn Fn(&str, &mut String)| -> BTreeMap<&str, String> {
+        members
+            .iter()
+            .map(|member| {
+                let mut text = std::fs::read_to_string(&paths[member]).expect("fixture text");
+                mutate(member, &mut text);
+                (*member, text)
+            })
+            .collect()
+    };
+    // The same overlay map `document_overlays` builds from the request:
+    // each document's file path to its supplied text.
+    let overlay_map = |texts: &BTreeMap<&str, String>| -> BTreeMap<String, String> {
+        texts
+            .iter()
+            .map(|(member, text)| (paths[member].to_string_lossy().into_owned(), text.clone()))
+            .collect()
+    };
+    let request_documents = |texts: &BTreeMap<&str, String>| -> Value {
+        texts
+            .iter()
+            .map(|(member, text)| {
+                let uri = uris[*member].clone();
+                (
+                    uri.clone(),
+                    json!({ "uri": uri, "languageId": "opy", "version": 3, "text": text }),
+                )
+            })
+            .collect::<serde_json::Map<String, Value>>()
+            .into()
+    };
+    // The supplied document a core span names, like `supplied_uri_for_path`.
+    let supplied_uri = |display_root: &Path, span_path: &str| -> Option<String> {
+        let resolved = core_path(display_root, span_path);
+        let resolved = resolved.canonicalize().unwrap_or(resolved);
+        paths
+            .iter()
+            .find_map(|(member, path)| (path == &resolved).then(|| uris[*member].clone()))
+    };
+    // The per-URI diagnostics when `outcome` is the analysis that ran: every
+    // diagnostic lands on the supplied document its span names, or on the
+    // checked entry's document when it names no supplied file.
+    let attribute =
+        |outcome: &opy_rs::tooling::CheckOutcome, fallback: &str| -> BTreeMap<String, Vec<Value>> {
+            let mut by_uri: BTreeMap<String, Vec<Value>> = BTreeMap::new();
+            for diagnostic in &outcome.diagnostics {
+                let uri = diagnostic
+                    .span
+                    .as_ref()
+                    .and_then(|span| supplied_uri(&outcome.display_root, &span.path))
+                    .unwrap_or_else(|| fallback.to_owned());
+                by_uri.entry(uri).or_default().push(json!({
+                    "range": expected_range(&outcome.display_root, diagnostic.span.as_ref()),
+                    "severity": diagnostic.severity.as_str(),
+                    "code": diagnostic.code,
+                    "message": diagnostic.message,
+                    "source": "opy",
+                }));
+            }
+            by_uri
+        };
+    // The wire document list is the supplied documents in URI order.
+    let expected_documents =
+        |texts: &BTreeMap<&str, String>, by_uri: &BTreeMap<String, Vec<Value>>| -> Vec<Value> {
+            let mut uris_sorted: Vec<&String> = texts.keys().map(|member| &uris[*member]).collect();
+            uris_sorted.sort();
+            uris_sorted
+                .iter()
+                .map(|uri| {
+                    json!({
+                        "uri": uri,
+                        "version": 3,
+                        "diagnostics": by_uri.get(*uri).cloned().unwrap_or_default(),
+                    })
+                })
+                .collect()
+        };
+    let check = |session: &mut Session, id: u64, texts: &BTreeMap<&str, String>| {
+        session.request(json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": "lpp/check",
+            "params": { "documents": request_documents(texts) },
+        }))["result"]["documents"]
+            .as_array()
+            .expect("documents")
+            .clone()
+    };
+    let check_on = |texts: &BTreeMap<&str, String>, member: &str| {
+        opy_rs::tooling::check_with_overlay(
+            &texts[member],
+            paths[member].to_str().expect("utf8"),
+            paths[member].parent().expect("document directory"),
+            &overlay_map(texts),
+        )
+    };
+
+    let mut session = Session::spawn();
+    session.initialize();
+
+    // Clean project: stray and member redirect to main, so one analysis
+    // covers main, member, and caller. Premise asserts keep the scenario
+    // load-bearing: a standalone caller reports worker() as unknown, so a
+    // provider that parsed members out of context diverges observably.
+    let clean = texts(&|_, _| {});
+    let group = check_on(&clean, "main.opy");
+    assert!(group.is_clean(), "clean fixture premise");
+    assert!(
+        !check_on(&clean, "caller.opy").is_clean(),
+        "caller cannot resolve worker() outside the project"
+    );
+    assert_eq!(
+        check(&mut session, 2, &clean),
+        expected_documents(&clean, &attribute(&group, &uris["main.opy"])),
+        "covered members must report the shared analysis, not a standalone parse"
+    );
+
+    // Broken member: the group registers caller before failing inside
+    // member, so caller was never analyzed — its deferred standalone check
+    // still runs and reports, and stray's unparsed stub stays clean.
+    let broken = texts(&|member, text| match member {
+        "main.opy" => {
+            *text = text.replacen(
+                "#!include \"env/member.opy\"\n#!include \"caller.opy\"",
+                "#!include \"caller.opy\"\n#!include \"env/member.opy\"",
+                1,
+            )
+        }
+        "caller.opy" => text.push_str("\nrule \"bad caller\":\n    definitelyMissingAction()\n"),
+        "env/member.opy" => text.push_str("\nrule \"broken\n"),
+        _ => {}
+    });
+    let group = check_on(&broken, "main.opy");
+    assert!(!group.is_clean(), "broken member fails the group check");
+    assert!(
+        group.files.iter().any(|file| {
+            let resolved = core_path(&group.display_root, &file.path);
+            resolved.canonicalize().unwrap_or(resolved) == paths["caller.opy"]
+        }),
+        "caller is registered before the failure — the registry is not coverage"
+    );
+    let mut by_uri = attribute(&group, &uris["main.opy"]);
+    for (uri, diagnostics) in attribute(&check_on(&broken, "caller.opy"), &uris["caller.opy"]) {
+        by_uri.entry(uri).or_default().extend(diagnostics);
+    }
+    assert_eq!(
+        check(&mut session, 3, &broken),
+        expected_documents(&broken, &by_uri),
+        "a failed check's file registry must not silence member diagnostics"
+    );
+    session.shutdown();
+}
+
+/// `lpp/compile` must follow the same effective entry and project load as
+/// the core compile: an artifact appears exactly when the core compile
+/// succeeds (and is the core workshop text), diagnostics match the core
+/// compile report, and `sourceIdentity` hashes the *effective* primary
+/// source — never the stub the loaded entry happened to carry.
+#[test]
+fn entry_compile_projects_the_core_compile_outcome() {
+    let compiler = opy_rs::Compiler::new().expect("compiler");
+    let mut session = Session::spawn();
+    session.initialize();
+    let mut id = 1;
+    for (name, entry) in [
+        ("clean single file", BASIC_RULE),
+        ("#!mainFile redirect", MAIN_FILE_ENTRY),
+        (
+            "#!mainFile redirect into a subdirectory",
+            MAIN_FILE_SUBDIR_ENTRY,
+        ),
+        (
+            "frontend failure before a model exists",
+            MAIN_FILE_ERROR_ENTRY,
+        ),
+        ("integration failure on a resolved model", UNSUPPORTED),
+    ] {
+        id += 1;
+        // Replay the load, frontend outcome, and compile report the provider
+        // is supposed to project.
+        let path = Path::new(entry).canonicalize().expect("fixture entry");
+        let project = opy_rs::FilesystemProject::load(&path).expect("project loads");
+        let outcome = opy_rs::compile_with_overlay_outcome(
+            project.source(),
+            &project.main_path().to_string_lossy(),
+            project.root(),
+            &BTreeMap::new(),
+        );
+        let files = outcome.files.clone();
+        let display_root = outcome.display_root.clone();
+        let report =
+            compiler.compile_outcome_report_with_language(outcome, project.root(), "en-US");
+
+        let compiled = session.request(json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": "lpp/compile",
+            "params": {
+                "entry": {
+                    "uri": file_uri(entry),
+                    "languageId": "opy",
+                    "version": 7,
+                }
+            },
+        }));
+        assert_eq!(
+            compiled["result"]["diagnostics"],
+            json!(expected_entry_documents(
+                7,
+                &files,
+                &display_root,
+                &report.compile.diagnostics,
+            )),
+            "{name}: compile diagnostics must match the core compile report"
+        );
+        match report.compile.status {
+            opy_rs::CompileStatus::Success => assert_eq!(
+                compiled["result"]["artifact"],
+                json!({
+                    "format": TEXT_V1,
+                    "content": &report.compile.workshop_exact,
+                }),
+                "{name}: a successful core compile projects its workshop text"
+            ),
+            _ => assert_eq!(
+                compiled["result"]["artifact"],
+                Value::Null,
+                "{name}: a failed core compile must not produce an artifact"
+            ),
+        }
+        assert_eq!(
+            compiled["result"]["sourceIdentity"],
+            json!(expected_source_identity(&project)),
+            "{name}: sourceIdentity must hash the effective primary source"
+        );
+    }
+    session.shutdown();
+}
+
+/// A documents-mode `lpp/compile` agrees with the core compile run on the
+/// supplied text: no artifact when the core compile fails, and a lowering
+/// failure reports the integration diagnostic on the document instead of an
+/// artifact.
+#[test]
+fn document_compile_projects_the_core_compile_outcome() {
+    let compiler = opy_rs::Compiler::new().expect("compiler");
+    let mut session = Session::spawn();
+    session.initialize();
+
+    let mut id = 1;
+    for (name, path) in [
+        ("clean document", BASIC_RULE),
+        ("frontend failure", DIAGNOSTICS),
+        ("integration failure", UNSUPPORTED),
+    ] {
+        id += 1;
+        let uri = file_uri(path);
+        let text = std::fs::read_to_string(path).expect("fixture source");
+        let document_path = Path::new(path).canonicalize().expect("fixture path");
+        let root = document_path.parent().expect("document directory");
+        // Replay the provider's single-document overlay and compile outcome.
+        let overlays =
+            BTreeMap::from([(document_path.to_string_lossy().into_owned(), text.clone())]);
+        let outcome = opy_rs::compile_with_overlay_outcome(
+            &text,
+            &document_path.to_string_lossy(),
+            root,
+            &overlays,
+        );
+        // Expected diagnostics: the outcome's own diagnostics (all landing
+        // on the one supplied document), then the integration diagnostic the
+        // provider appends at the document origin when lowering fails.
+        let mut diagnostics: Vec<Value> = outcome
+            .diagnostics
+            .iter()
+            .map(|diagnostic| {
+                json!({
+                    "range": expected_range(&outcome.display_root, diagnostic.span.as_ref()),
+                    "severity": diagnostic.severity.as_str(),
+                    "code": diagnostic.code,
+                    "message": diagnostic.message,
+                    "source": "opy",
+                })
+            })
+            .collect();
+        let artifact = match outcome.hir.as_ref() {
+            Some(hir) => match compiler.compile_hir(hir) {
+                Ok(artifact) => json!({
+                    "format": TEXT_V1,
+                    "content": artifact.final_output,
+                }),
+                Err(error) => {
+                    diagnostics.push(json!({
+                        "range": {
+                            "start": { "line": 0, "character": 0 },
+                            "end": { "line": 0, "character": 0 },
+                        },
+                        "severity": "error",
+                        "code": error.diagnostic.code,
+                        "message": error.diagnostic.message,
+                        "source": "opy",
+                    }));
+                    Value::Null
+                }
+            },
+            None => Value::Null,
+        };
+        let compiled = session.request(json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": "lpp/compile",
+            "params": {
+                "documents": {
+                    &uri: {
+                        "uri": &uri,
+                        "languageId": "opy",
+                        "version": 3,
+                        "text": text,
+                    },
+                },
+            },
+        }));
+        assert_eq!(
+            compiled["result"]["diagnostics"],
+            json!([{ "uri": uri, "version": 3, "diagnostics": diagnostics }]),
+            "{name}: compile diagnostics must match the core outcome"
+        );
+        assert_eq!(
+            compiled["result"]["artifact"], artifact,
+            "{name}: artifact parity with the core compile"
+        );
+    }
     session.shutdown();
 }
