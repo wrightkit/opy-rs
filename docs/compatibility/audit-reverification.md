@@ -1,6 +1,6 @@
 # opy-rs adversarial audit — independent re-verification checklist
 
-For another agent to re-verify every checked finding. Oracle: `overpy@9.7.10` at `tools/overpy/oracle/node_modules/overpy/cli.js` (commit `1e2688954302a402d076944b46db07efb14d7b61`). Native CLI: `target/debug/opy-cli` — **always `cargo build -p opy-cli` after pulling before comparing** (stale binaries caused false diffs during the audit).
+For another agent to re-verify every checked finding. Oracle: `overpy@9.7.17` at `tools/overpy/oracle/node_modules/overpy/cli.js` (content commit `5a7d0e294b8cad73b9701987bb584d0551d7fa4d`); the original audit ran against the `9.7.10` pin (commit `1e2688954302a402d076944b46db07efb14d7b61`). Native CLI: `target/debug/opy-cli` — **always `cargo build -p opy-cli` after pulling before comparing** (stale binaries caused false diffs during the audit).
 
 Conventions: `$ORACLE` = `node tools/overpy/oracle/node_modules/overpy/cli.js compile -i FILE.opy --root .` · `$NATIVE` = `target/debug/opy-cli compile FILE.opy`. Put scratch `.opy` files under `target/audit-scratch/` (git-ignored).
 
@@ -59,7 +59,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace --all-targets
 cargo run -p workshop-rs --bin workshop-catalog-gen -- check   # if workspace covers it
 git diff --check
-python3 tools/overpy/run_native.py   # 127 fixtures: 116 match + 11 known-gap expected
+python3 tools/overpy/run_native.py   # 144 fixtures: 129 match + 15 known-gap expected
 ```
 
 ## Watchpoints for the re-checking agent

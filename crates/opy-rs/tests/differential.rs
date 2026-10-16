@@ -4,7 +4,7 @@
 //! (`crates/opy-rs/tests/fixtures/corpus/**/fixture.json`) through the native frontend and
 //! compares the outcome against the recorded reference result
 //! (`oracle.json`, produced by `tools/overpy/run_oracle.py` against the
-//! pinned OverPy 9.7.10 oracle).
+//! pinned OverPy 9.7.17 oracle).
 //!
 //! # What is compared
 //!
