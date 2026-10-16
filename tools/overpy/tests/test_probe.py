@@ -95,6 +95,29 @@ class ProbeClassificationTests(unittest.TestCase):
         self.assertEqual(unexplained, [])
         self.assertEqual(generated, [])
 
+    def test_a_gap_detail_can_discriminate_on_the_oracle_rejection(self):
+        # `detail` also matches the recorded oracle error, so an acceptance
+        # gap can name the member or diagnostic the reference rejected.
+        gaps = self.GAPS + [
+            {
+                "id": "accepts",
+                "status": "native-accepts",
+                "functions": ["createInWorldText"],
+                "variant": ":base",
+                "detail": "DO_NOT_CLIP",
+            }
+        ]
+        item = finding("native-accepts", "default:createInWorldText:base")
+        item["referenceError"] = "OpyError: Unknown member 'DO_NOT_CLIP' of 'Clipping'"
+        explained, unexplained, _, _ = probe_builtins.classify([item], gaps)
+        self.assertEqual(len(explained["accepts"]), 1)
+        self.assertEqual(unexplained, [])
+
+        item["referenceError"] = "OpyError: Unknown member 'CLIP' of 'Clipping'"
+        _, unexplained, _, stale = probe_builtins.classify([item], gaps)
+        self.assertEqual(len(unexplained), 1)
+        self.assertEqual(stale, ["omission", "folds", "accepts"])
+
     def test_a_gap_must_discriminate_beyond_status_and_functions(self):
         # A gap with no variant or detail would explain any finding on its
         # functions — including classes it was never approved for.

@@ -87,11 +87,15 @@ def classify(findings: list[dict], gaps: list[dict]):
     for finding in findings:
         for gap in gaps:
             functions = gap["functions"]
+            detail = gap.get("detail", "")
             if (
                 finding["status"] == gap["status"]
                 and (functions == "*" or function_of(finding["id"]) in functions)
                 and gap.get("variant", "") in finding["id"]
-                and gap.get("detail", "") in finding["detail"]
+                and (
+                    detail in finding["detail"]
+                    or detail in finding.get("referenceError", "")
+                )
             ):
                 explained[gap["id"]].append(finding)
                 break
