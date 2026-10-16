@@ -9,8 +9,13 @@ programs structurally.
 
 A difference must belong to a gap recorded in `probe-gaps.json`, and a
 recorded gap must still match something, so an unexplained or a stale
-difference fails. The oracle rejecting a probe while the native compiler
-accepts it is diagnostics parity, not structure, and is only counted.
+difference fails. An `oracle rejects / native accepts` outcome on a canonical
+probe — a `base` call, a declared setting form, a `:name` or `:spelling`
+resolution — claims acceptance parity, so it fails unless a recorded gap
+explains it. On generated candidate inputs (literal substitutions `arg*=`,
+omissions `omit-*`, and the `in-boolean`/`in-replacement` wrappers) the same
+outcome is invalid probe input, not a parity claim: it is reported
+separately as `probe-input` and does not fail the run.
 
 Every accepted spelling — each manifest function id and alias source — is
 also probed against the oracle's name resolution (a `:name` variant, and the
@@ -26,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -46,25 +52,62 @@ def function_of(probe_id: str) -> str:
     return probe_id.split(":")[1]
 
 
+# Variants that generate a candidate input rather than a canonical call form:
+# literal substitutions (`arg2=null`), defaulted-argument omissions
+# (`omit-from-*`, `omit-arg*`), and slots that wrap what they cannot hold
+# (`in-boolean`, `in-replacement`). A reference rejection of one of these
+# says the generated candidate was invalid input, not that acceptance
+# diverged; everything else (`base`, `sort-order`, `bool`, `int`, `float`,
+# `name`, `spelling`, ...) is a declared form whose rejection claims parity.
+GENERATED_CANDIDATE = re.compile(r"^(arg\d+=|omit-|in-)")
+
+
+def is_generated_candidate(probe_id: str) -> bool:
+    return bool(GENERATED_CANDIDATE.match(probe_id.rsplit(":", 1)[-1]))
+
+
+def load_gaps(path: Path = GAPS) -> list[dict]:
+    gaps = json.loads(path.read_text(encoding="utf-8"))["gaps"]
+    for gap in gaps:
+        # A gap must discriminate by variant or detail; a status plus a
+        # function list alone would swallow a whole divergence class.
+        if not gap.get("variant") and not gap.get("detail"):
+            raise RuntimeError(
+                f"probe gap {gap.get('id')!r} needs a variant or a detail to match"
+            )
+    return gaps
+
+
 def classify(findings: list[dict], gaps: list[dict]):
-    """Split findings into explained by gap id, unexplained, and stale gaps."""
+    """Split findings into explained by gap id, unexplained, generated probe
+    input, and stale gaps."""
     explained: dict[str, list[dict]] = {gap["id"]: [] for gap in gaps}
     unexplained = []
+    generated = []
     for finding in findings:
         for gap in gaps:
             functions = gap["functions"]
+            detail = gap.get("detail", "")
             if (
                 finding["status"] == gap["status"]
                 and (functions == "*" or function_of(finding["id"]) in functions)
                 and gap.get("variant", "") in finding["id"]
-                and gap.get("detail", "") in finding["detail"]
+                and (
+                    detail in finding["detail"]
+                    or detail in finding.get("referenceError", "")
+                )
             ):
                 explained[gap["id"]].append(finding)
                 break
         else:
-            unexplained.append(finding)
+            if finding["status"] == "native-accepts" and is_generated_candidate(
+                finding["id"]
+            ):
+                generated.append(finding)
+            else:
+                unexplained.append(finding)
     stale = [gap_id for gap_id, matched in explained.items() if not matched]
-    return explained, unexplained, stale
+    return explained, unexplained, generated, stale
 
 
 def compare_batch(binary: Path, selected: list[dict], scratch: Path) -> dict:
@@ -85,7 +128,16 @@ def compare_batch(binary: Path, selected: list[dict], scratch: Path) -> dict:
     if compared.returncode != 0:
         raise RuntimeError(f"native probe comparison failed: {compared.stderr}")
     sys.stderr.write(compared.stderr)
-    return json.loads(compared.stdout)
+    reference_map = json.loads(references.read_text(encoding="utf-8"))
+    report = json.loads(compared.stdout)
+    for finding in report.get("findings", []):
+        reference = reference_map.get(finding["id"])
+        if isinstance(reference, dict) and not reference.get("ok", True):
+            # Keep the oracle's reason on the finding so an unexplained
+            # acceptance divergence reports what the pinned reference
+            # rejected, not just that it rejected.
+            finding["referenceError"] = reference.get("error", "")
+    return report
 
 
 def compare_probes(binary: Path, selected: list[dict], jobs: int) -> dict:
@@ -141,9 +193,8 @@ def main() -> int:
         print(error, file=sys.stderr)
         return 2
 
-    findings = [f for f in report["findings"] if f["status"] != "native-accepts"]
-    gaps = json.loads(GAPS.read_text(encoding="utf-8"))["gaps"]
-    explained, unexplained, stale = classify(findings, gaps)
+    gaps = load_gaps()
+    explained, unexplained, generated, stale = classify(report["findings"], gaps)
     if args.functions:
         stale = []
 
@@ -159,15 +210,31 @@ def main() -> int:
     for gap in gaps:
         print(f"  gap {gap['id']}: {len(explained[gap['id']])} probes ({gap['owner']}, {gap['decision']})")
     print(f"  unexplained: {len(unexplained)}")
-    if not args.functions:
-        print(f"  manifest functions without a valid sample call: {len(unprobed)}")
     for finding in unexplained:
-        print(f"    {finding['status']} {finding['id']} {finding['detail'][:100]}")
+        reference = finding.get("referenceError")
+        rejected = f"  (oracle: {reference[:100]})" if reference else ""
+        print(f"    {finding['status']} {finding['id']} {finding['detail'][:100]}{rejected}")
+    if generated:
+        # Not contract claims: the reference rejected a generated candidate,
+        # so acceptance parity was never in question. They still print with
+        # their oracle reason instead of disappearing into a status count.
+        print(f"  probe-input: {len(generated)} generated candidates the oracle rejected")
+        for name, count in sorted(
+            Counter(function_of(f["id"]) for f in generated).items()
+        ):
+            print(f"    {name}: {count}")
     for gap_id in stale:
         print(f"    stale gap {gap_id}: it no longer matches any probe")
     if args.report:
         args.report.write_text(
-            json.dumps({**report, "unprobedFunctions": unprobed}, indent=2),
+            json.dumps(
+                {
+                    **report,
+                    "probeInput": [f["id"] for f in generated],
+                    "unprobedFunctions": unprobed,
+                },
+                indent=2,
+            ),
             encoding="utf-8",
         )
     return 1 if unexplained or stale else 0

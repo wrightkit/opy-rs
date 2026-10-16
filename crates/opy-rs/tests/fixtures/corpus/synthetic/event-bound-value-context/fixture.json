@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/event-bound-value-context",
+  "category": "synthetic",
+  "features": [
+    "event-bound values",
+    "assignments"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "known-gap",
+      "ruleNames": false
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "known-gap",
+      "comparison": "compiler-contract"
+    }
+  }
+}

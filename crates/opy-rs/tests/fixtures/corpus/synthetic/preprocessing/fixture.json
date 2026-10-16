@@ -19,7 +19,8 @@
       "nativeStatus": "success",
       "relationship": "known-gap",
       "comparison": "semantic-wir",
-      "semanticEquivalent": false
+      "semanticEquivalent": false,
+      "semanticDifferenceSha256": "5928a9959d13df9014d1728eb7dea4cd80a31da002e421bdaad24ce37ca19499"
     }
   }
 }

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/settings-expression-invalid",
+  "category": "diagnostics",
+  "features": [
+    "settings",
+    "negative diagnostic"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "failure",
+      "relationship": "match",
+      "ruleNames": false,
+      "diagnosticCode": "settings-expression"
+    },
+    "compiler": {
+      "nativeStatus": "failure",
+      "relationship": "match",
+      "comparison": "diagnostic-code",
+      "diagnosticCode": "settings-expression",
+      "failureClass": "frontend"
+    }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: g\n}\n\nrule (\"numeric literal in a Team position\") {\n    event {\n        Ongoing - Each Player;\n        Team 2;\n        All;\n    }\n    actions {\n        Set Global Variable(g, All Living Players(2));\n        Set Team Score(2, 5);\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: g\n}\n\nrule (\"numeric literal in a Team position\") {\n    event {\n        Ongoing - Each Player;\n        Team 2;\n        All;\n    }\n    actions {\n        Set Global Variable(g, All Living Players(2));\n        Set Team Score(2, 5);\n    }\n}\n\n",
+    "workshopSha256": "272b3cd076e28b5c72f39f7687f5590709e2ad6cfb7e08f3566ad593cbd0dd38"
+  },
+  "fixture": "synthetic/team-numeric-literal",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "cb081deabd84dea853587a7dc93fd7bbff5a069705abd64d90db65a5e8694f3e"
+      }
+    ],
+    "sha256": "3853e3945e9f32ce00e5b82870299e16f99789de8c3a69974505ba00d9ab6d2c",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "5a7d0e294b8cad73b9701987bb584d0551d7fa4d",
+    "gitHead": "ec763c1d245aa5485ef61af5b2bda4975bce4877",
+    "integrity": "sha512-C5F6btT5yn19BvHuE0bjMuSd/2esebBabmpL4SYLQFuJ4IdouVOKEoMLLuJFAyNc0Phwrolblj5GDkDGYR0ofg==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.17.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.17"
+  },
+  "schemaVersion": 1
+}
