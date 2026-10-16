@@ -75,5 +75,6 @@ narrow the established upstream core-language scope.
 
 ## Maintenance
 
+- [Principles](principles/README.md): repository-local engineering judgment, promoted from recurring review findings.
 - [Lessons](LESSONS.md): short queue of reusable failure classes from merged
   work, pruned once promoted into tests or standards.

@@ -142,3 +142,5 @@ real-project compatibility; rerun the affected full-project workflow.
 ## Documentation
 
 Durable documentation follows the shared documentation policy; `docs/README.md` is this repository's index.
+
+Repository engineering principles are in [`docs/principles/README.md`](docs/principles/README.md); read that index with the workspace principles index before multi-step work.
