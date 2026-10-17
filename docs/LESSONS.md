@@ -19,32 +19,15 @@ then remove it here. The procedure is the `wrightkit-retro` skill in
   correct the same class five times in two weeks.
 - **Prevention home:** existing policy — the workspace `AGENTS.md`
   documentation-synchronization invariant and this repository's support-claims
-  rule; review surface `wrightkit-test-design-review`. Escalation: #556.
+  rule; review surface `wrightkit-test-design-review`. Escalation: #556
+  (closed not-planned).
 - **Incidents:** [#196](https://github.com/wrightkit/opy-rs/pull/196),
   [#222](https://github.com/wrightkit/opy-rs/pull/222),
   [#252](https://github.com/wrightkit/opy-rs/pull/252),
   [#327](https://github.com/wrightkit/opy-rs/pull/327),
-  [#341](https://github.com/wrightkit/opy-rs/pull/341) — observed 2026-09-06,
-  2026-09-08, 2026-09-12, 2026-09-19, 2026-09-20
-
-### An issue closes when its acceptance criteria verify, not when its PRs merge
-
-- **Rule:** A PR may close a tracker or parent issue only after the issue's
-  verifiable outcome is demonstrated end-to-end. A stack that lands partial
-  scope keeps the parent open and uses `Refs` until the remainder merges.
-- **Why:** On 2026-08-31 four convergence PRs closed their tracker issues on
-  merge; a next-morning audit reopened all of them, and #141 was closed
-  prematurely twice. #170 was reopened within two hours of its closing PR, and
-  #192 stayed closed for thirteen days before residual gaps reopened it.
-- **Prevention home:** existing policy — `wrightkit/.github`
-  `docs/issue-readiness.md` verifiable outcomes. Escalation: #557.
-- **Incidents:** [#146](https://github.com/wrightkit/opy-rs/pull/146),
-  [#147](https://github.com/wrightkit/opy-rs/pull/147),
-  [#148](https://github.com/wrightkit/opy-rs/pull/148),
-  [#149](https://github.com/wrightkit/opy-rs/pull/149),
-  [#171](https://github.com/wrightkit/opy-rs/pull/171),
-  [#195](https://github.com/wrightkit/opy-rs/pull/195) — observed 2026-08-31,
-  2026-09-01, 2026-09-03, 2026-09-19
+  [#341](https://github.com/wrightkit/opy-rs/pull/341),
+  [#570](https://github.com/wrightkit/opy-rs/pull/570) — observed 2026-09-06,
+  2026-09-08, 2026-09-12, 2026-09-19, 2026-09-20, 2026-10-16
 
 ### The linked issue's scope is an implementation boundary
 
@@ -60,26 +43,8 @@ then remove it here. The procedure is the `wrightkit-retro` skill in
   a blocked review round and an in-flight correction.
 - **Prevention home:** existing policy — `wrightkit/.github`
   `docs/pr-review.md` linked-issue scope check, applied at authoring time.
-  Escalation: #558.
+  Escalation: #558 (closed not-planned).
 - **Incidents:** [#210](https://github.com/wrightkit/opy-rs/pull/210),
   [#214](https://github.com/wrightkit/opy-rs/pull/214),
   [#467](https://github.com/wrightkit/opy-rs/pull/467) — observed 2026-09-07,
   2026-10-06
-
-### Provider results must project the resolved core outcome, not re-derive it
-
-- **Rule:** Provider-side projection of check results, diagnostics, and
-  document sets consumes the effective entry, resolved source context, and
-  failure state that core tooling produced — not the initially loaded text, a
-  `None`-model fallback, or preprocessing rules reimplemented with different
-  ordering.
-- **Why:** LPP-facing results diverged from standalone `check` on redirected
-  entries, errored models, and multi-file include sets; one instance shipped in
-  a release and returned as a bug report.
-- **Prevention home:** regression tests over redirected-entry, failure-state,
-  and multi-file include inputs asserting parity with standalone `check`.
-  Escalation: #559.
-- **Incidents:** [#257](https://github.com/wrightkit/opy-rs/pull/257),
-  [#456](https://github.com/wrightkit/opy-rs/pull/456),
-  [#480](https://github.com/wrightkit/opy-rs/pull/480) — observed 2026-09-13,
-  2026-10-05, 2026-10-08
