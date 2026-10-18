@@ -13,7 +13,7 @@ impl Compiler {
             let result = runtime
                 .run_hook(&hook.source, &artifact.emitted, &hook.script)
                 .map_err(|error| {
-                    IntegrationError::post_compile_hook(error, hook.span.map(hir_span_from_diag))
+                    IntegrationError::post_compile_hook(error, hook.span.map(Into::into))
                 })?;
             artifact.final_output = result.text;
             artifact.hook_console_output = result.console_output;
