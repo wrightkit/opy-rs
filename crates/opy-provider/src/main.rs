@@ -1030,21 +1030,8 @@ fn source_identity(project: &LoadedProject) -> Result<String, HandlerError> {
 }
 
 fn effective_primary_source_path(project: &LoadedProject) -> Result<Option<PathBuf>, HandlerError> {
-    let Some(first_line) = project.filesystem.source().lines().next() else {
-        return Ok(None);
-    };
-    let first_line = first_line.trim_end_matches('\r');
-    let Some(rest) = first_line.strip_prefix("#!mainFile").map(str::trim) else {
-        return Ok(None);
-    };
-    let main_file = rest
-        .strip_prefix('"')
-        .and_then(|rest| rest.strip_suffix('"'))
-        .or_else(|| {
-            rest.strip_prefix('\'')
-                .and_then(|rest| rest.strip_suffix('\''))
-        });
-    let Some(main_file) = main_file else {
+    let Some(main_file) = opy_rs::preprocess::main_file_directive(project.filesystem.source())
+    else {
         return Ok(None);
     };
     if main_file.is_empty() {
@@ -1053,7 +1040,7 @@ fn effective_primary_source_path(project: &LoadedProject) -> Result<Option<PathB
     let path = project
         .filesystem
         .root()
-        .join(main_file)
+        .join(&main_file)
         .canonicalize()
         .map_err(|error| HandlerError::Lpp {
             kind: "providerFailure",
@@ -1336,8 +1323,7 @@ fn check_documents(documents: &BTreeMap<String, Document>) -> Result<Value, Hand
     // - Standalone fallbacks run after the includers, not in path order: a
     //   member that sorts before its root would otherwise report
     //   out-of-context errors the entry parse never produces.
-    let canonical =
-        |path: &Path| std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let canonical = edits::normalized;
     let supplied: BTreeSet<PathBuf> = documents
         .values()
         .filter_map(|document| document_path(document).ok())
@@ -1605,8 +1591,7 @@ fn supplied_uri_for_path(
 }
 
 fn same_path(left: &Path, right: &Path) -> bool {
-    left.canonicalize().unwrap_or_else(|_| left.to_path_buf())
-        == right.canonicalize().unwrap_or_else(|_| right.to_path_buf())
+    edits::normalized(left) == edits::normalized(right)
 }
 
 fn diagnostic_json_for_documents(
