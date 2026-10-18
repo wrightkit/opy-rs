@@ -2645,9 +2645,18 @@ fn validate_edits_applies_normative_rules() {
         }))
     };
     for (id, text) in [
-        (12, "#!postCompileHook junk\nrule \"r\":\n    @Event global\n    pass\n"),
-        (13, "#!define s(x) __script__(x\nrule \"r\":\n    @Event global\n    pass\n"),
-        (14, "enum E:\n    X = 1 + 2\n    Y\nrule \"r\":\n    @Event global\n    pass\n"),
+        (
+            12,
+            "#!postCompileHook junk\nrule \"r\":\n    @Event global\n    pass\n",
+        ),
+        (
+            13,
+            "#!define s(x) __script__(x\nrule \"r\":\n    @Event global\n    pass\n",
+        ),
+        (
+            14,
+            "enum E:\n    X = 1 + 2\n    Y\nrule \"r\":\n    @Event global\n    pass\n",
+        ),
     ] {
         assert_eq!(
             malformed_doc(&mut session, id, text)["result"],
