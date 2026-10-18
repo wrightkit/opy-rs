@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.15](https://github.com/wrightkit/opy-rs/compare/opy-provider-v0.3.14...opy-provider-v0.3.15) - 2026-10-18
+
+### Added
+
+- *(provider)* serve symbols, definition, and references over LPP ([#574](https://github.com/wrightkit/opy-rs/pull/574))
+
+### Fixed
+
+- *(provider)* scope lpp/validateEdits syntaxError to document-local malformation ([#578](https://github.com/wrightkit/opy-rs/pull/578))
+
+### Other
+
+- simplify opy-rs internals without output changes ([#577](https://github.com/wrightkit/opy-rs/pull/577))
+
 ## [0.3.14](https://github.com/wrightkit/opy-rs/compare/opy-provider-v0.3.13...opy-provider-v0.3.14) - 2026-10-16
 
 ### Other
