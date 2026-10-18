@@ -2623,6 +2623,38 @@ fn validate_edits_applies_normative_rules() {
         "syntaxError",
         "an unterminated entity in the edited document is a syntaxError"
     );
+
+    // Directive-text malformation in the document itself is `syntaxError`
+    // even though the directive names an external script — the verdict is
+    // about the line's shape, not the file. Enum auto-increment depends
+    // only on the same-block predecessor, also document-local.
+    let malformed_doc = |session: &mut Session, id: i64, text: &str| {
+        session.request(json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": "lpp/validateEdits",
+            "params": {
+                "document": {
+                    "uri": "file:///project/malformed.opy",
+                    "languageId": "opy",
+                    "version": 1,
+                    "text": text,
+                },
+                "edits": [],
+            },
+        }))
+    };
+    for (id, text) in [
+        (12, "#!postCompileHook junk\nrule \"r\":\n    @Event global\n    pass\n"),
+        (13, "#!define s(x) __script__(x\nrule \"r\":\n    @Event global\n    pass\n"),
+        (14, "enum E:\n    X = 1 + 2\n    Y\nrule \"r\":\n    @Event global\n    pass\n"),
+    ] {
+        assert_eq!(
+            malformed_doc(&mut session, id, text)["result"],
+            json!({ "valid": false, "version": 1, "reason": "syntaxError" }),
+            "malformation in the document's own text: {text:?}"
+        );
+    }
     session.shutdown();
 }
 
