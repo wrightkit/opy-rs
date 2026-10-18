@@ -122,14 +122,15 @@ impl<'a> Lowering<'a> {
                 .push((msgid.to_string(), context.map(str::to_string)));
         }
         let use_tl_err = !self.translation_player_options().2;
+        let entry = translations
+            .entries
+            .iter()
+            .find(|entry| entry.msgid == msgid && entry.context.as_deref() == context);
         let mut localized = translations
             .languages
             .iter()
             .map(|language| {
-                translations
-                    .entries
-                    .iter()
-                    .find(|entry| entry.msgid == msgid && entry.context.as_deref() == context)
+                entry
                     .and_then(|entry| entry.translations.get(language))
                     .filter(|value| !value.is_empty())
                     .cloned()
@@ -255,45 +256,31 @@ impl<'a> Lowering<'a> {
         let Some(translations) = self.hir.preprocessing.translations.as_ref() else {
             return Vec::new();
         };
-        let keep_unused = self
-            .hir
-            .preprocessing
-            .directives
-            .iter()
-            .any(|directive| directive.name == "keepUnusedTranslations");
+        // `keepUnusedTranslations` is rejected as unsupported before lowering,
+        // so the used (msgid, context) pairs are the only keys ever written.
+        let mut keys = self.translation_uses.clone();
+        keys.sort();
+        keys.dedup();
         translations
             .languages
             .iter()
             .skip(1)
             .map(|language| {
-                let mut keys = self.translation_uses.clone();
-                if keep_unused {
-                    keys.extend(
-                        translations
-                            .entries
-                            .iter()
-                            .map(|entry| (entry.msgid.clone(), entry.context.clone())),
-                    );
-                }
-                keys.sort();
-                keys.dedup();
                 let mut output = String::from(
                     "msgid \"\"\nmsgstr \"\"\n\"Content-Type: text/plain; charset=UTF-8\\n\"\n",
                 );
                 output.push_str(&format!("\"Language: {language}\\n\"\n\n"));
-                for (msgid, context) in keys {
-                    if let Some(ref context) = context {
+                for (msgid, context) in &keys {
+                    if let Some(context) = context {
                         output.push_str(&format!(
                             "msgctxt {}\n",
                             serde_json::to_string(&context).unwrap()
                         ));
                     }
-                    let translated = translations
-                        .entries
-                        .iter()
-                        .find(|entry| {
-                            entry.msgid == msgid && entry.context.as_deref() == context.as_deref()
-                        })
+                    let entry = translations.entries.iter().find(|entry| {
+                        entry.msgid == *msgid && entry.context.as_deref() == context.as_deref()
+                    });
+                    let translated = entry
                         .and_then(|entry| entry.translations.get(language))
                         .cloned()
                         .unwrap_or_default();
