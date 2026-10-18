@@ -21,6 +21,7 @@ use sha2::{Digest, Sha256};
 use workshop_rs::program::MappedText;
 
 mod edits;
+mod navigation;
 
 const PROTOCOL_VERSIONS: [&str; 7] = ["1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6"];
 const PROJECT_LOADING_VERSION: &str = "1.1";
@@ -48,6 +49,9 @@ struct Capabilities {
     compile: bool,
     project_loading: bool,
     source_identity: bool,
+    symbols: bool,
+    definition: bool,
+    references: bool,
     rename: bool,
     edit_validation: bool,
     lookup: bool,
@@ -61,6 +65,9 @@ impl Capabilities {
             compile: true,
             project_loading: true,
             source_identity: true,
+            symbols: true,
+            definition: true,
+            references: true,
             rename: true,
             edit_validation: true,
             lookup: true,
@@ -73,6 +80,9 @@ impl Capabilities {
             "check" => self.check,
             "compile" => self.compile,
             "projectLoading" => self.project_loading,
+            "symbols" => self.symbols,
+            "definition" => self.definition,
+            "references" => self.references,
             "rename" => self.rename,
             "editValidation" => self.edit_validation,
             "lookup" => self.lookup,
@@ -86,9 +96,9 @@ impl Capabilities {
             "check": self.check,
             "compile": self.compile,
             "reconstruct": false,
-            "symbols": false,
-            "definition": false,
-            "references": false,
+            "symbols": self.symbols,
+            "definition": self.definition,
+            "references": self.references,
             "rename": self.rename,
             "editValidation": self.edit_validation,
         });
@@ -503,6 +513,9 @@ impl Server {
         let result = match method {
             "lpp/check" => self.check(params),
             "lpp/compile" => self.compile(params),
+            "lpp/symbols" => navigation::symbols(params),
+            "lpp/definition" => navigation::definition(params),
+            "lpp/references" => navigation::references(params),
             "lpp/rename" => edits::rename(params),
             "lpp/validateEdits" => edits::validate_edits(params),
             "lpp/lookup" => self.lookup(params),
@@ -1980,6 +1993,9 @@ mod tests {
         assert_eq!(response["result"]["languages"][0]["id"], LANGUAGE_ID);
         assert_eq!(response["result"]["capabilities"]["check"], true);
         assert_eq!(response["result"]["capabilities"]["compile"], true);
+        assert_eq!(response["result"]["capabilities"]["symbols"], true);
+        assert_eq!(response["result"]["capabilities"]["definition"], true);
+        assert_eq!(response["result"]["capabilities"]["references"], true);
         assert_eq!(response["result"]["capabilities"]["rename"], true);
         assert_eq!(response["result"]["capabilities"]["editValidation"], true);
     }
