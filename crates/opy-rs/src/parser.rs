@@ -1077,6 +1077,20 @@ mod tests {
     }
 
     #[test]
+    fn subroutine_declaration_keeps_pinned_index() {
+        let program = parse_ok("subroutine Foo 1\nsubroutine Bar\n");
+        let indexes: Vec<_> = program
+            .declarations
+            .iter()
+            .map(|decl| match decl {
+                Decl::Subroutine { index, .. } => *index,
+                _ => panic!("expected subroutine"),
+            })
+            .collect();
+        assert_eq!(indexes, vec![Some(1), None]);
+    }
+
+    #[test]
     fn macro_and_enum_redeclarations_are_checked_at_ast_surfaces() {
         let text = "enum Kind:\n    First\n    First\nmacro helper():\n    pass\nmacro helper():\n    pass\n";
         let errors = parse_err(text);

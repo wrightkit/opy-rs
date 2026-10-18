@@ -41,11 +41,12 @@ impl Lowerer {
             }),
             Decl::Subroutine {
                 name,
+                index,
                 span,
                 name_span,
             } => Some(Declaration::Subroutine {
                 name: name.clone(),
-                index: None,
+                index: *index,
                 span: Some(span.into()),
                 name_span: Some(name_span.into()),
             }),

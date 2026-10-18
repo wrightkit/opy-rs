@@ -78,12 +78,29 @@ impl Parser<'_> {
             Ok(name) => name,
             Err(()) => return false,
         };
+        let mut index = None;
+        if self.peek_kind() == TokenKind::Number {
+            let token = self.advance();
+            index = token.text.parse::<u32>().ok();
+            if index.is_none() {
+                self.errors.push(OpyError::at(
+                    "parse-error",
+                    format!(
+                        "invalid subroutine index '{}' (expected an integer)",
+                        token.text
+                    ),
+                    token.span,
+                ));
+                return false;
+            }
+        }
         let end = self
             .tokens
             .get(self.pos.saturating_sub(1))
             .map_or(start.span.end, |token| token.span.end);
         declarations.push(Decl::Subroutine {
             name,
+            index,
             span: Span::new(start.span.file, start.span.start, end),
             name_span,
         });

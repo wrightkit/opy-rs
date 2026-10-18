@@ -49,3 +49,17 @@ fn filesystem_project_entry_owns_include_root_resolution() {
     );
     assert_eq!(outcome.files[1].path, "child.opy");
 }
+
+#[test]
+fn indexed_subroutine_declaration_pins_the_emitted_slot() {
+    let compiler = Compiler::new().expect("the embedded compiler contract loads");
+    let output = compiler
+        .compile_source(
+            "subroutine Foo 3\n\ndef Foo():\n    @Name \"Foo\"\n    pass\n\nrule \"r\":\n    Foo()\n",
+            "indexed.opy",
+            Path::new("."),
+        )
+        .expect("indexed subroutine source compiles");
+
+    assert!(output.workshop.contains("3: Foo"), "{}", output.workshop);
+}
