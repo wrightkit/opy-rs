@@ -105,6 +105,8 @@ pub enum Decl {
     },
     Subroutine {
         name: String,
+        /// The pinned slot from `subroutine name index`.
+        index: Option<u32>,
         span: Span,
         /// The exact span of the declared identifier token.
         name_span: Span,
