@@ -1565,30 +1565,13 @@ fn diagnostic_json_for_documents(
     display_root: &Path,
     diagnostic: &OpyDiagnostic,
 ) -> Value {
-    json!({
-        "range": diagnostic_range_for_documents(documents, display_root, diagnostic.span.as_ref()),
-        "severity": diagnostic.severity.as_str(),
-        "code": diagnostic.code,
-        "message": diagnostic.message,
-        "source": LANGUAGE_ID,
-    })
-}
-
-fn diagnostic_range_for_documents(
-    documents: &BTreeMap<String, Document>,
-    display_root: &Path,
-    location: Option<&SourceLocation>,
-) -> Value {
-    let Some(location) = location else {
-        return json!({
-            "start": { "line": 0, "character": 0 },
-            "end": { "line": 0, "character": 0 },
-        });
-    };
-    json!({
-        "start": document_lsp_position(documents, display_root, &location.path, location.start.line, location.start.col),
-        "end": document_lsp_position(documents, display_root, &location.path, location.end.line, location.end.col),
-    })
+    diagnostic_json(
+        diagnostic.span.as_ref(),
+        &diagnostic.severity,
+        &diagnostic.code,
+        &diagnostic.message,
+        |path, line, col| document_lsp_position(documents, display_root, path, line, col),
+    )
 }
 
 fn document_lsp_position(
@@ -1626,9 +1609,11 @@ fn check_result(project: &LoadedProject, outcome: &CheckOutcome) -> Value {
             .and_then(|path| entries.iter().position(|entry| entry.path == path))
             .unwrap_or(0);
         entries[index].diagnostics.push(diagnostic_json(
-            project,
-            &outcome.display_root,
-            diagnostic,
+            diagnostic.span.as_ref(),
+            &diagnostic.severity,
+            &diagnostic.code,
+            &diagnostic.message,
+            |path, line, col| project_lsp_position(project, &outcome.display_root, path, line, col),
         ));
     }
     json!({
@@ -1651,9 +1636,13 @@ fn compile_diagnostics(
         let index = path
             .and_then(|path| entries.iter().position(|entry| entry.path == path))
             .unwrap_or(0);
-        entries[index]
-            .diagnostics
-            .push(compile_diagnostic_json(project, display_root, diagnostic));
+        entries[index].diagnostics.push(diagnostic_json(
+            diagnostic.span.as_ref(),
+            &diagnostic.severity,
+            &diagnostic.code,
+            &diagnostic.message,
+            |path, line, col| project_lsp_position(project, display_root, path, line, col),
+        ));
     }
     entries
         .into_iter()
@@ -1695,38 +1684,29 @@ fn file_entries(project: &LoadedProject, paths: &[String]) -> Vec<FileEntry> {
         .collect()
 }
 
+/// The LPP diagnostic object for one frontend diagnostic; `position_for`
+/// resolves a frontend `(path, line, col)` endpoint into an LPP position.
 fn diagnostic_json(
-    project: &LoadedProject,
-    display_root: &Path,
-    diagnostic: &OpyDiagnostic,
-) -> Value {
-    json!({
-        "range": diagnostic_range(project, display_root, diagnostic.span.as_ref()),
-        "severity": diagnostic.severity.as_str(),
-        "code": diagnostic.code,
-        "message": diagnostic.message,
-        "source": LANGUAGE_ID,
-    })
-}
-
-fn compile_diagnostic_json(
-    project: &LoadedProject,
-    display_root: &Path,
-    diagnostic: &CompileDiagnostic,
-) -> Value {
-    json!({
-        "range": diagnostic_range(project, display_root, diagnostic.span.as_ref()),
-        "severity": diagnostic.severity.as_str(),
-        "code": diagnostic.code,
-        "message": diagnostic.message,
-        "source": LANGUAGE_ID,
-    })
-}
-
-fn diagnostic_range(
-    project: &LoadedProject,
-    display_root: &Path,
     location: Option<&SourceLocation>,
+    severity: &opy_rs::tooling::DiagnosticSeverity,
+    code: &str,
+    message: &str,
+    position_for: impl Fn(&str, u32, u32) -> Value,
+) -> Value {
+    json!({
+        "range": diagnostic_range(location, position_for),
+        "severity": severity.as_str(),
+        "code": code,
+        "message": message,
+        "source": LANGUAGE_ID,
+    })
+}
+
+/// The LPP range of a frontend location — `(0, 0)-(0, 0)` when absent —
+/// with `position_for` resolving a `(path, line, col)` endpoint.
+fn diagnostic_range(
+    location: Option<&SourceLocation>,
+    position_for: impl Fn(&str, u32, u32) -> Value,
 ) -> Value {
     let Some(location) = location else {
         return json!({
@@ -1735,8 +1715,8 @@ fn diagnostic_range(
         });
     };
     json!({
-        "start": project_lsp_position(project, display_root, &location.path, location.start.line, location.start.col),
-        "end": project_lsp_position(project, display_root, &location.path, location.end.line, location.end.col),
+        "start": position_for(&location.path, location.start.line, location.start.col),
+        "end": position_for(&location.path, location.end.line, location.end.col),
     })
 }
 
