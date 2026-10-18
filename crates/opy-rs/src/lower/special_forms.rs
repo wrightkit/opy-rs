@@ -44,6 +44,133 @@ pub(crate) const SPECIAL_VALUE_CALLS: &[(&str, SpecialValueCall)] = &[
     ),
 ];
 
+/// A source-level special form: a call name the lowerer handles by name
+/// rather than through the manifest. Its parameter facts mirror the
+/// reference's declared signatures — the same `(name, type, required,
+/// default)` facts manifest-backed callables report — so `crate::lookup`
+/// describes special calls from one declaration instead of a parallel
+/// table that can drift from `SPECIAL_VALUE_CALLS` (issue #469).
+pub(crate) struct SpecialFunction {
+    pub(crate) name: &'static str,
+    pub(crate) params: &'static [SpecialParam],
+}
+
+/// One ordered parameter of a special call, from the reference signature.
+pub(crate) struct SpecialParam {
+    pub(crate) name: &'static str,
+    /// The reference's declared argument type (`IntLiteral`, `Lambda`, …).
+    pub(crate) param_type: &'static str,
+    pub(crate) required: bool,
+    /// The declared default rendered in source syntax, when declared.
+    pub(crate) default: Option<&'static str>,
+}
+
+const fn required(name: &'static str, param_type: &'static str) -> SpecialParam {
+    SpecialParam {
+        name,
+        param_type,
+        required: true,
+        default: None,
+    }
+}
+
+const fn defaulted(
+    name: &'static str,
+    param_type: &'static str,
+    default: &'static str,
+) -> SpecialParam {
+    SpecialParam {
+        name,
+        param_type,
+        required: false,
+        default: Some(default),
+    }
+}
+
+const fn optional(name: &'static str, param_type: &'static str) -> SpecialParam {
+    SpecialParam {
+        name,
+        param_type,
+        required: false,
+        default: None,
+    }
+}
+
+/// The special-call spellings an `unknown-value` diagnostic can suggest and
+/// the lookup can describe, with the parameter facts the reference declares,
+/// in the same order `SPECIAL_VALUE_CALLS` dispatches them.
+pub(crate) const SPECIAL_FUNCTIONS: &[SpecialFunction] = &[
+    SpecialFunction {
+        name: "sorted",
+        params: &[
+            required("array", "Array"),
+            // The reference's signature names the slot `lambda`; `key` is
+            // the keyword spelling callers write (#437).
+            optional("key", "Lambda"),
+        ],
+    },
+    SpecialFunction {
+        name: "createWorkshopSetting",
+        params: &[
+            required("type", "Type"),
+            required("category", "CustomStringLiteral"),
+            required("name", "CustomStringLiteral"),
+            required("default", "BoolLiteral|IntLiteral|FloatLiteral|HeroLiteral"),
+            defaulted("sortOrder", "IntLiteral", "0"),
+        ],
+    },
+    SpecialFunction {
+        name: "createWorkshopSettingBool",
+        params: &[
+            required("category", "CustomStringLiteral"),
+            required("name", "CustomStringLiteral"),
+            required("default", "BoolLiteral"),
+            defaulted("sortOrder", "IntLiteral", "0"),
+        ],
+    },
+    SpecialFunction {
+        name: "createWorkshopSettingEnum",
+        params: &[
+            required("category", "CustomStringLiteral"),
+            required("name", "CustomStringLiteral"),
+            required("default", "UnsignedIntLiteral"),
+            required("options", "Array<CustomStringLiteral>"),
+            defaulted("sortOrder", "IntLiteral", "0"),
+        ],
+    },
+    SpecialFunction {
+        name: "createWorkshopSettingInt",
+        params: &[
+            required("category", "CustomStringLiteral"),
+            required("name", "CustomStringLiteral"),
+            required("default", "IntLiteral"),
+            required("min", "IntLiteral"),
+            required("max", "IntLiteral"),
+            defaulted("sortOrder", "IntLiteral", "0"),
+        ],
+    },
+    SpecialFunction {
+        name: "createWorkshopSettingFloat",
+        params: &[
+            required("category", "CustomStringLiteral"),
+            required("name", "CustomStringLiteral"),
+            required("default", "FloatLiteral"),
+            required("min", "FloatLiteral"),
+            required("max", "FloatLiteral"),
+            defaulted("sortOrder", "IntLiteral", "0"),
+        ],
+    },
+    SpecialFunction {
+        name: "createWorkshopSettingHero",
+        params: &[
+            required("category", "CustomStringLiteral"),
+            required("name", "CustomStringLiteral"),
+            required("default", "HeroLiteral"),
+            defaulted("sortOrder", "IntLiteral", "0"),
+        ],
+    },
+];
+
 impl SpecialValueCall {
     pub(crate) fn from_name(name: &str) -> Option<SpecialValueCall> {
         SPECIAL_VALUE_CALLS
