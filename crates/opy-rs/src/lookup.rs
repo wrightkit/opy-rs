@@ -828,6 +828,9 @@ impl<'a> Index<'a> {
                 .map(|candidate| candidate.hit.clone().listed())
                 .collect();
         }
+        // Fold the query once per rank call: `path_score`'s segment split
+        // and `score`'s fold are per-query, not per-form, work.
+        let (path_segments, folded) = crate::matcher::fold_path_query(&query.text);
         let hits: Vec<ScoredHit<'c>> = candidates
             .filter_map(|candidate| {
                 candidate
@@ -841,15 +844,15 @@ impl<'a> Index<'a> {
                         // `crate::matcher` — the same pipeline that produces
                         // the `did you mean` candidates on rejected names.
                         let (scored, structural) = if *kind == MatchKind::Path {
-                            match crate::matcher::path_score(&query.text, form) {
+                            match crate::matcher::path_score_folded(&path_segments, form) {
                                 Some(s) => (Some(s), true),
-                                None => (crate::matcher::score(&query.text, form), false),
+                                None => (crate::matcher::score_folded(&folded, form), false),
                             }
                         } else {
                             // A produced-type form always reports the
                             // relation it matched, near or exact.
                             (
-                                crate::matcher::score(&query.text, form),
+                                crate::matcher::score_folded(&folded, form),
                                 *kind == MatchKind::ProducedType,
                             )
                         };
