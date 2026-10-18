@@ -49,13 +49,18 @@ const CROSS_FILE_CODES: [&str; 7] = [
 /// Intentionally deferred, so a fragment's own edits stay `valid` here and
 /// the project's `lpp/check` arbitrates:
 /// - name/binding verdicts (`unknown-*`, `duplicate-*`, `invalid-arity`,
-///   `unresolved-reference`, `incompatible-protocol`) — the referent may be
-///   declared in a sibling file;
+///   `unresolved-reference`, `incompatible-protocol`,
+///   `enum-type-without-member`) — the referent may be declared in a
+///   sibling file;
 /// - merged-table duplicates (`rule-prefix-template-duplicate`,
 ///   `replacement-duplicate`, `post-compile-hook-duplicate`,
 ///   `macro-redeclaration`) — the earlier entry may come from an include;
-/// - macro and script verdicts (`macro-arity`, `macro-recursion`,
-///   `script-*`) — the macro table and script files come from includes;
+/// - macro-table verdicts (`macro-arity`, `macro-recursion`) — the macro
+///   definition may come from an include;
+/// - script resolution and execution verdicts (`script-not-found`,
+///   `script-error`, `script-timeout`, `script-stack-limit`,
+///   `script-memory-limit`, `script-result-not-string`, `script-internal`)
+///   — the script file and its run live outside the document;
 /// - external-file verdicts (`include-not-found`, `settings-not-found`,
 ///   `translations-invalid`, `settings-expression`,
 ///   `rule-prefix-template-invalid`) — the source text or constants the
@@ -63,7 +68,7 @@ const CROSS_FILE_CODES: [&str; 7] = [
 /// - catalog/environment verdicts (`catalog-error`, `manifest-error`,
 ///   `unknown-enum-member`) — fixed-vocabulary questions the client's
 ///   project check answers the same way.
-const DOCUMENT_SYNTAX_CODES: [&str; 16] = [
+const DOCUMENT_SYNTAX_CODES: [&str; 18] = [
     "lex-error",
     "parse-error",
     "workshop-source",
@@ -80,6 +85,8 @@ const DOCUMENT_SYNTAX_CODES: [&str; 16] = [
     "do-while-placement",
     "invalid-string-entity",
     "unknown-string-entity",
+    "script-invalid",
+    "enum-increment",
 ];
 
 #[derive(Debug, Deserialize)]
