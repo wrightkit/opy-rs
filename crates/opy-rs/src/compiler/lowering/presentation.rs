@@ -194,7 +194,9 @@ impl<'a> Lowering<'a> {
                 span,
             )
         })?;
-        let helper = self.push_value(Value::GlobalVariable(self.global_names[helper_id].clone()));
+        let helper = self.push_value(Value::GlobalVariable(
+            self.program.global_variables[helper_id].name.clone(),
+        ));
         let translated = self.push_call("stringSplit", vec![custom, helper]);
         if name == "___" {
             return Ok(translated);
@@ -214,7 +216,7 @@ impl<'a> Lowering<'a> {
             let player = self.push_call("localPlayer", Vec::new());
             let index = self.push_value(Value::PlayerVariable {
                 player,
-                variable: self.player_names[variable].clone(),
+                variable: self.program.player_variables[variable].name.clone(),
             });
             return Ok(self.push_call("valueInArray", vec![translated, index]));
         }
@@ -226,7 +228,9 @@ impl<'a> Lowering<'a> {
             .globals
             .get(TRANSLATION_HELPER_NAME)
             .expect("translation helper variable is allocated");
-        let helper = self.push_value(Value::GlobalVariable(self.global_names[helper_id].clone()));
+        let helper = self.push_value(Value::GlobalVariable(
+            self.program.global_variables[helper_id].name.clone(),
+        ));
         let color = self.push_value(Value::Enum {
             value_type: "Color".to_string(),
             value: "WHITE".to_string(),

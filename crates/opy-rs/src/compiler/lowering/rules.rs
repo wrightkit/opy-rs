@@ -154,7 +154,7 @@ impl<'a> Lowering<'a> {
         }
         let mut actions = Vec::new();
         actions.extend(self.lower_actions(body, None)?);
-        let event = Event::Subroutine(self.subroutine_names[subroutine].clone());
+        let event = Event::Subroutine(self.program.subroutines[subroutine].name.clone());
         if self.optimization_state_at(span.as_ref()).enabled
             && !self.has_meaningful_rule_action(&actions, &event)
         {
@@ -890,7 +890,7 @@ impl<'a> Lowering<'a> {
                     self.unsupported(format!("unknown subroutine '{name}'"), *span)
                 })?;
                 Ok(vec![self.push_action(Action::CallSubroutine {
-                    subroutine: self.subroutine_names[subroutine].clone(),
+                    subroutine: self.program.subroutines[subroutine].name.clone(),
                 })])
             }
         };

@@ -277,8 +277,7 @@ impl<'a> Lowering<'a> {
         }
         planned_globals.sort_by_key(|(_, index, ..)| *index);
         for (name, assigned, span, name_span) in planned_globals {
-            let id = self.global_names.len();
-            self.global_names.push(name.clone());
+            let id = self.program.global_variables.len();
             self.globals.insert(name.clone(), id);
             self.program
                 .global_variables
@@ -301,15 +300,11 @@ impl<'a> Lowering<'a> {
         );
         planned_players.sort_by_key(|(_, index, ..)| *index);
         for (name, assigned, span, name_span) in planned_players {
-            let id = self.player_names.len();
-            self.player_names.push(name.clone());
-            self.players.insert(name, id);
+            let id = self.program.player_variables.len();
+            self.players.insert(name.clone(), id);
             self.program
                 .player_variables
-                .push(workshop_rs::Variable::with_index(
-                    self.player_names[id].clone(),
-                    assigned,
-                ));
+                .push(workshop_rs::Variable::with_index(name, assigned));
             self.program
                 .set_player_variable_spans(
                     id,
@@ -323,8 +318,7 @@ impl<'a> Lowering<'a> {
 
         declared_subroutines.sort_by_key(|(_, index, ..)| *index);
         for (name, assigned, span, name_span) in declared_subroutines {
-            let id = self.subroutine_names.len();
-            self.subroutine_names.push(name.to_string());
+            let id = self.program.subroutines.len();
             self.subroutines.insert(name.to_string(), id);
             self.program
                 .subroutines
@@ -350,7 +344,7 @@ impl<'a> Lowering<'a> {
                 let null = self.push_value(Value::Null);
                 let value = self.push_call("charAt", vec![empty_array, null]);
                 let action = self.push_action(Action::SetGlobalVariable {
-                    variable: self.global_names[variable].clone(),
+                    variable: self.program.global_variables[variable].name.clone(),
                     value,
                 });
                 Ok(action)
@@ -373,7 +367,7 @@ impl<'a> Lowering<'a> {
                     .expect("translation helper variable is created");
                 let value = self.lower_translation_helper(translations)?;
                 let action = self.push_action(Action::SetGlobalVariable {
-                    variable: self.global_names[variable].clone(),
+                    variable: self.program.global_variables[variable].name.clone(),
                     value,
                 });
                 self.mark_action_origins(std::slice::from_ref(&action), translations.span);
@@ -390,7 +384,7 @@ impl<'a> Lowering<'a> {
                     .expect("compression alphabet variable is created");
                 let value = self.lower_custom_string(compression_alphabet());
                 let action = self.push_action(Action::SetGlobalVariable {
-                    variable: self.global_names[variable].clone(),
+                    variable: self.program.global_variables[variable].name.clone(),
                     value,
                 });
                 Ok(action)
@@ -433,7 +427,7 @@ impl<'a> Lowering<'a> {
                 let variable = *self.globals.get(name).expect("declared global is created");
                 let value = self.lower_value(init_expr)?;
                 let action = self.push_action(Action::SetGlobalVariable {
-                    variable: self.global_names[variable].clone(),
+                    variable: self.program.global_variables[variable].name.clone(),
                     value,
                 });
                 self.mark_action_origins(std::slice::from_ref(&action), span);
@@ -457,7 +451,7 @@ impl<'a> Lowering<'a> {
                 let value = self.push_number(if no_tl_err { 0.1 } else { 1.1 });
                 actions.push(self.push_action(Action::SetPlayerVariable {
                     player,
-                    variable: self.player_names[variable].clone(),
+                    variable: self.program.player_variables[variable].name.clone(),
                     value,
                 }));
             }
@@ -470,7 +464,7 @@ impl<'a> Lowering<'a> {
                 let value = self.lower_value(init_expr)?;
                 let action = self.push_action(Action::SetPlayerVariable {
                     player,
-                    variable: self.player_names[variable].clone(),
+                    variable: self.program.player_variables[variable].name.clone(),
                     value,
                 });
                 self.mark_action_origins(std::slice::from_ref(&action), span);
@@ -533,7 +527,7 @@ impl<'a> Lowering<'a> {
         let player = self.push_value(Value::EventPlayer);
         let language = self.push_value(Value::PlayerVariable {
             player,
-            variable: self.player_names[variable].clone(),
+            variable: self.program.player_variables[variable].name.clone(),
         });
         let initial = self.push_number(if no_tl_err { 0.1 } else { 1.1 });
         let has_spawned = self.push_call("hasSpawned", vec![player]);
@@ -545,7 +539,7 @@ impl<'a> Lowering<'a> {
         let facing = self.push_call("getFacingDirection", vec![player]);
         let append = self.push_action(Action::ModifyPlayerVariable {
             player,
-            variable: self.player_names[variable].clone(),
+            variable: self.program.player_variables[variable].name.clone(),
             op: ModifyOp::AppendToArray,
             value: facing,
         });
@@ -610,7 +604,7 @@ impl<'a> Lowering<'a> {
         let finish = if no_tl_err {
             self.push_action(Action::ModifyPlayerVariable {
                 player,
-                variable: self.player_names[variable].clone(),
+                variable: self.program.player_variables[variable].name.clone(),
                 op: ModifyOp::Subtract,
                 value: one,
             })
@@ -618,7 +612,7 @@ impl<'a> Lowering<'a> {
             let final_value = self.push_call("firstOf", vec![language]);
             self.push_action(Action::SetPlayerVariable {
                 player,
-                variable: self.player_names[variable].clone(),
+                variable: self.program.player_variables[variable].name.clone(),
                 value: final_value,
             })
         };

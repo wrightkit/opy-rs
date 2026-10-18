@@ -28,8 +28,9 @@ impl<'a> Lowering<'a> {
                 span: target_span,
             } => {
                 let variable = self.global_variable_id(name, *target_span)?;
-                let root_value =
-                    self.push_value(Value::GlobalVariable(self.global_names[variable].clone()));
+                let root_value = self.push_value(Value::GlobalVariable(
+                    self.program.global_variables[variable].name.clone(),
+                ));
                 (root_value, "modifyGlobalVariableAtIndex")
             }
             Expr::PlayerVar {
@@ -42,7 +43,7 @@ impl<'a> Lowering<'a> {
                 let player = self.lower_value(player)?;
                 let value = self.push_value(Value::PlayerVariable {
                     player,
-                    variable: self.player_names[variable].clone(),
+                    variable: self.program.player_variables[variable].name.clone(),
                 });
                 (value, "modifyPlayerVariableAtIndex")
             }
@@ -149,14 +150,14 @@ impl<'a> Lowering<'a> {
                 {
                     let value = self.lower_value(right)?;
                     return Ok(self.push_action(Action::ModifyGlobalVariable {
-                        variable: self.global_names[variable].clone(),
+                        variable: self.program.global_variables[variable].name.clone(),
                         op: modify_op,
                         value,
                     }));
                 }
                 let val = self.lower_value(value)?;
                 Ok(self.push_action(Action::SetGlobalVariable {
-                    variable: self.global_names[variable].clone(),
+                    variable: self.program.global_variables[variable].name.clone(),
                     value: val,
                 }))
             }
@@ -177,7 +178,7 @@ impl<'a> Lowering<'a> {
                     let value = self.lower_value(right)?;
                     return Ok(self.push_action(Action::ModifyPlayerVariable {
                         player: player_val,
-                        variable: self.player_names[variable].clone(),
+                        variable: self.program.player_variables[variable].name.clone(),
                         op: modify_op,
                         value,
                     }));
@@ -185,7 +186,7 @@ impl<'a> Lowering<'a> {
                 let val = self.lower_value(value)?;
                 Ok(self.push_action(Action::SetPlayerVariable {
                     player: player_val,
-                    variable: self.player_names[variable].clone(),
+                    variable: self.program.player_variables[variable].name.clone(),
                     value: val,
                 }))
             }
@@ -200,7 +201,7 @@ impl<'a> Lowering<'a> {
                 } => {
                     let variable = self.global_variable_id(name, *arr_span)?;
                     let var_node = self.push_value(Value::GlobalVariable(
-                        self.global_names[variable].clone(),
+                        self.program.global_variables[variable].name.clone(),
                     ));
                     let index_val = self.lower_value(index)?;
                     self.lower_indexed_assignment(
@@ -221,7 +222,7 @@ impl<'a> Lowering<'a> {
                     let variable = self.player_variable_id(name, *arr_span)?;
                     let var_node = self.push_value(Value::PlayerVariable {
                         player: player_val,
-                        variable: self.player_names[variable].clone(),
+                        variable: self.program.player_variables[variable].name.clone(),
                     });
                     let index_val = self.lower_value(index)?;
                     self.lower_indexed_assignment(
@@ -296,8 +297,9 @@ impl<'a> Lowering<'a> {
                 span: target_span,
             } => {
                 let variable = self.global_variable_id(name, *target_span)?;
-                let root_value =
-                    self.push_value(Value::GlobalVariable(self.global_names[variable].clone()));
+                let root_value = self.push_value(Value::GlobalVariable(
+                    self.program.global_variables[variable].name.clone(),
+                ));
                 ("setGlobalVariableAtIndex", root_value)
             }
             Expr::PlayerVar {
@@ -310,7 +312,7 @@ impl<'a> Lowering<'a> {
                 let variable = self.player_variable_id(name, *target_span)?;
                 let root_value = self.push_value(Value::PlayerVariable {
                     player: player_value,
-                    variable: self.player_names[variable].clone(),
+                    variable: self.program.player_variables[variable].name.clone(),
                 });
                 ("setPlayerVariableAtIndex", root_value)
             }

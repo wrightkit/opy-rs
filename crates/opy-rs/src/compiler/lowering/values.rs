@@ -95,14 +95,14 @@ impl<'a> Lowering<'a> {
             }
             Expr::GlobalVar { name, .. } => {
                 let id = self.global_variable_id(name, span)?;
-                Value::GlobalVariable(self.global_names[id].clone())
+                Value::GlobalVariable(self.program.global_variables[id].name.clone())
             }
             Expr::PlayerVar { player, name, .. } => {
                 let player = self.lower_value(player)?;
                 let id = self.player_variable_id(name, span)?;
                 Value::PlayerVariable {
                     player,
-                    variable: self.player_names[id].clone(),
+                    variable: self.program.player_variables[id].name.clone(),
                 }
             }
             Expr::EventPlayer { .. } => Value::EventPlayer,
@@ -1620,7 +1620,9 @@ impl<'a> Lowering<'a> {
                 .globals
                 .get(COMPRESSION_ALPHABET_NAME)
                 .expect("compression alphabet variable is created");
-            self.push_value(Value::GlobalVariable(self.global_names[variable].clone()))
+            self.push_value(Value::GlobalVariable(
+                self.program.global_variables[variable].name.clone(),
+            ))
         } else {
             self.lower_custom_string(compression_alphabet())
         };

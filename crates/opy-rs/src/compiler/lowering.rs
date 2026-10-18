@@ -105,11 +105,8 @@ pub(crate) struct Lowering<'a> {
     action_origins: Vec<Option<HirSpan>>,
     action_argument_origins: Vec<Vec<Option<HirSpan>>>,
     globals: HashMap<String, GlobalVarId>,
-    global_names: Vec<String>,
     players: HashMap<String, PlayerVarId>,
-    player_names: Vec<String>,
     subroutines: HashMap<String, SubroutineId>,
-    subroutine_names: Vec<String>,
     constants: HashMap<String, &'a Expr>,
     defined_subroutines: HashSet<SubroutineId>,
     array_bindings: Vec<ArrayBinding>,
@@ -266,11 +263,8 @@ impl<'a> Lowering<'a> {
             action_origins: Vec::new(),
             action_argument_origins: Vec::new(),
             globals: HashMap::new(),
-            global_names: Vec::new(),
             players: HashMap::new(),
-            player_names: Vec::new(),
             subroutines: HashMap::new(),
-            subroutine_names: Vec::new(),
             constants: HashMap::new(),
             defined_subroutines: HashSet::new(),
             array_bindings: Vec::new(),
@@ -594,7 +588,7 @@ impl<'a> Lowering<'a> {
     ) -> Vec<ActionId> {
         self.push_loop_actions(
             Action::ForGlobalVariable {
-                variable: self.global_names[variable].clone(),
+                variable: self.program.global_variables[variable].name.clone(),
                 start,
                 stop,
                 step,
@@ -615,7 +609,7 @@ impl<'a> Lowering<'a> {
         self.push_loop_actions(
             Action::ForPlayerVariable {
                 player,
-                variable: self.player_names[variable].clone(),
+                variable: self.program.player_variables[variable].name.clone(),
                 start,
                 stop,
                 step,
