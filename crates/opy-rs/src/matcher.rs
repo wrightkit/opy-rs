@@ -208,11 +208,7 @@ pub(crate) fn score_folded(query: &str, form: &str) -> Option<u32> {
 /// [`score_folded`].
 #[cfg(test)]
 fn path_score(query: &str, path: &str) -> Option<u32> {
-    let segments: Vec<String> = query.trim().split('.').map(fold).collect();
-    if segments.iter().any(String::is_empty) {
-        return None;
-    }
-    path_score_folded(&segments, path)
+    path_score_folded(&fold_path_query(query).0, path)
 }
 
 /// [`path_score`] with the query's dot-separated segments already
@@ -220,6 +216,9 @@ fn path_score(query: &str, path: &str) -> Option<u32> {
 /// paths. Lookup settings queries score `MatchKind::Path` forms
 /// through this.
 pub(crate) fn path_score_folded(segments: &[String], path: &str) -> Option<u32> {
+    if segments.iter().any(String::is_empty) {
+        return None;
+    }
     let path_segments: Vec<&str> = path.split('.').collect();
     if segments.len() > path_segments.len() {
         return None;
