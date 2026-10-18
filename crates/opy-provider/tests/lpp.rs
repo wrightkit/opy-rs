@@ -135,7 +135,9 @@ fn entry_check_loads_the_owner_project_closure_without_documents() {
         initialized["result"]["capabilities"]["projectLoading"],
         true
     );
-    assert_eq!(initialized["result"]["capabilities"]["symbols"], false);
+    assert_eq!(initialized["result"]["capabilities"]["symbols"], true);
+    assert_eq!(initialized["result"]["capabilities"]["definition"], true);
+    assert_eq!(initialized["result"]["capabilities"]["references"], true);
     assert_eq!(initialized["result"]["capabilities"]["rename"], true);
     assert_eq!(
         initialized["result"]["capabilities"]["editValidation"],
@@ -1386,7 +1388,7 @@ fn lifecycle_and_capability_failures_are_structured() {
     let unavailable = session.request(json!({
         "jsonrpc": "2.0",
         "id": 2,
-        "method": "lpp/symbols",
+        "method": "lpp/reconstruct",
         "params": {},
     }));
     assert_eq!(
@@ -1395,7 +1397,7 @@ fn lifecycle_and_capability_failures_are_structured() {
     );
     assert_eq!(
         unavailable["error"]["data"]["lpp"]["details"]["capability"],
-        "symbols"
+        "reconstruct"
     );
     session.shutdown();
 }
@@ -2674,6 +2676,529 @@ fn rename_refuses_upstream_reserved_names_per_namespace() {
         renamed["result"]["edits"].is_array(),
         "player rename onto a global-only reserved name is upstream-legal: {renamed}"
     );
+    session.shutdown();
+}
+
+const NAV_DEFS: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../opy-rs/tests/fixtures/multi-file/shared/defs.opy"
+);
+
+/// A `Document` JSON object read from a fixture file on disk — the position
+/// methods receive only the position document, so `#!include` targets
+/// resolve through the filesystem.
+fn fixture_document(path: &str, version: i64) -> Value {
+    json!({
+        "uri": file_uri(path),
+        "languageId": "opy",
+        "version": version,
+        "text": std::fs::read_to_string(path).expect("fixture text"),
+    })
+}
+
+fn position_request(
+    method: &str,
+    id: i64,
+    document: &Value,
+    line: u32,
+    character: u32,
+    include_declaration: Option<bool>,
+) -> Value {
+    let mut params = json!({
+        "document": document,
+        "position": { "line": line, "character": character },
+    });
+    if let Some(include) = include_declaration {
+        params["includeDeclaration"] = json!(include);
+    }
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "method": method,
+        "params": params,
+    })
+}
+
+#[test]
+fn symbols_list_each_documents_declarations_in_map_key_order() {
+    let mut session = Session::spawn();
+    session.initialize();
+    let main_uri = file_uri(MULTI_FILE_MAIN);
+    let defs_uri = file_uri(NAV_DEFS);
+    let listed = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "lpp/symbols",
+        "params": {
+            "documents": {
+                defs_uri.clone(): fixture_document(NAV_DEFS, 7),
+                main_uri.clone(): fixture_document(MULTI_FILE_MAIN, 3),
+            },
+        },
+    }));
+    let documents = listed["result"]["documents"].as_array().expect("documents");
+    // The `documents` array is ordered by the request's map key:
+    // `main.opy` sorts before `shared/defs.opy`.
+    assert_eq!(documents.len(), 2);
+    assert_eq!(documents[0]["uri"], main_uri);
+    assert_eq!(documents[0]["version"], 3);
+    assert_eq!(
+        documents[0]["symbols"],
+        json!([
+            {
+                "name": "P",
+                "kind": "player",
+                "range": {
+                    "start": { "line": 3, "character": 10 },
+                    "end": { "line": 3, "character": 11 },
+                },
+            },
+        ])
+    );
+    assert_eq!(documents[1]["uri"], defs_uri);
+    assert_eq!(documents[1]["version"], 7);
+    // Declaration order within the included file; `kind` serializes the
+    // semantic `SymbolKind`, `range` is the authored name token — the macro
+    // declaration's recorded span starts at the `macro` keyword, so the
+    // range points at `doubleIt`. A `def` also materializes an implicit
+    // same-name `subroutine` declaration at the same site.
+    assert_eq!(
+        documents[1]["symbols"],
+        json!([
+            {
+                "name": "total",
+                "kind": "global",
+                "range": {
+                    "start": { "line": 0, "character": 10 },
+                    "end": { "line": 0, "character": 15 },
+                },
+            },
+            {
+                "name": "resetScore",
+                "kind": "subroutine",
+                "range": {
+                    "start": { "line": 2, "character": 11 },
+                    "end": { "line": 2, "character": 21 },
+                },
+            },
+            {
+                "name": "doubleIt",
+                "kind": "macro",
+                "range": {
+                    "start": { "line": 8, "character": 6 },
+                    "end": { "line": 8, "character": 14 },
+                },
+            },
+            {
+                "name": "finish",
+                "kind": "subroutine",
+                "range": {
+                    "start": { "line": 11, "character": 4 },
+                    "end": { "line": 11, "character": 10 },
+                },
+            },
+            {
+                "name": "finish",
+                "kind": "def",
+                "range": {
+                    "start": { "line": 11, "character": 4 },
+                    "end": { "line": 11, "character": 10 },
+                },
+            },
+        ])
+    );
+    session.shutdown();
+}
+
+#[test]
+fn symbols_attribute_included_declarations_through_the_project_view() {
+    // `rename-main-file`: member.opy and stray.opy redirect to main.opy via
+    // `#!mainFile`; caller.opy is included by main.opy and cannot analyze
+    // standalone (`worker()` is unknown without member.opy). With main.opy
+    // absent from the set, member.opy's declarations are still attributed
+    // because the redirecting check covers it through the include closure.
+    let root = Path::new(RENAME_MAIN_FILE_ROOT);
+    let uris: BTreeMap<&str, String> = ["caller.opy", "env/member.opy", "stray.opy"]
+        .into_iter()
+        .map(|member| (member, file_uri(root.join(member).to_str().expect("utf8"))))
+        .collect();
+    let document = |member: &str| {
+        json!({
+            "uri": uris[member],
+            "languageId": "opy",
+            "version": 4,
+            "text": std::fs::read_to_string(root.join(member)).expect("fixture text"),
+        })
+    };
+    let mut session = Session::spawn();
+    session.initialize();
+    let listed = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "lpp/symbols",
+        "params": {
+            "documents": {
+                uris["caller.opy"].clone(): document("caller.opy"),
+                uris["env/member.opy"].clone(): document("env/member.opy"),
+                uris["stray.opy"].clone(): document("stray.opy"),
+            },
+        },
+    }));
+    let documents = listed["result"]["documents"].as_array().expect("documents");
+    assert_eq!(documents.len(), 3);
+    // caller.opy declares nothing; the symbols it would report come only
+    // from the covering project view.
+    assert_eq!(documents[0]["uri"], uris["caller.opy"]);
+    assert_eq!(documents[0]["symbols"], json!([]));
+    assert_eq!(documents[1]["uri"], uris["env/member.opy"]);
+    assert_eq!(
+        documents[1]["symbols"],
+        json!([
+            {
+                "name": "worker",
+                "kind": "subroutine",
+                "range": {
+                    "start": { "line": 2, "character": 11 },
+                    "end": { "line": 2, "character": 17 },
+                },
+            },
+            {
+                "name": "worker",
+                "kind": "def",
+                "range": {
+                    "start": { "line": 4, "character": 4 },
+                    "end": { "line": 4, "character": 10 },
+                },
+            },
+        ])
+    );
+    // stray.opy's `#!mainFile` makes its own record a stub: the `def orphan`
+    // it spells is never analyzed, so it declares no symbols.
+    assert_eq!(documents[2]["uri"], uris["stray.opy"]);
+    assert_eq!(documents[2]["symbols"], json!([]));
+    session.shutdown();
+}
+
+#[test]
+fn symbols_rejects_project_fields_outside_its_schema() {
+    // Spec §19.1: a field the spec defines but that `lpp/symbols`' params
+    // schema does not include is a schema violation, not an ignored field.
+    let mut session = Session::spawn();
+    session.initialize();
+    let main_uri = file_uri(MULTI_FILE_MAIN);
+    let with_entry = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "lpp/symbols",
+        "params": {
+            "documents": {
+                main_uri.clone(): fixture_document(MULTI_FILE_MAIN, 3),
+            },
+            "entry": {
+                "uri": main_uri,
+                "languageId": "opy",
+                "version": 3,
+            },
+        },
+    }));
+    assert_eq!(with_entry["error"]["code"], -32602);
+    let without_documents = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "lpp/symbols",
+        "params": {},
+    }));
+    assert_eq!(without_documents["error"]["code"], -32602);
+    session.shutdown();
+}
+
+#[test]
+fn definition_returns_authored_include_declarations() {
+    let mut session = Session::spawn();
+    session.initialize();
+    let main_uri = file_uri(MULTI_FILE_MAIN);
+    let defs_uri = file_uri(NAV_DEFS);
+    let document = fixture_document(MULTI_FILE_MAIN, 5);
+
+    // `resetScore()` in main.opy resolves to the `subroutine` declaration
+    // written inside the `#!include`d shared/defs.opy.
+    let resolved = session.request(position_request(
+        "lpp/definition",
+        2,
+        &document,
+        10,
+        6,
+        None,
+    ));
+    assert_eq!(
+        resolved["result"]["locations"],
+        json!([
+            {
+                "uri": defs_uri,
+                "range": {
+                    "start": { "line": 2, "character": 11 },
+                    "end": { "line": 2, "character": 21 },
+                },
+            },
+        ])
+    );
+
+    // `total` in `total += I * SCALE` → `globalvar total` in the include.
+    let resolved = session.request(position_request(
+        "lpp/definition",
+        3,
+        &document,
+        8,
+        10,
+        None,
+    ));
+    assert_eq!(
+        resolved["result"]["locations"],
+        json!([
+            {
+                "uri": defs_uri,
+                "range": {
+                    "start": { "line": 0, "character": 10 },
+                    "end": { "line": 0, "character": 15 },
+                },
+            },
+        ])
+    );
+
+    // `eventPlayer.P`'s member resolves to `playervar P` in the same
+    // document — the request URI is echoed, not a canonicalized path.
+    let resolved = session.request(position_request(
+        "lpp/definition",
+        4,
+        &document,
+        9,
+        20,
+        None,
+    ));
+    assert_eq!(
+        resolved["result"]["locations"],
+        json!([
+            {
+                "uri": main_uri,
+                "range": {
+                    "start": { "line": 3, "character": 10 },
+                    "end": { "line": 3, "character": 11 },
+                },
+            },
+        ])
+    );
+
+    // `doubleIt(3)` is a macro call: the macro declaration's recorded span
+    // starts at the `macro` keyword, so the location narrows to the authored
+    // `doubleIt` name token inside shared/defs.opy.
+    let resolved = session.request(position_request(
+        "lpp/definition",
+        5,
+        &document,
+        11,
+        5,
+        None,
+    ));
+    assert_eq!(
+        resolved["result"]["locations"],
+        json!([
+            {
+                "uri": defs_uri,
+                "range": {
+                    "start": { "line": 8, "character": 6 },
+                    "end": { "line": 8, "character": 14 },
+                },
+            },
+        ])
+    );
+    session.shutdown();
+}
+
+#[test]
+fn definition_on_a_declaration_returns_the_declaration_itself() {
+    let mut session = Session::spawn();
+    session.initialize();
+    let defs_uri = file_uri(NAV_DEFS);
+    let document = fixture_document(NAV_DEFS, 7);
+
+    // A position on `total` in `globalvar total = 0` returns that same
+    // declaration — the request document is defs.opy itself.
+    let resolved = session.request(position_request(
+        "lpp/definition",
+        2,
+        &document,
+        0,
+        12,
+        None,
+    ));
+    assert_eq!(
+        resolved["result"]["locations"],
+        json!([
+            {
+                "uri": defs_uri,
+                "range": {
+                    "start": { "line": 0, "character": 10 },
+                    "end": { "line": 0, "character": 15 },
+                },
+            },
+        ])
+    );
+    session.shutdown();
+}
+
+#[test]
+fn references_list_declaration_first_then_sites_sorted_by_start() {
+    let mut session = Session::spawn();
+    session.initialize();
+    let defs_uri = file_uri(NAV_DEFS);
+    let document = fixture_document(MULTI_FILE_MAIN, 5);
+
+    // `total` sites: the `globalvar` declaration in shared/defs.opy plus
+    // references in main.opy (lines 8 and 9) and inside `def finish()` in
+    // shared/defs.opy (line 12). `includeDeclaration: true` lists the
+    // declaration first; the rest sort by `range.start`.
+    let resolved = session.request(position_request(
+        "lpp/references",
+        2,
+        &document,
+        8,
+        10,
+        Some(true),
+    ));
+    assert_eq!(
+        resolved["result"]["locations"],
+        json!([
+            {
+                "uri": defs_uri,
+                "range": {
+                    "start": { "line": 0, "character": 10 },
+                    "end": { "line": 0, "character": 15 },
+                },
+            },
+            {
+                "uri": document["uri"],
+                "range": {
+                    "start": { "line": 8, "character": 8 },
+                    "end": { "line": 8, "character": 13 },
+                },
+            },
+            {
+                "uri": document["uri"],
+                "range": {
+                    "start": { "line": 9, "character": 24 },
+                    "end": { "line": 9, "character": 29 },
+                },
+            },
+            {
+                "uri": defs_uri,
+                "range": {
+                    "start": { "line": 12, "character": 4 },
+                    "end": { "line": 12, "character": 9 },
+                },
+            },
+        ])
+    );
+
+    // `includeDeclaration: false` drops only the declaration location.
+    let resolved = session.request(position_request(
+        "lpp/references",
+        3,
+        &document,
+        8,
+        10,
+        Some(false),
+    ));
+    assert_eq!(
+        resolved["result"]["locations"],
+        json!([
+            {
+                "uri": document["uri"],
+                "range": {
+                    "start": { "line": 8, "character": 8 },
+                    "end": { "line": 8, "character": 13 },
+                },
+            },
+            {
+                "uri": document["uri"],
+                "range": {
+                    "start": { "line": 9, "character": 24 },
+                    "end": { "line": 9, "character": 29 },
+                },
+            },
+            {
+                "uri": defs_uri,
+                "range": {
+                    "start": { "line": 12, "character": 4 },
+                    "end": { "line": 12, "character": 9 },
+                },
+            },
+        ])
+    );
+    session.shutdown();
+}
+
+#[test]
+fn navigation_refusals_and_invalid_positions_are_structured() {
+    let mut session = Session::spawn();
+    session.initialize();
+    let main_uri = file_uri(MULTI_FILE_MAIN);
+    let document = fixture_document(MULTI_FILE_MAIN, 5);
+
+    // The position sits on `@Event`, which is not a symbol site: the methods
+    // refuse with their own `noSymbolAtPosition` code echoing the request
+    // document URI — not `invalidPosition`, which is reserved for positions
+    // outside the document.
+    let refused = session.request(position_request("lpp/definition", 2, &document, 6, 5, None));
+    assert_eq!(refused["error"]["code"], -32000);
+    assert_eq!(
+        refused["error"]["data"]["lpp"]["details"],
+        json!({
+            "refusalCode": "definition.noSymbolAtPosition",
+            "uri": main_uri,
+        })
+    );
+
+    let refused = session.request(position_request(
+        "lpp/references",
+        3,
+        &document,
+        6,
+        5,
+        Some(true),
+    ));
+    assert_eq!(refused["error"]["code"], -32000);
+    assert_eq!(
+        refused["error"]["data"]["lpp"]["details"],
+        json!({
+            "refusalCode": "references.noSymbolAtPosition",
+            "uri": main_uri,
+        })
+    );
+
+    // A position beyond the document's lines, and one beyond a line's end,
+    // are `invalidPosition` LPP errors carrying `{uri, position}`.
+    for (method, id, line, character, include_declaration) in [
+        ("lpp/definition", 4, 99, 0, None),
+        ("lpp/references", 5, 4, 999, Some(false)),
+    ] {
+        let failed = session.request(position_request(
+            method,
+            id,
+            &document,
+            line,
+            character,
+            include_declaration,
+        ));
+        assert_eq!(failed["error"]["code"], -32000);
+        assert_eq!(failed["error"]["data"]["lpp"]["kind"], "invalidPosition");
+        assert_eq!(
+            failed["error"]["data"]["lpp"]["details"],
+            json!({
+                "uri": main_uri,
+                "position": { "line": line, "character": character },
+            })
+        );
+    }
     session.shutdown();
 }
 

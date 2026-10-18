@@ -50,9 +50,9 @@ struct RenameParams {
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
-struct LspPosition {
-    line: u32,
-    character: u32,
+pub(crate) struct LspPosition {
+    pub(crate) line: u32,
+    pub(crate) character: u32,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -87,24 +87,24 @@ struct ModelView {
 
 /// An authored identifier token a semantic site narrows to.
 #[derive(Debug, Clone, Copy)]
-struct SiteToken {
+pub(crate) struct SiteToken {
     /// 1-based frontend column of the token start.
-    col: u32,
+    pub(crate) col: u32,
     /// 0-based line index for text access.
-    line_index: usize,
+    pub(crate) line_index: usize,
     /// Char-index range of the token within its line.
-    start_index: usize,
-    end_index: usize,
+    pub(crate) start_index: usize,
+    pub(crate) end_index: usize,
 }
 
 impl SiteToken {
     /// The token's 1-based frontend line.
-    fn line(&self) -> u32 {
+    pub(crate) fn line(&self) -> u32 {
         self.line_index as u32 + 1
     }
 
     /// The token's length in characters (identifier characters are width 1).
-    fn len(&self) -> u32 {
+    pub(crate) fn len(&self) -> u32 {
         (self.end_index - self.start_index) as u32
     }
 }
@@ -179,7 +179,7 @@ impl<'a> SourceText<'a> {
 
 /// The frontend column of `index` (a char index) within `line`: 1-based, and
 /// `\t` spans four columns — the lexer advances the column by four per tab.
-fn frontend_column(line: &str, index: usize) -> u32 {
+pub(crate) fn frontend_column(line: &str, index: usize) -> u32 {
     line.chars()
         .take(index)
         .map(|ch| if ch == '\t' { 4 } else { 1 })
@@ -189,7 +189,7 @@ fn frontend_column(line: &str, index: usize) -> u32 {
 
 /// The char index at 1-based frontend `column` within `line`; `None` when the
 /// column lands inside a tab's span or beyond the line's end.
-fn char_index_at_column(line: &str, column: u32) -> Option<usize> {
+pub(crate) fn char_index_at_column(line: &str, column: u32) -> Option<usize> {
     let mut current = 1u32;
     for (index, ch) in line.chars().enumerate() {
         if current == column {
@@ -203,7 +203,7 @@ fn char_index_at_column(line: &str, column: u32) -> Option<usize> {
 /// The char index at UTF-16 unit `character` within `line`; `None` when the
 /// unit lands inside a supplementary-plane character or beyond the line's
 /// end.
-fn char_index_at_utf16(line: &str, character: u32) -> Option<usize> {
+pub(crate) fn char_index_at_utf16(line: &str, character: u32) -> Option<usize> {
     let mut units = 0u32;
     for (index, ch) in line.chars().enumerate() {
         if units == character {
@@ -252,7 +252,7 @@ fn byte_of_char_index(line: &str, index: usize) -> usize {
 
 /// The identifier token of `line` starting at char `index`, as a char-index
 /// range; `None` when no identifier starts there.
-fn ident_token_at(line: &str, index: usize) -> Option<(usize, usize)> {
+pub(crate) fn ident_token_at(line: &str, index: usize) -> Option<(usize, usize)> {
     let (byte, first) = line.char_indices().nth(index)?;
     if !is_ident_start(first) {
         return None;
@@ -284,14 +284,14 @@ fn mentions_identifier(text: &str, name: &str) -> bool {
 }
 
 /// The parent directory of `path`, or `"."` for a bare file name.
-fn document_root(path: &Path) -> PathBuf {
+pub(crate) fn document_root(path: &Path) -> PathBuf {
     path.parent()
         .map(Path::to_path_buf)
         .unwrap_or_else(|| PathBuf::from("."))
 }
 
 /// A path in canonical form when it exists, verbatim otherwise.
-fn normalized(path: &Path) -> PathBuf {
+pub(crate) fn normalized(path: &Path) -> PathBuf {
     path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
 }
 
@@ -312,7 +312,7 @@ fn supplied_document_for_path<'d>(
 /// include and `#!mainFile` resolution hit open buffers regardless of
 /// symlink normalization. `texts` overrides document contents — used to
 /// re-check the renamed project.
-fn overlay_map(
+pub(crate) fn overlay_map(
     documents: &BTreeMap<String, Document>,
     texts: Option<&BTreeMap<String, String>>,
 ) -> Result<BTreeMap<String, String>, HandlerError> {
@@ -334,7 +334,7 @@ fn overlay_map(
 /// its start. Returns `None` when the location does not spell `name` exactly
 /// in the source — macro-expanded or generated sites report positions whose
 /// text cannot be rewritten for this symbol.
-fn narrow_site(text: &str, location: &SourceLocation, name: &str) -> Option<SiteToken> {
+pub(crate) fn narrow_site(text: &str, location: &SourceLocation, name: &str) -> Option<SiteToken> {
     let line_index = location.start.line.checked_sub(1)? as usize;
     let line = SourceText::new(text).line_text(line_index)?;
     let index = char_index_at_column(line, location.start.col)?;
@@ -353,7 +353,7 @@ fn narrow_site(text: &str, location: &SourceLocation, name: &str) -> Option<Site
 }
 
 /// The LPP range of a narrowed token.
-fn token_range(text: &str, token: SiteToken) -> Value {
+pub(crate) fn token_range(text: &str, token: SiteToken) -> Value {
     let line = SourceText::new(text)
         .line_text(token.line_index)
         .unwrap_or_default();
@@ -401,7 +401,11 @@ fn rename_namespace(kind: SymbolKind) -> NameNamespace {
 }
 
 /// Whether `span` (half-open `[start, end)`) contains the point `position`.
-fn site_contains(site: &SourceLocation, file_ids: &BTreeSet<u32>, position: Position) -> bool {
+pub(crate) fn site_contains(
+    site: &SourceLocation,
+    file_ids: &BTreeSet<u32>,
+    position: Position,
+) -> bool {
     file_ids.contains(&site.file_id) && site.start <= position && position < site.end
 }
 
@@ -410,7 +414,7 @@ fn site_contains(site: &SourceLocation, file_ids: &BTreeSet<u32>, position: Posi
 /// preprocessor swaps in the redirect target, so the entry's own text is
 /// never analyzed and no symbol site references id 0. A path matching only
 /// that record is not covered by the view.
-fn carries_source(
+pub(crate) fn carries_source(
     outcome: &opy_rs::tooling::CheckOutcome,
     file: &opy_rs::preprocess::FileRecord,
 ) -> bool {
