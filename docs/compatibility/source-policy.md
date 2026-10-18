@@ -169,9 +169,11 @@ when the oracle is absent.
   files next to the source, and `Impulse.CANCEL_CONTRARY_MOTION` warns
   `w_cancel_contrary_motion` in `applyImpulse`.
 * **Round-trip boundary.** Emitted `settings` sections are deliberately not
-  reparseable by the Workshop source implementation; a `.ws` decompiler is a non-goal for
-  `opy-rs` (Workshop → OPY decompilation is deferred to the `workshop-rs`
-  integration stage; see `../language-support.md`).
+  reparseable by the Workshop source implementation. A raw `.ws` text
+  decompiler that bypasses canonical parsing is a non-goal for `opy-rs`;
+  Workshop → OPY reconstruction from the canonical `workshop-rs` `Program`
+  is `opy-rs`-owned and bounded by the [reconstruction contract](../architecture/reconstruction.md)
+  (see also `../language-support.md`).
 
 ## Related documents
 

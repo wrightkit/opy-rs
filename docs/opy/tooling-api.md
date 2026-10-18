@@ -54,6 +54,9 @@ callers do not need to construct a `workshop-rs` `Locale`.
 `*_with_locale` and `compile_hir*` methods, `CompilationArtifact`, and
 `opy_rs::reconstruct` are advanced integration APIs for consumers that
 intentionally interoperate with canonical Workshop Program/catalog types.
+The reconstruction entry points, supported subset, equivalence criteria,
+and refusal codes are defined in
+[`architecture/reconstruction.md`](../architecture/reconstruction.md).
 
 The report schema version is 1. It contains compiler and catalog identities,
 compile status, exit code, failure class, source-attributed diagnostics, exact
@@ -282,7 +285,9 @@ stdout.
 * Custom enums fold to constants in the HIR (reference behavior); enum
   declarations are queryable through `SemanticModel::enums`, not the HIR
   declaration list.
-* Broader Workshop emission, decompilation, and unsupported source constructs
-  remain explicit in the canonical language-support contract and native corpus report. The
+* Broader Workshop emission and unsupported source constructs
+  remain explicit in the canonical language-support contract and native corpus report;
+  Workshop → OPY reconstruction is bounded by the
+  [reconstruction contract](../architecture/reconstruction.md). The
   compile contract never counts an inconclusive normalized-output comparison
   as successful parity.

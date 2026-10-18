@@ -115,7 +115,7 @@ grounded in the pinned tree, specifically:
   macros, enums, settings) and advertised feature surface;
 * `examples/`: real-world OPY corpus (see `crates/opy-rs/tests/fixtures/corpus/README.md`
   for the ported subset and the per-file mapping);
-* `src/tests/`: 60 `.opy` compile tests with 50 pinned result files plus 17
+* `src/tests/`: 60 `.opy` compile tests with 50 pinned result files plus 16
   decompiler inputs (16 pinned results) covering arrays, macros, enums,
   dicts, gotos, includes, loops, operators, rule prefixes, strings,
   translations, custom game settings, and full gamemode `z_*` programs;

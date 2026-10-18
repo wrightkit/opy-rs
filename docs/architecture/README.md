@@ -15,6 +15,7 @@ Use it for substantive implementation preflight. Architecture intent, implementa
 | --- | --- |
 | OverPy language ownership, upstream core scope, semantic implementation model | [`language-core.md`](language-core.md) |
 | Boundary with canonical Workshop and source→Workshop / Workshop→source responsibilities | [`workshop-boundary.md`](workshop-boundary.md) |
+| Workshop → OPY reconstruction supported subset, equivalence, refusals, and upstream coverage | [`reconstruction.md`](reconstruction.md) |
 | Current tested support | [`../language-support.md`](../language-support.md) plus executable tests |
 | Pinned upstream identity and source attribution | [`../compatibility/upstream-references.md`](../compatibility/upstream-references.md) |
 | Opy HIR wire/semantic representation | [`../hir/opy-hir-v2.md`](../hir/opy-hir-v2.md) where still consistent with current contracts and code reality |

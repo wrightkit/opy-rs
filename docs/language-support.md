@@ -45,7 +45,7 @@ claiming byte-identical output.
 | Embedded JavaScript macros | ✅ Supported | [Tooling and backend](language-support/tooling-and-backend.md) |
 | Workshop output language | ✅ Supported | [Tooling and backend](language-support/tooling-and-backend.md) |
 | OPY → Workshop compilation | ✅ Supported | [Tooling and backend](language-support/tooling-and-backend.md) |
-| Workshop → OPY reconstruction | ❌ Unsupported | [Tooling and backend](language-support/tooling-and-backend.md) |
+| Workshop → OPY reconstruction | 🚧 Partial | [Tooling and backend](language-support/tooling-and-backend.md) |
 
 ## Tests and ownership
 
