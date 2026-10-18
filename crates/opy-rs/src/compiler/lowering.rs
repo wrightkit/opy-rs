@@ -346,12 +346,11 @@ impl<'a> Lowering<'a> {
         arg_index: usize,
         value_id: ValueId,
     ) -> ValueId {
-        let domain = [Kind::Action, Kind::Value].into_iter().find_map(|kind| {
-            self.compiler
-                .catalog
-                .entry(kind, call_id)
-                .and_then(|entry| entry.param_domain(arg_index))
-        });
+        let domain = workshop_rs::signatures::ExpectedDomain::expected_domain(
+            self.compiler.catalog,
+            call_id,
+            arg_index,
+        );
         if domain == Some("BarrierLos") {
             let value = match self.value(value_id) {
                 Value::Bool(true) => Some("PASS_THROUGH_BARRIERS"),

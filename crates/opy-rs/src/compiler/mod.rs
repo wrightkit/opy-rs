@@ -850,11 +850,7 @@ impl Compiler {
             let error = outcome
                 .error
                 .expect("failed frontend compile has diagnostic");
-            IntegrationError::new(
-                error.code,
-                error.message,
-                error.span.map(Into::into),
-            )
+            IntegrationError::new(error.code, error.message, error.span.map(Into::into))
         })?;
         let artifact =
             self.compile_hir_with_locale_and_hook(&hir, outcome.post_compile_hook, locale)?;
