@@ -146,8 +146,9 @@ fn function_candidates(
     pool
 }
 
-/// The function an alias resolves to, through its declared kind.
-fn alias_target<'a>(
+/// The function an alias resolves to, through its declared kind. `lookup`
+/// matches aliases to their targets through this same resolution.
+pub(crate) fn alias_target<'a>(
     alias: &crate::manifest::Alias,
     manifest: &'a Manifest,
 ) -> Option<&'a Function> {

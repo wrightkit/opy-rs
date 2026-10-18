@@ -17,7 +17,7 @@ use workshop_rs::catalog::{Catalog, Kind};
 use workshop_rs::settings::{self, PathPart, SettingValueDomain};
 
 use crate::manifest::{
-    AliasKind, Function, FunctionKind, Manifest, Param, ParamDefault, ReceiverCategory,
+    Function, FunctionKind, Manifest, Param, ParamDefault, ReceiverCategory,
 };
 
 /// The default bound on returned hits; also the diagnostic candidate bound.
@@ -1196,7 +1196,7 @@ impl<'a> Index<'a> {
                 }
             }
             for alias in self.manifest.aliases() {
-                if alias_target(alias, self.manifest)
+                if crate::matcher::alias_target(alias, self.manifest)
                     .is_some_and(|target| std::ptr::eq(target, function))
                 {
                     forms.push((alias.source.clone(), MatchKind::Alias));
@@ -1560,17 +1560,6 @@ impl<'a> Index<'a> {
 /// `vector` does not match every callable returning one.
 fn is_handle_type(type_name: &str) -> bool {
     type_name.ends_with("Id")
-}
-
-/// The function an alias resolves to, through its declared kind.
-fn alias_target<'a>(
-    alias: &crate::manifest::Alias,
-    manifest: &'a Manifest,
-) -> Option<&'a Function> {
-    match alias.kind {
-        AliasKind::FunctionAlias => manifest.function(&alias.target),
-        AliasKind::MemberAlias => manifest.member(&alias.target),
-    }
 }
 
 /// Render a manifest `DomainMember` as a lookup member entry.
