@@ -240,25 +240,11 @@ impl<'a> Emitter<'a> {
             self.check_variable_name(&variable.name, None, "player variable");
             self.check_duplicate_name(&variable.name, position, "player variable", None);
         }
-        // Subroutine table: unique names, valid identifiers, and indices
-        // exactly equal to table position (the OPY `subroutine name`
-        // declaration cannot carry an index; the re-lowered index is the
-        // table position).
+        // Subroutine table: unique names and valid identifiers; a slot that
+        // differs from the table position is carried by `subroutine name <index>`.
         for (position, subroutine) in self.program.subroutines.iter().enumerate() {
             self.check_variable_name(&subroutine.name, None, "subroutine");
             self.check_duplicate_name(&subroutine.name, position, "subroutine", None);
-            let index = subroutine.index.unwrap_or(position as u32);
-            if index as usize != position {
-                self.issue(
-                    "unsupported-subroutine-index",
-                    format!(
-                        "subroutine '{}' has index {} but the OPY surface requires \
-                         table position {} (subroutine declarations cannot carry an index)",
-                        subroutine.name, index, position
-                    ),
-                    None,
-                );
-            }
         }
     }
 
@@ -516,9 +502,12 @@ impl<'a> Emitter<'a> {
         if self.program.subroutines.is_empty() {
             self.out.push('\n');
         } else {
-            for subroutine in self.program.subroutines.iter() {
+            for (position, subroutine) in self.program.subroutines.iter().enumerate() {
                 self.out.push_str("subroutine ");
                 self.out.push_str(&subroutine.name);
+                if let Some(index) = subroutine.index.filter(|index| *index as usize != position) {
+                    self.out.push_str(&format!(" {index}"));
+                }
                 self.out.push('\n');
             }
             self.out.push('\n');
@@ -2020,6 +2009,27 @@ mod tests {
         assert!(source.contains("reset()"));
 
         let reparsed = compile_to_program(&source, "subroutine.opy");
+        assert!(workshop_rs::roundtrip::equivalent(&program, &reparsed));
+    }
+
+    #[test]
+    fn reconstructs_pinned_subroutine_index() {
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("score", 0));
+        program.subroutine(Subroutine::with_index("reset", 3));
+        program.rule(
+            Rule::new("Subroutine reset", Event::Subroutine("reset".into())).action(
+                Action::SetGlobalVariable {
+                    variable: "score".into(),
+                    value: Value::number(0.0),
+                },
+            ),
+        );
+
+        let source = reconstruct(&program).expect("pinned subroutine index should reconstruct");
+        assert!(source.contains("subroutine reset 3\n"), "{source}");
+
+        let reparsed = compile_to_program(&source, "subroutine-index.opy");
         assert!(workshop_rs::roundtrip::equivalent(&program, &reparsed));
     }
 

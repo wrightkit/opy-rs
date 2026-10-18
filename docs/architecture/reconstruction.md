@@ -243,7 +243,6 @@ environment checks.
 | `unsupported-name` | Table name is not a valid OPY identifier or collides with a keyword/literal | extension → recorded mangling; unrepresentable residue stays refused |
 | `unsupported-duplicate-name` | A name repeats inside one declaration table | refusal |
 | `unsupported-global-order` | Global indices are not in ascending order | extension → emit sorted with explicit indices |
-| `unsupported-subroutine-index` | Subroutine index ≠ table position | extension/refusal → pending `subroutine name <index>` grammar parity |
 | `unsupported-indexed-initializer` | Initializer-bearing global at a non-lowest-free slot | extension/refusal → pending `globalvar name <index> = <init>` grammar parity |
 | `unsupported-rule-order` | Subroutine rule after a normal rule, out of table order, wrong synthesized name, or carrying conditions; `Subroutine` event outside `def` layout | extension for order/name shape (allowed differences); refusal for conditions on subroutine rules |
 | `unsupported-init-rule` | Initializer rule carries conditions, non-Set actions, non-eventPlayer target, or out-of-order Sets | extension → ordinary-rule emission where reproducible |
