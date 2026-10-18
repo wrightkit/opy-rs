@@ -220,7 +220,6 @@ pub fn preprocess_with_overlay_outcome(
             id: 0,
             path: main_path.to_string(),
         }],
-        next_file_id: 1,
         root: resolved_root.clone(),
         display_root: resolved_root,
         overlay: overlay.clone(),
@@ -319,7 +318,6 @@ pub fn preprocess_with_overlay_outcome(
             id: source_file_id,
             path: display_path,
         });
-        pre.next_file_id = 2;
         pre.preprocessing
             .source_file_initial_optimization
             .insert(source_file_id, pre.preprocessing.optimization.clone());
@@ -446,8 +444,9 @@ fn external_text_span(file: u32, text: &str) -> Span {
 }
 
 struct Preprocessor {
+    /// The append-only file registry: a record's `id` is always its index
+    /// (`files.len()` at registration), so no separate counter is needed.
     files: Vec<FileRecord>,
-    next_file_id: u32,
     root: PathBuf,
     display_root: PathBuf,
     overlay: BTreeMap<String, String>,
@@ -549,8 +548,7 @@ impl Preprocessor {
 
     fn register_external_file(&mut self, candidate: &Path, requested: &str, text: String) -> u32 {
         let canonical = std::fs::canonicalize(candidate).ok();
-        let file_id = self.next_file_id;
-        self.next_file_id += 1;
+        let file_id = self.files.len() as u32;
         self.source_texts.insert(file_id, text);
         self.files.push(FileRecord {
             id: file_id,

@@ -169,8 +169,7 @@ impl Preprocessor {
                 })?
             }
         };
-        let file_id = self.next_file_id;
-        self.next_file_id += 1;
+        let file_id = self.files.len() as u32;
         self.preprocessing
             .source_file_initial_optimization
             .insert(file_id, self.preprocessing.optimization.clone());
