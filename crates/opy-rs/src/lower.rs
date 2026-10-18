@@ -104,7 +104,7 @@ struct Lowerer {
     catalog: &'static Catalog,
     texture_used: bool,
     setup_tags: bool,
-    errors: Vec<OpyError>,
+    first_error: Option<OpyError>,
 }
 
 impl Lowerer {
@@ -125,7 +125,7 @@ impl Lowerer {
             catalog,
             texture_used: false,
             setup_tags: false,
-            errors: Vec::new(),
+            first_error: None,
         }
     }
 }
@@ -250,8 +250,8 @@ fn lower_program(
         }
     }
 
-    if !lowerer.errors.is_empty() {
-        return Err(lowerer.errors.swap_remove(0));
+    if let Some(error) = lowerer.first_error.take() {
+        return Err(error);
     }
 
     if lowerer.texture_used || lowerer.setup_tags {
@@ -496,16 +496,12 @@ impl SettingsLowerer {
         origin: crate::diag::Position,
     ) -> OpyResult<HirExpr> {
         let expression = crate::parser::parse_expression_fragment(text, file, origin, None, &[])?;
-        self.lowerer.errors.clear();
+        self.lowerer.first_error = None;
         self.lowerer.texture_used = false;
         let lowered = self
             .lowerer
             .lower_expr(&expression, &[], CallPosition::Value);
-        self.lowerer
-            .errors
-            .first()
-            .cloned()
-            .map_or(Ok(lowered), Err)
+        self.lowerer.first_error.take().map_or(Ok(lowered), Err)
     }
 }
 
@@ -884,7 +880,9 @@ fn lower_settings_node(node: &cst::SettingsNode) -> HirSettingsNode {
 
 impl Lowerer {
     fn error_at(&mut self, code: &str, message: String, span: Span) {
-        self.errors.push(OpyError::at(code, message, span));
+        if self.first_error.is_none() {
+            self.first_error = Some(OpyError::at(code, message, span));
+        }
     }
 
     /// An error whose message names the valid spellings nearest `rejected`
