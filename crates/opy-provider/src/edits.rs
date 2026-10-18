@@ -45,7 +45,7 @@ const CROSS_FILE_CODES: [&str; 7] = [
 /// reports `syntaxError` only for one of these attributed to the validated
 /// document itself; every diagnostic whose verdict depends on sibling
 /// sources or bindings defers to the client's post-edit project `lpp/check`.
-const DOCUMENT_SYNTAX_CODES: [&str; 11] = [
+const DOCUMENT_SYNTAX_CODES: [&str; 14] = [
     "lex-error",
     "parse-error",
     "workshop-source",
@@ -57,6 +57,9 @@ const DOCUMENT_SYNTAX_CODES: [&str; 11] = [
     "main-file-placement",
     "rule-prefix-invalid",
     "settings-invalid",
+    "settings-placement",
+    "macro-invalid",
+    "do-while-placement",
 ];
 
 #[derive(Debug, Deserialize)]
