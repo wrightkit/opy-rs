@@ -26,10 +26,10 @@ use crate::{
     path_to_file_uri, resolved_path, same_path, validate_documents,
 };
 
-/// Diagnostics that describe sources or bindings outside a single document.
-/// A document whose only failures are these is a project fragment — edits to
-/// it are still well-formed, so `lpp/validateEdits` does not treat them as
-/// `syntaxError`, and `lpp/rename` reads them as missing project sources.
+/// Diagnostics that describe sources or bindings outside a single document;
+/// `lpp/rename` reads them as missing project sources. `lpp/validateEdits`
+/// never blocks on them: a fragment's unresolved includes and foreign names
+/// say nothing about the document's own text.
 const CROSS_FILE_CODES: [&str; 7] = [
     "include-not-found",
     "main-file-not-found",
@@ -38,6 +38,28 @@ const CROSS_FILE_CODES: [&str; 7] = [
     "unknown-action",
     "unknown-value",
     "unknown-member",
+];
+
+/// Error codes for text malformed within a single document — lexer, parser,
+/// and directive verdicts that need no project context. `lpp/validateEdits`
+/// reports `syntaxError` only for one of these attributed to the validated
+/// document itself; every diagnostic whose verdict depends on sibling
+/// sources or bindings defers to the client's post-edit project `lpp/check`.
+const DOCUMENT_SYNTAX_CODES: [&str; 14] = [
+    "lex-error",
+    "parse-error",
+    "workshop-source",
+    "directive-invalid",
+    "unsupported-directive",
+    "include-invalid",
+    "define-invalid",
+    "main-file-invalid",
+    "main-file-placement",
+    "rule-prefix-invalid",
+    "settings-invalid",
+    "settings-placement",
+    "macro-invalid",
+    "do-while-placement",
 ];
 
 #[derive(Debug, Deserialize)]
@@ -1024,37 +1046,23 @@ pub(crate) fn validate_edits(params: Value) -> Result<Value, HandlerError> {
     let root = document_root(&path);
     let overlay = overlay_map(&singleton, None)?;
 
-    // Cross-file diagnostics are tolerated only up to the count already
-    // present in the original document — a fragment's unresolved include or
-    // foreign symbols predate the edits, and swapping one foreign name for
-    // another keeps the count unchanged. A *new* `unknown-*` produced by the
-    // edits is an introduced error, not a cross-file artifact.
-    let baseline_outcome =
-        opy_rs::tooling::check_with_overlay(&document.text, &path_string(&path), &root, &overlay);
-    let mut budget: BTreeMap<&str, usize> = BTreeMap::new();
-    for diagnostic in &baseline_outcome.diagnostics {
-        if diagnostic.severity == opy_rs::tooling::DiagnosticSeverity::Error
-            && CROSS_FILE_CODES.contains(&diagnostic.code.as_str())
-        {
-            *budget.entry(diagnostic.code.as_str()).or_insert(0) += 1;
-        }
-    }
-
+    // `syntaxError` is strictly malformed text of the validated document: a
+    // fragment's cross-file edits are well-formed only in composition with
+    // the sibling edits the request cannot see, so every diagnostic whose
+    // verdict depends on project sources or bindings — name resolution,
+    // include resolution, duplicate declarations — defers to the client's
+    // post-edit project `lpp/check`. Diagnostics a sibling file's own text
+    // produces attribute to that file, not to this document.
     let outcome =
         opy_rs::tooling::check_with_overlay(&result, &path_string(&path), &root, &overlay);
-    let error = outcome.diagnostics.iter().any(|diagnostic| {
-        if diagnostic.severity != opy_rs::tooling::DiagnosticSeverity::Error {
-            return false;
-        }
-        match budget.get_mut(diagnostic.code.as_str()) {
-            Some(remaining) if *remaining > 0 => {
-                *remaining -= 1;
-                false
-            }
-            _ => true,
-        }
+    let malformed = outcome.diagnostics.iter().any(|diagnostic| {
+        diagnostic.severity == opy_rs::tooling::DiagnosticSeverity::Error
+            && DOCUMENT_SYNTAX_CODES.contains(&diagnostic.code.as_str())
+            && diagnostic.span.as_ref().is_some_and(|span| {
+                same_path(&resolved_path(&outcome.display_root, &span.path), &path)
+            })
     });
-    if error {
+    if malformed {
         return invalid("syntaxError", None);
     }
     Ok(json!({ "valid": true, "version": version }))

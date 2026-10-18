@@ -1934,6 +1934,115 @@ fn rename_global_covers_declaration_and_references_across_documents() {
     session.shutdown();
 }
 
+/// A cross-file rename validates one edited document at a time while the
+/// project still holds the pre-edit siblings (opy-rs#576). Renaming a
+/// subroutine whose declaration lives in an `#!include`d file leaves the
+/// entry document temporarily referencing a name the on-disk declaration
+/// does not define — a resolution verdict that only composes once the
+/// sibling edits land, not malformed text in the validated document.
+#[test]
+fn validate_edits_accepts_fragments_of_a_cross_file_rename() {
+    let dir = std::env::temp_dir().join(format!("opy-lpp-fragval-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("shared")).unwrap();
+    let defs = "subroutine doWork\n\ndef doWork():\n    pass\n";
+    let main = "#!include \"shared/defs.opy\"\n\nrule \"work\":\n    @Event global\n    doWork()\n";
+    std::fs::write(dir.join("shared").join("defs.opy"), defs).unwrap();
+    std::fs::write(dir.join("main.opy"), main).unwrap();
+    let base = dir.canonicalize().unwrap();
+    let main_uri = format!("file://{}", base.join("main.opy").display());
+    let defs_uri = format!("file://{}", base.join("shared").join("defs.opy").display());
+    let documents = || {
+        json!({
+            main_uri.clone(): {
+                "uri": main_uri, "languageId": "opy", "version": 1, "text": main,
+            },
+            defs_uri.clone(): {
+                "uri": defs_uri, "languageId": "opy", "version": 1, "text": defs,
+            },
+        })
+    };
+
+    let mut session = Session::spawn();
+    session.initialize();
+    let renamed = session.request(rename_request(
+        2,
+        documents(),
+        &defs_uri,
+        2,
+        6,
+        "performTask",
+    ));
+    let edits = renamed["result"]["edits"].as_array().expect("edits");
+    assert_eq!(edits.len(), 2);
+    let main_edits = edits
+        .iter()
+        .find(|edit| edit["documentUri"] == main_uri)
+        .expect("main edits");
+    let defs_edits = edits
+        .iter()
+        .find(|edit| edit["documentUri"] == defs_uri)
+        .expect("defs edits");
+
+    // Validating the entry document alone still sees the stale on-disk
+    // declaration, so `performTask` resolves to nothing — a fragment-level
+    // semantic diagnostic that must not be a `syntaxError`.
+    for (id, uri, text, doc_edits) in [
+        (3, &main_uri, main, main_edits),
+        (4, &defs_uri, defs, defs_edits),
+    ] {
+        let response = session.request(json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": "lpp/validateEdits",
+            "params": {
+                "document": {
+                    "uri": uri,
+                    "languageId": "opy",
+                    "version": doc_edits["version"],
+                    "text": text,
+                },
+                "edits": doc_edits["textEdits"],
+            },
+        }));
+        assert_eq!(
+            response["result"],
+            json!({ "valid": true, "version": doc_edits["version"] }),
+            "{uri} edits are well-formed fragments of the transaction"
+        );
+    }
+
+    // The composed transaction is clean: the client's post-edit project
+    // `lpp/check` is the semantic authority, and it passes here.
+    let checked = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 5,
+        "method": "lpp/check",
+        "params": {
+            "documents": {
+                main_uri.clone(): {
+                    "uri": main_uri, "languageId": "opy", "version": 2,
+                    "text": apply_text_edits(main, main_edits),
+                },
+                defs_uri.clone(): {
+                    "uri": defs_uri, "languageId": "opy", "version": 2,
+                    "text": apply_text_edits(defs, defs_edits),
+                },
+            }
+        }
+    }));
+    std::fs::remove_dir_all(&dir).unwrap();
+    assert!(
+        checked["result"]["documents"]
+            .as_array()
+            .expect("documents")
+            .iter()
+            .all(|document| document["diagnostics"] == json!([])),
+        "the composed rename checks clean: {checked}"
+    );
+    session.shutdown();
+}
+
 #[test]
 fn rename_player_and_subroutine_cover_their_binding_groups() {
     let mut session = Session::spawn();
@@ -2430,8 +2539,10 @@ fn validate_edits_applies_normative_rules() {
     }));
     assert_eq!(fragment["result"], json!({ "valid": true, "version": 11 }));
 
-    // A cross-file code the edits *introduce* is not fragment leniency:
-    // `wiat` is not a catalog action, so the result must report syntaxError.
+    // A semantic diagnostic the edits *introduce* is not malformed text:
+    // `wiat` parses and type-checks locally, so whether it names a real
+    // action is a project question the client's post-edit `lpp/check`
+    // decides, not a `syntaxError`.
     let introduced = session.request(json!({
         "jsonrpc": "2.0",
         "id": 8,
@@ -2454,8 +2565,8 @@ fn validate_edits_applies_normative_rules() {
     }));
     assert_eq!(
         introduced["result"],
-        json!({ "valid": false, "version": 2, "reason": "syntaxError" }),
-        "an introduced unknown-action is an error, not a cross-file artifact"
+        json!({ "valid": true, "version": 2 }),
+        "an introduced unknown-action is a semantic diagnostic, not malformed syntax"
     );
 
     // The first offending index is the earliest bad edit in request order.

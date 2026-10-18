@@ -18,7 +18,7 @@ lookup, and LPP `1.6` for canonical id resolution.
 | Compile | `lpp/compile` | Uses the same project loading path and returns canonical Workshop text when clean. |
 | Project loading | `lpp/check`, `lpp/compile` | LPP 1.1 loads from a client-selected file entry; LPP 1.2 also lets the provider select the default entry from a directory target. |
 | Rename | `lpp/rename` | Semantic rename of globals, player variables, and subroutines/`def`s across the received documents; refuses (`rename.*` refusal codes) when a site does not map to authored source or the result would not rebind identically. |
-| Edit validation | `lpp/validateEdits` | Applies a client's proposed edits and reports whether the result still checks clean, per the spec's normative rules. |
+| Edit validation | `lpp/validateEdits` | Applies a client's proposed edits and validates the result mechanically: range bounds, overlap, and whether the document's own text is still well-formed (`syntaxError`). Semantic or cross-file verdicts that depend on sibling sources defer to the client's post-edit project `lpp/check`. |
 | Lookup | `lpp/lookup` | LPP 1.5. Resolves a name guess to OPY spellings and structured facts — callable signatures, enum domains and members, settings keys and value forms, and `@Event` rule events — from the `opy-rs` name vocabulary. No loaded project or source document is required. |
 | Resolve ids | `lpp/resolveIds` | LPP 1.6. Maps canonical Workshop call and enum member ids to the OPY spellings that produce them — the reverse direction of `lpp/lookup`, answered from the same vocabulary. No loaded project or source document is required. |
 
