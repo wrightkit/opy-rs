@@ -43,79 +43,54 @@ fn version_at_least(protocol_version: &str, minimum: &str) -> bool {
     rank(protocol_version) >= rank(minimum)
 }
 
-#[derive(Debug, Clone, Copy)]
-struct Capabilities {
-    check: bool,
-    compile: bool,
-    project_loading: bool,
-    source_identity: bool,
-    symbols: bool,
-    definition: bool,
-    references: bool,
-    rename: bool,
-    edit_validation: bool,
-    lookup: bool,
-    resolve_ids: bool,
+/// Whether `capability` is implemented by this first-party provider. All
+/// advertised capabilities are enabled; `projectLoading` is advertised only
+/// under the version-gated negotiation path in `dispatch`, never through
+/// `capability_for`/`enabled`.
+fn capability_enabled(capability: &str) -> bool {
+    matches!(
+        capability,
+        "check"
+            | "compile"
+            | "projectLoading"
+            | "sourceIdentity"
+            | "symbols"
+            | "definition"
+            | "references"
+            | "rename"
+            | "editValidation"
+            | "lookup"
+            | "resolveIds"
+    )
 }
 
-impl Capabilities {
-    const fn first_party() -> Self {
-        Self {
-            check: true,
-            compile: true,
-            project_loading: true,
-            source_identity: true,
-            symbols: true,
-            definition: true,
-            references: true,
-            rename: true,
-            edit_validation: true,
-            lookup: true,
-            resolve_ids: true,
-        }
+/// The advertised capabilities for `protocol_version`; every implemented
+/// capability is enabled, with version-gated names added at their
+/// introduction versions.
+fn capabilities_json(protocol_version: &str) -> Value {
+    let mut capabilities = json!({
+        "check": true,
+        "compile": true,
+        "reconstruct": false,
+        "symbols": true,
+        "definition": true,
+        "references": true,
+        "rename": true,
+        "editValidation": true,
+    });
+    if version_at_least(protocol_version, PROJECT_LOADING_VERSION) {
+        capabilities["projectLoading"] = json!(true);
     }
-
-    fn enabled(self, capability: &str) -> bool {
-        match capability {
-            "check" => self.check,
-            "compile" => self.compile,
-            "projectLoading" => self.project_loading,
-            "symbols" => self.symbols,
-            "definition" => self.definition,
-            "references" => self.references,
-            "rename" => self.rename,
-            "editValidation" => self.edit_validation,
-            "lookup" => self.lookup,
-            "resolveIds" => self.resolve_ids,
-            _ => false,
-        }
+    if version_at_least(protocol_version, SOURCE_IDENTITY_VERSION) {
+        capabilities["sourceIdentity"] = json!(true);
     }
-
-    fn as_json(self, protocol_version: &str) -> Value {
-        let mut capabilities = json!({
-            "check": self.check,
-            "compile": self.compile,
-            "reconstruct": false,
-            "symbols": self.symbols,
-            "definition": self.definition,
-            "references": self.references,
-            "rename": self.rename,
-            "editValidation": self.edit_validation,
-        });
-        if version_at_least(protocol_version, PROJECT_LOADING_VERSION) {
-            capabilities["projectLoading"] = json!(self.project_loading);
-        }
-        if version_at_least(protocol_version, SOURCE_IDENTITY_VERSION) {
-            capabilities["sourceIdentity"] = json!(self.source_identity);
-        }
-        if version_at_least(protocol_version, LOOKUP_VERSION) {
-            capabilities["lookup"] = json!(self.lookup);
-        }
-        if version_at_least(protocol_version, RESOLVE_IDS_VERSION) {
-            capabilities["resolveIds"] = json!(self.resolve_ids);
-        }
-        capabilities
+    if version_at_least(protocol_version, LOOKUP_VERSION) {
+        capabilities["lookup"] = json!(true);
     }
+    if version_at_least(protocol_version, RESOLVE_IDS_VERSION) {
+        capabilities["resolveIds"] = json!(true);
+    }
+    capabilities
 }
 
 /// The minimum protocol version a method capability can be negotiated at,
@@ -331,9 +306,7 @@ enum LoadedRequest {
 }
 
 struct Server {
-    initialized: bool,
     exiting: bool,
-    capabilities: Capabilities,
     protocol_version: Option<String>,
     compiler: Option<Compiler>,
 }
@@ -344,9 +317,7 @@ fn main() {
     let stdout = io::stdout();
     let mut writer = BufWriter::new(stdout.lock());
     let mut server = Server {
-        initialized: false,
         exiting: false,
-        capabilities: Capabilities::first_party(),
         protocol_version: None,
         compiler: None,
     };
@@ -384,7 +355,8 @@ impl Server {
         if parsed.is_array() || !parsed.is_object() {
             return Some(standard_error(Value::Null, -32600, "Invalid Request"));
         }
-        let object = parsed.as_object().expect("object checked");
+        let mut parsed = parsed;
+        let object = parsed.as_object_mut().expect("object checked");
         if object.get("jsonrpc").and_then(Value::as_str) != Some("2.0") {
             return Some(standard_error(Value::Null, -32600, "Invalid Request"));
         }
@@ -399,22 +371,26 @@ impl Server {
                 ));
             }
         };
-        let Some(method) = object.get("method").and_then(Value::as_str) else {
+        let Some(method) = object
+            .get("method")
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+        else {
             return Some(standard_error(id, -32600, "Invalid Request"));
         };
-        let Some(params) = object.get("params") else {
+        let Some(params) = object.remove("params") else {
             return Some(standard_error(id, -32602, "Invalid params"));
         };
 
-        match method {
-            "lpp/initialize" => Some(self.initialize(id, params.clone())),
+        match method.as_str() {
+            "lpp/initialize" => Some(self.initialize(id, params)),
             "lpp/shutdown" => Some(self.shutdown(id)),
-            _ => Some(self.dispatch(id, method, params.clone())),
+            _ => Some(self.dispatch(id, &method, params)),
         }
     }
 
     fn initialize(&mut self, id: Value, value: Value) -> Value {
-        if self.initialized {
+        if self.protocol_version.is_some() {
             return lpp_error(
                 id,
                 "invalidRequest",
@@ -422,9 +398,8 @@ impl Server {
                 "invalid request: already initialized",
             );
         }
-        let params: InitializeParams = match serde_json::from_value(value) {
-            Ok(params) => params,
-            Err(_) => return standard_error(id, -32602, "Invalid params"),
+        let Ok(params) = serde_json::from_value::<InitializeParams>(value) else {
+            return standard_error(id, -32602, "Invalid params");
         };
         if !PROTOCOL_VERSIONS.contains(&params.protocol_version.as_str()) {
             return lpp_error(
@@ -435,7 +410,7 @@ impl Server {
             );
         }
         let protocol_version = params.protocol_version;
-        self.initialized = true;
+        let capabilities = capabilities_json(&protocol_version);
         self.protocol_version = Some(protocol_version.clone());
         ok(
             id,
@@ -449,15 +424,13 @@ impl Server {
                     "id": LANGUAGE_ID,
                     "extensions": LANGUAGE_EXTENSIONS,
                 }],
-                "capabilities": self.capabilities.as_json(
-                    self.protocol_version.as_deref().expect("protocol version")
-                ),
+                "capabilities": capabilities,
             }),
         )
     }
 
     fn shutdown(&mut self, id: Value) -> Value {
-        if !self.initialized {
+        if self.protocol_version.is_none() {
             return lpp_error(
                 id,
                 "invalidRequest",
@@ -470,23 +443,20 @@ impl Server {
     }
 
     fn dispatch(&mut self, id: Value, method: &str, params: Value) -> Value {
-        if !self.initialized {
+        let Some(protocol_version) = self.protocol_version.as_deref() else {
             return lpp_error(
                 id,
                 "invalidRequest",
                 json!({ "reason": "notInitialized" }),
                 "invalid request: session not initialized",
             );
-        }
+        };
         let Some(capability) = capability_for(method) else {
             return standard_error(id, -32601, "Method not found");
         };
         if matches!(method, "lpp/check" | "lpp/compile")
             && params.get("entry").is_some()
-            && !version_at_least(
-                self.protocol_version.as_deref().expect("initialized"),
-                PROJECT_LOADING_VERSION,
-            )
+            && !version_at_least(protocol_version, PROJECT_LOADING_VERSION)
         {
             return lpp_error(
                 id,
@@ -495,13 +465,9 @@ impl Server {
                 "capability 'projectLoading' is not available",
             );
         }
-        if !self.capabilities.enabled(capability)
-            || capability_min_version(capability).is_some_and(|minimum| {
-                !version_at_least(
-                    self.protocol_version.as_deref().expect("initialized"),
-                    minimum,
-                )
-            })
+        if !capability_enabled(capability)
+            || capability_min_version(capability)
+                .is_some_and(|minimum| !version_at_least(protocol_version, minimum))
         {
             return lpp_error(
                 id,
@@ -1966,9 +1932,7 @@ mod tests {
     #[test]
     fn initialize_advertises_only_implemented_capabilities() {
         let mut server = Server {
-            initialized: false,
             exiting: false,
-            capabilities: Capabilities::first_party(),
             protocol_version: None,
             compiler: None,
         };
