@@ -432,7 +432,7 @@ impl Parser<'_> {
         let token = self.peek();
         match token.kind {
             TokenKind::Number => {
-                let token = self.advance();
+                let mut token = self.advance();
                 // `0x` is the one lenient prefix upstream: the reference
                 // rewrites it through `parseInt(name, 16)`, which reads a
                 // hex *prefix* — `0x1FZ` is 31, `0x`/`0xZZ` are `NaN`. The
@@ -471,13 +471,13 @@ impl Parser<'_> {
                 };
                 Ok(Expr::Number {
                     value,
-                    text: token.text.clone(),
+                    text: std::mem::take(&mut token.text),
                     span: token.span,
                 })
             }
             TokenKind::String => Ok(self.parse_string_literal()),
             TokenKind::Ident => {
-                let token = self.advance();
+                let mut token = self.advance();
                 if token.text == "lambda" {
                     return self.parse_lambda(token.span);
                 }
@@ -510,7 +510,7 @@ impl Parser<'_> {
                     && self.peek_kind() == TokenKind::LParen
                 {
                     return Ok(Expr::Name {
-                        name: token.text.clone(),
+                        name: std::mem::take(&mut token.text),
                         span: token.span,
                     });
                 }
@@ -525,7 +525,7 @@ impl Parser<'_> {
                     }),
                     "null" => Ok(Expr::Null { span: token.span }),
                     _ => Ok(Expr::Name {
-                        name: token.text.clone(),
+                        name: std::mem::take(&mut token.text),
                         span: token.span,
                     }),
                 }
@@ -629,8 +629,8 @@ impl Parser<'_> {
     /// boundary, matching the bounded implicit-concatenation surface used by
     /// the OverPy examples.
     pub(super) fn parse_string_literal(&mut self) -> Expr {
-        let first = self.advance();
-        let mut value = first.text.clone();
+        let mut first = self.advance();
+        let mut value = std::mem::take(&mut first.text);
         let mut end = first.span.end;
         loop {
             let saved = self.pos;
