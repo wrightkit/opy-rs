@@ -63,7 +63,7 @@ pub fn reconstruct(program: &Program) -> Result<String, ReconstructError> {
             });
         }
     };
-    let catalog = match Catalog::builtin() {
+    let catalog = match crate::enums::builtin_catalog() {
         Ok(catalog) => catalog,
         Err(error) => {
             return Err(ReconstructError {
@@ -75,7 +75,7 @@ pub fn reconstruct(program: &Program) -> Result<String, ReconstructError> {
             });
         }
     };
-    reconstruct_with(program, manifest, &catalog, &Locale::new("en-US"))
+    reconstruct_with(program, manifest, catalog, &Locale::new("en-US"))
 }
 
 /// The context-sensitive form of [`reconstruct`]: resolves identities through
