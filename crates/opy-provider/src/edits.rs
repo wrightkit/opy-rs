@@ -45,7 +45,25 @@ const CROSS_FILE_CODES: [&str; 7] = [
 /// reports `syntaxError` only for one of these attributed to the validated
 /// document itself; every diagnostic whose verdict depends on sibling
 /// sources or bindings defers to the client's post-edit project `lpp/check`.
-const DOCUMENT_SYNTAX_CODES: [&str; 14] = [
+///
+/// Intentionally deferred, so a fragment's own edits stay `valid` here and
+/// the project's `lpp/check` arbitrates:
+/// - name/binding verdicts (`unknown-*`, `duplicate-*`, `invalid-arity`,
+///   `unresolved-reference`, `incompatible-protocol`) — the referent may be
+///   declared in a sibling file;
+/// - merged-table duplicates (`rule-prefix-template-duplicate`,
+///   `replacement-duplicate`, `post-compile-hook-duplicate`,
+///   `macro-redeclaration`) — the earlier entry may come from an include;
+/// - macro and script verdicts (`macro-arity`, `macro-recursion`,
+///   `script-*`) — the macro table and script files come from includes;
+/// - external-file verdicts (`include-not-found`, `settings-not-found`,
+///   `translations-invalid`, `settings-expression`,
+///   `rule-prefix-template-invalid`) — the source text or constants the
+///   verdict needs live outside the document;
+/// - catalog/environment verdicts (`catalog-error`, `manifest-error`,
+///   `unknown-enum-member`) — fixed-vocabulary questions the client's
+///   project check answers the same way.
+const DOCUMENT_SYNTAX_CODES: [&str; 16] = [
     "lex-error",
     "parse-error",
     "workshop-source",
@@ -60,6 +78,8 @@ const DOCUMENT_SYNTAX_CODES: [&str; 14] = [
     "settings-placement",
     "macro-invalid",
     "do-while-placement",
+    "invalid-string-entity",
+    "unknown-string-entity",
 ];
 
 #[derive(Debug, Deserialize)]

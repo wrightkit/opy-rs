@@ -2588,6 +2588,41 @@ fn validate_edits_applies_normative_rules() {
             "failingEditIndex": 1,
         })
     );
+
+    // String entities are fixed vocabulary: a malformed `\&entity;` escape in
+    // the document's own text is a `syntaxError`, not a deferred verdict.
+    let entity = |session: &mut Session, id: i64, new_text: &str| {
+        session.request(json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": "lpp/validateEdits",
+            "params": {
+                "document": {
+                    "uri": "file:///project/entity.opy",
+                    "languageId": "opy",
+                    "version": 3,
+                    "text": "rule \"r\":\n    @Event global\n    wait(0.1)\n",
+                },
+                "edits": [{
+                    "range": {
+                        "start": { "line": 0, "character": 6 },
+                        "end": { "line": 0, "character": 7 },
+                    },
+                    "newText": new_text,
+                }],
+            },
+        }))
+    };
+    assert_eq!(
+        entity(&mut session, 10, "r \\&bogus;")["result"],
+        json!({ "valid": false, "version": 3, "reason": "syntaxError" }),
+        "an unknown entity in the edited document is a syntaxError"
+    );
+    assert_eq!(
+        entity(&mut session, 11, "r \\&bogus")["result"]["reason"],
+        "syntaxError",
+        "an unterminated entity in the edited document is a syntaxError"
+    );
     session.shutdown();
 }
 
