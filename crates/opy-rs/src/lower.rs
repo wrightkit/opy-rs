@@ -101,14 +101,14 @@ struct Lowerer {
     current_order: usize,
     allow_dict_literal: bool,
     manifest: &'static Manifest,
-    catalog: Catalog,
+    catalog: &'static Catalog,
     texture_used: bool,
     setup_tags: bool,
     errors: Vec<OpyError>,
 }
 
 impl Lowerer {
-    fn new(manifest: &'static Manifest, catalog: Catalog) -> Self {
+    fn new(manifest: &'static Manifest, catalog: &'static Catalog) -> Self {
         Self {
             global_declarations: HashMap::new(),
             player_declarations: HashMap::new(),
@@ -168,14 +168,11 @@ pub fn lower_with_preprocessing(
             ));
         }
     };
-    let catalog = match Catalog::builtin() {
-        Ok(catalog) => catalog,
-        Err(error) => {
-            return Err(OpyError::new(
-                "catalog-error",
-                format!("cannot load the Workshop catalog: {error}"),
-            ));
-        }
+    let Some(catalog) = crate::enums::builtin_catalog() else {
+        return Err(OpyError::new(
+            "catalog-error",
+            "cannot load the Workshop catalog: catalog data is not bundled".to_string(),
+        ));
     };
     lower_program(program, files, defines, preprocessing, manifest, catalog)
 }
@@ -186,7 +183,7 @@ fn lower_program(
     defines: Vec<Define>,
     preprocessing: &PreprocessingState,
     manifest: &'static Manifest,
-    catalog: Catalog,
+    catalog: &'static Catalog,
 ) -> OpyResult<HirProgram> {
     let mut lowerer = Lowerer::new(manifest, catalog);
     lowerer.setup_tags = preprocessing
@@ -471,12 +468,12 @@ impl SettingsLowerer {
                 format!("cannot load the OPY semantic compatibility manifest: {error}"),
             )
         })?;
-        let catalog = Catalog::builtin().map_err(|error| {
-            OpyError::new(
+        let Some(catalog) = crate::enums::builtin_catalog() else {
+            return Err(OpyError::new(
                 "catalog-error",
-                format!("cannot load the Workshop catalog: {error}"),
-            )
-        })?;
+                "cannot load the Workshop catalog: catalog data is not bundled".to_string(),
+            ));
+        };
         let mut lowerer = Lowerer::new(manifest, catalog);
         lowerer.current_order = program.top_level.len();
         lowerer.allow_dict_literal = true;
@@ -2313,7 +2310,7 @@ mod tests {
             vec![],
             &PreprocessingState::default(),
             manifest,
-            Catalog::builtin().expect("the builtin catalog loads"),
+            crate::enums::builtin_catalog().expect("the builtin catalog loads"),
         )
     }
 

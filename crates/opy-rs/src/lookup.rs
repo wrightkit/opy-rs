@@ -12,7 +12,6 @@
 //! carry, so lookup results and rejection diagnostics cannot drift.
 
 use serde::Serialize;
-use std::sync::OnceLock;
 use workshop_rs::catalog::{Catalog, Kind};
 use workshop_rs::settings::{self, PathPart, SettingValueDomain};
 
@@ -605,11 +604,13 @@ pub fn lookup(query: &LookupQuery) -> LookupOutcome {
             );
         }
     }
-    let (manifest, catalog) = match (Manifest::builtin(), Catalog::builtin()) {
-        (Ok(manifest), Ok(catalog)) => (manifest, catalog),
-        _ => return unsupported("vocabulary data (manifest or catalog) is not bundled"),
+    let Some(catalog) = crate::enums::builtin_catalog() else {
+        return unsupported("vocabulary data (manifest or catalog) is not bundled");
     };
-    let index = Index::new(manifest, &catalog);
+    let Ok(manifest) = Manifest::builtin() else {
+        return unsupported("vocabulary data (manifest or catalog) is not bundled");
+    };
+    let index = Index::new(manifest, catalog);
     if let Some(within) = &query.within {
         let Some(children) = index.children(within) else {
             return LookupOutcome::UnknownWithin {
@@ -732,14 +733,6 @@ const SYNTAX_SPELLINGS: &[(&str, &str)] = &[
     ("stopChasingPlayerVariable", "stopChasingVariable"),
 ];
 
-/// The bundled catalog, loaded once — `Catalog::builtin` reparses the
-/// data on every call, which a `resolveIds` request paying per id cannot
-/// afford.
-fn resolve_catalog() -> Option<&'static Catalog> {
-    static CATALOG: OnceLock<Option<Catalog>> = OnceLock::new();
-    CATALOG.get_or_init(|| Catalog::builtin().ok()).as_ref()
-}
-
 /// `lpp/resolveIds` backing: the OPY spelling a canonical Workshop action,
 /// value, or operator id compiles from — the manifest `catalogId` link for
 /// declared callables, else [`SYNTAX_SPELLINGS`] for the ids source syntax
@@ -747,7 +740,7 @@ fn resolve_catalog() -> Option<&'static Catalog> {
 /// unknown.
 pub fn call_spelling(canonical_id: &str) -> Option<&'static str> {
     let manifest = Manifest::builtin().ok()?;
-    let catalog = resolve_catalog()?;
+    let catalog = crate::enums::builtin_catalog()?;
     // A manifest entry's canonical identity is its `catalogId`, or — when
     // it declares none — its own `id` when that id is a canonical call
     // (`startRule`); a `catalogId`-free source name that is not a canonical
@@ -781,7 +774,7 @@ pub fn call_spelling(canonical_id: &str) -> Option<&'static str> {
 /// and members the reference does not spell in source, and for OPY-only
 /// members with no canonical id.
 pub fn enum_member_spelling<'a>(domain: &'a str, member: &'a str) -> Option<&'a str> {
-    let catalog = resolve_catalog()?;
+    let catalog = crate::enums::builtin_catalog()?;
     let enum_domain = catalog.enum_domain(domain)?;
     if !enum_domain
         .members
