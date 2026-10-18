@@ -20,11 +20,14 @@ pub(crate) fn en_us() -> Locale {
 
 /// The bundled Workshop catalog, loaded once — `Catalog::builtin`
 /// reparses the data on every call, which a per-id `resolveIds` request or
-/// repeated `check`/`compile` runs cannot afford. `None` when the bundled
-/// data failed to load (callers keep their existing failure paths).
-pub(crate) fn builtin_catalog() -> Option<&'static Catalog> {
-    static CATALOG: std::sync::OnceLock<Option<Catalog>> = std::sync::OnceLock::new();
-    CATALOG.get_or_init(|| Catalog::builtin().ok()).as_ref()
+/// repeated `check`/`compile` runs cannot afford. The error is the load
+/// failure's message.
+pub(crate) fn builtin_catalog() -> Result<&'static Catalog, &'static str> {
+    static CATALOG: std::sync::OnceLock<Result<Catalog, String>> = std::sync::OnceLock::new();
+    CATALOG
+        .get_or_init(|| Catalog::builtin().map_err(|error| error.to_string()))
+        .as_ref()
+        .map_err(String::as_str)
 }
 
 /// The OPY source domain spellings that rename a canonical catalog domain

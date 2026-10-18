@@ -168,12 +168,12 @@ pub fn lower_with_preprocessing(
             ));
         }
     };
-    let Some(catalog) = crate::enums::builtin_catalog() else {
-        return Err(OpyError::new(
+    let catalog = crate::enums::builtin_catalog().map_err(|error| {
+        OpyError::new(
             "catalog-error",
-            "cannot load the Workshop catalog: catalog data is not bundled".to_string(),
-        ));
-    };
+            format!("cannot load the Workshop catalog: {error}"),
+        )
+    })?;
     lower_program(program, files, defines, preprocessing, manifest, catalog)
 }
 
@@ -468,12 +468,12 @@ impl SettingsLowerer {
                 format!("cannot load the OPY semantic compatibility manifest: {error}"),
             )
         })?;
-        let Some(catalog) = crate::enums::builtin_catalog() else {
-            return Err(OpyError::new(
+        let catalog = crate::enums::builtin_catalog().map_err(|error| {
+            OpyError::new(
                 "catalog-error",
-                "cannot load the Workshop catalog: catalog data is not bundled".to_string(),
-            ));
-        };
+                format!("cannot load the Workshop catalog: {error}"),
+            )
+        })?;
         let mut lowerer = Lowerer::new(manifest, catalog);
         lowerer.current_order = program.top_level.len();
         lowerer.allow_dict_literal = true;

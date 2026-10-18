@@ -479,7 +479,7 @@ pub fn lookup(query: &LookupQuery) -> LookupOutcome {
             );
         }
     }
-    let Some(catalog) = crate::enums::builtin_catalog() else {
+    let Ok(catalog) = crate::enums::builtin_catalog() else {
         return unsupported("vocabulary data (manifest or catalog) is not bundled");
     };
     let Ok(manifest) = Manifest::builtin() else {
@@ -614,7 +614,7 @@ const SYNTAX_SPELLINGS: &[(&str, &str)] = &[
 /// unknown.
 pub fn call_spelling(canonical_id: &str) -> Option<&'static str> {
     let manifest = Manifest::builtin().ok()?;
-    let catalog = crate::enums::builtin_catalog()?;
+    let catalog = crate::enums::builtin_catalog().ok()?;
     // A manifest entry's canonical identity is its `catalogId`, or — when
     // it declares none — its own `id` when that id is a canonical call
     // (`startRule`); a `catalogId`-free source name that is not a canonical
@@ -648,7 +648,7 @@ pub fn call_spelling(canonical_id: &str) -> Option<&'static str> {
 /// and members the reference does not spell in source, and for OPY-only
 /// members with no canonical id.
 pub fn enum_member_spelling<'a>(domain: &'a str, member: &'a str) -> Option<&'a str> {
-    let catalog = crate::enums::builtin_catalog()?;
+    let catalog = crate::enums::builtin_catalog().ok()?;
     let enum_domain = catalog.enum_domain(domain)?;
     if !enum_domain
         .members
@@ -668,19 +668,19 @@ struct ScoredHit<'c> {
     candidate: &'c Candidate,
 }
 
-/// The lexicographic hit order for equal scores: a kind rank prefix plus
-/// the hit's spelling, as borrowed text (no allocation).
+/// The lexicographic hit order for equal scores: a kind rank, then the
+/// hit's spelling.
 fn sort_key(hit: &LookupHit) -> (u8, String) {
     match hit {
-        LookupHit::Function { spelling, .. } => (0, format!("{spelling}")),
-        LookupHit::EnumMember { spelling, .. } => (1, format!("{spelling}")),
-        LookupHit::EnumDomain { domain, .. } => (2, format!("{domain}")),
-        LookupHit::Setting { path, .. } => (3, format!("{path}")),
+        LookupHit::Function { spelling, .. } => (0, spelling.clone()),
+        LookupHit::EnumMember { spelling, .. } => (1, spelling.clone()),
+        LookupHit::EnumDomain { domain, .. } => (2, domain.clone()),
+        LookupHit::Setting { path, .. } => (3, path.clone()),
         LookupHit::Parameter {
             callable, param, ..
         } => (4, format!("{callable}.{}", param.name)),
-        LookupHit::SettingPath { path, .. } => (5, format!("{path}")),
-        LookupHit::Event { spelling, .. } => (6, format!("{spelling}")),
+        LookupHit::SettingPath { path, .. } => (5, path.clone()),
+        LookupHit::Event { spelling, .. } => (6, spelling.clone()),
     }
 }
 
