@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.16](https://github.com/wrightkit/opy-rs/compare/opy-provider-v0.3.15...opy-provider-v0.3.16) - 2026-10-18
+
+### Fixed
+
+- *(provider)* count directive-malformation and enum-increment as syntaxError ([#588](https://github.com/wrightkit/opy-rs/pull/588))
+- *(provider)* count string-entity lexer errors as validateEdits syntaxError ([#587](https://github.com/wrightkit/opy-rs/pull/587))
+
 ## [0.3.15](https://github.com/wrightkit/opy-rs/compare/opy-provider-v0.3.14...opy-provider-v0.3.15) - 2026-10-18
 
 ### Added

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.16](https://github.com/wrightkit/opy-rs/compare/v0.3.15...v0.3.16) - 2026-10-18
+
+### Fixed
+
+- *(compiler)* route reconstruct builtin-catalog access through the crate cache ([#585](https://github.com/wrightkit/opy-rs/pull/585))
+
 ## [0.3.15](https://github.com/wrightkit/opy-rs/compare/v0.3.14...v0.3.15) - 2026-10-18
 
 ### Fixed
