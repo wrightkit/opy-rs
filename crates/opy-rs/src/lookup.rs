@@ -494,8 +494,7 @@ pub fn lookup(query: &LookupQuery) -> LookupOutcome {
                 within: within.clone(),
             };
         };
-        let mut results = index.rank(children.iter(), query);
-        results.truncate(limit);
+        let results = index.rank(children.iter(), query, limit);
         return LookupOutcome::Matched {
             scope: within.scope(),
             limit,
@@ -505,14 +504,14 @@ pub fn lookup(query: &LookupQuery) -> LookupOutcome {
     if !query.scope.any() {
         return unsupported("the query scope selects no namespace");
     }
-    let mut results = index.rank(
+    let results = index.rank(
         index
             .candidates
             .iter()
             .filter(|candidate| index.in_scope(candidate, scope)),
         query,
+        limit,
     );
-    results.truncate(limit);
     LookupOutcome::Matched {
         scope,
         limit,
@@ -663,28 +662,31 @@ pub fn enum_member_spelling<'a>(domain: &'a str, member: &'a str) -> Option<&'a 
     crate::enums::spelling_of_member(domain, member).map(|(_, member)| member)
 }
 
-struct ScoredHit {
+struct ScoredHit<'c> {
     score: u32,
-    hit: LookupHit,
+    /// The kind and `structural` flag `with_match_kind` needs — the
+    /// un-stamped hit stays borrowed until the result list is bounded.
+    stamp: (MatchKind, bool),
+    candidate: &'c Candidate,
+}
+
+/// The lexicographic hit order for equal scores: a kind rank prefix plus
+/// the hit's spelling, as borrowed text (no allocation).
+fn sort_key(hit: &LookupHit) -> (u8, String) {
+    match hit {
+        LookupHit::Function { spelling, .. } => (0, format!("{spelling}")),
+        LookupHit::EnumMember { spelling, .. } => (1, format!("{spelling}")),
+        LookupHit::EnumDomain { domain, .. } => (2, format!("{domain}")),
+        LookupHit::Setting { path, .. } => (3, format!("{path}")),
+        LookupHit::Parameter {
+            callable, param, ..
+        } => (4, format!("{callable}.{}", param.name)),
+        LookupHit::SettingPath { path, .. } => (5, format!("{path}")),
+        LookupHit::Event { spelling, .. } => (6, format!("{spelling}")),
+    }
 }
 
 impl LookupHit {
-    fn sort_key(&self) -> String {
-        match self {
-            LookupHit::Function { spelling, .. } => format!("0{spelling}"),
-            LookupHit::EnumMember { spelling, .. } => format!("1{spelling}"),
-            LookupHit::EnumDomain { domain, .. } => format!("2{domain}"),
-            LookupHit::Setting { path, .. } => format!("3{path}"),
-            LookupHit::Parameter {
-                callable, param, ..
-            } => {
-                format!("4{callable}.{}", param.name)
-            }
-            LookupHit::SettingPath { path, .. } => format!("5{path}"),
-            LookupHit::Event { spelling, .. } => format!("6{spelling}"),
-        }
-    }
-
     /// Restamp `matched_on` for a listed answer: no text constraint scored,
     /// so the entry's own primary form is what it answers to.
     fn listed(self) -> LookupHit {
@@ -812,20 +814,23 @@ impl<'a> Index<'a> {
         index
     }
 
-    /// Rank `candidates` under `query`: a non-empty text scores each
-    /// candidate's best-matching form through the shared matcher pipeline,
-    /// while an empty text lists the candidates in their construction order.
+    /// Rank `candidates` under `query` bounded to `limit`: a non-empty text
+    /// scores each candidate's best-matching form through the shared matcher
+    /// pipeline, while an empty text lists the candidates in their
+    /// construction order. Hits are cloned only after the bound applies.
     fn rank<'c>(
         &self,
         candidates: impl Iterator<Item = &'c Candidate>,
         query: &LookupQuery,
+        limit: usize,
     ) -> Vec<LookupHit> {
         if query.text.trim().is_empty() {
             return candidates
+                .take(limit)
                 .map(|candidate| candidate.hit.clone().listed())
                 .collect();
         }
-        let mut hits: Vec<ScoredHit> = candidates
+        let hits: Vec<ScoredHit<'c>> = candidates
             .filter_map(|candidate| {
                 candidate
                     .forms
@@ -864,16 +869,33 @@ impl<'a> Index<'a> {
                     .min_by_key(|(s, exact, _, _)| (*s, !*exact))
                     .map(|(s, _, kind, structural)| ScoredHit {
                         score: s,
-                        hit: candidate.hit.clone().with_match_kind(kind, s, structural),
+                        stamp: (kind, structural),
+                        candidate,
                     })
             })
             .collect();
-        hits.sort_by(|a, b| {
-            a.score
-                .cmp(&b.score)
-                .then_with(|| a.hit.sort_key().cmp(&b.hit.sort_key()))
+        // The sort key is computed once per candidate and travels with it;
+        // `sort_by` is stable, so equal (score, key) pairs keep their
+        // candidate-iteration order, matching the previous behavior.
+        let mut ranked: Vec<((u8, String), ScoredHit<'c>)> = hits
+            .into_iter()
+            .map(|hit| (sort_key(&hit.candidate.hit), hit))
+            .collect();
+        ranked.sort_by(|(key_a, a), (key_b, b)| {
+            a.score.cmp(&b.score).then_with(|| key_a.cmp(key_b))
         });
-        hits.into_iter().map(|scored| scored.hit).collect()
+        ranked
+            .into_iter()
+            .take(limit)
+            .map(|(_, scored)| {
+                let (kind, structural) = scored.stamp;
+                scored
+                    .candidate
+                    .hit
+                    .clone()
+                    .with_match_kind(kind, scored.score, structural)
+            })
+            .collect()
     }
 
     fn in_scope(&self, candidate: &Candidate, scope: LookupScope) -> bool {
