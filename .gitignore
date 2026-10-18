@@ -8,6 +8,17 @@ tools/overpy/oracle/.funckw-*/
 # The pinned oracle (overpy 9.7.17) writes <main>.<lang>.po templates next
 # to the source when compiling #!translations fixtures.
 crates/opy-rs/tests/fixtures/corpus/**/*.po
+# Translation fixture inputs must remain visible to Cargo and release-plz.
+!crates/opy-rs/tests/fixtures/corpus/synthetic/directives-scoped/child.en.po
+!crates/opy-rs/tests/fixtures/corpus/synthetic/directives-scoped/child.zh_cn.po
+!crates/opy-rs/tests/fixtures/corpus/synthetic/translations-long-string-331/source.fr.fr.po
+!crates/opy-rs/tests/fixtures/corpus/synthetic/translations-long-string-331/source.fr.po
+!crates/opy-rs/tests/fixtures/corpus/synthetic/translations-player-default-331/source.fr.fr.po
+!crates/opy-rs/tests/fixtures/corpus/synthetic/translations-player-default-331/source.fr.po
+!crates/opy-rs/tests/fixtures/corpus/synthetic/translations-player-no-detection-331/source.fr.fr.po
+!crates/opy-rs/tests/fixtures/corpus/synthetic/translations-player-no-detection-331/source.fr.po
+!crates/opy-rs/tests/fixtures/corpus/synthetic/translations-player-no-tlerr-331/source.fr.fr.po
+!crates/opy-rs/tests/fixtures/corpus/synthetic/translations-player-no-tlerr-331/source.fr.po
 # Python harness caches
 __pycache__/
 *.pyc
