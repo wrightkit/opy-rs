@@ -16,9 +16,7 @@ use workshop_rs::catalog::{Catalog, Kind};
 use workshop_rs::settings::{self, PathPart, SettingValueDomain};
 
 use crate::lower::special_forms::SPECIAL_FUNCTIONS;
-use crate::manifest::{
-    Function, FunctionKind, Manifest, Param, ParamDefault, ReceiverCategory,
-};
+use crate::manifest::{Function, FunctionKind, Manifest, Param, ParamDefault, ReceiverCategory};
 
 /// The default bound on returned hits; also the diagnostic candidate bound.
 pub const DEFAULT_LIMIT: usize = 8;
@@ -881,9 +879,8 @@ impl<'a> Index<'a> {
             .into_iter()
             .map(|hit| (sort_key(&hit.candidate.hit), hit))
             .collect();
-        ranked.sort_by(|(key_a, a), (key_b, b)| {
-            a.score.cmp(&b.score).then_with(|| key_a.cmp(key_b))
-        });
+        ranked
+            .sort_by(|(key_a, a), (key_b, b)| a.score.cmp(&b.score).then_with(|| key_a.cmp(key_b)));
         ranked
             .into_iter()
             .take(limit)
