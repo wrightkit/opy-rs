@@ -303,7 +303,7 @@ impl<'a> Lowering<'a> {
         let elements = self.normalize_contextual_arguments(name, elements);
         self.push_value(Value::Call {
             name: name.to_string(),
-            args: self.value_args(&elements),
+            args: elements,
         })
     }
 
@@ -549,10 +549,6 @@ impl<'a> Lowering<'a> {
         let action = self.push_call_action(name, args);
         self.mark_action_argument_origins(action, spans);
         action
-    }
-
-    fn value_args(&self, ids: &[ValueId]) -> Vec<ValueId> {
-        ids.to_vec()
     }
 
     fn push_call_action(&mut self, name: impl Into<String>, args: &[ValueId]) -> ActionId {
