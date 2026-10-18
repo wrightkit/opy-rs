@@ -129,22 +129,20 @@ impl Lowerer {
                 if modifier.contains('f')
                     && let Some(format_text) = format_text
                 {
-                    // Combined modifiers transform the format text only, in
-                    // the reference's fixed order; `p` is a no-op.
-                    let mut text = format_text.clone();
-                    let mut transformed = true;
-                    for step in ['b', 'w', 'c'] {
-                        if modifier.contains(step) {
-                            match crate::compile_time::modifier_template(&step.to_string(), &text) {
-                                Some(next) => text = next,
-                                None => {
-                                    transformed = false;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    if transformed {
+                    // Combined modifiers transform the format text only,
+                    // in the reference's fixed order; `p` is a no-op.
+                    // `modifier_template` applies b/w/c in that same
+                    // order, so the filtered modifier is one call.
+                    let bwc: String = modifier
+                        .chars()
+                        .filter(|c| matches!(c, 'b' | 'w' | 'c'))
+                        .collect();
+                    let transformed = if bwc.is_empty() {
+                        Some(format_text.clone())
+                    } else {
+                        crate::compile_time::modifier_template(&bwc, format_text)
+                    };
+                    if let Some(text) = transformed {
                         if !interpolations.is_empty() {
                             return HirExpr::Format {
                                 text,
