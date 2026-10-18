@@ -18,6 +18,52 @@ pub(super) struct MacroArgument {
     pub(super) raw: String,
 }
 
+/// The byte offsets of each line start in one source text, so
+/// position → byte-offset lookups do not rescan the file from its start
+/// per macro argument.
+pub(super) struct LineOffsets {
+    /// Byte offset of each line's first character, one entry per line;
+    /// `starts[0]` is 0. The last entry covers to the end of the text.
+    starts: Vec<usize>,
+}
+
+impl LineOffsets {
+    fn new(text: &str) -> LineOffsets {
+        let mut starts = vec![0];
+        for (offset, character) in text.char_indices() {
+            if character == '\n' {
+                starts.push(offset + 1);
+            }
+        }
+        LineOffsets { starts }
+    }
+
+    /// The byte offset of a 1-based line/column position, or `None` when
+    /// the position is outside the text. Positions index characters, so
+    /// the offset is `col - 1` characters past the line's start.
+    fn offset_of(&self, text: &str, position: crate::diag::Position) -> Option<usize> {
+        let width = position.col.checked_sub(1)? as usize;
+        let line = position.line as usize;
+        let start = *self.starts.get(line.checked_sub(1)?)?;
+        // `line` is within the file; walk its characters until the column
+        // is consumed. The column may land one past the last character of
+        // a line (the position after the final `\n`-free character or the
+        // newline itself), which resolves to the next line's start.
+        let mut chars_seen = 0usize;
+        for (offset, character) in text[start..].char_indices() {
+            if character == '\n' {
+                // Columns past the newline do not exist on this line.
+                return (chars_seen == width).then_some(start + offset);
+            }
+            if chars_seen == width {
+                return Some(start + offset);
+            }
+            chars_seen += 1;
+        }
+        (chars_seen == width).then_some(text.len())
+    }
+}
+
 impl Preprocessor {
     pub(super) fn define(&mut self, rest: &str, span: Span, is_member: bool) -> OpyResult<()> {
         let rest = rest.trim();
@@ -135,29 +181,31 @@ impl Preprocessor {
         let mut out: Vec<Token> = Vec::new();
         let mut index = 0;
         while index < tokens.len() {
-            let (expanded, after) = self.expand_one(&tokens, index, &out)?;
-            out.extend(expanded);
-            index = after;
+            index = self.expand_one(&tokens, index, &mut out)?;
         }
         Ok(out)
     }
 
+    /// Expand one position of `tokens` directly into `output`, returning
+    /// the next index to process.
     pub(super) fn expand_one(
         &self,
         tokens: &[Token],
         index: usize,
-        output: &[Token],
-    ) -> OpyResult<(Vec<Token>, usize)> {
+        output: &mut Vec<Token>,
+    ) -> OpyResult<usize> {
         let token = &tokens[index];
         if token.kind != TokenKind::Ident
             || output.last().is_some_and(|previous| {
                 previous.kind == TokenKind::Ident && previous.text == "macro"
             })
         {
-            return Ok((vec![token.clone()], index + 1));
+            output.push(token.clone());
+            return Ok(index + 1);
         }
         let Some(mac) = self.macros.iter().find(|mac| mac.name == token.text) else {
-            return Ok((vec![token.clone()], index + 1));
+            output.push(token.clone());
+            return Ok(index + 1);
         };
         let (args, after) = if mac.is_function
             && tokens
@@ -170,7 +218,8 @@ impl Preprocessor {
         };
         let mut expanded = self.expand_macro(mac, args, token, line_indent(tokens, index))?;
         self.expand_into(&mut expanded, &mut Vec::new(), 0)?;
-        Ok((expanded, after))
+        output.append(&mut expanded);
+        Ok(after)
     }
 
     fn collect_args(
@@ -231,8 +280,12 @@ impl Preprocessor {
             return None;
         }
         let source = self.source_texts.get(&first.file)?;
-        let start = position_offset(source, first.start)?;
-        let end = position_offset(source, last.end)?;
+        let mut offsets = self.line_offsets.borrow_mut();
+        let offsets = offsets
+            .entry(first.file)
+            .or_insert_with(|| LineOffsets::new(source));
+        let start = offsets.offset_of(source, first.start)?;
+        let end = offsets.offset_of(source, last.end)?;
         let raw = source.get(start..end)?.to_string();
         let lexed = lex(LexInput {
             file_id: first.file,
@@ -376,26 +429,6 @@ fn line_indent(tokens: &[Token], index: usize) -> u32 {
         .get(line_start..=index)
         .and_then(|line| line.iter().find(|token| token.kind != TokenKind::Newline))
         .map_or(0, |token| token.layout.start.col.saturating_sub(1))
-}
-
-fn position_offset(source: &str, position: crate::diag::Position) -> Option<usize> {
-    let mut line = 1;
-    let mut col = 1;
-    if position.line == line && position.col == col {
-        return Some(0);
-    }
-    for (offset, character) in source.char_indices() {
-        if character == '\n' {
-            line += 1;
-            col = 1;
-        } else {
-            col += 1;
-        }
-        if position.line == line && position.col == col {
-            return Some(offset + character.len_utf8());
-        }
-    }
-    (position.line == line && position.col == col).then_some(source.len())
 }
 
 fn raw_arg_text(tokens: &[Token]) -> String {

@@ -225,6 +225,7 @@ pub fn preprocess_with_overlay_outcome(
         display_root: resolved_root,
         overlay: overlay.clone(),
         source_texts: BTreeMap::from([(0, main_text.to_string())]),
+        line_offsets: std::cell::RefCell::new(BTreeMap::new()),
         include_stack: Vec::new(),
         last_macro_include_path: None,
         imported_files: BTreeSet::new(),
@@ -451,6 +452,10 @@ struct Preprocessor {
     display_root: PathBuf,
     overlay: BTreeMap<String, String>,
     source_texts: BTreeMap<u32, String>,
+    /// Per-file line-start offsets, built once on the first macro-argument
+    /// raw-text lookup in that file (borrowed because `expand`/`expand_one`
+    /// run under `&self`).
+    line_offsets: std::cell::RefCell<BTreeMap<u32, macros::LineOffsets>>,
     include_stack: Vec<PathBuf>,
     // OverPy retains this file context after multiline macro expansion in an
     // included settings block; established projects rely on that lookup base.

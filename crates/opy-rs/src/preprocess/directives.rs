@@ -45,9 +45,7 @@ impl Preprocessor {
                 out.push(token.clone());
                 index += 1;
             } else {
-                let (expanded, after) = self.expand_one(&input, index, &out)?;
-                out.extend(expanded);
-                index = after;
+                index = self.expand_one(&input, index, &mut out)?;
             }
         }
         if let Some(block) = pending_settings.take() {
