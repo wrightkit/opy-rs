@@ -108,22 +108,8 @@ impl<'a> Lowering<'a> {
         let current_index = self.push_call("currentArrayIndex", Vec::new());
         let condition = self.push_call("!=", vec![current_index, leaf_index]);
         let filtered = self.push_call("filteredArray", vec![row, condition]);
-        let replacement = if let Some(number) = hir::visit::literal_number(indices[1]) {
-            let middle = self.lower_array(vec![filtered]);
-            let maximum = self.push_number(999_999_999_999.0);
-            let suffix_start = self.push_number(number + 1.0);
-            let suffix = self.push_call("slice", vec![outer_array, suffix_start, maximum]);
-            if number == 0.0 {
-                self.push_call("appendToArray", vec![middle, suffix])
-            } else {
-                let zero = self.push_number(0.0);
-                let prefix = self.push_call("slice", vec![outer_array, zero, inner_index]);
-                let with_replacement = self.push_call("appendToArray", vec![prefix, middle]);
-                self.push_call("appendToArray", vec![with_replacement, suffix])
-            }
-        } else {
-            self.replace_array_element(outer_array, inner_index, filtered)
-        };
+        let replacement =
+            self.replace_array_element_for_delete(outer_array, indices[1], inner_index, filtered);
         let action_name = if action_name == "modifyGlobalVariableAtIndex" {
             "setGlobalVariableAtIndex"
         } else {
