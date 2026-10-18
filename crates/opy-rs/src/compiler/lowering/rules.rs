@@ -1792,15 +1792,12 @@ impl<'a> Lowering<'a> {
         fallback_span: Option<HirSpan>,
     ) -> Result<usize, IntegrationError> {
         let public_actions = self.public_actions(actions);
-        let mut program = self.program.clone();
-        program.settings = None;
-        program.rules.push(rule_from_parts(
-            "action layout".to_string(),
-            false,
-            workshop_rs::Event::Global,
-            Vec::new(),
-            public_actions.clone(),
-        ));
+        // action_width only consults the variable/subroutine declarations and
+        // builds its own rule; no other program state is read.
+        let mut program = workshop_rs::Program::new();
+        program.global_variables = self.program.global_variables.clone();
+        program.player_variables = self.program.player_variables.clone();
+        program.subroutines = self.program.subroutines.clone();
         workshop_rs::emitter::action_width(
             &program,
             self.compiler.catalog,
