@@ -62,15 +62,9 @@ impl<'a> SizeOptimizer<'a> {
     /// empty array where the parameter accepts one.
     fn empty_string(&self, empty_array: bool) -> Value {
         if empty_array {
-            return Value::Call {
-                name: "emptyArray".to_string(),
-                args: Vec::new(),
-            };
+            return Value::call("emptyArray", Vec::new());
         }
-        Value::Call {
-            name: "charAt".to_string(),
-            args: vec![Value::String(String::new()), Value::Number(0.0)],
-        }
+        Value::call("charAt", [Value::String(String::new()), Value::Number(0.0)])
     }
 
     fn modified(&self, op: ModifyOp, value: &mut Value) {
@@ -285,19 +279,7 @@ impl<'a> SizeOptimizer<'a> {
     }
 
     fn zero_vector_sum(&self) -> Value {
-        Value::Call {
-            name: "add".to_string(),
-            args: vec![
-                Value::Enum {
-                    value_type: "Vector".to_string(),
-                    value: "LEFT".to_string(),
-                },
-                Value::Enum {
-                    value_type: "Vector".to_string(),
-                    value: "RIGHT".to_string(),
-                },
-            ],
-        }
+        Value::call("add", [direction("LEFT"), direction("RIGHT")])
     }
 }
 
@@ -350,15 +332,11 @@ fn compact_vector(x: &Value, y: &Value, z: &Value) -> Option<Value> {
             _ => None,
         };
         if let Some((first, second)) = pair {
-            return Some(Value::Call {
-                name: "add".to_string(),
-                args: vec![direction(first), direction(second)],
-            });
+            return Some(Value::call("add", [direction(first), direction(second)]));
         }
     }
-    let scaled = |component: &Value, axis: &str| Value::Call {
-        name: "multiply".to_string(),
-        args: vec![component.clone(), direction(axis)],
+    let scaled = |component: &Value, axis: &str| {
+        Value::call("multiply", [component.clone(), direction(axis)])
     };
     if ny == Some(0.0) && nz == Some(0.0) {
         Some(scaled(x, "LEFT"))
