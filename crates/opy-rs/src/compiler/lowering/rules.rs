@@ -1639,21 +1639,12 @@ impl<'a> Lowering<'a> {
             .collect();
         let offset_values = self.lower_array(offset_values);
         let offset_value = self.value(offset_values).clone();
+        // The selector's `valueInArray` already references the `offsets` node;
+        // replacing it in place fills the placeholder the selector holds.
         let Some(node) = self.values.get_mut(offsets) else {
             unreachable!("switch offset placeholder must exist")
         };
         *node = offset_value;
-
-        let Some(Action::Call { args, .. }) = self.actions.get_mut(skip) else {
-            unreachable!("switch selector must be a call action")
-        };
-        let Some(selector_id) = args.first().copied() else {
-            unreachable!("switch selector condition must be a value call")
-        };
-        let Some(Value::Call { args, .. }) = self.values.get_mut(selector_id) else {
-            unreachable!("switch selector condition must be a value call")
-        };
-        args[0] = offsets;
 
         Ok(switch)
     }
