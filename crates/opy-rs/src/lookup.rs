@@ -12,140 +12,14 @@
 //! carry, so lookup results and rejection diagnostics cannot drift.
 
 use serde::Serialize;
-use std::sync::OnceLock;
 use workshop_rs::catalog::{Catalog, Kind};
 use workshop_rs::settings::{self, PathPart, SettingValueDomain};
 
-use crate::manifest::{
-    AliasKind, Function, FunctionKind, Manifest, Param, ParamDefault, ReceiverCategory,
-};
+use crate::lower::special_forms::SPECIAL_FUNCTIONS;
+use crate::manifest::{Function, FunctionKind, Manifest, Param, ParamDefault, ReceiverCategory};
 
 /// The default bound on returned hits; also the diagnostic candidate bound.
 pub const DEFAULT_LIMIT: usize = 8;
-
-/// A source-level special form: a call name the lowerer handles by name
-/// rather than through the manifest (`crate::lower::expressions`). Their
-/// parameter facts mirror the reference's declared signatures — the same
-/// `(name, type, required, default)` facts manifest-backed callables report.
-struct SpecialFunction {
-    name: &'static str,
-    params: &'static [SpecialParam],
-}
-
-/// One ordered parameter of a special call, from the reference signature.
-struct SpecialParam {
-    name: &'static str,
-    /// The reference's declared argument type (`IntLiteral`, `Lambda`, …).
-    param_type: &'static str,
-    required: bool,
-    /// The declared default rendered in source syntax, when declared.
-    default: Option<&'static str>,
-}
-
-const fn required(name: &'static str, param_type: &'static str) -> SpecialParam {
-    SpecialParam {
-        name,
-        param_type,
-        required: true,
-        default: None,
-    }
-}
-
-const fn defaulted(
-    name: &'static str,
-    param_type: &'static str,
-    default: &'static str,
-) -> SpecialParam {
-    SpecialParam {
-        name,
-        param_type,
-        required: false,
-        default: Some(default),
-    }
-}
-
-const fn optional(name: &'static str, param_type: &'static str) -> SpecialParam {
-    SpecialParam {
-        name,
-        param_type,
-        required: false,
-        default: None,
-    }
-}
-
-/// The special-call spellings an `unknown-value` diagnostic can suggest and
-/// the lookup can describe, with the parameter facts the reference declares.
-const SPECIAL_FUNCTIONS: &[SpecialFunction] = &[
-    SpecialFunction {
-        name: "sorted",
-        params: &[
-            required("array", "Array"),
-            // The reference's signature names the slot `lambda`; `key` is
-            // the keyword spelling callers write (#437).
-            optional("key", "Lambda"),
-        ],
-    },
-    SpecialFunction {
-        name: "createWorkshopSetting",
-        params: &[
-            required("type", "Type"),
-            required("category", "CustomStringLiteral"),
-            required("name", "CustomStringLiteral"),
-            required("default", "BoolLiteral|IntLiteral|FloatLiteral|HeroLiteral"),
-            defaulted("sortOrder", "IntLiteral", "0"),
-        ],
-    },
-    SpecialFunction {
-        name: "createWorkshopSettingBool",
-        params: &[
-            required("category", "CustomStringLiteral"),
-            required("name", "CustomStringLiteral"),
-            required("default", "BoolLiteral"),
-            defaulted("sortOrder", "IntLiteral", "0"),
-        ],
-    },
-    SpecialFunction {
-        name: "createWorkshopSettingEnum",
-        params: &[
-            required("category", "CustomStringLiteral"),
-            required("name", "CustomStringLiteral"),
-            required("default", "UnsignedIntLiteral"),
-            required("options", "Array<CustomStringLiteral>"),
-            defaulted("sortOrder", "IntLiteral", "0"),
-        ],
-    },
-    SpecialFunction {
-        name: "createWorkshopSettingInt",
-        params: &[
-            required("category", "CustomStringLiteral"),
-            required("name", "CustomStringLiteral"),
-            required("default", "IntLiteral"),
-            required("min", "IntLiteral"),
-            required("max", "IntLiteral"),
-            defaulted("sortOrder", "IntLiteral", "0"),
-        ],
-    },
-    SpecialFunction {
-        name: "createWorkshopSettingFloat",
-        params: &[
-            required("category", "CustomStringLiteral"),
-            required("name", "CustomStringLiteral"),
-            required("default", "FloatLiteral"),
-            required("min", "FloatLiteral"),
-            required("max", "FloatLiteral"),
-            defaulted("sortOrder", "IntLiteral", "0"),
-        ],
-    },
-    SpecialFunction {
-        name: "createWorkshopSettingHero",
-        params: &[
-            required("category", "CustomStringLiteral"),
-            required("name", "CustomStringLiteral"),
-            required("default", "HeroLiteral"),
-            defaulted("sortOrder", "IntLiteral", "0"),
-        ],
-    },
-];
 
 /// A lookup request.
 #[derive(Debug, Clone, PartialEq)]
@@ -605,19 +479,20 @@ pub fn lookup(query: &LookupQuery) -> LookupOutcome {
             );
         }
     }
-    let (manifest, catalog) = match (Manifest::builtin(), Catalog::builtin()) {
-        (Ok(manifest), Ok(catalog)) => (manifest, catalog),
-        _ => return unsupported("vocabulary data (manifest or catalog) is not bundled"),
+    let Ok(catalog) = crate::enums::builtin_catalog() else {
+        return unsupported("vocabulary data (manifest or catalog) is not bundled");
     };
-    let index = Index::new(manifest, &catalog);
+    let Ok(manifest) = Manifest::builtin() else {
+        return unsupported("vocabulary data (manifest or catalog) is not bundled");
+    };
+    let index = Index::new(manifest, catalog);
     if let Some(within) = &query.within {
         let Some(children) = index.children(within) else {
             return LookupOutcome::UnknownWithin {
                 within: within.clone(),
             };
         };
-        let mut results = index.rank(children.iter(), query);
-        results.truncate(limit);
+        let results = index.rank(children.iter(), query, limit);
         return LookupOutcome::Matched {
             scope: within.scope(),
             limit,
@@ -627,14 +502,14 @@ pub fn lookup(query: &LookupQuery) -> LookupOutcome {
     if !query.scope.any() {
         return unsupported("the query scope selects no namespace");
     }
-    let mut results = index.rank(
+    let results = index.rank(
         index
             .candidates
             .iter()
             .filter(|candidate| index.in_scope(candidate, scope)),
         query,
+        limit,
     );
-    results.truncate(limit);
     LookupOutcome::Matched {
         scope,
         limit,
@@ -732,14 +607,6 @@ const SYNTAX_SPELLINGS: &[(&str, &str)] = &[
     ("stopChasingPlayerVariable", "stopChasingVariable"),
 ];
 
-/// The bundled catalog, loaded once — `Catalog::builtin` reparses the
-/// data on every call, which a `resolveIds` request paying per id cannot
-/// afford.
-fn resolve_catalog() -> Option<&'static Catalog> {
-    static CATALOG: OnceLock<Option<Catalog>> = OnceLock::new();
-    CATALOG.get_or_init(|| Catalog::builtin().ok()).as_ref()
-}
-
 /// `lpp/resolveIds` backing: the OPY spelling a canonical Workshop action,
 /// value, or operator id compiles from — the manifest `catalogId` link for
 /// declared callables, else [`SYNTAX_SPELLINGS`] for the ids source syntax
@@ -747,7 +614,7 @@ fn resolve_catalog() -> Option<&'static Catalog> {
 /// unknown.
 pub fn call_spelling(canonical_id: &str) -> Option<&'static str> {
     let manifest = Manifest::builtin().ok()?;
-    let catalog = resolve_catalog()?;
+    let catalog = crate::enums::builtin_catalog().ok()?;
     // A manifest entry's canonical identity is its `catalogId`, or — when
     // it declares none — its own `id` when that id is a canonical call
     // (`startRule`); a `catalogId`-free source name that is not a canonical
@@ -781,7 +648,7 @@ pub fn call_spelling(canonical_id: &str) -> Option<&'static str> {
 /// and members the reference does not spell in source, and for OPY-only
 /// members with no canonical id.
 pub fn enum_member_spelling<'a>(domain: &'a str, member: &'a str) -> Option<&'a str> {
-    let catalog = resolve_catalog()?;
+    let catalog = crate::enums::builtin_catalog().ok()?;
     let enum_domain = catalog.enum_domain(domain)?;
     if !enum_domain
         .members
@@ -793,28 +660,31 @@ pub fn enum_member_spelling<'a>(domain: &'a str, member: &'a str) -> Option<&'a 
     crate::enums::spelling_of_member(domain, member).map(|(_, member)| member)
 }
 
-struct ScoredHit {
+struct ScoredHit<'c> {
     score: u32,
-    hit: LookupHit,
+    /// The kind and `structural` flag `with_match_kind` needs — the
+    /// un-stamped hit stays borrowed until the result list is bounded.
+    stamp: (MatchKind, bool),
+    candidate: &'c Candidate,
+}
+
+/// The lexicographic hit order for equal scores: a kind rank, then the
+/// hit's spelling.
+fn sort_key(hit: &LookupHit) -> (u8, String) {
+    match hit {
+        LookupHit::Function { spelling, .. } => (0, spelling.clone()),
+        LookupHit::EnumMember { spelling, .. } => (1, spelling.clone()),
+        LookupHit::EnumDomain { domain, .. } => (2, domain.clone()),
+        LookupHit::Setting { path, .. } => (3, path.clone()),
+        LookupHit::Parameter {
+            callable, param, ..
+        } => (4, format!("{callable}.{}", param.name)),
+        LookupHit::SettingPath { path, .. } => (5, path.clone()),
+        LookupHit::Event { spelling, .. } => (6, spelling.clone()),
+    }
 }
 
 impl LookupHit {
-    fn sort_key(&self) -> String {
-        match self {
-            LookupHit::Function { spelling, .. } => format!("0{spelling}"),
-            LookupHit::EnumMember { spelling, .. } => format!("1{spelling}"),
-            LookupHit::EnumDomain { domain, .. } => format!("2{domain}"),
-            LookupHit::Setting { path, .. } => format!("3{path}"),
-            LookupHit::Parameter {
-                callable, param, ..
-            } => {
-                format!("4{callable}.{}", param.name)
-            }
-            LookupHit::SettingPath { path, .. } => format!("5{path}"),
-            LookupHit::Event { spelling, .. } => format!("6{spelling}"),
-        }
-    }
-
     /// Restamp `matched_on` for a listed answer: no text constraint scored,
     /// so the entry's own primary form is what it answers to.
     fn listed(self) -> LookupHit {
@@ -942,20 +812,26 @@ impl<'a> Index<'a> {
         index
     }
 
-    /// Rank `candidates` under `query`: a non-empty text scores each
-    /// candidate's best-matching form through the shared matcher pipeline,
-    /// while an empty text lists the candidates in their construction order.
+    /// Rank `candidates` under `query` bounded to `limit`: a non-empty text
+    /// scores each candidate's best-matching form through the shared matcher
+    /// pipeline, while an empty text lists the candidates in their
+    /// construction order. Hits are cloned only after the bound applies.
     fn rank<'c>(
         &self,
         candidates: impl Iterator<Item = &'c Candidate>,
         query: &LookupQuery,
+        limit: usize,
     ) -> Vec<LookupHit> {
         if query.text.trim().is_empty() {
             return candidates
+                .take(limit)
                 .map(|candidate| candidate.hit.clone().listed())
                 .collect();
         }
-        let mut hits: Vec<ScoredHit> = candidates
+        // Fold the query once per rank call: `path_score`'s segment split
+        // and `score`'s fold are per-query, not per-form, work.
+        let (path_segments, folded) = crate::matcher::fold_path_query(&query.text);
+        let hits: Vec<ScoredHit<'c>> = candidates
             .filter_map(|candidate| {
                 candidate
                     .forms
@@ -968,15 +844,15 @@ impl<'a> Index<'a> {
                         // `crate::matcher` — the same pipeline that produces
                         // the `did you mean` candidates on rejected names.
                         let (scored, structural) = if *kind == MatchKind::Path {
-                            match crate::matcher::path_score(&query.text, form) {
+                            match crate::matcher::path_score_folded(&path_segments, form) {
                                 Some(s) => (Some(s), true),
-                                None => (crate::matcher::score(&query.text, form), false),
+                                None => (crate::matcher::score_folded(&folded, form), false),
                             }
                         } else {
                             // A produced-type form always reports the
                             // relation it matched, near or exact.
                             (
-                                crate::matcher::score(&query.text, form),
+                                crate::matcher::score_folded(&folded, form),
                                 *kind == MatchKind::ProducedType,
                             )
                         };
@@ -994,16 +870,32 @@ impl<'a> Index<'a> {
                     .min_by_key(|(s, exact, _, _)| (*s, !*exact))
                     .map(|(s, _, kind, structural)| ScoredHit {
                         score: s,
-                        hit: candidate.hit.clone().with_match_kind(kind, s, structural),
+                        stamp: (kind, structural),
+                        candidate,
                     })
             })
             .collect();
-        hits.sort_by(|a, b| {
-            a.score
-                .cmp(&b.score)
-                .then_with(|| a.hit.sort_key().cmp(&b.hit.sort_key()))
-        });
-        hits.into_iter().map(|scored| scored.hit).collect()
+        // The sort key is computed once per candidate and travels with it;
+        // `sort_by` is stable, so equal (score, key) pairs keep their
+        // candidate-iteration order, matching the previous behavior.
+        let mut ranked: Vec<((u8, String), ScoredHit<'c>)> = hits
+            .into_iter()
+            .map(|hit| (sort_key(&hit.candidate.hit), hit))
+            .collect();
+        ranked
+            .sort_by(|(key_a, a), (key_b, b)| a.score.cmp(&b.score).then_with(|| key_a.cmp(key_b)));
+        ranked
+            .into_iter()
+            .take(limit)
+            .map(|(_, scored)| {
+                let (kind, structural) = scored.stamp;
+                scored
+                    .candidate
+                    .hit
+                    .clone()
+                    .with_match_kind(kind, scored.score, structural)
+            })
+            .collect()
     }
 
     fn in_scope(&self, candidate: &Candidate, scope: LookupScope) -> bool {
@@ -1196,7 +1088,7 @@ impl<'a> Index<'a> {
                 }
             }
             for alias in self.manifest.aliases() {
-                if alias_target(alias, self.manifest)
+                if crate::matcher::alias_target(alias, self.manifest)
                     .is_some_and(|target| std::ptr::eq(target, function))
                 {
                     forms.push((alias.source.clone(), MatchKind::Alias));
@@ -1562,17 +1454,6 @@ fn is_handle_type(type_name: &str) -> bool {
     type_name.ends_with("Id")
 }
 
-/// The function an alias resolves to, through its declared kind.
-fn alias_target<'a>(
-    alias: &crate::manifest::Alias,
-    manifest: &'a Manifest,
-) -> Option<&'a Function> {
-    match alias.kind {
-        AliasKind::FunctionAlias => manifest.function(&alias.target),
-        AliasKind::MemberAlias => manifest.member(&alias.target),
-    }
-}
-
 /// Render a manifest `DomainMember` as a lookup member entry.
 fn member_entry(member: &crate::enums::DomainMember) -> EnumMemberEntry {
     EnumMemberEntry {
@@ -1730,8 +1611,9 @@ mod tests {
         }
         // Special-call spellings must be exactly the names `lower_call`
         // dispatches on: `SPECIAL_VALUE_CALLS` is the descriptor the resolver
-        // consults, so a dropped or renamed special form makes the reported
-        // set disagree and fails here.
+        // consults and `SPECIAL_FUNCTIONS` is declared in the same module, so
+        // a dropped or renamed special form makes the reported set disagree
+        // and fails here.
         let reported: Vec<&str> = SPECIAL_FUNCTIONS
             .iter()
             .map(|special| special.name)

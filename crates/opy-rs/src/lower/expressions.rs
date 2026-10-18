@@ -129,22 +129,20 @@ impl Lowerer {
                 if modifier.contains('f')
                     && let Some(format_text) = format_text
                 {
-                    // Combined modifiers transform the format text only, in
-                    // the reference's fixed order; `p` is a no-op.
-                    let mut text = format_text.clone();
-                    let mut transformed = true;
-                    for step in ['b', 'w', 'c'] {
-                        if modifier.contains(step) {
-                            match crate::compile_time::modifier_template(&step.to_string(), &text) {
-                                Some(next) => text = next,
-                                None => {
-                                    transformed = false;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    if transformed {
+                    // Combined modifiers transform the format text only,
+                    // in the reference's fixed order; `p` is a no-op.
+                    // `modifier_template` applies b/w/c in that same
+                    // order, so the filtered modifier is one call.
+                    let bwc: String = modifier
+                        .chars()
+                        .filter(|c| matches!(c, 'b' | 'w' | 'c'))
+                        .collect();
+                    let transformed = if bwc.is_empty() {
+                        Some(format_text.clone())
+                    } else {
+                        crate::compile_time::modifier_template(&bwc, format_text)
+                    };
+                    if let Some(text) = transformed {
                         if !interpolations.is_empty() {
                             return HirExpr::Format {
                                 text,
@@ -492,7 +490,7 @@ impl Lowerer {
                 || crate::enums::literal_domain(name).is_some()
                 || (name == "Clip" && self.manifest.domain_identity(catalog_domain))
             {
-                match crate::enums::canonical_member(name, member, &self.catalog) {
+                match crate::enums::canonical_member(name, member, self.catalog) {
                     Some((domain, canonical_member)) => {
                         return HirExpr::Enum {
                             value_type: domain,
@@ -529,7 +527,7 @@ impl Lowerer {
                                     format!("enum '{name}' has no member '{member}'"),
                                     span,
                                     member,
-                                    &crate::matcher::enum_member_candidates(&self.catalog, name),
+                                    &crate::matcher::enum_member_candidates(self.catalog, name),
                                 );
                             }
                         }
@@ -559,7 +557,7 @@ impl Lowerer {
                     };
                 }
                 if !default_var_index(member).is_some() && !self.player_visible(member) {
-                    let mut pool = crate::matcher::member_candidates(self.manifest, &self.catalog);
+                    let mut pool = crate::matcher::member_candidates(self.manifest, self.catalog);
                     pool.extend(crate::matcher::bare_candidates(["x", "y", "z"]));
                     self.error_at_candidates(
                         "unknown-member",
@@ -759,10 +757,10 @@ impl Lowerer {
                     };
                     let pool = match code {
                         "unknown-action" => {
-                            crate::matcher::action_candidates(self.manifest, &self.catalog)
+                            crate::matcher::action_candidates(self.manifest, self.catalog)
                         }
                         "unknown-value" => {
-                            crate::matcher::value_candidates(self.manifest, &self.catalog)
+                            crate::matcher::value_candidates(self.manifest, self.catalog)
                         }
                         _ => Vec::new(),
                     };
@@ -1251,7 +1249,7 @@ impl Lowerer {
         if entry.params[param_index].domain.as_deref() == Some("Team") {
             if let Expr::Number { text, span, .. } = &arg.value {
                 if let Some((domain, member)) =
-                    crate::enums::canonical_member("Team", text, &self.catalog)
+                    crate::enums::canonical_member("Team", text, self.catalog)
                 {
                     return HirExpr::Enum {
                         value_type: domain,
@@ -1465,7 +1463,7 @@ impl Lowerer {
                     format!("unknown member '{name}'"),
                     span,
                     name,
-                    &crate::matcher::member_candidates(self.manifest, &self.catalog),
+                    &crate::matcher::member_candidates(self.manifest, self.catalog),
                 );
                 (name.to_string(), self.lower_arg_values(args, macro_params))
             }

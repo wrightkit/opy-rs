@@ -101,14 +101,14 @@ struct Lowerer {
     current_order: usize,
     allow_dict_literal: bool,
     manifest: &'static Manifest,
-    catalog: Catalog,
+    catalog: &'static Catalog,
     texture_used: bool,
     setup_tags: bool,
-    errors: Vec<OpyError>,
+    first_error: Option<OpyError>,
 }
 
 impl Lowerer {
-    fn new(manifest: &'static Manifest, catalog: Catalog) -> Self {
+    fn new(manifest: &'static Manifest, catalog: &'static Catalog) -> Self {
         Self {
             global_declarations: HashMap::new(),
             player_declarations: HashMap::new(),
@@ -125,7 +125,7 @@ impl Lowerer {
             catalog,
             texture_used: false,
             setup_tags: false,
-            errors: Vec::new(),
+            first_error: None,
         }
     }
 }
@@ -168,15 +168,12 @@ pub fn lower_with_preprocessing(
             ));
         }
     };
-    let catalog = match Catalog::builtin() {
-        Ok(catalog) => catalog,
-        Err(error) => {
-            return Err(OpyError::new(
-                "catalog-error",
-                format!("cannot load the Workshop catalog: {error}"),
-            ));
-        }
-    };
+    let catalog = crate::enums::builtin_catalog().map_err(|error| {
+        OpyError::new(
+            "catalog-error",
+            format!("cannot load the Workshop catalog: {error}"),
+        )
+    })?;
     lower_program(program, files, defines, preprocessing, manifest, catalog)
 }
 
@@ -186,7 +183,7 @@ fn lower_program(
     defines: Vec<Define>,
     preprocessing: &PreprocessingState,
     manifest: &'static Manifest,
-    catalog: Catalog,
+    catalog: &'static Catalog,
 ) -> OpyResult<HirProgram> {
     let mut lowerer = Lowerer::new(manifest, catalog);
     lowerer.setup_tags = preprocessing
@@ -253,8 +250,8 @@ fn lower_program(
         }
     }
 
-    if !lowerer.errors.is_empty() {
-        return Err(lowerer.errors.swap_remove(0));
+    if let Some(error) = lowerer.first_error.take() {
+        return Err(error);
     }
 
     if lowerer.texture_used || lowerer.setup_tags {
@@ -471,7 +468,7 @@ impl SettingsLowerer {
                 format!("cannot load the OPY semantic compatibility manifest: {error}"),
             )
         })?;
-        let catalog = Catalog::builtin().map_err(|error| {
+        let catalog = crate::enums::builtin_catalog().map_err(|error| {
             OpyError::new(
                 "catalog-error",
                 format!("cannot load the Workshop catalog: {error}"),
@@ -499,16 +496,12 @@ impl SettingsLowerer {
         origin: crate::diag::Position,
     ) -> OpyResult<HirExpr> {
         let expression = crate::parser::parse_expression_fragment(text, file, origin, None, &[])?;
-        self.lowerer.errors.clear();
+        self.lowerer.first_error = None;
         self.lowerer.texture_used = false;
         let lowered = self
             .lowerer
             .lower_expr(&expression, &[], CallPosition::Value);
-        self.lowerer
-            .errors
-            .first()
-            .cloned()
-            .map_or(Ok(lowered), Err)
+        self.lowerer.first_error.take().map_or(Ok(lowered), Err)
     }
 }
 
@@ -887,7 +880,9 @@ fn lower_settings_node(node: &cst::SettingsNode) -> HirSettingsNode {
 
 impl Lowerer {
     fn error_at(&mut self, code: &str, message: String, span: Span) {
-        self.errors.push(OpyError::at(code, message, span));
+        if self.first_error.is_none() {
+            self.first_error = Some(OpyError::at(code, message, span));
+        }
     }
 
     /// An error whose message names the valid spellings nearest `rejected`
@@ -2313,7 +2308,7 @@ mod tests {
             vec![],
             &PreprocessingState::default(),
             manifest,
-            Catalog::builtin().expect("the builtin catalog loads"),
+            crate::enums::builtin_catalog().expect("the builtin catalog loads"),
         )
     }
 

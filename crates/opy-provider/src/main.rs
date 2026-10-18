@@ -43,79 +43,54 @@ fn version_at_least(protocol_version: &str, minimum: &str) -> bool {
     rank(protocol_version) >= rank(minimum)
 }
 
-#[derive(Debug, Clone, Copy)]
-struct Capabilities {
-    check: bool,
-    compile: bool,
-    project_loading: bool,
-    source_identity: bool,
-    symbols: bool,
-    definition: bool,
-    references: bool,
-    rename: bool,
-    edit_validation: bool,
-    lookup: bool,
-    resolve_ids: bool,
+/// Whether `capability` is implemented by this first-party provider. All
+/// advertised capabilities are enabled; `projectLoading` is advertised only
+/// under the version-gated negotiation path in `dispatch`, never through
+/// `capability_for`/`enabled`.
+fn capability_enabled(capability: &str) -> bool {
+    matches!(
+        capability,
+        "check"
+            | "compile"
+            | "projectLoading"
+            | "sourceIdentity"
+            | "symbols"
+            | "definition"
+            | "references"
+            | "rename"
+            | "editValidation"
+            | "lookup"
+            | "resolveIds"
+    )
 }
 
-impl Capabilities {
-    const fn first_party() -> Self {
-        Self {
-            check: true,
-            compile: true,
-            project_loading: true,
-            source_identity: true,
-            symbols: true,
-            definition: true,
-            references: true,
-            rename: true,
-            edit_validation: true,
-            lookup: true,
-            resolve_ids: true,
-        }
+/// The advertised capabilities for `protocol_version`; every implemented
+/// capability is enabled, with version-gated names added at their
+/// introduction versions.
+fn capabilities_json(protocol_version: &str) -> Value {
+    let mut capabilities = json!({
+        "check": true,
+        "compile": true,
+        "reconstruct": false,
+        "symbols": true,
+        "definition": true,
+        "references": true,
+        "rename": true,
+        "editValidation": true,
+    });
+    if version_at_least(protocol_version, PROJECT_LOADING_VERSION) {
+        capabilities["projectLoading"] = json!(true);
     }
-
-    fn enabled(self, capability: &str) -> bool {
-        match capability {
-            "check" => self.check,
-            "compile" => self.compile,
-            "projectLoading" => self.project_loading,
-            "symbols" => self.symbols,
-            "definition" => self.definition,
-            "references" => self.references,
-            "rename" => self.rename,
-            "editValidation" => self.edit_validation,
-            "lookup" => self.lookup,
-            "resolveIds" => self.resolve_ids,
-            _ => false,
-        }
+    if version_at_least(protocol_version, SOURCE_IDENTITY_VERSION) {
+        capabilities["sourceIdentity"] = json!(true);
     }
-
-    fn as_json(self, protocol_version: &str) -> Value {
-        let mut capabilities = json!({
-            "check": self.check,
-            "compile": self.compile,
-            "reconstruct": false,
-            "symbols": self.symbols,
-            "definition": self.definition,
-            "references": self.references,
-            "rename": self.rename,
-            "editValidation": self.edit_validation,
-        });
-        if version_at_least(protocol_version, PROJECT_LOADING_VERSION) {
-            capabilities["projectLoading"] = json!(self.project_loading);
-        }
-        if version_at_least(protocol_version, SOURCE_IDENTITY_VERSION) {
-            capabilities["sourceIdentity"] = json!(self.source_identity);
-        }
-        if version_at_least(protocol_version, LOOKUP_VERSION) {
-            capabilities["lookup"] = json!(self.lookup);
-        }
-        if version_at_least(protocol_version, RESOLVE_IDS_VERSION) {
-            capabilities["resolveIds"] = json!(self.resolve_ids);
-        }
-        capabilities
+    if version_at_least(protocol_version, LOOKUP_VERSION) {
+        capabilities["lookup"] = json!(true);
     }
+    if version_at_least(protocol_version, RESOLVE_IDS_VERSION) {
+        capabilities["resolveIds"] = json!(true);
+    }
+    capabilities
 }
 
 /// The minimum protocol version a method capability can be negotiated at,
@@ -331,9 +306,7 @@ enum LoadedRequest {
 }
 
 struct Server {
-    initialized: bool,
     exiting: bool,
-    capabilities: Capabilities,
     protocol_version: Option<String>,
     compiler: Option<Compiler>,
 }
@@ -344,9 +317,7 @@ fn main() {
     let stdout = io::stdout();
     let mut writer = BufWriter::new(stdout.lock());
     let mut server = Server {
-        initialized: false,
         exiting: false,
-        capabilities: Capabilities::first_party(),
         protocol_version: None,
         compiler: None,
     };
@@ -384,7 +355,8 @@ impl Server {
         if parsed.is_array() || !parsed.is_object() {
             return Some(standard_error(Value::Null, -32600, "Invalid Request"));
         }
-        let object = parsed.as_object().expect("object checked");
+        let mut parsed = parsed;
+        let object = parsed.as_object_mut().expect("object checked");
         if object.get("jsonrpc").and_then(Value::as_str) != Some("2.0") {
             return Some(standard_error(Value::Null, -32600, "Invalid Request"));
         }
@@ -399,22 +371,26 @@ impl Server {
                 ));
             }
         };
-        let Some(method) = object.get("method").and_then(Value::as_str) else {
+        let Some(method) = object
+            .get("method")
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+        else {
             return Some(standard_error(id, -32600, "Invalid Request"));
         };
-        let Some(params) = object.get("params") else {
+        let Some(params) = object.remove("params") else {
             return Some(standard_error(id, -32602, "Invalid params"));
         };
 
-        match method {
-            "lpp/initialize" => Some(self.initialize(id, params.clone())),
+        match method.as_str() {
+            "lpp/initialize" => Some(self.initialize(id, params)),
             "lpp/shutdown" => Some(self.shutdown(id)),
-            _ => Some(self.dispatch(id, method, params.clone())),
+            _ => Some(self.dispatch(id, &method, params)),
         }
     }
 
     fn initialize(&mut self, id: Value, value: Value) -> Value {
-        if self.initialized {
+        if self.protocol_version.is_some() {
             return lpp_error(
                 id,
                 "invalidRequest",
@@ -422,9 +398,8 @@ impl Server {
                 "invalid request: already initialized",
             );
         }
-        let params: InitializeParams = match serde_json::from_value(value) {
-            Ok(params) => params,
-            Err(_) => return standard_error(id, -32602, "Invalid params"),
+        let Ok(params) = serde_json::from_value::<InitializeParams>(value) else {
+            return standard_error(id, -32602, "Invalid params");
         };
         if !PROTOCOL_VERSIONS.contains(&params.protocol_version.as_str()) {
             return lpp_error(
@@ -435,7 +410,7 @@ impl Server {
             );
         }
         let protocol_version = params.protocol_version;
-        self.initialized = true;
+        let capabilities = capabilities_json(&protocol_version);
         self.protocol_version = Some(protocol_version.clone());
         ok(
             id,
@@ -449,15 +424,13 @@ impl Server {
                     "id": LANGUAGE_ID,
                     "extensions": LANGUAGE_EXTENSIONS,
                 }],
-                "capabilities": self.capabilities.as_json(
-                    self.protocol_version.as_deref().expect("protocol version")
-                ),
+                "capabilities": capabilities,
             }),
         )
     }
 
     fn shutdown(&mut self, id: Value) -> Value {
-        if !self.initialized {
+        if self.protocol_version.is_none() {
             return lpp_error(
                 id,
                 "invalidRequest",
@@ -470,23 +443,20 @@ impl Server {
     }
 
     fn dispatch(&mut self, id: Value, method: &str, params: Value) -> Value {
-        if !self.initialized {
+        let Some(protocol_version) = self.protocol_version.as_deref() else {
             return lpp_error(
                 id,
                 "invalidRequest",
                 json!({ "reason": "notInitialized" }),
                 "invalid request: session not initialized",
             );
-        }
+        };
         let Some(capability) = capability_for(method) else {
             return standard_error(id, -32601, "Method not found");
         };
         if matches!(method, "lpp/check" | "lpp/compile")
             && params.get("entry").is_some()
-            && !version_at_least(
-                self.protocol_version.as_deref().expect("initialized"),
-                PROJECT_LOADING_VERSION,
-            )
+            && !version_at_least(protocol_version, PROJECT_LOADING_VERSION)
         {
             return lpp_error(
                 id,
@@ -495,13 +465,9 @@ impl Server {
                 "capability 'projectLoading' is not available",
             );
         }
-        if !self.capabilities.enabled(capability)
-            || capability_min_version(capability).is_some_and(|minimum| {
-                !version_at_least(
-                    self.protocol_version.as_deref().expect("initialized"),
-                    minimum,
-                )
-            })
+        if !capability_enabled(capability)
+            || capability_min_version(capability)
+                .is_some_and(|minimum| !version_at_least(protocol_version, minimum))
         {
             return lpp_error(
                 id,
@@ -1030,21 +996,8 @@ fn source_identity(project: &LoadedProject) -> Result<String, HandlerError> {
 }
 
 fn effective_primary_source_path(project: &LoadedProject) -> Result<Option<PathBuf>, HandlerError> {
-    let Some(first_line) = project.filesystem.source().lines().next() else {
-        return Ok(None);
-    };
-    let first_line = first_line.trim_end_matches('\r');
-    let Some(rest) = first_line.strip_prefix("#!mainFile").map(str::trim) else {
-        return Ok(None);
-    };
-    let main_file = rest
-        .strip_prefix('"')
-        .and_then(|rest| rest.strip_suffix('"'))
-        .or_else(|| {
-            rest.strip_prefix('\'')
-                .and_then(|rest| rest.strip_suffix('\''))
-        });
-    let Some(main_file) = main_file else {
+    let Some(main_file) = opy_rs::preprocess::main_file_directive(project.filesystem.source())
+    else {
         return Ok(None);
     };
     if main_file.is_empty() {
@@ -1053,7 +1006,7 @@ fn effective_primary_source_path(project: &LoadedProject) -> Result<Option<PathB
     let path = project
         .filesystem
         .root()
-        .join(main_file)
+        .join(&main_file)
         .canonicalize()
         .map_err(|error| HandlerError::Lpp {
             kind: "providerFailure",
@@ -1336,8 +1289,7 @@ fn check_documents(documents: &BTreeMap<String, Document>) -> Result<Value, Hand
     // - Standalone fallbacks run after the includers, not in path order: a
     //   member that sorts before its root would otherwise report
     //   out-of-context errors the entry parse never produces.
-    let canonical =
-        |path: &Path| std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let canonical = edits::normalized;
     let supplied: BTreeSet<PathBuf> = documents
         .values()
         .filter_map(|document| document_path(document).ok())
@@ -1605,8 +1557,7 @@ fn supplied_uri_for_path(
 }
 
 fn same_path(left: &Path, right: &Path) -> bool {
-    left.canonicalize().unwrap_or_else(|_| left.to_path_buf())
-        == right.canonicalize().unwrap_or_else(|_| right.to_path_buf())
+    edits::normalized(left) == edits::normalized(right)
 }
 
 fn diagnostic_json_for_documents(
@@ -1614,30 +1565,13 @@ fn diagnostic_json_for_documents(
     display_root: &Path,
     diagnostic: &OpyDiagnostic,
 ) -> Value {
-    json!({
-        "range": diagnostic_range_for_documents(documents, display_root, diagnostic.span.as_ref()),
-        "severity": diagnostic.severity.as_str(),
-        "code": diagnostic.code,
-        "message": diagnostic.message,
-        "source": LANGUAGE_ID,
-    })
-}
-
-fn diagnostic_range_for_documents(
-    documents: &BTreeMap<String, Document>,
-    display_root: &Path,
-    location: Option<&SourceLocation>,
-) -> Value {
-    let Some(location) = location else {
-        return json!({
-            "start": { "line": 0, "character": 0 },
-            "end": { "line": 0, "character": 0 },
-        });
-    };
-    json!({
-        "start": document_lsp_position(documents, display_root, &location.path, location.start.line, location.start.col),
-        "end": document_lsp_position(documents, display_root, &location.path, location.end.line, location.end.col),
-    })
+    diagnostic_json(
+        diagnostic.span.as_ref(),
+        &diagnostic.severity,
+        &diagnostic.code,
+        &diagnostic.message,
+        |path, line, col| document_lsp_position(documents, display_root, path, line, col),
+    )
 }
 
 fn document_lsp_position(
@@ -1675,9 +1609,11 @@ fn check_result(project: &LoadedProject, outcome: &CheckOutcome) -> Value {
             .and_then(|path| entries.iter().position(|entry| entry.path == path))
             .unwrap_or(0);
         entries[index].diagnostics.push(diagnostic_json(
-            project,
-            &outcome.display_root,
-            diagnostic,
+            diagnostic.span.as_ref(),
+            &diagnostic.severity,
+            &diagnostic.code,
+            &diagnostic.message,
+            |path, line, col| project_lsp_position(project, &outcome.display_root, path, line, col),
         ));
     }
     json!({
@@ -1700,9 +1636,13 @@ fn compile_diagnostics(
         let index = path
             .and_then(|path| entries.iter().position(|entry| entry.path == path))
             .unwrap_or(0);
-        entries[index]
-            .diagnostics
-            .push(compile_diagnostic_json(project, display_root, diagnostic));
+        entries[index].diagnostics.push(diagnostic_json(
+            diagnostic.span.as_ref(),
+            &diagnostic.severity,
+            &diagnostic.code,
+            &diagnostic.message,
+            |path, line, col| project_lsp_position(project, display_root, path, line, col),
+        ));
     }
     entries
         .into_iter()
@@ -1744,38 +1684,29 @@ fn file_entries(project: &LoadedProject, paths: &[String]) -> Vec<FileEntry> {
         .collect()
 }
 
+/// The LPP diagnostic object for one frontend diagnostic; `position_for`
+/// resolves a frontend `(path, line, col)` endpoint into an LPP position.
 fn diagnostic_json(
-    project: &LoadedProject,
-    display_root: &Path,
-    diagnostic: &OpyDiagnostic,
-) -> Value {
-    json!({
-        "range": diagnostic_range(project, display_root, diagnostic.span.as_ref()),
-        "severity": diagnostic.severity.as_str(),
-        "code": diagnostic.code,
-        "message": diagnostic.message,
-        "source": LANGUAGE_ID,
-    })
-}
-
-fn compile_diagnostic_json(
-    project: &LoadedProject,
-    display_root: &Path,
-    diagnostic: &CompileDiagnostic,
-) -> Value {
-    json!({
-        "range": diagnostic_range(project, display_root, diagnostic.span.as_ref()),
-        "severity": diagnostic.severity.as_str(),
-        "code": diagnostic.code,
-        "message": diagnostic.message,
-        "source": LANGUAGE_ID,
-    })
-}
-
-fn diagnostic_range(
-    project: &LoadedProject,
-    display_root: &Path,
     location: Option<&SourceLocation>,
+    severity: &opy_rs::tooling::DiagnosticSeverity,
+    code: &str,
+    message: &str,
+    position_for: impl Fn(&str, u32, u32) -> Value,
+) -> Value {
+    json!({
+        "range": diagnostic_range(location, position_for),
+        "severity": severity.as_str(),
+        "code": code,
+        "message": message,
+        "source": LANGUAGE_ID,
+    })
+}
+
+/// The LPP range of a frontend location — `(0, 0)-(0, 0)` when absent —
+/// with `position_for` resolving a `(path, line, col)` endpoint.
+fn diagnostic_range(
+    location: Option<&SourceLocation>,
+    position_for: impl Fn(&str, u32, u32) -> Value,
 ) -> Value {
     let Some(location) = location else {
         return json!({
@@ -1784,8 +1715,8 @@ fn diagnostic_range(
         });
     };
     json!({
-        "start": project_lsp_position(project, display_root, &location.path, location.start.line, location.start.col),
-        "end": project_lsp_position(project, display_root, &location.path, location.end.line, location.end.col),
+        "start": position_for(&location.path, location.start.line, location.start.col),
+        "end": position_for(&location.path, location.end.line, location.end.col),
     })
 }
 
@@ -1981,9 +1912,7 @@ mod tests {
     #[test]
     fn initialize_advertises_only_implemented_capabilities() {
         let mut server = Server {
-            initialized: false,
             exiting: false,
-            capabilities: Capabilities::first_party(),
             protocol_version: None,
             compiler: None,
         };

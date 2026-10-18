@@ -850,11 +850,7 @@ impl Compiler {
             let error = outcome
                 .error
                 .expect("failed frontend compile has diagnostic");
-            IntegrationError::new(
-                error.code,
-                error.message,
-                error.span.map(hir_span_from_diag),
-            )
+            IntegrationError::new(error.code, error.message, error.span.map(Into::into))
         })?;
         let artifact =
             self.compile_hir_with_locale_and_hook(&hir, outcome.post_compile_hook, locale)?;
@@ -1074,20 +1070,6 @@ impl CompilationArtifact {
             emitted_workshop: self.emitted,
             hook_console_output: self.hook_console_output,
         }
-    }
-}
-
-fn hir_span_from_diag(span: crate::diag::Span) -> HirSpan {
-    HirSpan {
-        file: span.file,
-        start: hir::Position {
-            line: span.start.line,
-            col: span.start.col,
-        },
-        end: hir::Position {
-            line: span.end.line,
-            col: span.end.col,
-        },
     }
 }
 

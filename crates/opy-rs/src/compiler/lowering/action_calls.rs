@@ -214,7 +214,7 @@ impl<'a> Lowering<'a> {
         if args.is_empty() {
             if let Some(&subroutine) = self.subroutines.get(name) {
                 return Ok(self.push_action(Action::CallSubroutine {
-                    subroutine: self.subroutine_names[subroutine].clone(),
+                    subroutine: self.program.subroutines[subroutine].name.clone(),
                 }));
             }
         }
@@ -262,7 +262,7 @@ impl<'a> Lowering<'a> {
             let subroutine_span = subroutine.span().copied();
             let behavior_span = behavior.span().copied();
             let subroutine = self.push_value(Value::Subroutine(
-                self.subroutine_names[subroutine_id].clone(),
+                self.program.subroutines[subroutine_id].name.clone(),
             ));
             let behavior = self.lower_value(behavior)?;
             return Ok(self.push_call_action_with_spans(
@@ -476,7 +476,7 @@ impl<'a> Lowering<'a> {
                 } => {
                     let variable = self.global_variable_id(name, *target_span)?;
                     let action = self.push_action(Action::ModifyGlobalVariable {
-                        variable: self.global_names[variable].clone(),
+                        variable: self.program.global_variables[variable].name.clone(),
                         op,
                         value,
                     });
@@ -494,7 +494,7 @@ impl<'a> Lowering<'a> {
                     let player = self.lower_value(player)?;
                     let action = self.push_action(Action::ModifyPlayerVariable {
                         player,
-                        variable: self.player_names[variable].clone(),
+                        variable: self.program.player_variables[variable].name.clone(),
                         op,
                         value,
                     });
@@ -518,7 +518,7 @@ impl<'a> Lowering<'a> {
                         } => {
                             let variable = self.global_variable_id(name, *array_span)?;
                             let variable = self.push_value(Value::GlobalVariable(
-                                self.global_names[variable].clone(),
+                                self.program.global_variables[variable].name.clone(),
                             ));
                             let args = self.normalize_contextual_arguments(
                                 "modifyGlobalVariableAtIndex",
@@ -542,7 +542,7 @@ impl<'a> Lowering<'a> {
                             let player = self.lower_value(player)?;
                             let variable = self.push_value(Value::PlayerVariable {
                                 player,
-                                variable: self.player_names[variable].clone(),
+                                variable: self.program.player_variables[variable].name.clone(),
                             });
                             let args = self.normalize_contextual_arguments(
                                 "modifyPlayerVariableAtIndex",

@@ -146,8 +146,9 @@ fn function_candidates(
     pool
 }
 
-/// The function an alias resolves to, through its declared kind.
-fn alias_target<'a>(
+/// The function an alias resolves to, through its declared kind. `lookup`
+/// matches aliases to their targets through this same resolution.
+pub(crate) fn alias_target<'a>(
     alias: &crate::manifest::Alias,
     manifest: &'a Manifest,
 ) -> Option<&'a Function> {
@@ -167,12 +168,11 @@ pub(crate) fn fold(text: &str) -> String {
         .collect()
 }
 
-/// Score a query against one match form; lower is closer, `None` is
-/// unrelated. Exact folded equality beats prefix beats substring beats
-/// edit distance. The lookup scores its hit forms through this same
-/// function.
-pub(crate) fn score(query: &str, form: &str) -> Option<u32> {
-    let query = fold(query);
+/// Score a folded query against one match form; lower is closer,
+/// `None` is unrelated. Exact folded equality beats prefix beats
+/// substring beats edit distance. Callers ranking one query against
+/// many forms fold the query once; the form still folds inside.
+pub(crate) fn score_folded(query: &str, form: &str) -> Option<u32> {
     let form = fold(form);
     if query.is_empty() || form.is_empty() {
         return None;
@@ -180,7 +180,7 @@ pub(crate) fn score(query: &str, form: &str) -> Option<u32> {
     if query == form {
         return Some(0);
     }
-    if form.starts_with(&query) {
+    if form.starts_with(query) {
         return Some((form.len() - query.len()) as u32 + 2);
     }
     if query.starts_with(&form) {
@@ -188,10 +188,10 @@ pub(crate) fn score(query: &str, form: &str) -> Option<u32> {
     }
     // Substring matching on very short spellings is pure noise (a one-letter
     // display name like Icon's "X" hides inside unrelated folds).
-    if form.len().min(query.len()) >= 3 && (form.contains(&query) || query.contains(&form)) {
+    if form.len().min(query.len()) >= 3 && (form.contains(query) || query.contains(&form)) {
         return Some((form.len().max(query.len()) - form.len().min(query.len())) as u32 + 10);
     }
-    let distance = levenshtein(&query, &form);
+    let distance = levenshtein(query, &form);
     // Short names need tight edits; longer names admit proportionally
     // larger distance (a ≥50%-similar guess like `startForcingPlayerToBeHero`
     // still finds `startForcingHero`).
@@ -205,10 +205,17 @@ pub(crate) fn score(query: &str, form: &str) -> Option<u32> {
 /// segment (`<team>`, `<hero>`) accepts any segment spelling and the last
 /// query segment may be a prefix of its path segment. `None` when the
 /// query is not a path prefix — near-name ranking falls back to
-/// [`score`]. Lookup settings queries score `MatchKind::Path` forms
+/// [`score_folded`].
+#[cfg(test)]
+fn path_score(query: &str, path: &str) -> Option<u32> {
+    path_score_folded(&fold_path_query(query).0, path)
+}
+
+/// [`path_score`] with the query's dot-separated segments already
+/// [`fold`]ed, for ranking loops that score one query against many
+/// paths. Lookup settings queries score `MatchKind::Path` forms
 /// through this.
-pub(crate) fn path_score(query: &str, path: &str) -> Option<u32> {
-    let segments: Vec<String> = query.trim().split('.').map(fold).collect();
+pub(crate) fn path_score_folded(segments: &[String], path: &str) -> Option<u32> {
     if segments.iter().any(String::is_empty) {
         return None;
     }
@@ -230,6 +237,13 @@ pub(crate) fn path_score(query: &str, path: &str) -> Option<u32> {
         return None;
     }
     Some(penalty + (path_segments.len() - segments.len()) as u32)
+}
+
+/// [`path_score`] query preparation for a ranking loop: the
+/// dot-separated folded segments plus the whole folded query for
+/// near-name fallback scoring.
+pub(crate) fn fold_path_query(query: &str) -> (Vec<String>, String) {
+    (query.trim().split('.').map(fold).collect(), fold(query))
 }
 
 fn levenshtein(a: &str, b: &str) -> u32 {
@@ -255,13 +269,14 @@ fn levenshtein(a: &str, b: &str) -> u32 {
 /// reported text is always the owner spelling. Ties order by spelling so
 /// repeated runs return the same list in the same order.
 pub(crate) fn rank(query: &str, pool: &[MatchCandidate]) -> Vec<String> {
+    let query = fold(query);
     let mut scored: Vec<(u32, &str)> = pool
         .iter()
         .filter_map(|candidate| {
             candidate
                 .forms
                 .iter()
-                .filter_map(|form| score(query, form))
+                .filter_map(|form| score_folded(&query, form))
                 .min()
                 .map(|score| (score, candidate.spelling.as_str()))
         })

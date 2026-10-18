@@ -44,10 +44,7 @@ impl<'a> ActionOptimizer<'a> {
                         && matches!(charge, Value::Number(number) if number.fract() != 0.0)
                     {
                         let number = std::mem::replace(charge, Value::Null);
-                        *charge = Value::Call {
-                            name: "absoluteValue".to_string(),
-                            args: vec![number],
-                        };
+                        *charge = Value::call("absoluteValue", [number]);
                     }
                 }
                 _ => {}
@@ -76,10 +73,7 @@ impl<'a> ActionOptimizer<'a> {
             if boolean && wraps_in_boolean(arg) {
                 let mut inner = std::mem::replace(arg, Value::Null);
                 self.nested(&mut inner);
-                *arg = Value::Call {
-                    name: "firstOf".to_string(),
-                    args: vec![inner],
-                };
+                *arg = Value::call("firstOf", [inner]);
             } else {
                 self.nested(arg);
             }

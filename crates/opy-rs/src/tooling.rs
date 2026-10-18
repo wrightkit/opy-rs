@@ -148,11 +148,10 @@ pub fn check_with_overlay(
         preprocessed.preprocessing.allow_macro_redeclaration,
         &preprocessed.text_macros,
     );
-    let parse_warnings = parsed.warnings;
+    let mut diagnostics = visible_warnings(&preprocessed, &parsed.warnings)
+        .map(|warning| Diagnostic::from_warning(warning, &files))
+        .collect::<Vec<_>>();
     let Some(mut program) = parsed.program else {
-        let mut diagnostics = visible_warnings(&preprocessed, &parse_warnings)
-            .map(|warning| Diagnostic::from_warning(warning, &files))
-            .collect::<Vec<_>>();
         diagnostics.extend(
             parsed
                 .errors
@@ -165,9 +164,6 @@ pub fn check_with_overlay(
         match crate::settings::parse_block(block) {
             Ok(parsed_settings) => program.settings = Some(parsed_settings),
             Err(error) => {
-                let mut diagnostics = visible_warnings(&preprocessed, &parse_warnings)
-                    .map(|warning| Diagnostic::from_warning(warning, &files))
-                    .collect::<Vec<_>>();
                 diagnostics.push(Diagnostic::from_error(error, &files));
                 return CheckOutcome::failure(diagnostics, files, display_root);
             }
@@ -197,9 +193,6 @@ pub fn check_with_overlay(
         &preprocessed.preprocessing,
     ) {
         Ok(mut hir) => {
-            let mut diagnostics = visible_warnings(&preprocessed, &parse_warnings)
-                .map(|warning| Diagnostic::from_warning(warning, &files))
-                .collect::<Vec<_>>();
             hir.preprocessing = preprocessed.preprocessing;
             if let Err(error) = crate::settings::resolve_hir_settings(&mut hir, &program) {
                 diagnostics.push(Diagnostic::from_error(error, &files));
@@ -256,9 +249,6 @@ pub fn check_with_overlay(
             }
         }
         Err(error) => {
-            let mut diagnostics = visible_warnings(&preprocessed, &parse_warnings)
-                .map(|warning| Diagnostic::from_warning(warning, &files))
-                .collect::<Vec<_>>();
             diagnostics.push(Diagnostic::from_error(error, &files));
             CheckOutcome::failure(diagnostics, files, display_root)
         }

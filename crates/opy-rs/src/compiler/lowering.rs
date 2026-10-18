@@ -105,11 +105,8 @@ pub(crate) struct Lowering<'a> {
     action_origins: Vec<Option<HirSpan>>,
     action_argument_origins: Vec<Vec<Option<HirSpan>>>,
     globals: HashMap<String, GlobalVarId>,
-    global_names: Vec<String>,
     players: HashMap<String, PlayerVarId>,
-    player_names: Vec<String>,
     subroutines: HashMap<String, SubroutineId>,
-    subroutine_names: Vec<String>,
     constants: HashMap<String, &'a Expr>,
     defined_subroutines: HashSet<SubroutineId>,
     array_bindings: Vec<ArrayBinding>,
@@ -266,11 +263,8 @@ impl<'a> Lowering<'a> {
             action_origins: Vec::new(),
             action_argument_origins: Vec::new(),
             globals: HashMap::new(),
-            global_names: Vec::new(),
             players: HashMap::new(),
-            player_names: Vec::new(),
             subroutines: HashMap::new(),
-            subroutine_names: Vec::new(),
             constants: HashMap::new(),
             defined_subroutines: HashSet::new(),
             array_bindings: Vec::new(),
@@ -303,7 +297,7 @@ impl<'a> Lowering<'a> {
         let elements = self.normalize_contextual_arguments(name, elements);
         self.push_value(Value::Call {
             name: name.to_string(),
-            args: self.value_args(&elements),
+            args: elements,
         })
     }
 
@@ -346,12 +340,11 @@ impl<'a> Lowering<'a> {
         arg_index: usize,
         value_id: ValueId,
     ) -> ValueId {
-        let domain = [Kind::Action, Kind::Value].into_iter().find_map(|kind| {
-            self.compiler
-                .catalog
-                .entry(kind, call_id)
-                .and_then(|entry| entry.param_domain(arg_index))
-        });
+        let domain = workshop_rs::signatures::ExpectedDomain::expected_domain(
+            self.compiler.catalog,
+            call_id,
+            arg_index,
+        );
         if domain == Some("BarrierLos") {
             let value = match self.value(value_id) {
                 Value::Bool(true) => Some("PASS_THROUGH_BARRIERS"),
@@ -552,10 +545,6 @@ impl<'a> Lowering<'a> {
         action
     }
 
-    fn value_args(&self, ids: &[ValueId]) -> Vec<ValueId> {
-        ids.to_vec()
-    }
-
     fn push_call_action(&mut self, name: impl Into<String>, args: &[ValueId]) -> ActionId {
         self.push_action(Action::Call {
             name: name.into(),
@@ -599,7 +588,7 @@ impl<'a> Lowering<'a> {
     ) -> Vec<ActionId> {
         self.push_loop_actions(
             Action::ForGlobalVariable {
-                variable: self.global_names[variable].clone(),
+                variable: self.program.global_variables[variable].name.clone(),
                 start,
                 stop,
                 step,
@@ -620,7 +609,7 @@ impl<'a> Lowering<'a> {
         self.push_loop_actions(
             Action::ForPlayerVariable {
                 player,
-                variable: self.player_names[variable].clone(),
+                variable: self.program.player_variables[variable].name.clone(),
                 start,
                 stop,
                 step,
@@ -2083,28 +2072,26 @@ const TEXT_COMPARED_MAPS: [&str; 3] = ["COLOSSEO", "ESPERANCA", "SAMOA"];
 /// The maps named anywhere in the program whose value comparison the
 /// Workshop gets wrong.
 fn used_bugged_maps(hir: &hir::Program) -> Vec<&'static str> {
-    fn collect(value: &serde_json::Value, found: &mut HashSet<String>) {
-        match value {
-            serde_json::Value::Object(fields) => {
-                if fields.get("kind").and_then(|kind| kind.as_str()) == Some("enum")
-                    && fields.get("type").and_then(|kind| kind.as_str()) == Some("Map")
-                    && let Some(member) = fields.get("value").and_then(|value| value.as_str())
-                {
-                    found.insert(member.to_string());
-                }
-                fields.values().for_each(|field| collect(field, found));
+    struct MapFinder<'a> {
+        found: &'a mut HashSet<String>,
+    }
+
+    impl hir::visit::Visitor for MapFinder<'_> {
+        fn visit_expr(&mut self, expression: &Expr) {
+            if let Expr::Enum {
+                value_type, value, ..
+            } = expression
+                && value_type == "Map"
+            {
+                self.found.insert(value.clone());
             }
-            serde_json::Value::Array(items) => items.iter().for_each(|item| collect(item, found)),
-            _ => {}
+            hir::visit::walk_expr(self, expression);
         }
     }
+
     let mut found = HashSet::new();
-    if let Ok(value) = serde_json::to_value(&hir.rules) {
-        collect(&value, &mut found);
-    }
-    if let Ok(value) = serde_json::to_value(&hir.declarations) {
-        collect(&value, &mut found);
-    }
+    let mut finder = MapFinder { found: &mut found };
+    hir::visit::walk_program(&mut finder, hir);
     BUGGED_MAPS
         .into_iter()
         .filter(|map| found.contains(*map))

@@ -220,11 +220,11 @@ pub fn preprocess_with_overlay_outcome(
             id: 0,
             path: main_path.to_string(),
         }],
-        next_file_id: 1,
         root: resolved_root.clone(),
         display_root: resolved_root,
         overlay: overlay.clone(),
         source_texts: BTreeMap::from([(0, main_text.to_string())]),
+        line_offsets: std::cell::RefCell::new(BTreeMap::new()),
         include_stack: Vec::new(),
         last_macro_include_path: None,
         imported_files: BTreeSet::new(),
@@ -318,7 +318,6 @@ pub fn preprocess_with_overlay_outcome(
             id: source_file_id,
             path: display_path,
         });
-        pre.next_file_id = 2;
         pre.preprocessing
             .source_file_initial_optimization
             .insert(source_file_id, pre.preprocessing.optimization.clone());
@@ -445,12 +444,17 @@ fn external_text_span(file: u32, text: &str) -> Span {
 }
 
 struct Preprocessor {
+    /// The append-only file registry: a record's `id` is always its index
+    /// (`files.len()` at registration), so no separate counter is needed.
     files: Vec<FileRecord>,
-    next_file_id: u32,
     root: PathBuf,
     display_root: PathBuf,
     overlay: BTreeMap<String, String>,
     source_texts: BTreeMap<u32, String>,
+    /// Per-file line-start offsets, built once on the first macro-argument
+    /// raw-text lookup in that file (borrowed because `expand`/`expand_one`
+    /// run under `&self`).
+    line_offsets: std::cell::RefCell<BTreeMap<u32, macros::LineOffsets>>,
     include_stack: Vec<PathBuf>,
     // OverPy retains this file context after multiline macro expansion in an
     // included settings block; established projects rely on that lookup base.
@@ -544,8 +548,7 @@ impl Preprocessor {
 
     fn register_external_file(&mut self, candidate: &Path, requested: &str, text: String) -> u32 {
         let canonical = std::fs::canonicalize(candidate).ok();
-        let file_id = self.next_file_id;
-        self.next_file_id += 1;
+        let file_id = self.files.len() as u32;
         self.source_texts.insert(file_id, text);
         self.files.push(FileRecord {
             id: file_id,

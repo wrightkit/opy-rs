@@ -95,14 +95,14 @@ impl<'a> Lowering<'a> {
             }
             Expr::GlobalVar { name, .. } => {
                 let id = self.global_variable_id(name, span)?;
-                Value::GlobalVariable(self.global_names[id].clone())
+                Value::GlobalVariable(self.program.global_variables[id].name.clone())
             }
             Expr::PlayerVar { player, name, .. } => {
                 let player = self.lower_value(player)?;
                 let id = self.player_variable_id(name, span)?;
                 Value::PlayerVariable {
                     player,
-                    variable: self.player_names[id].clone(),
+                    variable: self.program.player_variables[id].name.clone(),
                 }
             }
             Expr::EventPlayer { .. } => Value::EventPlayer,
@@ -166,7 +166,7 @@ impl<'a> Lowering<'a> {
                 } else {
                     Value::Call {
                         name: "vector".to_string(),
-                        args: self.value_args(&[x, y, z]),
+                        args: vec![x, y, z],
                     }
                 }
             }
@@ -205,14 +205,14 @@ impl<'a> Lowering<'a> {
                     let array = self.lower_value(array)?;
                     Value::Call {
                         name: "firstOf".to_string(),
-                        args: self.value_args(&[array]),
+                        args: vec![array],
                     }
                 } else {
                     let array = self.lower_value(array)?;
                     let index = self.lower_value(index)?;
                     Value::Call {
                         name: "valueInArray".to_string(),
-                        args: self.value_args(&[array, index]),
+                        args: vec![array, index],
                     }
                 }
             }
@@ -279,7 +279,7 @@ impl<'a> Lowering<'a> {
                     let condition = self.lower_value(condition)?;
                     let then_value = self.lower_value(then_value)?;
                     let else_value = self.lower_value(else_value)?;
-                    self.value_args(&[condition, then_value, else_value])
+                    vec![condition, then_value, else_value]
                 },
             },
             Expr::Binary {
@@ -352,13 +352,13 @@ impl<'a> Lowering<'a> {
                     if op == "in" {
                         Value::Call {
                             name: "arrayContains".to_string(),
-                            args: self.value_args(&[right, left]),
+                            args: vec![right, left],
                         }
                     } else if op == "not in" {
                         let contains = self.push_call("arrayContains", vec![right, left]);
                         Value::Call {
                             name: "not".to_string(),
-                            args: self.value_args(&[contains]),
+                            args: vec![contains],
                         }
                     } else {
                         let name = match op.as_str() {
@@ -380,7 +380,7 @@ impl<'a> Lowering<'a> {
                         };
                         Value::Call {
                             name: name.to_string(),
-                            args: self.value_args(&[left, right]),
+                            args: vec![left, right],
                         }
                     }
                 }
@@ -403,20 +403,20 @@ impl<'a> Lowering<'a> {
                             let right = self.lower_value(right)?;
                             Value::Call {
                                 name: negated.to_string(),
-                                args: self.value_args(&[left, right]),
+                                args: vec![left, right],
                             }
                         } else {
                             let operand = self.lower_value(operand)?;
                             Value::Call {
                                 name: "not".to_string(),
-                                args: self.value_args(&[operand]),
+                                args: vec![operand],
                             }
                         }
                     } else {
                         let operand = self.lower_value(operand)?;
                         Value::Call {
                             name: "not".to_string(),
-                            args: self.value_args(&[operand]),
+                            args: vec![operand],
                         }
                     }
                 }
@@ -427,7 +427,7 @@ impl<'a> Lowering<'a> {
                     } else {
                         Value::Call {
                             name: "-".to_string(),
-                            args: self.value_args(&[operand]),
+                            args: vec![operand],
                         }
                     }
                 }
@@ -883,7 +883,7 @@ impl<'a> Lowering<'a> {
                     }
                     Value::Call {
                         name: canonical.to_string(),
-                        args: self.value_args(&lowered),
+                        args: lowered,
                     }
                 } else if matches!(name.as_str(), "all" | "any") {
                     let call_name = if name == "all" {
@@ -927,7 +927,7 @@ impl<'a> Lowering<'a> {
                     };
                     Value::Call {
                         name: call_name.to_string(),
-                        args: self.value_args(&[array, condition]),
+                        args: vec![array, condition],
                     }
                 } else if matches!(name.as_str(), "ceil" | "floor" | "round") {
                     let [value] = args.as_slice() else {
@@ -949,7 +949,7 @@ impl<'a> Lowering<'a> {
                     let value = self.lower_value(value)?;
                     Value::Call {
                         name: "roundToInteger".to_string(),
-                        args: self.value_args(&[value, rounding]),
+                        args: vec![value, rounding],
                     }
                 } else if name == "sorted" {
                     let (array_expr, key) = match args.as_slice() {
@@ -980,7 +980,7 @@ impl<'a> Lowering<'a> {
                     let array = self.lower_value(array_expr)?;
                     Value::Call {
                         name: "sortedArray".to_string(),
-                        args: self.value_args(&[array, key]),
+                        args: vec![array, key],
                     }
                 } else {
                     let function = self
@@ -1011,7 +1011,7 @@ impl<'a> Lowering<'a> {
                     let lowered_args = self.lower_values(args)?;
                     Value::Call {
                         name: catalog_id.clone(),
-                        args: self.value_args(&lowered_args),
+                        args: lowered_args,
                     }
                 }
             }
@@ -1078,7 +1078,7 @@ impl<'a> Lowering<'a> {
                             ));
                         }
                     };
-                    let args = self.value_args(&[receiver, condition]);
+                    let args = vec![receiver, condition];
                     return Ok(self.push_value(Value::Call {
                         name: if name == "all" {
                             "isTrueForAll"
@@ -1224,7 +1224,7 @@ impl<'a> Lowering<'a> {
                     let lowered_args = self.lower_values(receiver_args)?;
                     return Ok(self.push_value(Value::Call {
                         name: catalog_id,
-                        args: self.value_args(&lowered_args),
+                        args: lowered_args,
                     }));
                 }
                 if function.id == "filter" {
@@ -1240,7 +1240,7 @@ impl<'a> Lowering<'a> {
                     let receiver = self.lower_value(receiver)?;
                     Value::Call {
                         name: "filteredArray".to_string(),
-                        args: self.value_args(&[receiver, condition]),
+                        args: vec![receiver, condition],
                     }
                 } else if matches!(function.id.as_str(), "concat" | "exclude") {
                     let [value] = args.as_slice() else {
@@ -1258,7 +1258,7 @@ impl<'a> Lowering<'a> {
                             "removeFromArray"
                         }
                         .to_string(),
-                        args: self.value_args(&[receiver, value]),
+                        args: vec![receiver, value],
                     }
                 } else {
                     let catalog_id = function.catalog_id.as_ref().ok_or_else(|| {
@@ -1275,7 +1275,7 @@ impl<'a> Lowering<'a> {
                     lowered.extend(self.lower_values(args)?);
                     Value::Call {
                         name: catalog_id.clone(),
-                        args: self.value_args(&lowered),
+                        args: lowered,
                     }
                 }
             }
@@ -1291,13 +1291,13 @@ impl<'a> Lowering<'a> {
                 } {
                     Value::Call {
                         name: name.to_string(),
-                        args: self.value_args(&[receiver]),
+                        args: vec![receiver],
                     }
                 } else {
                     let member = self.push_value(Value::String(member.clone()));
                     Value::Call {
                         name: "memberAccess".to_string(),
-                        args: self.value_args(&[receiver, member]),
+                        args: vec![receiver, member],
                     }
                 }
             }
@@ -1341,7 +1341,7 @@ impl<'a> Lowering<'a> {
                 };
                 Value::Call {
                     name: "mappedArray".to_string(),
-                    args: self.value_args(&[iterable, element]),
+                    args: vec![iterable, element],
                 }
             }
             Expr::Lambda { span, .. } => {
@@ -1620,7 +1620,9 @@ impl<'a> Lowering<'a> {
                 .globals
                 .get(COMPRESSION_ALPHABET_NAME)
                 .expect("compression alphabet variable is created");
-            self.push_value(Value::GlobalVariable(self.global_names[variable].clone()))
+            self.push_value(Value::GlobalVariable(
+                self.program.global_variables[variable].name.clone(),
+            ))
         } else {
             self.lower_custom_string(compression_alphabet())
         };

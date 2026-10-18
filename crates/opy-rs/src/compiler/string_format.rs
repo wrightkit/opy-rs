@@ -112,12 +112,10 @@ pub(super) fn unsplit(tokens: Vec<Token>) -> Value {
             }
         }
     }
-    Value::Call {
-        name: "customString".to_string(),
-        args: std::iter::once(Value::String(text))
-            .chain(arguments)
-            .collect(),
-    }
+    Value::call(
+        "customString",
+        std::iter::once(Value::String(text)).chain(arguments),
+    )
 }
 
 /// Splits every custom string in the tree into strings the Workshop accepts.
@@ -136,10 +134,7 @@ fn split(mut tokens: Vec<Token>) -> Value {
     let count = tokens.len();
     if let [Token::Text(text)] = tokens.as_slice() {
         if length(text) <= MAX_LENGTH {
-            return Value::Call {
-                name: "customString".to_string(),
-                args: vec![Value::String(text.clone())],
-            };
+            return Value::call("customString", [Value::String(text.clone())]);
         }
     }
     let mut result = String::new();
@@ -226,10 +221,8 @@ fn split(mut tokens: Vec<Token>) -> Value {
             }
         }
     }
-    Value::Call {
-        name: "customString".to_string(),
-        args: std::iter::once(Value::String(result))
-            .chain(result_args)
-            .collect(),
-    }
+    Value::call(
+        "customString",
+        std::iter::once(Value::String(result)).chain(result_args),
+    )
 }

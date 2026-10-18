@@ -334,9 +334,13 @@ pub(crate) fn overlay_map(
 /// its start. Returns `None` when the location does not spell `name` exactly
 /// in the source — macro-expanded or generated sites report positions whose
 /// text cannot be rewritten for this symbol.
-pub(crate) fn narrow_site(text: &str, location: &SourceLocation, name: &str) -> Option<SiteToken> {
+pub(crate) fn narrow_site(
+    source: &SourceText,
+    location: &SourceLocation,
+    name: &str,
+) -> Option<SiteToken> {
     let line_index = location.start.line.checked_sub(1)? as usize;
-    let line = SourceText::new(text).line_text(line_index)?;
+    let line = source.line_text(line_index)?;
     let index = char_index_at_column(line, location.start.col)?;
     let (start_index, end_index) = ident_token_at(line, index)?;
     let token: String = line
@@ -353,10 +357,8 @@ pub(crate) fn narrow_site(text: &str, location: &SourceLocation, name: &str) -> 
 }
 
 /// The LPP range of a narrowed token.
-pub(crate) fn token_range(text: &str, token: SiteToken) -> Value {
-    let line = SourceText::new(text)
-        .line_text(token.line_index)
-        .unwrap_or_default();
+pub(crate) fn token_range(source: &SourceText, token: SiteToken) -> Value {
+    let line = source.line_text(token.line_index).unwrap_or_default();
     json!({
         "start": { "line": token.line_index, "character": utf16_column(line, token.start_index) },
         "end": { "line": token.line_index, "character": utf16_column(line, token.end_index) },
@@ -364,8 +366,7 @@ pub(crate) fn token_range(text: &str, token: SiteToken) -> Value {
 }
 
 /// Byte range of a narrowed token inside `text`.
-fn token_byte_range(text: &str, token: SiteToken) -> Option<(usize, usize)> {
-    let source = SourceText::new(text);
+fn token_byte_range(source: &SourceText, token: SiteToken) -> Option<(usize, usize)> {
     let (line_start, _) = source.line_byte_range(token.line_index);
     let line = source.line_text(token.line_index)?;
     Some((
@@ -626,9 +627,10 @@ fn verify_rename(
     let mut edited = BTreeMap::new();
     for (uri, tokens) in sites {
         let document = &documents[uri];
+        let source = SourceText::new(&document.text);
         let mut ranges = Vec::with_capacity(tokens.len());
         for token in tokens {
-            let Some(range) = token_byte_range(&document.text, *token) else {
+            let Some(range) = token_byte_range(&source, *token) else {
                 return Err(collision());
             };
             ranges.push(range);
@@ -697,12 +699,12 @@ fn verify_rename(
                     let text = edited
                         .get(&document.uri)
                         .map_or(document.text.as_str(), String::as_str);
-                    narrow_site(text, site, new_name)
+                    narrow_site(&SourceText::new(text), site, new_name)
                 })
                 .or_else(|| {
                     fs::read_to_string(&resolved)
                         .ok()
-                        .and_then(|text| narrow_site(&text, site, new_name))
+                        .and_then(|text| narrow_site(&SourceText::new(&text), site, new_name))
                 });
             let site_key = match token {
                 Some(token) => (
@@ -805,7 +807,7 @@ pub(crate) fn rename(params: Value) -> Result<Value, HandlerError> {
                 continue;
             }
             contained = true;
-            if let Some(token) = narrow_site(&position_document.text, site, &symbol.name) {
+            if let Some(token) = narrow_site(&source, site, &symbol.name) {
                 let token_end = Position::new(token.line(), token.col + token.len());
                 if position < token_end {
                     narrowed = true;
@@ -878,7 +880,12 @@ pub(crate) fn rename(params: Value) -> Result<Value, HandlerError> {
                 }
                 continue;
             };
-            let Some(token) = narrow_site(&document.text, site, &name) else {
+            let document_source = if document.uri == position_document.uri {
+                &source
+            } else {
+                &SourceText::new(&document.text)
+            };
+            let Some(token) = narrow_site(document_source, site, &name) else {
                 return Err(refusal(
                     "rename.unsupportedReference",
                     json!({ "uri": document.uri, "line": site.start.line }),
@@ -940,13 +947,18 @@ pub(crate) fn rename(params: Value) -> Result<Value, HandlerError> {
         .iter()
         .map(|(uri, tokens)| {
             let document = &params.documents[uri];
+            let document_source = if document.uri == position_document.uri {
+                &source
+            } else {
+                &SourceText::new(&document.text)
+            };
             json!({
                 "documentUri": document.uri,
                 "version": document.version,
                 "textEdits": tokens
                     .iter()
                     .map(|token| json!({
-                        "range": token_range(&document.text, *token),
+                        "range": token_range(document_source, *token),
                         "newText": params.new_name,
                     }))
                     .collect::<Vec<_>>(),

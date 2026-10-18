@@ -154,7 +154,7 @@ impl<'a> Lowering<'a> {
         }
         let mut actions = Vec::new();
         actions.extend(self.lower_actions(body, None)?);
-        let event = Event::Subroutine(self.subroutine_names[subroutine].clone());
+        let event = Event::Subroutine(self.program.subroutines[subroutine].name.clone());
         if self.optimization_state_at(span.as_ref()).enabled
             && !self.has_meaningful_rule_action(&actions, &event)
         {
@@ -890,7 +890,7 @@ impl<'a> Lowering<'a> {
                     self.unsupported(format!("unknown subroutine '{name}'"), *span)
                 })?;
                 Ok(vec![self.push_action(Action::CallSubroutine {
-                    subroutine: self.subroutine_names[subroutine].clone(),
+                    subroutine: self.program.subroutines[subroutine].name.clone(),
                 })])
             }
         };
@@ -1639,21 +1639,12 @@ impl<'a> Lowering<'a> {
             .collect();
         let offset_values = self.lower_array(offset_values);
         let offset_value = self.value(offset_values).clone();
+        // The selector's `valueInArray` already references the `offsets` node;
+        // replacing it in place fills the placeholder the selector holds.
         let Some(node) = self.values.get_mut(offsets) else {
             unreachable!("switch offset placeholder must exist")
         };
         *node = offset_value;
-
-        let Some(Action::Call { args, .. }) = self.actions.get_mut(skip) else {
-            unreachable!("switch selector must be a call action")
-        };
-        let Some(selector_id) = args.first().copied() else {
-            unreachable!("switch selector condition must be a value call")
-        };
-        let Some(Value::Call { args, .. }) = self.values.get_mut(selector_id) else {
-            unreachable!("switch selector condition must be a value call")
-        };
-        args[0] = offsets;
 
         Ok(switch)
     }
@@ -1801,15 +1792,12 @@ impl<'a> Lowering<'a> {
         fallback_span: Option<HirSpan>,
     ) -> Result<usize, IntegrationError> {
         let public_actions = self.public_actions(actions);
-        let mut program = self.program.clone();
-        program.settings = None;
-        program.rules.push(rule_from_parts(
-            "action layout".to_string(),
-            false,
-            workshop_rs::Event::Global,
-            Vec::new(),
-            public_actions.clone(),
-        ));
+        // action_width only consults the variable/subroutine declarations and
+        // builds its own rule; no other program state is read.
+        let mut program = workshop_rs::Program::new();
+        program.global_variables = self.program.global_variables.clone();
+        program.player_variables = self.program.player_variables.clone();
+        program.subroutines = self.program.subroutines.clone();
         workshop_rs::emitter::action_width(
             &program,
             self.compiler.catalog,
