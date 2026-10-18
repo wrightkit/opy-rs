@@ -60,7 +60,7 @@ source → preprocessing → parsing → semantic model / HIR
 
 ## Reconstruction
 
-Workshop→OPY targets semantically equivalent, useful OverPy source. It cannot recover macros, comments, formatting, abstractions, names, or other source information already erased by Workshop text/WIR and does not promise literal source recovery.
+Workshop→OPY targets semantically equivalent, useful OverPy source for migrating existing Workshop modes to maintainable OverPy. It cannot recover macros, comments, formatting, abstractions, names, or other source information already erased by Workshop text/WIR and does not promise literal source recovery. The accepted supported subset, semantic-equivalence criteria, refusal model, and upstream input-coverage contract are defined in [`reconstruction.md`](reconstruction.md).
 
 ## Wright/provider integration
 

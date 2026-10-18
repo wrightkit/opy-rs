@@ -8,7 +8,8 @@ This directory is the documentation index for `opy-rs`. The root
 ```text
 architecture/README.md       current architecture routing
   ├─ language-core.md        current OverPy semantic/scope contract
-  └─ workshop-boundary.md    current canonical Workshop boundary
+  ├─ workshop-boundary.md    current canonical Workshop boundary
+  └─ reconstruction.md       Workshop → OPY reconstruction contract
 adr/                         historical architecture decisions
 language-support.md          current tested support
 compatibility/               pinned reference/licensing
@@ -31,6 +32,9 @@ intent alone.
   feature locality.
 - [OverPy / Workshop boundary](architecture/workshop-boundary.md): lowering,
   canonical WIR, reconstruction, and dependency direction.
+- [Workshop → OPY reconstruction contract](architecture/reconstruction.md):
+  supported subset, semantic equivalence, refusals, and upstream input
+  coverage.
 - [Repository agent guidance](../AGENTS.md): implementation preflight,
   source attribution, validation, and delivery.
 - [ADR registry](adr/README.md): historical decisions and their rationale;
