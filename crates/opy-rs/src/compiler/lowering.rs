@@ -2078,28 +2078,26 @@ const TEXT_COMPARED_MAPS: [&str; 3] = ["COLOSSEO", "ESPERANCA", "SAMOA"];
 /// The maps named anywhere in the program whose value comparison the
 /// Workshop gets wrong.
 fn used_bugged_maps(hir: &hir::Program) -> Vec<&'static str> {
-    fn collect(value: &serde_json::Value, found: &mut HashSet<String>) {
-        match value {
-            serde_json::Value::Object(fields) => {
-                if fields.get("kind").and_then(|kind| kind.as_str()) == Some("enum")
-                    && fields.get("type").and_then(|kind| kind.as_str()) == Some("Map")
-                    && let Some(member) = fields.get("value").and_then(|value| value.as_str())
-                {
-                    found.insert(member.to_string());
-                }
-                fields.values().for_each(|field| collect(field, found));
+    struct MapFinder<'a> {
+        found: &'a mut HashSet<String>,
+    }
+
+    impl hir::visit::Visitor for MapFinder<'_> {
+        fn visit_expr(&mut self, expression: &Expr) {
+            if let Expr::Enum {
+                value_type, value, ..
+            } = expression
+                && value_type == "Map"
+            {
+                self.found.insert(value.clone());
             }
-            serde_json::Value::Array(items) => items.iter().for_each(|item| collect(item, found)),
-            _ => {}
+            hir::visit::walk_expr(self, expression);
         }
     }
+
     let mut found = HashSet::new();
-    if let Ok(value) = serde_json::to_value(&hir.rules) {
-        collect(&value, &mut found);
-    }
-    if let Ok(value) = serde_json::to_value(&hir.declarations) {
-        collect(&value, &mut found);
-    }
+    let mut finder = MapFinder { found: &mut found };
+    hir::visit::walk_program(&mut finder, hir);
     BUGGED_MAPS
         .into_iter()
         .filter(|map| found.contains(*map))
