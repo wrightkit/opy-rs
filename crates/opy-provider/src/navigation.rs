@@ -133,11 +133,12 @@ fn file_ids_covering(outcome: &CheckOutcome, path: &Path) -> BTreeSet<u32> {
 /// record a span starting at the `macro` keyword, so the name token is the
 /// first identifier spelling `name` later on the same line.
 fn declaration_token(text: &str, site: &SourceLocation, name: &str) -> Option<SiteToken> {
-    if let Some(token) = narrow_site(text, site, name) {
+    let source = SourceText::new(text);
+    if let Some(token) = narrow_site(&source, site, name) {
         return Some(token);
     }
     let line_index = site.start.line.checked_sub(1)? as usize;
-    let line = SourceText::new(text).line_text(line_index)?;
+    let line = source.line_text(line_index)?;
     let mut index = char_index_at_column(line, site.start.col)?;
     let char_count = line.chars().count();
     while index < char_count {
@@ -175,7 +176,7 @@ fn token_contains(token: &SiteToken, position: Position) -> bool {
 /// otherwise the recorded span — always authored source coordinates.
 fn site_range(text: &str, site: &SourceLocation, token: Option<SiteToken>) -> Value {
     if let Some(token) = token {
-        return token_range(text, token);
+        return token_range(&SourceText::new(text), token);
     }
     json!({
         "start": lsp_position(text, site.start.line, site.start.col),
@@ -226,7 +227,7 @@ fn site_location(
     let token = if declaration {
         declaration_token(&text, site, name)
     } else {
-        narrow_site(&text, site, name)
+        narrow_site(&SourceText::new(&text), site, name)
     };
     json!({
         "uri": uri,
@@ -295,6 +296,7 @@ fn symbols_at<'v>(view: &'v PositionView, document: &Document) -> Vec<&'v Symbol
         .model
         .as_ref()
         .expect("view guarantees a model");
+    let source = SourceText::new(&document.text);
     model
         .symbols()
         .iter()
@@ -304,7 +306,7 @@ fn symbols_at<'v>(view: &'v PositionView, document: &Document) -> Vec<&'v Symbol
                     .is_some_and(|token| token_contains(&token, view.position)))
                 || symbol.references.iter().any(|site| {
                     view.file_ids.contains(&site.file_id)
-                        && narrow_site(&document.text, site, &symbol.name)
+                        && narrow_site(&source, site, &symbol.name)
                             .is_some_and(|token| token_contains(&token, view.position))
                 })
         })
