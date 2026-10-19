@@ -1094,11 +1094,7 @@ fn workshop_hero_name(text: &str, locale: &Locale) -> Option<String> {
 }
 
 fn gameplay_catalog() -> &'static workshop_rs::gameplay::GameplayCatalog {
-    static CATALOG: std::sync::OnceLock<workshop_rs::gameplay::GameplayCatalog> =
-        std::sync::OnceLock::new();
-    CATALOG.get_or_init(|| {
-        workshop_rs::gameplay::data::builtin().expect("builtin gameplay catalog parses")
-    })
+    workshop_rs::gameplay::data::builtin_ref().expect("builtin gameplay catalog parses")
 }
 
 fn convert_settings_span(span: HirSpan) -> WorkshopSpan {
