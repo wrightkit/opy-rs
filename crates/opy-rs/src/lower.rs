@@ -168,7 +168,7 @@ pub fn lower_with_preprocessing(
             ));
         }
     };
-    let catalog = crate::enums::builtin_catalog().map_err(|error| {
+    let catalog = Catalog::builtin_ref().map_err(|error| {
         OpyError::new(
             "catalog-error",
             format!("cannot load the Workshop catalog: {error}"),
@@ -468,7 +468,7 @@ impl SettingsLowerer {
                 format!("cannot load the OPY semantic compatibility manifest: {error}"),
             )
         })?;
-        let catalog = crate::enums::builtin_catalog().map_err(|error| {
+        let catalog = Catalog::builtin_ref().map_err(|error| {
             OpyError::new(
                 "catalog-error",
                 format!("cannot load the Workshop catalog: {error}"),
@@ -2308,7 +2308,7 @@ mod tests {
             vec![],
             &PreprocessingState::default(),
             manifest,
-            crate::enums::builtin_catalog().expect("the builtin catalog loads"),
+            Catalog::builtin_ref().expect("the builtin catalog loads"),
         )
     }
 

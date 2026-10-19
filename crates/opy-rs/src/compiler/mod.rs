@@ -458,7 +458,7 @@ impl Compiler {
     pub fn new() -> Result<Self, IntegrationError> {
         let contract = load_compiler_contract()?;
         Ok(Self {
-            catalog: &contract.catalog,
+            catalog: contract.catalog,
             manifest: contract.manifest,
             links: contract.links,
         })

@@ -152,10 +152,10 @@ struct Reference {
 
 pub(super) fn generate() -> Result<(), String> {
     let manifest = Manifest::builtin().map_err(|error| error.to_string())?;
-    let catalog = Catalog::builtin().map_err(|error| error.to_string())?;
+    let catalog = Catalog::builtin_ref().map_err(|error| error.to_string())?;
     let mut probes = Vec::new();
     for function in manifest.functions() {
-        let calls = calls(&catalog, function);
+        let calls = calls(catalog, function);
         if calls.is_empty() {
             // Functions without a valid sample call would otherwise never
             // reach the oracle; a name probe still verifies the declared
@@ -205,7 +205,7 @@ pub(super) fn generate() -> Result<(), String> {
     // Every enum-member spelling the vocabulary lookup reports is an
     // accepted OPY spelling by contract; probe each against the oracle so a
     // catalog id or other upstream-rejected spelling cannot be advertised.
-    for (domain, spelling) in enum_spellings(manifest, &catalog) {
+    for (domain, spelling) in enum_spellings(manifest, catalog) {
         probes.push(Probe {
             id: format!("default:{domain}.{spelling}:spelling"),
             source: source("", "eachPlayer", &format!("g = {domain}.{spelling}")),
@@ -462,13 +462,13 @@ pub(super) fn compare(probes: &Path, references: &Path) -> Result<(), String> {
     let references: BTreeMap<String, Reference> = serde_json::from_str(&read(references)?)
         .map_err(|error| format!("cannot parse references: {error}"))?;
     let compiler = Compiler::new().map_err(|error| error.to_string())?;
-    let catalog = Catalog::builtin().map_err(|error| error.to_string())?;
-    let context = CompatibilityExpectedDomain { catalog: &catalog };
+    let catalog = Catalog::builtin_ref().map_err(|error| error.to_string())?;
+    let context = CompatibilityExpectedDomain { catalog };
     let locale = Locale::new("en-US");
     let parse = |text: &str| {
         workshop_rs::parser::parse_with_context(
             &strip_workshop_comments(text),
-            &catalog,
+            catalog,
             &locale,
             &context,
         )

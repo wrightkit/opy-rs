@@ -11,7 +11,7 @@ pub struct LinkReport {
 }
 
 pub(crate) struct CompilerContract {
-    pub(super) catalog: Catalog,
+    pub(super) catalog: &'static Catalog,
     pub(super) manifest: &'static Manifest,
     pub(super) links: LinkReport,
 }
@@ -95,11 +95,11 @@ pub(crate) fn cross_check_manifest(
 pub(crate) fn load_compiler_contract() -> Result<&'static CompilerContract, IntegrationError> {
     COMPILER_CONTRACT
         .get_or_init(|| {
-            let catalog = Catalog::builtin()
+            let catalog = Catalog::builtin_ref()
                 .map_err(|error| IntegrationError::new("catalog-load", error.to_string(), None))?;
             let manifest = Manifest::builtin()
                 .map_err(|error| IntegrationError::new("manifest-load", error.to_string(), None))?;
-            let links = cross_check_manifest(manifest, &catalog)?;
+            let links = cross_check_manifest(manifest, catalog)?;
             Ok(CompilerContract {
                 catalog,
                 manifest,

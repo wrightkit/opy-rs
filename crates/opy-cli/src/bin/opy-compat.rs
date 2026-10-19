@@ -219,12 +219,12 @@ fn compile_and_parse(
             &Locale::new("en-US"),
         )
         .map_err(|error| error.to_string())?;
-    let catalog = Catalog::builtin().map_err(|error| error.to_string())?;
-    let context = CompatibilityExpectedDomain { catalog: &catalog };
+    let catalog = Catalog::builtin_ref().map_err(|error| error.to_string())?;
+    let context = CompatibilityExpectedDomain { catalog };
     let parse = |text: &str| {
         workshop_rs::parser::parse_with_context(
             &strip_workshop_comments(text),
-            &catalog,
+            catalog,
             &Locale::new("en-US"),
             &context,
         )
