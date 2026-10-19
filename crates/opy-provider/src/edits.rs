@@ -47,27 +47,8 @@ const CROSS_FILE_CODES: [&str; 7] = [
 /// sources or bindings defers to the client's post-edit project `lpp/check`.
 ///
 /// Intentionally deferred, so a fragment's own edits stay `valid` here and
-/// the project's `lpp/check` arbitrates:
-/// - name/binding verdicts (`unknown-*`, `duplicate-*`, `invalid-arity`,
-///   `unresolved-reference`, `incompatible-protocol`,
-///   `enum-type-without-member`) — the referent may be declared in a
-///   sibling file;
-/// - merged-table duplicates (`rule-prefix-template-duplicate`,
-///   `replacement-duplicate`, `post-compile-hook-duplicate`,
-///   `macro-redeclaration`) — the earlier entry may come from an include;
-/// - macro-table verdicts (`macro-arity`, `macro-recursion`) — the macro
-///   definition may come from an include;
-/// - script resolution and execution verdicts (`script-not-found`,
-///   `script-error`, `script-timeout`, `script-stack-limit`,
-///   `script-memory-limit`, `script-result-not-string`, `script-internal`)
-///   — the script file and its run live outside the document;
-/// - external-file verdicts (`include-not-found`, `settings-not-found`,
-///   `translations-invalid`, `settings-expression`,
-///   `rule-prefix-template-invalid`) — the source text or constants the
-///   verdict needs live outside the document;
-/// - catalog/environment verdicts (`catalog-error`, `manifest-error`,
-///   `unknown-enum-member`) — fixed-vocabulary questions the client's
-///   project check answers the same way.
+/// the project's `lpp/check` arbitrates — see `EXCLUDED_CODES` below for the
+/// classified inventory.
 const DOCUMENT_SYNTAX_CODES: [&str; 18] = [
     "lex-error",
     "parse-error",
@@ -88,6 +69,161 @@ const DOCUMENT_SYNTAX_CODES: [&str; 18] = [
     "script-invalid",
     "enum-increment",
 ];
+
+/// Emitted diagnostic codes that never produce `syntaxError`, each class
+/// documented so new codes are triaged, not silently absorbed. A code lands
+/// here when its verdict can depend on project context, when it is not
+/// malformation at all, or when `check` never emits it. The exhaustive
+/// partition is enforced by `syntax_error_classification_is_exhaustive`.
+///
+/// - name/binding verdicts (`unknown-*`, `duplicate-*`, `invalid-arity`,
+///   `unresolved-reference`, `enum-type-without-member`, …) — the referent
+///   may be declared in a sibling file;
+/// - merged-table duplicates (`rule-prefix-template-duplicate`,
+///   `replacement-duplicate`, `post-compile-hook-duplicate`,
+///   `macro-redeclaration`) — the earlier entry may come from an include;
+/// - macro-table verdicts (`macro-arity`, `macro-recursion`) — the macro
+///   definition may come from an include;
+/// - script resolution and execution verdicts (`script-not-found`,
+///   `script-error`, `script-timeout`, `script-stack-limit`,
+///   `script-memory-limit`, `script-result-not-string`, `script-internal`)
+///   — the script file and its run live outside the document;
+/// - external-file verdicts (`include-not-found`, `include-cycle`,
+///   `settings-not-found`, `translations-invalid`, `settings-expression`,
+///   `rule-prefix-template-invalid`) — the source text or constants the
+///   verdict needs live outside the document;
+/// - catalog/environment verdicts (`catalog-error`, `manifest-error`,
+///   `unknown-enum-member`) — fixed-vocabulary questions the client's
+///   project check answers the same way;
+/// - capability verdicts (`unsupported-*`, `backend-directive-unsupported`,
+///   `unsupported-integration-surface`) — well-formed but unsupported
+///   constructs are not malformed text; the `reconstruct` family's codes
+///   are also unreachable from `check` and live here for the same reason;
+/// - semantic and structural verdicts (`invalid-*`, `break-context`,
+///   `continue-context`, `dict-access`, `lambda-context`, …) — the context
+///   they judge may be pasted or bound by a sibling file;
+/// - internal/protocol errors (`incompatible-protocol`,
+///   `malformed-payload`, `unsupported-node`, `workshop-emission`) — not
+///   source malformation;
+/// - `unknown-setting` is warning-severity, so the severity gate already
+///   excludes it.
+#[cfg(test)]
+const EXCLUDED_CODES: &[&str] = &[
+    "action-in-value-position",
+    "backend-directive-unsupported",
+    "break-context",
+    "catalog-error",
+    "continue-context",
+    "dict-access",
+    "duplicate-argument",
+    "duplicate-declaration",
+    "duplicate-definition",
+    "duplicate-rule-name",
+    "enum-type-without-member",
+    "four-dimensional-assignment",
+    "four-dimensional-delete",
+    "include-cycle",
+    "include-not-found",
+    "incompatible-protocol",
+    "index-collision",
+    "index-exhausted",
+    "invalid-argument",
+    "invalid-arity",
+    "invalid-call-context",
+    "invalid-identifier",
+    "invalid-iterable",
+    "invalid-range-binder",
+    "invalid-receiver",
+    "invalid-span",
+    "invalid-structure",
+    "keyword-required",
+    "keyword-unsupported",
+    "lambda-context",
+    "macro-arity",
+    "macro-recursion",
+    "macro-redeclaration",
+    "main-file-not-found",
+    "malformed-payload",
+    "manifest-error",
+    "missing-argument",
+    "positional-after-keyword",
+    "post-compile-hook-duplicate",
+    "random-indexed-delete",
+    "replacement-duplicate",
+    "rule-prefix-template-duplicate",
+    "rule-prefix-template-invalid",
+    "script-error",
+    "script-internal",
+    "script-memory-limit",
+    "script-not-found",
+    "script-result-not-string",
+    "script-stack-limit",
+    "script-timeout",
+    "settings-expression",
+    "settings-hero-lists",
+    "settings-not-found",
+    "settings-workshop-value",
+    "split-dict-array-arguments",
+    "split-dict-array-arity",
+    "split-dict-array-key",
+    "symbol-collision",
+    "tabular-arguments",
+    "translations-invalid",
+    "unknown-action",
+    "unknown-enum-member",
+    "unknown-identifier",
+    "unknown-keyword",
+    "unknown-member",
+    "unknown-setting",
+    "unknown-texture-member",
+    "unknown-value",
+    "unresolved-reference",
+    "unsupported-action-call",
+    "unsupported-arbitrary-player-target",
+    "unsupported-construct",
+    "unsupported-control-flow",
+    "unsupported-dangling",
+    "unsupported-disabled-action",
+    "unsupported-disabled-condition",
+    "unsupported-disabled-rule",
+    "unsupported-duplicate-name",
+    "unsupported-enum-domain",
+    "unsupported-enum-domain-mismatch",
+    "unsupported-enum-member",
+    "unsupported-global-order",
+    "unsupported-indexed-initializer",
+    "unsupported-init-rule",
+    "unsupported-integration-surface",
+    "unsupported-invalid-argument",
+    "unsupported-invalid-arity",
+    "unsupported-localized-string",
+    "unsupported-member",
+    "unsupported-member-assignment",
+    "unsupported-missing-argument",
+    "unsupported-modify-op",
+    "unsupported-name",
+    "unsupported-negative-number",
+    "unsupported-node",
+    "unsupported-non-finite-number",
+    "unsupported-per-player-loop",
+    "unsupported-rule-event",
+    "unsupported-rule-order",
+    "unsupported-set-binary",
+    "unsupported-settings",
+    "unsupported-subroutine-value",
+    "unsupported-value-call",
+    "value-in-action-position",
+    "vect-arity",
+    "workshop-action-layout",
+    "workshop-emission",
+];
+
+/// Kebab-case literals in `opy-rs` sources that are not diagnostic codes —
+/// serde attributes, assertion messages, and similar data. The
+/// classification test requires every code-shaped literal to appear in
+/// exactly one list, so non-codes need an explicit home too.
+#[cfg(test)]
+const NON_DIAGNOSTIC_LITERALS: &[&str] = &["kebab-case", "non-empty"];
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -1093,4 +1229,152 @@ pub(crate) fn validate_edits(params: Value) -> Result<Value, HandlerError> {
         return invalid("syntaxError", None);
     }
     Ok(json!({ "valid": true, "version": version }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeSet;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+
+    /// opy-rs#591: every kebab-case literal the compiler can emit must be
+    /// classified — in `DOCUMENT_SYNTAX_CODES`, in `EXCLUDED_CODES`, or in
+    /// `NON_DIAGNOSTIC_LITERALS` for literals that are not diagnostic codes
+    /// at all. A new code fails here until it is placed deliberately; that
+    /// is the guard against the allowlist's fail-open failure class.
+    #[test]
+    fn syntax_error_classification_is_exhaustive() {
+        let mut found = BTreeSet::new();
+        collect_literals(
+            &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../opy-rs/src"),
+            &mut found,
+        );
+
+        let syntax: BTreeSet<&str> = DOCUMENT_SYNTAX_CODES.iter().copied().collect();
+        let excluded: BTreeSet<&str> = EXCLUDED_CODES.iter().copied().collect();
+        let non_code: BTreeSet<&str> = NON_DIAGNOSTIC_LITERALS.iter().copied().collect();
+        let listed: BTreeSet<&str> = syntax.union(&excluded).copied().collect();
+        assert!(
+            syntax.is_disjoint(&excluded)
+                && syntax.is_disjoint(&non_code)
+                && excluded.is_disjoint(&non_code),
+            "a literal appears in more than one classification list"
+        );
+
+        let unclassified: Vec<&String> = found
+            .iter()
+            .filter(|code| !listed.contains(code.as_str()) && !non_code.contains(code.as_str()))
+            .collect();
+        let stale: Vec<&str> = listed
+            .iter()
+            .chain(non_code.iter())
+            .copied()
+            .filter(|code| !found.contains(*code))
+            .collect();
+        assert!(
+            unclassified.is_empty() && stale.is_empty(),
+            "unclassified literals: {unclassified:?}; listed but never emitted: {stale:?}"
+        );
+    }
+
+    /// Collect kebab-case string literals from `dir`'s Rust sources,
+    /// skipping `tests/` directories, `test_*.rs` files, and `#[cfg(test)]`
+    /// module tails.
+    fn collect_literals(dir: &Path, found: &mut BTreeSet<String>) {
+        for entry in fs::read_dir(dir).expect("read opy-rs sources") {
+            let path = entry.expect("dir entry").path();
+            let name = path.file_name().unwrap_or_default().to_string_lossy();
+            if path.is_dir() {
+                if name != "tests" {
+                    collect_literals(&path, found);
+                }
+            } else if name.ends_with(".rs") && !name.starts_with("test_") {
+                let source = fs::read_to_string(&path).expect("read source file");
+                let source = source.split("#[cfg(test)]").next().unwrap_or("");
+                scan(source, found);
+            }
+        }
+    }
+
+    /// Extract `"..."` string literals, skipping comments, char literals,
+    /// and raw strings.
+    fn scan(source: &str, found: &mut BTreeSet<String>) {
+        let bytes = source.as_bytes();
+        let mut i = 0;
+        while i < bytes.len() {
+            match bytes[i] {
+                b'/' if bytes.get(i + 1) == Some(&b'/') => {
+                    i = bytes[i..]
+                        .iter()
+                        .position(|b| *b == b'\n')
+                        .map(|end| i + end)
+                        .unwrap_or(bytes.len());
+                }
+                b'/' if bytes.get(i + 1) == Some(&b'*') => {
+                    i += 2;
+                    while i + 1 < bytes.len() && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
+                        i += 1;
+                    }
+                    i += 2;
+                }
+                b'r' => {
+                    let mut hashes = 0;
+                    while bytes.get(i + 1 + hashes) == Some(&b'#') {
+                        hashes += 1;
+                    }
+                    if bytes.get(i + 1 + hashes) == Some(&b'"') {
+                        let mut j = i + 2 + hashes;
+                        while j < bytes.len()
+                            && !(bytes[j] == b'"'
+                                && (0..hashes).all(|h| bytes.get(j + 1 + h) == Some(&b'#')))
+                        {
+                            j += 1;
+                        }
+                        i = j + 1 + hashes;
+                    } else {
+                        i += 1;
+                    }
+                }
+                b'"' => {
+                    let start = i + 1;
+                    let mut j = start;
+                    while j < bytes.len() && bytes[j] != b'"' {
+                        j += usize::from(bytes[j] == b'\\') + 1;
+                    }
+                    let text = &source[start..j.min(bytes.len())];
+                    if is_code_shape(text) {
+                        found.insert(text.to_string());
+                    }
+                    i = j + 1;
+                }
+                b'\'' => {
+                    // A `'` starts a char literal only if a matching `'`
+                    // follows one char or escape; otherwise it is a lifetime.
+                    let next = bytes.get(i + 1).copied();
+                    let after = if next == Some(b'\\') {
+                        (i + 2..bytes.len().min(i + 8))
+                            .find(|&j| bytes[j] == b'\'')
+                            .map(|j| j + 1)
+                    } else if bytes.get(i + 2) == Some(&b'\'') {
+                        Some(i + 3)
+                    } else {
+                        None
+                    };
+                    i = after.unwrap_or(i + 1);
+                }
+                _ => i += 1,
+            }
+        }
+    }
+
+    fn is_code_shape(text: &str) -> bool {
+        text.contains('-')
+            && text.split('-').all(|part| {
+                !part.is_empty()
+                    && part
+                        .bytes()
+                        .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
+            })
+    }
 }
