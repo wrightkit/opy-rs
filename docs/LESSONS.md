@@ -3,7 +3,7 @@
 Short review queue of reusable failure classes from merged opy-rs work. Each
 entry names a prevention action and the evidence behind it. Promote an entry
 into a regression test, an owner contract, or an existing engineering standard,
-then remove it here. The procedure is the `wrightkit-retro` skill in
+then remove it here. The procedure is the `merged-pr-retro` skill in
 `wrightkit/.agents`.
 
 ### Documents and declared status may only claim what executed checks verify
@@ -19,7 +19,7 @@ then remove it here. The procedure is the `wrightkit-retro` skill in
   correct the same class five times in two weeks.
 - **Prevention home:** existing policy — the workspace `AGENTS.md`
   documentation-synchronization invariant and this repository's support-claims
-  rule; review surface `wrightkit-test-design-review`. Escalation: #556
+  rule; review surface `test-design-review`. Escalation: #556
   (closed not-planned).
 - **Incidents:** [#196](https://github.com/wrightkit/opy-rs/pull/196),
   [#222](https://github.com/wrightkit/opy-rs/pull/222),
