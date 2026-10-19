@@ -1763,6 +1763,9 @@ const REFUSED_ARTIFACT: &str = concat!(
     "        All;\n",
     "        All;\n",
     "    }\n",
+    "    conditions {\n",
+    "        disabled Event Player == Null;\n",
+    "    }\n",
     "    actions {\n",
     "        For Player Variable(Event Player, x, 0, 1, 1);\n",
     "            Set Player Variable(Event Player, x, 0);\n",
@@ -1836,8 +1839,8 @@ fn reconstruct_refusal_carries_every_issue_code_and_span() {
     let message = response["error"]["message"].as_str().expect("message");
     for (code, span) in [
         ("unsupported-disabled-rule", "at 6:1"),
-        ("unsupported-per-player-loop", "at 22:9"),
-        ("unsupported-disabled-action", "at 25:18"),
+        ("unsupported-disabled-condition", "at 22:31"),
+        ("unsupported-disabled-action", "at 28:18"),
     ] {
         assert!(
             message
