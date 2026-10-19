@@ -117,6 +117,15 @@ pub(crate) struct Lowering<'a> {
     optimized_nodes: HashMap<ValueId, bool>,
     optimization_mark: Option<bool>,
     optimization_override: Option<OptimizationState>,
+    /// Per-file `#!` directive lookup built once from the recorded
+    /// preprocessing events, so `optimization_state_at` does not scan every
+    /// directive for every lowered value.
+    optimization_index: OptimizationIndex,
+    /// Every span handed to `optimization_state_at`, recorded so tests can
+    /// diff the index against the previous linear scan over real lowered
+    /// workloads.
+    #[cfg(test)]
+    pub(in crate::compiler) optimization_queries: std::cell::RefCell<Vec<Option<HirSpan>>>,
     used_maps: Vec<&'static str>,
 }
 
@@ -136,6 +145,44 @@ enum BreakTarget {
 type SwitchBreak = (usize, HirSpan);
 type LoweredSwitchBody = (Vec<ActionId>, Option<SwitchBreak>);
 type LoweredSwitchArm<'a> = (Option<&'a Expr>, Vec<ActionId>, Option<SwitchBreak>);
+
+/// Per-file index over `hir::PreprocessingState::directives` used by
+/// `optimization_state_at`.
+///
+/// Entries are the recorded directive events grouped by source file, each in
+/// the order they appear in `directives` (which is source order per file),
+/// carrying their start position and the optimization state they establish.
+/// Lookups reuse the same ordering the linear scan relied on: the last entry
+/// at or before the query position wins.
+pub(super) struct OptimizationIndex {
+    files: HashMap<u32, Vec<(hir::Position, OptimizationState)>>,
+}
+
+impl OptimizationIndex {
+    fn build(hir: &hir::Program) -> Self {
+        let mut files: HashMap<u32, Vec<(hir::Position, OptimizationState)>> = HashMap::new();
+        for directive in &hir.preprocessing.directives {
+            let Some(span) = directive.span else {
+                continue;
+            };
+            files
+                .entry(span.file)
+                .or_default()
+                .push((span.start, directive.state.optimization.clone()));
+        }
+        Self { files }
+    }
+
+    /// The state established by the last directive at or before `position`
+    /// in `file`, mirroring the linear scan's semantics exactly.
+    fn state_at(&self, file: u32, position: hir::Position) -> Option<&OptimizationState> {
+        let entries = self.files.get(&file)?;
+        let index = entries.partition_point(|(start, _)| {
+            start.line < position.line || (start.line == position.line && start.col <= position.col)
+        });
+        index.checked_sub(1).map(|index| &entries[index].1)
+    }
+}
 
 fn pure_continue_conditions(statement: &Stmt) -> Option<Vec<&Expr>> {
     if matches!(statement, Stmt::Continue { .. }) {
@@ -272,6 +319,9 @@ impl<'a> Lowering<'a> {
             optimized_nodes: HashMap::new(),
             optimization_mark: None,
             optimization_override: None,
+            optimization_index: OptimizationIndex::build(hir),
+            #[cfg(test)]
+            optimization_queries: std::cell::RefCell::new(Vec::new()),
             used_maps: used_bugged_maps(hir),
             visible_labels: Vec::new(),
             deferred_gotos: Vec::new(),
