@@ -1,3 +1,4 @@
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 use workshop_rs::Program;
@@ -131,9 +132,34 @@ const BINARY_OPS: &[&str] = &[
     "+", "-", "*", "/", "%", "**", "==", "!=", "<", "<=", ">", ">=", "and", "or",
 ];
 
+/// Canonical arithmetic call identities that reconstruct as source-level
+/// binary operators (`Add(x, y)` ↔ `x + y`).
+const ARITHMETIC_OPS: &[(&str, &str)] = &[
+    ("add", "+"),
+    ("subtract", "-"),
+    ("multiply", "*"),
+    ("divide", "/"),
+    ("modulo", "%"),
+    ("raiseToPower", "**"),
+];
+
 /// Call names the frontend lowers to dedicated Workshop actions or values.
 const DEDICATED_ACTION_NAMES: &[&str] = &["append"];
 const DEDICATED_VALUE_NAMES: &[&str] = &["vect", "range", "chase"];
+
+/// Operation argument spellings an indexed `modify*AtIndex` call carries as a
+/// zero-argument canonical call; the OPY spelling is the assignment operator
+/// that re-lowers to the same indexed modification.
+const INDEXED_MODIFY_OPS: &[(&str, &str)] = &[
+    ("add", "+="),
+    ("subtract", "-="),
+    ("multiply", "*="),
+    ("divide", "/="),
+    ("modulo", "%="),
+    ("raiseToPower", "**="),
+    ("min", "min="),
+    ("max", "max="),
+];
 
 struct Emitter<'a> {
     program: &'a Program,
@@ -143,7 +169,23 @@ struct Emitter<'a> {
     issues: Vec<ReconstructIssue>,
     out: String,
     /// Subroutine names, for call-vs-subroutine ambiguity checks.
-    subroutine_names: std::collections::HashSet<String>,
+    subroutine_names: HashSet<String>,
+    /// Every declared variable/subroutine name; generated identifiers must
+    /// not collide with them.
+    declared_names: HashSet<String>,
+    /// Generated `goto` labels by flat action index inside the rule currently
+    /// being emitted (the boundary the label statement precedes).
+    labels: HashMap<usize, Vec<String>>,
+    /// Generated label name by skip/skipIf action index.
+    skip_labels: HashMap<usize, String>,
+    /// Deterministic counters for generated label and lambda binder names.
+    generated_counter: usize,
+    /// Lambda binder names for nested `map`/`filter`/`sorted`/`all`/`any`
+    /// emission: `(element, index)` per enclosing generated lambda.
+    lambda_binders: Vec<(String, Option<String>)>,
+    /// Nesting depth of `while`/`for` bodies currently being emitted; the
+    /// canonical `break` action only has an OPY form inside a loop.
+    loop_depth: usize,
 }
 
 type IndexedRule<'a> = (usize, &'a Rule);
@@ -167,6 +209,13 @@ impl<'a> Emitter<'a> {
             .iter()
             .map(|subroutine| subroutine.name.clone())
             .collect();
+        let declared_names = program
+            .global_variables
+            .iter()
+            .chain(&program.player_variables)
+            .map(|variable| variable.name.clone())
+            .chain(program.subroutines.iter().map(|s| s.name.clone()))
+            .collect();
         Emitter {
             program,
             manifest,
@@ -175,6 +224,12 @@ impl<'a> Emitter<'a> {
             issues: Vec::new(),
             out: String::new(),
             subroutine_names,
+            declared_names,
+            labels: HashMap::new(),
+            skip_labels: HashMap::new(),
+            generated_counter: 0,
+            lambda_binders: Vec::new(),
+            loop_depth: 0,
         }
     }
 
@@ -768,14 +823,100 @@ impl<'a> Emitter<'a> {
     }
 
     fn emit_actions(&mut self, rule_index: usize, actions: &[Action], level: usize) {
+        self.labels.clear();
+        self.skip_labels.clear();
+        self.plan_labels(rule_index, actions);
         let mut position = 0;
         self.emit_action_block(rule_index, actions, &mut position, level);
+        self.emit_labels_at(actions.len(), level);
         if position < actions.len() {
             self.issue(
                 "unsupported-control-flow",
                 "unexpected control-flow marker in Workshop action sequence",
                 self.program.action_span(rule_index, position),
             );
+        }
+    }
+
+    /// `skip`/`skipIf` carry a native-action distance; every canonical action
+    /// in the flat sequence (including `If`/`Else`/`End` markers) is exactly
+    /// one native line, so the target boundary is `index + 1 + distance`.
+    /// For each literal-distance skip we reserve a generated label at that
+    /// boundary; the label statement is emitted by `emit_labels_at`.
+    /// Generated names avoid every declared program identifier.
+    ///
+    /// A label is only usable when its boundary sits in the skip's own
+    /// statement list or an enclosing one — the OPY goto resolution rejects
+    /// jumps into a nested sibling block. Deeper targets fall back to the
+    /// `goto loc+<distance>` spelling, which re-lowers to the same canonical
+    /// `skip(distance)` exactly (issue #602).
+    fn plan_labels(&mut self, rule_index: usize, actions: &[Action]) {
+        let _ = rule_index;
+        let mut depth = vec![0usize; actions.len() + 1];
+        for (index, action) in actions.iter().enumerate() {
+            depth[index + 1] = match action {
+                Action::If { .. }
+                | Action::While { .. }
+                | Action::ForGlobalVariable { .. }
+                | Action::ForPlayerVariable { .. } => depth[index] + 1,
+                Action::End => depth[index].saturating_sub(1),
+                _ => depth[index],
+            };
+        }
+        for (index, action) in actions.iter().enumerate() {
+            let Action::Call { name, args } = action else {
+                continue;
+            };
+            let distance_arg = match (name.as_str(), args.as_slice()) {
+                ("skip", [distance]) => distance,
+                ("skipIf", [_, distance]) => distance,
+                _ => continue,
+            };
+            let Some(distance) = literal_positive_int(distance_arg) else {
+                continue; // dynamic distance → `goto loc+<expr>` needs no label
+            };
+            let target = (index + 1 + distance).min(actions.len());
+            let source_depth = depth[index];
+            let target_depth = depth[target];
+            if target_depth > source_depth {
+                continue;
+            }
+            // The enclosing frame of the target boundary must stay open (or
+            // open further) along the whole jump, otherwise the label lands
+            // inside a sibling block the goto cannot see.
+            let dips_below_target =
+                ((index + 1)..=target).any(|boundary| depth[boundary] < target_depth);
+            if dips_below_target {
+                continue;
+            }
+            let label = self.fresh_generated_name("__op_label");
+            self.skip_labels.insert(index, label.clone());
+            self.labels.entry(target).or_default().push(label);
+        }
+    }
+
+    /// Deterministic generated identifier that never collides with a declared
+    /// program name.
+    fn fresh_generated_name(&mut self, prefix: &str) -> String {
+        loop {
+            self.generated_counter += 1;
+            let name = format!("{prefix}_{}", self.generated_counter);
+            if !self.declared_names.contains(&name) {
+                return name;
+            }
+        }
+    }
+
+    /// Emit any generated `name:` label statements registered for this flat
+    /// action boundary.
+    fn emit_labels_at(&mut self, position: usize, level: usize) {
+        let Some(labels) = self.labels.remove(&position) else {
+            return;
+        };
+        for label in labels {
+            self.out.push_str(&Self::indent(level));
+            self.out.push_str(&label);
+            self.out.push_str(":\n");
         }
     }
 
@@ -787,6 +928,7 @@ impl<'a> Emitter<'a> {
         level: usize,
     ) {
         while let Some(action) = actions.get(*position) {
+            self.emit_labels_at(*position, level);
             match action {
                 Action::ElseIf { .. } | Action::Else | Action::End => return,
                 Action::If { condition } => {
@@ -839,7 +981,9 @@ impl<'a> Emitter<'a> {
                     );
                     self.out.push_str(":\n");
                     *position += 1;
+                    self.loop_depth += 1;
                     self.emit_action_block(rule_index, actions, position, level + 1);
+                    self.loop_depth -= 1;
                     self.require_end(rule_index, actions, position, "while", span);
                 }
                 Action::ForGlobalVariable {
@@ -862,7 +1006,9 @@ impl<'a> Emitter<'a> {
                             span,
                         );
                         *position += 1;
+                        self.loop_depth += 1;
                         self.emit_action_block(rule_index, actions, position, level + 1);
+                        self.loop_depth -= 1;
                         self.require_end(rule_index, actions, position, "for", span);
                         continue;
                     };
@@ -882,20 +1028,67 @@ impl<'a> Emitter<'a> {
                     }
                     self.out.push_str("):\n");
                     *position += 1;
+                    self.loop_depth += 1;
                     self.emit_action_block(rule_index, actions, position, level + 1);
+                    self.loop_depth -= 1;
                     self.require_end(rule_index, actions, position, "for", span);
                 }
-                Action::ForPlayerVariable { .. } => {
+                Action::ForPlayerVariable {
+                    player,
+                    variable,
+                    start,
+                    stop,
+                    step,
+                } => {
                     let action_index = *position;
                     let span = self.program.action_span(rule_index, action_index);
-                    self.issue(
-                        "unsupported-per-player-loop",
-                        "For Player Variable is outside the reconstruction surface \
-                         (the OPY `for` form binds a global variable)",
-                        span,
+                    if !self
+                        .program
+                        .player_variables
+                        .iter()
+                        .any(|declaration| declaration.name == *variable)
+                    {
+                        self.issue(
+                            "unsupported-dangling",
+                            format!("unknown loop variable '{variable}'"),
+                            span,
+                        );
+                        *position += 1;
+                        self.loop_depth += 1;
+                        self.emit_action_block(rule_index, actions, position, level + 1);
+                        self.loop_depth -= 1;
+                        self.require_end(rule_index, actions, position, "for", span);
+                        continue;
+                    }
+                    self.out.push_str(&Self::indent(level));
+                    self.out.push_str("for ");
+                    self.emit_player_variable_receiver(
+                        player,
+                        self.program
+                            .action_argument_span(rule_index, action_index, 0),
                     );
+                    self.out.push('.');
+                    self.out.push_str(variable);
+                    self.out.push_str(" in range(");
+                    for (arg_index, value) in [start, stop, step].into_iter().enumerate() {
+                        if arg_index > 0 {
+                            self.out.push_str(", ");
+                        }
+                        self.emit_value(
+                            value,
+                            self.program.action_argument_span(
+                                rule_index,
+                                action_index,
+                                arg_index + 2,
+                            ),
+                        );
+                    }
+                    self.out.push_str("):\n");
                     *position += 1;
-                    self.skip_action_block(actions, position);
+                    self.loop_depth += 1;
+                    self.emit_action_block(rule_index, actions, position, level + 1);
+                    self.loop_depth -= 1;
+                    self.require_end(rule_index, actions, position, "for", span);
                 }
                 _ => {
                     let action_index = *position;
@@ -925,26 +1118,6 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    fn skip_action_block(&self, actions: &[Action], position: &mut usize) {
-        let mut depth = 1usize;
-        while let Some(action) = actions.get(*position) {
-            *position += 1;
-            match action {
-                Action::If { .. }
-                | Action::While { .. }
-                | Action::ForGlobalVariable { .. }
-                | Action::ForPlayerVariable { .. } => depth += 1,
-                Action::End => {
-                    depth -= 1;
-                    if depth == 0 {
-                        break;
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-
     fn indent(level: usize) -> String {
         "    ".repeat(level)
     }
@@ -959,19 +1132,10 @@ impl<'a> Emitter<'a> {
         let span = self.program.action_span(rule_index, action_index);
         let indent = Self::indent(level);
         match action {
+            // A self-referential Set (`x = x + v`) re-lowers to a Modify
+            // action; the comparator accepts the Set↔Modify difference, so
+            // the source-level Set form is emitted directly (issue #602).
             Action::SetGlobalVariable { variable, value } => {
-                if self.set_has_modify_pattern(value, variable, true) {
-                    self.issue(
-                        "unsupported-set-binary",
-                        format!(
-                            "Set Global Variable('{}', <binary over the same variable>) \
-                             re-lowers to a Modify action; emit the modify form",
-                            variable
-                        ),
-                        span,
-                    );
-                    return;
-                }
                 self.out.push_str(&indent);
                 self.out.push_str(variable);
                 self.out.push_str(" = ");
@@ -1001,31 +1165,12 @@ impl<'a> Emitter<'a> {
                 variable,
                 value,
             } => {
-                if !self.is_event_player(player) {
-                    self.issue(
-                        "unsupported-arbitrary-player-target",
-                        "Set Player Variable targets a non-event-player expression; \
-                         the OPY surface only exposes eventPlayer.member"
-                            .to_string(),
-                        span,
-                    );
-                    return;
-                }
-                if self.set_has_modify_pattern(value, variable, false) {
-                    self.issue(
-                        "unsupported-set-binary",
-                        format!(
-                            "Set Player Variable('{}', <binary over the same variable>) \
-                             re-lowers to a Modify action; emit the modify form",
-                            variable
-                        ),
-                        span,
-                    );
-                    return;
-                }
+                let player_span = self
+                    .program
+                    .action_argument_span(rule_index, action_index, 0);
+                let target = self.player_variable_target(player, variable, player_span);
                 self.out.push_str(&indent);
-                self.out.push_str("eventPlayer.");
-                self.out.push_str(variable);
+                self.out.push_str(&target);
                 self.out.push_str(" = ");
                 self.emit_value(
                     value,
@@ -1040,19 +1185,13 @@ impl<'a> Emitter<'a> {
                 op,
                 value,
             } => {
-                if !self.is_event_player(player) {
-                    self.issue(
-                        "unsupported-arbitrary-player-target",
-                        "Modify Player Variable targets a non-event-player expression; \
-                         the OPY surface only exposes eventPlayer.member"
-                            .to_string(),
-                        span,
-                    );
-                    return;
-                }
+                let player_span = self
+                    .program
+                    .action_argument_span(rule_index, action_index, 0);
+                let target = self.player_variable_target(player, variable, player_span);
                 self.emit_modify(
                     level,
-                    &format!("eventPlayer.{variable}"),
+                    &target,
                     *op,
                     value,
                     self.program
@@ -1108,37 +1247,52 @@ impl<'a> Emitter<'a> {
                 span,
             ),
             Action::Call { name, args } => {
-                let argument_spans = (0..args.len())
-                    .map(|index| {
-                        self.program
-                            .action_argument_span(rule_index, action_index, index)
-                    })
-                    .collect::<Vec<_>>();
-                self.emit_call_action(name, args, &indent, span, &argument_spans);
+                self.emit_call_action(rule_index, action_index, name, args, &indent, span);
             }
         }
-    }
-
-    /// `x = x <op> v` (or the player form) re-lowers to a Modify action, so a
-    /// Set whose value matches the pattern cannot be reconstructed as a Set.
-    fn set_has_modify_pattern(&self, value: &Value, variable: &str, global: bool) -> bool {
-        let Value::Call { name, args } = value else {
-            return false;
-        };
-        if !matches!(name.as_str(), "+" | "-" | "*" | "/" | "%" | "**") {
-            return false;
-        }
-        args.len() == 2 && args.iter().any(|operand| {
-            if global {
-                matches!(operand, Value::GlobalVariable(name) if name == variable)
-            } else {
-                matches!(operand, Value::PlayerVariable { variable: name, .. } if name == variable)
-            }
-        })
     }
 
     fn is_event_player(&self, value: &Value) -> bool {
         matches!(value, Value::EventPlayer)
+    }
+
+    /// Emit `eventPlayer` or a parenthesized arbitrary player expression as a
+    /// member receiver (issue #602).
+    fn emit_player_variable_receiver(&mut self, player: &Value, span: Option<Span>) {
+        if self.is_event_player(player) {
+            self.out.push_str("eventPlayer");
+        } else {
+            self.out.push('(');
+            self.emit_value(player, span);
+            self.out.push(')');
+        }
+    }
+
+    /// The `(<player>).<variable>` assignment target for Set/Modify/indexed
+    /// player-variable forms.
+    fn player_variable_target(
+        &mut self,
+        player: &Value,
+        variable: &str,
+        span: Option<Span>,
+    ) -> String {
+        let receiver = self.render_value_as(player, span, |this, player, span| {
+            this.emit_player_variable_receiver(player, span);
+        });
+        format!("{receiver}.{variable}")
+    }
+
+    /// Render a value through `emit_value` into a fresh string so it can be
+    /// composed into a target spelling.
+    fn render_value_as(
+        &mut self,
+        value: &Value,
+        span: Option<Span>,
+        emit: impl FnOnce(&mut Self, &Value, Option<Span>),
+    ) -> String {
+        let saved = std::mem::take(&mut self.out);
+        emit(self, value, span);
+        std::mem::replace(&mut self.out, saved)
     }
 
     fn emit_modify(
@@ -1159,35 +1313,30 @@ impl<'a> Emitter<'a> {
                 self.out.push_str(")\n");
             }
             ModifyOp::RemoveFromArrayByValue => {
-                self.issue(
-                    "unsupported-modify-op",
-                    "Modify ... Remove From Array is outside the reconstruction surface \
-                     (the OPY surface has no remove-from-array form)",
-                    span,
-                );
+                self.out.push_str(&indent);
+                self.out.push_str(name);
+                self.out.push_str(".remove(");
+                self.emit_value(value, span);
+                self.out.push_str(")\n");
             }
             ModifyOp::RemoveFromArrayByIndex => {
-                self.issue(
-                    "unsupported-modify-op",
-                    "Modify ... Remove From Array By Index is outside the reconstruction \
-                     surface (the OPY surface has no indexed remove-from-array form)",
-                    span,
-                );
+                self.out.push_str(&indent);
+                self.out.push_str("del ");
+                self.out.push_str(name);
+                self.out.push('[');
+                self.emit_value(value, span);
+                self.out.push_str("]\n");
             }
             ModifyOp::Min | ModifyOp::Max => {
-                self.issue(
-                    "unsupported-modify-op",
-                    format!(
-                        "Modify ... {} is outside the reconstruction surface \
-                         (the OPY surface has no equivalent modification form)",
-                        match op {
-                            ModifyOp::Min => "Min",
-                            ModifyOp::Max => "Max",
-                            _ => unreachable!(),
-                        }
-                    ),
-                    span,
-                );
+                self.out.push_str(&indent);
+                self.out.push_str(name);
+                self.out.push_str(match op {
+                    ModifyOp::Min => " min= ",
+                    ModifyOp::Max => " max= ",
+                    _ => unreachable!(),
+                });
+                self.emit_value(value, span);
+                self.out.push('\n');
             }
             ModifyOp::Add
             | ModifyOp::Subtract
@@ -1225,11 +1374,12 @@ impl<'a> Emitter<'a> {
     /// A generic or member action call in statement position.
     fn emit_call_action(
         &mut self,
+        rule_index: usize,
+        action_index: usize,
         name: &str,
         args: &[Value],
         indent: &str,
         span: Option<Span>,
-        argument_spans: &[Option<Span>],
     ) {
         if DEDICATED_ACTION_NAMES.contains(&name) {
             self.issue(
@@ -1240,6 +1390,11 @@ impl<'a> Emitter<'a> {
                 ),
                 span,
             );
+            return;
+        }
+        // Syntax-produced actions lower through canonical calls; emit the
+        // source form that re-lowers to the same action (issue #602).
+        if self.emit_syntax_action(rule_index, action_index, name, args, indent, span) {
             return;
         }
         let (entry, member) =
@@ -1261,9 +1416,337 @@ impl<'a> Emitter<'a> {
             );
             return;
         }
+        let argument_spans: Vec<Option<Span>> = (0..args.len())
+            .map(|index| {
+                self.program
+                    .action_argument_span(rule_index, action_index, index)
+            })
+            .collect();
         self.out.push_str(indent);
-        self.emit_manifest_call(entry, args, member, span, argument_spans);
+        self.emit_manifest_call(entry, args, member, span, &argument_spans);
         self.out.push('\n');
+    }
+
+    /// Syntax-produced action calls → the OPY statement form that re-lowers
+    /// to the same canonical action (issue #602). Returns true when handled.
+    fn emit_syntax_action(
+        &mut self,
+        rule_index: usize,
+        action_index: usize,
+        name: &str,
+        args: &[Value],
+        indent: &str,
+        span: Option<Span>,
+    ) -> bool {
+        let arg_span = |i: usize| {
+            self.program
+                .action_argument_span(rule_index, action_index, i)
+        };
+        match name {
+            // startRule(sub, behavior) → `async(<subroutine>, <behavior>)`
+            "startRule" => {
+                let [subroutine, behavior] = args else {
+                    self.issue(
+                        "unsupported-action-call",
+                        "startRule requires subroutine and behavior arguments",
+                        span,
+                    );
+                    return true;
+                };
+                let Value::Subroutine(sub_name) = subroutine else {
+                    self.issue(
+                        "unsupported-action-call",
+                        "startRule subroutine argument is not a subroutine value",
+                        arg_span(0).or(span),
+                    );
+                    return true;
+                };
+                if !self.subroutine_names.contains(sub_name.as_str()) {
+                    self.issue(
+                        "unsupported-dangling",
+                        format!("unknown subroutine '{sub_name}'"),
+                        arg_span(0).or(span),
+                    );
+                    return true;
+                }
+                self.out.push_str(indent);
+                self.out.push_str("async(");
+                self.out.push_str(sub_name);
+                self.out.push_str(", ");
+                self.emit_value(behavior, arg_span(1));
+                self.out.push_str(")\n");
+                true
+            }
+            // skip(n) → `goto <generated-label>` (label planned at the target
+            // boundary); dynamic distance → `goto loc+<expr>`
+            "skip" => {
+                let [distance] = args else {
+                    self.issue(
+                        "unsupported-action-call",
+                        "skip requires exactly one distance argument",
+                        span,
+                    );
+                    return true;
+                };
+                self.out.push_str(indent);
+                if let Some(label) = self.skip_labels.get(&action_index) {
+                    self.out.push_str("goto ");
+                    self.out.push_str(&label.clone());
+                    self.out.push('\n');
+                } else {
+                    self.out.push_str("goto loc+");
+                    self.emit_value(distance, arg_span(0));
+                    self.out.push('\n');
+                }
+                true
+            }
+            // skipIf(cond, n) → `if <cond>: goto <generated-label>`
+            "skipIf" => {
+                let [condition, distance] = args else {
+                    self.issue(
+                        "unsupported-action-call",
+                        "skipIf requires condition and distance arguments",
+                        span,
+                    );
+                    return true;
+                };
+                if let Some(label) = self.skip_labels.get(&action_index).cloned() {
+                    self.out.push_str(indent);
+                    self.out.push_str("if ");
+                    self.emit_value(condition, arg_span(0));
+                    self.out.push_str(":\n");
+                    self.out.push_str(indent);
+                    self.out.push_str("    goto ");
+                    self.out.push_str(&label);
+                    self.out.push('\n');
+                } else {
+                    self.out.push_str(indent);
+                    self.out.push_str("if ");
+                    self.emit_value(condition, arg_span(0));
+                    self.out.push_str(":\n");
+                    self.out.push_str(indent);
+                    self.out.push_str("    goto loc+");
+                    self.emit_value(distance, arg_span(1));
+                    self.out.push('\n');
+                }
+                true
+            }
+            // abortIf*/loopIf* → single-statement if forms
+            "abort" => {
+                if !args.is_empty() {
+                    self.issue("unsupported-action-call", "abort takes no arguments", span);
+                    return true;
+                }
+                self.out.push_str(indent);
+                self.out.push_str("return\n");
+                true
+            }
+            "abortIf" => {
+                let [condition] = args else {
+                    self.issue(
+                        "unsupported-action-call",
+                        "abortIf requires exactly one condition argument",
+                        span,
+                    );
+                    return true;
+                };
+                self.out.push_str(indent);
+                self.out.push_str("if ");
+                self.emit_value(condition, arg_span(0));
+                self.out.push_str(":\n");
+                self.out.push_str(indent);
+                self.out.push_str("    return\n");
+                true
+            }
+            "loop" => {
+                if !args.is_empty() {
+                    self.issue("unsupported-action-call", "loop takes no arguments", span);
+                    return true;
+                }
+                self.out.push_str(indent);
+                self.out.push_str("loop()\n");
+                true
+            }
+            "loopIf" => {
+                let [condition] = args else {
+                    self.issue(
+                        "unsupported-action-call",
+                        "loopIf requires exactly one condition argument",
+                        span,
+                    );
+                    return true;
+                };
+                self.out.push_str(indent);
+                self.out.push_str("if ");
+                self.emit_value(condition, arg_span(0));
+                self.out.push_str(":\n");
+                self.out.push_str(indent);
+                self.out.push_str("    loop()\n");
+                true
+            }
+            // `break` re-lowers to the same canonical call inside a loop body;
+            // outside one the OPY surface rejects it, so it stays refused.
+            "break" => {
+                if self.loop_depth == 0 {
+                    return false;
+                }
+                self.out.push_str(indent);
+                self.out.push_str("break\n");
+                true
+            }
+            "__abortIfConditionIsTrue__"
+            | "__abortIfConditionIsFalse__"
+            | "loopIfConditionIsTrue"
+            | "__loopIfConditionIsFalse__" => {
+                if !args.is_empty() {
+                    self.issue(
+                        "unsupported-action-call",
+                        format!("{name} takes no arguments"),
+                        span,
+                    );
+                    return true;
+                }
+                let (positive, is_loop) = match name {
+                    "__abortIfConditionIsTrue__" => (true, false),
+                    "__abortIfConditionIsFalse__" => (false, false),
+                    "loopIfConditionIsTrue" => (true, true),
+                    _ => (false, true),
+                };
+                self.out.push_str(indent);
+                self.out.push_str("if ");
+                if !positive {
+                    self.out.push_str("not ");
+                }
+                self.out.push_str("ruleCondition():\n");
+                self.out.push_str(indent);
+                self.out.push_str(if is_loop {
+                    "    loop()\n"
+                } else {
+                    "    return\n"
+                });
+                true
+            }
+            // Indexed assignment/modification → `target[i] = v` / `target[i] op= v`
+            "setGlobalVariableAtIndex" | "setPlayerVariableAtIndex" => {
+                let [variable, index, value] = args else {
+                    self.issue(
+                        "unsupported-action-call",
+                        format!("{name} requires variable, index and value arguments"),
+                        span,
+                    );
+                    return true;
+                };
+                let Some(target) = self.indexed_target(variable, arg_span(0)) else {
+                    self.issue(
+                        "unsupported-action-call",
+                        format!("{name} variable argument is not a variable value"),
+                        arg_span(0).or(span),
+                    );
+                    return true;
+                };
+                self.out.push_str(indent);
+                self.out.push_str(&target);
+                self.out.push('[');
+                self.emit_value(index, arg_span(1));
+                self.out.push_str("] = ");
+                self.emit_value(value, arg_span(2));
+                self.out.push('\n');
+                true
+            }
+            "modifyGlobalVariableAtIndex" | "modifyPlayerVariableAtIndex" => {
+                let [variable, index, op, value] = args else {
+                    self.issue(
+                        "unsupported-action-call",
+                        format!("{name} requires variable, index, operation and value arguments"),
+                        span,
+                    );
+                    return true;
+                };
+                let Some(target) = self.indexed_target(variable, arg_span(0)) else {
+                    self.issue(
+                        "unsupported-action-call",
+                        format!("{name} variable argument is not a variable value"),
+                        arg_span(0).or(span),
+                    );
+                    return true;
+                };
+                self.out.push_str(indent);
+                // Array-mutation ops on an indexed receiver keep their member
+                // form: appendToArray → `a[i].append(v)`, removeFromArray →
+                // `a[i].remove(v)`, removeFromArrayByIndex → `del a[i][j]`.
+                if let Value::Call {
+                    name: op_name,
+                    args: op_args,
+                } = op
+                {
+                    if matches!(
+                        op_name.as_str(),
+                        "removeFromArray" | "removeFromArrayByIndex" | "appendToArray"
+                    ) && op_args.is_empty()
+                    {
+                        match op_name.as_str() {
+                            "appendToArray" | "removeFromArray" => {
+                                self.out.push_str(&target);
+                                self.out.push('[');
+                                self.emit_value(index, arg_span(1));
+                                self.out.push_str("].");
+                                self.out.push_str(if op_name == "appendToArray" {
+                                    "append("
+                                } else {
+                                    "remove("
+                                });
+                                self.emit_value(value, arg_span(3));
+                                self.out.push_str(")\n");
+                            }
+                            _ => {
+                                self.out.push_str("del ");
+                                self.out.push_str(&target);
+                                self.out.push('[');
+                                self.emit_value(index, arg_span(1));
+                                self.out.push(']');
+                                self.out.push('[');
+                                self.emit_value(value, arg_span(3));
+                                self.out.push(']');
+                                self.out.push('\n');
+                            }
+                        }
+                        return true;
+                    }
+                }
+                let Some(operator) = indexed_modify_operator(op) else {
+                    self.issue(
+                        "unsupported-action-call",
+                        format!("{name} operation argument has no compound-assignment form"),
+                        arg_span(2).or(span),
+                    );
+                    return true;
+                };
+                self.out.push_str(&target);
+                self.out.push('[');
+                self.emit_value(index, arg_span(1));
+                self.out.push_str("] ");
+                self.out.push_str(operator);
+                self.out.push(' ');
+                self.emit_value(value, arg_span(3));
+                self.out.push('\n');
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// `(player).var` or `var` indexed-assignment target for `set*/modify*AtIndex`.
+    fn indexed_target(&mut self, variable: &Value, span: Option<Span>) -> Option<String> {
+        match variable {
+            Value::GlobalVariable(name) => Some(name.clone()),
+            Value::PlayerVariable { player, variable } => {
+                let receiver = self.render_value_as(player, span, |this, player, span| {
+                    this.emit_player_variable_receiver(player, span);
+                });
+                Some(format!("{receiver}.{variable}"))
+            }
+            _ => None,
+        }
     }
 
     fn resolve_call_entry<'manifest>(
@@ -1551,15 +2034,11 @@ impl<'a> Emitter<'a> {
                         span,
                     );
                 } else if *value < 0.0 {
-                    self.issue(
-                        "unsupported-negative-number",
-                        format!(
-                            "negative number literal '{}' has no OPY literal form \
-                             (the lexer has no negative-number token)",
-                            workshop_rs::format::format_number(*value)
-                        ),
-                        span,
-                    );
+                    // Negative finite numbers emit as unary negation over the
+                    // positive literal (issue #603).
+                    self.out.push('-');
+                    self.out
+                        .push_str(&workshop_rs::format::format_number(-*value));
                 } else {
                     self.out
                         .push_str(&workshop_rs::format::format_number(*value));
@@ -1567,11 +2046,7 @@ impl<'a> Emitter<'a> {
             }
             Value::String(value) => self.emit_string_literal(value),
             Value::LocalizedString(value) => {
-                self.issue(
-                    "unsupported-localized-string",
-                    format!("localized Workshop preset string '{value}' has no OPY source representation"),
-                    span,
-                );
+                self.emit_localized_literal(value, span);
             }
             Value::Bool(value) => {
                 self.out.push_str(if *value { "true" } else { "false" });
@@ -1618,16 +2093,6 @@ impl<'a> Emitter<'a> {
                 self.out.push_str(variable);
             }
             Value::PlayerVariable { player, variable } => {
-                if !self.is_event_player(player) {
-                    self.issue(
-                        "unsupported-arbitrary-player-target",
-                        "a player-variable access on a non-event-player expression is \
-                         outside the reconstruction surface (only eventPlayer.member \
-                         is representable)",
-                        span,
-                    );
-                    return;
-                }
                 if !self
                     .program
                     .player_variables
@@ -1641,13 +2106,20 @@ impl<'a> Emitter<'a> {
                     );
                     return;
                 }
-                self.out.push_str("eventPlayer.");
+                self.emit_player_variable_receiver(player, span);
+                self.out.push('.');
                 self.out.push_str(variable);
             }
-            Value::Subroutine(_) => {
+            Value::Subroutine(name) => {
+                // Bare subroutine names are only accepted where the OPY
+                // grammar resolves them (async args, call statements);
+                // anywhere else stays a structured refusal (issue #603).
                 self.issue(
                     "unsupported-subroutine-value",
-                    "subroutine values are outside the OPY reconstruction surface",
+                    format!(
+                        "subroutine value '{name}' is not representable in this \
+                         value position on the OPY surface"
+                    ),
                     span,
                 );
             }
@@ -1700,9 +2172,347 @@ impl<'a> Emitter<'a> {
         self.out.push_str(spelling);
     }
 
+    /// `Value::LocalizedString` → `l"<en-US spelling>"` (issue #603). The
+    /// `l` literal resolves against the catalog's en-US strings.
+    fn emit_localized_literal(&mut self, id: &str, span: Option<Span>) {
+        let Some(spelling) = self
+            .catalog
+            .localized_string_spelling(&Locale::new("en-US"), id)
+        else {
+            self.issue(
+                "unsupported-localized-string",
+                format!("localized string id '{id}' has no catalog spelling"),
+                span,
+            );
+            return;
+        };
+        self.out.push('l');
+        self.emit_string_literal(spelling);
+    }
+
+    /// Emit `body` wrapped as `lambda <element>[, <index>]: <body>` with
+    /// deterministic binder names pushed for `currentArrayElement`/`Index`.
+    fn emit_lambda_body(
+        &mut self,
+        member_call: &str,
+        receiver: &Value,
+        body: &Value,
+        span: Option<Span>,
+    ) {
+        let uses_index = uses_call(body, "currentArrayIndex");
+        let element = self.fresh_generated_name("__elem");
+        let index = uses_index.then(|| self.fresh_generated_name("__idx"));
+        self.out.push('(');
+        self.emit_value(receiver, span);
+        self.out.push_str(").");
+        self.out.push_str(member_call);
+        self.out.push_str("(lambda ");
+        self.out.push_str(&element);
+        if let Some(index) = &index {
+            self.out.push_str(", ");
+            self.out.push_str(index);
+        }
+        self.out.push_str(": ");
+        self.lambda_binders.push((element, index));
+        self.emit_value(body, span);
+        self.lambda_binders.pop();
+        self.out.push(')');
+    }
+
+    /// Emit `sorted(...)`/generic `all`/`any` forms which take the lambda as a
+    /// plain argument rather than on a member call.
+    fn emit_sorted(&mut self, array: &Value, key: &Value, span: Option<Span>) {
+        if matches!(key, Value::Call { name, args } if name == "currentArrayElement" && args.is_empty())
+        {
+            self.out.push_str("sorted(");
+            self.emit_value(array, span);
+            self.out.push(')');
+            return;
+        }
+        let uses_index = uses_call(key, "currentArrayIndex");
+        let element = self.fresh_generated_name("__elem");
+        let index = uses_index.then(|| self.fresh_generated_name("__idx"));
+        self.out.push_str("sorted(");
+        self.emit_value(array, span);
+        self.out.push_str(", lambda ");
+        self.out.push_str(&element);
+        if let Some(index) = &index {
+            self.out.push_str(", ");
+            self.out.push_str(index);
+        }
+        self.out.push_str(": ");
+        self.lambda_binders.push((element, index));
+        self.emit_value(key, span);
+        self.lambda_binders.pop();
+        self.out.push(')');
+    }
+
+    /// Syntax-produced value calls → the OPY source form that re-lowers to
+    /// the same canonical call (issue #603). Returns true when handled.
+    fn emit_syntax_value(&mut self, name: &str, args: &[Value], span: Option<Span>) -> bool {
+        // Canonical arithmetic identities (`Add`, `Subtract`, …) emit as
+        // source-level binary operators.
+        if args.len() == 2
+            && let Some((_, operator)) = ARITHMETIC_OPS.iter().find(|(n, _)| *n == name)
+        {
+            self.out.push('(');
+            self.emit_value(&args[0], span);
+            self.out.push(' ');
+            self.out.push_str(operator);
+            self.out.push(' ');
+            self.emit_value(&args[1], span);
+            self.out.push(')');
+            return true;
+        }
+        match name {
+            // valueInArray(a, i) → `a[i]`; a literal-zero index is
+            // unreachable: every `a[i]` spelling folding to 0 normalizes to
+            // `firstOf`, so it stays a structured refusal.
+            "valueInArray" => {
+                let [array, index] = args else {
+                    return false;
+                };
+                if matches!(index, Value::Number(n) if *n == 0.0) {
+                    self.issue(
+                        "unsupported-value-call",
+                        "valueInArray with a literal zero index re-lowers to firstOf \
+                         and cannot round-trip",
+                        span,
+                    );
+                    return true;
+                }
+                self.out.push('(');
+                self.emit_value(array, span);
+                self.out.push_str(")[");
+                self.emit_value(index, span);
+                self.out.push(']');
+                true
+            }
+            "firstOf" => {
+                let [array] = args else {
+                    return false;
+                };
+                self.out.push('(');
+                self.emit_value(array, span);
+                self.out.push_str(")[0]");
+                true
+            }
+            "emptyArray" if args.is_empty() => {
+                self.out.push_str("[]");
+                true
+            }
+            // slice(a, start, count) → `a.slice(start[, count])`; the count
+            // parameter defaults to 999999999999 on the source side.
+            "slice" => {
+                let [array, start, count] = args else {
+                    return false;
+                };
+                self.out.push('(');
+                self.emit_value(array, span);
+                self.out.push_str(").slice(");
+                self.emit_value(start, span);
+                if !matches!(count, Value::Number(n) if *n == 999_999_999_999.0) {
+                    self.out.push_str(", ");
+                    self.emit_value(count, span);
+                }
+                self.out.push(')');
+                true
+            }
+            // ifThenElse(c, t, e) → `(t if c else e)`
+            "ifThenElse" => {
+                let [condition, then_value, else_value] = args else {
+                    return false;
+                };
+                self.out.push('(');
+                self.emit_value(then_value, span);
+                self.out.push_str(" if ");
+                self.emit_value(condition, span);
+                self.out.push_str(" else ");
+                self.emit_value(else_value, span);
+                self.out.push(')');
+                true
+            }
+            // roundToInteger(v, Rounding.X) → `ceil(v)`/`floor(v)`/`round(v)`
+            "roundToInteger" => {
+                let [value, rounding] = args else {
+                    return false;
+                };
+                let spelling = match rounding {
+                    Value::Enum { value_type, value } if value_type == "Rounding" => {
+                        match value.as_str() {
+                            "UP" => "ceil",
+                            "DOWN" => "floor",
+                            "NEAREST" => "round",
+                            _ => return false,
+                        }
+                    }
+                    _ => return false,
+                };
+                self.out.push_str(spelling);
+                self.out.push('(');
+                self.emit_value(value, span);
+                self.out.push(')');
+                true
+            }
+            // Array callbacks carry their binder through lambda syntax.
+            "sortedArray" => {
+                let [array, key] = args else {
+                    return false;
+                };
+                self.emit_sorted(array, key, span);
+                true
+            }
+            "mappedArray" => {
+                let [array, body] = args else {
+                    return false;
+                };
+                self.emit_lambda_body("map", array, body, span);
+                true
+            }
+            "filteredArray" => {
+                let [array, condition] = args else {
+                    return false;
+                };
+                self.emit_lambda_body("filter", array, condition, span);
+                true
+            }
+            "isTrueForAll" | "isTrueForAny" => {
+                let [array, condition] = args else {
+                    return false;
+                };
+                let member = if name == "isTrueForAll" { "all" } else { "any" };
+                if matches!(condition, Value::Call { name, args } if name == "currentArrayElement" && args.is_empty())
+                {
+                    self.out.push_str(member);
+                    self.out.push('(');
+                    self.emit_value(array, span);
+                    self.out.push(')');
+                } else {
+                    self.emit_lambda_body(member, array, condition, span);
+                }
+                true
+            }
+            // arrayContains(a, x) → `(x in a)`
+            "arrayContains" => {
+                let [array, needle] = args else {
+                    return false;
+                };
+                self.out.push('(');
+                self.emit_value(needle, span);
+                self.out.push_str(" in ");
+                self.emit_value(array, span);
+                self.out.push(')');
+                true
+            }
+            // `string(localized, fmt...)` → `l"...".format(...)` / bare `l"..."`
+            "string" => {
+                let [localized, ..] = args else {
+                    return false;
+                };
+                let Value::LocalizedString(id) = localized else {
+                    return false;
+                };
+                self.emit_localized_literal(id, span);
+                if args.len() > 1 {
+                    self.out.push_str(".format(");
+                    for (index, arg) in args.iter().skip(1).enumerate() {
+                        if index > 0 {
+                            self.out.push_str(", ");
+                        }
+                        self.emit_value(arg, span);
+                    }
+                    self.out.push(')');
+                }
+                true
+            }
+            // `memberAccess(recv, "m")` → `(recv).m`; vector components are
+            // the dedicated `.x`/`.y`/`.z` member spellings.
+            "memberAccess" => {
+                let [receiver, member] = args else {
+                    return false;
+                };
+                let Value::String(member) = member else {
+                    return false;
+                };
+                if !is_simple_ident(member) {
+                    self.issue(
+                        "unsupported-value-call",
+                        format!("member name '{member}' is not a plain OPY identifier"),
+                        span,
+                    );
+                    return true;
+                }
+                self.out.push('(');
+                self.emit_value(receiver, span);
+                self.out.push_str(").");
+                self.out.push_str(member);
+                true
+            }
+            "__xComponentOf__" | "__yComponentOf__" | "__zComponentOf__" => {
+                let [receiver] = args else {
+                    return false;
+                };
+                self.out.push('(');
+                self.emit_value(receiver, span);
+                self.out.push_str(").");
+                self.out.push_str(match name {
+                    "__xComponentOf__" => "x",
+                    "__yComponentOf__" => "y",
+                    _ => "z",
+                });
+                true
+            }
+            // Lambda binders resolve to the deterministic names the enclosing
+            // generated lambda declared; outside one they stay refused.
+            "currentArrayElement" if args.is_empty() => {
+                match self.lambda_binders.last() {
+                    Some((element, _)) => {
+                        self.out.push_str(&element.clone());
+                    }
+                    None => {
+                        self.issue(
+                            "unsupported-value-call",
+                            "currentArrayElement outside an array callback has no OPY binder",
+                            span,
+                        );
+                    }
+                }
+                true
+            }
+            "currentArrayIndex" if args.is_empty() => {
+                match self.lambda_binders.last() {
+                    Some((_, Some(index))) => {
+                        self.out.push_str(&index.clone());
+                    }
+                    Some(_) => {
+                        self.issue(
+                            "unsupported-value-call",
+                            "currentArrayIndex used but the callback has no index binder",
+                            span,
+                        );
+                    }
+                    None => {
+                        self.issue(
+                            "unsupported-value-call",
+                            "currentArrayIndex outside an array callback has no OPY binder",
+                            span,
+                        );
+                    }
+                }
+                true
+            }
+            _ => false,
+        }
+    }
+
     fn emit_value_call(&mut self, name: &str, args: &[Value], span: Option<Span>) {
         if name == "localPlayer" && args.is_empty() {
             self.out.push_str(name);
+            return;
+        }
+        // Syntax-produced value calls → the source form that re-lowers to the
+        // same canonical call (issue #603).
+        if self.emit_syntax_value(name, args, span) {
             return;
         }
         // Binary and unary operator calls keep their source spelling.
@@ -1809,6 +2619,53 @@ impl<'a> Emitter<'a> {
         }
         self.out.push('"');
     }
+}
+
+/// Whether a canonical value tree contains a call with the given name
+/// (used to size generated lambda binders).
+fn uses_call(value: &Value, name: &str) -> bool {
+    match value {
+        Value::Call {
+            name: call_name,
+            args,
+        } => call_name == name || args.iter().any(|arg| uses_call(arg, name)),
+        Value::Array(elements) => elements.iter().any(|element| uses_call(element, name)),
+        Value::Vector { x, y, z } => uses_call(x, name) || uses_call(y, name) || uses_call(z, name),
+        _ => false,
+    }
+}
+
+/// The compound-assignment spelling for a `modify*AtIndex` operation argument
+/// (a zero-argument canonical call), or None when it has no assignment form.
+fn indexed_modify_operator(op: &Value) -> Option<&'static str> {
+    let Value::Call { name, args } = op else {
+        return None;
+    };
+    if !args.is_empty() {
+        return None;
+    }
+    INDEXED_MODIFY_OPS
+        .iter()
+        .find(|(op_name, _)| *op_name == name)
+        .map(|(_, operator)| *operator)
+}
+
+/// A positive whole-number `Value::Number` (skip/skipIf distances).
+fn literal_positive_int(value: &Value) -> Option<usize> {
+    let Value::Number(number) = value else {
+        return None;
+    };
+    (number.is_finite() && number.fract() == 0.0 && *number >= 0.0).then_some(*number as usize)
+}
+
+/// Whether `name` is safe to emit as a bare member/identifier spelling.
+fn is_simple_ident(name: &str) -> bool {
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(first) if first.is_ascii_alphabetic() || first == '_' => {}
+        _ => return false,
+    }
+    chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
 }
 
 fn kind_label(kind: FunctionKind) -> &'static str {
@@ -2150,5 +3007,962 @@ mod tests {
 
         let reparsed = compile_to_program(&source, "format.opy");
         assert!(workshop_rs::roundtrip::equivalent(&program, &reparsed));
+    }
+
+    #[test]
+    fn smoke_syntax_produced_actions() {
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("g", 0));
+        program.player_variable(Variable::with_index("p", 0));
+        program.subroutine(Subroutine::with_index("sub", 0));
+        program.rule(
+            Rule::new("Subroutine sub", Event::Subroutine("sub".into())).action(
+                Action::SetGlobalVariable {
+                    variable: "g".into(),
+                    value: Value::number(0.0),
+                },
+            ),
+        );
+        program.rule(
+            Rule::new("main", Event::EachPlayer)
+                // for <player>.p in range(0, 5, 1)
+                .action(Action::ForPlayerVariable {
+                    player: Value::EventPlayer,
+                    variable: "p".into(),
+                    start: Value::number(0.0),
+                    stop: Value::number(5.0),
+                    step: Value::number(1.0),
+                })
+                .action(Action::SetPlayerVariable {
+                    player: Value::call(
+                        "valueInArray",
+                        [
+                            Value::call(
+                                "allPlayers",
+                                [Value::Enum {
+                                    value_type: "Team".into(),
+                                    value: "ALL".into(),
+                                }],
+                            ),
+                            Value::number(1.0),
+                        ],
+                    ),
+                    variable: "p".into(),
+                    value: Value::number(-3.0),
+                })
+                .action(Action::End)
+                // self-referential set
+                .action(Action::SetGlobalVariable {
+                    variable: "g".into(),
+                    value: Value::call("add", [Value::global_variable("g"), Value::number(2.0)]),
+                })
+                // min/max/remove
+                .action(Action::ModifyGlobalVariable {
+                    variable: "g".into(),
+                    op: ModifyOp::Min,
+                    value: Value::number(9.0),
+                })
+                .action(Action::ModifyGlobalVariable {
+                    variable: "g".into(),
+                    op: ModifyOp::Max,
+                    value: Value::number(-9.0),
+                })
+                .action(Action::ModifyGlobalVariable {
+                    variable: "g".into(),
+                    op: ModifyOp::RemoveFromArrayByValue,
+                    value: Value::number(1.0),
+                })
+                .action(Action::ModifyGlobalVariable {
+                    variable: "g".into(),
+                    op: ModifyOp::RemoveFromArrayByIndex,
+                    value: Value::number(0.0),
+                })
+                // indexed assign + modify
+                .action(Action::call(
+                    "setGlobalVariableAtIndex",
+                    [
+                        Value::global_variable("g"),
+                        Value::number(1.0),
+                        Value::number(7.0),
+                    ],
+                ))
+                .action(Action::call(
+                    "modifyGlobalVariableAtIndex",
+                    [
+                        Value::global_variable("g"),
+                        Value::number(1.0),
+                        Value::call("add", Vec::<Value>::new()),
+                        Value::number(3.0),
+                    ],
+                ))
+                // async
+                .action(Action::call(
+                    "startRule",
+                    [
+                        Value::Subroutine("sub".into()),
+                        Value::Enum {
+                            value_type: "StartRuleBehavior".into(),
+                            value: "RESTART".into(),
+                        },
+                    ],
+                ))
+                // skipIf crossing an if block: skipIf(cond, 5) If..End x=1
+                .action(Action::call(
+                    "skipIf",
+                    [
+                        Value::call("==", [Value::global_variable("g"), Value::number(1.0)]),
+                        Value::number(5.0),
+                    ],
+                ))
+                .action(Action::If {
+                    condition: Value::Bool(true),
+                })
+                .action(Action::SetGlobalVariable {
+                    variable: "g".into(),
+                    value: Value::number(1.0),
+                })
+                .action(Action::Else)
+                .action(Action::SetGlobalVariable {
+                    variable: "g".into(),
+                    value: Value::number(5.0),
+                })
+                .action(Action::End)
+                .action(Action::SetGlobalVariable {
+                    variable: "g".into(),
+                    value: Value::number(2.0),
+                })
+                // abortIf + loopIf
+                .action(Action::call(
+                    "abortIf",
+                    [Value::call(
+                        "==",
+                        [Value::global_variable("g"), Value::number(3.0)],
+                    )],
+                ))
+                .action(Action::call(
+                    "loopIf",
+                    [Value::call(
+                        "==",
+                        [Value::global_variable("g"), Value::number(4.0)],
+                    )],
+                )),
+        );
+
+        let source = reconstruct(&program).expect("program should reconstruct");
+        assert!(source.contains("for eventPlayer.p in range(0, 5, 1):"));
+        assert!(source.contains("g min= 9"));
+        assert!(source.contains("g max= -9"));
+        assert!(source.contains("g.remove(1)"));
+        assert!(source.contains("del g[0]"));
+        assert!(source.contains("g[1] = 7"));
+        assert!(source.contains("g[1] += 3"));
+        assert!(source.contains("async(sub, StartRuleBehavior.RESTART)"));
+        assert!(source.contains("__op_label_1"));
+        assert_behaviorally_equivalent(&program, &source);
+    }
+
+    /// A single-action program `rule "main": @Event global; <action>` for
+    /// focused round-trip assertions.
+    fn one_action_program(action: Action) -> Program {
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("g", 0));
+        program.player_variable(Variable::with_index("p", 0));
+        program.rule(Rule::new("main", Event::Global).action(action));
+        program
+    }
+
+    fn one_value_program(value: Value) -> Program {
+        one_action_program(Action::SetGlobalVariable {
+            variable: "g".into(),
+            value,
+        })
+    }
+
+    fn assert_error_code(program: &Program, code: &str) {
+        let error = reconstruct(program).expect_err("program should be refused");
+        assert!(
+            error.issues.iter().any(|issue| issue.code == code),
+            "expected '{code}' in {error:?}"
+        );
+    }
+
+    // ---- issue #602: syntax-produced actions ------------------------------
+
+    #[test]
+    fn nested_player_variable_for_loops_round_trip() {
+        let mut program = Program::new();
+        program.player_variable(Variable::with_index("p", 0));
+        program.player_variable(Variable::with_index("q", 1));
+        program.rule(
+            Rule::new("main", Event::EachPlayer)
+                .action(Action::ForPlayerVariable {
+                    player: Value::EventPlayer,
+                    variable: "p".into(),
+                    start: Value::number(0.0),
+                    stop: Value::number(3.0),
+                    step: Value::number(1.0),
+                })
+                .action(Action::ForPlayerVariable {
+                    player: Value::call(
+                        "valueInArray",
+                        [
+                            Value::call(
+                                "allPlayers",
+                                [Value::Enum {
+                                    value_type: "Team".into(),
+                                    value: "ALL".into(),
+                                }],
+                            ),
+                            Value::number(1.0),
+                        ],
+                    ),
+                    variable: "q".into(),
+                    start: Value::number(1.0),
+                    stop: Value::number(4.0),
+                    step: Value::number(2.0),
+                })
+                .action(Action::ModifyPlayerVariable {
+                    player: Value::EventPlayer,
+                    variable: "p".into(),
+                    op: ModifyOp::Add,
+                    value: Value::number(1.0),
+                })
+                .action(Action::End)
+                .action(Action::End),
+        );
+
+        let source = reconstruct(&program).expect("nested for should reconstruct");
+        assert!(
+            source.contains("for eventPlayer.p in range(0, 3, 1):"),
+            "{source}"
+        );
+        assert!(
+            source.contains("for ((getPlayers(Team.ALL))[1]).q in range(1, 4, 2):"),
+            "{source}"
+        );
+        assert_behaviorally_equivalent(&program, &source);
+    }
+
+    #[test]
+    fn player_variable_reads_and_writes_on_arbitrary_players() {
+        let mut program = Program::new();
+        program.player_variable(Variable::with_index("p", 0));
+        program.rule(
+            Rule::new("main", Event::Global).action(Action::SetPlayerVariable {
+                player: Value::call(
+                    "getClosestPlayer",
+                    [
+                        Value::call(
+                            "vector",
+                            [Value::number(0.0), Value::number(0.0), Value::number(0.0)],
+                        ),
+                        Value::Enum {
+                            value_type: "Team".into(),
+                            value: "ALL".into(),
+                        },
+                    ],
+                ),
+                variable: "p".into(),
+                value: Value::PlayerVariable {
+                    player: Box::new(Value::call(
+                        "valueInArray",
+                        [
+                            Value::call(
+                                "allPlayers",
+                                [Value::Enum {
+                                    value_type: "Team".into(),
+                                    value: "ALL".into(),
+                                }],
+                            ),
+                            Value::number(1.0),
+                        ],
+                    )),
+                    variable: "p".into(),
+                },
+            }),
+        );
+
+        let source = reconstruct(&program).expect("player var access should reconstruct");
+        assert!(
+            source.contains(
+                "(getClosestPlayer(vect(0, 0, 0), Team.ALL)).p = ((getPlayers(Team.ALL))[1]).p"
+            ),
+            "{source}"
+        );
+        assert_behaviorally_equivalent(&program, &source);
+    }
+
+    #[test]
+    fn self_referential_set_and_modify_forms() {
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("g", 0));
+        program.rule(
+            Rule::new("main", Event::Global)
+                .action(Action::SetGlobalVariable {
+                    variable: "g".into(),
+                    value: Value::call("add", [Value::global_variable("g"), Value::number(2.0)]),
+                })
+                .action(Action::ModifyGlobalVariable {
+                    variable: "g".into(),
+                    op: ModifyOp::AppendToArray,
+                    value: Value::number(1.0),
+                })
+                .action(Action::ModifyGlobalVariable {
+                    variable: "g".into(),
+                    op: ModifyOp::RemoveFromArrayByValue,
+                    value: Value::number(2.0),
+                })
+                .action(Action::ModifyGlobalVariable {
+                    variable: "g".into(),
+                    op: ModifyOp::RemoveFromArrayByIndex,
+                    value: Value::number(0.0),
+                })
+                .action(Action::ModifyGlobalVariable {
+                    variable: "g".into(),
+                    op: ModifyOp::Min,
+                    value: Value::number(9.0),
+                })
+                .action(Action::ModifyGlobalVariable {
+                    variable: "g".into(),
+                    op: ModifyOp::Max,
+                    value: Value::number(-9.0),
+                }),
+        );
+
+        let source = reconstruct(&program).expect("modify forms should reconstruct");
+        assert!(source.contains("g = (g + 2)"), "{source}");
+        assert!(source.contains("g.append(1)"), "{source}");
+        assert!(source.contains("g.remove(2)"), "{source}");
+        assert!(source.contains("del g[0]"), "{source}");
+        assert!(source.contains("g min= 9"), "{source}");
+        assert!(source.contains("g max= -9"), "{source}");
+        assert_behaviorally_equivalent(&program, &source);
+    }
+
+    #[test]
+    fn indexed_assignment_and_compound_forms() {
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("g", 0));
+        program.player_variable(Variable::with_index("p", 0));
+        program.rule(
+            Rule::new("main", Event::Global)
+                .action(Action::call(
+                    "setGlobalVariableAtIndex",
+                    [
+                        Value::global_variable("g"),
+                        Value::number(1.0),
+                        Value::number(7.0),
+                    ],
+                ))
+                .action(Action::call(
+                    "modifyGlobalVariableAtIndex",
+                    [
+                        Value::global_variable("g"),
+                        Value::number(1.0),
+                        Value::call("multiply", Vec::<Value>::new()),
+                        Value::number(3.0),
+                    ],
+                ))
+                .action(Action::call(
+                    "modifyGlobalVariableAtIndex",
+                    [
+                        Value::global_variable("g"),
+                        Value::number(0.0),
+                        Value::call("min", Vec::<Value>::new()),
+                        Value::number(5.0),
+                    ],
+                ))
+                .action(Action::call(
+                    "modifyGlobalVariableAtIndex",
+                    [
+                        Value::global_variable("g"),
+                        Value::number(2.0),
+                        Value::call("appendToArray", Vec::<Value>::new()),
+                        Value::number(8.0),
+                    ],
+                ))
+                .action(Action::call(
+                    "modifyGlobalVariableAtIndex",
+                    [
+                        Value::global_variable("g"),
+                        Value::number(2.0),
+                        Value::call("removeFromArray", Vec::<Value>::new()),
+                        Value::number(8.0),
+                    ],
+                ))
+                .action(Action::call(
+                    "modifyGlobalVariableAtIndex",
+                    [
+                        Value::global_variable("g"),
+                        Value::number(1.0),
+                        Value::call("removeFromArrayByIndex", Vec::<Value>::new()),
+                        Value::number(0.0),
+                    ],
+                ))
+                .action(Action::call(
+                    "setPlayerVariableAtIndex",
+                    [
+                        Value::PlayerVariable {
+                            player: Box::new(Value::EventPlayer),
+                            variable: "p".into(),
+                        },
+                        Value::number(1.0),
+                        Value::number(4.0),
+                    ],
+                )),
+        );
+
+        let source = reconstruct(&program).expect("indexed forms should reconstruct");
+        assert!(source.contains("g[1] = 7"), "{source}");
+        assert!(source.contains("g[1] *= 3"), "{source}");
+        assert!(source.contains("g[0] min= 5"), "{source}");
+        assert!(source.contains("g[2].append(8)"), "{source}");
+        assert!(source.contains("g[2].remove(8)"), "{source}");
+        assert!(source.contains("del g[1][0]"), "{source}");
+        assert!(source.contains("eventPlayer.p[1] = 4"), "{source}");
+        assert_behaviorally_equivalent(&program, &source);
+    }
+
+    #[test]
+    fn skip_and_skipif_emit_deterministic_labels() {
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("g", 0));
+        program.rule(
+            Rule::new("main", Event::Global)
+                .action(Action::call("skip", [Value::number(1.0)]))
+                .action(Action::SetGlobalVariable {
+                    variable: "g".into(),
+                    value: Value::number(1.0),
+                })
+                .action(Action::call(
+                    "skipIf",
+                    [
+                        Value::call("==", [Value::global_variable("g"), Value::number(2.0)]),
+                        Value::number(1.0),
+                    ],
+                ))
+                .action(Action::SetGlobalVariable {
+                    variable: "g".into(),
+                    value: Value::number(3.0),
+                })
+                .action(Action::SetGlobalVariable {
+                    variable: "g".into(),
+                    value: Value::number(5.0),
+                }),
+        );
+
+        let source = reconstruct(&program).expect("skips should reconstruct");
+        assert!(source.contains("goto __op_label_1\n"), "{source}");
+        assert!(source.contains("goto __op_label_2\n"), "{source}");
+        assert!(source.contains("__op_label_1:"), "{source}");
+        assert!(source.contains("__op_label_2:"), "{source}");
+        assert_behaviorally_equivalent(&program, &source);
+    }
+
+    #[test]
+    fn generated_labels_avoid_declared_names() {
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("__op_label_1", 0));
+        program.rule(
+            Rule::new("main", Event::Global)
+                .action(Action::call("skip", [Value::number(1.0)]))
+                .action(Action::SetGlobalVariable {
+                    variable: "__op_label_1".into(),
+                    value: Value::number(1.0),
+                })
+                .action(Action::SetGlobalVariable {
+                    variable: "__op_label_1".into(),
+                    value: Value::number(2.0),
+                }),
+        );
+
+        let source = reconstruct(&program).expect("labels should dodge declared names");
+        assert!(source.contains("goto __op_label_2\n"), "{source}");
+        assert!(source.contains("__op_label_2:"), "{source}");
+        assert_behaviorally_equivalent(&program, &source);
+    }
+
+    #[test]
+    fn skip_into_a_nested_block_uses_relative_goto() {
+        // A skip whose target boundary sits inside a nested sibling block
+        // cannot name a label the goto resolution can see; `goto loc+N`
+        // re-lowers to the identical `skip(N)` (issue #602).
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("g", 0));
+        program.rule(
+            Rule::new("main", Event::Global)
+                .action(Action::call("skip", [Value::number(2.0)]))
+                .action(Action::If {
+                    condition: Value::Bool(true),
+                })
+                .action(Action::SetGlobalVariable {
+                    variable: "g".into(),
+                    value: Value::number(1.0),
+                })
+                .action(Action::End),
+        );
+
+        let source = reconstruct(&program).expect("skip should reconstruct");
+        assert!(source.contains("goto loc+2\n"), "{source}");
+        assert!(!source.contains("__op_label"), "{source}");
+        assert_behaviorally_equivalent(&program, &source);
+    }
+
+    #[test]
+    fn terminal_abort_and_loop_forms() {
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("g", 0));
+        program.rule(
+            Rule::new("main", Event::Global)
+                .action(Action::call("abort", Vec::<Value>::new()))
+                .action(Action::call(
+                    "abortIf",
+                    [Value::call(
+                        "==",
+                        [Value::global_variable("g"), Value::number(1.0)],
+                    )],
+                ))
+                .action(Action::call("loop", Vec::<Value>::new()))
+                .action(Action::call(
+                    "loopIf",
+                    [Value::call(
+                        "==",
+                        [Value::global_variable("g"), Value::number(2.0)],
+                    )],
+                ))
+                .action(Action::call(
+                    "__abortIfConditionIsTrue__",
+                    Vec::<Value>::new(),
+                ))
+                .action(Action::call("loopIfConditionIsTrue", Vec::<Value>::new()))
+                // One observable action keeps the rule alive on reparse.
+                .action(Action::SetGlobalVariable {
+                    variable: "g".into(),
+                    value: Value::number(9.0),
+                }),
+        );
+
+        let source = reconstruct(&program).expect("terminal forms should reconstruct");
+        assert!(source.contains("return\n"), "{source}");
+        assert!(source.contains("    loop()\n"), "{source}");
+        assert!(source.contains("if (g == 1):"), "{source}");
+        assert!(source.contains("if (g == 2):"), "{source}");
+        assert!(source.contains("if ruleCondition():"), "{source}");
+        assert_behaviorally_equivalent(&program, &source);
+    }
+
+    #[test]
+    fn break_inside_a_while_loop_round_trips() {
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("g", 0));
+        program.rule(
+            Rule::new("main", Event::Global)
+                .action(Action::While {
+                    condition: Value::call("<", [Value::global_variable("g"), Value::number(10.0)]),
+                })
+                .action(Action::ModifyGlobalVariable {
+                    variable: "g".into(),
+                    op: ModifyOp::Add,
+                    value: Value::number(1.0),
+                })
+                .action(Action::call("break", Vec::<Value>::new()))
+                .action(Action::End),
+        );
+
+        let source = reconstruct(&program).expect("break should reconstruct");
+        assert!(source.contains("while (g < 10):"), "{source}");
+        assert!(source.contains("    break\n"), "{source}");
+        assert_behaviorally_equivalent(&program, &source);
+    }
+
+    #[test]
+    fn member_assignment_stays_refused() {
+        let program = one_action_program(Action::AssignMember {
+            target: Value::call(
+                "memberAccess",
+                [Value::global_variable("g"), Value::string("health")],
+            ),
+            op: Some(ModifyOp::Add),
+            value: Value::number(1.0),
+        });
+        assert_error_code(&program, "unsupported-member-assignment");
+    }
+
+    // ---- issue #603: syntax-produced values -------------------------------
+
+    #[test]
+    fn syntax_produced_values_round_trip() {
+        let array = Value::call(
+            "allPlayers",
+            [Value::Enum {
+                value_type: "Team".into(),
+                value: "ALL".into(),
+            }],
+        );
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("g", 0));
+        program.rule(
+            Rule::new("main", Event::Global)
+                // (a)[i]
+                .action(Action::SetGlobalVariable {
+                    variable: "g".into(),
+                    value: Value::call("valueInArray", [array.clone(), Value::number(1.0)]),
+                })
+                // sorted(a), sorted(a, key lambda)
+                .action(Action::SetGlobalVariable {
+                    variable: "g".into(),
+                    value: Value::call(
+                        "sortedArray",
+                        [
+                            array.clone(),
+                            Value::call("currentArrayElement", Vec::<Value>::new()),
+                        ],
+                    ),
+                })
+                .action(Action::SetGlobalVariable {
+                    variable: "g".into(),
+                    value: Value::call(
+                        "sortedArray",
+                        [
+                            array.clone(),
+                            Value::call(
+                                "getSpeed",
+                                [Value::call("currentArrayElement", Vec::<Value>::new())],
+                            ),
+                        ],
+                    ),
+                })
+                // map + filter with element and index binders
+                .action(Action::SetGlobalVariable {
+                    variable: "g".into(),
+                    value: Value::call(
+                        "mappedArray",
+                        [
+                            array.clone(),
+                            Value::call(
+                                "+",
+                                [
+                                    Value::call("currentArrayElement", Vec::<Value>::new()),
+                                    Value::call("currentArrayIndex", Vec::<Value>::new()),
+                                ],
+                            ),
+                        ],
+                    ),
+                })
+                .action(Action::SetGlobalVariable {
+                    variable: "g".into(),
+                    value: Value::call(
+                        "filteredArray",
+                        [
+                            array.clone(),
+                            Value::call(
+                                ">",
+                                [
+                                    Value::call("currentArrayIndex", Vec::<Value>::new()),
+                                    Value::number(0.0),
+                                ],
+                            ),
+                        ],
+                    ),
+                })
+                // x in a
+                .action(Action::SetGlobalVariable {
+                    variable: "g".into(),
+                    value: Value::call("arrayContains", [array.clone(), Value::EventPlayer]),
+                })
+                // a[0], []
+                .action(Action::SetGlobalVariable {
+                    variable: "g".into(),
+                    value: Value::call("firstOf", [array.clone()]),
+                })
+                .action(Action::SetGlobalVariable {
+                    variable: "g".into(),
+                    value: Value::call("emptyArray", Vec::<Value>::new()),
+                })
+                // a.slice / conditional
+                .action(Action::SetGlobalVariable {
+                    variable: "g".into(),
+                    value: Value::call(
+                        "slice",
+                        [array.clone(), Value::number(1.0), Value::number(3.0)],
+                    ),
+                })
+                .action(Action::SetGlobalVariable {
+                    variable: "g".into(),
+                    value: Value::call(
+                        "ifThenElse",
+                        [
+                            Value::call("==", [Value::global_variable("g"), Value::number(1.0)]),
+                            Value::number(1.0),
+                            Value::number(2.0),
+                        ],
+                    ),
+                })
+                // round/floor/ceil
+                .action(Action::SetGlobalVariable {
+                    variable: "g".into(),
+                    value: Value::call(
+                        "roundToInteger",
+                        [
+                            Value::global_variable("g"),
+                            Value::Enum {
+                                value_type: "Rounding".into(),
+                                value: "NEAREST".into(),
+                            },
+                        ],
+                    ),
+                })
+                .action(Action::SetGlobalVariable {
+                    variable: "g".into(),
+                    value: Value::call(
+                        "roundToInteger",
+                        [
+                            Value::global_variable("g"),
+                            Value::Enum {
+                                value_type: "Rounding".into(),
+                                value: "DOWN".into(),
+                            },
+                        ],
+                    ),
+                })
+                .action(Action::SetGlobalVariable {
+                    variable: "g".into(),
+                    value: Value::call(
+                        "roundToInteger",
+                        [
+                            Value::global_variable("g"),
+                            Value::Enum {
+                                value_type: "Rounding".into(),
+                                value: "UP".into(),
+                            },
+                        ],
+                    ),
+                }),
+        );
+
+        let source = reconstruct(&program).expect("syntax values should reconstruct");
+        // `allPlayers(team)` reconstructs through the deterministic sanctioned
+        // alias `getPlayers(Team.ALL)` (documented in the reconstruction notes).
+        assert!(source.contains("(getPlayers(Team.ALL))[1]"), "{source}");
+        assert!(source.contains("sorted(getPlayers(Team.ALL))"), "{source}");
+        assert!(
+            source.contains("sorted(getPlayers(Team.ALL), lambda __elem"),
+            "{source}"
+        );
+        assert!(source.contains(".map(lambda __elem"), "{source}");
+        assert!(source.contains(".filter(lambda __elem"), "{source}");
+        assert!(
+            source.contains("(eventPlayer in getPlayers(Team.ALL))"),
+            "{source}"
+        );
+        assert!(source.contains("(getPlayers(Team.ALL))[0]"), "{source}");
+        assert!(source.contains("g = []"), "{source}");
+        assert!(
+            source.contains("getPlayers(Team.ALL)).slice(1, 3)"),
+            "{source}"
+        );
+        assert!(source.contains("(1 if (g == 1) else 2)"), "{source}");
+        assert!(source.contains("round(g)"), "{source}");
+        assert!(source.contains("floor(g)"), "{source}");
+        assert!(source.contains("ceil(g)"), "{source}");
+        assert_behaviorally_equivalent(&program, &source);
+    }
+
+    #[test]
+    fn mapped_array_lambda_uses_element_and_index_binders() {
+        let program = one_value_program(Value::call(
+            "mappedArray",
+            [
+                Value::global_variable("g"),
+                Value::call(
+                    "add",
+                    [
+                        Value::call("currentArrayElement", Vec::<Value>::new()),
+                        Value::call("currentArrayIndex", Vec::<Value>::new()),
+                    ],
+                ),
+            ],
+        ));
+
+        let source = reconstruct(&program).expect("lambda should reconstruct");
+        assert!(
+            source.contains("g = (g).map(lambda __elem_1, __idx_2: (__elem_1 + __idx_2))"),
+            "{source}"
+        );
+        assert_behaviorally_equivalent(&program, &source);
+    }
+
+    #[test]
+    fn localized_string_literals_round_trip() {
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("g", 0));
+        program.rule(
+            Rule::new("main", Event::Global)
+                .action(Action::SetGlobalVariable {
+                    variable: "g".into(),
+                    value: Value::call("string", [Value::LocalizedString("hello".into())]),
+                })
+                .action(Action::SetGlobalVariable {
+                    variable: "g".into(),
+                    value: Value::call(
+                        "string",
+                        [Value::LocalizedString("goodbye".into()), Value::EventPlayer],
+                    ),
+                }),
+        );
+
+        let source = reconstruct(&program).expect("localized strings should reconstruct");
+        assert!(source.contains("l\"Hello\""), "{source}");
+        assert!(
+            source.contains("l\"Goodbye\".format(eventPlayer)"),
+            "{source}"
+        );
+        assert_behaviorally_equivalent(&program, &source);
+    }
+
+    #[test]
+    fn negative_numbers_emit_unary_negation() {
+        let program = one_value_program(Value::number(-3.5));
+        let source = reconstruct(&program).expect("negative number should reconstruct");
+        assert!(source.contains("g = -3.5"), "{source}");
+        assert_behaviorally_equivalent(&program, &source);
+    }
+
+    #[test]
+    fn member_access_and_vector_components() {
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("g", 0));
+        program.rule(
+            Rule::new("main", Event::Global)
+                .action(Action::SetGlobalVariable {
+                    variable: "g".into(),
+                    value: Value::call("__xComponentOf__", [Value::global_variable("g")]),
+                })
+                .action(Action::SetGlobalVariable {
+                    variable: "g".into(),
+                    value: Value::call(
+                        "memberAccess",
+                        [Value::global_variable("g"), Value::string("health")],
+                    ),
+                }),
+        );
+
+        let source = reconstruct(&program).expect("member access should reconstruct");
+        assert!(source.contains("(g).x"), "{source}");
+        assert!(source.contains("(g).health"), "{source}");
+        assert_behaviorally_equivalent(&program, &source);
+    }
+
+    #[test]
+    fn nested_lambdas_keep_distinct_binders() {
+        let inner = Value::call(
+            "filteredArray",
+            [
+                Value::call("currentArrayElement", Vec::<Value>::new()),
+                Value::call(
+                    "==",
+                    [
+                        Value::call("currentArrayIndex", Vec::<Value>::new()),
+                        Value::number(0.0),
+                    ],
+                ),
+            ],
+        );
+        let program = one_value_program(Value::call(
+            "mappedArray",
+            [Value::global_variable("g"), inner],
+        ));
+
+        let source = reconstruct(&program).expect("nested lambdas should reconstruct");
+        assert!(source.contains(".map(lambda __elem_"), "{source}");
+        assert!(source.contains(".filter(lambda __elem_"), "{source}");
+        assert_behaviorally_equivalent(&program, &source);
+    }
+
+    // ---- refusals -----------------------------------------------------------
+
+    #[test]
+    fn refusals_stay_diagnostic() {
+        // Non-finite numbers have no OPY spelling.
+        assert_error_code(
+            &one_value_program(Value::number(f64::NAN)),
+            "unsupported-non-finite-number",
+        );
+        assert_error_code(
+            &one_value_program(Value::number(f64::INFINITY)),
+            "unsupported-non-finite-number",
+        );
+
+        // Enum domains outside the manifest's source surface stay refused.
+        assert_error_code(
+            &one_value_program(Value::Enum {
+                value_type: "NotARealDomain".into(),
+                value: "X".into(),
+            }),
+            "unsupported-enum-domain",
+        );
+
+        // Value calls with no OPY form stay refused.
+        assert_error_code(
+            &one_value_program(Value::call("definitelyNotAValue", [Value::number(1.0)])),
+            "unsupported-value-call",
+        );
+
+        // `valueInArray` with a literal zero index folds to `firstOf` on
+        // reparse, so the direct spelling cannot round-trip.
+        assert_error_code(
+            &one_value_program(Value::call(
+                "valueInArray",
+                [Value::global_variable("g"), Value::number(0.0)],
+            )),
+            "unsupported-value-call",
+        );
+
+        // Bare subroutine values outside `async` arguments stay refused.
+        assert_error_code(
+            &one_value_program(Value::Subroutine("sub".into())),
+            "unsupported-subroutine-value",
+        );
+
+        // Lambda binders outside an array callback stay refused.
+        assert_error_code(
+            &one_value_program(Value::call("currentArrayElement", Vec::<Value>::new())),
+            "unsupported-value-call",
+        );
+        assert_error_code(
+            &one_value_program(Value::call("currentArrayIndex", Vec::<Value>::new())),
+            "unsupported-value-call",
+        );
+
+        // Dynamic member names that are not identifiers stay refused.
+        assert_error_code(
+            &one_value_program(Value::call(
+                "memberAccess",
+                [Value::global_variable("g"), Value::string("not an ident")],
+            )),
+            "unsupported-value-call",
+        );
+    }
+
+    fn assert_behaviorally_equivalent(program: &Program, source: &str) {
+        let reparsed = match compile_to_program_checked(source) {
+            Ok(program) => program,
+            Err(message) => panic!("recompiled failed:\n{source}\n{message}"),
+        };
+        assert!(
+            workshop_rs::compare::equivalent(program, &reparsed),
+            "reconstructed source is not behaviorally equivalent:\n{source}\ndifference: {:?}",
+            workshop_rs::compare::difference(program, &reparsed),
+        );
+    }
+
+    fn compile_to_program_checked(source: &str) -> Result<Program, String> {
+        let artifact = Compiler::new()
+            .map_err(|e| e.to_string())?
+            .compile_source_artifact(source, "reconstructed.opy", Path::new("."))
+            .map_err(|e| format!("{e:?}"))?;
+        let catalog = Catalog::builtin().map_err(|e| e.to_string())?;
+        workshop_rs::parser::parse(&artifact.emitted, &catalog, &Locale::new("en-US"))
+            .map_err(|e| format!("{e:?}"))
     }
 }
