@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/globalvar-index-range-invalid",
+  "category": "diagnostics",
+  "features": [
+    "global variables",
+    "explicit indices",
+    "declaration initializers",
+    "negative diagnostic"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "known-gap",
+      "ruleNames": false
+    },
+    "compiler": {
+      "nativeStatus": "failure",
+      "relationship": "match",
+      "comparison": "diagnostic-code",
+      "diagnosticCode": "index-out-of-range",
+      "failureClass": "integration"
+    }
+  }
+}

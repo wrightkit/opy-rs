@@ -1539,6 +1539,25 @@ rule "implicit":
     }
 
     #[test]
+    fn explicit_declaration_index_out_of_range_is_rejected() {
+        let compiler = Compiler::new().unwrap();
+        for (source, name) in [
+            ("globalvar x 128 = 5\n", "'x'"),
+            ("playervar x 128\n", "'x'"),
+            ("subroutine x 128\ndef x():\n    pass\n", "'x'"),
+        ] {
+            let hir = crate::compile(source, "out-of-range.opy", Path::new(".")).unwrap();
+            let error = match compiler.compile_hir(&hir) {
+                Ok(_) => panic!("out-of-range index unexpectedly succeeded: {source}"),
+                Err(error) => error,
+            };
+            assert_eq!(error.diagnostic.code, "index-out-of-range");
+            assert!(error.diagnostic.message.contains(name));
+            assert!(error.diagnostic.message.contains("0 to 127"));
+        }
+    }
+
+    #[test]
     fn implicit_default_player_variables_use_independent_reference_slots() {
         let compiler = Compiler::new().unwrap();
         let hir = crate::compile(

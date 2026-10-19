@@ -127,6 +127,7 @@ const EXCLUDED_CODES: &[&str] = &[
     "incompatible-protocol",
     "index-collision",
     "index-exhausted",
+    "index-out-of-range",
     "invalid-argument",
     "invalid-arity",
     "invalid-call-context",

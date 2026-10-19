@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/indexed-initializers",
+  "category": "compilation",
+  "features": [
+    "global variables",
+    "player variables",
+    "subroutines",
+    "explicit indices",
+    "declaration initializers",
+    "structural convergence"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": true
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": true
+    }
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "compile": {
+    "diagnostics": [
+      {
+        "severity": "error",
+        "text": "Error: Invalid index '128' for subroutine 'foo', must be from 0 to 127\n    | at <internal>"
+      }
+    ],
+    "exitCode": 1,
+    "status": "failure",
+    "stdout": "",
+    "workshop": "",
+    "workshopExact": "",
+    "workshopSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "fixture": "synthetic/subroutine-index-range-invalid",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "3afb356faef1e61c950e254bc375c047d52abb842c32843245bbde3960ed70a1"
+      }
+    ],
+    "sha256": "60e1b4712ee28b91667b34476c7fff3464f54487d2c8b1a724b343cb6714163d",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "5a7d0e294b8cad73b9701987bb584d0551d7fa4d",
+    "gitHead": "ec763c1d245aa5485ef61af5b2bda4975bce4877",
+    "integrity": "sha512-C5F6btT5yn19BvHuE0bjMuSd/2esebBabmpL4SYLQFuJ4IdouVOKEoMLLuJFAyNc0Phwrolblj5GDkDGYR0ofg==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.17.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.17"
+  },
+  "schemaVersion": 1
+}
