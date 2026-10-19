@@ -146,7 +146,7 @@ the coverage section).
 
 | Canonical construct | OPY mapping | Status |
 | --- | --- | --- |
-| `program.settings` | `settings { … }` JSONC block built from canonical settings data | extension |
+| `program.settings` | `settings { … }` JSONC block built from canonical settings data — see [Custom game settings](#custom-game-settings) | supported |
 | Global variable, ascending index order, no initializer | `globalvar <name> <index>` | supported |
 | Global variable, out-of-order indices | Declarations sorted by index, each with its explicit index | supported |
 | Global variable with initializer, re-lowered lowest-free slot = index | `globalvar <name> = <value>` | supported |
@@ -173,6 +173,51 @@ another canonical name in the table gains `_opy1`, then `_opy2`,
 `_opy3`, … until it resolves uniquely. The mapping is computed once per
 table at emission and applied uniformly to the declaration and every
 reference, so identity stays bound to the declaration index.
+
+#### Custom game settings
+
+`program.settings` reconstructs as a `settings { … }` JSONC object plus
+`#!extension` directives. The mapping uses the canonical
+`workshop_rs::settings` model only — `Settings`, `SettingsNode`,
+`SettingDefinition`/`domain()`/`enum_members()` at `definition(&path)` —
+and never introduces an OPY-local settings model.
+
+- **Emission gate.** `workshop_rs::settings::check_emission` runs first:
+  anything the canonical emitter cannot write back — unknown maps, heroes,
+  teams, modes, or kind-mismatched members — refuses as
+  `unsupported-settings` at the canonical span. A second walk then refuses
+  shapes the OPY settings frontend rewrites on reparse: an `enabled` mode
+  marker other than leading `enabled: false`, hero names the alias pass
+  renames (`mccree`, `hammond`), members whose `name: value` reparse lands
+  on a catalogued display name instead of staying raw, blocks under
+  boolean settings (reparse to `false`) or list settings (reparse as
+  lists), `settings.workshop` values outside the frontend's
+  `On`/`Off`/number/one-element-list forms, and duplicate members.
+- **Key ordering.** Object members emit in the canonical child order, with
+  the two reorderings the frontend's own normalization applies: a mode's
+  `enabled` marker first, a team's `general` leaf members after its hero
+  groups and rosters. Emitted keys are the canonical setting keys
+  (`skirmish`, `enabledMaps`, `ability1Cooldown%`), which the OPY
+  settings lowerer resolves back through the same catalog.
+- **Layout.** The block follows the pinned upstream decompiler's
+  `JSON.stringify(result, null, 4)` layout: four-space indentation,
+  quoted keys, empty objects/arrays inline (`{}`, `[]`), no trailing
+  commas. A presence-only `extensions` member becomes `#!extension <name>`;
+  `extensions` is the only top-level group that may exist without a
+  `gamemodes` group, and only when it is the last group — an entirely
+  `#!extension`-only settings block emits the directives alone, and an
+  empty settings block has no OPY form and refuses.
+- **Opaque members.** `Raw`/`RawValue`/`RawGroup` members and uncatalogued
+  groups reconstruct verbatim as JSONC strings/objects when their names
+  and values survive a `name: value`/`name { … }` reparse unchanged;
+  members whose names collide with catalogued display names or carry
+  unwriteable text refuse.
+- **Variant-qualified maps.** A map-list element like
+  `Workshop Chamber 972777519512064577` parses into the canonical model
+  but fails `check_emission` — the canonical catalog exposes no
+  variant-qualified map lookup or emission. Refusal stays until
+  `wrightkit/workshop-rs#518` provides a canonical representation; the
+  pinned `customGameSettings` fixture pins this refusal.
 
 ### Rules and events
 
@@ -262,7 +307,7 @@ environment checks.
 | --- | --- | --- |
 | `manifest-error` | Builtin OPY manifest fails to load | guard |
 | `catalog-error` | Builtin catalog fails to load; a manifest `catalogId` is absent from the catalog | guard |
-| `unsupported-settings` | `program.settings` is present | extension → `settings` JSONC |
+| `unsupported-settings` | A `program.settings` member with no recompile-equivalent OPY form: canonical-emission failure, `enabled` marker outside leading `false`, hero-alias names, kind/display-name collisions, boolean/list-domain blocks, misplaced `#!extension` members, or an empty settings block | landed for the mapped surface; residue is refusal |
 | `unsupported-name` | Table name is not a valid OPY identifier or collides with a keyword/literal | relaxed → recorded deterministic mangling (#599) |
 | `unsupported-duplicate-name` | A name repeats inside one declaration table | refusal |
 | `unsupported-global-order` | Global indices are not in ascending order | relaxed → emit sorted with explicit indices (#599) |
@@ -323,14 +368,19 @@ full-gamemode programs — each with its pinned `results/*.opy` upstream
 output. A harness that parses each input through `workshop_rs::parser`,
 reconstructs, recompiles, and compares under the relaxed comparator is a
 follow-up; the fixtures enter only through the repository's attribution and
-fixture policy.
+fixture policy. The two settings inputs landed first, under
+`crates/opy-rs/tests/fixtures/reconstruction/` (attribution in its
+`README.md`): `shionSettings` round-trips and `customGameSettings` pins the
+variant-qualified-map refusal.
 
 Recorded exception classes against upstream input coverage (each names its
 justification; "extension" rows are contracted coverage, "refusal" rows are
 permanent unless a later owner decision changes them):
 
-- **Settings** — upstream emits `settings` JSONC; `opy-rs` refuses
-  (`unsupported-settings`) pending the contracted settings mapping.
+- **Settings** — upstream emits `settings` JSONC; `opy-rs` now
+  reconstructs the representable surface (`wrightkit/opy-rs#600`) and
+  refuses members with no recompile-equivalent form, including
+  variant-qualified map elements pending `wrightkit/workshop-rs#518`.
 - **Disabled constructs** — upstream comments them out or emits
   `@Disabled`; `opy-rs` reconstructs them as `@Disabled` and
   `#`-commented lines (disabled subroutine bodies become an inert `def`
@@ -397,8 +447,10 @@ recompile-equivalent. Current sanctioned heuristics:
   are the Workshop defaults at their index; mangling invalid or colliding
   names under a recorded rule.
 - **`@Delimiter` emission** for actionless rules.
-- **Settings JSONC layout** — key ordering and inline/block style within
-  canonical settings meaning.
+- **Settings JSONC layout** — landed: canonical child order with the
+  frontend's own `enabled`-first and `general`-last reorderings, and the
+  upstream `JSON.stringify(result, null, 4)` block style (see [Custom
+  game settings](#custom-game-settings)).
 
 A heuristic may never change observable semantics; when no
 recompile-equivalent choice is justified, reconstruction refuses.
@@ -453,6 +505,12 @@ Contract-level only; no OPY-local substitutes are introduced.
 1. **Relaxed behavior comparator** — landed in `workshop-rs` 1.20.0 as
    `workshop_rs::compare::{equivalent, difference}`
    (`wrightkit/workshop-rs#490`); reconstruction tests compare under it.
+2. **Variant-qualified map elements** — a settings map-list element like
+   `Workshop Chamber 972777519512064577` parses but fails canonical
+   emission, and no public API resolves the variant-qualified spelling or
+   keeps the variant id in the model. This is
+   `wrightkit/workshop-rs#518`; reconstruction refuses such elements
+   until a canonical representation exists.
 
 If implementation uncovers a genuinely missing canonical Workshop
 capability beyond this (for example a canonical operation reconstruction

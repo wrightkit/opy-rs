@@ -6,6 +6,7 @@ use workshop_rs::catalog::{Catalog, Locale};
 use workshop_rs::program::{
     Action, Event, EventTarget, EventTeam, ModifyOp, Rule, Value, Variable,
 };
+use workshop_rs::settings::{PathPart, SettingValueDomain, SettingsNode};
 use workshop_rs::source::Span;
 
 use crate::lexer::{is_ident_continue, is_ident_start, is_identifier};
@@ -231,13 +232,6 @@ impl<'a> Emitter<'a> {
     }
 
     fn validate_tables(&mut self) {
-        if self.program.settings.is_some() {
-            self.issue(
-                "unsupported-settings",
-                "custom-game-settings are outside the reconstruction surface",
-                None,
-            );
-        }
         // Every table: names must be unique (duplicates cannot be declared
         // or referenced faithfully); indices must be unique and inside the
         // Workshop slot range so the emitted explicit-index declarations
@@ -466,6 +460,856 @@ impl<'a> Emitter<'a> {
         Some(initializers)
     }
 
+    // ---- custom game settings (issue #600) ----
+
+    /// Emit `program.settings` as a `settings { ... }` JSONC block plus
+    /// `#!extension` directives, or report each member no OPY form can
+    /// reproduce.
+    ///
+    /// Two gates apply. `workshop_rs::settings::check_emission` refuses
+    /// anything the canonical emitter cannot write back — unknown maps,
+    /// heroes, teams, and modes or kind-mismatched members — with the
+    /// canonical source span. This walk then refuses shapes the OPY
+    /// settings frontend rewrites on the way back to canonical form:
+    /// `enabled` markers the mode header drops, hero names the alias pass
+    /// renames, members a `name: value` reparse would produce as `Raw`
+    /// rather than the authored kind, and any content OPY JSONC cannot
+    /// express at all.
+    ///
+    /// Member order follows the canonical child order: the OPY frontend's
+    /// own normalization reorders a team's `general` members ahead of its
+    /// hero groups and a mode's `enabled` marker to the front, so the
+    /// emitted layout writes `general` last and `enabled` first — the
+    /// order a reparse reproduces.
+    fn emit_settings(&mut self) {
+        let Some(settings) = self.program.settings.as_ref() else {
+            return;
+        };
+        let mut unemittable = false;
+        for error in workshop_rs::settings::check_emission(settings) {
+            unemittable = true;
+            self.issue("unsupported-settings", error.to_string(), error.span());
+        }
+        if unemittable {
+            return;
+        }
+
+        let mut top: Vec<(String, SettingsJson)> = Vec::new();
+        let mut extensions: Vec<String> = Vec::new();
+        let mut seen = HashSet::new();
+        let last = settings.children.len().saturating_sub(1);
+        for (index, child) in settings.children.iter().enumerate() {
+            if !seen.insert(child.name().to_string()) {
+                self.refuse_settings(child, "is a duplicate top-level group");
+            }
+            match child {
+                SettingsNode::Workshop { children, .. } => {
+                    top.push(("workshop".to_string(), self.settings_workshop(children)));
+                }
+                // `RawGroup` is the canonical marker for a member block
+                // written verbatim; the comparator equates it with `Group`
+                // and both emit `name { ... }`, so one path serves both.
+                SettingsNode::Group { name, children, .. }
+                | SettingsNode::RawGroup { name, children, .. } => match name.as_str() {
+                    // An OPY `workshop` key reparses as `Workshop`, never
+                    // as `Group`.
+                    "workshop" => self.refuse_settings(
+                        child,
+                        "has no OPY settings form; `workshop` reparses as workshop settings",
+                    ),
+                    "main" | "lobby" => {
+                        let display = display_names(&[format!("{name}.")]);
+                        let path = [PathPart::Part(name.as_str())];
+                        top.push((
+                            name.clone(),
+                            self.settings_object(children, &path, None, &display),
+                        ));
+                    }
+                    "extensions" => {
+                        // `#!extension` merges into an existing `extensions`
+                        // group or appends one at the end, so presence-only
+                        // members must trail every authored member and an
+                        // extensions group carrying only `#!extension`
+                        // directives must be the last top-level group.
+                        let flags = children
+                            .iter()
+                            .position(|member| matches!(member, SettingsNode::Flag { .. }));
+                        match flags {
+                            None => {
+                                let display = display_names(&["extensions.".to_string()]);
+                                top.push((
+                                    name.clone(),
+                                    self.settings_object(
+                                        children,
+                                        &[PathPart::Part("extensions")],
+                                        None,
+                                        &display,
+                                    ),
+                                ));
+                            }
+                            Some(first) => {
+                                let mut flag_names = HashSet::new();
+                                for member in &children[first..] {
+                                    let SettingsNode::Flag { name, .. } = member else {
+                                        self.refuse_settings(
+                                            member,
+                                            "follows a presence-only member in `extensions`",
+                                        );
+                                        continue;
+                                    };
+                                    if !flag_names.insert(name.clone()) {
+                                        self.refuse_settings(
+                                            member,
+                                            "is a duplicate `#!extension` name",
+                                        );
+                                    }
+                                    let path = [
+                                        PathPart::Part("extensions"),
+                                        PathPart::Part(name.as_str()),
+                                    ];
+                                    match workshop_rs::settings::definition(&path) {
+                                        Some(definition)
+                                            if matches!(
+                                                definition.domain(),
+                                                SettingValueDomain::PresenceOnly
+                                            ) =>
+                                        {
+                                            extensions.push(name.clone());
+                                        }
+                                        _ => self.refuse_settings(
+                                            member,
+                                            "is not a declared Workshop extension",
+                                        ),
+                                    }
+                                }
+                                if first == 0 {
+                                    if index != last {
+                                        self.refuse_settings(
+                                            child,
+                                            "carries only `#!extension` directives outside the last group",
+                                        );
+                                    }
+                                } else {
+                                    let display = display_names(&["extensions.".to_string()]);
+                                    top.push((
+                                        name.clone(),
+                                        self.settings_object(
+                                            &children[..first],
+                                            &[PathPart::Part("extensions")],
+                                            None,
+                                            &display,
+                                        ),
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                    "gamemodes" => {
+                        top.push(("gamemodes".to_string(), self.settings_modes(children)));
+                    }
+                    "heroes" => {
+                        top.push(("heroes".to_string(), self.settings_teams(children)));
+                    }
+                    _ => {
+                        top.push((name.clone(), self.opaque_group_object(children)));
+                    }
+                },
+                member => self.refuse_settings(
+                    member,
+                    "cannot appear at the settings top level; groups are expected",
+                ),
+            }
+        }
+
+        // The frontend requires every settings block to contain a
+        // `gamemodes` group; a `settings { ... }` without one is a compile
+        // error. An `extensions` group carried only by `#!extension`
+        // directives is the sole case where no `settings { ... }` block is
+        // needed at all — `merge_extensions` builds it from the directives
+        // alone — and an empty settings block has no OPY form either way.
+        match (top.is_empty(), extensions.is_empty()) {
+            (true, true) => {
+                self.issue(
+                    "unsupported-settings",
+                    "an empty settings block has no OPY form",
+                    settings.span,
+                );
+                return;
+            }
+            (true, false) => {}
+            (false, _) => {
+                if !top.iter().any(|(key, _)| key == "gamemodes") {
+                    self.issue(
+                        "unsupported-settings",
+                        "settings has no `gamemodes` group, which the OPY frontend requires",
+                        settings.span,
+                    );
+                    return;
+                }
+            }
+        }
+        if !top.is_empty() {
+            self.out.push_str("settings ");
+            write_settings_json(&mut self.out, &SettingsJson::Object(top), 0);
+            self.out.push_str("\n\n");
+        }
+        for name in &extensions {
+            self.out.push_str("#!extension ");
+            self.out.push_str(name);
+            self.out.push('\n');
+        }
+        if !extensions.is_empty() {
+            self.out.push('\n');
+        }
+    }
+
+    /// A `gamemodes` group: each child is a mode `Group` whose members are
+    /// ordinary leaf members plus the leading `enabled: false` marker the
+    /// `disabled <mode>` header round-trips. Members of a mode the settings
+    /// catalog does not declare are carried like any other leaf member.
+    fn settings_modes(&mut self, children: &[SettingsNode]) -> SettingsJson {
+        let mut entries = Vec::new();
+        let mut seen = HashSet::new();
+        for mode in children {
+            let (name, children) = match mode {
+                SettingsNode::Group { name, children, .. }
+                | SettingsNode::RawGroup { name, children, .. } => (name, children),
+                _ => {
+                    self.refuse_settings(
+                        mode,
+                        "cannot appear inside `gamemodes`; groups are expected",
+                    );
+                    continue;
+                }
+            };
+            if !seen.insert(name.clone()) {
+                self.refuse_settings(mode, "is a duplicate mode group");
+            }
+            let display = display_names(&[
+                format!("gamemodes.{name}."),
+                "gamemodes.general.".to_string(),
+            ]);
+            let path = [PathPart::Part("gamemodes"), PathPart::Part(name.as_str())];
+            let mut members = Vec::new();
+            let mut member_names = HashSet::new();
+            for (index, member) in children.iter().enumerate() {
+                if member.name() == "enabled" {
+                    // `disabled <mode>` reparses to a leading
+                    // `enabled: false`; every other `enabled` member is
+                    // dropped by the mode header or the frontend's retain.
+                    match (index, member) {
+                        (0, SettingsNode::Bool { value: false, .. }) => {
+                            members.push(("enabled".to_string(), SettingsJson::Bool(false)));
+                            member_names.insert("enabled".to_string());
+                        }
+                        _ => self.refuse_settings(
+                            member,
+                            "is an `enabled` marker only `enabled: false` in first position reproduces",
+                        ),
+                    }
+                    continue;
+                }
+                let Some((key, json)) = self.settings_member(member, &path, None, &display) else {
+                    continue;
+                };
+                if !member_names.insert(key.clone()) {
+                    self.refuse_settings(member, "is a duplicate settings member");
+                }
+                members.push((key, json));
+            }
+            entries.push((name.clone(), SettingsJson::Object(members)));
+        }
+        SettingsJson::Object(entries)
+    }
+
+    /// A `heroes` group: each child is a team `Group` whose canonical
+    /// children are already partitioned the way the OPY frontend's
+    /// normalization writes them back — team `general` members first,
+    /// then hero groups, then the hero roster lists — so the emitted
+    /// object writes hero groups, then rosters, then a `general` object.
+    fn settings_teams(&mut self, children: &[SettingsNode]) -> SettingsJson {
+        const TEAM: [PathPart<'static>; 2] = [PathPart::Part("heroes"), PathPart::Team];
+        const HERO: [PathPart<'static>; 3] =
+            [PathPart::Part("heroes"), PathPart::Team, PathPart::Hero];
+        let mut entries = Vec::new();
+        let mut seen = HashSet::new();
+        for team in children {
+            let (name, children) = match team {
+                SettingsNode::Group { name, children, .. }
+                | SettingsNode::RawGroup { name, children, .. } => (name, children),
+                _ => {
+                    self.refuse_settings(
+                        team,
+                        "cannot appear inside `heroes`; groups are expected",
+                    );
+                    continue;
+                }
+            };
+            if !seen.insert(name.clone()) {
+                self.refuse_settings(team, "is a duplicate team group");
+            }
+            // Partition into [general leaves][hero groups][roster lists];
+            // any other order reparses differently.
+            let roster = |member: &SettingsNode| {
+                matches!(member, SettingsNode::List { name, .. } if matches!(
+                    name.as_str(),
+                    "enabledHeroes" | "disabledHeroes"
+                ))
+            };
+            let rest_at = children
+                .iter()
+                .position(|member| matches!(member, SettingsNode::Group { .. }) || roster(member))
+                .unwrap_or(children.len());
+            let rosters_at = children[rest_at..]
+                .iter()
+                .position(roster)
+                .map(|index| rest_at + index)
+                .unwrap_or(children.len());
+            let general = &children[..rest_at];
+            let rest = &children[rest_at..rosters_at];
+            let rosters = &children[rosters_at..];
+            for member in rest {
+                if roster(member) {
+                    self.refuse_settings(
+                        member,
+                        "is a hero roster before the last hero group; rosters reparse last",
+                    );
+                }
+            }
+            for member in rosters {
+                if !roster(member) {
+                    self.refuse_settings(
+                        member,
+                        "follows a hero roster; team `general` members reparse first",
+                    );
+                }
+            }
+            if rosters
+                .iter()
+                .filter(|member| member.name() == "enabledHeroes")
+                .count()
+                + rosters
+                    .iter()
+                    .filter(|member| member.name() == "disabledHeroes")
+                    .count()
+                > 1
+            {
+                self.refuse_settings(
+                    team,
+                    "lists both `enabledHeroes` and `disabledHeroes`, which the frontend rejects",
+                );
+            }
+
+            let display = display_names(&[
+                "heroes.<team>.".to_string(),
+                "heroes.general.".to_string(),
+                "heroes.team1.".to_string(),
+                "heroes.team2.".to_string(),
+                "heroes.allTeams.".to_string(),
+            ]);
+            let mut members = Vec::new();
+            let mut member_names = HashSet::new();
+            for member in rest {
+                let (hero_name, hero_children) = match member {
+                    SettingsNode::Group { name, children, .. }
+                    | SettingsNode::RawGroup { name, children, .. } => (name, children),
+                    _ => {
+                        self.refuse_settings(
+                            member,
+                            "is a non-group member among hero groups; it would reparse as an empty group",
+                        );
+                        continue;
+                    }
+                };
+                // The frontend resolves every hero group name through its
+                // hero table and renames the two declared aliases; only a
+                // canonical hero name lands on the same group.
+                if !super::settings::resolves_to_hero(hero_name) {
+                    self.refuse_settings(member, "is not a declared hero");
+                    continue;
+                }
+                if super::settings::canonical_hero_name(hero_name) != hero_name.as_str() {
+                    self.refuse_settings(
+                        member,
+                        "is a hero alias that reparses under its canonical name",
+                    );
+                    continue;
+                }
+                if !member_names.insert(hero_name.clone()) {
+                    self.refuse_settings(member, "is a duplicate hero group");
+                }
+                members.push((
+                    hero_name.clone(),
+                    self.settings_object(hero_children, &HERO, Some(hero_name.as_str()), &display),
+                ));
+            }
+            for member in rosters {
+                let SettingsNode::List { elements, .. } = member else {
+                    continue;
+                };
+                for element in elements {
+                    if super::settings::canonical_hero_name(&element.value) != element.value {
+                        self.refuse_settings(
+                            member,
+                            "carries a hero alias that reparses under its canonical name",
+                        );
+                        break;
+                    }
+                }
+                if !member_names.insert(member.name().to_string()) {
+                    self.refuse_settings(member, "is a duplicate hero roster");
+                }
+                members.push((
+                    member.name().to_string(),
+                    SettingsJson::Array(
+                        elements
+                            .iter()
+                            .map(|element| SettingsJson::String(element.value.clone()))
+                            .collect(),
+                    ),
+                ));
+            }
+            if !general.is_empty() {
+                if !member_names.insert("general".to_string()) {
+                    self.refuse_settings(
+                        team,
+                        "carries a `general` member the hero-name position cannot express",
+                    );
+                }
+                members.push((
+                    "general".to_string(),
+                    self.settings_object(general, &TEAM, None, &display),
+                ));
+            }
+            for member in general {
+                if member.name() == "general" || roster(member) {
+                    self.refuse_settings(
+                        member,
+                        "cannot be reproduced at a team's `general` position",
+                    );
+                }
+            }
+            entries.push((name.clone(), SettingsJson::Object(members)));
+        }
+        SettingsJson::Object(entries)
+    }
+
+    /// The members of a catalogued or carried leaf group — `main`, `lobby`,
+    /// `extensions`, a mode, a team `general`, or a hero — as one JSONC
+    /// object.
+    fn settings_object(
+        &mut self,
+        children: &[SettingsNode],
+        path: &[PathPart<'_>],
+        hero: Option<&str>,
+        display: &HashSet<String>,
+    ) -> SettingsJson {
+        let mut entries = Vec::new();
+        let mut seen = HashSet::new();
+        for member in children {
+            let Some(entry) = self.settings_member(member, path, hero, display) else {
+                continue;
+            };
+            if !seen.insert(member.name().to_string()) {
+                self.refuse_settings(member, "is a duplicate settings member");
+            }
+            entries.push(entry);
+        }
+        SettingsJson::Object(entries)
+    }
+
+    /// One member at a catalogued leaf path as a JSONC pair, or `None` once
+    /// an issue is recorded.
+    fn settings_member(
+        &mut self,
+        member: &SettingsNode,
+        path: &[PathPart<'_>],
+        hero: Option<&str>,
+        display: &HashSet<String>,
+    ) -> Option<(String, SettingsJson)> {
+        // `extensions` members get no unknown-key pass-through: anything but
+        // a declared presence-only Flag fails the emission table, and a
+        // `Raw` member has no OPY form that reaches it.
+        if matches!(path, [PathPart::Part("extensions")]) {
+            self.refuse_settings(
+                member,
+                "is not a presence-only extension; only `#!extension` members survive here",
+            );
+            return None;
+        }
+        let name = member.name().to_string();
+        match member {
+            SettingsNode::Number { value, .. } => {
+                let definition = self.catalogued_member(member, path, hero)?;
+                if !matches!(
+                    definition.domain(),
+                    SettingValueDomain::Number(_) | SettingValueDomain::Percent(_)
+                ) {
+                    self.refuse_settings(member, "is a number member under a non-numeric setting");
+                    return None;
+                }
+                Some((name, SettingsJson::Number(format!("{value}"))))
+            }
+            SettingsNode::Bool { value, .. } => {
+                let definition = self.catalogued_member(member, path, hero)?;
+                if !matches!(definition.domain(), SettingValueDomain::Boolean) {
+                    self.refuse_settings(member, "is a boolean member under a non-boolean setting");
+                    return None;
+                }
+                Some((name, SettingsJson::Bool(*value)))
+            }
+            SettingsNode::String { value, .. } => {
+                let definition = self.catalogued_member(member, path, hero)?;
+                if !matches!(
+                    definition.domain(),
+                    SettingValueDomain::String | SettingValueDomain::Enum { .. }
+                ) {
+                    self.refuse_settings(member, "is a string member under a non-string setting");
+                    return None;
+                }
+                // A string value with an unbound `{n}`/`{}` formatter fails
+                // the frontend's `__customString__` check before it can
+                // lower; `main.modeName`/`main.description` must survive the
+                // filtered-word escape verbatim, and the `mapRotation`
+                // member rewrites `afterGame` to `afterAGame`.
+                if crate::compile_time::has_unbound_formatters(value) {
+                    self.refuse_settings(
+                        member,
+                        "carries a formatter the OPY settings evaluator rejects",
+                    );
+                    return None;
+                }
+                if *value == "afterAGame" && name == "mapRotation" {
+                    return Some((name, SettingsJson::String("afterGame".to_string())));
+                }
+                if name == "mapRotation" && value == "afterGame" {
+                    self.refuse_settings(
+                        member,
+                        "carries a `mapRotation` value the OPY frontend rewrites",
+                    );
+                    return None;
+                }
+                if matches!(path, [PathPart::Part("main")])
+                    && matches!(name.as_str(), "modeName" | "description")
+                    && super::lowering::escape_bad_words(value) != *value
+                {
+                    self.refuse_settings(
+                        member,
+                        "is a `main` string the filtered-word escape rewrites",
+                    );
+                    return None;
+                }
+                Some((name, SettingsJson::String(value.clone())))
+            }
+            SettingsNode::List { elements, .. } => {
+                let definition = self.catalogued_member(member, path, hero)?;
+                match definition.domain() {
+                    SettingValueDomain::MapList => {}
+                    SettingValueDomain::HeroList => {
+                        for element in elements {
+                            if super::settings::canonical_hero_name(&element.value) != element.value
+                            {
+                                self.refuse_settings(
+                                    member,
+                                    "carries a hero alias that reparses under its canonical name",
+                                );
+                                return None;
+                            }
+                        }
+                    }
+                    _ => {
+                        self.refuse_settings(member, "is a list member under a non-list setting");
+                        return None;
+                    }
+                }
+                Some((
+                    name,
+                    SettingsJson::Array(
+                        elements
+                            .iter()
+                            .map(|element| SettingsJson::String(element.value.clone()))
+                            .collect(),
+                    ),
+                ))
+            }
+            SettingsNode::Flag { .. } => {
+                self.refuse_settings(
+                    member,
+                    "is a presence-only member; only `#!extension` under `extensions` carries one",
+                );
+                None
+            }
+            SettingsNode::Raw { value, .. } => {
+                // `name: value` reparses as `Raw` only when `name` resolves
+                // no catalogued display name and `name:value` does not
+                // extend into one.
+                if self.member_definition(member, path, hero).is_some()
+                    || display.contains(name.as_str())
+                    || display.contains(format!("{name}:{value}").as_str())
+                {
+                    self.refuse_settings(
+                        member,
+                        "reparses under a catalogued display name rather than staying raw",
+                    );
+                    return None;
+                }
+                if !emittable_member_name(name.as_str()) || !emittable_raw_value(value) {
+                    self.refuse_settings(member, "carries text a `name: value` line cannot write");
+                    return None;
+                }
+                Some((name, SettingsJson::String(value.clone())))
+            }
+            SettingsNode::RawValue { value, .. } => {
+                // `name:` reparses as `RawValue` only with an empty value;
+                // any other value parses `Raw`.
+                if !value.is_empty() {
+                    self.refuse_settings(member, "has a value that reparses as a raw member");
+                    return None;
+                }
+                if self.member_definition(member, path, hero).is_some()
+                    || display.contains(name.as_str())
+                    || !emittable_member_name(name.as_str())
+                {
+                    self.refuse_settings(
+                        member,
+                        "reparses under a catalogued display name rather than staying raw",
+                    );
+                    return None;
+                }
+                Some((name, SettingsJson::String(String::new())))
+            }
+            SettingsNode::Group { children, .. } | SettingsNode::RawGroup { children, .. } => {
+                // `name { ... }` under a leaf path reparses `Group{name}`:
+                // under a catalogued non-list key the emitted block keeps
+                // the key's display name; under an uncatalogued name it
+                // stays verbatim. The comparator equates `Group` and
+                // `RawGroup`, so both reconstruct.
+                match self.member_definition(member, path, hero) {
+                    Some(definition)
+                        if matches!(
+                            definition.domain(),
+                            SettingValueDomain::MapList | SettingValueDomain::HeroList
+                        ) =>
+                    {
+                        self.refuse_settings(
+                            member,
+                            "is a block under a list setting; it reparses as a list",
+                        );
+                        None
+                    }
+                    // A boolean-domain member collapses every non-boolean
+                    // value to `enabled: false` upstream-style, so a block
+                    // never reaches the group form.
+                    Some(definition)
+                        if matches!(definition.domain(), SettingValueDomain::Boolean) =>
+                    {
+                        self.refuse_settings(
+                            member,
+                            "is a block under a boolean setting; it reparses as `false`",
+                        );
+                        None
+                    }
+                    Some(_) => Some((name, self.opaque_object(children))),
+                    None => {
+                        if display.contains(name.as_str()) || !emittable_member_name(name.as_str())
+                        {
+                            self.refuse_settings(
+                                member,
+                                "reparses under a catalogued display name rather than staying raw",
+                            );
+                            return None;
+                        }
+                        Some((name, self.opaque_object(children)))
+                    }
+                }
+            }
+            // `Workshop` only appears at the settings top level.
+            SettingsNode::Workshop { .. } => {
+                self.refuse_settings(member, "has no OPY settings form at a leaf path");
+                None
+            }
+        }
+    }
+
+    /// The catalog definition a member resolves at `path`, honoring the
+    /// pinned hero-applicability table under `heroes.<team>.<hero>`.
+    fn member_definition(
+        &self,
+        member: &SettingsNode,
+        path: &[PathPart<'_>],
+        hero: Option<&str>,
+    ) -> Option<workshop_rs::settings::SettingDefinition> {
+        let mut full = path.to_vec();
+        full.push(PathPart::Part(member.name()));
+        let definition = workshop_rs::settings::definition(&full)?;
+        match hero {
+            Some(hero) if !super::settings::hero_setting_applies(hero, member.name()) => None,
+            _ => Some(definition),
+        }
+    }
+
+    /// A catalogued member or `None` with an issue recorded: a typed member
+    /// the catalog does not declare (or does not apply to this hero) is
+    /// carried as a `name: value` line and reparses `Raw`, never its
+    /// authored kind.
+    fn catalogued_member(
+        &mut self,
+        member: &SettingsNode,
+        path: &[PathPart<'_>],
+        hero: Option<&str>,
+    ) -> Option<workshop_rs::settings::SettingDefinition> {
+        match self.member_definition(member, path, hero) {
+            Some(definition) => Some(definition),
+            None => {
+                self.refuse_settings(
+                    member,
+                    "is a typed member under an uncatalogued key; it reparses as raw text",
+                );
+                None
+            }
+        }
+    }
+
+    /// The children of a member block the Workshop parser reads opaquely —
+    /// a `name: value`/`name:` member or a nested `name { ... }` block.
+    /// The frontend's written-form pass turns an OPY string back into the
+    /// `name: value` line, so `Raw`, empty `RawValue`, and `Group` shapes
+    /// round-trip; everything else fails or shifts kind.
+    fn opaque_object(&mut self, children: &[SettingsNode]) -> SettingsJson {
+        let mut entries = Vec::new();
+        let mut seen = HashSet::new();
+        for member in children {
+            let entry = match member {
+                SettingsNode::Raw { name, value, .. }
+                    if emittable_member_name(name) && emittable_raw_value(value) =>
+                {
+                    Some((name.clone(), SettingsJson::String(value.clone())))
+                }
+                SettingsNode::RawValue { name, value, .. }
+                    if value.is_empty() && emittable_member_name(name) =>
+                {
+                    Some((name.clone(), SettingsJson::String(String::new())))
+                }
+                SettingsNode::Group { name, children, .. }
+                | SettingsNode::RawGroup { name, children, .. }
+                    if emittable_member_name(name) =>
+                {
+                    Some((name.clone(), self.opaque_object(children)))
+                }
+                _ => {
+                    self.refuse_settings(member, "has no OPY form inside an opaque settings block");
+                    None
+                }
+            };
+            let Some(entry) = entry else { continue };
+            if !seen.insert(member.name().to_string()) {
+                self.refuse_settings(member, "is a duplicate settings member");
+            }
+            entries.push(entry);
+        }
+        SettingsJson::Object(entries)
+    }
+
+    /// The children of an uncatalogued top-level group: the frontend keeps
+    /// the group verbatim and every non-group member fails the canonical
+    /// emission table, so only nested `name { ... }` blocks reconstruct.
+    fn opaque_group_object(&mut self, children: &[SettingsNode]) -> SettingsJson {
+        let mut entries = Vec::new();
+        let mut seen = HashSet::new();
+        for member in children {
+            let entry = match member {
+                SettingsNode::Group { name, children, .. }
+                | SettingsNode::RawGroup { name, children, .. }
+                    if emittable_member_name(name) =>
+                {
+                    Some((name.clone(), self.opaque_group_object(children)))
+                }
+                _ => {
+                    self.refuse_settings(
+                        member,
+                        "has no OPY form inside an uncatalogued settings group",
+                    );
+                    None
+                }
+            };
+            let Some(entry) = entry else { continue };
+            if !seen.insert(member.name().to_string()) {
+                self.refuse_settings(member, "is a duplicate settings member");
+            }
+            entries.push(entry);
+        }
+        SettingsJson::Object(entries)
+    }
+
+    /// The members of `settings.workshop`: the frontend writes each member
+    /// as `name: On`/`name: Off` for booleans, the number text for numbers
+    /// and number-like strings, `[element]` for a one-element list, and the
+    /// localized hero display name for a hero key; everything else is an
+    /// error. Canonical `Raw` members in those four shapes reconstruct.
+    fn settings_workshop(&mut self, children: &[SettingsNode]) -> SettingsJson {
+        let mut entries = Vec::new();
+        let mut seen = HashSet::new();
+        for member in children {
+            let entry = match member {
+                SettingsNode::Raw { name, value, .. } if emittable_member_name(name) => {
+                    let json = if value == "On" {
+                        Some(SettingsJson::Bool(true))
+                    } else if value == "Off" {
+                        Some(SettingsJson::Bool(false))
+                    } else if emittable_raw_value(value) && super::settings::is_number_text(value) {
+                        Some(SettingsJson::String(value.clone()))
+                    } else if let Some(inner) = value
+                        .strip_prefix('[')
+                        .and_then(|rest| rest.strip_suffix(']'))
+                    {
+                        if crate::compile_time::has_unbound_formatters(inner) {
+                            None
+                        } else {
+                            Some(SettingsJson::Array(vec![SettingsJson::String(
+                                inner.to_string(),
+                            )]))
+                        }
+                    } else {
+                        None
+                    };
+                    match json {
+                        Some(json) => Some((name.clone(), json)),
+                        None => {
+                            self.refuse_settings(
+                                member,
+                                "is a `settings.workshop` value OPY cannot write",
+                            );
+                            None
+                        }
+                    }
+                }
+                _ => {
+                    self.refuse_settings(
+                        member,
+                        "is not a `name: value` member inside `settings.workshop`",
+                    );
+                    None
+                }
+            };
+            let Some(entry) = entry else { continue };
+            if !seen.insert(member.name().to_string()) {
+                self.refuse_settings(member, "is a duplicate settings member");
+            }
+            entries.push(entry);
+        }
+        SettingsJson::Object(entries)
+    }
+
+    /// One reconstruction refusal at `code` `unsupported-settings`, keeping
+    /// the member's canonical source span when it carries one.
+    fn refuse_settings(&mut self, member: &SettingsNode, detail: &str) {
+        self.issue(
+            "unsupported-settings",
+            format!("settings member '{}' {detail}", member.name()),
+            member.span(),
+        );
+    }
+
     fn emit_program(&mut self, layout: &RuleLayout) {
         let global_order = index_order(&self.program.global_variables);
         let player_order = index_order(&self.program.player_variables);
@@ -479,6 +1323,7 @@ impl<'a> Emitter<'a> {
         // without it the frontend's default folding rewrites values such as
         // `Add(x, 0)` into a different canonical shape than the input's.
         self.out.push_str("#!optimizeStrict\n\n");
+        self.emit_settings();
         self.emit_variable_declarations(true, &global_order, global_initializers);
         self.emit_variable_declarations(false, &player_order, player_initializers);
         if self.program.subroutines.is_empty() {
@@ -1953,6 +2798,124 @@ impl<'a> Emitter<'a> {
     }
 }
 
+/// One JSONC value inside a reconstructed `settings { ... }` block.
+enum SettingsJson {
+    Object(Vec<(String, SettingsJson)>),
+    Array(Vec<SettingsJson>),
+    String(String),
+    Number(String),
+    Bool(bool),
+}
+
+/// Write `value` as JSONC the settings parser reads back — the layout the
+/// pinned OverPy's `JSON.stringify(result, null, 4)` produces: four-space
+/// indentation, empty containers inline, and no trailing comma.
+fn write_settings_json(out: &mut String, value: &SettingsJson, indent: usize) {
+    let pad = |out: &mut String| {
+        for _ in 0..indent {
+            out.push(' ');
+        }
+    };
+    match value {
+        SettingsJson::Object(entries) if entries.is_empty() => out.push_str("{}"),
+        SettingsJson::Object(entries) => {
+            out.push_str("{\n");
+            for (index, (key, value)) in entries.iter().enumerate() {
+                pad(out);
+                for _ in 0..4 {
+                    out.push(' ');
+                }
+                out.push('"');
+                push_json_escaped(out, key);
+                out.push_str("\": ");
+                write_settings_json(out, value, indent + 4);
+                if index + 1 < entries.len() {
+                    out.push(',');
+                }
+                out.push('\n');
+            }
+            pad(out);
+            out.push('}');
+        }
+        SettingsJson::Array(elements) if elements.is_empty() => out.push_str("[]"),
+        SettingsJson::Array(elements) => {
+            out.push_str("[\n");
+            for (index, element) in elements.iter().enumerate() {
+                pad(out);
+                for _ in 0..4 {
+                    out.push(' ');
+                }
+                write_settings_json(out, element, indent + 4);
+                if index + 1 < elements.len() {
+                    out.push(',');
+                }
+                out.push('\n');
+            }
+            pad(out);
+            out.push(']');
+        }
+        SettingsJson::String(value) => {
+            out.push('"');
+            push_json_escaped(out, value);
+            out.push('"');
+        }
+        SettingsJson::Number(value) => out.push_str(value),
+        SettingsJson::Bool(value) => out.push_str(if *value { "true" } else { "false" }),
+    }
+}
+
+fn push_json_escaped(out: &mut String, text: &str) {
+    for character in text.chars() {
+        match character {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            '\u{8}' => out.push_str("\\b"),
+            '\u{c}' => out.push_str("\\f"),
+            other => out.push(other),
+        }
+    }
+}
+
+/// The English display names of every catalogued setting under `prefixes`.
+/// A carried member emitted `name: value` reparses through the localized
+/// name index; a name colliding with one lands on the catalogued key
+/// instead of staying raw.
+fn display_names(prefixes: &[String]) -> HashSet<String> {
+    workshop_rs::settings::definitions()
+        .filter(|definition| {
+            let path = definition.path();
+            prefixes.iter().any(|prefix| path.starts_with(prefix))
+        })
+        .map(|definition| definition.presentation().english_name.to_string())
+        .collect()
+}
+
+/// Whether `name` survives a `name: value`/`name { }` line as the same
+/// member name: non-empty whitespace-normalized text without a colon,
+/// brace, quote, or comment marker the parser would split on, and without
+/// JavaScript-only whitespace (`\u{FEFF}`) the raw line reads differently.
+fn emittable_member_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.split_whitespace().collect::<Vec<_>>().join(" ") == name
+        && !name
+            .chars()
+            .any(|c| matches!(c, ':' | '{' | '}' | '"' | '#' | '\'' | '\u{FEFF}'))
+}
+
+/// Whether a `name: value` line writes `value` back unchanged: non-empty
+/// whitespace-normalized text without a closing brace (which would end the
+/// group), a quote, or a comment marker.
+fn emittable_raw_value(value: &str) -> bool {
+    !value.is_empty()
+        && value.split_whitespace().collect::<Vec<_>>().join(" ") == value
+        && !value
+            .chars()
+            .any(|c| matches!(c, '{' | '}' | '"' | '#' | '\'' | '\u{FEFF}'))
+}
+
 /// Emitted declaration order: table positions sorted by canonical
 /// Workshop index (stable, so equal slots — impossible after the index
 /// checks — would keep table order). Re-lowering sorts the table by
@@ -2416,10 +3379,153 @@ mod tests {
         let source = reconstruct(&program).expect("customString should reconstruct");
         assert!(source.contains("\"hp: {0}\".format(eventPlayer)"));
 
-        let reparsed = compile_to_program(&source, "format.opy");
+        let reparsed = compile_to_program(&source, "customString.opy");
         assert!(workshop_rs::roundtrip::equivalent(&program, &reparsed));
     }
 
+    fn parse_workshop(source: &str) -> Program {
+        workshop_rs::parser::parse(
+            source,
+            &Catalog::builtin().expect("catalog loads"),
+            &Locale::new("en-US"),
+        )
+        .expect("workshop source parses")
+    }
+
+    /// The reconstruction contract's own round trip: canonical Workshop
+    /// `Program` → OPY → compile → canonical `Program`, compared with the
+    /// canonical equivalence the contract fixes.
+    fn settings_round_trip(workshop_source: &str) -> (String, Program, Program) {
+        let program = parse_workshop(workshop_source);
+        let source = reconstruct(&program).expect("settings reconstruct");
+        let reparsed = compile_to_program(&source, "reconstructed.opy");
+        (source, program, reparsed)
+    }
+
+    #[test]
+    fn reconstructs_main_and_lobby_settings() {
+        let (source, program, reparsed) = settings_round_trip(
+            "settings\n{\n\tmain\n\t{\n\t\tMode Name: \"Recon\"\n\t\tDescription: \"test\"\n\t}\n\tlobby\n\t{\n\t\tAllow Players Who Are In Queue: Yes\n\t\tMax Team 1 Players: 4\n\t}\n\tmodes\n\t{\n\t\tSkirmish\n\t\t{\n\t\t}\n\t}\n}\n",
+        );
+        assert!(source.contains("\"main\""), "{source}");
+        assert!(source.contains("\"lobby\""), "{source}");
+        assert!(
+            workshop_rs::roundtrip::equivalent(&program, &reparsed),
+            "{source}"
+        );
+    }
+
+    #[test]
+    fn reconstructs_mode_settings() {
+        let (source, program, reparsed) = settings_round_trip(
+            "settings\n{\n\tmodes\n\t{\n\t\tdisabled Skirmish\n\t\t{\n\t\t\tLimit Valid Control Points: Fourth\n\t\t\tRandom Hero Role Limit Per Team: 3\n\t\t\tenabled maps\n\t\t\t{\n\t\t\t\tWorkshop Chamber\n\t\t\t}\n\t\t}\n\t}\n}\n",
+        );
+        assert!(source.contains("\"skirmish\""), "{source}");
+        assert!(source.contains("\"enabled\": false"), "{source}");
+        assert!(source.contains("workshopChamber"), "{source}");
+        assert!(
+            workshop_rs::roundtrip::equivalent(&program, &reparsed),
+            "{source}"
+        );
+    }
+
+    #[test]
+    fn reconstructs_hero_settings() {
+        let (source, program, reparsed) = settings_round_trip(
+            "settings\n{\n\tmodes\n\t{\n\t\tSkirmish\n\t\t{\n\t\t}\n\t}\n\theroes\n\t{\n\t\tGeneral\n\t\t{\n\t\t\tAbility Cooldown Time: 137%\n\t\t\tBaptiste\n\t\t\t{\n\t\t\t\tAbility 1 Cooldown Time: 60%\n\t\t\t}\n\t\t}\n\t\tTeam 1\n\t\t{\n\t\t\tenabled heroes\n\t\t\t{\n\t\t\t\tBaptiste\n\t\t\t}\n\t\t}\n\t}\n}\n",
+        );
+        assert!(source.contains("\"allTeams\""), "{source}");
+        assert!(source.contains("\"baptiste\""), "{source}");
+        assert!(source.contains("\"enabledHeroes\""), "{source}");
+        assert!(
+            workshop_rs::roundtrip::equivalent(&program, &reparsed),
+            "{source}"
+        );
+    }
+
+    #[test]
+    fn reconstructs_empty_and_carried_settings_groups() {
+        let (source, program, reparsed) = settings_round_trip(
+            "settings\n{\n\tmodes\n\t{\n\t\tSkirmish\n\t\t{\n\t\t}\n\t}\n\tmain\n\t{\n\t\tsomeCustomKey: some value\n\t\tanotherKey:\n\t}\n}\n",
+        );
+        assert!(
+            source.contains("\"someCustomKey\": \"some value\""),
+            "{source}"
+        );
+        assert!(source.contains("\"anotherKey\": \"\""), "{source}");
+        assert!(
+            workshop_rs::roundtrip::equivalent(&program, &reparsed),
+            "{source}"
+        );
+    }
+
+    #[test]
+    fn reconstructs_extensions_as_directives() {
+        let workshop =
+            "settings\n{\n\textensions\n\t{\n\t\tBeam Effects\n\t\tProjectiles\n\t}\n}\n";
+        let program = parse_workshop(workshop);
+        let source = reconstruct(&program).expect("extensions reconstruct");
+        assert!(source.contains("#!extension beamEffects"), "{source}");
+        assert!(source.contains("#!extension projectiles"), "{source}");
+        let reparsed = compile_to_program(&source, "extensions.opy");
+        assert!(
+            workshop_rs::roundtrip::equivalent(&program, &reparsed),
+            "{source}"
+        );
+    }
+
+    #[test]
+    fn refuses_unemittable_settings_map_element() {
+        // The variant-qualified map spelling parses but the canonical
+        // emission table cannot resolve it; the refusal keeps the
+        // canonical span.
+        let program = parse_workshop(
+            "settings\n{\n\tmodes\n\t{\n\t\tSkirmish\n\t\t{\n\t\t\tenabled maps\n\t\t\t{\n\t\t\t\tWorkshop Chamber 972777519512064577\n\t\t\t}\n\t\t}\n\t}\n}\n",
+        );
+        let error = reconstruct(&program).expect_err("unresolvable map refuses");
+        assert!(
+            error
+                .issues
+                .iter()
+                .any(|issue| issue.code == "unsupported-settings" && issue.span.is_some()),
+            "{error:?}"
+        );
+    }
+
+    // Pinned upstream decompiler inputs (`Zezombye/overpy` v9.7.17,
+    // `src/tests/decompiler/`); see
+    // `crates/opy-rs/tests/fixtures/reconstruction/README.md` for attribution.
+
+    #[test]
+    fn reconstructs_pinned_shion_settings_fixture() {
+        let (source, program, reparsed) = settings_round_trip(include_str!(
+            "../../tests/fixtures/reconstruction/shionSettings.txt"
+        ));
+        assert!(source.contains("\"shion\""), "{source}");
+        assert!(source.contains("\"skirmish\": {}"), "{source}");
+        assert!(
+            workshop_rs::roundtrip::equivalent(&program, &reparsed),
+            "{source}"
+        );
+    }
+
+    #[test]
+    fn refuses_unemittable_map_in_pinned_custom_game_settings_fixture() {
+        // `customGameSettings.txt` carries the variant-qualified map element
+        // the canonical catalog cannot resolve; reconstruction must refuse
+        // rather than silently drop or rename it.
+        let program = parse_workshop(include_str!(
+            "../../tests/fixtures/reconstruction/customGameSettings.txt"
+        ));
+        let error = reconstruct(&program).expect_err("unresolvable map refuses");
+        assert!(
+            error
+                .issues
+                .iter()
+                .any(|issue| issue.code == "unsupported-settings" && issue.span.is_some()),
+            "{error:?}"
+        );
+    }
     #[test]
     fn each_player_filters_emit_team_and_slot_annotations() {
         let mut program = Program::new();
