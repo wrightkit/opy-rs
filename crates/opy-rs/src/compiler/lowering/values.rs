@@ -1021,6 +1021,27 @@ impl<'a> Lowering<'a> {
                 args,
                 ..
             } => {
+                // `l"...".format(...)` is the localized-string form upstream:
+                // it lowers to the canonical `string` call with a localized
+                // first argument and up to three replacement arguments, the
+                // same shape `String("...", ...)` parses to (issue #603).
+                if name == "format"
+                    && let Expr::StringModifier {
+                        modifier, value, ..
+                    } = receiver.as_ref()
+                    && modifier == "l"
+                {
+                    let localized = self.localized_string_value(value, span)?;
+                    if args.len() > 3 {
+                        return Err(self.unsupported(
+                            "localized format strings accept at most three arguments",
+                            span,
+                        ));
+                    }
+                    let mut call_args = vec![localized];
+                    call_args.extend(self.lower_values(args)?);
+                    return Ok(self.push_call("string", call_args));
+                }
                 if name == "getOppositeTeam" {
                     if !args.is_empty() {
                         return Err(self.unsupported("getOppositeTeam requires no arguments", span));
@@ -1355,6 +1376,14 @@ impl<'a> Lowering<'a> {
                 value,
                 span,
             } => {
+                // `l"..."` is the localized-string literal: it lowers to the
+                // canonical `string` call carrying a localized-string node,
+                // matching what `String("...")` parses to in Workshop source
+                // (issues #603).
+                if modifier == "l" {
+                    let localized = self.localized_string_value(value, *span)?;
+                    return Ok(self.push_call("string", vec![localized]));
+                }
                 if let Some(error) = format_arity_error(value, 0) {
                     return Err(self.unsupported(error, *span));
                 }
@@ -2035,6 +2064,23 @@ impl<'a> Lowering<'a> {
             "getPlayersOnHero" => "getNumberOfHeroes",
             _ => return None,
         })
+    }
+
+    /// Resolve an `l"..."` literal's text to a canonical localized-string
+    /// node: the literal spells the preset's `en-US` source spelling.
+    fn localized_string_value(
+        &mut self,
+        spelling: &str,
+        span: Option<HirSpan>,
+    ) -> Result<ValueId, IntegrationError> {
+        let entry = self
+            .compiler
+            .catalog
+            .resolve_localized_string(&Locale::new("en-US"), spelling)
+            .ok_or_else(|| {
+                self.unsupported(format!("unknown localized string '{spelling}'"), span)
+            })?;
+        Ok(self.push_value(Value::LocalizedString(entry.id.clone())))
     }
 
     fn lower_array_callback(

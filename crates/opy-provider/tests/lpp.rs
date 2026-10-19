@@ -1746,22 +1746,15 @@ const REFUSED_ARTIFACT: &str = concat!(
     "variables {\n",
     "    global:\n",
     "        0: g\n",
-    "    player:\n",
-    "        0: x\n",
     "}\n",
     "\n",
-    "rule (\"loop\") {\n",
+    "rule (\"main\") {\n",
     "    event {\n",
-    "        Ongoing - Each Player;\n",
-    "        All;\n",
-    "        All;\n",
+    "        Ongoing - Global;\n",
     "    }\n",
     "    actions {\n",
-    "        For Player Variable(Event Player, x, 0, 1, 1);\n",
-    "            Set Player Variable(Event Player, x, 0);\n",
-    "        End;\n",
-    "        Set Player Variable(All Players(Team 1), x, 0);\n",
-    "        Set Global Variable(g, Add(Global Variable(g), 1));\n",
+    "        Chase Global Variable At Rate(g, 100, 1, Destination And Duration);\n",
+    "        Set Player Variable At Index(All Players(All), x, 0, 0);\n",
     "    }\n",
     "}\n",
 );
@@ -1825,13 +1818,13 @@ fn reconstruct_refusal_carries_every_issue_code_and_span() {
     // clients can show each code with its span.
     assert_eq!(
         lpp["details"]["refusalCode"],
-        json!("unsupported-per-player-loop")
+        json!("unsupported-enum-domain-mismatch")
     );
     let message = response["error"]["message"].as_str().expect("message");
     for (code, span) in [
-        ("unsupported-per-player-loop", "at 15:9"),
-        ("unsupported-arbitrary-player-target", "at 18:9"),
-        ("unsupported-value-call", "at 19:32"),
+        ("unsupported-enum-domain-mismatch", "at 11:50"),
+        ("unsupported-value-call", "at 11:50"),
+        ("unsupported-action-call", "at 12:9"),
     ] {
         assert!(
             message

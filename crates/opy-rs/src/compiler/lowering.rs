@@ -29,16 +29,32 @@ const EMPTY_STRING_NAME: &str = "__emptyString__";
 enum Value {
     Number(f64),
     String(String),
+    /// Canonical localized-string preset id (Workshop `String` presets; the
+    /// OPY `l"..."` literal lowers here, wrapped in a `string` call).
+    LocalizedString(String),
     Bool(bool),
     Null,
     Array(Vec<ValueId>),
-    Vector { x: ValueId, y: ValueId, z: ValueId },
-    Enum { value_type: String, value: String },
+    Vector {
+        x: ValueId,
+        y: ValueId,
+        z: ValueId,
+    },
+    Enum {
+        value_type: String,
+        value: String,
+    },
     GlobalVariable(String),
-    PlayerVariable { player: ValueId, variable: String },
+    PlayerVariable {
+        player: ValueId,
+        variable: String,
+    },
     Subroutine(String),
     EventPlayer,
-    Call { name: String, args: Vec<ValueId> },
+    Call {
+        name: String,
+        args: Vec<ValueId>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -703,6 +719,7 @@ impl<'a> Lowering<'a> {
         match self.value(id) {
             Value::Number(value) => workshop_rs::Value::Number(*value),
             Value::String(value) => workshop_rs::Value::String(value.clone()),
+            Value::LocalizedString(value) => workshop_rs::Value::LocalizedString(value.clone()),
             Value::Bool(value) => workshop_rs::Value::Bool(*value),
             Value::Null => workshop_rs::Value::Null,
             Value::Array(elements) => workshop_rs::Value::Array(
@@ -1964,6 +1981,8 @@ fn modify_operator(op: &str) -> Option<(ModifyOp, &'static str)> {
         "/" => (ModifyOp::Divide, "divide"),
         "%" => (ModifyOp::Modulo, "modulo"),
         "**" => (ModifyOp::RaiseToPower, "raiseToPower"),
+        "min" => (ModifyOp::Min, "min"),
+        "max" => (ModifyOp::Max, "max"),
         _ => return None,
     })
 }

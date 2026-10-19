@@ -126,6 +126,17 @@ impl Lowerer {
                 interpolations,
                 span,
             } => {
+                // Upstream accepts `l` only on its own; combinations like
+                // `fl"..."` or `lw"..."` are rejected outright.
+                if modifier.contains('l') && modifier != "l" {
+                    self.error_at(
+                        "invalid-string-modifier",
+                        "the 'l' string modifier cannot be combined with other modifiers"
+                            .to_string(),
+                        *span,
+                    );
+                    return HirExpr::Null { span: None };
+                }
                 if modifier.contains('f')
                     && let Some(format_text) = format_text
                 {
@@ -1142,6 +1153,13 @@ impl Lowerer {
                     }
                 },
             }
+        }
+
+        // `unbounded` entries accept any positional count (`.format`
+        // placeholders); their overflow binds as plain trailing arguments
+        // instead of re-associating or rejecting (issue #603).
+        if entry.unbounded {
+            bound.extend(std::mem::take(&mut overflow));
         }
 
         // Variadic overflow re-associates into nested two-argument calls —
