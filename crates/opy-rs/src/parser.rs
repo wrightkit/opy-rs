@@ -1091,6 +1091,25 @@ mod tests {
     }
 
     #[test]
+    fn variable_declarations_keep_pinned_index_and_initializer() {
+        let program = parse_ok("globalvar a 3 = 5\nplayervar b 7 = 9\nglobalvar c = 1\n");
+        let fields: Vec<_> = program
+            .declarations
+            .iter()
+            .map(|decl| match decl {
+                Decl::GlobalVariable {
+                    index, initializer, ..
+                }
+                | Decl::PlayerVariable {
+                    index, initializer, ..
+                } => (*index, initializer.is_some()),
+                _ => panic!("expected variable declaration"),
+            })
+            .collect();
+        assert_eq!(fields, vec![(Some(3), true), (Some(7), true), (None, true)]);
+    }
+
+    #[test]
     fn macro_and_enum_redeclarations_are_checked_at_ast_surfaces() {
         let text = "enum Kind:\n    First\n    First\nmacro helper():\n    pass\nmacro helper():\n    pass\n";
         let errors = parse_err(text);

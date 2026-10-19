@@ -78,6 +78,7 @@ REFERENCE_FRONTIER_RULES = (
         "workshop-emission",
     ),
     ("must be an integer", "lowering", "workshop-emission"),
+    ("must be from 0 to 127", "lowering", "index-out-of-range"),
     ("in custom game settings, expected", "semantic", "settings-expression"),
 )
 NATIVE_FRONTIER_STAGES = {

@@ -26,7 +26,8 @@
 | --- | --- | --- |
 | `=`, `+=`, `-=`, `*=`, `/=`, `%=`, `**=` | ✅ Supported | Global, player and indexed targets use their distinct lowering rules. |
 | `min=` and `max=` modifications | ✅ Supported | The operation is checked and lowered as a canonical variable modification. |
-| `globalvar` and `playervar`, with explicit or implicit indices | ✅ Supported | Initializers and zero defaults follow the source contract. |
+| `globalvar` and `playervar`, with explicit or implicit indices | ✅ Supported | Initializers and zero defaults follow the source contract; an explicit index may be combined with an initializer. Explicit indices outside 0–127 are rejected at the pinned OverPy boundary. Non-decimal index spellings the reference's `parseInt` accepts (`0x10`, `3x`) are a recorded acceptance gap (`synthetic/variable-index-spelling-gap` fixture). |
+| `subroutine` declarations, with explicit or implicit indices | ✅ Supported | An explicit index outside 0–127 is rejected at the pinned OverPy boundary. Tokens after `=` on the declaration line are dropped without being parsed, matching the pinned reference. |
 | `enum` declarations | ✅ Supported | See the domain rules in [callables and domains](callables-and-domains.md). |
 | Object, function and member `macro` declarations | ✅ Supported | Defaults, keyword arguments and member receivers are checked separately. |
 
