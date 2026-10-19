@@ -99,6 +99,25 @@ jobs:
             target/opy-rs-structural-gate-report.json
           if-no-files-found: ignore
 
+  reconstruction-corpus:
+    name: Reconstruction corpus gate
+    needs: rust-quality
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Rust
+        uses: wrightkit/.github/.github/actions/setup-rust@main
+        with:
+          toolchain: stable
+          cache-shared-key: linux-quality
+          cache-targets: false
+
+      - name: Run upstream decompiler corpus through reconstruction
+        run: cargo test --locked -p opy-rs --test reconstruction_corpus -- --nocapture
+
   macro-runtime-ports:
     name: JS runtime on ${{ matrix.os }}
     needs: rust-quality
