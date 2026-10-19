@@ -376,13 +376,18 @@ The starting corpus is upstream's decompiler test set: the 16 pinned inputs
 under `src/tests/decompiler/*.txt` at the pinned content commit —
 `customGameSettings`, `shionSettings`, `mysteryUltimates`, and the 13 `z_*`
 full-gamemode programs — each with its pinned `results/*.opy` upstream
-output. A harness that parses each input through `workshop_rs::parser`,
-reconstructs, recompiles, and compares under the relaxed comparator is a
-follow-up; the fixtures enter only through the repository's attribution and
-fixture policy. The two settings inputs landed first, under
+output. The corpus gate lives in
+`crates/opy-rs/tests/reconstruction_corpus.rs` with fixtures under
 `crates/opy-rs/tests/fixtures/reconstruction/` (attribution in its
-`README.md`): `shionSettings` round-trips and `customGameSettings` pins the
-variant-qualified-map refusal.
+`README.md`): each input is parsed through `workshop_rs::parser`,
+reconstructed, recompiled, and compared under `workshop_rs::compare`, and
+its recorded outcome in `classification.json` must hold —
+`equivalent`, `refused` with codes from the refusal inventory, or
+`unparseable` while a `workshop-rs` parse gap (below) keeps the canonical
+parser from reading the input. Thirteen `z_*` inputs are currently
+`unparseable`; the remainder classify as `shionSettings` equivalent,
+`customGameSettings` refused on the variant-qualified-map refusal, and
+`mysteryUltimates` refused on recorded codes.
 
 Recorded exception classes against upstream input coverage (each names its
 justification; "extension" rows are contracted coverage, "refusal" rows are
@@ -527,6 +532,20 @@ Contract-level only; no OPY-local substitutes are introduced.
    keeps the variant id in the model. This is
    `wrightkit/workshop-rs#518`; reconstruction refuses such elements
    until a canonical representation exists.
+3. **`Enabled`/`Disabled` settings boolean spellings** — the canonical
+   parser accepts only `On`/`Off`/`Yes`/`No` boolean values, but upstream
+   decompiler corpus inputs spell boolean settings `Enabled`/`Disabled`
+   (e.g. `modes.general`, `lobby` entries), which upstream maps through
+   `customGameSettingsKw` regardless of the declared boolean kind. Nine
+   `z_*` corpus inputs are `unparseable` for this reason; accepting the
+   spellings is a `workshop-rs` parser/schema change, not an OPY-side
+   workaround.
+4. **`^`/`^=` raise-to-power operators** — the canonical lexer rejects
+   `^`, which upstream's `workshopToAst` reads as `__raiseToPower__` in
+   Workshop rule text. Four `z_*` corpus inputs (`z_basewars`,
+   `z_junkensteinsvictory`, `z_lootquest`, `z_uno`) are `unparseable` for
+   this reason; the operator belongs in `workshop-rs`'s Workshop text
+   grammar.
 
 If implementation uncovers a genuinely missing canonical Workshop
 capability beyond this (for example a canonical operation reconstruction
@@ -548,8 +567,8 @@ recorded against the boundary contract, not approximated locally.
   test naming its code; each extension has a round-trip test once
   implemented.
 - The upstream decompiler corpus harness (the 16 pinned inputs) is the
-  coverage gate once landed; recorded exceptions are the only permitted
-  failures in it.
+  coverage gate (`crates/opy-rs/tests/reconstruction_corpus.rs`); recorded
+  exceptions are the only permitted failures in it.
 
 ## Recorded follow-up work
 
@@ -558,7 +577,9 @@ Decomposed only after this contract is reviewed and merged:
 1. Coverage extensions per the mapping tables and exception list.
 2. ~~`workshop-rs` relaxed behavior comparator~~ — landed (workshop-rs
    ≥ 1.20).
-3. Upstream decompiler corpus harness over the 16 pinned inputs.
+3. ~~Upstream decompiler corpus harness over the 16 pinned inputs~~ —
+   landed (`wrightkit/opy-rs#604`): `reconstruction_corpus.rs` +
+   `fixtures/reconstruction/classification.json`.
 4. `opy-provider` `lpp/reconstruct` advertisement so `wright convert
    --target opy` works — landed: the provider advertises `reconstruct`
    and serves this contract's bounded surface for its emitted artifact
