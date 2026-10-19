@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.17](https://github.com/wrightkit/opy-rs/compare/opy-cli-v0.3.16...opy-cli-v0.3.17) - 2026-10-19
+
+### Other
+
+- share workshop-rs's built-in catalog cache ([#592](https://github.com/wrightkit/opy-rs/pull/592))
+
 ## [0.3.14](https://github.com/wrightkit/opy-rs/compare/opy-cli-v0.3.13...opy-cli-v0.3.14) - 2026-10-16
 
 ### Other
