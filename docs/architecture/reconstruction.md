@@ -5,7 +5,9 @@ canonical public `workshop_rs::Program` model. It records the accepted
 supported subset, the refusal model, the semantic-equivalence criteria, the
 input-coverage bar against the pinned upstream decompiler, and the recorded
 exceptions and follow-up work. Issue `wrightkit/opy-rs#254`; the owner
-decisions of 2026-10-18 recorded there are the authority for this contract.
+decisions of 2026-10-18 recorded there, amended 2026-10-19 (initializer rules
+keep their program position, `wrightkit/opy-rs#597`), are the authority for
+this contract.
 
 ## Purpose
 
@@ -87,7 +89,7 @@ be required by the contract.
 
 The comparator checks behavior-relevant structure:
 
-- rule order, modulo the canonical synthesized placements below;
+- rule order, except the relative order of subroutine-event rules (below);
 - rule events, including team/hero/slot filters;
 - enabled rule conditions, in order;
 - actions and values, recursively, with variable/subroutine links resolved
@@ -105,7 +107,7 @@ observable behavior. A difference outside this list is a defect.
 | Rule names | Rule names are display metadata; nothing dispatches on them. |
 | Variable and subroutine names | Identity is the declaration index; every reference rebinds through the declared index. Consistent renames (e.g. identifier mangling) are unobservable. |
 | Declaration table order | Only the name → index binding matters; table position carries no execution effect. |
-| Rule order of synthesized-position rules | Initializer rules and subroutine-body rules occupy canonical positions the frontend regenerates (initializers first, subroutine bodies in subroutine-table order); subroutine rules dispatch by call, not by program order. These rules compare at their canonical positions, not at absolute program index. |
+| Relative order of subroutine-event rules | Subroutine-event rules run only when called, never by program position. |
 | `Set x = x <op> v` ↔ `Modify x <op> v` | The frontend normalizes the self-referential Set to the Modify; both spellings produce the same canonical action. |
 | `eachPlayer` event ↔ `eachPlayer` + `All`/`All` filters | The unfiltered event and the all-filters form select the same players (existing `equivalent` behavior, retained). |
 | Disabled rules, conditions, and actions | Disabled constructs never execute. They are reconstructed for fidelity (see the mapping table) but carry no observable weight. |
@@ -114,16 +116,21 @@ observable behavior. A difference outside this list is a defect.
 
 Algebraic or cost identities beyond this list — `Add(x, 0)` ≡ `x`,
 `Add(x, y)` ≡ `Add(y, x)`, `Set` ordering across independent variables — are
-**not** allowed differences. Reconstruction must not require the comparator
-to reason about evaluation equivalences; see the `#!optimizeStrict`
-requirement below.
+**not** allowed differences. Neither is relocating a non-subroutine rule,
+including an initializer rule: within one tick the execution order of Global
+Ongoing rules is observable, so moving an initializer rule to the front can
+change behavior (owner decision 2026-10-19). Reconstruction must not require
+the comparator to reason about evaluation equivalences; see the
+`#!optimizeStrict` requirement below.
 
 ### Comparator ownership
 
 The comparator belongs to `workshop-rs`: it judges canonical Workshop
-meaning and must be usable by every source-language implementation. If no
-such relaxed comparison exists there, that is a `workshop-rs` follow-up —
-this contract does not license an OPY-local comparator. Until it exists,
+meaning and must be usable by every source-language implementation. The
+compared structure and allowed differences above are the
+`wrightkit/workshop-rs#490` contract. If no such relaxed comparison exists
+there, that is a `workshop-rs` follow-up — this contract does not license an
+OPY-local comparator. Until it exists,
 `workshop_rs::roundtrip::equivalent` remains the gate for the subset where
 strict identity holds, and equivalence claims for the wider contract are
 deferred rather than weakened into text comparisons.
@@ -164,7 +171,7 @@ the coverage section).
 | Rule with zero actions | Inert; may be omitted or emitted as `@Delimiter` | supported (omitted) |
 | Subroutine rule with zero actions | `def` body needs a statement (`pass`) to parse | extension |
 | Canonical initializer rules (frontend-shaped name, event, all-Set, table order) | Declaration initializers | supported |
-| Non-frontend-shaped initializer-named rules | Ordinary `rule` emission | extension (relaxes `unsupported-init-rule` for shape mismatches that the ordinary-rule path reproduces) |
+| Initializer-named rules not in the frontend's canonical leading position, or not otherwise frontend-shaped | Ordinary `rule` emission at the rule's original position — initializer rules are never relocated | extension (relaxes `unsupported-init-rule` for position or shape mismatches that the ordinary-rule path reproduces) |
 
 ### Conditions
 
@@ -434,7 +441,8 @@ Contract-level only; no OPY-local substitutes are introduced.
 1. **Relaxed behavior comparator** — the equivalence contract above
    requires a canonical Workshop comparison primitive that `workshop-rs`
    does not currently expose (`roundtrip::equivalent` is strict
-   identity). This is a `workshop-rs` follow-up.
+   identity). This is `wrightkit/workshop-rs#490`, a `workshop-rs`
+   follow-up.
 
 If implementation uncovers a genuinely missing canonical Workshop
 capability beyond this (for example a canonical operation reconstruction
