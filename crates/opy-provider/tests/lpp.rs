@@ -131,6 +131,7 @@ fn entry_check_loads_the_owner_project_closure_without_documents() {
     assert_eq!(initialized["result"]["protocolVersion"], "1.1");
     assert_eq!(initialized["result"]["capabilities"]["check"], true);
     assert_eq!(initialized["result"]["capabilities"]["compile"], true);
+    assert_eq!(initialized["result"]["capabilities"]["reconstruct"], true);
     assert_eq!(
         initialized["result"]["capabilities"]["projectLoading"],
         true
@@ -1385,11 +1386,12 @@ fn lifecycle_and_capability_failures_are_structured() {
     );
 
     session.initialize();
+    // `lpp/lookup` is negotiated at LPP 1.5; the 1.1 session does not offer it.
     let unavailable = session.request(json!({
         "jsonrpc": "2.0",
         "id": 2,
-        "method": "lpp/reconstruct",
-        "params": {},
+        "method": "lpp/lookup",
+        "params": { "languageId": "opy" },
     }));
     assert_eq!(
         unavailable["error"]["data"]["lpp"]["kind"],
@@ -1397,7 +1399,7 @@ fn lifecycle_and_capability_failures_are_structured() {
     );
     assert_eq!(
         unavailable["error"]["data"]["lpp"]["details"]["capability"],
-        "reconstruct"
+        "lookup"
     );
     session.shutdown();
 }
@@ -1736,6 +1738,172 @@ fn macro_definition_spans_stay_in_the_shared_lowering() {
         .action_span(0, 0)
         .expect("expanded action span");
     assert_eq!(span.start.line, 4);
+}
+
+/// A canonical Workshop program outside the OPY reconstruction surface: three
+/// distinct constructs refuse, each with a stable code and a source span.
+const REFUSED_ARTIFACT: &str = concat!(
+    "variables {\n",
+    "    player:\n",
+    "        0: x\n",
+    "}\n",
+    "\n",
+    "disabled rule (\"off\") {\n",
+    "    event {\n",
+    "        Ongoing - Global;\n",
+    "    }\n",
+    "    actions {\n",
+    "        Abort;\n",
+    "    }\n",
+    "}\n",
+    "\n",
+    "rule (\"loop\") {\n",
+    "    event {\n",
+    "        Ongoing - Each Player;\n",
+    "        All;\n",
+    "        All;\n",
+    "    }\n",
+    "    actions {\n",
+    "        For Player Variable(Event Player, x, 0, 1, 1);\n",
+    "            Set Player Variable(Event Player, x, 0);\n",
+    "        End;\n",
+    "        disabled Abort;\n",
+    "    }\n",
+    "}\n",
+);
+
+fn reconstruct_artifact(session: &mut Session, artifact: Value) -> Value {
+    session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "lpp/reconstruct",
+        "params": { "artifact": artifact },
+    }))
+}
+
+#[test]
+fn reconstruct_is_advertised_and_returns_opy_for_each_emitted_artifact_format() {
+    let mut session = Session::spawn();
+    let initialize = session.initialize_version("1.4");
+    assert_eq!(
+        initialize["result"]["capabilities"]["reconstruct"],
+        json!(true)
+    );
+
+    // `lpp/reconstruct` inverts `lpp/compile` for every artifact format the
+    // provider can emit: the same OPY source comes back either way.
+    let text = compile_entry(&mut session, BASIC_RULE, Some(json!([TEXT_V1, MAPPED_V1])))["result"]
+        ["artifact"]
+        .clone();
+    assert_eq!(text["format"], json!(TEXT_V1));
+    let mapped =
+        compile_entry(&mut session, BASIC_RULE, Some(json!([MAPPED_V1])))["result"]["artifact"]
+            .clone();
+    assert_eq!(mapped["format"], json!(MAPPED_V1));
+
+    let from_text = reconstruct_artifact(&mut session, text);
+    let source = from_text["result"]["source"]
+        .as_str()
+        .unwrap_or_else(|| panic!("reconstruct returns OPY source: {from_text}"));
+    assert!(source.contains("rule \"setup\""), "{source}");
+    assert!(source.contains("@Event global"), "{source}");
+    assert!(source.contains("disableInspector()"), "{source}");
+
+    let from_mapped = reconstruct_artifact(&mut session, mapped);
+    assert_eq!(from_mapped["result"]["source"], json!(source));
+    session.shutdown();
+}
+
+#[test]
+fn reconstruct_refusal_carries_every_issue_code_and_span() {
+    let mut session = Session::spawn();
+    session.initialize_version("1.4");
+    let response = reconstruct_artifact(
+        &mut session,
+        json!({ "format": TEXT_V1, "content": REFUSED_ARTIFACT }),
+    );
+    assert_eq!(response["error"]["code"], json!(-32000));
+    let lpp = &response["error"]["data"]["lpp"];
+    assert_eq!(lpp["kind"], json!("refusal"));
+    // Refusal `details` is confined to `refusalCode` plus spec-owned echo
+    // keys (LPP §18.3), so it names the first issue's stable code; `message`
+    // carries every issue as `<code>: <message> at <line>:<column>` so
+    // clients can show each code with its span.
+    assert_eq!(
+        lpp["details"]["refusalCode"],
+        json!("unsupported-disabled-rule")
+    );
+    let message = response["error"]["message"].as_str().expect("message");
+    for (code, span) in [
+        ("unsupported-disabled-rule", "at 6:1"),
+        ("unsupported-per-player-loop", "at 22:9"),
+        ("unsupported-disabled-action", "at 25:18"),
+    ] {
+        assert!(
+            message
+                .lines()
+                .any(|line| line.contains(&format!("{code}: ")) && line.ends_with(span)),
+            "'{code}' issue at {span} missing from refusal message: {message}"
+        );
+    }
+    session.shutdown();
+}
+
+#[test]
+fn reconstruct_rejects_unknown_formats_and_malformed_artifacts() {
+    let mut session = Session::spawn();
+    session.initialize_version("1.4");
+
+    // A well-formed envelope in a format this provider does not emit is the
+    // §11.3 refusal, echoing `format` as the only spec-owned detail key.
+    let unknown = reconstruct_artifact(
+        &mut session,
+        json!({ "format": "x-other/artifact-v1", "content": "payload" }),
+    );
+    assert_eq!(unknown["error"]["code"], json!(-32000));
+    assert_eq!(
+        unknown["error"]["data"]["lpp"],
+        json!({
+            "kind": "refusal",
+            "details": {
+                "refusalCode": "reconstruct.artifactFormatUnsupported",
+                "format": "x-other/artifact-v1",
+            },
+        })
+    );
+
+    // A malformed payload in a supported format is `invalidArtifact`: the
+    // Workshop text cannot be parsed, and the mapped payload is not JSON.
+    let malformed_text = reconstruct_artifact(
+        &mut session,
+        json!({ "format": TEXT_V1, "content": "rule (broken" }),
+    );
+    assert_eq!(
+        malformed_text["error"]["data"]["lpp"]["kind"],
+        json!("invalidArtifact")
+    );
+    assert!(
+        malformed_text["error"]["data"]["lpp"]["details"]["reason"].is_string(),
+        "invalidArtifact carries a reason: {malformed_text}"
+    );
+    let malformed_mapped = reconstruct_artifact(
+        &mut session,
+        json!({ "format": MAPPED_V1, "content": "not json" }),
+    );
+    assert_eq!(
+        malformed_mapped["error"]["data"]["lpp"]["kind"],
+        json!("invalidArtifact")
+    );
+
+    // An envelope that does not match the §11.1 schema is Invalid params.
+    let missing_artifact = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 4,
+        "method": "lpp/reconstruct",
+        "params": {},
+    }));
+    assert_eq!(missing_artifact["error"]["code"], json!(-32602));
+    session.shutdown();
 }
 
 const RENAME_MAIN_URI: &str = "file:///project/main.opy";

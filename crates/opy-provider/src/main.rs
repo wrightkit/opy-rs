@@ -18,6 +18,7 @@ use opy_rs::{CompileDiagnostic, Compiler};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
+use workshop_rs::catalog::Catalog;
 use workshop_rs::program::MappedText;
 
 mod edits;
@@ -52,6 +53,7 @@ fn capability_enabled(capability: &str) -> bool {
         capability,
         "check"
             | "compile"
+            | "reconstruct"
             | "projectLoading"
             | "sourceIdentity"
             | "symbols"
@@ -71,7 +73,7 @@ fn capabilities_json(protocol_version: &str) -> Value {
     let mut capabilities = json!({
         "check": true,
         "compile": true,
-        "reconstruct": false,
+        "reconstruct": true,
         "symbols": true,
         "definition": true,
         "references": true,
@@ -279,6 +281,19 @@ struct ResolveIdsParams {
     enums: BTreeMap<String, Vec<String>>,
 }
 
+/// `lpp/reconstruct` params (`analysis-and-compilation.md` §11.1): the
+/// artifact envelope is opaque — `content` is interpreted by `format` alone.
+#[derive(Debug, Deserialize)]
+struct ReconstructParams {
+    artifact: ReconstructArtifact,
+}
+
+#[derive(Debug, Deserialize)]
+struct ReconstructArtifact {
+    format: String,
+    content: String,
+}
+
 /// The bound applied when an `lpp/lookup` request omits `limit`.
 const DEFAULT_LOOKUP_LIMIT: u64 = 20;
 
@@ -479,6 +494,7 @@ impl Server {
         let result = match method {
             "lpp/check" => self.check(params),
             "lpp/compile" => self.compile(params),
+            "lpp/reconstruct" => reconstruct(params),
             "lpp/symbols" => navigation::symbols(params),
             "lpp/definition" => navigation::definition(params),
             "lpp/references" => navigation::references(params),
@@ -936,6 +952,93 @@ fn accepted_artifact_formats(
         })
         .ok_or_else(invalid)?;
     Ok(Some(formats))
+}
+
+/// `lpp/reconstruct` (`analysis-and-compilation.md` §11): the inverse of
+/// `lpp/compile` for the artifact formats this provider emits.
+/// `workshop-rs/mapped-text-v1` reconstructs from its `text` member — issue
+/// spans are artifact-text provenance for every accepted format, so the
+/// optional source map is left unapplied (reconstruction must never depend
+/// on metadata the canonical model does not guarantee).
+///
+/// Failure classes follow §11.3: an unknown format is the
+/// `reconstruct.artifactFormatUnsupported` refusal (its `details.format`
+/// echoes the request); a malformed payload in a supported format is
+/// `invalidArtifact`; a parsed program outside the reconstruction surface is
+/// a refusal. §18.3 confines refusal `details` to `refusalCode` plus
+/// spec-owned echo keys, so every issue code and span is carried in
+/// `message` — `refusalCode` names the first (primary) issue's stable code.
+fn reconstruct(value: Value) -> Result<Value, HandlerError> {
+    let params: ReconstructParams =
+        serde_json::from_value(value).map_err(|_| HandlerError::invalid_params())?;
+    let text = match params.artifact.format.as_str() {
+        WORKSHOP_ARTIFACT_FORMAT => params.artifact.content,
+        MAPPED_ARTIFACT_FORMAT => {
+            MappedText::from_json(&params.artifact.content)
+                .map_err(|error| invalid_artifact(error.to_string()))?
+                .text
+        }
+        format => {
+            return Err(HandlerError::refusal(
+                "reconstruct.artifactFormatUnsupported",
+                json!({ "format": format }),
+                format!("artifact format is not supported for reconstruction: {format}"),
+            ));
+        }
+    };
+    let catalog = Catalog::builtin_ref().map_err(|error| HandlerError::Lpp {
+        kind: "providerFailure",
+        details: json!({ "code": "catalog-init" }),
+        message: format!("cannot load the Workshop catalog: {error}"),
+    })?;
+    // The artifact envelope carries no locale, so the text's client language
+    // is detected — the same `resolve_locale` the client uses — to accept an
+    // artifact in any locale this provider's `lpp/compile` can emit.
+    let locale = workshop_rs::detect::resolve_locale(&text, catalog, None)
+        .map_err(|error| invalid_artifact(error.to_string()))?;
+    let program = workshop_rs::parser::parse(&text, catalog, &locale)
+        .map_err(|error| invalid_artifact(error.to_string()))?;
+    match opy_rs::reconstruct::reconstruct(&program) {
+        Ok(source) => Ok(json!({ "source": source })),
+        Err(error) => {
+            // `manifest-error`/`catalog-error` are environment failures, not
+            // declines of the artifact (the contract's guard classes); they
+            // report as provider failures rather than refusals.
+            if error
+                .issues
+                .iter()
+                .all(|issue| matches!(issue.code, "manifest-error" | "catalog-error"))
+            {
+                return Err(HandlerError::Lpp {
+                    kind: "providerFailure",
+                    details: json!({
+                        "code": issue_code(&error).unwrap_or("environment")
+                    }),
+                    message: error.to_string(),
+                });
+            }
+            Err(HandlerError::refusal(
+                issue_code(&error).unwrap_or("reconstruct.unsupported"),
+                json!({}),
+                format!("reconstruct refused: {error}"),
+            ))
+        }
+    }
+}
+
+/// The stable code of the first issue a `ReconstructError` carries; the
+/// error is only ever constructed with at least one issue.
+fn issue_code(error: &opy_rs::reconstruct::ReconstructError) -> Option<&'static str> {
+    error.issues.first().map(|issue| issue.code)
+}
+
+/// A malformed artifact payload in a supported format (`§11.3`).
+fn invalid_artifact(reason: String) -> HandlerError {
+    HandlerError::Lpp {
+        kind: "invalidArtifact",
+        details: json!({ "reason": reason }),
+        message: format!("invalid artifact: {reason}"),
+    }
 }
 
 /// The first accepted format this provider produces; `None` when none is producible.
@@ -1922,6 +2025,7 @@ mod tests {
         assert_eq!(response["result"]["languages"][0]["id"], LANGUAGE_ID);
         assert_eq!(response["result"]["capabilities"]["check"], true);
         assert_eq!(response["result"]["capabilities"]["compile"], true);
+        assert_eq!(response["result"]["capabilities"]["reconstruct"], true);
         assert_eq!(response["result"]["capabilities"]["symbols"], true);
         assert_eq!(response["result"]["capabilities"]["definition"], true);
         assert_eq!(response["result"]["capabilities"]["references"], true);

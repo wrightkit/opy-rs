@@ -474,9 +474,10 @@ Decomposed only after this contract is reviewed and merged:
 2. `workshop-rs` relaxed behavior comparator.
 3. Upstream decompiler corpus harness over the 16 pinned inputs.
 4. `opy-provider` `lpp/reconstruct` advertisement so `wright convert
-   --target opy` works (`wrightkit/wright#736`, `wrightkit/skills#20`
-   track the current doc drift; the provider advertises `reconstruct:
-   false` today).
+   --target opy` works — landed: the provider advertises `reconstruct`
+   and serves this contract's bounded surface for its emitted artifact
+   formats (`wrightkit/wright#736`, `wrightkit/skills#20` track the
+   remaining client-side doc drift).
 5. opy-rs grammar parity decisions for `subroutine name <index>` and
    `globalvar/playervar name <index> = <init>` (upstream accepts both;
    needed only if the recorded refusals are lifted).
