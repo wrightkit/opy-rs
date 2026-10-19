@@ -63,7 +63,7 @@ pub fn reconstruct(program: &Program) -> Result<String, ReconstructError> {
             });
         }
     };
-    let catalog = match crate::enums::builtin_catalog() {
+    let catalog = match Catalog::builtin_ref() {
         Ok(catalog) => catalog,
         Err(error) => {
             return Err(ReconstructError {

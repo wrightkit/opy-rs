@@ -479,7 +479,7 @@ pub fn lookup(query: &LookupQuery) -> LookupOutcome {
             );
         }
     }
-    let Ok(catalog) = crate::enums::builtin_catalog() else {
+    let Ok(catalog) = Catalog::builtin_ref() else {
         return unsupported("vocabulary data (manifest or catalog) is not bundled");
     };
     let Ok(manifest) = Manifest::builtin() else {
@@ -614,7 +614,7 @@ const SYNTAX_SPELLINGS: &[(&str, &str)] = &[
 /// unknown.
 pub fn call_spelling(canonical_id: &str) -> Option<&'static str> {
     let manifest = Manifest::builtin().ok()?;
-    let catalog = crate::enums::builtin_catalog().ok()?;
+    let catalog = Catalog::builtin_ref().ok()?;
     // A manifest entry's canonical identity is its `catalogId`, or — when
     // it declares none — its own `id` when that id is a canonical call
     // (`startRule`); a `catalogId`-free source name that is not a canonical
@@ -648,7 +648,7 @@ pub fn call_spelling(canonical_id: &str) -> Option<&'static str> {
 /// and members the reference does not spell in source, and for OPY-only
 /// members with no canonical id.
 pub fn enum_member_spelling<'a>(domain: &'a str, member: &'a str) -> Option<&'a str> {
-    let catalog = crate::enums::builtin_catalog().ok()?;
+    let catalog = Catalog::builtin_ref().ok()?;
     let enum_domain = catalog.enum_domain(domain)?;
     if !enum_domain
         .members
