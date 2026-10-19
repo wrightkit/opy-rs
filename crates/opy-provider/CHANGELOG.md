@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.20](https://github.com/wrightkit/opy-rs/compare/opy-provider-v0.3.19...opy-provider-v0.3.20) - 2026-10-19
+
+### Added
+
+- *(opy)* reconstruct Workshop syntax-produced actions and values ([#618](https://github.com/wrightkit/opy-rs/pull/618))
+- *(reconstruct)* events, disabled constructs, and rule placement ([#615](https://github.com/wrightkit/opy-rs/pull/615))
+- *(compiler)* reconstruct strict preamble, sorted indices, and name mangling ([#614](https://github.com/wrightkit/opy-rs/pull/614))
+
 ## [0.3.19](https://github.com/wrightkit/opy-rs/compare/opy-provider-v0.3.18...opy-provider-v0.3.19) - 2026-10-19
 
 ### Added
