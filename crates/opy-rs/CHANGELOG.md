@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.18](https://github.com/wrightkit/opy-rs/compare/v0.3.17...v0.3.18) - 2026-10-19
+
+### Other
+
+- *(macro-js)* strengthen cross-invocation isolation coverage ([#607](https://github.com/wrightkit/opy-rs/pull/607))
+- *(lowering)* index optimization directives per file ([#606](https://github.com/wrightkit/opy-rs/pull/606))
+
 ## [0.3.17](https://github.com/wrightkit/opy-rs/compare/v0.3.16...v0.3.17) - 2026-10-19
 
 ### Other
