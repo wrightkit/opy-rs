@@ -1744,17 +1744,10 @@ fn macro_definition_spans_stay_in_the_shared_lowering() {
 /// distinct constructs refuse, each with a stable code and a source span.
 const REFUSED_ARTIFACT: &str = concat!(
     "variables {\n",
+    "    global:\n",
+    "        0: g\n",
     "    player:\n",
     "        0: x\n",
-    "}\n",
-    "\n",
-    "disabled rule (\"off\") {\n",
-    "    event {\n",
-    "        Ongoing - Global;\n",
-    "    }\n",
-    "    actions {\n",
-    "        Abort;\n",
-    "    }\n",
     "}\n",
     "\n",
     "rule (\"loop\") {\n",
@@ -1767,7 +1760,8 @@ const REFUSED_ARTIFACT: &str = concat!(
     "        For Player Variable(Event Player, x, 0, 1, 1);\n",
     "            Set Player Variable(Event Player, x, 0);\n",
     "        End;\n",
-    "        disabled Abort;\n",
+    "        Set Player Variable(All Players(Team 1), x, 0);\n",
+    "        Set Global Variable(g, Add(Global Variable(g), 1));\n",
     "    }\n",
     "}\n",
 );
@@ -1831,13 +1825,13 @@ fn reconstruct_refusal_carries_every_issue_code_and_span() {
     // clients can show each code with its span.
     assert_eq!(
         lpp["details"]["refusalCode"],
-        json!("unsupported-disabled-rule")
+        json!("unsupported-per-player-loop")
     );
     let message = response["error"]["message"].as_str().expect("message");
     for (code, span) in [
-        ("unsupported-disabled-rule", "at 6:1"),
-        ("unsupported-per-player-loop", "at 22:9"),
-        ("unsupported-disabled-action", "at 25:18"),
+        ("unsupported-per-player-loop", "at 15:9"),
+        ("unsupported-arbitrary-player-target", "at 18:9"),
+        ("unsupported-value-call", "at 19:32"),
     ] {
         assert!(
             message

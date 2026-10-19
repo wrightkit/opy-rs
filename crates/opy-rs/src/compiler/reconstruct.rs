@@ -153,9 +153,13 @@ struct Emitter<'a> {
 
 type IndexedRule<'a> = (usize, &'a Rule);
 
+/// The declaration initializers a canonical initializer rule carries:
+/// declaration table position → (value, provenance span of the Set's value).
+type Initializers = std::collections::HashMap<usize, (Value, Option<Span>)>;
+
 struct RuleLayout<'a> {
-    global_init: Option<IndexedRule<'a>>,
-    player_init: Option<IndexedRule<'a>>,
+    global_init: Option<Initializers>,
+    player_init: Option<Initializers>,
     sub_rules: Vec<IndexedRule<'a>>,
     normal_rules: Vec<IndexedRule<'a>>,
 }
@@ -224,14 +228,6 @@ impl<'a> Emitter<'a> {
             message: message.into(),
             span,
         });
-    }
-
-    fn report_disabled_rule(&mut self, rule_index: usize, name: &str) {
-        self.issue(
-            "unsupported-disabled-rule",
-            format!("rule '{name}' is disabled; the OPY surface cannot express it"),
-            self.program.rule_span(rule_index),
-        );
     }
 
     fn validate_tables(&mut self) {
@@ -340,10 +336,14 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// The canonical rule layout: optional leading initializer rules, then
-    /// all subroutine-body rules in subroutine table order, then the normal
-    /// rules. Any other arrangement cannot be reproduced by the frontend's
-    /// deterministic re-lowering and is rejected.
+    /// The canonical rule layout: optional leading initializer rules in the
+    /// frontend's synthesized position, then the subroutine-body rules and
+    /// the normal rules (each partition keeps program order). Subroutine
+    /// rules need no positional constraint — the comparator ignores their
+    /// relative order — and their rule names are free (rule names are
+    /// display metadata). An initializer-named rule outside the frontend's
+    /// canonical shape or position is an ordinary rule at its own position:
+    /// initializer rules are never relocated (#597).
     fn classify_rules(&mut self) -> RuleLayout<'a> {
         let rules: Vec<IndexedRule<'a>> = self.program.rules.iter().enumerate().collect();
         let mut index = 0;
@@ -351,25 +351,22 @@ impl<'a> Emitter<'a> {
         let mut player_init = None;
         if let Some(&(rule_index, rule)) = rules.first() {
             if rule.name == "Initialize global variables" {
-                let candidate = self.canonical_init(rule_index, rule, true);
-                if candidate.is_some() {
-                    global_init = candidate;
+                if let Some(initializers) = self.canonical_init(rule_index, rule, true) {
+                    global_init = Some(initializers);
                     index = 1;
                 }
             } else if rule.name == "Initialize player variables" {
-                let candidate = self.canonical_init(rule_index, rule, false);
-                if candidate.is_some() {
-                    player_init = candidate;
+                if let Some(initializers) = self.canonical_init(rule_index, rule, false) {
+                    player_init = Some(initializers);
                     index = 1;
                 }
             }
         }
-        if index == 1 {
+        if global_init.is_some() {
             if let Some(&(rule_index, rule)) = rules.get(1) {
-                if rule.name == "Initialize player variables" && global_init.is_some() {
-                    let candidate = self.canonical_init(rule_index, rule, false);
-                    if candidate.is_some() {
-                        player_init = candidate;
+                if rule.name == "Initialize player variables" {
+                    if let Some(initializers) = self.canonical_init(rule_index, rule, false) {
+                        player_init = Some(initializers);
                         index = 2;
                     }
                 }
@@ -378,22 +375,10 @@ impl<'a> Emitter<'a> {
 
         let mut sub_rules = Vec::new();
         let mut normal_rules = Vec::new();
-        let mut in_sub_rules = true;
         for (rule_index, rule) in rules.iter().copied().skip(index) {
             match &rule.event {
                 Event::Subroutine(_) => {
-                    if !in_sub_rules {
-                        self.issue(
-                            "unsupported-rule-order",
-                            format!(
-                                "subroutine-body rule '{}' appears after a normal rule; \
-                                 the frontend re-lowering emits subroutine rules first",
-                                rule.name
-                            ),
-                            self.program.rule_span(rule_index),
-                        );
-                    }
-                    if !rule.conditions.is_empty() {
+                    if !rule.disabled && !rule.conditions.is_empty() {
                         self.issue(
                             "unsupported-rule-order",
                             format!(
@@ -406,56 +391,7 @@ impl<'a> Emitter<'a> {
                     }
                     sub_rules.push((rule_index, rule));
                 }
-                _ => {
-                    in_sub_rules = false;
-                    normal_rules.push((rule_index, rule));
-                }
-            }
-        }
-
-        // Subroutine rules must be in subroutine table order, and each rule
-        // must carry the exact name the re-lowering synthesizes for its def.
-        let mut expected = 0usize;
-        for (rule_index, rule) in &sub_rules {
-            let Event::Subroutine(subroutine) = &rule.event else {
-                continue;
-            };
-            if self
-                .program
-                .subroutines
-                .iter()
-                .position(|definition| definition.name == *subroutine)
-                != Some(expected)
-            {
-                self.issue(
-                    "unsupported-rule-order",
-                    format!(
-                        "subroutine-body rules must appear in subroutine table order; \
-                         '{}' is out of order",
-                        rule.name
-                    ),
-                    self.program.rule_span(*rule_index),
-                );
-            }
-            expected += 1;
-            if let Some(definition) = self
-                .program
-                .subroutines
-                .iter()
-                .find(|definition| definition.name == *subroutine)
-            {
-                let expected_name = format!("Subroutine {}", definition.name);
-                if rule.name != expected_name {
-                    self.issue(
-                        "unsupported-rule-order",
-                        format!(
-                            "subroutine-body rule name '{}' does not match the def \
-                             form '{}' the frontend synthesizes",
-                            rule.name, expected_name
-                        ),
-                        self.program.rule_span(*rule_index),
-                    );
-                }
+                _ => normal_rules.push((rule_index, rule)),
             }
         }
 
@@ -467,74 +403,84 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    fn canonical_init(
-        &mut self,
-        rule_index: usize,
-        rule: &'a Rule,
-        global: bool,
-    ) -> Option<IndexedRule<'a>> {
+    /// The declaration initializers a candidate initializer rule carries
+    /// when it is exactly the frontend's canonical shape: not disabled, the
+    /// canonical event, no conditions, and all-`Set` actions in declaration
+    /// order on declared variables (`eventPlayer`-targeted for player
+    /// initializers). Any other shape is `None` — the rule reconstructs as
+    /// an ordinary rule at its own position.
+    fn canonical_init(&self, rule_index: usize, rule: &Rule, global: bool) -> Option<Initializers> {
         if rule.disabled {
             return None;
         }
-        let expected_name = if global {
-            "Initialize global variables"
-        } else {
-            "Initialize player variables"
-        };
         let canonical_event = if global {
             matches!(&rule.event, Event::Global)
         } else {
             matches!(&rule.event, Event::EachPlayer)
         };
-        if !canonical_event {
+        if !canonical_event || !rule.conditions.is_empty() {
             return None;
         }
-        if !rule.conditions.is_empty() {
-            self.issue(
-                "unsupported-init-rule",
-                format!(
-                    "initializer rule '{expected_name}' carries conditions; the \
-                     frontend synthesizes it from declarations with none"
-                ),
-                self.program.rule_span(rule_index),
-            );
-            return None;
-        }
+        let variables = if global {
+            &self.program.global_variables
+        } else {
+            &self.program.player_variables
+        };
+        let mut initializers = Initializers::new();
+        let mut previous: Option<usize> = None;
         for (action_index, action) in rule.actions.iter().enumerate() {
-            let set = matches!(
-                (global, action),
-                (true, Action::SetGlobalVariable { .. })
-                    | (false, Action::SetPlayerVariable { .. })
-            );
-            if !set {
-                self.issue(
-                    "unsupported-init-rule",
-                    format!(
-                        "initializer rule '{expected_name}' mixes non-Set actions; \
-                         the frontend's synthesized initializer rule is all-Set"
-                    ),
-                    self.program.action_span(rule_index, action_index),
-                );
+            let (player, variable, value) = match (global, action) {
+                (true, Action::SetGlobalVariable { variable, value }) => (None, variable, value),
+                (
+                    false,
+                    Action::SetPlayerVariable {
+                        player,
+                        variable,
+                        value,
+                    },
+                ) => (Some(player), variable, value),
+                _ => return None,
+            };
+            if player.is_some_and(|player| !self.is_event_player(player)) {
                 return None;
             }
+            let position = variables
+                .iter()
+                .position(|declaration| declaration.name == *variable)?;
+            if previous.is_some_and(|previous| position <= previous) {
+                return None;
+            }
+            previous = Some(position);
+            initializers.insert(
+                position,
+                (
+                    value.clone(),
+                    self.program.action_argument_span(
+                        rule_index,
+                        action_index,
+                        usize::from(!global),
+                    ),
+                ),
+            );
         }
-        Some((rule_index, rule))
+        Some(initializers)
     }
 
     fn emit_program(&mut self, layout: &RuleLayout) {
-        let global_initializers = self.collect_initializers(layout.global_init, true);
-        let player_initializers = self.collect_initializers(layout.player_init, false);
         let global_order = index_order(&self.program.global_variables);
         let player_order = index_order(&self.program.player_variables);
-        self.check_initializer_slots(true, &global_order, &global_initializers);
-        self.check_initializer_slots(false, &player_order, &player_initializers);
+        let empty = Initializers::new();
+        let global_initializers = layout.global_init.as_ref().unwrap_or(&empty);
+        let player_initializers = layout.player_init.as_ref().unwrap_or(&empty);
+        self.check_initializer_slots(true, &global_order, global_initializers);
+        self.check_initializer_slots(false, &player_order, player_initializers);
 
         // The strict-optimization directive is part of every reconstruction:
         // without it the frontend's default folding rewrites values such as
         // `Add(x, 0)` into a different canonical shape than the input's.
         self.out.push_str("#!optimizeStrict\n\n");
-        self.emit_variable_declarations(true, &global_order, &global_initializers);
-        self.emit_variable_declarations(false, &player_order, &player_initializers);
+        self.emit_variable_declarations(true, &global_order, global_initializers);
+        self.emit_variable_declarations(false, &player_order, player_initializers);
         if self.program.subroutines.is_empty() {
             self.out.push('\n');
         } else {
@@ -564,75 +510,90 @@ impl<'a> Emitter<'a> {
             self.out.push('\n');
         }
 
+        let mut defined = std::collections::HashSet::new();
         for (rule_index, rule) in &layout.sub_rules {
-            if rule.disabled {
-                self.report_disabled_rule(*rule_index, &rule.name);
-                continue;
-            }
             let Event::Subroutine(subroutine_name) = &rule.event else {
                 continue;
             };
-            let Some(definition) = self
-                .program
-                .subroutines
-                .iter()
-                .find(|definition| definition.name == *subroutine_name)
-            else {
+            if !self.subroutine_names.contains(subroutine_name) {
+                self.issue(
+                    "unsupported-dangling",
+                    format!("unknown subroutine '{subroutine_name}'"),
+                    self.program.rule_span(*rule_index),
+                );
                 continue;
-            };
+            }
+            if !defined.insert(subroutine_name.as_str()) {
+                self.issue(
+                    "unsupported-rule-order",
+                    format!(
+                        "subroutine '{subroutine_name}' has more than one def rule; \
+                         the comparator accepts reordering, not duplication"
+                    ),
+                    self.program.rule_span(*rule_index),
+                );
+                continue;
+            }
             self.out.push_str("def ");
             self.out
-                .push_str(emitted(&self.subroutine_emitted, &definition.name));
+                .push_str(emitted(&self.subroutine_emitted, subroutine_name));
             self.out.push_str("():\n");
-            self.emit_actions(*rule_index, &rule.actions, 1);
+            if rule.disabled {
+                // A disabled subroutine-body rule reconstructs as an inert
+                // `def`: a `def` cannot carry `@Disabled`, so the annotation
+                // and the whole body are emitted as `#`-commented lines plus
+                // a live `pass`. The comments make the disable explicit and
+                // keep the body text for fidelity; the behavior comparator
+                // treats disabled and no-op bodies the same.
+                self.out.push_str("    # @Disabled\n");
+                if !rule.conditions.is_empty() {
+                    for (condition_index, condition) in rule.conditions.iter().enumerate() {
+                        let scratch = std::mem::take(&mut self.out);
+                        self.out.push_str("    @Condition ");
+                        self.emit_value(
+                            &condition.value,
+                            self.program.condition_span(*rule_index, condition_index),
+                        );
+                        self.out.push('\n');
+                        self.flush_commented(scratch, 1);
+                    }
+                }
+                self.emit_commented_actions(*rule_index, &rule.actions);
+                self.out.push_str("    pass\n");
+            } else {
+                self.emit_actions(*rule_index, &rule.actions, 1);
+                if rule.actions.is_empty() {
+                    self.out.push_str("    pass\n");
+                }
+            }
             self.out.push('\n');
         }
 
         for (rule_index, rule) in &layout.normal_rules {
-            if rule.disabled {
-                self.report_disabled_rule(*rule_index, &rule.name);
-                continue;
-            }
-            if rule.actions.is_empty() {
+            if !rule.disabled && rule.actions.is_empty() {
                 continue;
             }
             self.out.push_str("rule ");
             self.emit_string_literal(&rule.name);
             self.out.push_str(":\n");
-            match &rule.event {
-                Event::Global => self.out.push_str("    @Event global\n"),
-                Event::EachPlayer
-                | Event::EachPlayerWithFilters {
-                    team: EventTeam::All,
-                    target: EventTarget::All,
-                } => self.out.push_str("    @Event eachPlayer\n"),
-                Event::EachPlayerWithFilters { .. } | Event::Player { .. } => {
-                    self.issue(
-                        "unsupported-rule-event",
-                        format!("rule '{}' uses an event outside the OPY surface", rule.name),
-                        self.program.rule_span(*rule_index),
-                    );
-                    continue;
-                }
-                Event::Subroutine(_) => {
-                    self.issue(
-                        "unsupported-rule-order",
-                        format!(
-                            "rule '{}' has a subroutine event outside the def layout",
-                            rule.name
-                        ),
-                        self.program.rule_span(*rule_index),
-                    );
-                    continue;
-                }
+            self.emit_event_annotation(*rule_index, rule);
+            if rule.disabled {
+                self.out.push_str("    @Disabled\n");
             }
             for (condition_index, condition) in rule.conditions.iter().enumerate() {
                 if condition.disabled {
-                    self.issue(
-                        "unsupported-disabled-condition",
-                        "disabled conditions are outside the OPY reconstruction surface",
+                    // A disabled condition never executes, so it reconstructs
+                    // as a `#`-commented line: the comparator treats disabled
+                    // conditions as inert, and the comment keeps the
+                    // condition text for fidelity.
+                    let scratch = std::mem::take(&mut self.out);
+                    self.out.push_str("    @Condition ");
+                    self.emit_value(
+                        &condition.value,
                         self.program.condition_span(*rule_index, condition_index),
                     );
+                    self.out.push('\n');
+                    self.flush_commented(scratch, 1);
                     continue;
                 }
                 self.out.push_str("    @Condition ");
@@ -647,6 +608,78 @@ impl<'a> Emitter<'a> {
         }
     }
 
+    /// Emit the `@Event` line and its `@Team`/`@Hero`/`@Slot` filters for a
+    /// normal rule. `EachPlayer` events carry filters through
+    /// `EachPlayerWithFilters`; `Player` events carry their catalog id plus
+    /// filters; `Global` has no filters.
+    fn emit_event_annotation(&mut self, rule_index: usize, rule: &Rule) {
+        let (kind, filters) = match &rule.event {
+            Event::Global => ("global", None),
+            Event::EachPlayer => ("eachPlayer", None),
+            Event::EachPlayerWithFilters { team, target } => ("eachPlayer", Some((team, target))),
+            Event::Player { kind, team, target } => (kind.catalog_id(), Some((team, target))),
+            Event::Subroutine(_) => {
+                self.issue(
+                    "unsupported-rule-order",
+                    format!(
+                        "rule '{}' has a subroutine event outside the def layout",
+                        rule.name
+                    ),
+                    self.program.rule_span(rule_index),
+                );
+                return;
+            }
+        };
+        self.out.push_str("    @Event ");
+        self.out.push_str(kind);
+        self.out.push('\n');
+        if let Some((team, target)) = filters {
+            self.emit_event_filters(rule_index, rule, team, target);
+        }
+    }
+
+    /// Emit `@Team`/`@Hero`/`@Slot` filter annotations for an `EachPlayer` or
+    /// `Player` event. `All` entries emit nothing; a hero target uses the
+    /// hero member's OPY spelling (`@Hero` is the only enum-member filter the
+    /// surface accepts, since slot targets use `@Slot` and the two cannot be
+    /// combined).
+    fn emit_event_filters(
+        &mut self,
+        rule_index: usize,
+        rule: &Rule,
+        team: &EventTeam,
+        target: &EventTarget,
+    ) {
+        match team {
+            EventTeam::All => {}
+            EventTeam::Team1 => self.out.push_str("    @Team 1\n"),
+            EventTeam::Team2 => self.out.push_str("    @Team 2\n"),
+        }
+        match target {
+            EventTarget::All => {}
+            EventTarget::Slot(slot) => {
+                self.out.push_str(&format!("    @Slot {slot}\n"));
+            }
+            EventTarget::Hero(member) => {
+                let Some((_, spelling)) = crate::enums::spelling_of_member("Hero", member) else {
+                    self.issue(
+                        "unsupported-enum-member",
+                        format!(
+                            "hero filter '{member}' on rule '{}' has no OPY spelling",
+                            rule.name
+                        ),
+                        self.program.rule_span(rule_index),
+                    );
+                    return;
+                };
+                self.out.push_str("    @Hero ");
+                self.out
+                    .push_str(&crate::enums::upper_case_to_camel_case(spelling));
+                self.out.push('\n');
+            }
+        }
+    }
+
     /// Declarations emit in canonical index order — the order the
     /// frontend's re-lowering sorts the table into — each with its explicit
     /// index unless an initializer carries it (`name = value` re-lowers to
@@ -655,7 +688,7 @@ impl<'a> Emitter<'a> {
         &mut self,
         global: bool,
         order: &[(usize, u32)],
-        initializers: &HashMap<usize, (Value, Option<Span>)>,
+        initializers: &Initializers,
     ) {
         let (kind, variables) = if global {
             ("globalvar ", &self.program.global_variables)
@@ -687,108 +720,6 @@ impl<'a> Emitter<'a> {
             }
             self.out.push('\n');
         }
-    }
-
-    /// Map initializer rule actions onto declaration positions (table order),
-    /// validating the rule's Sets are in table order like the frontend's
-    /// synthesized initializer rule.
-    fn collect_initializers(
-        &mut self,
-        initializer: Option<IndexedRule<'_>>,
-        global: bool,
-    ) -> std::collections::HashMap<usize, (Value, Option<Span>)> {
-        let mut initializers = std::collections::HashMap::new();
-        let Some((rule_index, rule)) = initializer else {
-            return initializers;
-        };
-        let mut previous: Option<u32> = None;
-        for (action_index, action) in rule.actions.iter().enumerate() {
-            let span = self.program.action_span(rule_index, action_index);
-            let (player, variable, value) = match (global, action) {
-                (true, Action::SetGlobalVariable { variable, value }) => (None, variable, value),
-                (
-                    false,
-                    Action::SetPlayerVariable {
-                        player,
-                        variable,
-                        value,
-                    },
-                ) => (Some(player), variable, value),
-                _ => continue,
-            };
-            if player.is_some_and(|player| !self.is_event_player(player)) {
-                self.issue(
-                    "unsupported-init-rule",
-                    "player initializer targets a non-event-player expression",
-                    span,
-                );
-            }
-            let variables = if global {
-                &self.program.global_variables
-            } else {
-                &self.program.player_variables
-            };
-            let Some(variable_position) = variables
-                .iter()
-                .position(|declaration| declaration.name == *variable)
-            else {
-                self.issue(
-                    "unsupported-dangling",
-                    format!(
-                        "unknown {} variable '{variable}'",
-                        if global { "global" } else { "player" }
-                    ),
-                    span,
-                );
-                continue;
-            };
-            // Re-lowering emits the synthesized initializer rule in
-            // index-sorted table order, so the canonical rule's Sets must
-            // already be index-ordered to round-trip.
-            let index = variables[variable_position]
-                .index
-                .unwrap_or(variable_position as u32);
-            self.record_initializer_position(
-                &mut previous,
-                index,
-                variable,
-                if global { "global" } else { "player" },
-                span,
-            );
-            initializers.insert(
-                variable_position,
-                (
-                    value.clone(),
-                    self.program.action_argument_span(
-                        rule_index,
-                        action_index,
-                        usize::from(!global),
-                    ),
-                ),
-            );
-        }
-        initializers
-    }
-
-    fn record_initializer_position(
-        &mut self,
-        previous: &mut Option<u32>,
-        index: u32,
-        variable: &str,
-        table: &str,
-        span: Option<Span>,
-    ) {
-        if previous.is_some_and(|previous| index <= previous) {
-            self.issue(
-                "unsupported-init-rule",
-                format!(
-                    "initializer rule Sets '{variable}' out of {table} index order; \
-                     the frontend synthesizes initializers in declaration order"
-                ),
-                span,
-            );
-        }
-        *previous = Some(index);
     }
 
     /// A declaration initializer: same value emission, but zero literals are
@@ -885,6 +816,39 @@ impl<'a> Emitter<'a> {
         }
     }
 
+    /// Move the fragment emitted into `out` since `prior` was swapped out to
+    /// `#`-commented lines at `level`. A disabled action or condition never
+    /// executes, so the comparator treats it as inert; the comment keeps the
+    /// emitted text for fidelity without making it live. (A `def` body
+    /// cannot carry `@Disabled`, and commenting a whole control-flow group
+    /// covers `elif`/`else`/`end` lines too.)
+    fn flush_commented(&mut self, prior: String, level: usize) {
+        let fragment = std::mem::replace(&mut self.out, prior);
+        let indent = Self::indent(level);
+        for line in fragment.lines() {
+            let trimmed = line.trim_start();
+            if trimmed.is_empty() {
+                self.out.push('\n');
+            } else {
+                self.out.push_str(&indent);
+                self.out.push_str("# ");
+                self.out.push_str(trimmed);
+                self.out.push('\n');
+            }
+        }
+    }
+
+    /// Emit an action sequence as `#`-commented lines (used for disabled
+    /// subroutine bodies, which cannot carry `@Disabled` on the `def`).
+    fn emit_commented_actions(&mut self, rule_index: usize, actions: &[Action]) {
+        if actions.is_empty() {
+            return;
+        }
+        let scratch = std::mem::take(&mut self.out);
+        self.emit_actions(rule_index, actions, 1);
+        self.flush_commented(scratch, 1);
+    }
+
     fn emit_action_block(
         &mut self,
         rule_index: usize,
@@ -895,121 +859,169 @@ impl<'a> Emitter<'a> {
         while let Some(action) = actions.get(*position) {
             match action {
                 Action::ElseIf { .. } | Action::Else | Action::End => return,
-                Action::If { condition } => {
+                Action::Disabled { action: inner } => {
                     let action_index = *position;
-                    let span = self.program.action_span(rule_index, action_index);
-                    self.out.push_str(&Self::indent(level));
-                    self.out.push_str("if ");
-                    self.emit_value(
-                        condition,
-                        self.program
-                            .action_argument_span(rule_index, action_index, 0),
-                    );
-                    self.out.push_str(":\n");
                     *position += 1;
-                    self.emit_action_block(rule_index, actions, position, level + 1);
-                    while let Some(Action::ElseIf { condition }) = actions.get(*position) {
-                        let action_index = *position;
-                        self.out.push_str(&Self::indent(level));
-                        self.out.push_str("elif ");
-                        self.emit_value(
-                            condition,
-                            self.program
-                                .action_argument_span(rule_index, action_index, 0),
-                        );
-                        self.out.push_str(":\n");
-                        *position += 1;
-                        self.emit_action_block(rule_index, actions, position, level + 1);
-                    }
-                    if matches!(actions.get(*position), Some(Action::Else)) {
-                        *position += 1;
-                        self.out.push_str(&Self::indent(level));
-                        self.out.push_str("else:\n");
-                        self.emit_action_block(rule_index, actions, position, level + 1);
-                    }
-                    if matches!(actions.get(*position), Some(Action::End)) {
-                        *position += 1;
-                    } else {
-                        self.issue("unsupported-control-flow", "if action is missing End", span);
-                    }
-                }
-                Action::While { condition } => {
-                    let action_index = *position;
-                    let span = self.program.action_span(rule_index, action_index);
-                    self.out.push_str(&Self::indent(level));
-                    self.out.push_str("while ");
-                    self.emit_value(
-                        condition,
-                        self.program
-                            .action_argument_span(rule_index, action_index, 0),
-                    );
-                    self.out.push_str(":\n");
-                    *position += 1;
-                    self.emit_action_block(rule_index, actions, position, level + 1);
-                    self.require_end(rule_index, actions, position, "while", span);
-                }
-                Action::ForGlobalVariable {
-                    variable,
-                    start,
-                    stop,
-                    step,
-                } => {
-                    let action_index = *position;
-                    let span = self.program.action_span(rule_index, action_index);
-                    let Some(declaration) = self
-                        .program
-                        .global_variables
-                        .iter()
-                        .find(|declaration| declaration.name == *variable)
-                    else {
-                        self.issue(
-                            "unsupported-dangling",
-                            format!("unknown loop variable '{variable}'"),
-                            span,
-                        );
-                        *position += 1;
-                        self.emit_action_block(rule_index, actions, position, level + 1);
-                        self.require_end(rule_index, actions, position, "for", span);
-                        continue;
-                    };
-                    self.out.push_str(&Self::indent(level));
-                    self.out.push_str("for ");
-                    self.out
-                        .push_str(emitted(&self.global_names, &declaration.name));
-                    self.out.push_str(" in range(");
-                    for (arg_index, value) in [start, stop, step].into_iter().enumerate() {
-                        if arg_index > 0 {
-                            self.out.push_str(", ");
+                    match &**inner {
+                        Action::If { .. }
+                        | Action::While { .. }
+                        | Action::ForGlobalVariable { .. }
+                        | Action::ForPlayerVariable { .. } => {
+                            // A disabled block marker comments out the whole
+                            // group; consume the nested stream exactly like
+                            // the live form does so `elif`/`else`/`end` are
+                            // covered by the comment.
+                            let scratch = std::mem::take(&mut self.out);
+                            self.emit_construct(
+                                rule_index,
+                                action_index,
+                                inner,
+                                actions,
+                                position,
+                                level,
+                            );
+                            self.flush_commented(scratch, level);
                         }
-                        self.emit_value(
-                            value,
-                            self.program
-                                .action_argument_span(rule_index, action_index, arg_index),
-                        );
+                        Action::ElseIf { .. }
+                        | Action::Else
+                        | Action::End
+                        | Action::Disabled { .. } => {
+                            self.issue(
+                                "unsupported-control-flow",
+                                "the disabled modifier applies to a single \
+                                 executable action",
+                                self.program.action_span(rule_index, action_index),
+                            );
+                        }
+                        _ => {
+                            let scratch = std::mem::take(&mut self.out);
+                            self.emit_action(rule_index, action_index, inner, level);
+                            self.flush_commented(scratch, level);
+                        }
                     }
-                    self.out.push_str("):\n");
-                    *position += 1;
-                    self.emit_action_block(rule_index, actions, position, level + 1);
-                    self.require_end(rule_index, actions, position, "for", span);
-                }
-                Action::ForPlayerVariable { .. } => {
-                    let action_index = *position;
-                    let span = self.program.action_span(rule_index, action_index);
-                    self.issue(
-                        "unsupported-per-player-loop",
-                        "For Player Variable is outside the reconstruction surface \
-                         (the OPY `for` form binds a global variable)",
-                        span,
-                    );
-                    *position += 1;
-                    self.skip_action_block(actions, position);
                 }
                 _ => {
                     let action_index = *position;
                     *position += 1;
-                    self.emit_action(rule_index, action_index, action, level);
+                    self.emit_construct(rule_index, action_index, action, actions, position, level);
                 }
             }
+        }
+    }
+
+    /// Emit one action sequence element at `action_index` (already consumed
+    /// in `actions` when it opens a block): block markers emit their header
+    /// and consume the nested stream; everything else is a single statement.
+    fn emit_construct(
+        &mut self,
+        rule_index: usize,
+        action_index: usize,
+        action: &Action,
+        actions: &[Action],
+        position: &mut usize,
+        level: usize,
+    ) {
+        match action {
+            Action::If { condition } => {
+                let span = self.program.action_span(rule_index, action_index);
+                self.out.push_str(&Self::indent(level));
+                self.out.push_str("if ");
+                self.emit_value(
+                    condition,
+                    self.program
+                        .action_argument_span(rule_index, action_index, 0),
+                );
+                self.out.push_str(":\n");
+                self.emit_action_block(rule_index, actions, position, level + 1);
+                while let Some(Action::ElseIf { condition }) = actions.get(*position) {
+                    let action_index = *position;
+                    *position += 1;
+                    self.out.push_str(&Self::indent(level));
+                    self.out.push_str("elif ");
+                    self.emit_value(
+                        condition,
+                        self.program
+                            .action_argument_span(rule_index, action_index, 0),
+                    );
+                    self.out.push_str(":\n");
+                    self.emit_action_block(rule_index, actions, position, level + 1);
+                }
+                if matches!(actions.get(*position), Some(Action::Else)) {
+                    *position += 1;
+                    self.out.push_str(&Self::indent(level));
+                    self.out.push_str("else:\n");
+                    self.emit_action_block(rule_index, actions, position, level + 1);
+                }
+                if matches!(actions.get(*position), Some(Action::End)) {
+                    *position += 1;
+                } else {
+                    self.issue("unsupported-control-flow", "if action is missing End", span);
+                }
+            }
+            Action::While { condition } => {
+                let span = self.program.action_span(rule_index, action_index);
+                self.out.push_str(&Self::indent(level));
+                self.out.push_str("while ");
+                self.emit_value(
+                    condition,
+                    self.program
+                        .action_argument_span(rule_index, action_index, 0),
+                );
+                self.out.push_str(":\n");
+                self.emit_action_block(rule_index, actions, position, level + 1);
+                self.require_end(rule_index, actions, position, "while", span);
+            }
+            Action::ForGlobalVariable {
+                variable,
+                start,
+                stop,
+                step,
+            } => {
+                let span = self.program.action_span(rule_index, action_index);
+                let Some(declaration) = self
+                    .program
+                    .global_variables
+                    .iter()
+                    .find(|declaration| declaration.name == *variable)
+                else {
+                    self.issue(
+                        "unsupported-dangling",
+                        format!("unknown loop variable '{variable}'"),
+                        span,
+                    );
+                    self.skip_action_block(actions, position);
+                    return;
+                };
+                self.out.push_str(&Self::indent(level));
+                self.out.push_str("for ");
+                self.out
+                    .push_str(emitted(&self.global_names, &declaration.name));
+                self.out.push_str(" in range(");
+                for (arg_index, value) in [start, stop, step].into_iter().enumerate() {
+                    if arg_index > 0 {
+                        self.out.push_str(", ");
+                    }
+                    self.emit_value(
+                        value,
+                        self.program
+                            .action_argument_span(rule_index, action_index, arg_index),
+                    );
+                }
+                self.out.push_str("):\n");
+                self.emit_action_block(rule_index, actions, position, level + 1);
+                self.require_end(rule_index, actions, position, "for", span);
+            }
+            Action::ForPlayerVariable { .. } => {
+                let span = self.program.action_span(rule_index, action_index);
+                self.issue(
+                    "unsupported-per-player-loop",
+                    "For Player Variable is outside the reconstruction surface \
+                     (the OPY `for` form binds a global variable)",
+                    span,
+                );
+                self.skip_action_block(actions, position);
+            }
+            _ => self.emit_action(rule_index, action_index, action, level),
         }
     }
 
@@ -1212,11 +1224,14 @@ impl<'a> Emitter<'a> {
                     span,
                 );
             }
-            Action::Disabled { .. } => self.issue(
-                "unsupported-disabled-action",
-                "disabled actions are outside the OPY reconstruction surface",
-                span,
-            ),
+            Action::Disabled { action: inner } => {
+                // Defensive path: `emit_action_block` intercepts disabled
+                // actions before they reach `emit_action`, so a bare
+                // `Disabled` landing here is commented out like the rest.
+                let scratch = std::mem::take(&mut self.out);
+                self.emit_action(rule_index, action_index, inner, level);
+                self.flush_commented(scratch, level);
+            }
             Action::Call { name, args } => {
                 let argument_spans = (0..args.len())
                     .map(|index| {
@@ -2058,7 +2073,10 @@ mod tests {
     use crate::compiler::Compiler;
     use workshop_rs::catalog::{Catalog, Locale};
     use workshop_rs::source::{Position, SourceFile, Span};
-    use workshop_rs::{Action, Event, ModifyOp, Program, Rule, Subroutine, Value, Variable};
+    use workshop_rs::{
+        Action, Condition, Event, EventTarget, EventTeam, ModifyOp, PlayerEventKind, Program, Rule,
+        Subroutine, Value, Variable,
+    };
 
     fn compile_to_program(source: &str, path: &str) -> Program {
         let artifact = Compiler::new()
@@ -2162,7 +2180,9 @@ mod tests {
     }
 
     #[test]
-    fn disabled_initializer_is_not_reconstructed_as_a_declaration_initializer() {
+    fn disabled_initializer_reconstructs_as_a_disabled_ordinary_rule() {
+        // A disabled initializer-named rule is no declaration initializer,
+        // so it stays an ordinary rule at its position — with `@Disabled`.
         let mut program = Program::new();
         program.global_variable(Variable::with_index("score", 0));
         let mut initializer = Rule::new("Initialize global variables", Event::Global).action(
@@ -2174,12 +2194,24 @@ mod tests {
         initializer.disabled = true;
         program.rule(initializer);
 
-        let error = reconstruct(&program).expect_err("disabled initializer cannot be emitted");
-        assert_eq!(error.issues[0].code, "unsupported-disabled-rule");
+        let source = reconstruct(&program).expect("disabled initializer reconstructs");
+        assert!(
+            source.contains(
+                "rule \"Initialize global variables\":\n    @Event global\n    @Disabled\n"
+            ),
+            "{source}"
+        );
+        assert!(!source.contains("globalvar score ="), "{source}");
+
+        let reparsed = compile_to_program(&source, "disabled-initializer.opy");
+        assert!(workshop_rs::compare::equivalent(&program, &reparsed));
     }
 
     #[test]
-    fn disabled_subroutine_rule_is_not_reconstructed_as_an_active_definition() {
+    fn disabled_subroutine_rule_reconstructs_as_an_inert_def() {
+        // `def` cannot carry `@Disabled`; a disabled subroutine-body rule
+        // reconstructs as commented lines plus a live `pass` — behaviorally
+        // inert like the disabled body.
         let mut program = Program::new();
         program.global_variable(Variable::with_index("score", 0));
         program.subroutine(Subroutine::with_index("reset", 0));
@@ -2191,8 +2223,14 @@ mod tests {
         subroutine.disabled = true;
         program.rule(subroutine);
 
-        let error = reconstruct(&program).expect_err("disabled subroutine cannot be emitted");
-        assert_eq!(error.issues[0].code, "unsupported-disabled-rule");
+        let source = reconstruct(&program).expect("disabled subroutine reconstructs");
+        assert!(source.contains("def reset():\n"), "{source}");
+        assert!(source.contains("    # @Disabled\n"), "{source}");
+        assert!(source.contains("# score = 0"), "{source}");
+        assert!(source.contains("    pass\n"), "{source}");
+
+        let reparsed = compile_to_program(&source, "disabled-subroutine.opy");
+        assert!(workshop_rs::compare::equivalent(&program, &reparsed));
     }
 
     #[test]
@@ -2382,6 +2420,428 @@ mod tests {
         assert!(workshop_rs::roundtrip::equivalent(&program, &reparsed));
     }
 
+    #[test]
+    fn each_player_filters_emit_team_and_slot_annotations() {
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("score", 0));
+        program.rule(
+            Rule::new(
+                "filtered",
+                Event::EachPlayerWithFilters {
+                    team: EventTeam::Team1,
+                    target: EventTarget::Slot(0),
+                },
+            )
+            .action(Action::SetGlobalVariable {
+                variable: "score".into(),
+                value: Value::number(1.0),
+            }),
+        );
+
+        let source = reconstruct(&program).expect("filtered event reconstructs");
+        assert!(
+            source.contains("    @Event eachPlayer\n    @Team 1\n    @Slot 0\n"),
+            "{source}"
+        );
+
+        let reparsed = compile_to_program(&source, "each-player-filters.opy");
+        assert!(workshop_rs::compare::equivalent(&program, &reparsed));
+    }
+
+    #[test]
+    fn each_player_hero_filter_emits_the_source_hero_spelling() {
+        // `SOLDIER_76` spells `Hero.SOLDIER` in source; the `@Hero` argument
+        // uses the camel-case keyword (`soldier`).
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("score", 0));
+        program.rule(
+            Rule::new(
+                "hero",
+                Event::EachPlayerWithFilters {
+                    team: EventTeam::All,
+                    target: EventTarget::Hero("SOLDIER_76".into()),
+                },
+            )
+            .action(Action::SetGlobalVariable {
+                variable: "score".into(),
+                value: Value::number(1.0),
+            }),
+        );
+
+        let source = reconstruct(&program).expect("hero filter reconstructs");
+        assert!(
+            source.contains("    @Event eachPlayer\n    @Hero soldier\n"),
+            "{source}"
+        );
+
+        let reparsed = compile_to_program(&source, "each-player-hero.opy");
+        assert!(workshop_rs::compare::equivalent(&program, &reparsed));
+    }
+
+    #[test]
+    fn player_event_emits_the_catalog_id_and_filters() {
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("score", 0));
+        program.rule(
+            Rule::new(
+                "died",
+                Event::Player {
+                    kind: PlayerEventKind::Died,
+                    team: EventTeam::Team2,
+                    target: EventTarget::Hero("CASSIDY".into()),
+                },
+            )
+            .action(Action::SetGlobalVariable {
+                variable: "score".into(),
+                value: Value::number(1.0),
+            }),
+        );
+
+        let source = reconstruct(&program).expect("player event reconstructs");
+        assert!(
+            source.contains("    @Event playerDied\n    @Team 2\n    @Hero cassidy\n"),
+            "{source}"
+        );
+
+        let reparsed = compile_to_program(&source, "player-event.opy");
+        assert!(workshop_rs::compare::equivalent(&program, &reparsed));
+    }
+
+    #[test]
+    fn unspellable_hero_filter_is_refused() {
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("score", 0));
+        program.rule(
+            Rule::new(
+                "hero",
+                Event::EachPlayerWithFilters {
+                    team: EventTeam::All,
+                    target: EventTarget::Hero("DOCTRINE".into()),
+                },
+            )
+            .action(Action::SetGlobalVariable {
+                variable: "score".into(),
+                value: Value::number(1.0),
+            }),
+        );
+
+        let error = reconstruct(&program).expect_err("a hero with no OPY spelling is refused");
+        assert_eq!(error.issues[0].code, "unsupported-enum-member");
+    }
+
+    #[test]
+    fn disabled_rule_emits_the_disabled_annotation() {
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("score", 0));
+        let mut rule = Rule::new("off", Event::Global).action(Action::SetGlobalVariable {
+            variable: "score".into(),
+            value: Value::number(1.0),
+        });
+        rule.disabled = true;
+        program.rule(rule);
+
+        let source = reconstruct(&program).expect("disabled rule reconstructs");
+        assert!(
+            source.contains("rule \"off\":\n    @Event global\n    @Disabled\n"),
+            "{source}"
+        );
+
+        let reparsed = compile_to_program(&source, "disabled-rule.opy");
+        assert!(workshop_rs::compare::equivalent(&program, &reparsed));
+    }
+
+    #[test]
+    fn disabled_condition_emits_a_commented_line() {
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("score", 0));
+        program.rule(
+            Rule::new("main", Event::Global)
+                .condition(Value::call(
+                    "==",
+                    [Value::global_variable("score"), Value::number(0.0)],
+                ))
+                .condition(Condition::disabled(Value::call(
+                    "<",
+                    [Value::global_variable("score"), Value::number(1.0)],
+                )))
+                .action(Action::SetGlobalVariable {
+                    variable: "score".into(),
+                    value: Value::number(2.0),
+                }),
+        );
+
+        let source = reconstruct(&program).expect("disabled condition reconstructs");
+        assert!(source.contains("    @Condition (score == 0)\n"), "{source}");
+        assert!(
+            source.contains("    # @Condition (score < 1)\n"),
+            "{source}"
+        );
+
+        let reparsed = compile_to_program(&source, "disabled-condition.opy");
+        assert!(
+            workshop_rs::compare::equivalent(&program, &reparsed),
+            "{source}\n{:?}",
+            workshop_rs::compare::difference(&program, &reparsed)
+        );
+    }
+
+    #[test]
+    fn disabled_action_emits_a_commented_line() {
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("score", 0));
+        program.rule(Rule::new("main", Event::Global).action(Action::disabled(
+            Action::SetGlobalVariable {
+                variable: "score".into(),
+                value: Value::number(1.0),
+            },
+        )));
+
+        let source = reconstruct(&program).expect("disabled action reconstructs");
+        assert!(source.contains("    # score = 1\n"), "{source}");
+
+        let reparsed = compile_to_program(&source, "disabled-action.opy");
+        assert!(workshop_rs::compare::equivalent(&program, &reparsed));
+    }
+
+    #[test]
+    fn disabled_control_flow_emits_a_commented_block() {
+        // `Disabled` wraps the `If` marker only; the whole group comments
+        // out — `elif`/`else`/`end` lines included.
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("score", 0));
+        program.rule(
+            Rule::new("main", Event::Global)
+                .action(Action::disabled(Action::If {
+                    condition: Value::call(
+                        "==",
+                        [Value::global_variable("score"), Value::number(0.0)],
+                    ),
+                }))
+                .action(Action::SetGlobalVariable {
+                    variable: "score".into(),
+                    value: Value::number(1.0),
+                })
+                .action(Action::Else)
+                .action(Action::SetGlobalVariable {
+                    variable: "score".into(),
+                    value: Value::number(2.0),
+                })
+                .action(Action::End),
+        );
+
+        let source = reconstruct(&program).expect("disabled control flow reconstructs");
+        assert!(source.contains("    # if (score == 0):\n"), "{source}");
+        assert!(source.contains("    # score = 1\n"), "{source}");
+        assert!(source.contains("    # else:\n"), "{source}");
+
+        let reparsed = compile_to_program(&source, "disabled-if.opy");
+        assert!(workshop_rs::compare::equivalent(&program, &reparsed));
+    }
+
+    #[test]
+    fn subroutine_rule_without_actions_emits_pass() {
+        let mut program = Program::new();
+        program.subroutine(Subroutine::with_index("reset", 0));
+        program.rule(Rule::new(
+            "Subroutine reset",
+            Event::Subroutine("reset".into()),
+        ));
+
+        let source = reconstruct(&program).expect("empty subroutine rule reconstructs");
+        assert!(source.contains("def reset():\n    pass\n"), "{source}");
+
+        let reparsed = compile_to_program(&source, "empty-subroutine.opy");
+        assert!(workshop_rs::compare::equivalent(&program, &reparsed));
+    }
+
+    #[test]
+    fn subroutine_rules_reconstruct_in_def_form_in_any_order() {
+        // Subroutine-event rules may appear anywhere and carry any rule
+        // name: the comparator ignores their relative order, and rule names
+        // are display metadata.
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("score", 0));
+        program.subroutine(Subroutine::with_index("first", 0));
+        program.subroutine(Subroutine::with_index("second", 1));
+        program.rule(
+            Rule::new("main", Event::Global).action(Action::CallSubroutine {
+                subroutine: "first".into(),
+            }),
+        );
+        program.rule(
+            Rule::new("my second body", Event::Subroutine("second".into())).action(
+                Action::SetGlobalVariable {
+                    variable: "score".into(),
+                    value: Value::number(2.0),
+                },
+            ),
+        );
+        program.rule(
+            Rule::new("my first body", Event::Subroutine("first".into())).action(
+                Action::SetGlobalVariable {
+                    variable: "score".into(),
+                    value: Value::number(1.0),
+                },
+            ),
+        );
+
+        let source = reconstruct(&program).expect("out-of-order defs reconstruct");
+        assert!(source.contains("def second():"), "{source}");
+        assert!(source.contains("def first():"), "{source}");
+
+        let reparsed = compile_to_program(&source, "def-order.opy");
+        assert!(workshop_rs::compare::equivalent(&program, &reparsed));
+    }
+
+    #[test]
+    fn subroutine_rule_with_conditions_stays_refused() {
+        let mut program = Program::new();
+        program.subroutine(Subroutine::with_index("reset", 0));
+        program.rule(
+            Rule::new("Subroutine reset", Event::Subroutine("reset".into()))
+                .condition(Value::number(1.0))
+                .action(Action::CallSubroutine {
+                    subroutine: "reset".into(),
+                }),
+        );
+
+        let error = reconstruct(&program).expect_err("subroutine conditions stay refused");
+        assert_eq!(error.issues[0].code, "unsupported-rule-order");
+    }
+
+    #[test]
+    fn duplicate_subroutine_rules_stay_refused() {
+        let mut program = Program::new();
+        program.subroutine(Subroutine::with_index("reset", 0));
+        for name in ["first def", "second def"] {
+            program.rule(Rule::new(name, Event::Subroutine("reset".into())));
+        }
+
+        let error = reconstruct(&program).expect_err("one subroutine, one def");
+        assert_eq!(error.issues[0].code, "unsupported-rule-order");
+    }
+
+    #[test]
+    fn initializer_named_rule_after_an_ongoing_rule_keeps_its_position() {
+        // Initializer rules are never relocated: an initializer-named rule
+        // that is not the leading canonical initializer reconstructs as an
+        // ordinary rule where it sits (#597).
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("score", 0));
+        program.rule(
+            Rule::new("main", Event::Global).action(Action::SetGlobalVariable {
+                variable: "score".into(),
+                value: Value::number(2.0),
+            }),
+        );
+        program.rule(
+            Rule::new("Initialize global variables", Event::Global).action(
+                Action::SetGlobalVariable {
+                    variable: "score".into(),
+                    value: Value::number(1.0),
+                },
+            ),
+        );
+
+        let source = reconstruct(&program).expect("demoted initializer reconstructs");
+        let main = source.find("rule \"main\":").expect("main rule emitted");
+        let init = source
+            .find("rule \"Initialize global variables\":")
+            .expect("initializer-named rule emitted");
+        assert!(main < init, "{source}");
+        assert!(!source.contains("globalvar score ="), "{source}");
+
+        let reparsed = compile_to_program(&source, "init-position.opy");
+        assert!(
+            workshop_rs::compare::equivalent(&program, &reparsed),
+            "{:?}",
+            workshop_rs::compare::difference(&program, &reparsed)
+        );
+    }
+
+    #[test]
+    fn initializer_named_rule_with_conditions_stays_an_ordinary_rule() {
+        // Conditions are not part of the canonical initializer shape, so
+        // the rule demotes to an ordinary rule instead of refusing.
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("score", 0));
+        program.rule(
+            Rule::new("Initialize global variables", Event::Global)
+                .condition(Value::call(
+                    "==",
+                    [Value::global_variable("score"), Value::number(0.0)],
+                ))
+                .action(Action::SetGlobalVariable {
+                    variable: "score".into(),
+                    value: Value::number(1.0),
+                }),
+        );
+
+        let source = reconstruct(&program).expect("conditioned initializer-name reconstructs");
+        assert!(
+            source.contains("rule \"Initialize global variables\":"),
+            "{source}"
+        );
+        assert!(source.contains("    @Condition (score == 0)\n"), "{source}");
+
+        let reparsed = compile_to_program(&source, "init-condition.opy");
+        assert!(
+            workshop_rs::compare::equivalent(&program, &reparsed),
+            "{source}\n{:?}",
+            workshop_rs::compare::difference(&program, &reparsed)
+        );
+    }
+
+    #[test]
+    fn initializer_named_rule_with_out_of_order_sets_stays_an_ordinary_rule() {
+        // The canonical initializer Sets in declaration order; any other
+        // arrangement demotes to an ordinary rule.
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("first", 0));
+        program.global_variable(Variable::with_index("second", 1));
+        program.rule(
+            Rule::new("Initialize global variables", Event::Global)
+                .action(Action::SetGlobalVariable {
+                    variable: "second".into(),
+                    value: Value::number(2.0),
+                })
+                .action(Action::SetGlobalVariable {
+                    variable: "first".into(),
+                    value: Value::number(1.0),
+                }),
+        );
+
+        let source = reconstruct(&program).expect("out-of-order initializer-name reconstructs");
+        assert!(
+            source.contains("rule \"Initialize global variables\":"),
+            "{source}"
+        );
+        assert!(!source.contains("globalvar second ="), "{source}");
+
+        let reparsed = compile_to_program(&source, "init-order.opy");
+        assert!(workshop_rs::compare::equivalent(&program, &reparsed));
+    }
+
+    #[test]
+    fn canonical_initializer_still_folds_into_declarations() {
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("score", 0));
+        program.rule(
+            Rule::new("Initialize global variables", Event::Global).action(
+                Action::SetGlobalVariable {
+                    variable: "score".into(),
+                    value: Value::number(1.0),
+                },
+            ),
+        );
+
+        let source = reconstruct(&program).expect("canonical initializer reconstructs");
+        assert!(source.contains("globalvar score = 1\n"), "{source}");
+        assert!(!source.contains("rule \""), "{source}");
+
+        let reparsed = compile_to_program(&source, "canonical-init.opy");
+        assert!(workshop_rs::roundtrip::equivalent(&program, &reparsed));
+    }
     #[test]
     fn reconstruction_begins_with_optimize_strict() {
         let mut program = Program::new();

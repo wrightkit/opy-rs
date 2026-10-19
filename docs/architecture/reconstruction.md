@@ -128,11 +128,12 @@ the comparator to reason about evaluation equivalences; see the
 The comparator belongs to `workshop-rs`: it judges canonical Workshop
 meaning and must be usable by every source-language implementation. The
 compared structure and allowed differences above are the
-`wrightkit/workshop-rs#490` contract, landed as
-`workshop_rs::compare::equivalent` (workshop-rs 1.20.0). This contract
-does not license an OPY-local comparator;
+`wrightkit/workshop-rs#490` contract, exposed as
+`workshop_rs::compare::{equivalent, difference}` since `workshop-rs`
+1.20.0 — this contract does not license an OPY-local comparator.
 `workshop_rs::roundtrip::equivalent` remains valid evidence for the
-strict-identity subset it covers.
+subset where strict identity holds, but widened-surface tests compare
+under `workshop_rs::compare`.
 
 ## Supported surface by canonical construct
 
@@ -179,21 +180,21 @@ reference, so identity stays bound to the declaration index.
 | --- | --- | --- |
 | `Event::Global` rule | `rule "<name>": @Event global` | supported |
 | `Event::EachPlayer`, incl. `All`/`All` filters | `rule "<name>": @Event eachPlayer` | supported |
-| `Event::EachPlayerWithFilters` (non-`All`) | `@Event eachPlayer` + `@Team`/`@Hero`/`@Slot` | extension (relaxes `unsupported-rule-event`) |
-| `Event::Player { kind, team, target }` | `@Event <catalog-id>` + filters | extension |
-| `Event::Subroutine` body rules | `def` blocks | supported in canonical layout; ordering/name-shape relaxations under the allowed differences are extension |
-| Disabled rule | `@Disabled` | extension (relaxes `unsupported-disabled-rule`) |
+| `Event::EachPlayerWithFilters` (non-`All`) | `@Event eachPlayer` + `@Team`/`@Hero`/`@Slot` | supported |
+| `Event::Player { kind, team, target }` | `@Event <catalog-id>` + `@Team`/`@Hero`/`@Slot` filters | supported |
+| `Event::Subroutine` body rules | `def` blocks in any program position with any rule name (order/name-shape are allowed differences); conditions and duplicate defs stay refused | supported |
+| Disabled rule | `@Disabled` (`def` cannot carry the annotation, so a disabled subroutine-body rule emits its body as `#`-commented lines plus `pass`) | supported |
 | Rule with zero actions | Inert; may be omitted or emitted as `@Delimiter` | supported (omitted) |
-| Subroutine rule with zero actions | `def` body needs a statement (`pass`) to parse | extension |
+| Subroutine rule with zero actions | `def` body needs a statement (`pass`) to parse | supported |
 | Canonical initializer rules (frontend-shaped name, event, all-Set, table order) | Declaration initializers | supported |
-| Initializer-named rules not in the frontend's canonical leading position, or not otherwise frontend-shaped | Ordinary `rule` emission at the rule's original position — initializer rules are never relocated | extension (relaxes `unsupported-init-rule` for position or shape mismatches that the ordinary-rule path reproduces) |
+| Initializer-named rules not in the frontend's canonical leading position, or not otherwise frontend-shaped | Ordinary `rule` emission at the rule's original position — initializer rules are never relocated | supported |
 
 ### Conditions
 
 | Canonical construct | OPY mapping | Status |
 | --- | --- | --- |
 | Enabled condition | `@Condition <value>` | supported |
-| Disabled condition | `#`-commented `@Condition` line (unobservable; kept for fidelity) or dropped | extension (relaxes `unsupported-disabled-condition`) |
+| Disabled condition | `#`-commented `@Condition` line (unobservable; kept for fidelity) | supported |
 
 ### Actions
 
@@ -212,7 +213,7 @@ reference, so identity stays bound to the declaration index.
 | `Modify` RemoveFromArrayByValue / RemoveFromArrayByIndex / Min / Max | `<v>.remove(<value>)` / `del <v>[<i>]` / `min=` / `max=` | extension (relaxes `unsupported-modify-op`) |
 | `AssignMember` (dynamic member-write target) | No OPY source form; `.x`/`.y`/`.z` member writes are also a pending canonical-validation exception | refusal (`unsupported-member-assignment`) |
 | `CallSubroutine` to a declared subroutine | `<name>()` | supported |
-| Disabled action | `#`-commented statement line (unobservable; kept for fidelity) | extension (relaxes `unsupported-disabled-action`) |
+| Disabled action | `#`-commented statement lines (unobservable; kept for fidelity); a disabled block marker comments out its whole `elif`/`else`/`end` group | supported |
 | `Action::Call` resolvable through the manifest (incl. member calls) | `<fn>(<args>)` / `<recv>.<fn>(<args>)` | supported |
 | `Action::Call` for syntax-produced ids — `set*/modify*AtIndex`, `startRule`, `skip`, `skipIf`, `abortIf*`, `loopIf*` | Indexed assignment forms `v[i] = x` / `v[i] <op>= x`; `async(<sub>, <behavior>)`; `goto`/label or dynamic-`goto` synthesis; `if <c>: return` / `if <c>: loop()`; `if [not] ruleCondition: return` / `loop()` | extension |
 | `Action::Call` with no OPY form and no syntax mapping | — | refusal (`unsupported-action-call`) |
@@ -267,18 +268,13 @@ environment checks.
 | `unsupported-global-order` | Global indices are not in ascending order | relaxed → emit sorted with explicit indices (#599) |
 | `unsupported-index` | Declaration index outside the 0–127 slot range or shared with a sibling | guard |
 | `unsupported-indexed-initializer` | Initializer-bearing global at a non-lowest-free slot | extension/refusal → `globalvar name <index> = <init>` grammar parity landed; the emission mapping is the remaining work |
-| `unsupported-rule-order` | Subroutine rule after a normal rule, out of table order, wrong synthesized name, or carrying conditions; `Subroutine` event outside `def` layout | extension for order/name shape (allowed differences); refusal for conditions on subroutine rules |
-| `unsupported-init-rule` | Initializer rule carries conditions, non-Set actions, non-eventPlayer target, or out-of-order Sets | extension → ordinary-rule emission where reproducible |
-| `unsupported-disabled-rule` | `rule.disabled` | extension → `@Disabled` |
-| `unsupported-rule-event` | Filtered `eachPlayer`, any `Player` event | extension → event + `@Team`/`@Hero`/`@Slot` |
-| `unsupported-disabled-condition` | `condition.disabled` | extension → `#`-commented `@Condition` |
-| `unsupported-control-flow` | Unbalanced/unexpected `If`/`ElseIf`/`Else`/`End`/`While`/`For` markers, missing `End` | guard (malformed action stream) |
+| `unsupported-rule-order` | Subroutine-body rule carrying conditions, or more than one def rule bound to one subroutine; `Subroutine` event outside `def` layout | refusal (order and rule-name shape relaxed as allowed differences) |
+| `unsupported-control-flow` | Unbalanced/unexpected `If`/`ElseIf`/`Else`/`End`/`While`/`For` markers, missing `End`, or a `Disabled` modifier on a marker/`Disabled` | guard (malformed action stream) |
 | `unsupported-per-player-loop` | `ForPlayerVariable` | extension → `for <player>.<v> in range(...)` |
 | `unsupported-set-binary` | `Set x = x <op> v` over the same variable | extension → emit as written; `Modify` is an allowed difference |
 | `unsupported-arbitrary-player-target` | Player-variable access/write on a non-`eventPlayer` receiver | extension → `(<player>).<v>` forms |
 | `unsupported-member-assignment` | `AssignMember` dynamic member-write | refusal |
 | `unsupported-dangling` | Variable/subroutine reference with no declaration | guard |
-| `unsupported-disabled-action` | `Action::Disabled` | extension → `#`-commented line |
 | `unsupported-action-call` | Call with no OPY form, dedicated-lowering name, kind mismatch, or subroutine-ambiguous bare call | refusal; syntax-produced ids (`set*/modify*AtIndex`, `startRule`, `skip*`, `abortIf*`, `loopIf*`) are extension |
 | `unsupported-modify-op` | `RemoveFromArrayByValue`, `RemoveFromArrayByIndex`, `Min`, `Max`, or a future op | extension → `.remove` / `del` / `min=` / `max=`; unknown future ops stay refused |
 | `unsupported-invalid-arity` | Member call without receiver; args exceed declared params | guard |
@@ -336,11 +332,11 @@ permanent unless a later owner decision changes them):
 - **Settings** — upstream emits `settings` JSONC; `opy-rs` refuses
   (`unsupported-settings`) pending the contracted settings mapping.
 - **Disabled constructs** — upstream comments them out or emits
-  `@Disabled`; `opy-rs` refuses today; the contracted mapping preserves
-  them as annotations/comments. Unobservable under the equivalence
-  contract either way.
+  `@Disabled`; `opy-rs` reconstructs them as `@Disabled` and
+  `#`-commented lines (disabled subroutine bodies become an inert `def`
+  with `pass`). Unobservable under the equivalence contract either way.
 - **Filtered and player events** — upstream emits event names and filters;
-  `opy-rs` refuses today; contracted mapping exists on the OPY surface.
+  `opy-rs` reconstructs `@Event` plus `@Team`/`@Hero`/`@Slot` filters.
 - **Arbitrary player targets and per-player loops** — upstream emits
   `<player>.<var>` forms; the OPY surface accepts them; `opy-rs` refuses
   today — contracted extension.
@@ -454,9 +450,9 @@ origin fidelity.
 
 Contract-level only; no OPY-local substitutes are introduced.
 
-1. **Relaxed behavior comparator** — landed:
-   `workshop_rs::compare::equivalent` (workshop-rs 1.20.0) implements
-   `wrightkit/workshop-rs#490`.
+1. **Relaxed behavior comparator** — landed in `workshop-rs` 1.20.0 as
+   `workshop_rs::compare::{equivalent, difference}`
+   (`wrightkit/workshop-rs#490`); reconstruction tests compare under it.
 
 If implementation uncovers a genuinely missing canonical Workshop
 capability beyond this (for example a canonical operation reconstruction
@@ -469,10 +465,11 @@ recorded against the boundary contract, not approximated locally.
   to a program equivalent to the input under this contract's comparator —
   `Program → OPY → Program`. A round-trip failure on an accepted input is
   a defect, regardless of which stage produced it.
-- `workshop_rs::compare::equivalent` gates the widened subset
-  (out-of-order declaration tables, mangled names);
-  `workshop_rs::roundtrip::equivalent` remains valid evidence for the
-  strict-identity subset it covers.
+- Round-trip tests for the widened surface compare under
+  `workshop_rs::compare::equivalent` (`workshop-rs` ≥ 1.20.0), including
+  out-of-order declaration tables and mangled names;
+  `workshop_rs::roundtrip::equivalent` remains valid evidence where
+  strict identity holds.
 - Refusal classes keep executable evidence: each recorded refusal has a
   test naming its code; each extension has a round-trip test once
   implemented.
