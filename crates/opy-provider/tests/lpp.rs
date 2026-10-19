@@ -1744,33 +1744,17 @@ fn macro_definition_spans_stay_in_the_shared_lowering() {
 /// distinct constructs refuse, each with a stable code and a source span.
 const REFUSED_ARTIFACT: &str = concat!(
     "variables {\n",
-    "    player:\n",
-    "        0: x\n",
+    "    global:\n",
+    "        0: g\n",
     "}\n",
     "\n",
-    "disabled rule (\"off\") {\n",
+    "rule (\"main\") {\n",
     "    event {\n",
     "        Ongoing - Global;\n",
     "    }\n",
     "    actions {\n",
-    "        Abort;\n",
-    "    }\n",
-    "}\n",
-    "\n",
-    "rule (\"loop\") {\n",
-    "    event {\n",
-    "        Ongoing - Each Player;\n",
-    "        All;\n",
-    "        All;\n",
-    "    }\n",
-    "    conditions {\n",
-    "        disabled Event Player == Null;\n",
-    "    }\n",
-    "    actions {\n",
-    "        For Player Variable(Event Player, x, 0, 1, 1);\n",
-    "            Set Player Variable(Event Player, x, 0);\n",
-    "        End;\n",
-    "        disabled Abort;\n",
+    "        Chase Global Variable At Rate(g, 100, 1, Destination And Duration);\n",
+    "        Set Player Variable At Index(All Players(All), x, 0, 0);\n",
     "    }\n",
     "}\n",
 );
@@ -1834,13 +1818,13 @@ fn reconstruct_refusal_carries_every_issue_code_and_span() {
     // clients can show each code with its span.
     assert_eq!(
         lpp["details"]["refusalCode"],
-        json!("unsupported-disabled-rule")
+        json!("unsupported-enum-domain-mismatch")
     );
     let message = response["error"]["message"].as_str().expect("message");
     for (code, span) in [
-        ("unsupported-disabled-rule", "at 6:1"),
-        ("unsupported-disabled-condition", "at 22:31"),
-        ("unsupported-disabled-action", "at 28:18"),
+        ("unsupported-enum-domain-mismatch", "at 11:50"),
+        ("unsupported-value-call", "at 11:50"),
+        ("unsupported-action-call", "at 12:9"),
     ] {
         assert!(
             message

@@ -138,7 +138,8 @@ compared structure and allowed differences above are the
 `workshop_rs::compare::equivalent` / `workshop_rs::compare::difference`
 (workshop-rs ≥ 1.20). This contract does not license an OPY-local
 comparator; `workshop_rs::roundtrip::equivalent` remains valid evidence
-for the strict-identity subset only.
+for the strict-identity subset only, while widened-surface tests compare
+under `workshop_rs::compare`.
 
 ## Supported surface by canonical construct
 
@@ -185,21 +186,21 @@ reference, so identity stays bound to the declaration index.
 | --- | --- | --- |
 | `Event::Global` rule | `rule "<name>": @Event global` | supported |
 | `Event::EachPlayer`, incl. `All`/`All` filters | `rule "<name>": @Event eachPlayer` | supported |
-| `Event::EachPlayerWithFilters` (non-`All`) | `@Event eachPlayer` + `@Team`/`@Hero`/`@Slot` | extension (relaxes `unsupported-rule-event`) |
-| `Event::Player { kind, team, target }` | `@Event <catalog-id>` + filters | extension |
-| `Event::Subroutine` body rules | `def` blocks | supported in canonical layout; ordering/name-shape relaxations under the allowed differences are extension |
-| Disabled rule | `@Disabled` | extension (relaxes `unsupported-disabled-rule`) |
+| `Event::EachPlayerWithFilters` (non-`All`) | `@Event eachPlayer` + `@Team`/`@Hero`/`@Slot` | supported |
+| `Event::Player { kind, team, target }` | `@Event <catalog-id>` + `@Team`/`@Hero`/`@Slot` filters | supported |
+| `Event::Subroutine` body rules | `def` blocks in any program position with any rule name (order/name-shape are allowed differences); conditions and duplicate defs stay refused | supported |
+| Disabled rule | `@Disabled` (`def` cannot carry the annotation, so a disabled subroutine-body rule emits its body as `#`-commented lines plus `pass`) | supported |
 | Rule with zero actions | Inert; may be omitted or emitted as `@Delimiter` | supported (omitted) |
-| Subroutine rule with zero actions | `def` body needs a statement (`pass`) to parse | extension |
+| Subroutine rule with zero actions | `def` body needs a statement (`pass`) to parse | supported |
 | Canonical initializer rules (frontend-shaped name, event, all-Set, table order) | Declaration initializers | supported |
-| Initializer-named rules not in the frontend's canonical leading position, or not otherwise frontend-shaped | Ordinary `rule` emission at the rule's original position — initializer rules are never relocated | extension (relaxes `unsupported-init-rule` for position or shape mismatches that the ordinary-rule path reproduces) |
+| Initializer-named rules not in the frontend's canonical leading position, or not otherwise frontend-shaped | Ordinary `rule` emission at the rule's original position — initializer rules are never relocated | supported |
 
 ### Conditions
 
 | Canonical construct | OPY mapping | Status |
 | --- | --- | --- |
 | Enabled condition | `@Condition <value>` | supported |
-| Disabled condition | `#`-commented `@Condition` line (unobservable; kept for fidelity) or dropped | extension (relaxes `unsupported-disabled-condition`) |
+| Disabled condition | `#`-commented `@Condition` line (unobservable; kept for fidelity) | supported |
 
 ### Actions
 
@@ -218,7 +219,7 @@ reference, so identity stays bound to the declaration index.
 | `Modify` RemoveFromArrayByValue / RemoveFromArrayByIndex / Min / Max | `<v>.remove(<value>)` / `del <v>[<i>]` / `min=` / `max=` | supported |
 | `AssignMember` (dynamic member-write target) | No OPY source form; `.x`/`.y`/`.z` member writes are also a pending canonical-validation exception | refusal (`unsupported-member-assignment`) |
 | `CallSubroutine` to a declared subroutine | `<name>()` | supported |
-| Disabled action | `#`-commented statement line (unobservable; kept for fidelity) | extension (relaxes `unsupported-disabled-action`) |
+| Disabled action | `#`-commented statement lines (unobservable; kept for fidelity); a disabled block marker comments out its whole `elif`/`else`/`end` group | supported |
 | `Action::Call` resolvable through the manifest (incl. member calls) | `<fn>(<args>)` / `<recv>.<fn>(<args>)` | supported |
 | `Action::Call` for syntax-produced ids — `set*/modify*AtIndex`, `startRule`, `skip`, `skipIf`, `abortIf*`, `loopIf*` | Indexed assignment forms `v[i] = x` / `v[i] <op>= x`; `async(<sub>, <behavior>)`; `goto`/label or dynamic-`goto` synthesis; `if <c>: return` / `if <c>: loop()`; `if [not] ruleCondition: return` / `loop()` | supported |
 | `Action::Call` with no OPY form and no syntax mapping | — | refusal (`unsupported-action-call`) |
@@ -273,20 +274,20 @@ environment checks.
 | `unsupported-global-order` | Global indices are not in ascending order | relaxed → emit sorted with explicit indices (#599) |
 | `unsupported-index` | Declaration index outside the 0–127 slot range or shared with a sibling | guard |
 | `unsupported-indexed-initializer` | Initializer-bearing global at a non-lowest-free slot | extension/refusal → `globalvar name <index> = <init>` grammar parity landed; the emission mapping is the remaining work |
-| `unsupported-rule-order` | Subroutine rule after a normal rule, out of table order, wrong synthesized name, or carrying conditions; `Subroutine` event outside `def` layout | extension for order/name shape (allowed differences); refusal for conditions on subroutine rules |
-| `unsupported-init-rule` | Initializer rule carries conditions, non-Set actions, non-eventPlayer target, or out-of-order Sets | extension → ordinary-rule emission where reproducible |
-| `unsupported-disabled-rule` | `rule.disabled` | extension → `@Disabled` |
-| `unsupported-rule-event` | Filtered `eachPlayer`, any `Player` event | extension → event + `@Team`/`@Hero`/`@Slot` |
-| `unsupported-disabled-condition` | `condition.disabled` | extension → `#`-commented `@Condition` |
-| `unsupported-control-flow` | Unbalanced/unexpected `If`/`ElseIf`/`Else`/`End`/`While`/`For` markers, missing `End` | guard (malformed action stream) |
-| `unsupported-per-player-loop` | A `ForPlayerVariable` reaching the single-action path (malformed stream residue; the supported `for <player>.<v>` form is emitted by the block walker) | residual guard; the mapping itself is implemented |
+| `unsupported-rule-order` | Subroutine-body rule carrying conditions, more than one def rule bound to one subroutine, or `Subroutine` event outside `def` layout | refusal for conditions/duplication; order and rule-name shape are relaxed as allowed differences |
+| ~~`unsupported-init-rule`~~ | — | implemented: non-canonical initializer-named rules emit as ordinary rules |
+| ~~`unsupported-disabled-rule`~~ | — | implemented: `rule.disabled` → `@Disabled` |
+| ~~`unsupported-rule-event`~~ | — | implemented: filtered `eachPlayer` and `Player` events → `@Event` plus `@Team`/`@Hero`/`@Slot` |
+| ~~`unsupported-disabled-condition`~~ | — | implemented: `condition.disabled` → `#`-commented `@Condition` |
+| `unsupported-control-flow` | Unbalanced/unexpected `If`/`ElseIf`/`Else`/`End`/`While`/`For` markers, missing `End`, or a `Disabled` modifier on a marker/`Disabled` | guard (malformed action stream) |
+| `unsupported-per-player-loop` | A `ForPlayerVariable` reaching the single-action path (malformed stream residue; the block walker emits `for <player>.<v>`) | residual guard; the mapping itself is implemented |
 | ~~`unsupported-set-binary`~~ | — | implemented: self-referential `Set` emits as written; `Modify` is an allowed difference |
 | ~~`unsupported-arbitrary-player-target`~~ | — | implemented: `(<player>).<v>` read/write and `for` binder forms |
 | `unsupported-member-assignment` | `AssignMember` dynamic member-write | refusal |
 | `unsupported-dangling` | Variable/subroutine reference with no declaration | guard |
-| `unsupported-disabled-action` | `Action::Disabled` | extension → `#`-commented line |
+| ~~`unsupported-disabled-action`~~ | — | implemented: `Action::Disabled` → `#`-commented line (a `Disabled` block marker comments out the whole group) |
 | `unsupported-action-call` | Call with no OPY form, dedicated-lowering name, kind mismatch, or subroutine-ambiguous bare call | refusal; syntax-produced ids (`set*/modify*AtIndex`, `startRule`, `skip*`, `abortIf*`, `loopIf*`) are implemented |
-| `unsupported-modify-op` | A modify operation beyond `Add`/`Subtract`/`Multiply`/`Divide`/`Modulo`/`RaiseToPower`/`AppendToArray`/`RemoveFromArrayByValue`/`RemoveFromArrayByIndex`/`Min`/`Max` (a future op) | refusal for unknown ops; the four syntax ops are implemented |
+| `unsupported-modify-op` | A modify operation beyond `Add`/`Subtract`/`Multiply`/`Divide`/`Modulo`/`RaiseToPower`/`AppendToArray`/`RemoveFromArrayByValue`/`RemoveFromArrayByIndex`/`Min`/`Max` (a future op) | refusal for unknown ops; `.remove` / `del` / `min=` / `max=` are implemented |
 | `unsupported-invalid-arity` | Member call without receiver; args exceed declared params | guard |
 | `unsupported-missing-argument` | A non-optional parameter omitted | guard |
 | `unsupported-invalid-argument` | Variable-required parameter (`chase*` arg 0) not a variable | guard |
@@ -342,11 +343,11 @@ permanent unless a later owner decision changes them):
 - **Settings** — upstream emits `settings` JSONC; `opy-rs` refuses
   (`unsupported-settings`) pending the contracted settings mapping.
 - **Disabled constructs** — upstream comments them out or emits
-  `@Disabled`; `opy-rs` refuses today; the contracted mapping preserves
-  them as annotations/comments. Unobservable under the equivalence
-  contract either way.
-- **Filtered and player events** — upstream emits event names and filters;
-  `opy-rs` refuses today; contracted mapping exists on the OPY surface.
+  `@Disabled`; `opy-rs` reconstructs them as `@Disabled` and
+  `#`-commented lines (disabled subroutine bodies become an inert `def`
+  with `pass`). Unobservable under the equivalence contract either way.
+- ~~**Filtered and player events**~~ — implemented: `opy-rs` reconstructs
+  `@Event` plus `@Team`/`@Hero`/`@Slot` filters.
 - ~~**Arbitrary player targets and per-player loops**~~ — implemented:
   `(<player>).<v>` read/write forms and `for <player>.<v> in range(...)`.
 - ~~**Indexed assignments and syntax-produced call ids**~~ — implemented:
