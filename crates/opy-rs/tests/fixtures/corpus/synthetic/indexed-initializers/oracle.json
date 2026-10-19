@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        3: a\n        127: top\n    player:\n        7: b\n}\n\nsubroutines {\n    0: loose\n    2: helper\n    5: pinned\n}\n\nrule (\"Initialize global variables\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(a, 5);\n        Set Global Variable(top, 1);\n    }\n}\n\nrule (\"Initialize player variables\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Set Player Variable(Event Player, b, 9);\n    }\n}\n\nrule (\"uses the declared names\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Modify Global Variable(a, Add, 1);\n        Modify Player Variable(Event Player, b, Add, 1);\n        Call Subroutine(helper);\n        Call Subroutine(loose);\n        Call Subroutine(pinned);\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        3: a\n        127: top\n    player:\n        7: b\n}\n\nsubroutines {\n    0: loose\n    2: helper\n    5: pinned\n}\n\nrule (\"Initialize global variables\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(a, 5);\n        Set Global Variable(top, 1);\n    }\n}\n\nrule (\"Initialize player variables\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Set Player Variable(Event Player, b, 9);\n    }\n}\n\nrule (\"uses the declared names\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Modify Global Variable(a, Add, 1);\n        Modify Player Variable(Event Player, b, Add, 1);\n        Call Subroutine(helper);\n        Call Subroutine(loose);\n        Call Subroutine(pinned);\n    }\n}\n\n",
+    "workshopSha256": "6ec33529fa267882c3fd06afc6317c170365ca81365acd64ffa2fbfd732b055d"
+  },
+  "fixture": "synthetic/indexed-initializers",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "66dc1b8f56cc4187f4f79450eeb8ecdcf864302b76d99e412d247df8fb61c810"
+      }
+    ],
+    "sha256": "2f29451f978dce1ad31fd4af6a412aef9e909ff1f139e9a59896cd894feeec0d",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "5a7d0e294b8cad73b9701987bb584d0551d7fa4d",
+    "gitHead": "ec763c1d245aa5485ef61af5b2bda4975bce4877",
+    "integrity": "sha512-C5F6btT5yn19BvHuE0bjMuSd/2esebBabmpL4SYLQFuJ4IdouVOKEoMLLuJFAyNc0Phwrolblj5GDkDGYR0ofg==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.17.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.17"
+  },
+  "schemaVersion": 1
+}

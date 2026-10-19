@@ -1,5 +1,24 @@
 use super::*;
 
+/// The pinned reference rejects an explicit declaration index outside the
+/// Workshop slot range ("Invalid index 'N' for <kind> '<name>', must be from
+/// 0 to 127") before any slot assignment.
+fn check_explicit_index(
+    index: u32,
+    kind: &str,
+    name: &str,
+    span: Option<HirSpan>,
+) -> Result<(), IntegrationError> {
+    if index > 127 {
+        return Err(IntegrationError::new(
+            "index-out-of-range",
+            format!("invalid index '{index}' for {kind} '{name}', must be from 0 to 127"),
+            span,
+        ));
+    }
+    Ok(())
+}
+
 impl<'a> Lowering<'a> {
     fn translation_helper_index(
         &self,
@@ -66,6 +85,7 @@ impl<'a> Lowering<'a> {
                     name, index, span, ..
                 } => {
                     if let Some(index) = index {
+                        check_explicit_index(*index, "global variable", name, *span)?;
                         for (implicit_name, implicit_span) in &implicit_globals {
                             if default_var_index(implicit_name) == Some(*index) {
                                 return Err(IntegrationError::new(
@@ -85,6 +105,7 @@ impl<'a> Lowering<'a> {
                     name, index, span, ..
                 } => {
                     if let Some(index) = index {
+                        check_explicit_index(*index, "player variable", name, *span)?;
                         for (implicit_name, implicit_span) in &implicit_players {
                             if implicit_player_index(implicit_name) == *index {
                                 return Err(IntegrationError::new(
@@ -99,7 +120,12 @@ impl<'a> Lowering<'a> {
                     }
                     players.push((*index, *span));
                 }
-                hir::Declaration::Subroutine { index, span, .. } => {
+                hir::Declaration::Subroutine {
+                    name, index, span, ..
+                } => {
+                    if let Some(index) = index {
+                        check_explicit_index(*index, "subroutine", name, *span)?;
+                    }
                     subroutines.push((*index, *span));
                 }
                 hir::Declaration::Constant { .. } | hir::Declaration::Macro { .. } => {}

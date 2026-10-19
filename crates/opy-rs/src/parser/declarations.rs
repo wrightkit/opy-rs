@@ -12,13 +12,7 @@ impl Parser<'_> {
         };
         let mut index = None;
         let mut initializer = None;
-        if self.peek_kind() == TokenKind::Assign {
-            self.bump();
-            match self.parse_expr() {
-                Ok(expr) => initializer = Some(expr),
-                Err(()) => return false,
-            }
-        } else if self.peek_kind() == TokenKind::Number {
+        if self.peek_kind() == TokenKind::Number {
             let token = self.advance();
             index = token.text.parse::<u32>().ok();
             if index.is_none() {
@@ -31,6 +25,13 @@ impl Parser<'_> {
                     token.span,
                 ));
                 return false;
+            }
+        }
+        if self.peek_kind() == TokenKind::Assign {
+            self.bump();
+            match self.parse_expr() {
+                Ok(expr) => initializer = Some(expr),
+                Err(()) => return false,
             }
         } else if self.peek_kind() == TokenKind::LBrace {
             self.report_workshop_source(self.peek().span, BRACE_BLOCKS);
@@ -92,6 +93,26 @@ impl Parser<'_> {
                     token.span,
                 ));
                 return false;
+            }
+        }
+        // The pinned reference splits every globalvar/playervar/subroutine
+        // declaration line at its first '='; for `subroutine` the rest of
+        // the logical line is dropped without being parsed, including
+        // bracket-continued tokens on following physical lines.
+        if self.peek_kind() == TokenKind::Assign {
+            self.bump();
+            let mut bracket = 0usize;
+            loop {
+                match self.peek_kind() {
+                    TokenKind::Eof => break,
+                    TokenKind::Newline if bracket == 0 => break,
+                    TokenKind::LParen | TokenKind::LBracket | TokenKind::LBrace => bracket += 1,
+                    TokenKind::RParen | TokenKind::RBracket | TokenKind::RBrace => {
+                        bracket = bracket.saturating_sub(1)
+                    }
+                    _ => {}
+                }
+                self.bump();
             }
         }
         let end = self
