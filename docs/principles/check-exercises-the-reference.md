@@ -6,7 +6,7 @@
 
 **Changes the choice between:** a check that is cheap and stays green, and one that can fail on a real divergence from the reference.
 
-**Enforced by:** judgment. The independent-source rule for expected results is in the organization testing policy; `wrightkit-test-design-review` is the review surface.
+**Enforced by:** judgment. The independent-source rule for expected results is in the organization testing policy; `test-design-review` is the review surface.
 
 **Why:** guards passed while hiding divergence: a comparison reported only the first divergent line so a recorded exception masked sibling errors, exception matching never compared recorded values, and a consistency test compared two hand-kept copies of the same names.
 
