@@ -1862,7 +1862,38 @@ impl<'a> Lowering<'a> {
         self.optimization_state_at(expr.span()).strict
     }
 
-    pub(super) fn optimization_state_at(&self, span: Option<&HirSpan>) -> OptimizationState {
+    pub(in crate::compiler) fn optimization_state_at(
+        &self,
+        span: Option<&HirSpan>,
+    ) -> OptimizationState {
+        #[cfg(test)]
+        self.optimization_queries.borrow_mut().push(span.cloned());
+        if let Some(state) = &self.optimization_override {
+            return state.clone();
+        }
+        let Some(span) = span else {
+            return self.hir.preprocessing.optimization.clone();
+        };
+        self.optimization_index
+            .state_at(span.file, span.start)
+            .cloned()
+            .or_else(|| {
+                self.hir
+                    .preprocessing
+                    .source_file_initial_optimization
+                    .get(&span.file)
+                    .cloned()
+            })
+            .unwrap_or_else(|| self.hir.preprocessing.optimization.clone())
+    }
+
+    /// The pre-index linear scan over `preprocessing.directives`, retained
+    /// only as the equivalence oracle for `optimization_state_at` in tests.
+    #[cfg(test)]
+    pub(in crate::compiler) fn optimization_state_scan(
+        &self,
+        span: Option<&HirSpan>,
+    ) -> OptimizationState {
         if let Some(state) = &self.optimization_override {
             return state.clone();
         }

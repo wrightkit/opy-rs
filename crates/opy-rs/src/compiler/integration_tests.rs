@@ -42,6 +42,8 @@ mod member_angles;
 mod member_values;
 #[path = "tests/numeric_settings.rs"]
 mod numeric_settings;
+#[path = "tests/optimization_index.rs"]
+mod optimization_index;
 #[path = "tests/postfix_assignments.rs"]
 mod postfix_assignments;
 #[path = "tests/preprocessing.rs"]
