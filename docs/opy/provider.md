@@ -16,6 +16,7 @@ lookup, and LPP `1.6` for canonical id resolution.
 | --- | --- | --- |
 | Check | `lpp/check` | Loads the selected entry's OPY project and returns source diagnostics. |
 | Compile | `lpp/compile` | Uses the same project loading path and returns canonical Workshop text when clean. |
+| Reconstruct | `lpp/reconstruct` | Reconstructs OPY source from a canonical Workshop artifact; the bounded subset is defined by the [reconstruction contract](../architecture/reconstruction.md) and unsupported constructs refuse with every issue's stable code and span. |
 | Project loading | `lpp/check`, `lpp/compile` | LPP 1.1 loads from a client-selected file entry; LPP 1.2 also lets the provider select the default entry from a directory target. |
 | Rename | `lpp/rename` | Semantic rename of globals, player variables, and subroutines/`def`s across the received documents; refuses (`rename.*` refusal codes) when a site does not map to authored source or the result would not rebind identically. |
 | Edit validation | `lpp/validateEdits` | Applies a client's proposed edits and validates the result mechanically: range bounds, overlap, and whether the document's own text is still well-formed (`syntaxError`). Semantic or cross-file verdicts that depend on sibling sources defer to the client's post-edit project `lpp/check`. |
@@ -154,6 +155,27 @@ returned. Attribution is owned here:
 - Generated helper nodes (initializer rules, translation helpers) carry no span.
 
 Columns are 1-based Unicode scalar values, matching `Position`.
+
+## Reconstruction
+
+`lpp/reconstruct` is the inverse of `lpp/compile`: it accepts the artifact
+formats this provider emits — `workshop-rs/text-v1` and
+`workshop-rs/mapped-text-v1` — re-parses the canonical Workshop text through
+`workshop-rs`, and runs the bounded `opy_rs::reconstruct` surface defined by
+the [reconstruction contract](../architecture/reconstruction.md). For the
+mapped format the `text` member is reconstructed directly; the optional
+source map is not applied because issue spans are artifact-text provenance.
+
+An accepted program returns `{ "source": "..." }`. A program outside the
+reconstruction subset is refused: `details.refusalCode` names the first
+issue's stable code and the error `message` lists every issue as
+`<code>: <message> at <line>:<column>`, so the client can show each code
+with its span — reconstruction never emits partial OPY. A well-formed
+envelope in another format is refused with
+`reconstruct.artifactFormatUnsupported` (echoing `format`), and a malformed
+payload in a supported format is `invalidArtifact`. Environment failures
+(`manifest-error`, `catalog-error`) report as `providerFailure`, not
+refusals.
 
 ## Running locally
 
