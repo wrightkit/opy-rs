@@ -1,12 +1,16 @@
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 use workshop_rs::Program;
 use workshop_rs::catalog::{Catalog, Locale};
-use workshop_rs::program::{Action, Event, EventTarget, EventTeam, ModifyOp, Rule, Value};
+use workshop_rs::program::{
+    Action, Event, EventTarget, EventTeam, ModifyOp, Rule, Value, Variable,
+};
 use workshop_rs::source::Span;
 
-use crate::lexer::is_identifier;
-use crate::lower::policy;
+use crate::lexer::{is_ident_continue, is_ident_start, is_identifier};
+use crate::lower::special_forms::SpecialValueCall;
+use crate::lower::{NameNamespace, is_reserved_name, policy};
 use crate::manifest::{Function, FunctionKind, Manifest};
 
 /// A structured reconstruction diagnostic naming one non-representable
@@ -99,30 +103,23 @@ pub fn reconstruct_with(
     }
 }
 
-/// OPY names the parser treats as keywords or literals; a Workshop table name
-/// that collides with one of these cannot be referenced or declared faithfully.
-const RESERVED_NAMES: &[&str] = &[
-    "true",
-    "false",
-    "null",
-    "eventPlayer",
-    "rule",
-    "def",
-    "globalvar",
-    "playervar",
-    "subroutine",
-    "enum",
-    "macro",
-    "if",
-    "for",
-    "while",
-    "pass",
-    "elif",
-    "else",
-    "in",
-    "and",
-    "or",
-    "not",
+/// Call names a `name()` invocation resolves before the declared-subroutine
+/// check in the OPY frontend (`lower_call`): the translation calls,
+/// `compressed`, `vect`, `async`/`startRule`, plus the `sorted` and
+/// `createWorkshopSetting*` special forms (kept in `SPECIAL_VALUE_CALLS`),
+/// and `range`, which a subroutine would steal from every `for ... in`
+/// iterable. A subroutine carrying one of these names is emitted mangled;
+/// the remaining shadowed names are the upstream reserved sets used through
+/// `is_reserved_name`.
+const SHADOWED_SUBROUTINE_NAMES: &[&str] = &[
+    "_",
+    "__",
+    "___",
+    "compressed",
+    "vect",
+    "async",
+    "startRule",
+    "range",
 ];
 
 /// Binary operator spellings the OPY frontend lowers to `Value::Call`s with
@@ -142,8 +139,16 @@ struct Emitter<'a> {
     locale: &'a Locale,
     issues: Vec<ReconstructIssue>,
     out: String,
-    /// Subroutine names, for call-vs-subroutine ambiguity checks.
-    subroutine_names: std::collections::HashSet<String>,
+    /// Canonical table name → emitted OPY name, under the recorded
+    /// mangling rule (identity when the name re-resolves to its
+    /// declaration).
+    global_names: HashMap<String, String>,
+    player_names: HashMap<String, String>,
+    subroutine_emitted: HashMap<String, String>,
+    /// Canonical subroutine names, for dangling-reference checks.
+    subroutine_names: HashSet<String>,
+    /// Emitted subroutine names, for call-vs-subroutine ambiguity checks.
+    emitted_subroutine_names: HashSet<String>,
 }
 
 type IndexedRule<'a> = (usize, &'a Rule);
@@ -162,6 +167,28 @@ impl<'a> Emitter<'a> {
         catalog: &'a Catalog,
         locale: &'a Locale,
     ) -> Self {
+        let global_names = mangle_names(
+            program
+                .global_variables
+                .iter()
+                .map(|variable| variable.name.as_str()),
+            NameNamespace::Global,
+        );
+        let player_names = mangle_names(
+            program
+                .player_variables
+                .iter()
+                .map(|variable| variable.name.as_str()),
+            NameNamespace::Player,
+        );
+        let subroutine_emitted = mangle_names(
+            program
+                .subroutines
+                .iter()
+                .map(|subroutine| subroutine.name.as_str()),
+            NameNamespace::Subroutine,
+        );
+        let emitted_subroutine_names = subroutine_emitted.values().cloned().collect();
         let subroutine_names = program
             .subroutines
             .iter()
@@ -174,7 +201,11 @@ impl<'a> Emitter<'a> {
             locale,
             issues: Vec::new(),
             out: String::new(),
+            global_names,
+            player_names,
+            subroutine_emitted,
             subroutine_names,
+            emitted_subroutine_names,
         }
     }
 
@@ -211,61 +242,59 @@ impl<'a> Emitter<'a> {
                 None,
             );
         }
-        // Global table: unique names, valid OPY identifiers, non-decreasing
-        // slot order (the frontend's re-lowering sorts the table by index,
-        // so only slot-ordered input reproduces the same table).
-        let mut previous_index: Option<u32> = None;
+        // Every table: names must be unique (duplicates cannot be declared
+        // or referenced faithfully); indices must be unique and inside the
+        // Workshop slot range so the emitted explicit-index declarations
+        // re-lower to the same name → index binding. Names outside the OPY
+        // surface are not a failure here — they are mangled on emission.
+        let mut taken = HashSet::new();
         for (position, variable) in self.program.global_variables.iter().enumerate() {
-            let index = variable.index.unwrap_or(position as u32);
-            self.check_variable_name(&variable.name, None, "global variable");
             self.check_duplicate_name(&variable.name, position, "global variable", None);
-            if let Some(previous) = previous_index {
-                if index < previous {
-                    self.issue(
-                        "unsupported-global-order",
-                        format!(
-                            "global variables must be in ascending index order \
-                             (slot {} precedes slot {})",
-                            previous, index
-                        ),
-                        None,
-                    );
-                }
-            }
-            previous_index = Some(index);
+            self.check_index(
+                variable.index.unwrap_or(position as u32),
+                &mut taken,
+                "global variable",
+                &variable.name,
+            );
         }
-        // Player table: unique names and valid identifiers; player slots are
-        // explicit in the `playervar name <index>` form, so no order rule.
+        taken.clear();
         for (position, variable) in self.program.player_variables.iter().enumerate() {
-            self.check_variable_name(&variable.name, None, "player variable");
             self.check_duplicate_name(&variable.name, position, "player variable", None);
+            self.check_index(
+                variable.index.unwrap_or(position as u32),
+                &mut taken,
+                "player variable",
+                &variable.name,
+            );
         }
-        // Subroutine table: unique names and valid identifiers; a slot that
-        // differs from the table position is carried by `subroutine name <index>`.
+        taken.clear();
         for (position, subroutine) in self.program.subroutines.iter().enumerate() {
-            self.check_variable_name(&subroutine.name, None, "subroutine");
             self.check_duplicate_name(&subroutine.name, position, "subroutine", None);
+            self.check_index(
+                subroutine.index.unwrap_or(position as u32),
+                &mut taken,
+                "subroutine",
+                &subroutine.name,
+            );
         }
     }
 
-    fn check_variable_name(&mut self, name: &str, span: Option<Span>, kind: &str) {
-        if !is_identifier(name) {
+    /// A declaration index the explicit-index declaration forms cannot
+    /// emit: outside the `0..=127` Workshop slot range or already claimed
+    /// by a table sibling (the frontend rejects index collisions on
+    /// re-lowering).
+    fn check_index(&mut self, index: u32, taken: &mut HashSet<u32>, kind: &str, name: &str) {
+        if index > 127 {
             self.issue(
-                "unsupported-name",
-                format!(
-                    "{kind} name '{name}' is not a valid OPY identifier on the \
-                     reconstruction surface"
-                ),
-                span,
+                "unsupported-index",
+                format!("{kind} '{name}' index {index} is outside the 0-127 slot range"),
+                None,
             );
-        } else if RESERVED_NAMES.contains(&name) {
+        } else if !taken.insert(index) {
             self.issue(
-                "unsupported-name",
-                format!(
-                    "{kind} name '{name}' collides with an OPY keyword or literal \
-                     and cannot be referenced on the reconstruction surface"
-                ),
-                span,
+                "unsupported-index",
+                format!("{kind} '{name}' shares declaration index {index} with a sibling"),
+                None,
             );
         }
     }
@@ -495,17 +524,39 @@ impl<'a> Emitter<'a> {
     fn emit_program(&mut self, layout: &RuleLayout) {
         let global_initializers = self.collect_initializers(layout.global_init, true);
         let player_initializers = self.collect_initializers(layout.player_init, false);
-        self.check_initializer_slot(&global_initializers);
+        let global_order = index_order(&self.program.global_variables);
+        let player_order = index_order(&self.program.player_variables);
+        self.check_initializer_slots(true, &global_order, &global_initializers);
+        self.check_initializer_slots(false, &player_order, &player_initializers);
 
-        self.emit_variable_declarations(true, &global_initializers);
-        self.emit_variable_declarations(false, &player_initializers);
+        // The strict-optimization directive is part of every reconstruction:
+        // without it the frontend's default folding rewrites values such as
+        // `Add(x, 0)` into a different canonical shape than the input's.
+        self.out.push_str("#!optimizeStrict\n\n");
+        self.emit_variable_declarations(true, &global_order, &global_initializers);
+        self.emit_variable_declarations(false, &player_order, &player_initializers);
         if self.program.subroutines.is_empty() {
             self.out.push('\n');
         } else {
+            // A bare `subroutine name` auto-allocates the lowest free index;
+            // it reproduces the canonical binding only for the leading run
+            // whose index already equals the table position. Every later
+            // declaration carries its index explicitly.
+            let prefix = self
+                .program
+                .subroutines
+                .iter()
+                .enumerate()
+                .take_while(|(position, subroutine)| {
+                    subroutine.index.unwrap_or(*position as u32) == *position as u32
+                })
+                .count();
             for (position, subroutine) in self.program.subroutines.iter().enumerate() {
                 self.out.push_str("subroutine ");
-                self.out.push_str(&subroutine.name);
-                if let Some(index) = subroutine.index.filter(|index| *index as usize != position) {
+                self.out
+                    .push_str(emitted(&self.subroutine_emitted, &subroutine.name));
+                if position >= prefix {
+                    let index = subroutine.index.unwrap_or(position as u32);
                     self.out.push_str(&format!(" {index}"));
                 }
                 self.out.push('\n');
@@ -530,7 +581,8 @@ impl<'a> Emitter<'a> {
                 continue;
             };
             self.out.push_str("def ");
-            self.out.push_str(&definition.name);
+            self.out
+                .push_str(emitted(&self.subroutine_emitted, &definition.name));
             self.out.push_str("():\n");
             self.emit_actions(*rule_index, &rule.actions, 1);
             self.out.push('\n');
@@ -595,19 +647,34 @@ impl<'a> Emitter<'a> {
         }
     }
 
+    /// Declarations emit in canonical index order — the order the
+    /// frontend's re-lowering sorts the table into — each with its explicit
+    /// index unless an initializer carries it (`name = value` re-lowers to
+    /// a slot `check_initializer_slots` verified).
     fn emit_variable_declarations(
         &mut self,
         global: bool,
-        initializers: &std::collections::HashMap<usize, (Value, Option<Span>)>,
+        order: &[(usize, u32)],
+        initializers: &HashMap<usize, (Value, Option<Span>)>,
     ) {
         let (kind, variables) = if global {
             ("globalvar ", &self.program.global_variables)
         } else {
             ("playervar ", &self.program.player_variables)
         };
-        for (position, variable) in variables.iter().enumerate() {
+        for &(position, index) in order {
+            let variable = &variables[position];
+            let name = emitted(
+                if global {
+                    &self.global_names
+                } else {
+                    &self.player_names
+                },
+                &variable.name,
+            )
+            .to_string();
             self.out.push_str(kind);
-            self.out.push_str(&variable.name);
+            self.out.push_str(&name);
             match initializers.get(&position) {
                 Some(value) => {
                     self.out.push_str(" = ");
@@ -615,8 +682,7 @@ impl<'a> Emitter<'a> {
                 }
                 None => {
                     self.out.push(' ');
-                    self.out
-                        .push_str(&variable.index.unwrap_or(position as u32).to_string());
+                    self.out.push_str(&index.to_string());
                 }
             }
             self.out.push('\n');
@@ -635,7 +701,7 @@ impl<'a> Emitter<'a> {
         let Some((rule_index, rule)) = initializer else {
             return initializers;
         };
-        let mut previous: Option<usize> = None;
+        let mut previous: Option<u32> = None;
         for (action_index, action) in rule.actions.iter().enumerate() {
             let span = self.program.action_span(rule_index, action_index);
             let (player, variable, value) = match (global, action) {
@@ -676,9 +742,15 @@ impl<'a> Emitter<'a> {
                 );
                 continue;
             };
+            // Re-lowering emits the synthesized initializer rule in
+            // index-sorted table order, so the canonical rule's Sets must
+            // already be index-ordered to round-trip.
+            let index = variables[variable_position]
+                .index
+                .unwrap_or(variable_position as u32);
             self.record_initializer_position(
                 &mut previous,
-                variable_position,
+                index,
                 variable,
                 if global { "global" } else { "player" },
                 span,
@@ -700,23 +772,23 @@ impl<'a> Emitter<'a> {
 
     fn record_initializer_position(
         &mut self,
-        previous: &mut Option<usize>,
-        position: usize,
+        previous: &mut Option<u32>,
+        index: u32,
         variable: &str,
         table: &str,
         span: Option<Span>,
     ) {
-        if previous.is_some_and(|previous| position <= previous) {
+        if previous.is_some_and(|previous| index <= previous) {
             self.issue(
                 "unsupported-init-rule",
                 format!(
-                    "initializer rule Sets '{variable}' out of {table} table order; \
+                    "initializer rule Sets '{variable}' out of {table} index order; \
                      the frontend synthesizes initializers in declaration order"
                 ),
                 span,
             );
         }
-        *previous = Some(position);
+        *previous = Some(index);
     }
 
     /// A declaration initializer: same value emission, but zero literals are
@@ -732,37 +804,71 @@ impl<'a> Emitter<'a> {
         self.emit_value(value, span);
     }
 
-    /// The OPY declaration `globalvar name = value` cannot carry an explicit
-    /// slot, so the frontend re-lowering assigns the lowest free slot. An
-    /// initializer-bearing global is only representable when that slot equals
-    /// its Workshop index; otherwise the reconstructed table would differ.
-    fn check_initializer_slot(
+    /// The OPY declaration `name = value` cannot carry an explicit slot, so
+    /// the frontend re-lowering auto-allocates one: explicit indices are
+    /// reserved upfront, `__x__`-wrapped names then take the highest free
+    /// slots in declaration order, and the remaining initializer
+    /// declarations fill the lowest free slots in declaration order.
+    /// Simulate that allocation over the emitted (index-sorted) order: an
+    /// initializer-bearing declaration is only representable when the slot
+    /// the frontend would assign equals its Workshop index; otherwise the
+    /// reconstructed table would differ.
+    fn check_initializer_slots(
         &mut self,
-        initializers: &std::collections::HashMap<usize, (Value, Option<Span>)>,
+        global: bool,
+        order: &[(usize, u32)],
+        initializers: &HashMap<usize, (Value, Option<Span>)>,
     ) {
-        let mut taken: std::collections::HashSet<u32> = std::collections::HashSet::new();
-        for (position, variable) in self.program.global_variables.iter().enumerate() {
+        let kind = if global { "globalvar" } else { "playervar" };
+        let (variables, names) = if global {
+            (&self.program.global_variables, &self.global_names)
+        } else {
+            (&self.program.player_variables, &self.player_names)
+        };
+        let mut taken = HashSet::new();
+        let mut pending = Vec::new();
+        for &(position, index) in order {
             if initializers.contains_key(&position) {
-                let mut next_free = 0u32;
-                while taken.contains(&next_free) {
-                    next_free += 1;
+                let name = emitted(names, &variables[position].name);
+                pending.push((
+                    position,
+                    index,
+                    name.starts_with("__") && name.ends_with("__"),
+                ));
+            } else {
+                taken.insert(index);
+            }
+        }
+        // The frontend's top-allocation pass runs before the lowest-free
+        // pass, so `__x__` initializer declarations claim their slots first.
+        for high in [true, false] {
+            for &(position, index, dunder) in &pending {
+                if dunder != high {
+                    continue;
                 }
-                let index = variable.index.unwrap_or(position as u32);
-                if next_free != index {
+                let slot = if high {
+                    (0..=127u32).rev().find(|slot| !taken.contains(slot))
+                } else {
+                    (0..=127u32).find(|slot| !taken.contains(slot))
+                };
+                if slot != Some(index) {
                     self.issues.push(ReconstructIssue {
                         code: "unsupported-indexed-initializer",
                         message: format!(
-                            "initializer-bearing global '{}' occupies slot {} but the \
-                             OPY `globalvar name = value` form assigns the lowest free \
-                             slot ({}) on re-lowering",
-                            variable.name, index, next_free
+                            "initializer-bearing {} '{}' occupies slot {} but the \
+                             OPY `{kind} name = value` form assigns slot {} on \
+                             re-lowering",
+                            if global { "global" } else { "player" },
+                            variables[position].name,
+                            index,
+                            slot.map_or_else(|| "none".to_string(), |slot| slot.to_string()),
                         ),
                         span: None,
                     });
                 }
-                taken.insert(next_free);
-            } else {
-                taken.insert(variable.index.unwrap_or(position as u32));
+                if let Some(slot) = slot {
+                    taken.insert(slot);
+                }
             }
         }
     }
@@ -868,7 +974,8 @@ impl<'a> Emitter<'a> {
                     };
                     self.out.push_str(&Self::indent(level));
                     self.out.push_str("for ");
-                    self.out.push_str(&declaration.name);
+                    self.out
+                        .push_str(emitted(&self.global_names, &declaration.name));
                     self.out.push_str(" in range(");
                     for (arg_index, value) in [start, stop, step].into_iter().enumerate() {
                         if arg_index > 0 {
@@ -973,7 +1080,7 @@ impl<'a> Emitter<'a> {
                     return;
                 }
                 self.out.push_str(&indent);
-                self.out.push_str(variable);
+                self.out.push_str(emitted(&self.global_names, variable));
                 self.out.push_str(" = ");
                 self.emit_value(
                     value,
@@ -987,9 +1094,10 @@ impl<'a> Emitter<'a> {
                 op,
                 value,
             } => {
+                let variable = emitted(&self.global_names, variable).to_string();
                 self.emit_modify(
                     level,
-                    variable,
+                    &variable,
                     *op,
                     value,
                     self.program
@@ -1025,7 +1133,7 @@ impl<'a> Emitter<'a> {
                 }
                 self.out.push_str(&indent);
                 self.out.push_str("eventPlayer.");
-                self.out.push_str(variable);
+                self.out.push_str(emitted(&self.player_names, variable));
                 self.out.push_str(" = ");
                 self.emit_value(
                     value,
@@ -1050,6 +1158,7 @@ impl<'a> Emitter<'a> {
                     );
                     return;
                 }
+                let variable = emitted(&self.player_names, variable).to_string();
                 self.emit_modify(
                     level,
                     &format!("eventPlayer.{variable}"),
@@ -1076,7 +1185,8 @@ impl<'a> Emitter<'a> {
                     return;
                 }
                 self.out.push_str(&indent);
-                self.out.push_str(subroutine);
+                self.out
+                    .push_str(emitted(&self.subroutine_emitted, subroutine));
                 self.out.push_str("()\n");
             }
             Action::If { .. } | Action::ElseIf { .. } | Action::Else | Action::End => self.issue(
@@ -1250,12 +1360,16 @@ impl<'a> Emitter<'a> {
                     return;
                 }
             };
-        if !member && args.is_empty() && self.subroutine_names.contains(name) {
+        // A bare call spelled like a declared subroutine resolves to the
+        // subroutine on re-lowering — at any arity — so an emitted call
+        // whose spelling collides with an emitted subroutine name cannot
+        // reproduce the builtin.
+        if !member && self.emitted_subroutine_names.contains(entry.id.as_str()) {
             self.issue(
                 "unsupported-action-call",
                 format!(
-                    "action '{name}' with no arguments is ambiguous with a subroutine \
-                     of the same name on the OPY surface"
+                    "action '{name}' is ambiguous with a subroutine of the same \
+                     emitted name on the OPY surface"
                 ),
                 span,
             );
@@ -1615,7 +1729,7 @@ impl<'a> Emitter<'a> {
                     );
                     return;
                 }
-                self.out.push_str(variable);
+                self.out.push_str(emitted(&self.global_names, variable));
             }
             Value::PlayerVariable { player, variable } => {
                 if !self.is_event_player(player) {
@@ -1642,7 +1756,7 @@ impl<'a> Emitter<'a> {
                     return;
                 }
                 self.out.push_str("eventPlayer.");
-                self.out.push_str(variable);
+                self.out.push_str(emitted(&self.player_names, variable));
             }
             Value::Subroutine(_) => {
                 self.issue(
@@ -1789,6 +1903,19 @@ impl<'a> Emitter<'a> {
             );
             return;
         }
+        // Same subroutine-shadowing rule as actions: a bare call spelled
+        // like an emitted subroutine name resolves to the subroutine.
+        if !member && self.emitted_subroutine_names.contains(entry.id.as_str()) {
+            self.issue(
+                "unsupported-value-call",
+                format!(
+                    "value '{name}' is ambiguous with a subroutine of the same \
+                     emitted name on the OPY surface"
+                ),
+                span,
+            );
+            return;
+        }
         self.emit_manifest_call(entry, args, member, span, &[]);
     }
 
@@ -1809,6 +1936,109 @@ impl<'a> Emitter<'a> {
         }
         self.out.push('"');
     }
+}
+
+/// Emitted declaration order: table positions sorted by canonical
+/// Workshop index (stable, so equal slots — impossible after the index
+/// checks — would keep table order). Re-lowering sorts the table by
+/// index, so emitting in index order reproduces the canonical binding.
+fn index_order(variables: &[Variable]) -> Vec<(usize, u32)> {
+    let mut order: Vec<(usize, u32)> = variables
+        .iter()
+        .enumerate()
+        .map(|(position, variable)| (position, variable.index.unwrap_or(position as u32)))
+        .collect();
+    order.sort_by_key(|&(_, index)| index);
+    order
+}
+
+/// The OPY spelling recorded for a canonical table name. `mangle_names`
+/// covers every declared name; a missing entry means a duplicate name the
+/// caller already reports, so falling back to the canonical spelling is
+/// unreachable on a successful reconstruction.
+fn emitted<'a>(map: &'a HashMap<String, String>, name: &'a str) -> &'a str {
+    map.get(name).map_or(name, String::as_str)
+}
+
+/// Whether a canonical name must be mangled to appear on the OPY surface:
+/// it is not a well-formed identifier, the pinned reserved-name table
+/// refuses it in this declaration namespace, or — for subroutines — a
+/// `name()` invocation would resolve to a translation call, a special
+/// form, `async`/`startRule`, `compressed`, `vect`, or `range` before the
+/// declared-subroutine check runs.
+fn needs_mangling(name: &str, namespace: NameNamespace) -> bool {
+    !is_identifier(name)
+        || is_reserved_name(name, namespace)
+        || (namespace == NameNamespace::Subroutine
+            && (SHADOWED_SUBROUTINE_NAMES.contains(&name)
+                || SpecialValueCall::from_name(name).is_some()))
+}
+
+/// Map every declared name to the OPY spelling reconstruction emits for
+/// it, under the rule recorded in `docs/architecture/reconstruction.md`:
+///
+/// * a name that already re-resolves to its declaration (a well-formed
+///   identifier outside the reserved and shadowed sets) keeps its
+///   spelling;
+/// * any other name is mangled deterministically — every identifier
+///   continuation character is kept, every other character becomes
+///   `_xHH_` (lowercase hex codepoint), and the result is prefixed `v_`
+///   when it is empty or does not start with an identifier-start
+///   character;
+/// * a candidate still rejected by `needs_mangling`, already taken by a
+///   table sibling, or equal to another canonical name in the table gains
+///   `_opy1`, then `_opy2`, `_opy3`, … until it resolves uniquely.
+///
+/// A duplicate canonical name is only entered once; the caller reports
+/// `unsupported-duplicate-name` for it.
+fn mangle_names<'a>(
+    names: impl Iterator<Item = &'a str>,
+    namespace: NameNamespace,
+) -> HashMap<String, String> {
+    let names: Vec<&str> = names.collect();
+    let canonical: HashSet<&str> = names.iter().copied().collect();
+    let mut emitted_names = HashMap::new();
+    let mut taken = HashSet::new();
+    for name in names {
+        if emitted_names.contains_key(name) {
+            continue;
+        }
+        let stem = if needs_mangling(name, namespace) {
+            mangle_base(name)
+        } else {
+            name.to_string()
+        };
+        let mut emitted_name = stem.clone();
+        let mut counter = 0u32;
+        while needs_mangling(&emitted_name, namespace)
+            || taken.contains(emitted_name.as_str())
+            || (emitted_name != name && canonical.contains(emitted_name.as_str()))
+        {
+            counter += 1;
+            emitted_name = format!("{stem}_opy{counter}");
+        }
+        taken.insert(emitted_name.clone());
+        emitted_names.insert(name.to_string(), emitted_name);
+    }
+    emitted_names
+}
+
+/// The stem of a mangled name: identifier continuation characters kept,
+/// every other character escaped as `_xHH_` (lowercase hex codepoint),
+/// prefixed `v_` when the result cannot start an identifier.
+fn mangle_base(name: &str) -> String {
+    let mut mangled = String::with_capacity(name.len() + 2);
+    for ch in name.chars() {
+        if is_ident_continue(ch) {
+            mangled.push(ch);
+        } else {
+            mangled.push_str(&format!("_x{:x}_", ch as u32));
+        }
+    }
+    if !mangled.starts_with(is_ident_start) {
+        mangled.insert_str(0, "v_");
+    }
+    mangled
 }
 
 fn kind_label(kind: FunctionKind) -> &'static str {
@@ -2150,5 +2380,177 @@ mod tests {
 
         let reparsed = compile_to_program(&source, "format.opy");
         assert!(workshop_rs::roundtrip::equivalent(&program, &reparsed));
+    }
+
+    #[test]
+    fn reconstruction_begins_with_optimize_strict() {
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("g", 0));
+        program.rule(
+            Rule::new("main", Event::Global).action(Action::SetGlobalVariable {
+                variable: "g".into(),
+                value: Value::number(1.0),
+            }),
+        );
+
+        let source = reconstruct(&program).expect("canonical Program should reconstruct");
+        assert!(source.starts_with("#!optimizeStrict\n"), "{source}");
+    }
+
+    #[test]
+    fn optimize_strict_preserves_add_zero() {
+        // Without `#!optimizeStrict` the frontend's default folding would
+        // rewrite `h + 0` to `h`, changing the canonical program.
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("g", 0));
+        program.global_variable(Variable::with_index("h", 1));
+        program.rule(
+            Rule::new("main", Event::Global).action(Action::SetGlobalVariable {
+                variable: "g".into(),
+                value: Value::call("+", [Value::global_variable("h"), Value::number(0.0)]),
+            }),
+        );
+
+        let source = reconstruct(&program).expect("Add(x, 0) should reconstruct");
+        assert!(source.starts_with("#!optimizeStrict"), "{source}");
+        assert!(source.contains("h + 0"), "{source}");
+
+        let reparsed = compile_to_program(&source, "add-zero.opy");
+        assert!(workshop_rs::roundtrip::equivalent(&program, &reparsed));
+    }
+
+    #[test]
+    fn out_of_order_global_indices_reconstruct_sorted_with_explicit_indices() {
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("zed", 3));
+        program.global_variable(Variable::with_index("alpha", 0));
+        program.global_variable(Variable::with_index("mid", 2));
+        program.rule(
+            Rule::new("main", Event::Global)
+                .action(Action::SetGlobalVariable {
+                    variable: "zed".into(),
+                    value: Value::number(1.0),
+                })
+                .action(Action::SetGlobalVariable {
+                    variable: "alpha".into(),
+                    value: Value::global_variable("mid"),
+                }),
+        );
+
+        let source = reconstruct(&program).expect("out-of-order indices should reconstruct");
+        let alpha = source
+            .find("globalvar alpha 0")
+            .expect("alpha declares its index");
+        let mid = source
+            .find("globalvar mid 2")
+            .expect("mid declares its index");
+        let zed = source
+            .find("globalvar zed 3")
+            .expect("zed declares its index");
+        assert!(alpha < mid && mid < zed, "{source}");
+
+        let reparsed = compile_to_program(&source, "out-of-order.opy");
+        assert!(workshop_rs::compare::equivalent(&program, &reparsed));
+    }
+
+    #[test]
+    fn out_of_order_player_indices_reconstruct_sorted_with_explicit_indices() {
+        let mut program = Program::new();
+        program.player_variable(Variable::with_index("zed", 3));
+        program.player_variable(Variable::with_index("alpha", 0));
+        program.rule(
+            Rule::new("main", Event::EachPlayer).action(Action::SetPlayerVariable {
+                player: Value::EventPlayer,
+                variable: "alpha".into(),
+                value: Value::player_variable(Value::EventPlayer, "zed"),
+            }),
+        );
+
+        let source = reconstruct(&program).expect("out-of-order player indices reconstruct");
+        let alpha = source
+            .find("playervar alpha 0")
+            .expect("alpha declares its index");
+        let zed = source
+            .find("playervar zed 3")
+            .expect("zed declares its index");
+        assert!(alpha < zed, "{source}");
+
+        let reparsed = compile_to_program(&source, "player-out-of-order.opy");
+        assert!(workshop_rs::compare::equivalent(&program, &reparsed));
+    }
+
+    #[test]
+    fn names_outside_the_opy_surface_reconstruct_with_recorded_mangling() {
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("for", 0));
+        program.global_variable(Variable::with_index("1st place", 1));
+        program.player_variable(Variable::with_index("x", 0));
+        program.subroutine(Subroutine::with_index("sorted", 0));
+        program.rule(
+            Rule::new("Subroutine sorted", Event::Subroutine("sorted".into())).action(
+                Action::SetGlobalVariable {
+                    variable: "for".into(),
+                    value: Value::global_variable("1st place"),
+                },
+            ),
+        );
+        program.rule(
+            Rule::new("main", Event::EachPlayer)
+                .action(Action::SetPlayerVariable {
+                    player: Value::EventPlayer,
+                    variable: "x".into(),
+                    value: Value::number(0.0),
+                })
+                .action(Action::CallSubroutine {
+                    subroutine: "sorted".into(),
+                }),
+        );
+
+        let source = reconstruct(&program).expect("mangled names should reconstruct");
+        assert!(source.contains("globalvar for_opy1 0"), "{source}");
+        assert!(source.contains("globalvar v_1st_x20_place 1"), "{source}");
+        assert!(source.contains("playervar x_opy1 0"), "{source}");
+        assert!(source.contains("subroutine sorted_opy1\n"), "{source}");
+        assert!(source.contains("def sorted_opy1():"), "{source}");
+        assert!(source.contains("for_opy1 = v_1st_x20_place"), "{source}");
+        assert!(source.contains("eventPlayer.x_opy1 = 0"), "{source}");
+        assert!(source.contains("sorted_opy1()"), "{source}");
+
+        let reparsed = compile_to_program(&source, "mangled.opy");
+        assert!(workshop_rs::compare::equivalent(&program, &reparsed));
+
+        // The mangling rule is deterministic: the same input program always
+        // maps to the same output.
+        let again = reconstruct(&program).expect("reconstruction is deterministic");
+        assert_eq!(source, again);
+    }
+
+    #[test]
+    fn duplicate_table_names_still_refuse() {
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("dup", 0));
+        program.global_variable(Variable::with_index("dup", 1));
+
+        let error = reconstruct(&program).expect_err("duplicate names refuse");
+        assert_eq!(error.issues[0].code, "unsupported-duplicate-name");
+    }
+
+    #[test]
+    fn declaration_indices_outside_the_slot_range_refuse() {
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("g", 200));
+
+        let error = reconstruct(&program).expect_err("out-of-range index refuses");
+        assert_eq!(error.issues[0].code, "unsupported-index");
+    }
+
+    #[test]
+    fn colliding_declaration_indices_refuse() {
+        let mut program = Program::new();
+        program.global_variable(Variable::with_index("a", 0));
+        program.global_variable(Variable::with_index("b", 0));
+
+        let error = reconstruct(&program).expect_err("colliding indices refuse");
+        assert_eq!(error.issues[0].code, "unsupported-index");
     }
 }
