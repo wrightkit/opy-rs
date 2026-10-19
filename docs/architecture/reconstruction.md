@@ -128,12 +128,11 @@ the comparator to reason about evaluation equivalences; see the
 The comparator belongs to `workshop-rs`: it judges canonical Workshop
 meaning and must be usable by every source-language implementation. The
 compared structure and allowed differences above are the
-`wrightkit/workshop-rs#490` contract. If no such relaxed comparison exists
-there, that is a `workshop-rs` follow-up — this contract does not license an
-OPY-local comparator. Until it exists,
-`workshop_rs::roundtrip::equivalent` remains the gate for the subset where
-strict identity holds, and equivalence claims for the wider contract are
-deferred rather than weakened into text comparisons.
+`wrightkit/workshop-rs#490` contract, landed as
+`workshop_rs::compare::equivalent` (workshop-rs 1.20.0). This contract
+does not license an OPY-local comparator;
+`workshop_rs::roundtrip::equivalent` remains valid evidence for the
+strict-identity subset it covers.
 
 ## Supported surface by canonical construct
 
@@ -148,15 +147,31 @@ the coverage section).
 | --- | --- | --- |
 | `program.settings` | `settings { … }` JSONC block built from canonical settings data — see [Custom game settings](#custom-game-settings) | supported |
 | Global variable, ascending index order, no initializer | `globalvar <name> <index>` | supported |
-| Global variable, out-of-order indices | Emit declarations sorted by index with explicit indices | extension (relaxes `unsupported-global-order`) |
+| Global variable, out-of-order indices | Declarations sorted by index, each with its explicit index | supported |
 | Global variable with initializer, re-lowered lowest-free slot = index | `globalvar <name> = <value>` | supported |
 | Global variable with initializer and any other index | Requires `globalvar <name> <index> = <value>` (the combined form is part of the grammar) or recorded refusal | extension / refusal |
 | Player variable, any order, no initializer | `playervar <name> <index>` | supported |
 | Player variable with initializer | `playervar <name> = <value>` | supported |
 | Subroutine at table position | `subroutine <name>` + `def <name>():` | supported |
-| Subroutine at non-position index | Requires `subroutine <name> <index>` (the indexed form is part of the grammar) or recorded refusal | extension / refusal |
+| Subroutine at non-position index | `subroutine <name> <index>` | supported |
 | Duplicate names inside one table | No faithful declaration form exists | refusal (`unsupported-duplicate-name`) |
-| Names that are not valid OPY identifiers or collide with keywords | Deterministic documented mangling, or refusal when no mangling is recorded | extension |
+| Names that are not valid OPY identifiers or collide with keywords | Recorded deterministic mangling (below) | supported |
+
+A canonical name that is already a well-formed OPY identifier and does
+not collide with its declaration namespace's reserved names — or, for
+subroutines, the call names the frontend resolves before the
+declared-subroutine check (`_`, `__`, `___`, `compressed`, `vect`,
+`async`/`startRule`, `range`, and the `sorted`/`createWorkshopSetting*`
+special forms) — keeps its spelling. Any other name is mangled
+deterministically: every identifier-continuation character is kept,
+every other character becomes `_xHH_` (lowercase hexadecimal
+codepoint), and the result is prefixed `v_` when it is empty or does
+not start with an identifier-start character. A candidate still
+reserved or shadowed, already taken by a table sibling, or equal to
+another canonical name in the table gains `_opy1`, then `_opy2`,
+`_opy3`, … until it resolves uniquely. The mapping is computed once per
+table at emission and applied uniformly to the declaration and every
+reference, so identity stays bound to the declaration index.
 
 #### Custom game settings
 
@@ -292,9 +307,10 @@ environment checks.
 | `manifest-error` | Builtin OPY manifest fails to load | guard |
 | `catalog-error` | Builtin catalog fails to load; a manifest `catalogId` is absent from the catalog | guard |
 | `unsupported-settings` | A `program.settings` member with no recompile-equivalent OPY form: canonical-emission failure, `enabled` marker outside leading `false`, hero-alias names, kind/display-name collisions, boolean/list-domain blocks, misplaced `#!extension` members, or an empty settings block | landed for the mapped surface; residue is refusal |
-| `unsupported-name` | Table name is not a valid OPY identifier or collides with a keyword/literal | extension → recorded mangling; unrepresentable residue stays refused |
+| `unsupported-name` | Table name is not a valid OPY identifier or collides with a keyword/literal | relaxed → recorded deterministic mangling (#599) |
 | `unsupported-duplicate-name` | A name repeats inside one declaration table | refusal |
-| `unsupported-global-order` | Global indices are not in ascending order | extension → emit sorted with explicit indices |
+| `unsupported-global-order` | Global indices are not in ascending order | relaxed → emit sorted with explicit indices (#599) |
+| `unsupported-index` | Declaration index outside the 0–127 slot range or shared with a sibling | guard |
 | `unsupported-indexed-initializer` | Initializer-bearing global at a non-lowest-free slot | extension/refusal → `globalvar name <index> = <init>` grammar parity landed; the emission mapping is the remaining work |
 | `unsupported-rule-order` | Subroutine rule after a normal rule, out of table order, wrong synthesized name, or carrying conditions; `Subroutine` event outside `def` layout | extension for order/name shape (allowed differences); refusal for conditions on subroutine rules |
 | `unsupported-init-rule` | Initializer rule carries conditions, non-Set actions, non-eventPlayer target, or out-of-order Sets | extension → ordinary-rule emission where reproducible |
@@ -327,11 +343,11 @@ environment checks.
 Two frontend behaviors make a naive source emission change the program it
 recompiles to, and the contract accounts for both:
 
-- Reconstructed output begins with `#!optimizeStrict` (extension; not yet
-  emitted). Without it, the frontend's default optimizations fold values
-  such as `Add(x, 0)` into a different canonical structure than the input
-  carries. `#!optimizeForSize` and other optimization-changing directives
-  are never emitted. Upstream emits the same directive for the same reason.
+- Reconstructed output begins with `#!optimizeStrict`. Without it, the
+  frontend's default optimizations fold values such as `Add(x, 0)` into a
+  different canonical structure than the input carries.
+  `#!optimizeForSize` and other optimization-changing directives are
+  never emitted. Upstream emits the same directive for the same reason.
 - Any construct the frontend re-normalizes on the way to canonical form —
   re-associated variadic calls, folded expressions, synthesized rule
   placement — must be emitted in the shape that survives re-lowering, or
@@ -390,13 +406,13 @@ permanent unless a later owner decision changes them):
   contracted extension.
 - **Subroutine/global indices in declaration+initializer combined forms**
   — upstream accepts `subroutine name index` and
-  `globalvar name index = init`, and `opy-rs` now parses and lowers both;
-  the emission-side mapping that would lift the recorded refusals is the
-  remaining extension.
-- **Name collisions / invalid identifiers** — upstream mangles names
-  (`translateNameToAvoidKeywords`); `opy-rs` refuses today — a recorded
-  deterministic mangling is a contracted extension; unrepresentable
-  residue stays refused.
+  `globalvar name index = init`, and `opy-rs` parses and lowers both;
+  `subroutine name <index>` emission has landed (#599); the
+  declaration-initializer combined-form emission that would lift the
+  recorded refusal is the remaining extension.
+- **Name collisions / invalid identifiers** — landed (#599): upstream
+  mangles names (`translateNameToAvoidKeywords`); `opy-rs` mangles under
+  the recorded deterministic rule above.
 - **Dynamic member writes (`AssignMember`)** — upstream's accepted surface
   here overlaps the pending `.x`/`.y`/`.z` canonical-validation exception;
   recorded refusal.
@@ -490,11 +506,9 @@ origin fidelity.
 
 Contract-level only; no OPY-local substitutes are introduced.
 
-1. **Relaxed behavior comparator** — the equivalence contract above
-   requires a canonical Workshop comparison primitive that `workshop-rs`
-   does not currently expose (`roundtrip::equivalent` is strict
-   identity). This is `wrightkit/workshop-rs#490`, a `workshop-rs`
-   follow-up.
+1. **Relaxed behavior comparator** — landed:
+   `workshop_rs::compare::equivalent` (workshop-rs 1.20.0) implements
+   `wrightkit/workshop-rs#490`.
 2. **Variant-qualified map elements** — a settings map-list element like
    `Workshop Chamber 972777519512064577` parses but fails canonical
    emission, and no public API resolves the variant-qualified spelling or
@@ -513,10 +527,10 @@ recorded against the boundary contract, not approximated locally.
   to a program equivalent to the input under this contract's comparator —
   `Program → OPY → Program`. A round-trip failure on an accepted input is
   a defect, regardless of which stage produced it.
-- Until the `workshop-rs` comparator exists,
-  `workshop_rs::roundtrip::equivalent` gates the strict-identity subset
-  (the existing `reconstruct` tests pass under it and remain valid);
-  widened-subset claims wait on the comparator.
+- `workshop_rs::compare::equivalent` gates the widened subset
+  (out-of-order declaration tables, mangled names);
+  `workshop_rs::roundtrip::equivalent` remains valid evidence for the
+  strict-identity subset it covers.
 - Refusal classes keep executable evidence: each recorded refusal has a
   test naming its code; each extension has a round-trip test once
   implemented.
