@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.17](https://github.com/wrightkit/opy-rs/compare/opy-provider-v0.3.16...opy-provider-v0.3.17) - 2026-10-19
+
+### Other
+
+- *(provider)* make the syntaxError classification exhaustive ([#591](https://github.com/wrightkit/opy-rs/pull/591)) ([#593](https://github.com/wrightkit/opy-rs/pull/593))
+
 ## [0.3.16](https://github.com/wrightkit/opy-rs/compare/opy-provider-v0.3.15...opy-provider-v0.3.16) - 2026-10-18
 
 ### Fixed
