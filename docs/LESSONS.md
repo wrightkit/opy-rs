@@ -54,3 +54,9 @@ then remove it here. The procedure is the `wrightkit-retro` skill in
 - **Why:** A PR written under a newer local toolchain shipped let-chains and needed a pushed fix after the MSRV job failed; the same class hit wright#743 the same day. `workshop-rs` already carried the same rule in its `AGENTS.md` since 2026-10-15, but the rule had not propagated to sibling repositories.
 - **Prevention home:** the `cargo +1.85.0` pre-push gate now stated in `AGENTS.md` (ported from workshop-rs#457); the `Rust (1.85.0)` CI job remains the backstop.
 - **Incidents:** [opy-rs#574](https://github.com/wrightkit/opy-rs/pull/574), observed 2026-10-18; same class in [wright#743](https://github.com/wrightkit/wright/pull/743) the same day, recorded in wright's `docs/LESSONS.md` and the escalation issue.
+
+### A scope-defining allowlist needs an exhaustive audit, not a hand-picked list
+- **Rule:** When a change enumerates which diagnostics or codes belong to a contract class (for example `DOCUMENT_SYNTAX_CODES`), every emit site must be audited — and the classification pinned by a test asserting each emitted code lands in the list or a documented exclusion — before merge.
+- **Why:** #578 narrowed `lpp/validateEdits` `syntaxError` to document-local malformation with a hand-built allowlist; two follow-up PRs each found omitted document-local codes that then returned `{"valid": true}` — malformed text the contract must reject was silently accepted.
+- **Prevention home:** an exhaustive diagnostic-code classification test in this repository — every emitted code appears exactly once in the `syntaxError` list or a documented exclusion list; proposed in the escalation issue.
+- **Incidents:** [opy-rs#578](https://github.com/wrightkit/opy-rs/pull/578) merged incomplete; omissions fixed by [opy-rs#587](https://github.com/wrightkit/opy-rs/pull/587) and [opy-rs#588](https://github.com/wrightkit/opy-rs/pull/588) — observed 2026-10-18
