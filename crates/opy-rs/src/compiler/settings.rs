@@ -80,7 +80,7 @@ pub(crate) fn general_hero_keys() -> &'static [String] {
 /// Whether `name` resolves to a hero under `heroes.<team>` — the pinned
 /// compiler's `tows(key, heroKw)` lookup applied to the canonical alias,
 /// like the group-name path.
-fn resolves_to_hero(name: &str) -> bool {
+pub(crate) fn resolves_to_hero(name: &str) -> bool {
     gameplay_catalog()
         .hero_by_id(canonical_hero_name(name))
         .is_some()
@@ -109,7 +109,11 @@ fn applicability() -> &'static HeroApplicability {
 /// renames run as one pass per alias in this order.
 const HERO_NAME_ALIASES: &[(&str, &str)] = &[("mccree", "cassidy"), ("hammond", "wreckingBall")];
 
-fn canonical_hero_name(name: &str) -> &str {
+/// The canonical hero key an authored `heroes.<team>` name lands on after
+/// the pinned compiler's `HERO_NAME_ALIASES` rename (`mccree` → `cassidy`,
+/// `hammond` → `wreckingBall`). Reconstruction needs the same map to keep a
+/// canonical alias-named member from silently shifting identity on reparse.
+pub(crate) fn canonical_hero_name(name: &str) -> &str {
     HERO_NAME_ALIASES
         .iter()
         .find_map(|(alias, canonical)| (*alias == name).then_some(*canonical))
@@ -1005,7 +1009,7 @@ fn convert_workshop_node(
 /// `settings.workshop` member: a non-blank string `parseInt` or
 /// `parseFloat` reads a numeric prefix from (`"3"`, `"3abc"`, `"Infinity"`,
 /// and `"0x10"` pass; `"a"` and `"NaN"` do not; #512).
-fn is_number_text(text: &str) -> bool {
+pub(crate) fn is_number_text(text: &str) -> bool {
     let text = text.trim_start();
     if text.is_empty() {
         return false;
