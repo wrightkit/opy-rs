@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.19](https://github.com/wrightkit/opy-rs/compare/v0.3.18...v0.3.19) - 2026-10-19
+
+### Added
+
+- *(parser)* accept indexed initializers and indexed subroutines like upstream ([#610](https://github.com/wrightkit/opy-rs/pull/610))
+
 ## [0.3.18](https://github.com/wrightkit/opy-rs/compare/v0.3.17...v0.3.18) - 2026-10-19
 
 ### Other
