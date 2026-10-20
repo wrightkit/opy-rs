@@ -203,20 +203,16 @@ impl<'a> SizeOptimizer<'a> {
     }
 
     /// A rule condition is written as a comparison of its operands, which
-    /// the reference does not treat as arguments: they only lose `0` and
-    /// (beside an ordering) `1`, and their contents are optimized as usual.
+    /// the reference does not treat as arguments: they only lose `0`, and
+    /// their contents are optimized as usual.
     pub(super) fn condition(&self, value: &mut Value) {
         match value {
             Value::Call { name, args }
                 if matches!(name.as_str(), "==" | "!=" | "<" | "<=" | ">" | ">=") =>
             {
-                let ordering = matches!(name.as_str(), "<" | "<=" | ">" | ">=");
                 for arg in args.iter_mut().take(2) {
                     match arg {
                         Value::Number(number) if *number == 0.0 => *arg = Value::Null,
-                        Value::Number(number) if *number == 1.0 && ordering => {
-                            *arg = Value::Bool(true);
-                        }
                         _ => self.nested(arg),
                     }
                 }
