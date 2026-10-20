@@ -7,13 +7,17 @@
 //!
 //! * [`check`] / [`check_with_overlay`] run the full frontend pipeline
 //!   (preprocess → parse → resolve) on a main file plus its includes and
-//!   return every structured diagnostic together with the file registry,
-//!   without requiring lowering to any Workshop backend. Resolution stops at
-//!   the Opy HIR semantic model ([`hir::Program`]); Workshop emission,
-//!   decompilation, and catalog behavior are deliberately out of scope here.
-//!   The one Workshop-bound input, the settings block, is additionally checked
-//!   against the canonical emission table so `check` never accepts a settings
-//!   key `compile` would reject (issue #411).
+//!   return every structured diagnostic together with the file registry.
+//!   Resolution produces the Opy HIR semantic model ([`hir::Program`]);
+//!   Workshop decompilation and catalog inspection are out of scope. Two
+//!   Workshop-bound acceptance passes keep `check` and `compile` agreeing:
+//!   the settings block is checked against the canonical emission table so
+//!   `check` never accepts a settings key `compile` would reject (issue
+//!   #411), and the compile stage — lowering, canonical validation,
+//!   localized emission, the declared post-compile hook, and re-validation
+//!   of hook-rewritten output — runs under the request locale so the
+//!   spelling rejections only emission sees (`unknown-*` member spellings,
+//!   `missing-mapping`) reach `check` too (issue #620).
 //! * [`SemanticModel`] wraps the resolved program and answers semantic
 //!   queries: declarations, rule listing, symbol/reference lookup by name or
 //!   span, custom-enum declarations, macro defines, and source provenance
@@ -74,11 +78,11 @@ pub struct CheckOutcome {
     /// The declared `#!postCompileHook` script, when the source declared one
     /// and the project checked clean.
     ///
-    /// This is the declaration record, not an execution result: the frontend
-    /// recognizes, parses, validates, and records the directive, but never
-    /// executes the hook. Execution against the final Workshop text is
-    /// lowering-dependent (workshop-rs emission, issue #8); the frontend
-    /// never fabricates a Workshop payload.
+    /// This is the declaration record, not an execution result. `check` runs
+    /// the hook through the bounded runtime as part of the compile-stage
+    /// acceptance pass (issue #620), and a rewrite into a spelling the
+    /// active locale rejects fails `check` the same way it fails `compile`;
+    /// a hook that throws stays a `compile`-only failure.
     pub post_compile_hook: Option<crate::preprocess::PostCompileHook>,
     /// The directory the `files` display paths resolve against — the
     /// `#!mainFile` effective directory when the entry redirects the project
@@ -110,12 +114,61 @@ impl CheckOutcome {
 }
 
 /// Check one `.opy` project: preprocess (includes/defines) → parse (CST) →
-/// resolve (Opy HIR). `main_path` is the display path recorded in the file
-/// registry; `root` is the include base. No Workshop backend is required;
-/// settings blocks are validated against the canonical emission table so the
-/// `check` verdict agrees with `compile` on settings keys (issue #411).
+/// resolve (Opy HIR). `main_path` is the file's display path recorded in the file
+/// registry; `root` is the include base.
+///
+/// Beyond the source pipeline, `check` validates the resolved settings block
+/// against the canonical Workshop emission table (issue #411) and runs the
+/// same compile-stage acceptance pass `compile` performs — lowering,
+/// canonical validation, localized emission, the declared post-compile hook,
+/// and re-validation of hook-rewritten output — under the active catalog
+/// locale, because enum member spellings resolve under that locale (issue
+/// #620). Whatever `check` accepts, `compile` does not reject for a
+/// source-level reason: `check` surfaces the locale-dependent spelling
+/// rejections the acceptance pass produces (`unknown-*`,
+/// `missing-mapping`), while other integration-stage failures stay
+/// `compile`-only diagnostics. The default locale is `en-US`;
+/// [`check_with_locale`] selects another.
 pub fn check(source: &str, main_path: &str, root: &Path) -> CheckOutcome {
-    check_with_overlay(source, main_path, root, &std::collections::BTreeMap::new())
+    check_with_locale(
+        source,
+        main_path,
+        root,
+        &workshop_rs::catalog::Locale::new("en-US"),
+    )
+}
+
+/// [`check`] under a catalog locale name, without constructing a
+/// `workshop-rs` `Locale` — the same locale `compile` emits under.
+pub fn check_with_language(
+    source: &str,
+    main_path: &str,
+    root: &Path,
+    language: &str,
+) -> CheckOutcome {
+    check_with_locale(
+        source,
+        main_path,
+        root,
+        &workshop_rs::catalog::Locale::new(language),
+    )
+}
+
+/// [`check`] under an explicit catalog locale: enum member spellings are
+/// validated under `locale`, the same locale `compile` emits under.
+pub fn check_with_locale(
+    source: &str,
+    main_path: &str,
+    root: &Path,
+    locale: &workshop_rs::catalog::Locale,
+) -> CheckOutcome {
+    check_with_overlay_and_locale(
+        source,
+        main_path,
+        root,
+        &std::collections::BTreeMap::new(),
+        locale,
+    )
 }
 
 /// [`check`] with open-document overlays (unsaved editor buffers participate
@@ -125,6 +178,48 @@ pub fn check_with_overlay(
     main_path: &str,
     root: &Path,
     overlay: &std::collections::BTreeMap<String, String>,
+) -> CheckOutcome {
+    check_with_overlay_and_locale(
+        source,
+        main_path,
+        root,
+        overlay,
+        &workshop_rs::catalog::Locale::new("en-US"),
+    )
+}
+
+/// [`check_with_overlay`] under an explicit catalog locale.
+pub fn check_with_overlay_and_locale(
+    source: &str,
+    main_path: &str,
+    root: &Path,
+    overlay: &std::collections::BTreeMap<String, String>,
+    locale: &workshop_rs::catalog::Locale,
+) -> CheckOutcome {
+    check_pipeline(source, main_path, root, overlay, locale, true)
+}
+
+/// The frontend stage of [`check_with_overlay_and_locale`] alone, shared
+/// with the compile-outcome pipeline: the compile-stage acceptance pass is
+/// left to the caller's own `Compiler` invocation so integration failures
+/// keep their integration classification (issue #620).
+pub(crate) fn check_frontend_with_overlay(
+    source: &str,
+    main_path: &str,
+    root: &Path,
+    overlay: &std::collections::BTreeMap<String, String>,
+    locale: &workshop_rs::catalog::Locale,
+) -> CheckOutcome {
+    check_pipeline(source, main_path, root, overlay, locale, false)
+}
+
+fn check_pipeline(
+    source: &str,
+    main_path: &str,
+    root: &Path,
+    overlay: &std::collections::BTreeMap<String, String>,
+    locale: &workshop_rs::catalog::Locale,
+    run_compile_stage: bool,
 ) -> CheckOutcome {
     let PreprocessOutcome {
         result,
@@ -198,13 +293,9 @@ pub fn check_with_overlay(
                 diagnostics.push(Diagnostic::from_error(error, &files));
                 return CheckOutcome::failure(diagnostics, files, display_root);
             }
-            // The locale only selects emitted text (workshop `On`/`Off`,
-            // hero names), never validity, so a fixed `en-US` preserves the
-            // compile-time parity invariant.
-            match crate::compiler::settings::workshop_settings(
-                &hir,
-                &workshop_rs::catalog::Locale::new("en-US"),
-            ) {
+            // The settings emission-table check runs under the request
+            // locale, the same locale `compile` converts the block under.
+            match crate::compiler::settings::workshop_settings(&hir, locale) {
                 Ok((settings, unknown)) => {
                     diagnostics.extend(unknown.into_iter().map(|member| {
                         Diagnostic::from_unknown_setting(member, hir.settings.as_ref(), &files)
@@ -239,6 +330,43 @@ pub fn check_with_overlay(
                 .any(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error)
             {
                 return CheckOutcome::failure(diagnostics, files, display_root);
+            }
+            if run_compile_stage {
+                // Enum member spellings resolve under the emission locale — a
+                // member spelling valid in one locale can be unknown in the
+                // active one — and a post-compile rewrite can introduce
+                // spellings the emitter never produced, so only localized
+                // emission sees them. `check` therefore runs the same
+                // lowering, canonical validation, localized emission,
+                // post-compile hook, and re-validation of the rewritten text
+                // `compile` performs, under the same locale (issue #620).
+                //
+                // `check` surfaces exactly the spelling-rejection class
+                // (`unknown-*` spellings and `missing-mapping`), which only
+                // the hook-output revalidation produces; every other
+                // integration-stage failure — unsupported lowering surfaces,
+                // a throwing hook, malformed rewritten text — stays a
+                // `compile`-only diagnostic so `check` still analyzes
+                // projects that do not fully compile.
+                let hook = preprocessed.post_compile_hook.as_ref().map(|hook| {
+                    crate::PostCompileHookRecord {
+                        script: hook.path.clone(),
+                        source: hook.source.clone(),
+                        span: Some(hook.span),
+                    }
+                });
+                let compiled = crate::compiler::Compiler::new().and_then(|compiler| {
+                    compiler
+                        .compile_hir_with_locale_and_hook(&hir, hook, locale)
+                        .map(|_| ())
+                });
+                if let Err(error) = compiled {
+                    let code = error.diagnostic.code.as_str();
+                    if code.starts_with("unknown-") || code == "missing-mapping" {
+                        diagnostics.push(Diagnostic::from_integration_error(error, &files));
+                        return CheckOutcome::failure(diagnostics, files, display_root);
+                    }
+                }
             }
             CheckOutcome {
                 diagnostics,

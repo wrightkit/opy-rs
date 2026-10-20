@@ -4979,3 +4979,77 @@ fn document_compile_projects_the_core_compile_outcome() {
     }
     session.shutdown();
 }
+
+/// Issue #620: enum member spellings resolve under the request `locale`. A
+/// `#!postCompileHook` rewrite can introduce a spelling the emitter never
+/// produced — `Map(格里姆火山)` is valid under `zh-CN` but unknown under
+/// `en-US` — so `lpp/check` reports the same diagnostic `lpp/compile`
+/// reports, at the same location.
+#[test]
+fn check_and_compile_share_the_request_locale_for_member_spellings() {
+    const LOCALE_HOOK: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../opy-rs/tests/fixtures/macros/locale-hook.opy"
+    );
+    let mut session = Session::spawn();
+    session.initialize();
+    let entry = || {
+        json!({
+            "uri": file_uri(LOCALE_HOOK),
+            "languageId": "opy",
+            "version": 7,
+        })
+    };
+
+    // Under `en-US` the residual `Map(格里姆火山)` is an unknown member
+    // spelling: both requests reject it under the same code and range.
+    let checked = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "lpp/check",
+        "params": { "entry": entry(), "locale": "en-US" },
+    }));
+    let check_diagnostic = &checked["result"]["documents"][0]["diagnostics"][0];
+    assert_eq!(check_diagnostic["severity"], "error");
+    assert_eq!(check_diagnostic["code"], "unknown-enum-member");
+
+    let compiled = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "lpp/compile",
+        "params": { "entry": entry(), "locale": "en-US" },
+    }));
+    assert_eq!(compiled["result"]["artifact"], Value::Null);
+    let compile_diagnostic = &compiled["result"]["diagnostics"][0]["diagnostics"][0];
+    assert_eq!(compile_diagnostic["code"], "unknown-enum-member");
+    assert_eq!(compile_diagnostic["range"], check_diagnostic["range"]);
+
+    // Under `zh-CN` the same spelling is valid: both accept it.
+    let checked = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 4,
+        "method": "lpp/check",
+        "params": { "entry": entry(), "locale": "zh-CN" },
+    }));
+    assert!(
+        checked["result"]["documents"]
+            .as_array()
+            .expect("documents")
+            .iter()
+            .all(|document| document["diagnostics"]
+                .as_array()
+                .expect("diagnostics")
+                .is_empty()),
+        "zh-CN check must accept the spelling: {}",
+        checked["result"]["documents"]
+    );
+
+    let compiled = session.request(json!({
+        "jsonrpc": "2.0",
+        "id": 5,
+        "method": "lpp/compile",
+        "params": { "entry": entry(), "locale": "zh-CN" },
+    }));
+    assert!(compiled["result"]["artifact"].is_object());
+    session.shutdown();
+}

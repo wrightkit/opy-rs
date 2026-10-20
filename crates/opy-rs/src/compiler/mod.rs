@@ -626,6 +626,43 @@ impl Compiler {
         Ok(MappedText::new(text.to_owned(), map))
     }
 
+    /// Re-parse hook-rewritten Workshop `text` under `locale` and re-run the
+    /// canonical validation and emission a consumer of the artifact applies.
+    /// Emission output round-trips under its own locale by construction, but
+    /// a post-compile rewrite can introduce spellings the emitter never
+    /// produced — an enum member spelling valid in one locale and unknown in
+    /// the active one — which is rejected here instead of surfacing only in
+    /// the artifact's consumer (issue #620). `span` anchors the failure at
+    /// the declaring post-compile directive.
+    fn validate_final_output(
+        &self,
+        hir: &hir::Program,
+        text: &str,
+        locale: &Locale,
+        span: Option<HirSpan>,
+    ) -> Result<(), IntegrationError> {
+        let reparsed = workshop_rs::parser::parse(text, self.catalog, locale)
+            .map_err(|error| IntegrationError::new("workshop-emission", error.to_string(), span))?;
+        reparsed.validate().map_err(|error| {
+            IntegrationError::new("workshop-validation", error.to_string(), span)
+        })?;
+        workshop_rs::emitter::emit(&reparsed, self.catalog, locale).map_err(|error| {
+            IntegrationError::new(
+                spelling_rejection_code(&error),
+                crate::matcher::did_you_mean(
+                    error.to_string(),
+                    &crate::matcher::settings_member_candidates(
+                        hir.settings.as_ref(),
+                        &error,
+                        None,
+                    ),
+                ),
+                span,
+            )
+        })?;
+        Ok(())
+    }
+
     /// Compile source using the default `en-US` catalog locale.
     ///
     /// This is the ordinary embedding API. It returns Workshop text and does
@@ -759,11 +796,12 @@ impl Compiler {
         locale: &Locale,
         mapped: bool,
     ) -> (CompileReport, Option<MappedText>) {
-        let outcome = crate::compile_with_overlay_outcome(
+        let outcome = crate::compile_with_overlay_outcome_with_locale(
             source,
             main_path,
             root,
             &std::collections::BTreeMap::new(),
+            locale,
         );
         self.compile_outcome_report_impl(outcome, root, locale, mapped)
     }
@@ -840,11 +878,12 @@ impl Compiler {
         root: &std::path::Path,
         locale: &Locale,
     ) -> Result<CompilationArtifact, IntegrationError> {
-        let outcome = crate::compile_with_overlay_outcome(
+        let outcome = crate::compile_with_overlay_outcome_with_locale(
             source,
             main_path,
             root,
             &std::collections::BTreeMap::new(),
+            locale,
         );
         let hir = outcome.hir.ok_or_else(|| {
             let error = outcome
@@ -899,6 +938,24 @@ pub(crate) fn workshop_error_span(
         | workshop_rs::WorkshopError::Malformed { span, .. }
         | workshop_rs::WorkshopError::Unsupported { span, .. } => *span,
         _ => None,
+    }
+}
+
+/// The diagnostic code a re-emission failure carries at the hook-output
+/// boundary. `Unknown` spellings report `unknown-{kind}` — the same code the
+/// frontend assigns enum member rejections and Wright's `workshop_diag`
+/// mapping derives — so a localized spelling the active locale rejects keeps
+/// one code wherever it is discovered (issue #620). `check` surfaces exactly
+/// this spelling-rejection class while every other emission failure stays
+/// `workshop-emission`.
+fn spelling_rejection_code(error: &workshop_rs::WorkshopError) -> String {
+    match error {
+        workshop_rs::WorkshopError::Unknown { kind, .. }
+        | workshop_rs::WorkshopError::UnknownWithCandidates { kind, .. } => {
+            format!("unknown-{}", kind.replace(' ', "-"))
+        }
+        workshop_rs::WorkshopError::MissingMapping { .. } => "missing-mapping".to_string(),
+        _ => "workshop-emission".to_string(),
     }
 }
 

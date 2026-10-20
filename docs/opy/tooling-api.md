@@ -35,6 +35,21 @@ localized display name; any other value is a `settings-expression` or
 `check` reports each as a
 `unknown-setting` warning. A mode's non-Boolean `enabled` is dropped, as
 upstream does.
+
+`check` then runs the same compile-stage acceptance pass `compile`
+performs — lowering, canonical validation, localized emission, the declared
+`#!postCompileHook`, and re-validation of hook-rewritten output — under the
+request locale (`check_with_locale` / `check_with_language`; `check` defaults
+to `en-US`). Enum member spellings resolve under the emission locale, so a
+spelling valid in one locale can be unknown in the active one — for example
+a hook that rewrites `Map(Grímsvötn)` to `Map(格里姆火山)` is rejected under
+`en-US` and accepted under `zh-CN`. `check` surfaces exactly that
+spelling-rejection class (`unknown-*` spellings and `missing-mapping`), at
+the same diagnostic code and location `compile` reports (issue #620); every
+other integration-stage failure — unsupported lowering surfaces, a throwing
+hook, malformed rewritten text — stays a `compile`-only diagnostic, so
+`check` still analyzes projects that do not fully compile.
+
 `compile` continues from that resolved model through canonical WIR lowering,
 validation, and localized Workshop emission. A compile report retains the
 source-attributed diagnostic when either the frontend or integration stage
@@ -87,7 +102,10 @@ expectation mismatches remain blocking.
 
 ```rust
 pub fn check(source: &str, main_path: &str, root: &Path) -> CheckOutcome
+pub fn check_with_language(source, main_path, root, language) -> CheckOutcome
+pub fn check_with_locale(source, main_path, root, locale) -> CheckOutcome
 pub fn check_with_overlay(source, main_path, root, overlay) -> CheckOutcome
+pub fn check_with_overlay_and_locale(source, main_path, root, overlay, locale) -> CheckOutcome
 
 pub struct CheckOutcome {
     pub diagnostics: Vec<Diagnostic>,   // empty ⟺ clean
@@ -104,8 +122,13 @@ pub struct CheckOutcome {
   the file registry to `(file id, path, line/col)`.
 * `PostCompileHook`: the declared `#!postCompileHook` script (root-relative
   path plus directive span), present only when the source declared one and
-  the project checked clean. It is a declaration record only; the compiler
-  executes it after successful final Workshop emission.
+  the project checked clean. It is a declaration record only; execution
+  happens in the compile stage — including `check`'s acceptance pass, which
+  re-validates the rewritten output under the request locale (issue #620).
+* Locale variants: `check` defaults to `en-US`. `check_with_language`
+  selects a catalog locale by name (no `workshop-rs` type needed);
+  `check_with_locale` and `check_with_overlay_and_locale` take an explicit
+  `workshop_rs::catalog::Locale` — the same locale `compile` emits under.
 
 `SemanticModel` wraps the resolved program and answers queries:
 
@@ -174,7 +197,8 @@ Span layout: `file_id` indexes the registry, positions are 1-based
 | `unknown-action` / `unknown-value` / `unknown-member` | resolve | Unknown builtins |
 | `duplicate-declaration` / `duplicate-definition` | resolve | Duplicate OPY declarations or `def` definitions |
 | `unsupported-member` | resolve | Member access outside the declared surface |
-| `unknown-enum-member` | resolve | Custom (user-declared) enum member validation |
+| `unknown-enum-member` | resolve / emission | Custom (user-declared) enum member validation; also an enum member spelling the active locale rejects in hook-rewritten output (issue #620) |
+| `missing-mapping` | emission | A canonical member has no spelling mapped for the active locale |
 | `invalid-arity` / `missing-argument` / `invalid-argument` | resolve | Signature validation |
 | `keyword-unsupported` / `unknown-keyword` / `duplicate-argument` / `keyword-required` / `positional-after-keyword` | resolve | Keyword binding |
 | `invalid-iterable` / `invalid-call-context` | resolve | Position/context validation |
@@ -186,7 +210,10 @@ Span layout: `file_id` indexes the registry, positions are 1-based
 
 Parse diagnostics are reported in full (recovery collects several);
 semantic-resolution diagnostics follow the compile contract and report the
-first error. `check` and `compile` agree on the verdict; only the parse-stage
+first error. `check` and `compile` agree on the verdicts `check` owns —
+source-level failures plus the locale-dependent spelling rejections of the
+acceptance pass; `compile` additionally reports other integration-stage
+failures `check` does not surface (issue #620). Only the parse-stage
 reporting depth differs.
 
 ## Vocabulary lookup (`opy_rs::lookup`)
@@ -233,6 +260,7 @@ uses — OPY owns no separate vocabulary copy:
 ```
 opy-cli check <main.opy>                          # diagnostics → stderr; 0 clean / 1 diagnostics
 opy-cli check --format json <main.opy>             # machine JSON result/diagnostics on stdout
+opy-cli check --language zh-CN <main.opy>          # spellings validated under the catalog-declared locale
 opy-cli compile <main.opy>                        # Workshop text → stdout
 opy-cli compile --format json <main.opy>           # versioned compile report → stdout
 opy-cli compile --language zh-CN <main.opy>        # catalog-declared locale

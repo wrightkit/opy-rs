@@ -60,6 +60,12 @@ pub(crate) struct CheckArgs {
     /// Output format; JSON contains only the check result and diagnostics.
     #[arg(long, value_enum, default_value_t = OutputFormatArg::Text)]
     pub(crate) format: OutputFormatArg,
+
+    /// Workshop locale declared by the canonical catalog; enum member
+    /// spellings are validated under it like `compile --language` (issue
+    /// #620).
+    #[arg(long, default_value = "en-US", value_name = "LOCALE")]
+    pub(crate) language: String,
 }
 
 #[derive(Debug, Args)]
