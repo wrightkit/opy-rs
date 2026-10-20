@@ -522,11 +522,10 @@ impl<'a> Emitter<'a> {
     /// anything the canonical emitter cannot write back — unknown maps,
     /// heroes, teams, and modes or kind-mismatched members — with the
     /// canonical source span. This walk then refuses shapes the OPY
-    /// settings frontend rewrites on the way back to canonical form:
+    /// settings frontend rewrites on the way back to canonical form —
     /// `enabled` markers the mode header drops, hero names the alias pass
-    /// renames, members a `name: value` reparse would produce as `Raw`
-    /// rather than the authored kind, and any content OPY JSONC cannot
-    /// express at all.
+    /// renames, members a `name: value` reparse produces as `Raw` — and
+    /// any content OPY JSONC cannot express at all.
     ///
     /// Member order follows the canonical child order: the OPY frontend's
     /// own normalization reorders a team's `general` members ahead of its
@@ -558,9 +557,8 @@ impl<'a> Emitter<'a> {
                 SettingsNode::Workshop { children, .. } => {
                     top.push(("workshop".to_string(), self.settings_workshop(children)));
                 }
-                // `RawGroup` is the canonical marker for a member block
-                // written verbatim; the comparator equates it with `Group`
-                // and both emit `name { ... }`, so one path serves both.
+                // `RawGroup` marks a verbatim member block; the comparator
+                // equates it with `Group` and both emit `name { ... }`.
                 SettingsNode::Group { name, children, .. }
                 | SettingsNode::RawGroup { name, children, .. } => match name.as_str() {
                     // An OPY `workshop` key reparses as `Workshop`, never
@@ -580,9 +578,8 @@ impl<'a> Emitter<'a> {
                     "extensions" => {
                         // `#!extension` merges into an existing `extensions`
                         // group or appends one at the end, so presence-only
-                        // members must trail every authored member and an
-                        // extensions group carrying only `#!extension`
-                        // directives must be the last top-level group.
+                        // members must trail authored members and an
+                        // all-directive group must come last.
                         let flags = children
                             .iter()
                             .position(|member| matches!(member, SettingsNode::Flag { .. }));
@@ -1019,11 +1016,10 @@ impl<'a> Emitter<'a> {
                     self.refuse_settings(member, "is a string member under a non-string setting");
                     return None;
                 }
-                // A string value with an unbound `{n}`/`{}` formatter fails
-                // the frontend's `__customString__` check before it can
-                // lower; `main.modeName`/`main.description` must survive the
-                // filtered-word escape verbatim, and the `mapRotation`
-                // member rewrites `afterGame` to `afterAGame`.
+                // An unbound `{n}`/`{}` formatter fails the frontend's
+                // `__customString__` check; `main.modeName`/`main.description`
+                // must survive the filtered-word escape verbatim, and
+                // `mapRotation` rewrites `afterGame` to `afterAGame`.
                 if crate::compile_time::has_unbound_formatters(value) {
                     self.refuse_settings(
                         member,
@@ -1056,7 +1052,12 @@ impl<'a> Emitter<'a> {
             SettingsNode::List { elements, .. } => {
                 let definition = self.catalogued_member(member, path, hero)?;
                 match definition.domain() {
-                    SettingValueDomain::MapList => {}
+                    SettingValueDomain::MapList => {
+                        if elements.iter().any(|element| element.variant.is_some()) {
+                            self.refuse_settings(member, "carries a map variant qualifier");
+                            return None;
+                        }
+                    }
                     SettingValueDomain::HeroList => {
                         for element in elements {
                             if super::settings::canonical_hero_name(&element.value) != element.value
@@ -1201,9 +1202,8 @@ impl<'a> Emitter<'a> {
     }
 
     /// A catalogued member or `None` with an issue recorded: a typed member
-    /// the catalog does not declare (or does not apply to this hero) is
-    /// carried as a `name: value` line and reparses `Raw`, never its
-    /// authored kind.
+    /// the catalog does not declare (or does not apply to this hero)
+    /// reparses `Raw`, never its authored kind.
     fn catalogued_member(
         &mut self,
         member: &SettingsNode,
@@ -4341,9 +4341,8 @@ mod tests {
 
     #[test]
     fn refuses_unemittable_settings_map_element() {
-        // The variant-qualified map spelling parses but the canonical
-        // emission table cannot resolve it; the refusal keeps the
-        // canonical span.
+        // The variant-qualified map resolves, but OPY settings have no
+        // element form carrying the qualifier; the refusal keeps the span.
         let program = parse_workshop(
             "settings\n{\n\tmodes\n\t{\n\t\tSkirmish\n\t\t{\n\t\t\tenabled maps\n\t\t\t{\n\t\t\t\tWorkshop Chamber 972777519512064577\n\t\t\t}\n\t\t}\n\t}\n}\n",
         );
@@ -4376,9 +4375,8 @@ mod tests {
 
     #[test]
     fn refuses_unemittable_map_in_pinned_custom_game_settings_fixture() {
-        // `customGameSettings.txt` carries the variant-qualified map element
-        // the canonical catalog cannot resolve; reconstruction must refuse
-        // rather than silently drop or rename it.
+        // `customGameSettings.txt` carries a variant-qualified map element
+        // OPY cannot express; reconstruction must refuse, not drop it.
         let program = parse_workshop(include_str!(
             "../../tests/fixtures/reconstruction/customGameSettings.txt"
         ));

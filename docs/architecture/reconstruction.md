@@ -220,9 +220,11 @@ and never introduces an OPY-local settings model.
   unwriteable text refuse.
 - **Variant-qualified maps.** A map-list element like
   `Workshop Chamber 972777519512064577` parses into the canonical model
-  but fails `check_emission` — the canonical catalog exposes no
-  variant-qualified map lookup or emission. Refusal stays until
-  `wrightkit/workshop-rs#518` provides a canonical representation; the
+  with the variant ids on `SettingsListElement::variant`
+  (`wrightkit/workshop-rs#518`). opy-rs settings have no element form
+  carrying a variant qualifier — upstream writes `{<map>: [<variants>]}`
+  object elements, which the OPY settings evaluator does not yet produce —
+  so reconstruction still refuses rather than emit the bare map; the
   pinned `customGameSettings` fixture pins this refusal.
 
 ### Rules and events
