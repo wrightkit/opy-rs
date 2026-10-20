@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: g\n        1: h\n}\n\n//Optimize for size enabled\nrule (\"operands\") {\n    event {\n        Ongoing - Global;\n    }\n    conditions {\n        Global.g >= 1;\n        Global.g < 1;\n        1 <= Global.g;\n        Global.g > 1;\n        Global.g == 1;\n        Global.g != 1;\n        Global.g >= Null;\n        Global.g == Null;\n        Add(Global.g, True) >= 1;\n        Global.h != False;\n    }\n    actions {\n        Set Global Variable(h, 1);\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: g\n        1: h\n}\n\n//Optimize for size enabled\nrule (\"operands\") {\n    event {\n        Ongoing - Global;\n    }\n    conditions {\n        Global.g >= 1;\n        Global.g < 1;\n        1 <= Global.g;\n        Global.g > 1;\n        Global.g == 1;\n        Global.g != 1;\n        Global.g >= Null;\n        Global.g == Null;\n        Add(Global.g, True) >= 1;\n        Global.h != False;\n    }\n    actions {\n        Set Global Variable(h, 1);\n    }\n}\n\n",
+    "workshopSha256": "bc91919eb9c97ab7a62f96faedfc3ca4361c2c4e06618d31aafd2450f0d13d0b"
+  },
+  "fixture": "synthetic/structural-size-condition-operands",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "daa58320825fd7741a7cc06a2ab29ad6634feff87a83f68d6aa627c9901eb713"
+      }
+    ],
+    "sha256": "50f5c8810c3226ef1358952c8436e6668c132be5f1a494e4039b0147457094b0",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "5a7d0e294b8cad73b9701987bb584d0551d7fa4d",
+    "gitHead": "ec763c1d245aa5485ef61af5b2bda4975bce4877",
+    "integrity": "sha512-C5F6btT5yn19BvHuE0bjMuSd/2esebBabmpL4SYLQFuJ4IdouVOKEoMLLuJFAyNc0Phwrolblj5GDkDGYR0ofg==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.17.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.17"
+  },
+  "schemaVersion": 1
+}
