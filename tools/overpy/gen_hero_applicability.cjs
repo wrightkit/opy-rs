@@ -1,5 +1,5 @@
 // Records crates/opy-rs/src/compiler/data/hero_applicability.json from the
-// pinned OverPy 9.7.10 customGameSettingsSchema hero merge: the post-load
+// pinned OverPy customGameSettingsSchema hero merge: the post-load
 // `computeCustomGameSettingsSchema` task expands
 // `heroes.values.__generalAndEachHero__` + `__eachHero__` (filtered by each
 // key's include/exclude hero lists) into every hero's `values` block, and
