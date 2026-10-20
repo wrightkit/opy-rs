@@ -93,8 +93,9 @@ const DOCUMENT_SYNTAX_CODES: [&str; 18] = [
 ///   `rule-prefix-template-invalid`) — the source text or constants the
 ///   verdict needs live outside the document;
 /// - catalog/environment verdicts (`catalog-error`, `manifest-error`,
-///   `unknown-enum-member`) — fixed-vocabulary questions the client's
-///   project check answers the same way;
+///   `unknown-enum-member`, `missing-mapping`) — fixed-vocabulary and
+///   request-locale questions the client's project check answers the same
+///   way;
 /// - capability verdicts (`unsupported-*`, `backend-directive-unsupported`,
 ///   `unsupported-integration-surface`) — well-formed but unsupported
 ///   constructs are not malformed text; the `reconstruct` family's codes
@@ -148,6 +149,7 @@ const EXCLUDED_CODES: &[&str] = &[
     "malformed-payload",
     "manifest-error",
     "missing-argument",
+    "missing-mapping",
     "positional-after-keyword",
     "post-compile-hook-duplicate",
     "random-indexed-delete",

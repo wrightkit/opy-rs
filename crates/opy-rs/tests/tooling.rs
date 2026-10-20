@@ -1965,3 +1965,68 @@ fn orphan_elif_else_warns_lone_else_and_rejects_instead_of_misparsing() {
         );
     }
 }
+
+/// Issue #620: enum member spellings resolve under the active emission
+/// locale. A `#!postCompileHook` rewrite can introduce a spelling the
+/// emitter never produced — `Map(格里姆火山)` is valid under `zh-CN` but not
+/// `en-US` — so `check` runs the same compile-stage acceptance pass
+/// `compile` performs, under the same locale, and reports the same
+/// diagnostic code and location.
+#[test]
+fn check_and_compile_agree_on_locale_dependent_enum_member_spellings() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/macros");
+    let source = concat!(
+        "#!postCompileHook \"locale-map.js\"\n",
+        "globalvar g\n",
+        "rule \"map\":\n",
+        "    @Event global\n",
+        "    g = Map.GRIMSVOTN\n",
+    );
+    let compiler = opy_rs::Compiler::new().expect("compiler initializes");
+
+    // Under `en-US` the hook-rewritten `Map(格里姆火山)` is an unknown enum
+    // member spelling; `check` and `compile` report it identically.
+    let checked = tooling::check_with_language(source, "main.opy", &root, "en-US");
+    let check_error = checked
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.severity == tooling::DiagnosticSeverity::Error)
+        .unwrap_or_else(|| panic!("en-US check must reject the residual spelling: {checked:?}"));
+    assert_eq!(check_error.code, "unknown-enum-member");
+    assert!(
+        check_error
+            .message
+            .contains("unknown enum member spelling 'Map.格里姆火山' for locale 'en-us'"),
+        "{}",
+        check_error.message
+    );
+    let report = compiler.compile_source_report_with_language(source, "main.opy", &root, "en-US");
+    assert_eq!(report.compile.status, opy_rs::CompileStatus::Failure);
+    let compile_error = report
+        .compile
+        .diagnostics
+        .iter()
+        .find(|diagnostic| diagnostic.severity == tooling::DiagnosticSeverity::Error)
+        .expect("en-US compile must reject the residual spelling");
+    assert_eq!(compile_error.code, check_error.code);
+    assert_eq!(compile_error.span, check_error.span);
+    // The failure anchors at the `#!postCompileHook` directive whose rewrite
+    // introduced the spelling.
+    assert_eq!(check_error.span.as_ref().unwrap().start.line, 1);
+
+    // Under `zh-CN` the same spelling is valid: both paths accept the
+    // project.
+    let checked = tooling::check_with_language(source, "main.opy", &root, "zh-CN");
+    assert!(
+        checked.is_clean(),
+        "zh-CN check must accept the spelling: {:?}",
+        checked.diagnostics
+    );
+    let report = compiler.compile_source_report_with_language(source, "main.opy", &root, "zh-CN");
+    assert_eq!(
+        report.compile.status,
+        opy_rs::CompileStatus::Success,
+        "zh-CN compile must accept the spelling: {:?}",
+        report.compile.diagnostics
+    );
+}

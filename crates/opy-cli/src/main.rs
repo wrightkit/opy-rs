@@ -77,10 +77,11 @@ fn cmd_check(args: &CheckArgs, presentation: Presentation) -> ExitCode {
         Ok(project) => project,
         Err(code) => return code,
     };
-    let outcome = check(
+    let outcome = opy_rs::tooling::check_with_language(
         project.source(),
         &project.main_path().to_string_lossy(),
         project.root(),
+        &args.language,
     );
     if args.format == OutputFormatArg::Json {
         return match print_json(&CheckReport {

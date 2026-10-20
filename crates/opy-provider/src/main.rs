@@ -18,7 +18,7 @@ use opy_rs::{CompileDiagnostic, Compiler};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use workshop_rs::catalog::Catalog;
+use workshop_rs::catalog::{Catalog, Locale};
 use workshop_rs::program::MappedText;
 
 mod edits;
@@ -312,6 +312,8 @@ struct LoadedProject {
 #[derive(Debug)]
 struct LoadedDocuments {
     documents: BTreeMap<String, Document>,
+    /// The request's `locale` parameter, or the `en-US` default.
+    locale: String,
 }
 
 #[derive(Debug)]
@@ -524,15 +526,18 @@ impl Server {
             self.protocol_version.as_deref().expect("initialized"),
         )? {
             LoadedRequest::Entry(project) => {
-                let outcome = opy_rs::tooling::check(
+                let outcome = opy_rs::tooling::check_with_locale(
                     project.filesystem.source(),
                     &path_string(project.filesystem.main_path()),
                     project.filesystem.root(),
+                    &Locale::new(&project.locale),
                 );
                 ensure_entry_sources_loaded(&project, &outcome.diagnostics)?;
                 Ok(check_result(&project, &outcome))
             }
-            LoadedRequest::Documents(request) => check_documents(&request.documents),
+            LoadedRequest::Documents(request) => {
+                check_documents(&request.documents, &request.locale)
+            }
         }
     }
 
@@ -573,11 +578,12 @@ impl Server {
         }
         let compiler = self.compiler.as_ref().expect("compiler initialized");
         let main_path = path_string(project.filesystem.main_path());
-        let outcome = opy_rs::compile_with_overlay_outcome(
+        let outcome = opy_rs::compile_with_overlay_outcome_with_locale(
             project.filesystem.source(),
             &main_path,
             project.filesystem.root(),
             &BTreeMap::new(),
+            &Locale::new(&project.locale),
         );
         ensure_entry_sources_loaded(&project, &outcome.diagnostics)?;
         let display_root = outcome.display_root.clone();
@@ -1142,7 +1148,10 @@ fn load_project(
     match (documents, entry) {
         (Some(documents), None) => {
             validate_documents(&documents)?;
-            Ok(LoadedRequest::Documents(LoadedDocuments { documents }))
+            Ok(LoadedRequest::Documents(LoadedDocuments {
+                documents,
+                locale: locale.unwrap_or_else(|| "en-US".to_string()),
+            }))
         }
         (None, Some(entry)) => load_entry(entry, locale, protocol_version),
         _ => Err(HandlerError::Standard {
@@ -1367,7 +1376,11 @@ fn include_remainder(target: &str) -> PathBuf {
     parts.into_iter().collect()
 }
 
-fn check_documents(documents: &BTreeMap<String, Document>) -> Result<Value, HandlerError> {
+fn check_documents(
+    documents: &BTreeMap<String, Document>,
+    locale: &str,
+) -> Result<Value, HandlerError> {
+    let locale = Locale::new(locale);
     let overlays = document_overlays(documents)?;
     let mut diagnostics_by_uri = documents
         .keys()
@@ -1452,11 +1465,12 @@ fn check_documents(documents: &BTreeMap<String, Document>) -> Result<Value, Hand
             .parent()
             .map(Path::to_path_buf)
             .unwrap_or_else(|| PathBuf::from("."));
-        let outcome = opy_rs::tooling::check_with_overlay(
+        let outcome = opy_rs::tooling::check_with_overlay_and_locale(
             &representative.text,
             &path_string(&path),
             &root,
             &overlays,
+            &locale,
         );
         if outcome.is_clean() {
             covered.extend(
@@ -1537,6 +1551,7 @@ fn compile_document(
         .map(Path::to_path_buf)
         .unwrap_or_else(|| PathBuf::from("."));
     let overlays = document_overlays(&request.documents)?;
+    let locale = Locale::new(&request.locale);
     if server.compiler.is_none() {
         server.compiler = Some(Compiler::new().map_err(|error| HandlerError::Lpp {
             kind: "providerFailure",
@@ -1544,8 +1559,13 @@ fn compile_document(
             message: format!("cannot initialize compiler: {error}"),
         })?);
     }
-    let outcome =
-        opy_rs::compile_with_overlay_outcome(&document.text, &path_string(&path), &root, &overlays);
+    let outcome = opy_rs::compile_with_overlay_outcome_with_locale(
+        &document.text,
+        &path_string(&path),
+        &root,
+        &overlays,
+        &locale,
+    );
     let mut diagnostics_by_uri = request
         .documents
         .keys()
@@ -1573,10 +1593,20 @@ fn compile_document(
         Some(hir) => {
             let compiled = if format == Some(ArtifactFormat::Mapped) {
                 compiler
-                    .compile_hir_mapped(hir)
+                    .compile_hir_mapped_with_locale_and_hook(
+                        hir,
+                        outcome.post_compile_hook.clone(),
+                        &locale,
+                    )
                     .map(|(artifact, mapped)| (artifact, Some(mapped)))
             } else {
-                compiler.compile_hir(hir).map(|artifact| (artifact, None))
+                compiler
+                    .compile_hir_with_locale_and_hook(
+                        hir,
+                        outcome.post_compile_hook.clone(),
+                        &locale,
+                    )
+                    .map(|artifact| (artifact, None))
             };
             match compiled {
                 Ok((artifact, mapped)) => Some(artifact_json(

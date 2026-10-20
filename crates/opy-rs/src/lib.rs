@@ -19,11 +19,12 @@
 //! (`macro_js::Limits::default()`). Script-macro expansion is
 //! compile-time behavior and is source-supported.
 //!
-//! `#!postCompileHook` is recognized, parsed, validated, and recorded only
-//! (see [`preprocess`] and [`CompileOutcome::post_compile_hook`]): the
-//! The source implementation never executes the hook. Real hook execution
-//! receives the final Workshop text produced by lowering and is
-//! lowering-dependent (workshop-rs emission, issue #8); source analysis never
+//! `#!postCompileHook` is recognized, parsed, validated, and recorded at the
+//! source stage (see [`preprocess`] and [`CompileOutcome::post_compile_hook`]).
+//! The hook executes against the final Workshop text produced by lowering —
+//! in [`Compiler`] compilation and in [`tooling::check`]'s compile-stage
+//! acceptance pass, which re-validates hook-rewritten output under the
+//! request locale (issue #620). The frontend pipeline itself never
 //! fabricates a Workshop payload.
 //!
 //! This crate owns the OverPy source-language implementation, its bounded
@@ -148,22 +149,23 @@ pub struct CompileOutcome {
     /// root, otherwise the canonicalized input root.
     pub display_root: std::path::PathBuf,
     /// The declared `#!postCompileHook` script, when the source declared one
-    /// and compilation succeeded.
+    /// and the frontend stage succeeded.
     ///
-    /// This is the declaration record, not an execution result: the OPY
-    /// implementation
-    /// recognizes, parses, validates, and records the directive, but never
-    /// executes the hook. Execution against the final Workshop text is
-    /// lowering-dependent (workshop-rs emission, issue #8); source analysis
-    /// never fabricates a Workshop payload.
+    /// This is the declaration record, not an execution result: the frontend
+    /// recognizes, parses, validates, and records the directive, and the
+    /// compile stage (or `check`'s acceptance pass, issue #620) executes it
+    /// against the emitted Workshop text and revalidates the rewritten
+    /// output under the request locale. The frontend itself never
+    /// fabricates a Workshop payload (issue #8).
     pub post_compile_hook: Option<PostCompileHookRecord>,
 }
 
 /// The recorded declaration of a `#!postCompileHook` script.
 ///
-/// The declared `#!postCompileHook` script; execution against the final
-/// Workshop text is lowering-dependent (workshop-rs emission, issue #8). The
-/// frontend never fabricates a Workshop payload.
+/// Execution against the final Workshop text is lowering-dependent
+/// (workshop-rs emission, issue #8), so it happens in the compile stage and
+/// in `check`'s compile-stage acceptance pass (issue #620) — never in the
+/// frontend, which fabricates no Workshop payload.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PostCompileHookRecord {
     /// The resolved project-relative script path.
@@ -177,16 +179,36 @@ pub struct PostCompileHookRecord {
 /// Compile with open-document overlays while retaining the source file registry
 /// on parse/lower failure.
 ///
-/// This is the compile contract view of [`tooling::check_with_overlay`]: the
-/// two share one pipeline, so `check` and `compile` never disagree about
-/// whether a project is clean.
+/// This is the frontend-stage view of [`tooling::check_with_overlay`]: the
+/// two share one source pipeline, so they never disagree about whether the
+/// source is clean. The compile stage runs afterwards through [`Compiler`],
+/// under the caller's locale, so its failures keep their integration
+/// classification.
 pub fn compile_with_overlay_outcome(
     source: &str,
     main_path: &str,
     root: &Path,
     overlay: &std::collections::BTreeMap<String, String>,
 ) -> CompileOutcome {
-    let outcome = tooling::check_with_overlay(source, main_path, root, overlay);
+    compile_with_overlay_outcome_with_locale(
+        source,
+        main_path,
+        root,
+        overlay,
+        &workshop_rs::catalog::Locale::new("en-US"),
+    )
+}
+
+/// [`compile_with_overlay_outcome`] under an explicit catalog locale — the
+/// locale the caller's subsequent compile emits under (issue #620).
+pub fn compile_with_overlay_outcome_with_locale(
+    source: &str,
+    main_path: &str,
+    root: &Path,
+    overlay: &std::collections::BTreeMap<String, String>,
+    locale: &workshop_rs::catalog::Locale,
+) -> CompileOutcome {
+    let outcome = tooling::check_frontend_with_overlay(source, main_path, root, overlay, locale);
     // Every failed check carries at least one error diagnostic, so a None model
     // always yields an error (the compile outcome invariant).
     let error = outcome
