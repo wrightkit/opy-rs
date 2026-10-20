@@ -211,12 +211,12 @@ impl<'a> Lowering<'a> {
         args: &[Expr],
         span: Option<HirSpan>,
     ) -> Result<ActionId, IntegrationError> {
-        if args.is_empty() {
-            if let Some(&subroutine) = self.subroutines.get(name) {
-                return Ok(self.push_action(Action::CallSubroutine {
-                    subroutine: self.program.subroutines[subroutine].name.clone(),
-                }));
-            }
+        if args.is_empty()
+            && let Some(&subroutine) = self.subroutines.get(name)
+        {
+            return Ok(self.push_action(Action::CallSubroutine {
+                subroutine: self.program.subroutines[subroutine].name.clone(),
+            }));
         }
         if name == "chaseAtRate" {
             let spans = args
@@ -421,10 +421,11 @@ impl<'a> Lowering<'a> {
     }
 
     fn lower_hud_visible_to(&mut self, expr: &Expr) -> Result<ValueId, IntegrationError> {
-        if let Expr::Call { name, args, .. } = expr {
-            if name == "getAllPlayers" && args.is_empty() {
-                return Ok(self.lower_all_players());
-            }
+        if let Expr::Call { name, args, .. } = expr
+            && name == "getAllPlayers"
+            && args.is_empty()
+        {
+            return Ok(self.lower_all_players());
         }
         self.lower_value(expr)
     }

@@ -112,14 +112,14 @@ impl<'a> MacroExpander<'a> {
     ) -> Result<(), IntegrationError> {
         let mut expanded = Vec::new();
         for mut statement in statements.drain(..) {
-            if let Stmt::Expr { expr, .. } = &mut statement {
-                if let Expr::MacroCall { name, args, span } = expr.as_mut() {
-                    for argument in args.iter_mut() {
-                        self.expand_expr_in_place(argument, bindings, site)?;
-                    }
-                    expanded.extend(self.expand_macro_body(name, args, *span, site)?);
-                    continue;
+            if let Stmt::Expr { expr, .. } = &mut statement
+                && let Expr::MacroCall { name, args, span } = expr.as_mut()
+            {
+                for argument in args.iter_mut() {
+                    self.expand_expr_in_place(argument, bindings, site)?;
                 }
+                expanded.extend(self.expand_macro_body(name, args, *span, site)?);
+                continue;
             }
             self.expand_stmt_inner(&mut statement, bindings, site)?;
             if let Some(site) = site {

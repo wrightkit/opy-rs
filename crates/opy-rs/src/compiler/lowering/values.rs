@@ -337,10 +337,11 @@ impl<'a> Lowering<'a> {
                         }
                     }
                 }
-                if op == "==" && self.optimization_state_at(span.as_ref()).enabled {
-                    if let Some(value) = self.lower_current_map_equality(left, right) {
-                        return Ok(value);
-                    }
+                if op == "=="
+                    && self.optimization_state_at(span.as_ref()).enabled
+                    && let Some(value) = self.lower_current_map_equality(left, right)
+                {
+                    return Ok(value);
                 }
                 let left = self.lower_value(left)?;
                 let right = self.lower_value(right)?;
@@ -348,40 +349,38 @@ impl<'a> Lowering<'a> {
                     && let Some(value) = self.fold_numeric_binary(op, left, right)
                 {
                     Value::Number(value)
+                } else if op == "in" {
+                    Value::Call {
+                        name: "arrayContains".to_string(),
+                        args: vec![right, left],
+                    }
+                } else if op == "not in" {
+                    let contains = self.push_call("arrayContains", vec![right, left]);
+                    Value::Call {
+                        name: "not".to_string(),
+                        args: vec![contains],
+                    }
                 } else {
-                    if op == "in" {
-                        Value::Call {
-                            name: "arrayContains".to_string(),
-                            args: vec![right, left],
+                    let name = match op.as_str() {
+                        "==" | "!=" | "<" | "<=" | ">" | ">=" | "and" | "or" => op,
+                        "+" => "add",
+                        "-" => "subtract",
+                        "*" => "multiply",
+                        "/" => "divide",
+                        "%" => "modulo",
+                        "**" => "raiseToPower",
+                        _ => {
+                            return Err(self.unsupported(
+                                format!(
+                                    "binary operator '{op}' is not currently representable in canonical WIR"
+                                ),
+                                span,
+                            ));
                         }
-                    } else if op == "not in" {
-                        let contains = self.push_call("arrayContains", vec![right, left]);
-                        Value::Call {
-                            name: "not".to_string(),
-                            args: vec![contains],
-                        }
-                    } else {
-                        let name = match op.as_str() {
-                            "==" | "!=" | "<" | "<=" | ">" | ">=" | "and" | "or" => op,
-                            "+" => "add",
-                            "-" => "subtract",
-                            "*" => "multiply",
-                            "/" => "divide",
-                            "%" => "modulo",
-                            "**" => "raiseToPower",
-                            _ => {
-                                return Err(self.unsupported(
-                                    format!(
-                                        "binary operator '{op}' is not currently representable in canonical WIR"
-                                    ),
-                                    span,
-                                ));
-                            }
-                        };
-                        Value::Call {
-                            name: name.to_string(),
-                            args: vec![left, right],
-                        }
+                    };
+                    Value::Call {
+                        name: name.to_string(),
+                        args: vec![left, right],
                     }
                 }
             }
@@ -1542,8 +1541,7 @@ impl<'a> Lowering<'a> {
             hir.preprocessing
                 .replacements
                 .iter()
-                .find(|value| value.value == name)
-                .is_some()
+                .any(|value| value.value == name)
         };
         match self.value(value_id).clone() {
             Value::Number(0.0) => {
@@ -1758,7 +1756,7 @@ impl<'a> Lowering<'a> {
         let mut strings = adjusted
             .iter()
             .map(|value| {
-                format!("{value:.precision$}", precision = max_decimals)
+                format!("{value:.max_decimals$}")
                     .replace('.', "")
                     .chars()
                     .rev()

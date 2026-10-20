@@ -50,9 +50,9 @@ then remove it here. The procedure is the `merged-pr-retro` skill in
   2026-10-06
 
 ### The MSRV gate catches syntax the local toolchain accepts
-- **Rule:** Code must compile on the declared `rust-version` (1.85.0), so the workspace gates run on that toolchain — `cargo +1.85.0 clippy --workspace --all-targets --all-features -- -D warnings` — before pushing. Syntax stabilized after the MSRV (for example let-chains in 1.88) compiles under a newer local toolchain and fails only in the `Rust (1.85.0)` CI job.
+- **Rule:** Code must compile on the declared `rust-version` (1.88.0), so the workspace gates run on that toolchain — `cargo +1.88.0 clippy --workspace --all-targets --all-features -- -D warnings` — before pushing. Syntax stabilized after the MSRV (for example let-chains in 1.88) compiles under a newer local toolchain and fails only in the `Rust (1.85.0)` CI job.
 - **Why:** A PR written under a newer local toolchain shipped let-chains and needed a pushed fix after the MSRV job failed; the same class hit wright#743 the same day. `workshop-rs` already carried the same rule in its `AGENTS.md` since 2026-10-15, but the rule had not propagated to sibling repositories.
-- **Prevention home:** the `cargo +1.85.0` pre-push gate now stated in `AGENTS.md` (ported from workshop-rs#457); the `Rust (1.85.0)` CI job remains the backstop.
+- **Prevention home:** the `cargo +1.88.0` pre-push gate now stated in `AGENTS.md` (ported from workshop-rs#457); the `Rust (1.85.0)` CI job remains the backstop.
 - **Incidents:** [opy-rs#574](https://github.com/wrightkit/opy-rs/pull/574), observed 2026-10-18; same class in [wright#743](https://github.com/wrightkit/wright/pull/743) the same day, recorded in wright's `docs/LESSONS.md` and the escalation issue.
 
 ### A scope-defining allowlist needs an exhaustive audit, not a hand-picked list

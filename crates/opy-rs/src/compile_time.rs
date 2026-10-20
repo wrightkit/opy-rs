@@ -613,10 +613,10 @@ fn evaluate_binary(op: &str, left: Value, right: Value, settings: bool) -> Optio
     let folded = |result: f64| (result.abs() <= NUMBER_LIMIT).then_some(Value::Number(result));
     match op {
         "+" => {
-            if let (Value::Number(left), Value::Number(right)) = (&left, &right) {
-                if let result @ Some(_) = folded(left + right) {
-                    return result;
-                }
+            if let (Value::Number(left), Value::Number(right)) = (&left, &right)
+                && let result @ Some(_) = folded(left + right)
+            {
+                return result;
             }
             if is_zero(&left) {
                 return Some(right);
@@ -1058,7 +1058,7 @@ fn evaluate_format(text: &str, args: &[Value]) -> Option<Value> {
     // formatters require exactly one argument each — the reference errors
     // in both cases. Extra arguments with numbered formatters (or none at
     // all) are dropped silently (`"{{0}}".format(5)` emits `{{0}}`; #512).
-    if numbered && unnumbered > 0 || unnumbered > 0 && unnumbered != args.len() {
+    if unnumbered > 0 && (numbered || unnumbered != args.len()) {
         return None;
     }
     Some(Value::String(output))

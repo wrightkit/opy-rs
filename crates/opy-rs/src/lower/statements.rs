@@ -106,13 +106,14 @@ impl Lowerer {
             Stmt::Expr { expr, span } => {
                 // A bare call of a declared subroutine becomes
                 // `CallSubroutine` (reference behavior).
-                if let Expr::Call { name, args, .. } = expr {
-                    if self.subroutine_visible(name) && args.is_empty() {
-                        return HirStmt::CallSubroutine {
-                            name: name.clone(),
-                            span: Some(span.into()),
-                        };
-                    }
+                if let Expr::Call { name, args, .. } = expr
+                    && self.subroutine_visible(name)
+                    && args.is_empty()
+                {
+                    return HirStmt::CallSubroutine {
+                        name: name.clone(),
+                        span: Some(span.into()),
+                    };
                 }
                 HirStmt::Expr {
                     expr: Box::new(self.lower_expr(expr, macro_params, CallPosition::Statement)),
@@ -331,7 +332,7 @@ impl Lowerer {
             span,
         } = variable
         {
-            if !default_var_index(member).is_some() && !self.player_visible(member) {
+            if default_var_index(member).is_none() && !self.player_visible(member) {
                 self.error_at(
                     "unknown-identifier",
                     format!("unknown player variable '{member}'"),

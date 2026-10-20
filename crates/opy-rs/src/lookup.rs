@@ -471,13 +471,13 @@ pub fn lookup(query: &LookupQuery) -> LookupOutcome {
         scope,
         reason: reason.to_string(),
     };
-    if let Some(locale) = &query.locale {
-        if !locale.eq_ignore_ascii_case("en-US") {
-            return unsupported(
-                "localized display names are owned by workshop-rs; opy-rs \
+    if let Some(locale) = &query.locale
+        && !locale.eq_ignore_ascii_case("en-US")
+    {
+        return unsupported(
+            "localized display names are owned by workshop-rs; opy-rs \
                  resolves display names in the 'en-US' locale only",
-            );
-        }
+        );
     }
     let Ok(catalog) = Catalog::builtin_ref() else {
         return unsupported("vocabulary data (manifest or catalog) is not bundled");

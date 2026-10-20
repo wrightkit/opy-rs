@@ -132,10 +132,10 @@ fn length(text: &str) -> usize {
 
 fn split(mut tokens: Vec<Token>) -> Value {
     let count = tokens.len();
-    if let [Token::Text(text)] = tokens.as_slice() {
-        if length(text) <= MAX_LENGTH {
-            return Value::call("customString", [Value::String(text.clone())]);
-        }
+    if let [Token::Text(text)] = tokens.as_slice()
+        && length(text) <= MAX_LENGTH
+    {
+        return Value::call("customString", [Value::String(text.clone())]);
     }
     let mut result = String::new();
     let mut result_args: Vec<Value> = Vec::new();

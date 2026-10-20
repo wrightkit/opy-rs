@@ -567,7 +567,7 @@ impl Lowerer {
                         span: Some(span.into()),
                     };
                 }
-                if !default_var_index(member).is_some() && !self.player_visible(member) {
+                if default_var_index(member).is_none() && !self.player_visible(member) {
                     let mut pool = crate::matcher::member_candidates(self.manifest, self.catalog);
                     pool.extend(crate::matcher::bare_candidates(["x", "y", "z"]));
                     self.error_at_candidates(
@@ -835,21 +835,20 @@ impl Lowerer {
                         .iter()
                         .enumerate()
                         .map(|(index, arg)| {
-                            if index == 0 && arg.keyword.is_none() {
-                                if let cst::Expr::Name {
+                            if index == 0
+                                && arg.keyword.is_none()
+                                && let cst::Expr::Name {
                                     name: subroutine,
                                     span,
                                 } = &arg.value
-                                {
-                                    if self.subroutine_visible(subroutine) {
-                                        return HirExpr::Call {
-                                            name: subroutine.clone(),
-                                            args: Vec::new(),
-                                            debug_source: None,
-                                            span: Some((*span).into()),
-                                        };
-                                    }
-                                }
+                                && self.subroutine_visible(subroutine)
+                            {
+                                return HirExpr::Call {
+                                    name: subroutine.clone(),
+                                    args: Vec::new(),
+                                    debug_source: None,
+                                    span: Some((*span).into()),
+                                };
                             }
                             self.lower_expr(&arg.value, macro_params, CallPosition::Value)
                         })
@@ -1193,19 +1192,19 @@ impl Lowerer {
         // flag records the same fact descriptively and does not select this
         // check (issue #458).
         for &index in policy::variable_args(&entry.id) {
-            if let Some(Some(value)) = slots.get(index) {
-                if !matches!(value, HirExpr::GlobalVar { .. } | HirExpr::PlayerVar { .. }) {
-                    self.error_at(
-                        "invalid-argument",
-                        format!(
-                            "argument {} of '{}' must be a variable (globalvar or \
+            if let Some(Some(value)) = slots.get(index)
+                && !matches!(value, HirExpr::GlobalVar { .. } | HirExpr::PlayerVar { .. })
+            {
+                self.error_at(
+                    "invalid-argument",
+                    format!(
+                        "argument {} of '{}' must be a variable (globalvar or \
                              playervar)",
-                            index + 1,
-                            entry.id
-                        ),
-                        arg_span(args, call_span),
-                    );
-                }
+                        index + 1,
+                        entry.id
+                    ),
+                    arg_span(args, call_span),
+                );
             }
         }
 
@@ -1232,25 +1231,22 @@ impl Lowerer {
                 .domain
                 .as_deref()
                 .is_some_and(|domain| domain == contextual.domain);
-            if is_contextual {
-                if let Expr::Member {
+            if is_contextual
+                && let Expr::Member {
                     receiver,
                     member,
                     span,
                     ..
                 } = &arg.value
-                {
-                    if let Expr::Name { name, .. } = receiver.as_ref() {
-                        if name == contextual.domain {
-                            return HirExpr::Enum {
-                                value_type: contextual.domain.to_string(),
-                                value: member.clone(),
-                                literal: false,
-                                span: Some((*span).into()),
-                            };
-                        }
-                    }
-                }
+                && let Expr::Name { name, .. } = receiver.as_ref()
+                && name == contextual.domain
+            {
+                return HirExpr::Enum {
+                    value_type: contextual.domain.to_string(),
+                    value: member.clone(),
+                    literal: false,
+                    span: Some((*span).into()),
+                };
             }
         }
         // A bare number in a `Team` parameter spells the team member like
@@ -1264,19 +1260,17 @@ impl Lowerer {
         // exception in docs/architecture/language-core.md (issue #528). A
         // number that spells no `Team.{n}` member keeps the literal and
         // stays rejected at canonical validation.
-        if entry.params[param_index].domain.as_deref() == Some("Team") {
-            if let Expr::Number { text, span, .. } = &arg.value {
-                if let Some((domain, member)) =
-                    crate::enums::canonical_member("Team", text, self.catalog)
-                {
-                    return HirExpr::Enum {
-                        value_type: domain,
-                        value: member,
-                        literal: false,
-                        span: Some((*span).into()),
-                    };
-                }
-            }
+        if entry.params[param_index].domain.as_deref() == Some("Team")
+            && let Expr::Number { text, span, .. } = &arg.value
+            && let Some((domain, member)) =
+                crate::enums::canonical_member("Team", text, self.catalog)
+        {
+            return HirExpr::Enum {
+                value_type: domain,
+                value: member,
+                literal: false,
+                span: Some((*span).into()),
+            };
         }
         self.lower_expr(&arg.value, macro_params, CallPosition::Value)
     }
@@ -1366,26 +1360,23 @@ impl Lowerer {
                 span: Some(span.into()),
             };
         }
-        if name == "toArray" {
-            if let Expr::Name {
+        if name == "toArray"
+            && let Expr::Name {
                 name: type_name, ..
             } = receiver
-            {
-                if self.manifest.domain_identity(type_name)
-                    || self.catalog.enum_domain(type_name).is_some()
-                {
-                    return HirExpr::ReceiverCall {
-                        receiver: Box::new(HirExpr::Type {
-                            name: type_name.clone(),
-                            args: Vec::new(),
-                            span: Some(receiver.span().into()),
-                        }),
-                        name: name.to_string(),
-                        args: self.lower_arg_values(args, macro_params),
-                        span: Some(span.into()),
-                    };
-                }
-            }
+            && (self.manifest.domain_identity(type_name)
+                || self.catalog.enum_domain(type_name).is_some())
+        {
+            return HirExpr::ReceiverCall {
+                receiver: Box::new(HirExpr::Type {
+                    name: type_name.clone(),
+                    args: Vec::new(),
+                    span: Some(receiver.span().into()),
+                }),
+                name: name.to_string(),
+                args: self.lower_arg_values(args, macro_params),
+                span: Some(span.into()),
+            };
         }
         if matches!(name, "map" | "filter" | "all" | "any") {
             // The reference parser special-cases these member calls to a bare
@@ -1410,17 +1401,17 @@ impl Lowerer {
             return lowered;
         }
         // `random.uniform(...)` etc. are dotted generic calls.
-        if let Expr::Name { name: root, .. } = receiver {
-            if root == "random" {
-                return self.lower_call(
-                    &format!("random.{name}"),
-                    args,
-                    None,
-                    span,
-                    macro_params,
-                    position,
-                );
-            }
+        if let Expr::Name { name: root, .. } = receiver
+            && root == "random"
+        {
+            return self.lower_call(
+                &format!("random.{name}"),
+                args,
+                None,
+                span,
+                macro_params,
+                position,
+            );
         }
         // `.format` on a string literal is the format special form; it is
         // also a declared member value, so position misuse diagnoses here.
@@ -1486,25 +1477,25 @@ impl Lowerer {
                 (name.to_string(), self.lower_arg_values(args, macro_params))
             }
         };
-        if let Expr::Name { name: root, .. } = receiver {
-            if matches!(
+        if let Expr::Name { name: root, .. } = receiver
+            && matches!(
                 root.as_str(),
                 "eventPlayer" | "hostPlayer" | "localPlayer" | "attacker" | "victim"
-            ) {
-                return HirExpr::ReceiverCall {
-                    receiver: Box::new(
-                        context_player_expr(
-                            root,
-                            (!matches!(root.as_str(), "eventPlayer" | "hostPlayer"))
-                                .then_some(receiver.span()),
-                        )
-                        .expect("context-player receiver name is exhaustive"),
-                    ),
-                    name: member_name,
-                    args: lowered,
-                    span: Some(span.into()),
-                };
-            }
+            )
+        {
+            return HirExpr::ReceiverCall {
+                receiver: Box::new(
+                    context_player_expr(
+                        root,
+                        (!matches!(root.as_str(), "eventPlayer" | "hostPlayer"))
+                            .then_some(receiver.span()),
+                    )
+                    .expect("context-player receiver name is exhaustive"),
+                ),
+                name: member_name,
+                args: lowered,
+                span: Some(span.into()),
+            };
         }
         HirExpr::ReceiverCall {
             receiver: Box::new(self.lower_expr(receiver, macro_params, CallPosition::Value)),

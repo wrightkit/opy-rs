@@ -197,34 +197,38 @@ fn emit_debug_element_counts(
             in_conditions = false;
         }
 
-        if in_conditions && line.starts_with("        ") && trimmed.ends_with(';') {
-            if let Some(condition) = conditions.get(condition_index) {
-                let condition_count = debug_condition_count(condition);
-                let suffix = if condition_count == 1 {
-                    "element"
-                } else {
-                    "elements"
-                };
-                annotated.push_str(line.trim_end_matches('\n'));
-                annotated.push_str(&format!(" // {condition_count} {suffix}\n"));
-                condition_index += 1;
-                continue;
-            }
+        if in_conditions
+            && line.starts_with("        ")
+            && trimmed.ends_with(';')
+            && let Some(condition) = conditions.get(condition_index)
+        {
+            let condition_count = debug_condition_count(condition);
+            let suffix = if condition_count == 1 {
+                "element"
+            } else {
+                "elements"
+            };
+            annotated.push_str(line.trim_end_matches('\n'));
+            annotated.push_str(&format!(" // {condition_count} {suffix}\n"));
+            condition_index += 1;
+            continue;
         }
 
-        if in_actions && line.starts_with("        ") && trimmed.ends_with(';') {
-            if let Some(action) = actions.get(action_index) {
-                let action_count = debug_action_local_count(action);
-                let suffix = if action_count == 1 {
-                    "element"
-                } else {
-                    "elements"
-                };
-                annotated.push_str(line.trim_end_matches('\n'));
-                annotated.push_str(&format!(" // {action_count} {suffix}\n"));
-                action_index += 1;
-                continue;
-            }
+        if in_actions
+            && line.starts_with("        ")
+            && trimmed.ends_with(';')
+            && let Some(action) = actions.get(action_index)
+        {
+            let action_count = debug_action_local_count(action);
+            let suffix = if action_count == 1 {
+                "element"
+            } else {
+                "elements"
+            };
+            annotated.push_str(line.trim_end_matches('\n'));
+            annotated.push_str(&format!(" // {action_count} {suffix}\n"));
+            action_index += 1;
+            continue;
         }
         annotated.push_str(line);
     }

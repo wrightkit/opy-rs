@@ -125,10 +125,10 @@ cargo test --workspace --all-targets --all-features
 python3 -m unittest discover -s tools/overpy/tests
 ```
 
-The workspace declares `rust-version = "1.85.0"`. Before pushing, also run
-`cargo +1.85.0 clippy --workspace --all-targets --all-features -- -D warnings`;
+The workspace declares `rust-version = "1.88.0"`. Before pushing, also run
+`cargo +1.88.0 clippy --workspace --all-targets --all-features -- -D warnings`;
 newer syntax such as let-chains passes on stable and is caught only by the
-`Rust (1.85.0)` CI job (opy-rs#574).
+`Rust (1.88.0)` CI job (opy-rs#574).
 
 Oracle-required compatibility tests run separately against the pinned
 reference. A change to lowering, optimization or builtin argument handling also

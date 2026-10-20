@@ -403,22 +403,20 @@ impl<'a> Emitter<'a> {
                     global_init = Some(initializers);
                     index = 1;
                 }
-            } else if rule.name == "Initialize player variables" {
-                if let Some(initializers) = self.canonical_init(rule_index, rule, false) {
-                    player_init = Some(initializers);
-                    index = 1;
-                }
+            } else if rule.name == "Initialize player variables"
+                && let Some(initializers) = self.canonical_init(rule_index, rule, false)
+            {
+                player_init = Some(initializers);
+                index = 1;
             }
         }
-        if global_init.is_some() {
-            if let Some(&(rule_index, rule)) = rules.get(1) {
-                if rule.name == "Initialize player variables" {
-                    if let Some(initializers) = self.canonical_init(rule_index, rule, false) {
-                        player_init = Some(initializers);
-                        index = 2;
-                    }
-                }
-            }
+        if global_init.is_some()
+            && let Some(&(rule_index, rule)) = rules.get(1)
+            && rule.name == "Initialize player variables"
+            && let Some(initializers) = self.canonical_init(rule_index, rule, false)
+        {
+            player_init = Some(initializers);
+            index = 2;
         }
 
         let mut sub_rules = Vec::new();
@@ -1625,11 +1623,11 @@ impl<'a> Emitter<'a> {
     /// spelled `0.0` because the frontend drops integer-`0` initializers
     /// (matching the reference adapter).
     fn emit_initializer(&mut self, value: &Value, span: Option<Span>) {
-        if let Value::Number(number) = value {
-            if *number == 0.0 {
-                self.out.push_str("0.0");
-                return;
-            }
+        if let Value::Number(number) = value
+            && *number == 0.0
+        {
+            self.out.push_str("0.0");
+            return;
         }
         self.emit_value(value, span);
     }
@@ -2663,40 +2661,39 @@ impl<'a> Emitter<'a> {
                     name: op_name,
                     args: op_args,
                 } = op
-                {
-                    if matches!(
+                    && matches!(
                         op_name.as_str(),
                         "removeFromArray" | "removeFromArrayByIndex" | "appendToArray"
-                    ) && op_args.is_empty()
-                    {
-                        match op_name.as_str() {
-                            "appendToArray" | "removeFromArray" => {
-                                self.out.push_str(&target);
-                                self.out.push('[');
-                                self.emit_value(index, arg_span(1));
-                                self.out.push_str("].");
-                                self.out.push_str(if op_name == "appendToArray" {
-                                    "append("
-                                } else {
-                                    "remove("
-                                });
-                                self.emit_value(value, arg_span(3));
-                                self.out.push_str(")\n");
-                            }
-                            _ => {
-                                self.out.push_str("del ");
-                                self.out.push_str(&target);
-                                self.out.push('[');
-                                self.emit_value(index, arg_span(1));
-                                self.out.push(']');
-                                self.out.push('[');
-                                self.emit_value(value, arg_span(3));
-                                self.out.push(']');
-                                self.out.push('\n');
-                            }
+                    )
+                    && op_args.is_empty()
+                {
+                    match op_name.as_str() {
+                        "appendToArray" | "removeFromArray" => {
+                            self.out.push_str(&target);
+                            self.out.push('[');
+                            self.emit_value(index, arg_span(1));
+                            self.out.push_str("].");
+                            self.out.push_str(if op_name == "appendToArray" {
+                                "append("
+                            } else {
+                                "remove("
+                            });
+                            self.emit_value(value, arg_span(3));
+                            self.out.push_str(")\n");
                         }
-                        return true;
+                        _ => {
+                            self.out.push_str("del ");
+                            self.out.push_str(&target);
+                            self.out.push('[');
+                            self.emit_value(index, arg_span(1));
+                            self.out.push(']');
+                            self.out.push('[');
+                            self.emit_value(value, arg_span(3));
+                            self.out.push(']');
+                            self.out.push('\n');
+                        }
                     }
+                    return true;
                 }
                 let Some(operator) = indexed_modify_operator(op) else {
                     self.issue(

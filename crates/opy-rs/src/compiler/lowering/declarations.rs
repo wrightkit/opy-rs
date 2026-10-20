@@ -219,10 +219,10 @@ impl<'a> Lowering<'a> {
                         ));
                     }
                     planned_globals.push((name.clone(), assigned, *span, *name_span));
-                    if let Some(init) = initializer {
-                        if !is_zero_initializer(init) {
-                            global_initializers.push((name, init, *span, *name_span));
-                        }
+                    if let Some(init) = initializer
+                        && !is_zero_initializer(init)
+                    {
+                        global_initializers.push((name, init, *span, *name_span));
                     }
                 }
                 hir::Declaration::PlayerVariable {
@@ -245,10 +245,10 @@ impl<'a> Lowering<'a> {
                         ));
                     }
                     planned_players.push((name.clone(), assigned, *span, *name_span));
-                    if let Some(init) = initializer {
-                        if !is_zero_initializer(init) {
-                            player_initializers.push((name, init, *span, *name_span));
-                        }
+                    if let Some(init) = initializer
+                        && !is_zero_initializer(init)
+                    {
+                        player_initializers.push((name, init, *span, *name_span));
                     }
                 }
                 hir::Declaration::Subroutine {
