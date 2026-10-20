@@ -894,11 +894,11 @@ fn convert_settings_node(
                         evals.insert(eval_key(span), hir_span);
                     }
                     // Catalogued list keys (`enabledMaps`, hero rosters) read
-                    // the display text the evaluator produced (#512). The
-                    // authored text only remains for a spanless element no
-                    // evaluation recorded.
+                    // the evaluated display text (#512); a spanless element
+                    // keeps its authored text.
                     SettingsListElement {
                         value: element.evaluated.unwrap_or(element.value),
+                        variant: None,
                         span,
                     }
                 })
