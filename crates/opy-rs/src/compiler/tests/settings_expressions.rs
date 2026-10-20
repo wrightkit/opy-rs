@@ -332,6 +332,24 @@ fn hero_general_settings_are_emitted_at_team_scope() {
 }
 
 #[test]
+fn hero_key_outside_the_hero_schema_is_written_back_raw() {
+    // Pinned OverPy 9.7.17 no longer declares `secondaryFire*` for roadhog
+    // (Take a Breather moved to `ability2`), so it writes the authored key
+    // verbatim. workshop-rs parses the mapped spelling to the same canonical
+    // key, so only the emitted text can tell the two apart.
+    let source = source_with_settings(
+        "settings { \"gamemodes\": {}, \"heroes\": { \"allTeams\": { \"roadhog\": { \"secondaryFireCooldown%\": 50 } } } }",
+    );
+    let hir = crate::compile(&source, "source.opy", Path::new(".")).expect("settings resolve");
+    let artifact = Compiler::new()
+        .expect("compiler loads")
+        .compile_hir(&hir)
+        .expect("the key is passed through");
+    assert!(artifact.emitted.contains("secondaryFireCooldown%: 50"));
+    assert!(!artifact.emitted.contains("Take a Breather"));
+}
+
+#[test]
 fn general_keys_reject_directly_under_teams_and_accept_under_general() {
     // opy-rs#545: the pinned compiler resolves every `heroes.<team>` member
     // name through `tows(key, heroKw)` before the value is read, so each of

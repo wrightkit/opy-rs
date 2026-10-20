@@ -83,6 +83,7 @@
   ],
   "ability1Kb%": [
    "brigitte",
+   "dmon",
    "domina",
    "dva",
    "wreckingBall",
@@ -90,6 +91,12 @@
    "mauga",
    "reinhardt",
    "winston"
+  ],
+  "ability1MaxTime%": [
+   "dmon"
+  ],
+  "ability1RechargeRate%": [
+   "dmon"
   ],
   "ability1RefuelScalar": [
    "pharah"
@@ -144,8 +151,14 @@
   "ability3Distance%": [
    "hanzo"
   ],
+  "ability3Kb%": [
+   "dmon"
+  ],
   "ammoRegenerationTime%": [
    "doomfist"
+  ],
+  "assembleMechKb%": [
+   "dmon"
   ],
   "callMechKb%": [
    "dva"
@@ -270,7 +283,6 @@
    "orisa",
    "pharah",
    "reinhardt",
-   "roadhog",
    "shion",
    "sierra",
    "sigma",
@@ -304,8 +316,7 @@
   ],
   "secondaryFireMaximumTime%": [
    "dva",
-   "jetpackCat",
-   "roadhog"
+   "jetpackCat"
   ],
   "secondaryFireMovementSpeedPenalty%": [
    "hazard"
@@ -318,7 +329,6 @@
    "dva",
    "jetpackCat",
    "reinhardt",
-   "roadhog",
    "sigma",
    "wuyang",
    "vendetta"
@@ -342,6 +352,7 @@
    "illari"
   ],
   "spawnWithoutMech": [
+   "dmon",
    "dva"
   ],
   "ultBarrierHealth%": [
@@ -429,19 +440,15 @@
   "enableSecondaryFire": [
    "ana",
    "ashe",
-   "dmon",
-   "domina",
    "emre",
    "hanzo",
    "jetpackCat",
    "junkrat",
-   "mizuki",
    "reaper",
    "shion",
    "tracer",
    "widowmaker",
-   "wuyang",
-   "vendetta"
+   "wuyang"
   ],
   "projectileGravity%": [
    "ana",
