@@ -292,13 +292,13 @@ fn native_and_reference_agree_on_the_corpus() {
         let skipped = !snapshot_present;
 
         let mut detail = Vec::new();
-        if let (Some(expected_code), Err(error)) = (&expected_diagnostic_code, &native) {
-            if error.code != expected_code.as_str() {
-                detail.push(format!(
-                    "expected diagnostic code '{expected_code}', got '{}'",
-                    error.code
-                ));
-            }
+        if let (Some(expected_code), Err(error)) = (&expected_diagnostic_code, &native)
+            && error.code != expected_code.as_str()
+        {
+            detail.push(format!(
+                "expected diagnostic code '{expected_code}', got '{}'",
+                error.code
+            ));
         }
 
         // Reference status parity: informational when the manifest deliberately
@@ -421,12 +421,9 @@ fn native_and_reference_agree_on_the_corpus() {
             *count =
                 serde_json::Number::from(count.as_u64().expect("status counts start as u64") + 1);
         }
-        if skipped {
-            if let Value::Number(count) = &mut counts["skipped"] {
-                *count = serde_json::Number::from(
-                    count.as_u64().expect("status counts start as u64") + 1,
-                );
-            }
+        if skipped && let Value::Number(count) = &mut counts["skipped"] {
+            *count =
+                serde_json::Number::from(count.as_u64().expect("status counts start as u64") + 1);
         }
         let classification_key = match classification {
             "known-gap" => "knownGap",

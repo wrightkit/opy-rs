@@ -703,12 +703,11 @@ fn parse_po(text: &str, language: &str, span: Option<Span>) -> OpyResult<Vec<Tra
             && current
                 .as_ref()
                 .is_some_and(|(_, msgid, _)| msgid.is_empty())
+            && let Some((_, value, _)) = current.as_ref()
         {
-            if let Some((_, value, _)) = current.as_ref() {
-                for line in value.lines() {
-                    if let Some(value) = line.strip_prefix("Language:") {
-                        header_language = Some(value.trim().to_string());
-                    }
+            for line in value.lines() {
+                if let Some(value) = line.strip_prefix("Language:") {
+                    header_language = Some(value.trim().to_string());
                 }
             }
         }

@@ -467,7 +467,7 @@ fn dump_settings_node(node: &SettingsNode, out: &mut String, level: usize) {
 fn render_expr(expr: &Expr, out: &mut String) {
     match expr {
         Expr::Number { value, .. } => out.push_str(&format_number(*value)),
-        Expr::String { value, .. } => out.push_str(&format!("{:?}", value)),
+        Expr::String { value, .. } => out.push_str(&format!("{value:?}")),
         Expr::Bool { value, .. } => out.push_str(if *value { "true" } else { "false" }),
         Expr::Null { .. } => out.push_str("null"),
         Expr::Array { elements, .. } => {
@@ -531,7 +531,7 @@ fn render_expr(expr: &Expr, out: &mut String) {
             modifier, value, ..
         } => {
             out.push(modifier.chars().next().unwrap_or_default());
-            out.push_str(&format!("{:?}", value));
+            out.push_str(&format!("{value:?}"));
         }
         Expr::Local { name, .. } | Expr::GlobalVar { name, .. } | Expr::Constant { name, .. } => {
             out.push_str(name)
@@ -658,7 +658,7 @@ fn render_expr(expr: &Expr, out: &mut String) {
         }
         Expr::Format { text, args, .. } => {
             out.push_str("format(");
-            out.push_str(&format!("{:?}", text));
+            out.push_str(&format!("{text:?}"));
             for arg in args {
                 out.push_str(", ");
                 render_expr(arg, out);

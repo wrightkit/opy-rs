@@ -871,10 +871,10 @@ impl<'a> Lowering<'a> {
                         }),
                     };
                 }
-                if optimization.enabled {
-                    if let Some(modification) = self_modification(&action) {
-                        action = modification;
-                    }
+                if optimization.enabled
+                    && let Some(modification) = self_modification(&action)
+                {
+                    action = modification;
                 }
                 ActionOptimizer::new(self.compiler, optimization.enabled).action(&mut action);
                 if optimization.enabled && optimization.for_size {
@@ -1582,12 +1582,10 @@ pub(crate) fn big_letters(value: &str) -> String {
     let mut output = String::with_capacity(value.len());
     let mut converted = false;
     for character in value.chars() {
-        if !converted {
-            if let Some(mapped) = big_letter(character) {
-                output.push(mapped);
-                converted = true;
-                continue;
-            }
+        if !converted && let Some(mapped) = big_letter(character) {
+            output.push(mapped);
+            converted = true;
+            continue;
         }
         output.push(character);
     }
@@ -1858,7 +1856,7 @@ fn debug_expr_text(expr: &Expr) -> String {
         }
         Expr::StringModifier {
             modifier, value, ..
-        } => format!("{}\"{}\"", modifier, value),
+        } => format!("{modifier}\"{value}\""),
         Expr::Local { name, .. }
         | Expr::GlobalVar { name, .. }
         | Expr::Constant { name, .. }
@@ -1885,7 +1883,7 @@ fn debug_expr_text(expr: &Expr) -> String {
         ),
         Expr::Enum {
             value_type, value, ..
-        } => format!("{}.{}", value_type, value),
+        } => format!("{value_type}.{value}"),
         Expr::PlayerVar { player, name, .. } => {
             format!("{}.{}", debug_expr_text(player), name)
         }

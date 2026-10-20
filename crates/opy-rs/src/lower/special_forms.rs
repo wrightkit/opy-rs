@@ -437,16 +437,14 @@ impl Lowerer {
                 // other keyword spelling or position fails upstream parsing
                 // (issue #437).
                 for (index, arg) in args.iter().enumerate() {
-                    if let Some((keyword, keyword_span)) = &arg.keyword {
-                        if index != 1 || keyword != "key" {
-                            self.error_at(
-                                "unknown-keyword",
-                                format!(
-                                    "unknown keyword argument '{keyword}' for function 'sorted'"
-                                ),
-                                *keyword_span,
-                            );
-                        }
+                    if let Some((keyword, keyword_span)) = &arg.keyword
+                        && (index != 1 || keyword != "key")
+                    {
+                        self.error_at(
+                            "unknown-keyword",
+                            format!("unknown keyword argument '{keyword}' for function 'sorted'"),
+                            *keyword_span,
+                        );
                     }
                 }
                 HirExpr::Call {

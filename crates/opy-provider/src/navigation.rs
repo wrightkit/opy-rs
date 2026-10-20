@@ -84,12 +84,12 @@ fn parse_params<T: serde::de::DeserializeOwned>(
     params: Value,
     allowed: &[&str],
 ) -> Result<T, HandlerError> {
-    if let Some(object) = params.as_object() {
-        if object.keys().any(|key| {
+    if let Some(object) = params.as_object()
+        && object.keys().any(|key| {
             SPEC_PARAM_FIELDS.contains(&key.as_str()) && !allowed.contains(&key.as_str())
-        }) {
-            return Err(invalid_params());
-        }
+        })
+    {
+        return Err(invalid_params());
     }
     serde_json::from_value(params).map_err(|_| invalid_params())
 }

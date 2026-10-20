@@ -36,7 +36,7 @@ impl<'a> OperatorOptimizer<'a> {
     pub(super) fn constant_truth(&self, value: &Value) -> Option<bool> {
         if falsy(value) {
             Some(false)
-        } else if self.truthy(value) {
+        } else if Self::truthy(value) {
             Some(true)
         } else {
             None
@@ -225,7 +225,7 @@ impl<'a> OperatorOptimizer<'a> {
         if falsy(&operand) {
             return Rewrite::Changed(Value::Bool(true));
         }
-        if self.truthy(&operand) {
+        if Self::truthy(&operand) {
             return Rewrite::Changed(Value::Bool(false));
         }
         if let Value::Call { name, args } = operand {
@@ -261,10 +261,10 @@ impl<'a> OperatorOptimizer<'a> {
         if !self.strict && falsy(&right) {
             return Rewrite::Changed(if conjunction { right } else { left });
         }
-        if self.truthy(&left) {
+        if Self::truthy(&left) {
             return Rewrite::Changed(if conjunction { right } else { left });
         }
-        if !self.strict && self.truthy(&right) {
+        if !self.strict && Self::truthy(&right) {
             return Rewrite::Changed(if conjunction { left } else { right });
         }
         if same(&left, &right) {
@@ -281,7 +281,7 @@ impl<'a> OperatorOptimizer<'a> {
 
     fn if_then_else(&self, args: Vec<Value>) -> Rewrite {
         let [condition, then_value, else_value] = three(args);
-        if self.truthy(&condition) {
+        if Self::truthy(&condition) {
             return Rewrite::Changed(then_value);
         }
         if falsy(&condition) {
@@ -818,17 +818,17 @@ impl<'a> OperatorOptimizer<'a> {
             name,
             args: operands,
         } = &predicate
+            && name == "!="
+            && operands.len() == 2
         {
-            if name == "!=" && operands.len() == 2 {
-                for (element, other) in [(0, 1), (1, 0)] {
-                    if matches!(&operands[element], Value::Call { name, .. } if name == "currentArrayElement")
-                        && element_free(&operands[other])
-                    {
-                        return Rewrite::Changed(call(
-                            "removeFromArray",
-                            vec![array, operands[other].clone()],
-                        ));
-                    }
+            for (element, other) in [(0, 1), (1, 0)] {
+                if matches!(&operands[element], Value::Call { name, .. } if name == "currentArrayElement")
+                    && element_free(&operands[other])
+                {
+                    return Rewrite::Changed(call(
+                        "removeFromArray",
+                        vec![array, operands[other].clone()],
+                    ));
                 }
             }
         }
@@ -934,12 +934,12 @@ impl<'a> OperatorOptimizer<'a> {
         }
     }
 
-    fn truthy(&self, value: &Value) -> bool {
+    fn truthy(value: &Value) -> bool {
         match value {
             Value::Bool(value) => *value,
             Value::Number(number) => *number != 0.0,
-            Value::Vector { x, y, z } => self.truthy(x) || self.truthy(y) || self.truthy(z),
-            Value::Array(elements) => elements.first().is_some_and(|first| self.truthy(first)),
+            Value::Vector { x, y, z } => Self::truthy(x) || Self::truthy(y) || Self::truthy(z),
+            Value::Array(elements) => elements.first().is_some_and(Self::truthy),
             Value::Enum { value_type, .. } => matches!(
                 value_type.as_str(),
                 "Hero" | "Map" | "Gamemode" | "Team" | "Button" | "Color"

@@ -1026,10 +1026,10 @@ impl<'a> Lowering<'a> {
                 ..
             } => self.mark_if_chain_origins(branches, *else_span, *end_span, actions),
             Stmt::While { condition, .. } => {
-                if let Some(action) = actions.first() {
-                    if matches!(self.actions.get(*action), Some(Action::While { .. })) {
-                        self.mark_action_argument_origins(*action, [condition.span().copied()]);
-                    }
+                if let Some(action) = actions.first()
+                    && matches!(self.actions.get(*action), Some(Action::While { .. }))
+                {
+                    self.mark_action_argument_origins(*action, [condition.span().copied()]);
                 }
             }
             Stmt::For {
@@ -1056,24 +1056,24 @@ impl<'a> Lowering<'a> {
                         .collect::<Vec<_>>(),
                     _ => range_spans,
                 };
-                if let Some(action) = actions.first() {
-                    if matches!(
+                if let Some(action) = actions.first()
+                    && matches!(
                         self.actions.get(*action),
                         Some(Action::ForGlobalVariable { .. })
                             | Some(Action::ForPlayerVariable { .. })
-                    ) {
-                        self.mark_action_argument_origins(*action, spans);
-                    }
+                    )
+                {
+                    self.mark_action_argument_origins(*action, spans);
                 }
             }
             Stmt::DoWhile { condition, .. } => {
-                if let Some(action) = actions.last() {
-                    if matches!(
+                if let Some(action) = actions.last()
+                    && matches!(
                         self.actions.get(*action),
                         Some(Action::Call { name, .. }) if name == "loopIf"
-                    ) {
-                        self.mark_action_argument_origins(*action, [condition.span().copied()]);
-                    }
+                    )
+                {
+                    self.mark_action_argument_origins(*action, [condition.span().copied()]);
                 }
             }
             Stmt::Delete { target, .. } => {
@@ -1241,38 +1241,36 @@ impl<'a> Lowering<'a> {
                 actions.extend(tail);
                 return Ok(actions);
             }
-            if let Some((conditions, label)) = pure_goto_conditions(statement) {
-                if let Some(target) = statements[index + 1..]
+            if let Some((conditions, label)) = pure_goto_conditions(statement)
+                && let Some(target) = statements[index + 1..]
                     .iter()
                     .position(
                         |candidate| matches!(candidate, Stmt::Label { name, .. } if name == label),
                     )
                     .map(|offset| index + 1 + offset)
-                {
-                    let middle = self.lower_loop_sequence_with_break_target(
-                        &statements[index + 1..target],
-                        after,
-                        structural_after,
-                        break_target,
-                    )?;
-                    let suffix = self.lower_loop_sequence_with_break_target(
-                        &statements[target + 1..],
-                        after,
-                        structural_after,
-                        break_target,
-                    )?;
-                    let distance =
-                        self.canonical_action_width(&middle, statement.span().copied())?;
-                    let skip = self.lower_skip_with_distance(
-                        &conditions,
-                        distance,
-                        statement.span().copied(),
-                    )?;
-                    actions.push(skip);
-                    actions.extend(middle);
-                    actions.extend(suffix);
-                    return Ok(actions);
-                }
+            {
+                let middle = self.lower_loop_sequence_with_break_target(
+                    &statements[index + 1..target],
+                    after,
+                    structural_after,
+                    break_target,
+                )?;
+                let suffix = self.lower_loop_sequence_with_break_target(
+                    &statements[target + 1..],
+                    after,
+                    structural_after,
+                    break_target,
+                )?;
+                let distance = self.canonical_action_width(&middle, statement.span().copied())?;
+                let skip = self.lower_skip_with_distance(
+                    &conditions,
+                    distance,
+                    statement.span().copied(),
+                )?;
+                actions.push(skip);
+                actions.extend(middle);
+                actions.extend(suffix);
+                return Ok(actions);
             }
             if self.lower_conditional_label_jump(statement, &mut actions)? {
                 index += 1;

@@ -130,7 +130,7 @@ pub(crate) fn map_macro_error(error: &MacroError, script_path: &str, span: Span)
         ),
         MacroError::Internal(message) => OpyError::at(
             "script-internal",
-            format!("script '{}' runtime failure: {message}", script_path),
+            format!("script '{script_path}' runtime failure: {message}"),
             span,
         ),
     }

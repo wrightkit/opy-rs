@@ -572,10 +572,10 @@ impl Visitor for StatementValidator<'_, '_, '_> {
                         *span,
                     ));
                 }
-                if let Some(label) = label {
-                    if let Err(error) = check_name(label, "label", *span) {
-                        self.errors.push(error);
-                    }
+                if let Some(label) = label
+                    && let Err(error) = check_name(label, "label", *span)
+                {
+                    self.errors.push(error);
                 }
             }
             Stmt::Label { name, span } => {
@@ -691,11 +691,11 @@ fn check_rule_entry(value: &Value) -> Result<(), HirError> {
             Ok(())
         }
         None => {
-            if let Some(event) = object.get("event").and_then(Value::as_object) {
-                if let Some(args) = event.get("args").and_then(Value::as_array) {
-                    for arg in args {
-                        check_expr(arg)?;
-                    }
+            if let Some(event) = object.get("event").and_then(Value::as_object)
+                && let Some(args) = event.get("args").and_then(Value::as_array)
+            {
+                for arg in args {
+                    check_expr(arg)?;
                 }
             }
             if let Some(conditions) = object.get("conditions").and_then(Value::as_array) {
