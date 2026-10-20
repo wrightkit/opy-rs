@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.21](https://github.com/wrightkit/opy-rs/compare/v0.3.20...v0.3.21) - 2026-10-20
+
+### Fixed
+
+- *(opy-rs)* validate enum member spellings under the active locale in check ([#623](https://github.com/wrightkit/opy-rs/pull/623))
+
+### Other
+
+- raise the minimum supported Rust version to 1.88.0 ([#625](https://github.com/wrightkit/opy-rs/pull/625))
+
 ## [0.3.20](https://github.com/wrightkit/opy-rs/compare/v0.3.19...v0.3.20) - 2026-10-19
 
 ### Added
