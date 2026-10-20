@@ -1,0 +1,17 @@
+# Human review is required for what defines "passing": CI and release gates,
+# public contracts, compatibility references, and agent instructions.
+# Ordinary code, tests, and docs stay unowned, so agents may review and merge them.
+/.github/ @Teakowa
+/AGENTS.md @Teakowa
+/docs/adr/ @Teakowa
+
+# Upstream compiler oracle and reference pins
+/tools/overpy/ @Teakowa
+/docs/compatibility/ @Teakowa
+/crates/opy-rs/tests/fixtures/corpus/ @Teakowa
+
+# Toolchain and release
+/rust-toolchain.toml @Teakowa
+/release-plz.toml @Teakowa
+/tools/verify-release-order.py @Teakowa
+/docs/release.md @Teakowa
