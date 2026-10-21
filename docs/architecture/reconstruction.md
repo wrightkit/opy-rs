@@ -272,7 +272,7 @@ and never introduces an OPY-local settings model.
 | `Action::Call` with no OPY form and no syntax mapping | — | refusal (`unsupported-action-call`) |
 | `Action::Call` `append` (dedicated lowering) | Never produced canonically | guard (`unsupported-action-call`) |
 | Missing `End` / malformed marker sequence | No faithful source form | guard (`unsupported-control-flow`) |
-| Variable-required parameter not a variable (`chase*` arg 0) | Cannot reproduce the typed policy | guard (`unsupported-invalid-argument`) |
+| Variable-required parameter not a variable (`chase*` arg 0) | Cannot reproduce the manifest `variable` requirement | guard (`unsupported-invalid-argument`) |
 | Omitted non-optional parameter / arity overflow | Recompiling would default-fill or reject | guard (`unsupported-missing-argument`, `unsupported-invalid-arity`) |
 | Dangling variable/subroutine reference | Cannot rebind | guard (`unsupported-dangling`) |
 | Zero-argument action ambiguous with a same-named subroutine | Ambiguous surface | refusal (`unsupported-action-call`) |

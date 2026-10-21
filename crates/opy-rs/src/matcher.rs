@@ -49,9 +49,9 @@ where
 pub(crate) fn value_candidates(manifest: &Manifest, catalog: &Catalog) -> Vec<MatchCandidate> {
     let mut pool = function_candidates(manifest, catalog, FunctionKind::is_value);
     pool.extend(
-        crate::lower::special_forms::SPECIAL_VALUE_CALLS
+        crate::lower::special_forms::SPECIAL_FUNCTIONS
             .iter()
-            .map(|(spelling, _)| MatchCandidate::bare(*spelling)),
+            .map(|function| MatchCandidate::bare(function.name)),
     );
     pool
 }

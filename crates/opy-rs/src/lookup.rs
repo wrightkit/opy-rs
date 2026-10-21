@@ -1340,18 +1340,6 @@ mod tests {
                 function.id
             );
         }
-        let reported: Vec<&str> = SPECIAL_FUNCTIONS
-            .iter()
-            .map(|special| special.name)
-            .collect();
-        let dispatched: Vec<&str> = crate::lower::special_forms::SPECIAL_VALUE_CALLS
-            .iter()
-            .map(|(name, _)| *name)
-            .collect();
-        assert_eq!(
-            reported, dispatched,
-            "reported special-call spellings must be the dispatched set"
-        );
         for special in SPECIAL_FUNCTIONS {
             let source = format!(
                 "globalvar x\nrule \"r\":\n    @Event global\n    x = {}()\n",

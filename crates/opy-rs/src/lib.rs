@@ -184,12 +184,17 @@ pub fn compile_with_overlay_outcome_with_locale(
         source: hook.source,
         span: Some(hook.span),
     });
-    CompileOutcome {
+    let outcome = CompileOutcome {
         hir: outcome.model.map(|model| model.hir),
         error,
         diagnostics: outcome.diagnostics,
         files: outcome.files,
         display_root: outcome.display_root,
         post_compile_hook,
-    }
+    };
+    debug_assert!(
+        outcome.hir.is_some() || outcome.error.is_some(),
+        "a failed check always carries an error"
+    );
+    outcome
 }

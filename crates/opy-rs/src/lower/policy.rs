@@ -50,45 +50,12 @@ pub(crate) fn function_context(function_id: &str) -> Option<FunctionContext> {
     (function_id == "range").then_some(FunctionContext::ForIterable)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum ReceiverRequirement {
-    Assignable,
-    StringLiteral,
-}
-
-impl ReceiverRequirement {
-    pub(crate) fn describe(self) -> &'static str {
-        match self {
-            ReceiverRequirement::Assignable => "an assignable variable",
-            ReceiverRequirement::StringLiteral => "a string literal",
-        }
-    }
-}
-
-/// The receiver requirement a member enforces, if any. Members without an
-/// entry accept any receiver: the pinned reference does not type-check
-/// player-oriented receivers.
-pub(crate) fn member_receiver_requirement(member_id: &str) -> Option<ReceiverRequirement> {
-    match member_id {
-        "append" | "remove" => Some(ReceiverRequirement::Assignable),
-        "format" => Some(ReceiverRequirement::StringLiteral),
-        _ => None,
-    }
-}
-
 /// `min`/`max` are the pinned reference's variadic builtins: positional
 /// arguments past the declared pair re-associate into nested two-argument
 /// calls upstream rather than hitting the arity rejection every other
 /// builtin takes (#512).
 pub(crate) fn variadic(function_id: &str) -> bool {
     matches!(function_id, "min" | "max")
-}
-
-pub(crate) fn variable_args(function_id: &str) -> &'static [usize] {
-    match function_id {
-        "chase" | "chaseAtRate" | "chaseOverTime" => &[0],
-        _ => &[],
-    }
 }
 
 pub(crate) fn validate(function: &Function) -> Result<(), String> {

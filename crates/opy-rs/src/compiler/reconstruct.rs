@@ -4,15 +4,20 @@ use std::fmt;
 use workshop_rs::Program;
 use workshop_rs::catalog::{Catalog, Locale};
 use workshop_rs::program::{
-    Action, Event, EventTarget, EventTeam, ModifyOp, Rule, Value, Variable,
+    Action, Condition, Event, EventTarget, EventTeam, ModifyOp, Rule, Value, Variable,
 };
 use workshop_rs::settings::{PathPart, SettingValueDomain, SettingsNode};
 use workshop_rs::source::Span;
 
 use crate::lexer::{is_ident_continue, is_ident_start, is_identifier};
 use crate::lower::special_forms::SpecialValueCall;
-use crate::lower::{NameNamespace, is_reserved_name, policy};
+use crate::lower::{NameNamespace, is_reserved_name};
 use crate::manifest::{Function, FunctionKind, Manifest};
+
+mod settings;
+mod settings_json;
+
+const DECLARATION_SLOT_RANGE: std::ops::Range<u32> = 0..128;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReconstructIssue {
@@ -284,7 +289,7 @@ impl<'a> Emitter<'a> {
     }
 
     fn check_index(&mut self, index: u32, taken: &mut HashSet<u32>, kind: &str, name: &str) {
-        if index > 127 {
+        if !DECLARATION_SLOT_RANGE.contains(&index) {
             self.issue(
                 "unsupported-index",
                 format!("{kind} '{name}' index {index} is outside the 0-127 slot range"),
@@ -452,762 +457,6 @@ impl<'a> Emitter<'a> {
         Some(initializers)
     }
 
-    fn emit_settings(&mut self) {
-        let Some(settings) = self.program.settings.as_ref() else {
-            return;
-        };
-        let mut unemittable = false;
-        for error in workshop_rs::settings::check_emission(settings) {
-            unemittable = true;
-            self.issue("unsupported-settings", error.to_string(), error.span());
-        }
-        if unemittable {
-            return;
-        }
-
-        let mut top: Vec<(String, SettingsJson)> = Vec::new();
-        let mut extensions: Vec<String> = Vec::new();
-        let mut seen = HashSet::new();
-        let last = settings.children.len().saturating_sub(1);
-        for (index, child) in settings.children.iter().enumerate() {
-            if !seen.insert(child.name().to_string()) {
-                self.refuse_settings(child, "is a duplicate top-level group");
-            }
-            match child {
-                SettingsNode::Workshop { children, .. } => {
-                    top.push(("workshop".to_string(), self.settings_workshop(children)));
-                }
-                SettingsNode::Group { name, children, .. }
-                | SettingsNode::RawGroup { name, children, .. } => match name.as_str() {
-                    "workshop" => self.refuse_settings(
-                        child,
-                        "has no OPY settings form; `workshop` reparses as workshop settings",
-                    ),
-                    "main" | "lobby" => {
-                        let display = display_names(&[format!("{name}.")]);
-                        let path = [PathPart::Part(name.as_str())];
-                        top.push((
-                            name.clone(),
-                            self.settings_object(children, &path, None, &display),
-                        ));
-                    }
-                    "extensions" => {
-                        let flags = children
-                            .iter()
-                            .position(|member| matches!(member, SettingsNode::Flag { .. }));
-                        match flags {
-                            None => {
-                                let display = display_names(&["extensions.".to_string()]);
-                                top.push((
-                                    name.clone(),
-                                    self.settings_object(
-                                        children,
-                                        &[PathPart::Part("extensions")],
-                                        None,
-                                        &display,
-                                    ),
-                                ));
-                            }
-                            Some(first) => {
-                                let mut flag_names = HashSet::new();
-                                for member in &children[first..] {
-                                    let SettingsNode::Flag { name, .. } = member else {
-                                        self.refuse_settings(
-                                            member,
-                                            "follows a presence-only member in `extensions`",
-                                        );
-                                        continue;
-                                    };
-                                    if !flag_names.insert(name.clone()) {
-                                        self.refuse_settings(
-                                            member,
-                                            "is a duplicate `#!extension` name",
-                                        );
-                                    }
-                                    let path = [
-                                        PathPart::Part("extensions"),
-                                        PathPart::Part(name.as_str()),
-                                    ];
-                                    match workshop_rs::settings::definition(&path) {
-                                        Some(definition)
-                                            if matches!(
-                                                definition.domain(),
-                                                SettingValueDomain::PresenceOnly
-                                            ) =>
-                                        {
-                                            extensions.push(name.clone());
-                                        }
-                                        _ => self.refuse_settings(
-                                            member,
-                                            "is not a declared Workshop extension",
-                                        ),
-                                    }
-                                }
-                                if first == 0 {
-                                    if index != last {
-                                        self.refuse_settings(
-                                            child,
-                                            "carries only `#!extension` directives outside the last group",
-                                        );
-                                    }
-                                } else {
-                                    let display = display_names(&["extensions.".to_string()]);
-                                    top.push((
-                                        name.clone(),
-                                        self.settings_object(
-                                            &children[..first],
-                                            &[PathPart::Part("extensions")],
-                                            None,
-                                            &display,
-                                        ),
-                                    ));
-                                }
-                            }
-                        }
-                    }
-                    "gamemodes" => {
-                        top.push(("gamemodes".to_string(), self.settings_modes(children)));
-                    }
-                    "heroes" => {
-                        top.push(("heroes".to_string(), self.settings_teams(children)));
-                    }
-                    _ => {
-                        top.push((name.clone(), self.opaque_group_object(children)));
-                    }
-                },
-                member => self.refuse_settings(
-                    member,
-                    "cannot appear at the settings top level; groups are expected",
-                ),
-            }
-        }
-
-        match (top.is_empty(), extensions.is_empty()) {
-            (true, true) => {
-                self.issue(
-                    "unsupported-settings",
-                    "an empty settings block has no OPY form",
-                    settings.span,
-                );
-                return;
-            }
-            (true, false) => {}
-            (false, _) => {
-                if !top.iter().any(|(key, _)| key == "gamemodes") {
-                    self.issue(
-                        "unsupported-settings",
-                        "settings has no `gamemodes` group, which the OPY frontend requires",
-                        settings.span,
-                    );
-                    return;
-                }
-            }
-        }
-        if !top.is_empty() {
-            self.out.push_str("settings ");
-            write_settings_json(&mut self.out, &SettingsJson::Object(top), 0);
-            self.out.push_str("\n\n");
-        }
-        for name in &extensions {
-            self.out.push_str("#!extension ");
-            self.out.push_str(name);
-            self.out.push('\n');
-        }
-        if !extensions.is_empty() {
-            self.out.push('\n');
-        }
-    }
-
-    fn settings_modes(&mut self, children: &[SettingsNode]) -> SettingsJson {
-        let mut entries = Vec::new();
-        let mut seen = HashSet::new();
-        for mode in children {
-            let (name, children) = match mode {
-                SettingsNode::Group { name, children, .. }
-                | SettingsNode::RawGroup { name, children, .. } => (name, children),
-                _ => {
-                    self.refuse_settings(
-                        mode,
-                        "cannot appear inside `gamemodes`; groups are expected",
-                    );
-                    continue;
-                }
-            };
-            if !seen.insert(name.clone()) {
-                self.refuse_settings(mode, "is a duplicate mode group");
-            }
-            let display = display_names(&[
-                format!("gamemodes.{name}."),
-                "gamemodes.general.".to_string(),
-            ]);
-            let path = [PathPart::Part("gamemodes"), PathPart::Part(name.as_str())];
-            let mut members = Vec::new();
-            let mut member_names = HashSet::new();
-            for (index, member) in children.iter().enumerate() {
-                if member.name() == "enabled" {
-                    match (index, member) {
-                        (0, SettingsNode::Bool { value: false, .. }) => {
-                            members.push(("enabled".to_string(), SettingsJson::Bool(false)));
-                            member_names.insert("enabled".to_string());
-                        }
-                        _ => self.refuse_settings(
-                            member,
-                            "is an `enabled` marker only `enabled: false` in first position reproduces",
-                        ),
-                    }
-                    continue;
-                }
-                let Some((key, json)) = self.settings_member(member, &path, None, &display) else {
-                    continue;
-                };
-                if !member_names.insert(key.clone()) {
-                    self.refuse_settings(member, "is a duplicate settings member");
-                }
-                members.push((key, json));
-            }
-            entries.push((name.clone(), SettingsJson::Object(members)));
-        }
-        SettingsJson::Object(entries)
-    }
-
-    fn settings_teams(&mut self, children: &[SettingsNode]) -> SettingsJson {
-        const TEAM: [PathPart<'static>; 2] = [PathPart::Part("heroes"), PathPart::Team];
-        const HERO: [PathPart<'static>; 3] =
-            [PathPart::Part("heroes"), PathPart::Team, PathPart::Hero];
-        let mut entries = Vec::new();
-        let mut seen = HashSet::new();
-        for team in children {
-            let (name, children) = match team {
-                SettingsNode::Group { name, children, .. }
-                | SettingsNode::RawGroup { name, children, .. } => (name, children),
-                _ => {
-                    self.refuse_settings(
-                        team,
-                        "cannot appear inside `heroes`; groups are expected",
-                    );
-                    continue;
-                }
-            };
-            if !seen.insert(name.clone()) {
-                self.refuse_settings(team, "is a duplicate team group");
-            }
-            let roster = |member: &SettingsNode| {
-                matches!(member, SettingsNode::List { name, .. } if matches!(
-                    name.as_str(),
-                    "enabledHeroes" | "disabledHeroes"
-                ))
-            };
-            let rest_at = children
-                .iter()
-                .position(|member| matches!(member, SettingsNode::Group { .. }) || roster(member))
-                .unwrap_or(children.len());
-            let rosters_at = children[rest_at..]
-                .iter()
-                .position(roster)
-                .map(|index| rest_at + index)
-                .unwrap_or(children.len());
-            let general = &children[..rest_at];
-            let rest = &children[rest_at..rosters_at];
-            let rosters = &children[rosters_at..];
-            for member in rest {
-                if roster(member) {
-                    self.refuse_settings(
-                        member,
-                        "is a hero roster before the last hero group; rosters reparse last",
-                    );
-                }
-            }
-            for member in rosters {
-                if !roster(member) {
-                    self.refuse_settings(
-                        member,
-                        "follows a hero roster; team `general` members reparse first",
-                    );
-                }
-            }
-            if rosters
-                .iter()
-                .filter(|member| member.name() == "enabledHeroes")
-                .count()
-                + rosters
-                    .iter()
-                    .filter(|member| member.name() == "disabledHeroes")
-                    .count()
-                > 1
-            {
-                self.refuse_settings(
-                    team,
-                    "lists both `enabledHeroes` and `disabledHeroes`, which the frontend rejects",
-                );
-            }
-
-            let display = display_names(&[
-                "heroes.<team>.".to_string(),
-                "heroes.general.".to_string(),
-                "heroes.team1.".to_string(),
-                "heroes.team2.".to_string(),
-                "heroes.allTeams.".to_string(),
-            ]);
-            let mut members = Vec::new();
-            let mut member_names = HashSet::new();
-            for member in rest {
-                let (hero_name, hero_children) = match member {
-                    SettingsNode::Group { name, children, .. }
-                    | SettingsNode::RawGroup { name, children, .. } => (name, children),
-                    _ => {
-                        self.refuse_settings(
-                            member,
-                            "is a non-group member among hero groups; it would reparse as an empty group",
-                        );
-                        continue;
-                    }
-                };
-                if !super::settings::resolves_to_hero(hero_name) {
-                    self.refuse_settings(member, "is not a declared hero");
-                    continue;
-                }
-                if super::settings::canonical_hero_name(hero_name) != hero_name.as_str() {
-                    self.refuse_settings(
-                        member,
-                        "is a hero alias that reparses under its canonical name",
-                    );
-                    continue;
-                }
-                if !member_names.insert(hero_name.clone()) {
-                    self.refuse_settings(member, "is a duplicate hero group");
-                }
-                members.push((
-                    hero_name.clone(),
-                    self.settings_object(hero_children, &HERO, Some(hero_name.as_str()), &display),
-                ));
-            }
-            for member in rosters {
-                let SettingsNode::List { elements, .. } = member else {
-                    continue;
-                };
-                for element in elements {
-                    if super::settings::canonical_hero_name(&element.value) != element.value {
-                        self.refuse_settings(
-                            member,
-                            "carries a hero alias that reparses under its canonical name",
-                        );
-                        break;
-                    }
-                }
-                if !member_names.insert(member.name().to_string()) {
-                    self.refuse_settings(member, "is a duplicate hero roster");
-                }
-                members.push((
-                    member.name().to_string(),
-                    SettingsJson::Array(
-                        elements
-                            .iter()
-                            .map(|element| SettingsJson::String(element.value.clone()))
-                            .collect(),
-                    ),
-                ));
-            }
-            if !general.is_empty() {
-                if !member_names.insert("general".to_string()) {
-                    self.refuse_settings(
-                        team,
-                        "carries a `general` member the hero-name position cannot express",
-                    );
-                }
-                members.push((
-                    "general".to_string(),
-                    self.settings_object(general, &TEAM, None, &display),
-                ));
-            }
-            for member in general {
-                if member.name() == "general" || roster(member) {
-                    self.refuse_settings(
-                        member,
-                        "cannot be reproduced at a team's `general` position",
-                    );
-                }
-            }
-            entries.push((name.clone(), SettingsJson::Object(members)));
-        }
-        SettingsJson::Object(entries)
-    }
-
-    fn settings_object(
-        &mut self,
-        children: &[SettingsNode],
-        path: &[PathPart<'_>],
-        hero: Option<&str>,
-        display: &HashSet<String>,
-    ) -> SettingsJson {
-        let mut entries = Vec::new();
-        let mut seen = HashSet::new();
-        for member in children {
-            let Some(entry) = self.settings_member(member, path, hero, display) else {
-                continue;
-            };
-            if !seen.insert(member.name().to_string()) {
-                self.refuse_settings(member, "is a duplicate settings member");
-            }
-            entries.push(entry);
-        }
-        SettingsJson::Object(entries)
-    }
-
-    fn settings_member(
-        &mut self,
-        member: &SettingsNode,
-        path: &[PathPart<'_>],
-        hero: Option<&str>,
-        display: &HashSet<String>,
-    ) -> Option<(String, SettingsJson)> {
-        if matches!(path, [PathPart::Part("extensions")]) {
-            self.refuse_settings(
-                member,
-                "is not a presence-only extension; only `#!extension` members survive here",
-            );
-            return None;
-        }
-        let name = member.name().to_string();
-        match member {
-            SettingsNode::Number { value, .. } => {
-                let definition = self.catalogued_member(member, path, hero)?;
-                if !matches!(
-                    definition.domain(),
-                    SettingValueDomain::Number(_) | SettingValueDomain::Percent(_)
-                ) {
-                    self.refuse_settings(member, "is a number member under a non-numeric setting");
-                    return None;
-                }
-                Some((name, SettingsJson::Number(format!("{value}"))))
-            }
-            SettingsNode::Bool { value, .. } => {
-                let definition = self.catalogued_member(member, path, hero)?;
-                if !matches!(definition.domain(), SettingValueDomain::Boolean) {
-                    self.refuse_settings(member, "is a boolean member under a non-boolean setting");
-                    return None;
-                }
-                Some((name, SettingsJson::Bool(*value)))
-            }
-            SettingsNode::String { value, .. } => {
-                let definition = self.catalogued_member(member, path, hero)?;
-                if !matches!(
-                    definition.domain(),
-                    SettingValueDomain::String | SettingValueDomain::Enum { .. }
-                ) {
-                    self.refuse_settings(member, "is a string member under a non-string setting");
-                    return None;
-                }
-                if crate::compile_time::has_unbound_formatters(value) {
-                    self.refuse_settings(
-                        member,
-                        "carries a formatter the OPY settings evaluator rejects",
-                    );
-                    return None;
-                }
-                if *value == "afterAGame" && name == "mapRotation" {
-                    return Some((name, SettingsJson::String("afterGame".to_string())));
-                }
-                if name == "mapRotation" && value == "afterGame" {
-                    self.refuse_settings(
-                        member,
-                        "carries a `mapRotation` value the OPY frontend rewrites",
-                    );
-                    return None;
-                }
-                if matches!(path, [PathPart::Part("main")])
-                    && matches!(name.as_str(), "modeName" | "description")
-                    && super::lowering::escape_bad_words(value) != *value
-                {
-                    self.refuse_settings(
-                        member,
-                        "is a `main` string the filtered-word escape rewrites",
-                    );
-                    return None;
-                }
-                Some((name, SettingsJson::String(value.clone())))
-            }
-            SettingsNode::List { elements, .. } => {
-                let definition = self.catalogued_member(member, path, hero)?;
-                match definition.domain() {
-                    SettingValueDomain::MapList => {
-                        if elements.iter().any(|element| element.variant.is_some()) {
-                            self.refuse_settings(member, "carries a map variant qualifier");
-                            return None;
-                        }
-                    }
-                    SettingValueDomain::HeroList => {
-                        for element in elements {
-                            if super::settings::canonical_hero_name(&element.value) != element.value
-                            {
-                                self.refuse_settings(
-                                    member,
-                                    "carries a hero alias that reparses under its canonical name",
-                                );
-                                return None;
-                            }
-                        }
-                    }
-                    _ => {
-                        self.refuse_settings(member, "is a list member under a non-list setting");
-                        return None;
-                    }
-                }
-                Some((
-                    name,
-                    SettingsJson::Array(
-                        elements
-                            .iter()
-                            .map(|element| SettingsJson::String(element.value.clone()))
-                            .collect(),
-                    ),
-                ))
-            }
-            SettingsNode::Flag { .. } => {
-                self.refuse_settings(
-                    member,
-                    "is a presence-only member; only `#!extension` under `extensions` carries one",
-                );
-                None
-            }
-            SettingsNode::Raw { value, .. } => {
-                if self.member_definition(member, path, hero).is_some()
-                    || display.contains(name.as_str())
-                    || display.contains(format!("{name}:{value}").as_str())
-                {
-                    self.refuse_settings(
-                        member,
-                        "reparses under a catalogued display name rather than staying raw",
-                    );
-                    return None;
-                }
-                if !emittable_member_name(name.as_str()) || !emittable_raw_value(value) {
-                    self.refuse_settings(member, "carries text a `name: value` line cannot write");
-                    return None;
-                }
-                Some((name, SettingsJson::String(value.clone())))
-            }
-            SettingsNode::RawValue { value, .. } => {
-                if !value.is_empty() {
-                    self.refuse_settings(member, "has a value that reparses as a raw member");
-                    return None;
-                }
-                if self.member_definition(member, path, hero).is_some()
-                    || display.contains(name.as_str())
-                    || !emittable_member_name(name.as_str())
-                {
-                    self.refuse_settings(
-                        member,
-                        "reparses under a catalogued display name rather than staying raw",
-                    );
-                    return None;
-                }
-                Some((name, SettingsJson::String(String::new())))
-            }
-            SettingsNode::Group { children, .. } | SettingsNode::RawGroup { children, .. } => {
-                match self.member_definition(member, path, hero) {
-                    Some(definition)
-                        if matches!(
-                            definition.domain(),
-                            SettingValueDomain::MapList | SettingValueDomain::HeroList
-                        ) =>
-                    {
-                        self.refuse_settings(
-                            member,
-                            "is a block under a list setting; it reparses as a list",
-                        );
-                        None
-                    }
-                    // A boolean-domain member collapses every non-boolean
-                    // value to `enabled: false` upstream-style, so a block
-                    // never reaches the group form.
-                    Some(definition)
-                        if matches!(definition.domain(), SettingValueDomain::Boolean) =>
-                    {
-                        self.refuse_settings(
-                            member,
-                            "is a block under a boolean setting; it reparses as `false`",
-                        );
-                        None
-                    }
-                    Some(_) => Some((name, self.opaque_object(children))),
-                    None => {
-                        if display.contains(name.as_str()) || !emittable_member_name(name.as_str())
-                        {
-                            self.refuse_settings(
-                                member,
-                                "reparses under a catalogued display name rather than staying raw",
-                            );
-                            return None;
-                        }
-                        Some((name, self.opaque_object(children)))
-                    }
-                }
-            }
-            SettingsNode::Workshop { .. } => {
-                self.refuse_settings(member, "has no OPY settings form at a leaf path");
-                None
-            }
-        }
-    }
-
-    fn member_definition(
-        &self,
-        member: &SettingsNode,
-        path: &[PathPart<'_>],
-        hero: Option<&str>,
-    ) -> Option<workshop_rs::settings::SettingDefinition> {
-        let mut full = path.to_vec();
-        full.push(PathPart::Part(member.name()));
-        let definition = workshop_rs::settings::definition(&full)?;
-        match hero {
-            Some(hero) if !super::settings::hero_setting_applies(hero, member.name()) => None,
-            _ => Some(definition),
-        }
-    }
-
-    fn catalogued_member(
-        &mut self,
-        member: &SettingsNode,
-        path: &[PathPart<'_>],
-        hero: Option<&str>,
-    ) -> Option<workshop_rs::settings::SettingDefinition> {
-        match self.member_definition(member, path, hero) {
-            Some(definition) => Some(definition),
-            None => {
-                self.refuse_settings(
-                    member,
-                    "is a typed member under an uncatalogued key; it reparses as raw text",
-                );
-                None
-            }
-        }
-    }
-
-    fn opaque_object(&mut self, children: &[SettingsNode]) -> SettingsJson {
-        let mut entries = Vec::new();
-        let mut seen = HashSet::new();
-        for member in children {
-            let entry = match member {
-                SettingsNode::Raw { name, value, .. }
-                    if emittable_member_name(name) && emittable_raw_value(value) =>
-                {
-                    Some((name.clone(), SettingsJson::String(value.clone())))
-                }
-                SettingsNode::RawValue { name, value, .. }
-                    if value.is_empty() && emittable_member_name(name) =>
-                {
-                    Some((name.clone(), SettingsJson::String(String::new())))
-                }
-                SettingsNode::Group { name, children, .. }
-                | SettingsNode::RawGroup { name, children, .. }
-                    if emittable_member_name(name) =>
-                {
-                    Some((name.clone(), self.opaque_object(children)))
-                }
-                _ => {
-                    self.refuse_settings(member, "has no OPY form inside an opaque settings block");
-                    None
-                }
-            };
-            let Some(entry) = entry else { continue };
-            if !seen.insert(member.name().to_string()) {
-                self.refuse_settings(member, "is a duplicate settings member");
-            }
-            entries.push(entry);
-        }
-        SettingsJson::Object(entries)
-    }
-
-    fn opaque_group_object(&mut self, children: &[SettingsNode]) -> SettingsJson {
-        let mut entries = Vec::new();
-        let mut seen = HashSet::new();
-        for member in children {
-            let entry = match member {
-                SettingsNode::Group { name, children, .. }
-                | SettingsNode::RawGroup { name, children, .. }
-                    if emittable_member_name(name) =>
-                {
-                    Some((name.clone(), self.opaque_group_object(children)))
-                }
-                _ => {
-                    self.refuse_settings(
-                        member,
-                        "has no OPY form inside an uncatalogued settings group",
-                    );
-                    None
-                }
-            };
-            let Some(entry) = entry else { continue };
-            if !seen.insert(member.name().to_string()) {
-                self.refuse_settings(member, "is a duplicate settings member");
-            }
-            entries.push(entry);
-        }
-        SettingsJson::Object(entries)
-    }
-
-    fn settings_workshop(&mut self, children: &[SettingsNode]) -> SettingsJson {
-        let mut entries = Vec::new();
-        let mut seen = HashSet::new();
-        for member in children {
-            let entry = match member {
-                SettingsNode::Raw { name, value, .. } if emittable_member_name(name) => {
-                    let json = if value == "On" {
-                        Some(SettingsJson::Bool(true))
-                    } else if value == "Off" {
-                        Some(SettingsJson::Bool(false))
-                    } else if emittable_raw_value(value) && super::settings::is_number_text(value) {
-                        Some(SettingsJson::String(value.clone()))
-                    } else if let Some(inner) = value
-                        .strip_prefix('[')
-                        .and_then(|rest| rest.strip_suffix(']'))
-                    {
-                        if crate::compile_time::has_unbound_formatters(inner) {
-                            None
-                        } else {
-                            Some(SettingsJson::Array(vec![SettingsJson::String(
-                                inner.to_string(),
-                            )]))
-                        }
-                    } else {
-                        None
-                    };
-                    match json {
-                        Some(json) => Some((name.clone(), json)),
-                        None => {
-                            self.refuse_settings(
-                                member,
-                                "is a `settings.workshop` value OPY cannot write",
-                            );
-                            None
-                        }
-                    }
-                }
-                _ => {
-                    self.refuse_settings(
-                        member,
-                        "is not a `name: value` member inside `settings.workshop`",
-                    );
-                    None
-                }
-            };
-            let Some(entry) = entry else { continue };
-            if !seen.insert(member.name().to_string()) {
-                self.refuse_settings(member, "is a duplicate settings member");
-            }
-            entries.push(entry);
-        }
-        SettingsJson::Object(entries)
-    }
-
-    fn refuse_settings(&mut self, member: &SettingsNode, detail: &str) {
-        self.issue(
-            "unsupported-settings",
-            format!("settings member '{}' {detail}", member.name()),
-            member.span(),
-        );
-    }
-
     fn emit_program(&mut self, layout: &RuleLayout) {
         let global_order = index_order(&self.program.global_variables);
         let player_order = index_order(&self.program.player_variables);
@@ -1282,21 +531,7 @@ impl<'a> Emitter<'a> {
                 .push_str(emitted(&self.subroutine_emitted, subroutine_name));
             self.out.push_str("():\n");
             if rule.disabled {
-                self.out.push_str("    # @Disabled\n");
-                if !rule.conditions.is_empty() {
-                    for (condition_index, condition) in rule.conditions.iter().enumerate() {
-                        let scratch = std::mem::take(&mut self.out);
-                        self.out.push_str("    @Condition ");
-                        self.emit_value(
-                            &condition.value,
-                            self.program.condition_span(*rule_index, condition_index),
-                        );
-                        self.out.push('\n');
-                        self.flush_commented(scratch, 1);
-                    }
-                }
-                self.emit_commented_actions(*rule_index, &rule.actions);
-                self.out.push_str("    pass\n");
+                self.emit_disabled_def_body(*rule_index, rule);
             } else {
                 self.emit_actions(*rule_index, &rule.actions, 1);
                 if rule.actions.is_empty() {
@@ -1319,14 +554,7 @@ impl<'a> Emitter<'a> {
             }
             for (condition_index, condition) in rule.conditions.iter().enumerate() {
                 if condition.disabled {
-                    let scratch = std::mem::take(&mut self.out);
-                    self.out.push_str("    @Condition ");
-                    self.emit_value(
-                        &condition.value,
-                        self.program.condition_span(*rule_index, condition_index),
-                    );
-                    self.out.push('\n');
-                    self.flush_commented(scratch, 1);
+                    self.emit_commented_condition(*rule_index, condition_index, condition);
                     continue;
                 }
                 self.out.push_str("    @Condition ");
@@ -1339,6 +567,31 @@ impl<'a> Emitter<'a> {
             self.emit_actions(*rule_index, &rule.actions, 1);
             self.out.push('\n');
         }
+    }
+
+    fn emit_disabled_def_body(&mut self, rule_index: usize, rule: &Rule) {
+        self.out.push_str("    # @Disabled\n");
+        for (condition_index, condition) in rule.conditions.iter().enumerate() {
+            self.emit_commented_condition(rule_index, condition_index, condition);
+        }
+        self.emit_commented_actions(rule_index, &rule.actions);
+        self.out.push_str("    pass\n");
+    }
+
+    fn emit_commented_condition(
+        &mut self,
+        rule_index: usize,
+        condition_index: usize,
+        condition: &Condition,
+    ) {
+        let scratch = std::mem::take(&mut self.out);
+        self.out.push_str("    @Condition ");
+        self.emit_value(
+            &condition.value,
+            self.program.condition_span(rule_index, condition_index),
+        );
+        self.out.push('\n');
+        self.flush_commented(scratch, 1);
     }
 
     fn emit_event_annotation(&mut self, rule_index: usize, rule: &Rule) {
@@ -1488,10 +741,11 @@ impl<'a> Emitter<'a> {
                 if dunder != high {
                     continue;
                 }
+                let mut range = DECLARATION_SLOT_RANGE;
                 let slot = if high {
-                    (0..=127u32).rev().find(|slot| !taken.contains(slot))
+                    range.rev().find(|slot| !taken.contains(slot))
                 } else {
-                    (0..=127u32).find(|slot| !taken.contains(slot))
+                    range.find(|slot| !taken.contains(slot))
                 };
                 if slot != Some(index) {
                     self.issues.push(ReconstructIssue {
@@ -1885,15 +1139,14 @@ impl<'a> Emitter<'a> {
         let indent = Self::indent(level);
         match action {
             Action::SetGlobalVariable { variable, value } => {
-                self.out.push_str(&indent);
-                self.out.push_str(emitted(&self.global_names, variable));
-                self.out.push_str(" = ");
-                self.emit_value(
+                let target = emitted(&self.global_names, variable).to_string();
+                self.emit_source_set_form(
+                    level,
+                    &target,
                     value,
                     self.program
                         .action_argument_span(rule_index, action_index, 0),
                 );
-                self.out.push('\n');
             }
             Action::ModifyGlobalVariable {
                 variable,
@@ -1919,15 +1172,13 @@ impl<'a> Emitter<'a> {
                     .program
                     .action_argument_span(rule_index, action_index, 0);
                 let target = self.player_variable_target(player, variable, player_span);
-                self.out.push_str(&indent);
-                self.out.push_str(&target);
-                self.out.push_str(" = ");
-                self.emit_value(
+                self.emit_source_set_form(
+                    level,
+                    &target,
                     value,
                     self.program
                         .action_argument_span(rule_index, action_index, 1),
                 );
-                self.out.push('\n');
             }
             Action::ModifyPlayerVariable {
                 player,
@@ -2027,6 +1278,20 @@ impl<'a> Emitter<'a> {
             this.emit_player_variable_receiver(player, span);
         });
         format!("{receiver}.{}", emitted(&self.player_names, variable))
+    }
+
+    fn emit_source_set_form(
+        &mut self,
+        level: usize,
+        target: &str,
+        value: &Value,
+        span: Option<Span>,
+    ) {
+        self.out.push_str(&Self::indent(level));
+        self.out.push_str(target);
+        self.out.push_str(" = ");
+        self.emit_value(value, span);
+        self.out.push('\n');
     }
 
     fn render_value_as(
@@ -2704,7 +1969,7 @@ impl<'a> Emitter<'a> {
                 }
             }
         }
-        if policy::variable_args(&entry.id).contains(&index) {
+        if entry.params.get(index).is_some_and(|param| param.variable) {
             let is_variable =
                 matches!(arg, Value::GlobalVariable(_) | Value::PlayerVariable { .. });
             if !is_variable {
@@ -3345,86 +2610,6 @@ fn is_simple_ident(name: &str) -> bool {
         _ => return false,
     }
     chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
-}
-
-enum SettingsJson {
-    Object(Vec<(String, SettingsJson)>),
-    Array(Vec<SettingsJson>),
-    String(String),
-    Number(String),
-    Bool(bool),
-}
-
-/// Write `value` as JSONC the settings parser reads back — the layout the
-/// pinned OverPy's `JSON.stringify(result, null, 4)` produces: four-space
-/// indentation, empty containers inline, and no trailing comma.
-fn write_settings_json(out: &mut String, value: &SettingsJson, indent: usize) {
-    let pad = |out: &mut String| {
-        for _ in 0..indent {
-            out.push(' ');
-        }
-    };
-    match value {
-        SettingsJson::Object(entries) if entries.is_empty() => out.push_str("{}"),
-        SettingsJson::Object(entries) => {
-            out.push_str("{\n");
-            for (index, (key, value)) in entries.iter().enumerate() {
-                pad(out);
-                for _ in 0..4 {
-                    out.push(' ');
-                }
-                out.push('"');
-                push_json_escaped(out, key);
-                out.push_str("\": ");
-                write_settings_json(out, value, indent + 4);
-                if index + 1 < entries.len() {
-                    out.push(',');
-                }
-                out.push('\n');
-            }
-            pad(out);
-            out.push('}');
-        }
-        SettingsJson::Array(elements) if elements.is_empty() => out.push_str("[]"),
-        SettingsJson::Array(elements) => {
-            out.push_str("[\n");
-            for (index, element) in elements.iter().enumerate() {
-                pad(out);
-                for _ in 0..4 {
-                    out.push(' ');
-                }
-                write_settings_json(out, element, indent + 4);
-                if index + 1 < elements.len() {
-                    out.push(',');
-                }
-                out.push('\n');
-            }
-            pad(out);
-            out.push(']');
-        }
-        SettingsJson::String(value) => {
-            out.push('"');
-            push_json_escaped(out, value);
-            out.push('"');
-        }
-        SettingsJson::Number(value) => out.push_str(value),
-        SettingsJson::Bool(value) => out.push_str(if *value { "true" } else { "false" }),
-    }
-}
-
-fn push_json_escaped(out: &mut String, text: &str) {
-    for character in text.chars() {
-        match character {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            '\u{8}' => out.push_str("\\b"),
-            '\u{c}' => out.push_str("\\f"),
-            other => out.push(other),
-        }
-    }
 }
 
 fn display_names(prefixes: &[String]) -> HashSet<String> {

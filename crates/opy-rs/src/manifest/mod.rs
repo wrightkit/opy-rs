@@ -82,6 +82,10 @@ impl ReceiverCategory {
             ReceiverCategory::Any => "any expression",
         }
     }
+
+    pub fn enforced(self) -> Option<Self> {
+        matches!(self, ReceiverCategory::String | ReceiverCategory::Variable).then_some(self)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -153,6 +157,14 @@ impl Function {
             .rposition(|param| param.default.is_none() && !param.optional)
             .map_or(0, |index| index + 1);
         (min, Some(self.params.len()))
+    }
+
+    pub fn variable_param_indices(&self) -> impl Iterator<Item = usize> + '_ {
+        self.params
+            .iter()
+            .enumerate()
+            .filter(|(_, param)| param.variable)
+            .map(|(index, _)| index)
     }
 }
 

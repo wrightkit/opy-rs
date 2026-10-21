@@ -213,6 +213,28 @@ fn many_consecutive_invocations_stay_independent() {
 }
 
 #[test]
+fn scripts_see_no_filesystem_process_or_network_capabilities() {
+    let rt = runtime();
+    let result = rt
+        .run_macro(
+            r#"var capabilities = [
+                   typeof std, typeof os, typeof require, typeof process,
+                   typeof Deno, typeof Bun,
+                   typeof fetch, typeof XMLHttpRequest, typeof WebSocket,
+               ];
+               var module_load = "threw";
+               try { require("fs"); module_load = "resolved"; } catch (error) {}
+               (capabilities.every(function(capability) {
+                   return capability === "undefined";
+               }) && module_load === "threw").toString();"#,
+            &[],
+            "host-capabilities.js",
+        )
+        .unwrap();
+    assert_eq!(result.text, "true");
+}
+
+#[test]
 fn builtin_intrinsics_are_fully_reset() {
     let rt = runtime();
     rt.run_macro(
