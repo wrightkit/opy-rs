@@ -1,13 +1,3 @@
-// Records tools/overpy/upstream-literal-flags.json from the pinned OverPy 9.7.10
-// argument tables (`canReplace0ByFalse`,
-// `canReplace1ByTrue`, `canReplace0ByNull`, `canReplaceNullVectorByNull`).
-//
-//   pnpm install --dir tools/overpy/oracle
-//   node tools/overpy/gen_literal_flags.cjs
-//
-// Comparison operators, `__for__`, the indexed
-// variable calls, `__assignTo__` and the HUD macros are excluded: the compiler applies OverPy's
-// rules for those on the typed actions and rule conditions directly.
 const fs = require("fs");
 const path = require("path");
 const { loadFuncKw } = require("./oracle_func_kw.cjs");
@@ -16,19 +6,14 @@ const excluded = new Set([
   "__for__", "__setGlobalVariableAtIndex__",
   "__setPlayerVariableAtIndex__", "__assignTo__", "__equals__", "__inequals__",
   "__greaterThan__", "__greaterThanOrEquals__", "__lessThan__", "__lessThanOrEquals__",
-  // Macros expand to `hudText` before this pass runs.
   "hudHeader", "hudSubheader", "hudSubtext",
-  // Localized strings lower to Custom String without their own catalog entry.
   "__localizedString__",
 ]);
-// OverPy spells some functions differently from the catalog; the manifest
-// records where an OverPy name resolves to another catalog id.
 const manifest = JSON.parse(
   fs.readFileSync(path.join(__dirname, "../../crates/opy-rs/src/manifest/data/manifest.json"), "utf8"),
 );
 const catalogId = new Map([
   ...manifest.functions.filter((entry) => entry.catalogId).map((entry) => [entry.id, entry.catalogId]),
-  // Lowered specially onto the catalog's array values.
   ["concat", "appendToArray"],
   ["exclude", "removeFromArray"],
 ]);

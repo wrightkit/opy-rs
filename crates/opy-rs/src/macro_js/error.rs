@@ -1,5 +1,3 @@
-//! Structured errors carrying script/source provenance.
-
 use std::fmt;
 
 /// A JavaScript exception with engine-provided provenance.
@@ -15,15 +13,9 @@ pub(crate) struct ScriptError {
     /// are `"interrupted"`, `"out of memory"`, and
     /// `"Maximum call stack size exceeded"`.
     pub(crate) message: String,
-    /// The script name the invocation was attributed to.
     pub(crate) source_name: Option<String>,
-    /// 1-based line in the user's script of the first stack frame matching
-    /// `source_name`, when the engine provided a stack.
     pub(crate) line: Option<u32>,
-    /// 1-based column of that frame, when available.
     pub(crate) column: Option<u32>,
-    /// The engine stack trace with line numbers adjusted to the user's script,
-    /// when the engine provided one.
     pub(crate) stack: Option<String>,
 }
 
@@ -42,7 +34,6 @@ pub(crate) enum MacroError {
     InvalidResult {
         type_name: String,
     },
-    /// Engine setup failure (runtime/context creation, builtin helper install).
     Internal(String),
 }
 

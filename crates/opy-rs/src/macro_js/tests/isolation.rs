@@ -1,5 +1,3 @@
-//! Independent evidence for the fresh-engine isolation contract.
-
 use std::time::Duration;
 
 use crate::macro_js::error::MacroError;
@@ -104,8 +102,6 @@ fn concurrent_runtime_instances_are_independent() {
 
 #[test]
 fn memory_limit_recovery_keeps_each_invocation_bounded() {
-    // An invocation that exhausts the memory limit must neither leak its
-    // allocation accounting nor disable the limit for the next invocation.
     let limits = Limits {
         memory_limit_bytes: 2 * 1024 * 1024,
         ..Limits::default()
@@ -150,15 +146,12 @@ fn stack_limit_recovery_keeps_each_invocation_bounded() {
 
 #[test]
 fn deadline_state_is_re_armed_per_invocation() {
-    // After an interrupted invocation the interrupt handler must be reset:
-    // the next call gets a fresh deadline, not the expired one.
     let rt = MacroRuntime::new(Limits {
         macro_time_budget: Duration::from_millis(50),
         ..Limits::default()
     });
     rt.run_macro("while (true) {}", &[], "first.js")
         .unwrap_err();
-    // Succeeding invocations after the abort get a full fresh budget.
     for _ in 0..3 {
         let result = rt
             .run_macro(
@@ -173,8 +166,6 @@ fn deadline_state_is_re_armed_per_invocation() {
 
 #[test]
 fn console_sink_is_rebound_per_invocation() {
-    // `console.log` writes to the invocation's own buffer: a previous call's
-    // sink must not receive or retain lines.
     let rt = runtime();
     let first = rt
         .run_macro(r#"console.log("a"); "ok";"#, &[], "first.js")
@@ -194,12 +185,8 @@ fn console_sink_is_rebound_per_invocation() {
 
 #[test]
 fn many_consecutive_invocations_stay_independent() {
-    // Sweep: interleave leaking, throwing, and clean invocations on one
-    // runtime; every result must reflect only its own invocation.
     let rt = runtime();
     for i in 0..32 {
-        // Set marker{i} and verify it is visible in the same invocation;
-        // a later script then asserts it is gone again.
         let leak =
             format!(r#"globalThis.marker{i} = {i}; (globalThis.marker{i} === {i}).toString();"#);
         let leaked = rt.run_macro(&leak, &[], "leak.js").unwrap();
@@ -227,8 +214,6 @@ fn many_consecutive_invocations_stay_independent() {
 
 #[test]
 fn builtin_intrinsics_are_fully_reset() {
-    // Mutation of shared-looking intrinsics (Object.prototype, Array methods,
-    // the builtins script's `vect`) must not reach the next invocation.
     let rt = runtime();
     rt.run_macro(
         r#"Array.prototype.push = function() { return -1; };

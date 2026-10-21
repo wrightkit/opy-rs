@@ -1,5 +1,3 @@
-//! Public compile-path coverage for preprocessor member defines.
-
 use std::collections::BTreeMap;
 
 use crate::compile_with_overlay;
@@ -87,9 +85,6 @@ fn multiline_object_define_preserves_statement_boundaries() {
 
 #[test]
 fn multiline_function_define_preserves_block_structure() {
-    // #506: expanded tokens keep the expansion's relative layout for the
-    // indentation-sensitive parser even though their authored provenance is
-    // the use site — a collapsed layout would let `C = 2` escape the body.
     let hir = crate::compile(
         "#!define check() if A == 1:\\\n    B = 1\\\n    C = 2\nglobalvar A\nglobalvar B\nglobalvar C\nrule \"block macro\":\n    @Event global\n    check()\n",
         "main.opy",
@@ -129,10 +124,6 @@ fn multiline_function_define_preserves_for_block() {
 
 #[test]
 fn multiline_function_define_preserves_conditional_expressions() {
-    // #506 re-review: the conditional-expression statement-boundary guard
-    // must compare layout lines on both sides; reading the then-value's
-    // provenance span collapses expanded tokens to the use site and the
-    // guard misfires, so `expected ':' after the if condition` fails.
     let hir = crate::compile(
         "#!define E() A = 0\\\n    B = 0\\\n    y = B if C else D\nglobalvar A\nglobalvar B\nglobalvar C\nglobalvar D\nglobalvar y\nrule \"a\":\n    @Event global\n    E()\n",
         "main.opy",
@@ -149,9 +140,6 @@ fn multiline_function_define_preserves_conditional_expressions() {
 
 #[test]
 fn expanded_f_string_interpolation_errors_stay_inside_the_use_site() {
-    // #506: an interpolation inside an expanded string has no authored
-    // extent; its derived positions clamp into the use-site span rather
-    // than fabricating columns past the authored line.
     let error = crate::compile(
         "globalvar B\nrule \"bad f-string\":\n    @Event global\n    A = f\"hp: {B +}\"\n",
         "main.opy",
@@ -168,8 +156,6 @@ fn expanded_f_string_interpolation_errors_stay_inside_the_use_site() {
     )
     .expect_err("the malformed expanded interpolation must fail");
     let span = error.span.expect("the error must carry a span");
-    // `M` is the use site at 6:9-6:10; the fabricated interpolation column
-    // (string start + index) must clamp into it instead of escaping.
     assert_eq!(span.start.line, 6);
     assert!(
         (9..=10).contains(&span.start.col) && (9..=10).contains(&span.end.col),

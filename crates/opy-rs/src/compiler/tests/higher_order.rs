@@ -1,5 +1,3 @@
-//! Higher-order array and comprehension lowering coverage.
-
 use std::path::{Path, PathBuf};
 
 use crate::Compiler;

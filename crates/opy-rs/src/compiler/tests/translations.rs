@@ -1,5 +1,3 @@
-//! Translation lowering and catalog lifecycle coverage.
-
 use std::fs;
 use std::path::Path;
 

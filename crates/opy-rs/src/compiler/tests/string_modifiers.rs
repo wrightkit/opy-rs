@@ -1,5 +1,3 @@
-//! String modifier lowering against the pinned canonical-WIR oracle.
-
 use std::path::{Path, PathBuf};
 
 use crate::Compiler;
@@ -53,8 +51,6 @@ fn combined_and_plain_modifiers_match_the_pinned_oracle() {
 
 #[test]
 fn combined_f_modifier_formats_and_transforms_the_template() {
-    // `fw"a{x}b"` interpolates like an f-string while `w` rewrites the text
-    // around the surviving `{0}` formatter.
     let source = "globalvar g\nglobalvar x\nrule \"r\":\n    @Event global\n    g = fw\"a{x}b\"\n";
     let hir = crate::compile(source, "fw.opy", Path::new(".")).unwrap();
     let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();

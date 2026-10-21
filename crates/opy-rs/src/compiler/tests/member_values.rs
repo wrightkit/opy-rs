@@ -1,5 +1,3 @@
-//! Canonical-WIR lowering evidence for member values.
-
 use std::path::{Path, PathBuf};
 
 use crate::Compiler;

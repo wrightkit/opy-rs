@@ -8,18 +8,15 @@
 //! emit resolved source locations as JSON without introducing a parallel
 //! position type.
 
-/// A structured frontend error.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OpyError {
     /// A stable machine-readable code, e.g. `parse-error`.
     pub code: String,
     /// Human-readable message (not part of the machine contract).
     pub message: String,
-    /// The offending source region, when known.
     pub span: Option<Span>,
 }
 
-/// A source span in the frontend's file registry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Span {
     pub file: u32,
@@ -27,7 +24,6 @@ pub struct Span {
     pub end: Position,
 }
 
-/// A 1-based line/column position.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
 pub struct Position {
     pub line: u32,
@@ -57,11 +53,9 @@ impl Span {
     }
 }
 
-/// A crate-wide result alias.
 pub type OpyResult<T> = Result<T, OpyError>;
 
 impl OpyError {
-    /// An error without a source span.
     pub fn new(code: impl Into<String>, message: impl Into<String>) -> OpyError {
         OpyError {
             code: code.into(),
@@ -70,7 +64,6 @@ impl OpyError {
         }
     }
 
-    /// An error at a source position.
     pub fn at(code: impl Into<String>, message: impl Into<String>, span: Span) -> OpyError {
         OpyError {
             code: code.into(),

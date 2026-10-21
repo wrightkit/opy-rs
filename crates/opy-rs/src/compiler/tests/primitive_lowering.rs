@@ -1,11 +1,3 @@
-//! Primitive lowering against the pinned canonical-WIR oracle.
-//!
-//! The pinned OverPy oracle snapshot for the `synthetic/primitive-lowering`
-//! fixture is load-bearing for the native compiler: this suite compiles the
-//! fixture source through the full native pipeline (frontend → OPY HIR →
-//! canonical WIR → deterministic en-US emission). The native lowering is
-//! compared directly with the oracle's parsed canonical WIR.
-
 use std::path::Path;
 
 use crate::Compiler;

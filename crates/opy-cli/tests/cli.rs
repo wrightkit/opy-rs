@@ -1,8 +1,3 @@
-//! Integration tests for the `opy-cli` binary: exit-code contract
-//! (0 clean / 1 diagnostics / 2 usage and I/O errors), stderr diagnostics,
-//! and the JSON surfaces. Uses `std::process::Command` on the built binary
-//! via `CARGO_BIN_EXE_opy-cli` — no extra test dependencies.
-
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -10,7 +5,6 @@ fn bin() -> Command {
     Command::new(env!("CARGO_BIN_EXE_opy-cli"))
 }
 
-/// The WrightKit-authored multi-file fixture shared with the frontend tests.
 const MULTI_MAIN: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../opy-rs/tests/fixtures/multi-file/main.opy"
@@ -37,8 +31,6 @@ fn run_with_env(args: &[&str], vars: &[(&str, &str)]) -> std::process::Output {
     command.output().expect("the binary runs")
 }
 
-/// A fresh temp directory for per-test source files (recoverable and
-/// task-scoped; removed by the caller like the rest of the workspace tests).
 fn temp_dir(tag: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("opy-cli-test-{}-{tag}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
@@ -547,9 +539,6 @@ fn lookup_scope_filters_namespaces() {
 
 #[test]
 fn lookup_empty_query_lists_the_vocabulary() {
-    // clap rejects a missing QUERY argument as usage (exit 2); an explicit
-    // empty string applies no text constraint and lists the bounded result
-    // set like the provider's unscoped listing does.
     let output = run(&["lookup", "", "--format", "json"]);
     assert_eq!(output.status.code(), Some(0));
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("pure JSON");

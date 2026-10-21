@@ -1,19 +1,3 @@
-//! Scoped `settings { ... }` extraction and JSONC parsing (#86).
-//!
-//! The settings block is recognized and consumed *before* lexing, so the
-//! lexer never gains global `{`/`}` tokens (meipocalypse's dict literal keeps
-//! failing as a `lex-error`). [`find_blocks`] locates a logical-line `settings`
-//! statement in each source file with a keyword scan, [`sanitize_for_lex`]
-//! blanks the block region out of the text handed to the lexer (newlines
-//! preserved, so positions after the block are unchanged), and [`parse_block`]
-//! turns the JSONC text into a typed [`cst::Settings`] tree with source spans.
-//!
-//! The parse is value-driven: any JSONC object/leaf shape becomes a
-//! structurally generic [`cst::SettingsNode`]. Which keys exist and which
-//! leaf kinds/spellings are valid is Workshop-owned settings-schema content;
-//! that validation is `lowering-dependent` (issue #8) and lives at the
-//! Workshop integration boundary, never in a local allowlist here.
-
 use std::collections::HashMap;
 
 use crate::cst;
@@ -21,26 +5,16 @@ use crate::diag::{OpyError, OpyResult, Position, Span};
 use crate::hir;
 use crate::lexer::{decode_string_escape, is_ident_continue, is_ident_start};
 
-/// A project `settings { ... }` block.
 #[derive(Debug, Clone)]
 pub struct SettingsBlock {
-    /// The raw JSONC text between the braces (braces excluded).
     pub text: String,
-    /// The whole block: the `settings` keyword through the closing brace.
     pub span: Span,
-    /// The `settings` keyword token (diagnostic anchor).
     pub keyword_span: Span,
-    /// The char offset of the `settings` keyword (for sanitization).
     pub start: usize,
-    /// The char offset just past the closing brace (for sanitization).
     pub end: usize,
-    /// The position of the first char of `text` (just past the opening brace).
     pub text_start: Position,
-    /// The source file containing the extracted settings content.
     pub content_file: u32,
-    /// The span covering the extracted settings content.
     pub content_span: Span,
-    /// The external source path for `settings "settings.opy.json"`.
     pub external_path: Option<String>,
 }
 
@@ -65,17 +39,9 @@ pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
     let mut in_block_comment = false;
     let mut string_quote = None;
     let mut escaped = false;
-    // `line_start`: the next token would open a logical line. `tail_start`:
-    // the next token would open the inline tail of a `:`-header line.
-    // `depth`: open `(`, `[`, `{` count, which keeps a newline from ending
-    // the logical line.
     let mut line_start = true;
     let mut tail_start = false;
     let mut depth = 0usize;
-    // `line_indent`: the current logical line's leading whitespace, counted
-    // like the reference (a tab is 4). `enum_indent`: the indentation of the
-    // enclosing `enum` header, while its body domain is open.
-    // `first_word_is_enum`: this logical line opened with `enum`.
     let mut line_indent = 0usize;
     let mut enum_indent: Option<usize> = None;
     let mut first_word_is_enum = false;
@@ -192,8 +158,6 @@ pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
     Ok(blocks)
 }
 
-/// Match the braces of one `settings { ... }` block, returning the extracted
-/// block. `scanner` is positioned just past the `settings` keyword.
 fn match_block(
     scanner: &mut Cursor<'_>,
     keyword_start: Position,
@@ -372,11 +336,6 @@ pub fn parse_block(block: &SettingsBlock) -> OpyResult<cst::Settings> {
     })
 }
 
-/// Resolve parsed settings values through the ordinary OPY HIR expression path.
-///
-/// Token-level `#!define` expansion is performed by [`crate::preprocess`]
-/// before this function runs. Source macros and constants are resolved from
-/// the same HIR program used by ordinary OPY lowering.
 pub(crate) fn resolve_hir_settings(
     program: &mut hir::Program,
     cst_program: &cst::Program,
@@ -491,10 +450,6 @@ fn resolve_hir_node(
     }
 }
 
-/// Compile an authored settings expression to a constant value: parse it as
-/// OPY, expand macros, then fold. `strict` selects the pinned settings
-/// evaluator — scalars and list elements both evaluate through it upstream
-/// (#512).
 fn eval_settings_text(
     text: &str,
     span: hir::Span,
@@ -895,9 +850,6 @@ impl Cursor<'_> {
         Ok((members, span))
     }
 
-    /// Parse `key: value, ...` members. `root` is true when the enclosing
-    /// object's braces are the settings block's own braces (the text runs to
-    /// the end of the block, and a trailing comma before it is allowed).
     fn parse_members(&mut self, root: bool) -> OpyResult<Vec<cst::SettingsNode>> {
         let mut nodes = Vec::new();
         let mut names = Vec::new();
@@ -1101,9 +1053,6 @@ impl Cursor<'_> {
         Ok((node, end))
     }
 
-    /// Preserve an unquoted setting expression as an opaque value. Commas and
-    /// closing braces delimit it only outside nested expression delimiters and
-    /// string literals.
     fn parse_expression_value(&mut self) -> String {
         let mut value = String::new();
         let mut depth = 0usize;
@@ -1299,8 +1248,6 @@ impl Cursor<'_> {
         }
     }
 
-    /// Parse a quoted string value; `None` when no string is here or the
-    /// string is unterminated before end-of-line.
     fn parse_string_value(&mut self) -> Option<String> {
         let quote = self.peek()?;
         if quote != '"' && quote != '\'' {
@@ -1327,9 +1274,6 @@ impl Cursor<'_> {
         }
     }
 
-    /// Parse adjacent quoted strings as one compile-time string value. This
-    /// is the settings equivalent of OPY's implicit string concatenation and
-    /// is used after macro expansion has turned identifiers into literals.
     fn parse_string_expression(&mut self) -> Option<String> {
         let mut value = self.parse_string_value()?;
         loop {
@@ -1441,8 +1385,6 @@ mod tests {
 
     #[test]
     fn settings_after_constructs_is_extracted() {
-        // The pinned reference accepts `settings` as the first token of any
-        // logical line, with no ordering or indentation requirement (#513).
         let text = "playervar score\n\nrule \"r\":\n    pass\n\nsettings {\n}\n";
         let found = block(text);
         assert_eq!(found.keyword_span.start.line, 6);
@@ -1453,12 +1395,9 @@ mod tests {
 
     #[test]
     fn settings_inside_brackets_is_an_ordinary_token() {
-        // Inside a bracketed expression a `settings` line start does not open
-        // a block; the text reaches the lexer and the parser rejects it.
         let text = "globalvar g = [\n    1,\nsettings]\n";
         assert!(find_blocks(text, 0).unwrap().is_empty());
 
-        // A `settings` mid-line after a non-colon token is not a statement.
         assert!(
             find_blocks("globalvar g = settings {}\n", 0)
                 .unwrap()
@@ -1468,18 +1407,12 @@ mod tests {
 
     #[test]
     fn settings_in_an_inline_tail_is_extracted() {
-        // The reference parses the `:` tail of a header line as a nested
-        // logical line, so its first token is a statement position (#513).
         let found = block("rule \"r\":\n    pass\n\nrule \"t\": settings {\n}\n");
         assert_eq!(found.keyword_span.start.line, 4);
     }
 
     #[test]
     fn settings_inside_an_enum_body_is_a_member() {
-        // The reference walks enum child lines itself and names each member
-        // from the line's first token, so a `settings` line inside an enum
-        // body — or the `:` tail — is a member, never a settings statement
-        // (#517).
         for text in [
             "enum E:\n    A\n    settings {\n        \"gamemodes\": {}\n    }\n",
             "enum E:\n    settings {\n        \"gamemodes\": {}\n    }\n    A\n",
@@ -1494,17 +1427,12 @@ mod tests {
 
     #[test]
     fn settings_after_the_enum_domain_is_extracted() {
-        // The enum body ends at the first logical line at or below the enum
-        // header's indentation — including a `#` comment line, which the
-        // reference counts as a logical line.
         let found = block("enum E:\n    A\nsettings {\n}\n");
         assert_eq!(found.keyword_span.start.line, 3);
 
         let found = block("enum E:\n    A\n# comment ends the body\n    settings {\n    }\n");
         assert_eq!(found.keyword_span.start.line, 4);
 
-        // A `#!` directive line produces no logical line and leaves the enum
-        // body open.
         assert!(
             find_blocks(
                 "enum E:\n    A\n#!mainFile m.opy\n    settings {\n    }\n",
@@ -1517,8 +1445,6 @@ mod tests {
 
     #[test]
     fn enum_member_lines_do_not_reopen_the_domain() {
-        // A member line starting with `enum` is still a member line; it does
-        // not open a nested enum domain (#517).
         assert!(
             find_blocks("enum E:\n    enum F:\n    settings {\n    }\n", 0)
                 .unwrap()
@@ -1528,8 +1454,6 @@ mod tests {
 
     #[test]
     fn settings_inside_other_bodies_is_still_extracted() {
-        // Outside an enum domain the statement position still extracts,
-        // inside rule/def/if bodies as well as in `:` tails (#513).
         let found = block("rule \"r\":\n    if x:\n        settings {\n        }\n");
         assert_eq!(found.keyword_span.start.line, 3);
     }
@@ -1661,8 +1585,6 @@ mod tests {
 
     #[test]
     fn parse_block_reads_javascript_number_literals() {
-        // The pinned OverPy tokenizer reads exponent and `0x`/`0o`/`0b`
-        // integer forms in settings (#496).
         let found = block(
             "settings {\n    \"lobby\": { \"a\": 0x1F, \"b\": 0b101, \"c\": 0o17, \"d\": 1.5e21, \"e\": 12e2, \"f\": -0.5, \"g\": 2.5e1 },\n    \"gamemodes\": {}\n}\n",
         );
@@ -1682,10 +1604,6 @@ mod tests {
 
     #[test]
     fn parse_block_routes_signed_exponents_to_the_expression_path() {
-        // The pinned settings tokenizer splits an exponent sign or a
-        // fraction-less dot out as an operator, so `1e-7`, `1e+21`,
-        // `-2.5e-3`, and `1.e5` are expressions — the parser keeps them
-        // raw and the settings evaluator rejects them downstream (#512).
         for value in ["1e-7", "1e+21", "-2.5e-3", "0.5e+3", "1.e5", "0.e5"] {
             let found = block(&format!(
                 "settings {{\n    \"lobby\": {{ \"k\": {value} }},\n    \"gamemodes\": {{}}\n}}\n"

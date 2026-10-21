@@ -50,21 +50,13 @@ pub(crate) fn function_context(function_id: &str) -> Option<FunctionContext> {
     (function_id == "range").then_some(FunctionContext::ForIterable)
 }
 
-/// A receiver constraint a member call enforces — typed OverPy policy keyed
-/// on the member id. The manifest's `Function::receiver` category is
-/// descriptive signature metadata and does not select these checks
-/// (issue #458).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ReceiverRequirement {
-    /// `.append` / `.remove`: the receiver must be assignable (the pinned
-    /// reference's "Cannot modify or assign to …" rejection).
     Assignable,
-    /// `.format`: the receiver must be a string literal.
     StringLiteral,
 }
 
 impl ReceiverRequirement {
-    /// A human-readable description of the requirement for diagnostics.
     pub(crate) fn describe(self) -> &'static str {
         match self {
             ReceiverRequirement::Assignable => "an assignable variable",
@@ -92,11 +84,6 @@ pub(crate) fn variadic(function_id: &str) -> bool {
     matches!(function_id, "min" | "max")
 }
 
-/// The parameter indices of `function_id` that must bind a variable
-/// reference (a global or player variable): the chase family's first
-/// argument selects the global/player emission form. Typed policy keyed on
-/// the function id — the manifest's `Param::variable` flag records the same
-/// fact descriptively and does not select this enforcement (issue #458).
 pub(crate) fn variable_args(function_id: &str) -> &'static [usize] {
     match function_id {
         "chase" | "chaseAtRate" | "chaseOverTime" => &[0],

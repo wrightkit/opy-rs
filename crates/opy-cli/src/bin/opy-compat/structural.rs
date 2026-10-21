@@ -1,23 +1,10 @@
-//! Structural comparison of two parsed Workshop programs.
-//!
-//! Two programs are the same when their settings, variables, subroutines and
-//! rules are identical; only source provenance, which the public program keeps
-//! private, is ignored. A difference is reported by section, item, and the
-//! canonical path of the first diverging node, never as a text diff.
-//! `roundtrip::equivalent` is deliberately not used: it treats structurally
-//! different but behaviorally equal programs as the same.
-
 use serde::Serialize;
 
 #[derive(Debug, Serialize, PartialEq, Eq)]
 pub(super) struct Difference {
-    /// `settings`, `globalVariables`, `playerVariables`, `subroutines` or `rules`.
     pub section: &'static str,
-    /// Position within the section; the reference position when they differ.
     pub index: usize,
-    /// Declared name of the item, from the reference when it has one.
     pub name: Option<String>,
-    /// Canonical path of the first diverging node, e.g. `Rule.conditions[1].Call.args[0]`.
     pub path: String,
     pub native: String,
     pub reference: String,
@@ -61,8 +48,6 @@ pub(super) fn differences(
     found
 }
 
-/// Pretty-printed item without source positions, which are presentation,
-/// not structure.
 fn dump(item: &impl std::fmt::Debug) -> String {
     format!("{item:#?}")
         .lines()
@@ -106,8 +91,6 @@ fn compare(
     }
 }
 
-/// The value of the first `name: "…"` field, which identifies a rule,
-/// variable or subroutine.
 fn name(dump: &str) -> Option<String> {
     dump.lines().find_map(|line| {
         line.trim_start()
@@ -116,9 +99,6 @@ fn name(dump: &str) -> Option<String> {
     })
 }
 
-/// Every diverging line of two dumps, each with the path of its enclosing
-/// nodes, so a recorded difference cannot hide a later one in the same item.
-/// Lines are aligned by position; a shifted tail is reported line by line.
 fn diverge(native: &str, reference: &str) -> Vec<(String, String, String)> {
     let native: Vec<&str> = native.lines().collect();
     let reference: Vec<&str> = reference.lines().collect();
@@ -148,8 +128,6 @@ struct Frame {
     children: usize,
 }
 
-/// Enclosing node labels of `lines[at]`, from the indentation of the
-/// pretty-printed tree; list members carry their position.
 fn path(lines: &[&str], at: usize) -> String {
     let mut stack: Vec<Frame> = Vec::new();
     let mut labels = Vec::new();

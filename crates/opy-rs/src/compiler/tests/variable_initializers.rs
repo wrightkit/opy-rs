@@ -1,5 +1,3 @@
-//! Variable initializer lowering coverage.
-
 use std::path::Path;
 
 use crate::Compiler;

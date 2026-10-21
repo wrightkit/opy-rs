@@ -1,8 +1,3 @@
-//! Builtin-call probes: one small OPY program per manifest function, default
-//! or argument variant, and `#!optimizeForSize` mode. `probe-generate` writes
-//! them; `probe-compare` compiles them natively and compares each with the
-//! pinned OverPy output that `tools/overpy/probe_builtins.py` collected.
-
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -13,8 +8,6 @@ use workshop_rs::catalog::{Catalog, CatalogEntry, Kind, Locale};
 
 use super::{CompatibilityExpectedDomain, strip_workshop_comments, structurally_identical};
 
-/// Literals substituted into each argument position, to exercise the
-/// replacements the reference applies to small constants.
 const LITERALS: [&str; 12] = [
     "0",
     "1",
@@ -30,8 +23,6 @@ const LITERALS: [&str; 12] = [
     "[]",
 ];
 
-/// Workshop setting calls the manifest does not list, with and without the
-/// trailing sort order: (function, variant, call).
 const SETTING_CALLS: [(&str, &str, &str); 16] = [
     (
         "createWorkshopSettingBool",
@@ -157,9 +148,6 @@ pub(super) fn generate() -> Result<(), String> {
     for function in manifest.functions() {
         let calls = calls(catalog, function);
         if calls.is_empty() {
-            // Functions without a valid sample call would otherwise never
-            // reach the oracle; a name probe still verifies the declared
-            // spelling is one upstream resolves.
             probes.push(name_probe(&function.id, function.kind.is_member()));
         }
         let mut statements: Vec<(String, String)> = calls
@@ -173,7 +161,6 @@ pub(super) fn generate() -> Result<(), String> {
                 (call.variant.clone(), statement)
             })
             .collect();
-        // Every value also stands in the slots that wrap what they cannot hold.
         if let Some(base) = calls.first().filter(|_| !function.kind.is_action()) {
             statements.push((
                 "in-boolean".to_string(),
@@ -195,16 +182,11 @@ pub(super) fn generate() -> Result<(), String> {
         }
     }
     for alias in manifest.aliases() {
-        // Alias sources are accepted spellings too; verify each resolves
-        // upstream like the function table ids do.
         probes.push(name_probe(
             &alias.source,
             alias.kind == AliasKind::MemberAlias,
         ));
     }
-    // Every enum-member spelling the vocabulary lookup reports is an
-    // accepted OPY spelling by contract; probe each against the oracle so a
-    // catalog id or other upstream-rejected spelling cannot be advertised.
     for (domain, spelling) in enum_spellings(manifest, catalog) {
         probes.push(Probe {
             id: format!("default:{domain}.{spelling}:spelling"),
@@ -276,12 +258,6 @@ fn name_probe(name: &str, member: bool) -> Probe {
     }
 }
 
-/// The `(domain, spelling)` pairs the vocabulary lookup reports for enum
-/// members — the reported member spelling plus every reported alias —
-/// enumerated through the public `lookup` API so the probed set is exactly
-/// the advertised one. Catalog and manifest-parameter domain names seed
-/// the walk; every `EnumDomain` hit (renamed source domains included) is
-/// queued and its members' spellings collected.
 fn enum_spellings(manifest: &Manifest, catalog: &Catalog) -> Vec<(String, String)> {
     use opy_rs::lookup::{LookupHit, LookupOutcome, LookupQuery, lookup};
     let mut queue: Vec<String> = catalog
@@ -332,8 +308,6 @@ fn enum_spellings(manifest: &Manifest, catalog: &Catalog) -> Vec<(String, String
     spellings
 }
 
-/// The base call, its trailing-default omissions, and one call per argument
-/// position and probe literal.
 fn calls(catalog: &Catalog, function: &Function) -> Vec<Call> {
     let Some(id) = &function.catalog_id else {
         return Vec::new();
@@ -411,8 +385,6 @@ fn calls(catalog: &Catalog, function: &Function) -> Vec<Call> {
     calls
 }
 
-/// Whether a parameter declared as `declared` takes `literal` as a valid
-/// value; `null` is valid everywhere.
 fn accepts(declared: &str, literal: &str) -> bool {
     let kind = match literal {
         "null" => return true,
@@ -427,8 +399,6 @@ fn accepts(declared: &str, literal: &str) -> bool {
     })
 }
 
-/// A valid literal for one catalog parameter, or `None` for a type the probe
-/// cannot spell.
 fn sample(catalog: &Catalog, entry: &CatalogEntry, index: usize) -> Option<String> {
     let declared = entry
         .param_type(index)
@@ -481,8 +451,6 @@ pub(super) fn compare(probes: &Path, references: &Path) -> Result<(), String> {
         let reference = references
             .get(&probe.id)
             .ok_or_else(|| format!("no reference result for {}", probe.id))?;
-        // `mode:name:variant`; the probed spelling is the middle field and
-        // `name` variants only exercise name resolution, not native behavior.
         let mut fields = probe.id.split(':');
         let _ = fields.next();
         let name = fields.next().unwrap_or_default();
@@ -539,9 +507,6 @@ pub(super) fn compare(probes: &Path, references: &Path) -> Result<(), String> {
                         }
                         (Ok(_), Ok(_)) => ("different", String::new()),
                         (native, reference_parsed) => {
-                            // Name the failing side and carry the reference's
-                            // raw emission, so a recorded gap can pin the exact
-                            // malformed output rather than any parse failure.
                             let mut sides = Vec::new();
                             if let Err(error) = native {
                                 sides.push(format!("native unparsable: {error}"));

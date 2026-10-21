@@ -380,10 +380,6 @@ class DiffTests(unittest.TestCase):
         self.assertEqual(report_result["status"], "match")
 
     def test_compiler_oracle_status_flip_is_not_parity(self):
-        # A `match` fixture whose recorded reference rejects what the native
-        # side expects to reject — or accepts what it accepts — is an
-        # acceptance divergence; a wrong oracle double must not let a
-        # contract stage report parity.
         fixture = "synthetic/diagnostics"
         with tempfile.TemporaryDirectory() as temporary:
             corpus = Path(temporary) / "corpus"
@@ -411,8 +407,6 @@ class DiffTests(unittest.TestCase):
         self.assertIn("acceptance-status", report_result["regressionStages"])
 
     def test_compiler_oracle_rejection_is_not_semantic_parity(self):
-        # A comparator that only trusted its own `equivalent` verdict would
-        # call this a match; the reference-side failure must stay visible.
         fixture = "synthetic/expressions-values"
         with tempfile.TemporaryDirectory() as temporary:
             corpus = Path(temporary) / "corpus"
@@ -452,9 +446,6 @@ class DiffTests(unittest.TestCase):
         self.assertIn("acceptance-status", report_result["regressionStages"])
 
     def test_semantic_wir_verdict_must_match_its_recorded_differences(self):
-        # An `equivalent` verdict over a non-empty difference list is a
-        # comparator claiming parity while seeing divergence; a `False`
-        # verdict with no recorded difference claims a gap it cannot show.
         fixture = "synthetic/expressions-values"
         oracle = json.loads(
             (CORPUS_DIR / fixture / "oracle.json").read_text(encoding="utf-8")
@@ -491,9 +482,6 @@ class DiffTests(unittest.TestCase):
                 self.assertEqual(report_result["status"], "regression")
 
     def test_a_known_gap_still_needs_recorded_differences(self):
-        # `synthetic/preprocessing` records an approved divergence; a
-        # comparator that reports non-equivalence without a difference to
-        # show must not satisfy the gap.
         fixture = "synthetic/preprocessing"
         oracle = json.loads(
             (CORPUS_DIR / fixture / "oracle.json").read_text(encoding="utf-8")
@@ -538,8 +526,6 @@ class DiffTests(unittest.TestCase):
         return result
 
     def test_semantic_wir_gap_pin_matches_its_recorded_differences(self):
-        # Re-pinning an approved gap binds it to exactly the differences it
-        # recorded: the same list still satisfies the known-gap declaration.
         fixture = "synthetic/preprocessing"
         differences = [{"path": "Rule.actions.[0]", "index": 0}]
         with tempfile.TemporaryDirectory() as temporary:
@@ -570,8 +556,6 @@ class DiffTests(unittest.TestCase):
         self.assertEqual(report_result["status"], "known-gap")
 
     def test_semantic_wir_gap_pin_rejects_an_added_divergence(self):
-        # The recorded exception covers only the differences it pinned; a
-        # second divergence in the same fixture cannot hide behind it.
         fixture = "synthetic/preprocessing"
         oracle = json.loads(
             (CORPUS_DIR / fixture / "oracle.json").read_text(encoding="utf-8")
@@ -592,9 +576,6 @@ class DiffTests(unittest.TestCase):
         self.assertIn("semantic-wir", report_result["regressionStages"])
 
     def test_semantic_wir_gap_requires_a_difference_pin(self):
-        # `semanticEquivalent: false` without the pinned difference list is an
-        # unnamed exception and must be rejected at load time; the pin is
-        # meaningless on an equivalent fixture or another comparison.
         for edit in ("drop-pin", "pin-equivalent", "pin-other-comparison"):
             with self.subTest(edit=edit):
                 with tempfile.TemporaryDirectory() as temporary:

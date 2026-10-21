@@ -1,5 +1,3 @@
-//! End-to-end conditional-expression coverage.
-
 use std::path::Path;
 
 use crate::hir::Expr;

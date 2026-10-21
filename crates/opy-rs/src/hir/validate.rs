@@ -1,21 +1,3 @@
-//! Opy HIR v2 validation.
-//!
-//! Validation follows the order of the Opy HIR v2 specification (`docs/hir/
-//! opy-hir-v2.md`) §8: the protocol envelope is
-//! checked first (in [`super::parse_value`]), then unknown node kinds are
-//! rejected with the offending kind name and span, then the payload is
-//! deserialized, then structural invariants (spans, identifiers, references)
-//! are checked over the typed program.
-//!
-//! Settings validation is structural only: the block's group shape (children
-//! must be groups, a `gamemodes` group must be present), span validity, and
-//! non-empty key names. Key *existence* and leaf *kinds* (which keys exist,
-//! whether a leaf is a number/bool/string/enum/list-of-heroes, and which
-//! mode/team/hero/map/enum spellings are valid) need the canonical Workshop
-//! settings schema, which is Workshop-owned catalog content; those checks
-//! are `lowering-dependent` (issue #8) and are never approximated with a
-//! local allowlist here.
-
 use serde_json::Value;
 
 use super::error::{HirError, invalid};
@@ -88,10 +70,6 @@ struct NameTables<'a> {
     constants: Vec<&'a str>,
 }
 
-/// Reject any node whose `kind` this consumer does not understand, walking
-/// the raw JSON so the error can name the kind and its span. This runs before
-/// typed deserialization so an unknown kind cannot be mistaken for malformed
-/// JSON.
 pub(crate) fn check_unknown_kinds(value: &Value) -> Result<(), HirError> {
     let Some(object) = value.as_object() else {
         return Ok(());
@@ -112,8 +90,6 @@ pub(crate) fn check_unknown_kinds(value: &Value) -> Result<(), HirError> {
     Ok(())
 }
 
-/// Validate the protocol envelope against the supported identity and major
-/// version, before any program-body inspection.
 pub(crate) fn check_envelope(value: &Value) -> Result<(), HirError> {
     let name = value
         .get("protocol")
@@ -276,12 +252,6 @@ pub(crate) fn validate_program(program: &Program) -> Result<(), HirError> {
     Ok(())
 }
 
-/// Validate the settings carrier structurally: the block's group shape,
-/// span validity, and non-empty key names. Key existence and leaf kinds are
-/// NOT validated here — the canonical Workshop settings schema (key paths,
-/// value kinds, mode/team/hero/map/enum spellings) is Workshop-owned catalog
-/// content, so that validation is `lowering-dependent` (issue #8) and the
-/// tree is carried structurally.
 fn validate_settings(program: &Program, settings: &Settings) -> Result<(), HirError> {
     check_span(settings.span, program.files.len())?;
     let mut has_gamemodes = false;
@@ -308,9 +278,6 @@ fn validate_settings(program: &Program, settings: &Settings) -> Result<(), HirEr
     Ok(())
 }
 
-/// Validate one settings node: span validity, non-empty key, and (for
-/// groups) recursive child validation. Values are carried structurally —
-/// the JSONC parse is value-driven and key kinds are lowering-dependent.
 fn validate_settings_node(program: &Program, node: &SettingsNode) -> Result<(), HirError> {
     check_span(node.span().copied(), program.files.len())?;
     check_key(node_name(node), node.span().copied())?;

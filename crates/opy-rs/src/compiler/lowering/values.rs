@@ -1386,9 +1386,6 @@ impl<'a> Lowering<'a> {
                 if let Some(error) = format_arity_error(value, 0) {
                     return Err(self.unsupported(error, *span));
                 }
-                // Combined modifiers apply in the reference's fixed pipeline
-                // order; `p` is a no-op and `f`/`t`/`l` stay unsupported at
-                // this stage.
                 if modifier
                     .chars()
                     .any(|c| !matches!(c, 'f' | 'p' | 'b' | 'w' | 'c'))
@@ -1914,8 +1911,6 @@ impl<'a> Lowering<'a> {
             .unwrap_or_else(|| self.hir.preprocessing.optimization.clone())
     }
 
-    /// The pre-index linear scan over `preprocessing.directives`, retained
-    /// only as the equivalence oracle for `optimization_state_at` in tests.
     #[cfg(test)]
     pub(in crate::compiler) fn optimization_state_scan(
         &self,
@@ -1955,9 +1950,6 @@ impl<'a> Lowering<'a> {
             .unwrap_or_else(|| self.hir.preprocessing.optimization.clone())
     }
 
-    /// The array literal behind `expr`, following `const`/`macro`
-    /// substitution like the reference's `__array__` check, lowered in
-    /// reverse. Returns `None` when `expr` is not an array literal.
     fn lower_reversed_literal_array(
         &mut self,
         expr: &Expr,
@@ -1977,8 +1969,6 @@ impl<'a> Lowering<'a> {
         let Expr::Array { elements, .. } = definition else {
             return Ok(None);
         };
-        // As in `Expr::Constant`, a substituted expression optimizes under
-        // the use-site state.
         let previous = substituted.then(|| {
             let state = self.optimization_state_at(expr.span());
             self.optimization_override.replace(state)
@@ -1994,10 +1984,6 @@ impl<'a> Lowering<'a> {
         Ok(Some(self.lower_array(elements?)))
     }
 
-    /// Whether `key` is the reference's `-Current Array Index` sort key —
-    /// `multiply` of `-1` and the index in either order, or unary minus on
-    /// the index — under which `sorted` folds an array literal into its
-    /// reverse.
     fn is_reversed_index_key(&self, key: ValueId) -> bool {
         let is_index = |id: ValueId| {
             matches!(
@@ -2050,9 +2036,6 @@ impl<'a> Lowering<'a> {
         })
     }
 
-    /// `len(<player-set>)` → specialized `Number Of …` call — the pinned
-    /// reference's `len.ts` table (overpy@9.7.10), keyed by canonical
-    /// Workshop call name.
     fn len_player_set_call(call_name: &str) -> Option<&'static str> {
         Some(match call_name {
             "allPlayers" => "numberOfPlayers",
@@ -2064,8 +2047,6 @@ impl<'a> Lowering<'a> {
         })
     }
 
-    /// Resolve an `l"..."` literal's text to a canonical localized-string
-    /// node: the literal spells the preset's `en-US` source spelling.
     fn localized_string_value(
         &mut self,
         spelling: &str,

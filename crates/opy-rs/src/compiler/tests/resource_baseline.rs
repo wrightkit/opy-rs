@@ -1,10 +1,3 @@
-//! Manual compiler-resource evidence for the optimization workstream.
-//!
-//! Run the ignored `resource_baseline` test through the documented command in
-//! `docs/benchmarks/compiler-resources.md`. Each workload is executed in a
-//! child test process so its peak RSS and test-only mechanism counters are not
-//! contaminated by another workload.
-
 use std::env;
 use std::path::{Path, PathBuf};
 use std::process::Command;

@@ -375,10 +375,6 @@ impl Lowerer {
                 "AsyncBehavior" => "StartRuleBehavior",
                 other => other,
             };
-            // Custom enum member: folds to its constant or inlines the
-            // explicit value expression. A member missing from a custom
-            // enum falls through to a builtin domain of the same name,
-            // matching the reference's per-member lookup.
             if self.enum_visible(enum_name) {
                 let members = self
                     .enums
@@ -546,9 +542,6 @@ impl Lowerer {
                     }
                 }
             }
-            // Context-player member: `x`/`y`/`z` are reserved member names
-            // that resolve unconditionally to the vector-component call; any
-            // other member is a player-variable reference.
             if matches!(
                 name.as_str(),
                 "eventPlayer" | "hostPlayer" | "localPlayer" | "attacker" | "victim"
@@ -602,10 +595,6 @@ impl Lowerer {
                     span: Some(span.into()),
                 };
             }
-            // A bare variable receiver member is valid OPY source syntax even
-            // when canonical member existence is deferred to Workshop. Keep
-            // both the resolved variable receiver and the source member
-            // identity in HIR instead of treating it as an unknown member.
             if self.global_visible(name)
                 || self.player_visible(name)
                 || default_var_index(name).is_some()
@@ -713,8 +702,6 @@ impl Lowerer {
         if let Some(special) = special_forms::SpecialValueCall::from_name(name) {
             return self.lower_special_call(special, name, args, span, macro_params);
         }
-        // Builtin identity and position checks run before the generic call
-        // arms so that a misplaced `wait`/`vect` still diagnoses its position.
         if !self.macro_visible(name) && !self.subroutine_visible(name) {
             match self.manifest.resolve_function(name) {
                 Some(entry) => self.check_call_position(name, entry, position, span),
@@ -781,10 +768,6 @@ impl Lowerer {
         }
         match name {
             "vect" => {
-                // `vect` goes through the generic argument binder so its
-                // keyword forms (`vect(x=1, y=2, z=3)`) bind like any other
-                // manifest signature; the result must fill exactly the three
-                // declared parameters (x, y, z).
                 let (bound, _) = match self.manifest.resolve_function(name) {
                     Some(entry) => self.bind_args(entry, args, span, macro_params),
                     None => (self.lower_arg_values(args, macro_params), None),
@@ -809,9 +792,6 @@ impl Lowerer {
             }
             _ => {
                 if self.macro_visible(name) {
-                    // A declared `macro` invocation is recorded as a macroCall
-                    // (positional-only; keyword arguments are an explicit
-                    // diagnostic).
                     for arg in args {
                         if let Some((keyword, span)) = &arg.keyword {
                             self.error_at(
@@ -862,9 +842,6 @@ impl Lowerer {
                 }
                 match self.manifest.resolve_function(name) {
                     Some(entry) => {
-                        // Declared subroutines with arguments stay generic
-                        // calls; builtins get keyword binding, arity, and
-                        // domain/default handling.
                         if self.subroutine_visible(name) {
                             return HirExpr::Call {
                                 name: name.to_string(),
@@ -925,18 +902,6 @@ impl Lowerer {
             .collect()
     }
 
-    /// Bind positional and keyword arguments against a manifest signature
-    /// (issue #110), producing lowered values in parameter order with
-    /// declared defaults filled. Diagnostics are structured and
-    /// source-located: `unknown-keyword`, `duplicate-argument`,
-    /// `keyword-required`, `positional-after-keyword`, `missing-argument`,
-    /// `keyword-unsupported`, `invalid-arity` (overflow), and
-    /// `invalid-argument` (the chase family's variable-argument requirement,
-    /// typed policy at `policy::variable_args`).
-    ///
-    /// The returned `selector` is the keyword spelling used to bind the
-    /// entry's contextual-domain selector parameter (the `chase` form's
-    /// `rate`/`duration`), when the entry declares one.
     pub(super) fn bind_args(
         &mut self,
         entry: &Function,
@@ -1042,9 +1007,6 @@ impl Lowerer {
                             arg.value.span(),
                         );
                     }
-                    // Positional arguments fill the slot at their argument
-                    // index (keywords occupy their named slots), matching
-                    // the reference binder.
                     let index = arg_index;
                     if index < entry.params.len() {
                         let param = &entry.params[index];
@@ -1087,9 +1049,6 @@ impl Lowerer {
             self.check_arity(entry, args.len(), arg_span(args, call_span));
         }
 
-        // Unbound parameters: declared defaults fill; required parameters
-        // without a default are the reference's missing-argument rejection;
-        // `optional` parameters stay omittable without an emitted expansion.
         let mut bound: Vec<HirExpr> = Vec::with_capacity(entry.params.len());
         for (index, param) in entry.params.iter().enumerate() {
             match &slots[index] {
@@ -1154,9 +1113,6 @@ impl Lowerer {
             }
         }
 
-        // `unbounded` entries accept any positional count (`.format`
-        // placeholders); their overflow binds as plain trailing arguments
-        // instead of re-associating or rejecting (issue #603).
         if entry.unbounded {
             bound.extend(std::mem::take(&mut overflow));
         }
@@ -1186,11 +1142,6 @@ impl Lowerer {
             bound.push(nested);
         }
 
-        // Variable-required parameters (the chase family's first argument)
-        // must resolve to a variable reference. The requirement is typed
-        // policy keyed on the function id; the manifest's `param.variable`
-        // flag records the same fact descriptively and does not select this
-        // check (issue #458).
         for &index in policy::variable_args(&entry.id) {
             if let Some(Some(value)) = slots.get(index)
                 && !matches!(value, HirExpr::GlobalVar { .. } | HirExpr::PlayerVar { .. })
@@ -1211,14 +1162,6 @@ impl Lowerer {
         (bound, selector)
     }
 
-    /// Lower one call argument's value. Two domain-aware resolutions apply:
-    /// the contextual-domain parameter (the `chase` form's `ChaseReeval`
-    /// member) is recorded as a pending enum without validating the domain —
-    /// it resolves only against the concrete domain selected by the call's
-    /// keyword selector (issue #110), and outside that signature context
-    /// `ChaseReeval` never resolves because it is not a declared enum domain;
-    /// and a number literal bound to a `Team` parameter resolves to the
-    /// `Team.{n}` member its text spells (issue #528).
     pub(super) fn lower_call_arg_value(
         &mut self,
         entry: &Function,
@@ -1275,15 +1218,6 @@ impl Lowerer {
         self.lower_expr(&arg.value, macro_params, CallPosition::Value)
     }
 
-    /// Resolve a contextual enum-domain parameter (the `chase` form's
-    /// `ChaseReeval` member, issue #110): the keyword spelling bound to the
-    /// selector parameter selects the concrete domain and the function the
-    /// call lowers to. This is pure catalog-identity dispatch — member
-    /// *existence* in the selected domain is Workshop-owned knowledge and is
-    /// not validated here (lowering-dependent, issue #8). Outside this
-    /// signature context `ChaseReeval` never resolves (it is not a standalone
-    /// domain identity). A call that does not bind a contextual member keeps
-    /// its original function identity.
     pub(super) fn resolve_contextual_domain(
         &mut self,
         entry: &Function,
@@ -1300,9 +1234,6 @@ impl Lowerer {
         else {
             return (entry.id.clone(), bound);
         };
-        // Dispatch only when the argument is written as a member of the
-        // contextual domain; anything else keeps the generic call (the
-        // reference's "expected an enum" rejection is lowering-dependent).
         let HirExpr::Enum {
             value_type,
             value,
@@ -1400,7 +1331,6 @@ impl Lowerer {
             };
             return lowered;
         }
-        // `random.uniform(...)` etc. are dotted generic calls.
         if let Expr::Name { name: root, .. } = receiver
             && root == "random"
         {
@@ -1456,9 +1386,6 @@ impl Lowerer {
                 span: Some(span.into()),
             };
         }
-        // Member calls resolve through the manifest (identity,
-        // explicit-argument signatures, keyword binding); enforced receiver
-        // requirements are typed member policy, not manifest metadata.
         let (member_name, lowered) = match self.manifest.resolve_member(name) {
             Some(entry) => {
                 self.check_call_position(name, entry, position, span);
@@ -1560,14 +1487,6 @@ impl Lowerer {
         }
     }
 
-    /// Check a member call's receiver against the requirement the member
-    /// enforces (`policy::member_receiver_requirement`): `.append` and
-    /// `.remove` require an assignable receiver, `.format` a string literal;
-    /// all other members accept any receiver (the pinned reference does not
-    /// type-check player-oriented receivers). The requirement is typed
-    /// policy keyed on the member id — the manifest's `Function::receiver`
-    /// category is descriptive signature metadata and does not select this
-    /// check (issue #458).
     pub(super) fn check_receiver(&mut self, receiver: &Expr, entry: &Function, span: Span) {
         let Some(requirement) = policy::member_receiver_requirement(&entry.id) else {
             return;

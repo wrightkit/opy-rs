@@ -1,12 +1,3 @@
-//! `opy-cli` — the standalone Workshop-independent OPY CLI.
-//!
-//! The CLI owns command parsing and presentation. `opy-rs` owns OPY
-//! parsing, semantic resolution, and structured diagnostics.
-//!
-//! Exit codes remain: 0 clean/success, 1 source diagnostics, and 2 usage or
-//! I/O errors. Machine-readable output is written directly to stdout without
-//! passing through human or GitHub Actions presentation.
-
 mod cli;
 mod present;
 
@@ -244,8 +235,6 @@ fn cmd_lookup(args: &LookupArgs) -> ExitCode {
     code
 }
 
-/// One human-readable line per lookup hit; JSON output is the machine
-/// contract, so the text form stays terse.
 fn lookup_hit_line(hit: &LookupHit) -> String {
     match hit {
         LookupHit::Function {

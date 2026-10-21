@@ -14,8 +14,6 @@ use crate::lower::special_forms::SpecialValueCall;
 use crate::lower::{NameNamespace, is_reserved_name, policy};
 use crate::manifest::{Function, FunctionKind, Manifest};
 
-/// A structured reconstruction diagnostic naming one non-representable
-/// Workshop construct, with its source span when available.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReconstructIssue {
     pub code: &'static str,
@@ -104,14 +102,6 @@ pub fn reconstruct_with(
     }
 }
 
-/// Call names a `name()` invocation resolves before the declared-subroutine
-/// check in the OPY frontend (`lower_call`): the translation calls,
-/// `compressed`, `vect`, `async`/`startRule`, plus the `sorted` and
-/// `createWorkshopSetting*` special forms (kept in `SPECIAL_VALUE_CALLS`),
-/// and `range`, which a subroutine would steal from every `for ... in`
-/// iterable. A subroutine carrying one of these names is emitted mangled;
-/// the remaining shadowed names are the upstream reserved sets used through
-/// `is_reserved_name`.
 const SHADOWED_SUBROUTINE_NAMES: &[&str] = &[
     "_",
     "__",
@@ -123,14 +113,10 @@ const SHADOWED_SUBROUTINE_NAMES: &[&str] = &[
     "range",
 ];
 
-/// Binary operator spellings the OPY frontend lowers to `Value::Call`s with
-/// the same name (source operators, not Workshop spellings like `add`).
 const BINARY_OPS: &[&str] = &[
     "+", "-", "*", "/", "%", "**", "==", "!=", "<", "<=", ">", ">=", "and", "or",
 ];
 
-/// Canonical arithmetic call identities that reconstruct as source-level
-/// binary operators (`Add(x, y)` ↔ `x + y`).
 const ARITHMETIC_OPS: &[(&str, &str)] = &[
     ("add", "+"),
     ("subtract", "-"),
@@ -140,13 +126,9 @@ const ARITHMETIC_OPS: &[(&str, &str)] = &[
     ("raiseToPower", "**"),
 ];
 
-/// Call names the frontend lowers to dedicated Workshop actions or values.
 const DEDICATED_ACTION_NAMES: &[&str] = &["append"];
 const DEDICATED_VALUE_NAMES: &[&str] = &["vect", "range", "chase"];
 
-/// Operation argument spellings an indexed `modify*AtIndex` call carries as a
-/// zero-argument canonical call; the OPY spelling is the assignment operator
-/// that re-lowers to the same indexed modification.
 const INDEXED_MODIFY_OPS: &[(&str, &str)] = &[
     ("add", "+="),
     ("subtract", "-="),
@@ -165,38 +147,21 @@ struct Emitter<'a> {
     locale: &'a Locale,
     issues: Vec<ReconstructIssue>,
     out: String,
-    /// Canonical table name → emitted OPY name, under the recorded
-    /// mangling rule (identity when the name re-resolves to its
-    /// declaration).
     global_names: HashMap<String, String>,
     player_names: HashMap<String, String>,
     subroutine_emitted: HashMap<String, String>,
-    /// Canonical subroutine names, for dangling-reference checks.
     subroutine_names: HashSet<String>,
-    /// Emitted subroutine names, for call-vs-subroutine ambiguity checks.
     emitted_subroutine_names: HashSet<String>,
-    /// Every declared variable/subroutine name; generated identifiers must
-    /// not collide with them.
     declared_names: HashSet<String>,
-    /// Generated `goto` labels by flat action index inside the rule currently
-    /// being emitted (the boundary the label statement precedes).
     labels: HashMap<usize, Vec<String>>,
-    /// Generated label name by skip/skipIf action index.
     skip_labels: HashMap<usize, String>,
-    /// Deterministic counters for generated label and lambda binder names.
     generated_counter: usize,
-    /// Lambda binder names for nested `map`/`filter`/`sorted`/`all`/`any`
-    /// emission: `(element, index)` per enclosing generated lambda.
     lambda_binders: Vec<(String, Option<String>)>,
-    /// Nesting depth of `while`/`for` bodies currently being emitted; the
-    /// canonical `break` action only has an OPY form inside a loop.
     loop_depth: usize,
 }
 
 type IndexedRule<'a> = (usize, &'a Rule);
 
-/// The declaration initializers a canonical initializer rule carries:
-/// declaration table position → (value, provenance span of the Set's value).
 type Initializers = std::collections::HashMap<usize, (Value, Option<Span>)>;
 
 struct RuleLayout<'a> {
@@ -286,11 +251,6 @@ impl<'a> Emitter<'a> {
     }
 
     fn validate_tables(&mut self) {
-        // Every table: names must be unique (duplicates cannot be declared
-        // or referenced faithfully); indices must be unique and inside the
-        // Workshop slot range so the emitted explicit-index declarations
-        // re-lower to the same name → index binding. Names outside the OPY
-        // surface are not a failure here — they are mangled on emission.
         let mut taken = HashSet::new();
         for (position, variable) in self.program.global_variables.iter().enumerate() {
             self.check_duplicate_name(&variable.name, position, "global variable", None);
@@ -323,10 +283,6 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// A declaration index the explicit-index declaration forms cannot
-    /// emit: outside the `0..=127` Workshop slot range or already claimed
-    /// by a table sibling (the frontend rejects index collisions on
-    /// re-lowering).
     fn check_index(&mut self, index: u32, taken: &mut HashSet<u32>, kind: &str, name: &str) {
         if index > 127 {
             self.issue(
@@ -343,8 +299,6 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// Whether a name repeats an earlier entry of its table (duplicates
-    /// cannot be declared or referenced faithfully on the OPY surface).
     fn check_duplicate_name(
         &mut self,
         name: &str,
@@ -384,14 +338,6 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// The canonical rule layout: optional leading initializer rules in the
-    /// frontend's synthesized position, then the subroutine-body rules and
-    /// the normal rules (each partition keeps program order). Subroutine
-    /// rules need no positional constraint — the comparator ignores their
-    /// relative order — and their rule names are free (rule names are
-    /// display metadata). An initializer-named rule outside the frontend's
-    /// canonical shape or position is an ordinary rule at its own position:
-    /// initializer rules are never relocated (#597).
     fn classify_rules(&mut self) -> RuleLayout<'a> {
         let rules: Vec<IndexedRule<'a>> = self.program.rules.iter().enumerate().collect();
         let mut index = 0;
@@ -449,12 +395,6 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// The declaration initializers a candidate initializer rule carries
-    /// when it is exactly the frontend's canonical shape: not disabled, the
-    /// canonical event, no conditions, and all-`Set` actions in declaration
-    /// order on declared variables (`eventPlayer`-targeted for player
-    /// initializers). Any other shape is `None` — the rule reconstructs as
-    /// an ordinary rule at its own position.
     fn canonical_init(&self, rule_index: usize, rule: &Rule, global: bool) -> Option<Initializers> {
         if rule.disabled {
             return None;
@@ -512,26 +452,6 @@ impl<'a> Emitter<'a> {
         Some(initializers)
     }
 
-    // ---- custom game settings (issue #600) ----
-
-    /// Emit `program.settings` as a `settings { ... }` JSONC block plus
-    /// `#!extension` directives, or report each member no OPY form can
-    /// reproduce.
-    ///
-    /// Two gates apply. `workshop_rs::settings::check_emission` refuses
-    /// anything the canonical emitter cannot write back — unknown maps,
-    /// heroes, teams, and modes or kind-mismatched members — with the
-    /// canonical source span. This walk then refuses shapes the OPY
-    /// settings frontend rewrites on the way back to canonical form —
-    /// `enabled` markers the mode header drops, hero names the alias pass
-    /// renames, members a `name: value` reparse produces as `Raw` — and
-    /// any content OPY JSONC cannot express at all.
-    ///
-    /// Member order follows the canonical child order: the OPY frontend's
-    /// own normalization reorders a team's `general` members ahead of its
-    /// hero groups and a mode's `enabled` marker to the front, so the
-    /// emitted layout writes `general` last and `enabled` first — the
-    /// order a reparse reproduces.
     fn emit_settings(&mut self) {
         let Some(settings) = self.program.settings.as_ref() else {
             return;
@@ -557,12 +477,8 @@ impl<'a> Emitter<'a> {
                 SettingsNode::Workshop { children, .. } => {
                     top.push(("workshop".to_string(), self.settings_workshop(children)));
                 }
-                // `RawGroup` marks a verbatim member block; the comparator
-                // equates it with `Group` and both emit `name { ... }`.
                 SettingsNode::Group { name, children, .. }
                 | SettingsNode::RawGroup { name, children, .. } => match name.as_str() {
-                    // An OPY `workshop` key reparses as `Workshop`, never
-                    // as `Group`.
                     "workshop" => self.refuse_settings(
                         child,
                         "has no OPY settings form; `workshop` reparses as workshop settings",
@@ -576,10 +492,6 @@ impl<'a> Emitter<'a> {
                         ));
                     }
                     "extensions" => {
-                        // `#!extension` merges into an existing `extensions`
-                        // group or appends one at the end, so presence-only
-                        // members must trail authored members and an
-                        // all-directive group must come last.
                         let flags = children
                             .iter()
                             .position(|member| matches!(member, SettingsNode::Flag { .. }));
@@ -670,12 +582,6 @@ impl<'a> Emitter<'a> {
             }
         }
 
-        // The frontend requires every settings block to contain a
-        // `gamemodes` group; a `settings { ... }` without one is a compile
-        // error. An `extensions` group carried only by `#!extension`
-        // directives is the sole case where no `settings { ... }` block is
-        // needed at all — `merge_extensions` builds it from the directives
-        // alone — and an empty settings block has no OPY form either way.
         match (top.is_empty(), extensions.is_empty()) {
             (true, true) => {
                 self.issue(
@@ -712,10 +618,6 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// A `gamemodes` group: each child is a mode `Group` whose members are
-    /// ordinary leaf members plus the leading `enabled: false` marker the
-    /// `disabled <mode>` header round-trips. Members of a mode the settings
-    /// catalog does not declare are carried like any other leaf member.
     fn settings_modes(&mut self, children: &[SettingsNode]) -> SettingsJson {
         let mut entries = Vec::new();
         let mut seen = HashSet::new();
@@ -743,9 +645,6 @@ impl<'a> Emitter<'a> {
             let mut member_names = HashSet::new();
             for (index, member) in children.iter().enumerate() {
                 if member.name() == "enabled" {
-                    // `disabled <mode>` reparses to a leading
-                    // `enabled: false`; every other `enabled` member is
-                    // dropped by the mode header or the frontend's retain.
                     match (index, member) {
                         (0, SettingsNode::Bool { value: false, .. }) => {
                             members.push(("enabled".to_string(), SettingsJson::Bool(false)));
@@ -771,11 +670,6 @@ impl<'a> Emitter<'a> {
         SettingsJson::Object(entries)
     }
 
-    /// A `heroes` group: each child is a team `Group` whose canonical
-    /// children are already partitioned the way the OPY frontend's
-    /// normalization writes them back — team `general` members first,
-    /// then hero groups, then the hero roster lists — so the emitted
-    /// object writes hero groups, then rosters, then a `general` object.
     fn settings_teams(&mut self, children: &[SettingsNode]) -> SettingsJson {
         const TEAM: [PathPart<'static>; 2] = [PathPart::Part("heroes"), PathPart::Team];
         const HERO: [PathPart<'static>; 3] =
@@ -797,8 +691,6 @@ impl<'a> Emitter<'a> {
             if !seen.insert(name.clone()) {
                 self.refuse_settings(team, "is a duplicate team group");
             }
-            // Partition into [general leaves][hero groups][roster lists];
-            // any other order reparses differently.
             let roster = |member: &SettingsNode| {
                 matches!(member, SettingsNode::List { name, .. } if matches!(
                     name.as_str(),
@@ -870,9 +762,6 @@ impl<'a> Emitter<'a> {
                         continue;
                     }
                 };
-                // The frontend resolves every hero group name through its
-                // hero table and renames the two declared aliases; only a
-                // canonical hero name lands on the same group.
                 if !super::settings::resolves_to_hero(hero_name) {
                     self.refuse_settings(member, "is not a declared hero");
                     continue;
@@ -943,9 +832,6 @@ impl<'a> Emitter<'a> {
         SettingsJson::Object(entries)
     }
 
-    /// The members of a catalogued or carried leaf group — `main`, `lobby`,
-    /// `extensions`, a mode, a team `general`, or a hero — as one JSONC
-    /// object.
     fn settings_object(
         &mut self,
         children: &[SettingsNode],
@@ -967,8 +853,6 @@ impl<'a> Emitter<'a> {
         SettingsJson::Object(entries)
     }
 
-    /// One member at a catalogued leaf path as a JSONC pair, or `None` once
-    /// an issue is recorded.
     fn settings_member(
         &mut self,
         member: &SettingsNode,
@@ -976,9 +860,6 @@ impl<'a> Emitter<'a> {
         hero: Option<&str>,
         display: &HashSet<String>,
     ) -> Option<(String, SettingsJson)> {
-        // `extensions` members get no unknown-key pass-through: anything but
-        // a declared presence-only Flag fails the emission table, and a
-        // `Raw` member has no OPY form that reaches it.
         if matches!(path, [PathPart::Part("extensions")]) {
             self.refuse_settings(
                 member,
@@ -1016,10 +897,6 @@ impl<'a> Emitter<'a> {
                     self.refuse_settings(member, "is a string member under a non-string setting");
                     return None;
                 }
-                // An unbound `{n}`/`{}` formatter fails the frontend's
-                // `__customString__` check; `main.modeName`/`main.description`
-                // must survive the filtered-word escape verbatim, and
-                // `mapRotation` rewrites `afterGame` to `afterAGame`.
                 if crate::compile_time::has_unbound_formatters(value) {
                     self.refuse_settings(
                         member,
@@ -1093,9 +970,6 @@ impl<'a> Emitter<'a> {
                 None
             }
             SettingsNode::Raw { value, .. } => {
-                // `name: value` reparses as `Raw` only when `name` resolves
-                // no catalogued display name and `name:value` does not
-                // extend into one.
                 if self.member_definition(member, path, hero).is_some()
                     || display.contains(name.as_str())
                     || display.contains(format!("{name}:{value}").as_str())
@@ -1113,8 +987,6 @@ impl<'a> Emitter<'a> {
                 Some((name, SettingsJson::String(value.clone())))
             }
             SettingsNode::RawValue { value, .. } => {
-                // `name:` reparses as `RawValue` only with an empty value;
-                // any other value parses `Raw`.
                 if !value.is_empty() {
                     self.refuse_settings(member, "has a value that reparses as a raw member");
                     return None;
@@ -1132,11 +1004,6 @@ impl<'a> Emitter<'a> {
                 Some((name, SettingsJson::String(String::new())))
             }
             SettingsNode::Group { children, .. } | SettingsNode::RawGroup { children, .. } => {
-                // `name { ... }` under a leaf path reparses `Group{name}`:
-                // under a catalogued non-list key the emitted block keeps
-                // the key's display name; under an uncatalogued name it
-                // stays verbatim. The comparator equates `Group` and
-                // `RawGroup`, so both reconstruct.
                 match self.member_definition(member, path, hero) {
                     Some(definition)
                         if matches!(
@@ -1176,7 +1043,6 @@ impl<'a> Emitter<'a> {
                     }
                 }
             }
-            // `Workshop` only appears at the settings top level.
             SettingsNode::Workshop { .. } => {
                 self.refuse_settings(member, "has no OPY settings form at a leaf path");
                 None
@@ -1184,8 +1050,6 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// The catalog definition a member resolves at `path`, honoring the
-    /// pinned hero-applicability table under `heroes.<team>.<hero>`.
     fn member_definition(
         &self,
         member: &SettingsNode,
@@ -1201,9 +1065,6 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// A catalogued member or `None` with an issue recorded: a typed member
-    /// the catalog does not declare (or does not apply to this hero)
-    /// reparses `Raw`, never its authored kind.
     fn catalogued_member(
         &mut self,
         member: &SettingsNode,
@@ -1222,11 +1083,6 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// The children of a member block the Workshop parser reads opaquely —
-    /// a `name: value`/`name:` member or a nested `name { ... }` block.
-    /// The frontend's written-form pass turns an OPY string back into the
-    /// `name: value` line, so `Raw`, empty `RawValue`, and `Group` shapes
-    /// round-trip; everything else fails or shifts kind.
     fn opaque_object(&mut self, children: &[SettingsNode]) -> SettingsJson {
         let mut entries = Vec::new();
         let mut seen = HashSet::new();
@@ -1262,9 +1118,6 @@ impl<'a> Emitter<'a> {
         SettingsJson::Object(entries)
     }
 
-    /// The children of an uncatalogued top-level group: the frontend keeps
-    /// the group verbatim and every non-group member fails the canonical
-    /// emission table, so only nested `name { ... }` blocks reconstruct.
     fn opaque_group_object(&mut self, children: &[SettingsNode]) -> SettingsJson {
         let mut entries = Vec::new();
         let mut seen = HashSet::new();
@@ -1293,11 +1146,6 @@ impl<'a> Emitter<'a> {
         SettingsJson::Object(entries)
     }
 
-    /// The members of `settings.workshop`: the frontend writes each member
-    /// as `name: On`/`name: Off` for booleans, the number text for numbers
-    /// and number-like strings, `[element]` for a one-element list, and the
-    /// localized hero display name for a hero key; everything else is an
-    /// error. Canonical `Raw` members in those four shapes reconstruct.
     fn settings_workshop(&mut self, children: &[SettingsNode]) -> SettingsJson {
         let mut entries = Vec::new();
         let mut seen = HashSet::new();
@@ -1352,8 +1200,6 @@ impl<'a> Emitter<'a> {
         SettingsJson::Object(entries)
     }
 
-    /// One reconstruction refusal at `code` `unsupported-settings`, keeping
-    /// the member's canonical source span when it carries one.
     fn refuse_settings(&mut self, member: &SettingsNode, detail: &str) {
         self.issue(
             "unsupported-settings",
@@ -1436,12 +1282,6 @@ impl<'a> Emitter<'a> {
                 .push_str(emitted(&self.subroutine_emitted, subroutine_name));
             self.out.push_str("():\n");
             if rule.disabled {
-                // A disabled subroutine-body rule reconstructs as an inert
-                // `def`: a `def` cannot carry `@Disabled`, so the annotation
-                // and the whole body are emitted as `#`-commented lines plus
-                // a live `pass`. The comments make the disable explicit and
-                // keep the body text for fidelity; the behavior comparator
-                // treats disabled and no-op bodies the same.
                 self.out.push_str("    # @Disabled\n");
                 if !rule.conditions.is_empty() {
                     for (condition_index, condition) in rule.conditions.iter().enumerate() {
@@ -1479,10 +1319,6 @@ impl<'a> Emitter<'a> {
             }
             for (condition_index, condition) in rule.conditions.iter().enumerate() {
                 if condition.disabled {
-                    // A disabled condition never executes, so it reconstructs
-                    // as a `#`-commented line: the comparator treats disabled
-                    // conditions as inert, and the comment keeps the
-                    // condition text for fidelity.
                     let scratch = std::mem::take(&mut self.out);
                     self.out.push_str("    @Condition ");
                     self.emit_value(
@@ -1505,10 +1341,6 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// Emit the `@Event` line and its `@Team`/`@Hero`/`@Slot` filters for a
-    /// normal rule. `EachPlayer` events carry filters through
-    /// `EachPlayerWithFilters`; `Player` events carry their catalog id plus
-    /// filters; `Global` has no filters.
     fn emit_event_annotation(&mut self, rule_index: usize, rule: &Rule) {
         let (kind, filters) = match &rule.event {
             Event::Global => ("global", None),
@@ -1535,11 +1367,6 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// Emit `@Team`/`@Hero`/`@Slot` filter annotations for an `EachPlayer` or
-    /// `Player` event. `All` entries emit nothing; a hero target uses the
-    /// hero member's OPY spelling (`@Hero` is the only enum-member filter the
-    /// surface accepts, since slot targets use `@Slot` and the two cannot be
-    /// combined).
     fn emit_event_filters(
         &mut self,
         rule_index: usize,
@@ -1577,10 +1404,6 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// Declarations emit in canonical index order — the order the
-    /// frontend's re-lowering sorts the table into — each with its explicit
-    /// index unless an initializer carries it (`name = value` re-lowers to
-    /// a slot `check_initializer_slots` verified).
     fn emit_variable_declarations(
         &mut self,
         global: bool,
@@ -1632,15 +1455,6 @@ impl<'a> Emitter<'a> {
         self.emit_value(value, span);
     }
 
-    /// The OPY declaration `name = value` cannot carry an explicit slot, so
-    /// the frontend re-lowering auto-allocates one: explicit indices are
-    /// reserved upfront, `__x__`-wrapped names then take the highest free
-    /// slots in declaration order, and the remaining initializer
-    /// declarations fill the lowest free slots in declaration order.
-    /// Simulate that allocation over the emitted (index-sorted) order: an
-    /// initializer-bearing declaration is only representable when the slot
-    /// the frontend would assign equals its Workshop index; otherwise the
-    /// reconstructed table would differ.
     fn check_initializer_slots(
         &mut self,
         global: bool,
@@ -1717,18 +1531,6 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// `skip`/`skipIf` carry a native-action distance; every canonical action
-    /// in the flat sequence (including `If`/`Else`/`End` markers) is exactly
-    /// one native line, so the target boundary is `index + 1 + distance`.
-    /// For each literal-distance skip we reserve a generated label at that
-    /// boundary; the label statement is emitted by `emit_labels_at`.
-    /// Generated names avoid every declared program identifier.
-    ///
-    /// A label is only usable when its boundary sits in the skip's own
-    /// statement list or an enclosing one — the OPY goto resolution rejects
-    /// jumps into a nested sibling block. Deeper targets fall back to the
-    /// `goto loc+<distance>` spelling, which re-lowers to the same canonical
-    /// `skip(distance)` exactly (issue #602).
     fn plan_labels(&mut self, rule_index: usize, actions: &[Action]) {
         let _ = rule_index;
         let mut depth = vec![0usize; actions.len() + 1];
@@ -1752,7 +1554,7 @@ impl<'a> Emitter<'a> {
                 _ => continue,
             };
             let Some(distance) = literal_positive_int(distance_arg) else {
-                continue; // dynamic distance → `goto loc+<expr>` needs no label
+                continue;
             };
             let target = (index + 1 + distance).min(actions.len());
             let source_depth = depth[index];
@@ -1760,9 +1562,6 @@ impl<'a> Emitter<'a> {
             if target_depth > source_depth {
                 continue;
             }
-            // The enclosing frame of the target boundary must stay open (or
-            // open further) along the whole jump, otherwise the label lands
-            // inside a sibling block the goto cannot see.
             let dips_below_target =
                 ((index + 1)..=target).any(|boundary| depth[boundary] < target_depth);
             if dips_below_target {
@@ -1774,8 +1573,6 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// Deterministic generated identifier that never collides with a declared
-    /// program name.
     fn fresh_generated_name(&mut self, prefix: &str) -> String {
         loop {
             self.generated_counter += 1;
@@ -1786,12 +1583,6 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// Move the fragment emitted into `out` since `prior` was swapped out to
-    /// `#`-commented lines at `level`. A disabled action or condition never
-    /// executes, so the comparator treats it as inert; the comment keeps the
-    /// emitted text for fidelity without making it live. (A `def` body
-    /// cannot carry `@Disabled`, and commenting a whole control-flow group
-    /// covers `elif`/`else`/`end` lines too.)
     fn flush_commented(&mut self, prior: String, level: usize) {
         let fragment = std::mem::replace(&mut self.out, prior);
         let indent = Self::indent(level);
@@ -1808,8 +1599,6 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// Emit any generated `name:` label statements registered for this flat
-    /// action boundary.
     fn emit_labels_at(&mut self, position: usize, level: usize) {
         let Some(labels) = self.labels.remove(&position) else {
             return;
@@ -1821,8 +1610,6 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// Emit an action sequence as `#`-commented lines (used for disabled
-    /// subroutine bodies, which cannot carry `@Disabled` on the `def`).
     fn emit_commented_actions(&mut self, rule_index: usize, actions: &[Action]) {
         if actions.is_empty() {
             return;
@@ -1851,10 +1638,6 @@ impl<'a> Emitter<'a> {
                         | Action::While { .. }
                         | Action::ForGlobalVariable { .. }
                         | Action::ForPlayerVariable { .. } => {
-                            // A disabled block marker comments out the whole
-                            // group; consume the nested stream exactly like
-                            // the live form does so `elif`/`else`/`end` are
-                            // covered by the comment.
                             let scratch = std::mem::take(&mut self.out);
                             self.emit_construct(
                                 rule_index,
@@ -1893,9 +1676,6 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// Emit one action sequence element at `action_index` (already consumed
-    /// in `actions` when it opens a block): block markers emit their header
-    /// and consume the nested stream; everything else is a single statement.
     fn emit_construct(
         &mut self,
         rule_index: usize,
@@ -2051,8 +1831,6 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// Consume a nested action block without emitting: positions past the
-    /// matching `End` of the block opened by the already-consumed marker.
     fn skip_action_block(&self, actions: &[Action], position: &mut usize) {
         let mut depth = 1usize;
         while let Some(action) = actions.get(*position) {
@@ -2106,9 +1884,6 @@ impl<'a> Emitter<'a> {
         let span = self.program.action_span(rule_index, action_index);
         let indent = Self::indent(level);
         match action {
-            // A self-referential Set (`x = x + v`) re-lowers to a Modify
-            // action; the comparator accepts the Set↔Modify difference, so
-            // the source-level Set form is emitted directly (issue #602).
             Action::SetGlobalVariable { variable, value } => {
                 self.out.push_str(&indent);
                 self.out.push_str(emitted(&self.global_names, variable));
@@ -2218,9 +1993,6 @@ impl<'a> Emitter<'a> {
                 );
             }
             Action::Disabled { action: inner } => {
-                // Defensive path: `emit_action_block` intercepts disabled
-                // actions before they reach `emit_action`, so a bare
-                // `Disabled` landing here is commented out like the rest.
                 let scratch = std::mem::take(&mut self.out);
                 self.emit_action(rule_index, action_index, inner, level);
                 self.flush_commented(scratch, level);
@@ -2235,8 +2007,6 @@ impl<'a> Emitter<'a> {
         matches!(value, Value::EventPlayer)
     }
 
-    /// Emit `eventPlayer` or a parenthesized arbitrary player expression as a
-    /// member receiver (issue #602).
     fn emit_player_variable_receiver(&mut self, player: &Value, span: Option<Span>) {
         if self.is_event_player(player) {
             self.out.push_str("eventPlayer");
@@ -2247,8 +2017,6 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// The `(<player>).<variable>` assignment target for Set/Modify/indexed
-    /// player-variable forms.
     fn player_variable_target(
         &mut self,
         player: &Value,
@@ -2261,8 +2029,6 @@ impl<'a> Emitter<'a> {
         format!("{receiver}.{}", emitted(&self.player_names, variable))
     }
 
-    /// Render a value through `emit_value` into a fresh string so it can be
-    /// composed into a target spelling.
     fn render_value_as(
         &mut self,
         value: &Value,
@@ -2350,7 +2116,6 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// A generic or member action call in statement position.
     fn emit_call_action(
         &mut self,
         rule_index: usize,
@@ -2371,8 +2136,6 @@ impl<'a> Emitter<'a> {
             );
             return;
         }
-        // Syntax-produced actions lower through canonical calls; emit the
-        // source form that re-lowers to the same action (issue #602).
         if self.emit_syntax_action(rule_index, action_index, name, args, indent, span) {
             return;
         }
@@ -2410,8 +2173,6 @@ impl<'a> Emitter<'a> {
         self.out.push('\n');
     }
 
-    /// Syntax-produced action calls → the OPY statement form that re-lowers
-    /// to the same canonical action (issue #602). Returns true when handled.
     fn emit_syntax_action(
         &mut self,
         rule_index: usize,
@@ -2426,7 +2187,6 @@ impl<'a> Emitter<'a> {
                 .action_argument_span(rule_index, action_index, i)
         };
         match name {
-            // startRule(sub, behavior) → `async(<subroutine>, <behavior>)`
             "startRule" => {
                 let [subroutine, behavior] = args else {
                     self.issue(
@@ -2460,8 +2220,6 @@ impl<'a> Emitter<'a> {
                 self.out.push_str(")\n");
                 true
             }
-            // skip(n) → `goto <generated-label>` (label planned at the target
-            // boundary); dynamic distance → `goto loc+<expr>`
             "skip" => {
                 let [distance] = args else {
                     self.issue(
@@ -2483,7 +2241,6 @@ impl<'a> Emitter<'a> {
                 }
                 true
             }
-            // skipIf(cond, n) → `if <cond>: goto <generated-label>`
             "skipIf" => {
                 let [condition, distance] = args else {
                     self.issue(
@@ -2514,7 +2271,6 @@ impl<'a> Emitter<'a> {
                 }
                 true
             }
-            // abortIf*/loopIf* → single-statement if forms
             "abort" => {
                 if !args.is_empty() {
                     self.issue("unsupported-action-call", "abort takes no arguments", span);
@@ -2609,7 +2365,6 @@ impl<'a> Emitter<'a> {
                 });
                 true
             }
-            // Indexed assignment/modification → `target[i] = v` / `target[i] op= v`
             "setGlobalVariableAtIndex" | "setPlayerVariableAtIndex" => {
                 let [variable, index, value] = args else {
                     self.issue(
@@ -2654,9 +2409,6 @@ impl<'a> Emitter<'a> {
                     return true;
                 };
                 self.out.push_str(indent);
-                // Array-mutation ops on an indexed receiver keep their member
-                // form: appendToArray → `a[i].append(v)`, removeFromArray →
-                // `a[i].remove(v)`, removeFromArrayByIndex → `del a[i][j]`.
                 if let Value::Call {
                     name: op_name,
                     args: op_args,
@@ -2717,7 +2469,6 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    /// `(player).var` or `var` indexed-assignment target for `set*/modify*AtIndex`.
     fn indexed_target(&mut self, variable: &Value, span: Option<Span>) -> Option<String> {
         match variable {
             Value::GlobalVariable(name) => Some(name.clone()),
@@ -2738,13 +2489,6 @@ impl<'a> Emitter<'a> {
         args_len: usize,
     ) -> Result<(&'manifest Function, bool), String> {
         let expected_action = expected.is_action();
-        // `name` is a canonical Workshop call identity, so an entry that
-        // links to it through `catalogId` is the same builtin under its
-        // upstream source spelling (`id`). Distinct spellings may share one
-        // canonical id (`getPlayers` aliases `getAllPlayers`, and
-        // `getRealPlayersInRadius` expands to a filtered `getPlayersInRadius`
-        // call); prefer the entry whose own id is the canonical name so the
-        // emitted spelling reproduces the same bare call.
         let by_catalog = |entry: &&Function| {
             entry.catalog_id.as_deref() == Some(name)
                 && entry.kind.is_action() == expected_action
@@ -2805,11 +2549,6 @@ impl<'a> Emitter<'a> {
         Ok((entry, member))
     }
 
-    /// Emit a manifest function call with explicit full-arity arguments, no
-    /// indent and no trailing newline (the caller frames the line). The OPY
-    /// frontend fills declared defaults at recompile time, so any Workshop call
-    /// that omits a defaulted or required parameter cannot be reconstructed
-    /// identically and is rejected.
     fn emit_manifest_call(
         &mut self,
         entry: &Function,
@@ -2848,10 +2587,6 @@ impl<'a> Emitter<'a> {
             );
             return;
         }
-        // Every parameter beyond the provided arguments must be omittable
-        // (`optional`). A required parameter (with or without a declared
-        // default) cannot be omitted: the OPY frontend would reject it or
-        // fill its default, changing the resulting Workshop program.
         for (_index, param) in entry.params.iter().enumerate().skip(params.len()) {
             if !param.optional {
                 self.issue(
@@ -2875,11 +2610,6 @@ impl<'a> Emitter<'a> {
         }
         self.out.push_str(name);
         self.out.push('(');
-        // Cross-check through the Workshop catalog: a manifest entry with a
-        // declared `catalogId` must resolve there under the matching kind and
-        // the reconstruction locale (mirroring the manifest's own catalog
-        // cross-check test), so the reconstruction identity layer never
-        // drifts from the catalog.
         if let Some(catalog_id) = &entry.catalog_id {
             let expected_kind = match entry.kind {
                 FunctionKind::Action | FunctionKind::MemberAction => {
@@ -2921,12 +2651,6 @@ impl<'a> Emitter<'a> {
         self.out.push(')');
     }
 
-    /// Validate a provided argument against its manifest parameter: enum
-    /// domains are enforced (like the frontend) and variable-required
-    /// parameters must be variable references. The variable requirement is
-    /// typed policy (`policy::variable_args`); the manifest's
-    /// `param.variable` flag records the same fact descriptively and does
-    /// not select this check (issue #458).
     fn check_param_argument(
         &mut self,
         entry: &Function,
@@ -3016,8 +2740,6 @@ impl<'a> Emitter<'a> {
                         span,
                     );
                 } else if *value < 0.0 {
-                    // Negative finite numbers emit as unary negation over the
-                    // positive literal (issue #603).
                     self.out.push('-');
                     self.out
                         .push_str(&workshop_rs::format::format_number(-*value));
@@ -3093,9 +2815,6 @@ impl<'a> Emitter<'a> {
                 self.out.push_str(emitted(&self.player_names, variable));
             }
             Value::Subroutine(name) => {
-                // Bare subroutine names are only accepted where the OPY
-                // grammar resolves them (async args, call statements);
-                // anywhere else stays a structured refusal (issue #603).
                 self.issue(
                     "unsupported-subroutine-value",
                     format!(
@@ -3137,9 +2856,6 @@ impl<'a> Emitter<'a> {
             );
             return;
         }
-        // Reconstruction must emit the OverPy source spelling, not the
-        // canonical catalog id (`Hero.SOLDIER`, `Map.ROUTE66`, `Clip.NONE`;
-        // issue #466).
         let Some((source_name, spelling)) = crate::enums::spelling_of_member(value_type, value)
         else {
             self.issue(
@@ -3154,8 +2870,6 @@ impl<'a> Emitter<'a> {
         self.out.push_str(spelling);
     }
 
-    /// `Value::LocalizedString` → `l"<en-US spelling>"` (issue #603). The
-    /// `l` literal resolves against the catalog's en-US strings.
     fn emit_localized_literal(&mut self, id: &str, span: Option<Span>) {
         let Some(spelling) = self
             .catalog
@@ -3172,8 +2886,6 @@ impl<'a> Emitter<'a> {
         self.emit_string_literal(spelling);
     }
 
-    /// Emit `body` wrapped as `lambda <element>[, <index>]: <body>` with
-    /// deterministic binder names pushed for `currentArrayElement`/`Index`.
     fn emit_lambda_body(
         &mut self,
         member_call: &str,
@@ -3201,8 +2913,6 @@ impl<'a> Emitter<'a> {
         self.out.push(')');
     }
 
-    /// Emit `sorted(...)`/generic `all`/`any` forms which take the lambda as a
-    /// plain argument rather than on a member call.
     fn emit_sorted(&mut self, array: &Value, key: &Value, span: Option<Span>) {
         if matches!(key, Value::Call { name, args } if name == "currentArrayElement" && args.is_empty())
         {
@@ -3229,11 +2939,7 @@ impl<'a> Emitter<'a> {
         self.out.push(')');
     }
 
-    /// Syntax-produced value calls → the OPY source form that re-lowers to
-    /// the same canonical call (issue #603). Returns true when handled.
     fn emit_syntax_value(&mut self, name: &str, args: &[Value], span: Option<Span>) -> bool {
-        // Canonical arithmetic identities (`Add`, `Subtract`, …) emit as
-        // source-level binary operators.
         if args.len() == 2
             && let Some((_, operator)) = ARITHMETIC_OPS.iter().find(|(n, _)| *n == name)
         {
@@ -3300,7 +3006,6 @@ impl<'a> Emitter<'a> {
                 self.out.push(')');
                 true
             }
-            // ifThenElse(c, t, e) → `(t if c else e)`
             "ifThenElse" => {
                 let [condition, then_value, else_value] = args else {
                     return false;
@@ -3314,7 +3019,6 @@ impl<'a> Emitter<'a> {
                 self.out.push(')');
                 true
             }
-            // roundToInteger(v, Rounding.X) → `ceil(v)`/`floor(v)`/`round(v)`
             "roundToInteger" => {
                 let [value, rounding] = args else {
                     return false;
@@ -3336,7 +3040,6 @@ impl<'a> Emitter<'a> {
                 self.out.push(')');
                 true
             }
-            // Array callbacks carry their binder through lambda syntax.
             "sortedArray" => {
                 let [array, key] = args else {
                     return false;
@@ -3374,7 +3077,6 @@ impl<'a> Emitter<'a> {
                 }
                 true
             }
-            // arrayContains(a, x) → `(x in a)`
             "arrayContains" => {
                 let [array, needle] = args else {
                     return false;
@@ -3386,7 +3088,6 @@ impl<'a> Emitter<'a> {
                 self.out.push(')');
                 true
             }
-            // `string(localized, fmt...)` → `l"...".format(...)` / bare `l"..."`
             "string" => {
                 let [localized, ..] = args else {
                     return false;
@@ -3407,8 +3108,6 @@ impl<'a> Emitter<'a> {
                 }
                 true
             }
-            // `memberAccess(recv, "m")` → `(recv).m`; vector components are
-            // the dedicated `.x`/`.y`/`.z` member spellings.
             "memberAccess" => {
                 let [receiver, member] = args else {
                     return false;
@@ -3444,8 +3143,6 @@ impl<'a> Emitter<'a> {
                 });
                 true
             }
-            // Lambda binders resolve to the deterministic names the enclosing
-            // generated lambda declared; outside one they stay refused.
             "currentArrayElement" if args.is_empty() => {
                 match self.lambda_binders.last() {
                     Some((element, _)) => {
@@ -3492,12 +3189,9 @@ impl<'a> Emitter<'a> {
             self.out.push_str(name);
             return;
         }
-        // Syntax-produced value calls → the source form that re-lowers to the
-        // same canonical call (issue #603).
         if self.emit_syntax_value(name, args, span) {
             return;
         }
-        // Binary and unary operator calls keep their source spelling.
         if BINARY_OPS.contains(&name) && args.len() == 2 {
             self.out.push('(');
             self.emit_value(&args[0], span);
@@ -3520,8 +3214,6 @@ impl<'a> Emitter<'a> {
             self.out.push(')');
             return;
         }
-        // Interpolated strings lower to `customString`; emit the OPY member
-        // form `"text".format(args...)`.
         if name == "customString" {
             let Some(first) = args.first() else {
                 self.issue(
@@ -3581,8 +3273,6 @@ impl<'a> Emitter<'a> {
             );
             return;
         }
-        // Same subroutine-shadowing rule as actions: a bare call spelled
-        // like an emitted subroutine name resolves to the subroutine.
         if !member && self.emitted_subroutine_names.contains(entry.id.as_str()) {
             self.issue(
                 "unsupported-value-call",
@@ -3616,8 +3306,6 @@ impl<'a> Emitter<'a> {
     }
 }
 
-/// Whether a canonical value tree contains a call with the given name
-/// (used to size generated lambda binders).
 fn uses_call(value: &Value, name: &str) -> bool {
     match value {
         Value::Call {
@@ -3630,8 +3318,6 @@ fn uses_call(value: &Value, name: &str) -> bool {
     }
 }
 
-/// The compound-assignment spelling for a `modify*AtIndex` operation argument
-/// (a zero-argument canonical call), or None when it has no assignment form.
 fn indexed_modify_operator(op: &Value) -> Option<&'static str> {
     let Value::Call { name, args } = op else {
         return None;
@@ -3645,7 +3331,6 @@ fn indexed_modify_operator(op: &Value) -> Option<&'static str> {
         .map(|(_, operator)| *operator)
 }
 
-/// A positive whole-number `Value::Number` (skip/skipIf distances).
 fn literal_positive_int(value: &Value) -> Option<usize> {
     let Value::Number(number) = value else {
         return None;
@@ -3653,7 +3338,6 @@ fn literal_positive_int(value: &Value) -> Option<usize> {
     (number.is_finite() && number.fract() == 0.0 && *number >= 0.0).then_some(*number as usize)
 }
 
-/// Whether `name` is safe to emit as a bare member/identifier spelling.
 fn is_simple_ident(name: &str) -> bool {
     let mut chars = name.chars();
     match chars.next() {
@@ -3663,7 +3347,6 @@ fn is_simple_ident(name: &str) -> bool {
     chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
 }
 
-/// One JSONC value inside a reconstructed `settings { ... }` block.
 enum SettingsJson {
     Object(Vec<(String, SettingsJson)>),
     Array(Vec<SettingsJson>),
@@ -3744,10 +3427,6 @@ fn push_json_escaped(out: &mut String, text: &str) {
     }
 }
 
-/// The English display names of every catalogued setting under `prefixes`.
-/// A carried member emitted `name: value` reparses through the localized
-/// name index; a name colliding with one lands on the catalogued key
-/// instead of staying raw.
 fn display_names(prefixes: &[String]) -> HashSet<String> {
     workshop_rs::settings::definitions()
         .filter(|definition| {
@@ -3758,10 +3437,6 @@ fn display_names(prefixes: &[String]) -> HashSet<String> {
         .collect()
 }
 
-/// Whether `name` survives a `name: value`/`name { }` line as the same
-/// member name: non-empty whitespace-normalized text without a colon,
-/// brace, quote, or comment marker the parser would split on, and without
-/// JavaScript-only whitespace (`\u{FEFF}`) the raw line reads differently.
 fn emittable_member_name(name: &str) -> bool {
     !name.is_empty()
         && name.split_whitespace().collect::<Vec<_>>().join(" ") == name
@@ -3770,9 +3445,6 @@ fn emittable_member_name(name: &str) -> bool {
             .any(|c| matches!(c, ':' | '{' | '}' | '"' | '#' | '\'' | '\u{FEFF}'))
 }
 
-/// Whether a `name: value` line writes `value` back unchanged: non-empty
-/// whitespace-normalized text without a closing brace (which would end the
-/// group), a quote, or a comment marker.
 fn emittable_raw_value(value: &str) -> bool {
     !value.is_empty()
         && value.split_whitespace().collect::<Vec<_>>().join(" ") == value
@@ -3781,10 +3453,6 @@ fn emittable_raw_value(value: &str) -> bool {
             .any(|c| matches!(c, '{' | '}' | '"' | '#' | '\'' | '\u{FEFF}'))
 }
 
-/// Emitted declaration order: table positions sorted by canonical
-/// Workshop index (stable, so equal slots — impossible after the index
-/// checks — would keep table order). Re-lowering sorts the table by
-/// index, so emitting in index order reproduces the canonical binding.
 fn index_order(variables: &[Variable]) -> Vec<(usize, u32)> {
     let mut order: Vec<(usize, u32)> = variables
         .iter()
@@ -3795,20 +3463,10 @@ fn index_order(variables: &[Variable]) -> Vec<(usize, u32)> {
     order
 }
 
-/// The OPY spelling recorded for a canonical table name. `mangle_names`
-/// covers every declared name; a missing entry means a duplicate name the
-/// caller already reports, so falling back to the canonical spelling is
-/// unreachable on a successful reconstruction.
 fn emitted<'a>(map: &'a HashMap<String, String>, name: &'a str) -> &'a str {
     map.get(name).map_or(name, String::as_str)
 }
 
-/// Whether a canonical name must be mangled to appear on the OPY surface:
-/// it is not a well-formed identifier, the pinned reserved-name table
-/// refuses it in this declaration namespace, or — for subroutines — a
-/// `name()` invocation would resolve to a translation call, a special
-/// form, `async`/`startRule`, `compressed`, `vect`, or `range` before the
-/// declared-subroutine check runs.
 fn needs_mangling(name: &str, namespace: NameNamespace) -> bool {
     !is_identifier(name)
         || is_reserved_name(name, namespace)
@@ -3817,23 +3475,6 @@ fn needs_mangling(name: &str, namespace: NameNamespace) -> bool {
                 || SpecialValueCall::from_name(name).is_some()))
 }
 
-/// Map every declared name to the OPY spelling reconstruction emits for
-/// it, under the rule recorded in `docs/architecture/reconstruction.md`:
-///
-/// * a name that already re-resolves to its declaration (a well-formed
-///   identifier outside the reserved and shadowed sets) keeps its
-///   spelling;
-/// * any other name is mangled deterministically — every identifier
-///   continuation character is kept, every other character becomes
-///   `_xHH_` (lowercase hex codepoint), and the result is prefixed `v_`
-///   when it is empty or does not start with an identifier-start
-///   character;
-/// * a candidate still rejected by `needs_mangling`, already taken by a
-///   table sibling, or equal to another canonical name in the table gains
-///   `_opy1`, then `_opy2`, `_opy3`, … until it resolves uniquely.
-///
-/// A duplicate canonical name is only entered once; the caller reports
-/// `unsupported-duplicate-name` for it.
 fn mangle_names<'a>(
     names: impl Iterator<Item = &'a str>,
     namespace: NameNamespace,
@@ -3866,9 +3507,6 @@ fn mangle_names<'a>(
     emitted_names
 }
 
-/// The stem of a mangled name: identifier continuation characters kept,
-/// every other character escaped as `_xHH_` (lowercase hex codepoint),
-/// prefixed `v_` when the result cannot start an identifier.
 fn mangle_base(name: &str) -> String {
     let mut mangled = String::with_capacity(name.len() + 2);
     for ch in name.chars() {
@@ -4009,8 +3647,6 @@ mod tests {
 
     #[test]
     fn disabled_initializer_reconstructs_as_a_disabled_ordinary_rule() {
-        // A disabled initializer-named rule is no declaration initializer,
-        // so it stays an ordinary rule at its position — with `@Disabled`.
         let mut program = Program::new();
         program.global_variable(Variable::with_index("score", 0));
         let mut initializer = Rule::new("Initialize global variables", Event::Global).action(
@@ -4037,9 +3673,6 @@ mod tests {
 
     #[test]
     fn disabled_subroutine_rule_reconstructs_as_an_inert_def() {
-        // `def` cannot carry `@Disabled`; a disabled subroutine-body rule
-        // reconstructs as commented lines plus a live `pass` — behaviorally
-        // inert like the disabled body.
         let mut program = Program::new();
         program.global_variable(Variable::with_index("score", 0));
         program.subroutine(Subroutine::with_index("reset", 0));
@@ -4174,9 +3807,6 @@ mod tests {
 
     #[test]
     fn catalog_identity_prefers_the_canonical_source_spelling() {
-        // `getRealPlayersInRadius` shares `getPlayersInRadius`'s catalog id; a
-        // bare canonical call is the unfiltered builtin, not the macro that
-        // would recompile to an extra `Filtered Array` wrapper.
         let mut program = Program::new();
         program.global_variable(Variable::with_index("g", 0));
         program.rule(
@@ -4257,9 +3887,6 @@ mod tests {
         .expect("workshop source parses")
     }
 
-    /// The reconstruction contract's own round trip: canonical Workshop
-    /// `Program` → OPY → compile → canonical `Program`, compared with the
-    /// canonical equivalence the contract fixes.
     fn settings_round_trip(workshop_source: &str) -> (String, Program, Program) {
         let program = parse_workshop(workshop_source);
         let source = reconstruct(&program).expect("settings reconstruct");
@@ -4341,8 +3968,6 @@ mod tests {
 
     #[test]
     fn refuses_unemittable_settings_map_element() {
-        // The variant-qualified map resolves, but OPY settings have no
-        // element form carrying the qualifier; the refusal keeps the span.
         let program = parse_workshop(
             "settings\n{\n\tmodes\n\t{\n\t\tSkirmish\n\t\t{\n\t\t\tenabled maps\n\t\t\t{\n\t\t\t\tWorkshop Chamber 972777519512064577\n\t\t\t}\n\t\t}\n\t}\n}\n",
         );
@@ -4375,8 +4000,6 @@ mod tests {
 
     #[test]
     fn refuses_unemittable_map_in_pinned_custom_game_settings_fixture() {
-        // `customGameSettings.txt` carries a variant-qualified map element
-        // OPY cannot express; reconstruction must refuse, not drop it.
         let program = parse_workshop(include_str!(
             "../../tests/fixtures/reconstruction/customGameSettings.txt"
         ));
@@ -4405,7 +4028,6 @@ mod tests {
         );
         program.rule(
             Rule::new("main", Event::EachPlayer)
-                // for <player>.p in range(0, 5, 1)
                 .action(Action::ForPlayerVariable {
                     player: Value::EventPlayer,
                     variable: "p".into(),
@@ -4431,12 +4053,10 @@ mod tests {
                     value: Value::number(-3.0),
                 })
                 .action(Action::End)
-                // self-referential set
                 .action(Action::SetGlobalVariable {
                     variable: "g".into(),
                     value: Value::call("add", [Value::global_variable("g"), Value::number(2.0)]),
                 })
-                // min/max/remove
                 .action(Action::ModifyGlobalVariable {
                     variable: "g".into(),
                     op: ModifyOp::Min,
@@ -4457,7 +4077,6 @@ mod tests {
                     op: ModifyOp::RemoveFromArrayByIndex,
                     value: Value::number(0.0),
                 })
-                // indexed assign + modify
                 .action(Action::call(
                     "setGlobalVariableAtIndex",
                     [
@@ -4475,7 +4094,6 @@ mod tests {
                         Value::number(3.0),
                     ],
                 ))
-                // async
                 .action(Action::call(
                     "startRule",
                     [
@@ -4486,7 +4104,6 @@ mod tests {
                         },
                     ],
                 ))
-                // skipIf crossing an if block: skipIf(cond, 5) If..End x=1
                 .action(Action::call(
                     "skipIf",
                     [
@@ -4511,7 +4128,6 @@ mod tests {
                     variable: "g".into(),
                     value: Value::number(2.0),
                 })
-                // abortIf + loopIf
                 .action(Action::call(
                     "abortIf",
                     [Value::call(
@@ -4541,8 +4157,6 @@ mod tests {
         assert_behaviorally_equivalent(&program, &source);
     }
 
-    /// A single-action program `rule "main": @Event global; <action>` for
-    /// focused round-trip assertions.
     fn one_action_program(action: Action) -> Program {
         let mut program = Program::new();
         program.global_variable(Variable::with_index("g", 0));
@@ -4565,8 +4179,6 @@ mod tests {
             "expected '{code}' in {error:?}"
         );
     }
-
-    // ---- issue #602: syntax-produced actions ------------------------------
 
     #[test]
     fn nested_player_variable_for_loops_round_trip() {
@@ -4864,9 +4476,6 @@ mod tests {
 
     #[test]
     fn skip_into_a_nested_block_uses_relative_goto() {
-        // A skip whose target boundary sits inside a nested sibling block
-        // cannot name a label the goto resolution can see; `goto loc+N`
-        // re-lowers to the identical `skip(N)` (issue #602).
         let mut program = Program::new();
         program.global_variable(Variable::with_index("g", 0));
         program.rule(
@@ -4915,7 +4524,6 @@ mod tests {
                     Vec::<Value>::new(),
                 ))
                 .action(Action::call("loopIfConditionIsTrue", Vec::<Value>::new()))
-                // One observable action keeps the rule alive on reparse.
                 .action(Action::SetGlobalVariable {
                     variable: "g".into(),
                     value: Value::number(9.0),
@@ -4968,8 +4576,6 @@ mod tests {
         assert_error_code(&program, "unsupported-member-assignment");
     }
 
-    // ---- issue #603: syntax-produced values -------------------------------
-
     #[test]
     fn syntax_produced_values_round_trip() {
         let array = Value::call(
@@ -4983,12 +4589,10 @@ mod tests {
         program.global_variable(Variable::with_index("g", 0));
         program.rule(
             Rule::new("main", Event::Global)
-                // (a)[i]
                 .action(Action::SetGlobalVariable {
                     variable: "g".into(),
                     value: Value::call("valueInArray", [array.clone(), Value::number(1.0)]),
                 })
-                // sorted(a), sorted(a, key lambda)
                 .action(Action::SetGlobalVariable {
                     variable: "g".into(),
                     value: Value::call(
@@ -5012,7 +4616,6 @@ mod tests {
                         ],
                     ),
                 })
-                // map + filter with element and index binders
                 .action(Action::SetGlobalVariable {
                     variable: "g".into(),
                     value: Value::call(
@@ -5045,12 +4648,10 @@ mod tests {
                         ],
                     ),
                 })
-                // x in a
                 .action(Action::SetGlobalVariable {
                     variable: "g".into(),
                     value: Value::call("arrayContains", [array.clone(), Value::EventPlayer]),
                 })
-                // a[0], []
                 .action(Action::SetGlobalVariable {
                     variable: "g".into(),
                     value: Value::call("firstOf", [array.clone()]),
@@ -5059,7 +4660,6 @@ mod tests {
                     variable: "g".into(),
                     value: Value::call("emptyArray", Vec::<Value>::new()),
                 })
-                // a.slice / conditional
                 .action(Action::SetGlobalVariable {
                     variable: "g".into(),
                     value: Value::call(
@@ -5078,7 +4678,6 @@ mod tests {
                         ],
                     ),
                 })
-                // round/floor/ceil
                 .action(Action::SetGlobalVariable {
                     variable: "g".into(),
                     value: Value::call(
@@ -5121,8 +4720,6 @@ mod tests {
         );
 
         let source = reconstruct(&program).expect("syntax values should reconstruct");
-        // `allPlayers(team)` reconstructs through the deterministic sanctioned
-        // alias `getPlayers(Team.ALL)` (documented in the reconstruction notes).
         assert!(source.contains("(getPlayers(Team.ALL))[1]"), "{source}");
         assert!(source.contains("sorted(getPlayers(Team.ALL))"), "{source}");
         assert!(
@@ -5259,11 +4856,8 @@ mod tests {
         assert_behaviorally_equivalent(&program, &source);
     }
 
-    // ---- refusals -----------------------------------------------------------
-
     #[test]
     fn refusals_stay_diagnostic() {
-        // Non-finite numbers have no OPY spelling.
         assert_error_code(
             &one_value_program(Value::number(f64::NAN)),
             "unsupported-non-finite-number",
@@ -5273,7 +4867,6 @@ mod tests {
             "unsupported-non-finite-number",
         );
 
-        // Enum domains outside the manifest's source surface stay refused.
         assert_error_code(
             &one_value_program(Value::Enum {
                 value_type: "NotARealDomain".into(),
@@ -5282,14 +4875,11 @@ mod tests {
             "unsupported-enum-domain",
         );
 
-        // Value calls with no OPY form stay refused.
         assert_error_code(
             &one_value_program(Value::call("definitelyNotAValue", [Value::number(1.0)])),
             "unsupported-value-call",
         );
 
-        // `valueInArray` with a literal zero index folds to `firstOf` on
-        // reparse, so the direct spelling cannot round-trip.
         assert_error_code(
             &one_value_program(Value::call(
                 "valueInArray",
@@ -5298,13 +4888,11 @@ mod tests {
             "unsupported-value-call",
         );
 
-        // Bare subroutine values outside `async` arguments stay refused.
         assert_error_code(
             &one_value_program(Value::Subroutine("sub".into())),
             "unsupported-subroutine-value",
         );
 
-        // Lambda binders outside an array callback stay refused.
         assert_error_code(
             &one_value_program(Value::call("currentArrayElement", Vec::<Value>::new())),
             "unsupported-value-call",
@@ -5314,7 +4902,6 @@ mod tests {
             "unsupported-value-call",
         );
 
-        // Dynamic member names that are not identifiers stay refused.
         assert_error_code(
             &one_value_program(Value::call(
                 "memberAccess",
@@ -5376,8 +4963,6 @@ mod tests {
 
     #[test]
     fn each_player_hero_filter_emits_the_source_hero_spelling() {
-        // `SOLDIER_76` spells `Hero.SOLDIER` in source; the `@Hero` argument
-        // uses the camel-case keyword (`soldier`).
         let mut program = Program::new();
         program.global_variable(Variable::with_index("score", 0));
         program.rule(
@@ -5531,8 +5116,6 @@ mod tests {
 
     #[test]
     fn disabled_control_flow_emits_a_commented_block() {
-        // `Disabled` wraps the `If` marker only; the whole group comments
-        // out — `elif`/`else`/`end` lines included.
         let mut program = Program::new();
         program.global_variable(Variable::with_index("score", 0));
         program.rule(
@@ -5582,9 +5165,6 @@ mod tests {
 
     #[test]
     fn subroutine_rules_reconstruct_in_def_form_in_any_order() {
-        // Subroutine-event rules may appear anywhere and carry any rule
-        // name: the comparator ignores their relative order, and rule names
-        // are display metadata.
         let mut program = Program::new();
         program.global_variable(Variable::with_index("score", 0));
         program.subroutine(Subroutine::with_index("first", 0));
@@ -5649,9 +5229,6 @@ mod tests {
 
     #[test]
     fn initializer_named_rule_after_an_ongoing_rule_keeps_its_position() {
-        // Initializer rules are never relocated: an initializer-named rule
-        // that is not the leading canonical initializer reconstructs as an
-        // ordinary rule where it sits (#597).
         let mut program = Program::new();
         program.global_variable(Variable::with_index("score", 0));
         program.rule(
@@ -5687,8 +5264,6 @@ mod tests {
 
     #[test]
     fn initializer_named_rule_with_conditions_stays_an_ordinary_rule() {
-        // Conditions are not part of the canonical initializer shape, so
-        // the rule demotes to an ordinary rule instead of refusing.
         let mut program = Program::new();
         program.global_variable(Variable::with_index("score", 0));
         program.rule(
@@ -5720,8 +5295,6 @@ mod tests {
 
     #[test]
     fn initializer_named_rule_with_out_of_order_sets_stays_an_ordinary_rule() {
-        // The canonical initializer Sets in declaration order; any other
-        // arrangement demotes to an ordinary rule.
         let mut program = Program::new();
         program.global_variable(Variable::with_index("first", 0));
         program.global_variable(Variable::with_index("second", 1));
@@ -5786,8 +5359,6 @@ mod tests {
 
     #[test]
     fn optimize_strict_preserves_add_zero() {
-        // Without `#!optimizeStrict` the frontend's default folding would
-        // rewrite `h + 0` to `h`, changing the canonical program.
         let mut program = Program::new();
         program.global_variable(Variable::with_index("g", 0));
         program.global_variable(Variable::with_index("h", 1));
@@ -5906,8 +5477,6 @@ mod tests {
         let reparsed = compile_to_program(&source, "mangled.opy");
         assert!(workshop_rs::compare::equivalent(&program, &reparsed));
 
-        // The mangling rule is deterministic: the same input program always
-        // maps to the same output.
         let again = reconstruct(&program).expect("reconstruction is deterministic");
         assert_eq!(source, again);
     }

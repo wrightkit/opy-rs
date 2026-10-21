@@ -1,5 +1,3 @@
-//! Canonical WIR lowering coverage for HUD actions.
-
 use std::path::{Path, PathBuf};
 
 use crate::Compiler;

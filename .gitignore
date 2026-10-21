@@ -2,7 +2,6 @@
 **/*.rs.bk
 .DS_Store
 .env
-# Pinned oracle installs (pnpm install --dir tools/overpy/oracle)
 tools/overpy/oracle/node_modules/
 tools/overpy/oracle/.funckw-*/
 # The pinned oracle (overpy 9.7.17) writes <main>.<lang>.po templates next
@@ -19,6 +18,5 @@ crates/opy-rs/tests/fixtures/corpus/**/*.po
 !crates/opy-rs/tests/fixtures/corpus/synthetic/translations-player-no-detection-331/source.fr.po
 !crates/opy-rs/tests/fixtures/corpus/synthetic/translations-player-no-tlerr-331/source.fr.fr.po
 !crates/opy-rs/tests/fixtures/corpus/synthetic/translations-player-no-tlerr-331/source.fr.po
-# Python harness caches
 __pycache__/
 *.pyc

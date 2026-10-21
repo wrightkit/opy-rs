@@ -67,8 +67,6 @@ impl Preprocessor {
             .zip(args.iter())
             .map(|(param, argument)| MacroArg::new(param.clone(), argument.raw.clone()))
             .collect();
-        // Resource limits mirror the pinned reference constants (1000 ms macro
-        // budget, 64 MiB memory, 512 KiB stack; see `crate::macro_js::Limits`).
         let runtime = MacroRuntime::new(Limits::default());
         let result = runtime
             .run_macro(&script.source, &macro_args, &script.path)
@@ -87,17 +85,6 @@ impl Preprocessor {
     }
 }
 
-/// Maps a runtime [`MacroError`] to a structured frontend diagnostic with the
-/// script path as provenance and the directive/call-site span.
-///
-/// The runtime's QuickJS abort messages are classified into stable codes:
-/// `script-timeout` (`"interrupted"`), `script-memory-limit`
-/// (`"out of memory"`), `script-stack-limit`
-/// (`"Maximum call stack size exceeded"`), and `script-error` for thrown
-/// exceptions (with the script path and, when the engine provided one, the
-/// line/column). Non-string completion values are `script-result-not-string`
-/// with the reference's wording, and engine setup failures are
-/// `script-internal`.
 pub(crate) fn map_macro_error(error: &MacroError, script_path: &str, span: Span) -> OpyError {
     match error {
         MacroError::Script(script) => {

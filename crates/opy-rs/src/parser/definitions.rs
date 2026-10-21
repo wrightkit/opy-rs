@@ -19,7 +19,6 @@ impl Parser<'_> {
         let start = self.advance();
         let name = match self.peek_kind() {
             TokenKind::String => self.advance().text,
-            // `rule("name") {` and `rule {` are the Workshop script forms.
             TokenKind::LParen => {
                 let span = Span::new(start.span.file, start.span.start, self.peek().span.end);
                 self.report_workshop_source(
@@ -40,8 +39,6 @@ impl Parser<'_> {
             }
         };
         let name_token_span = self.tokens[self.pos.saturating_sub(1)].span;
-        // The exact rule-name occurrence is the string content between the
-        // quotes (the `"name"` token itself spans the quotes).
         let name_span = Span::new(
             name_token_span.file,
             Position::new(name_token_span.start.line, name_token_span.start.col + 1),
@@ -67,8 +64,6 @@ impl Parser<'_> {
         let body_indent = line_indent + 1;
         let mut directives = DirectiveState::default();
         let mut actions = Vec::new();
-        // The rule header is the enclosing floor for its action statements:
-        // `elif`/`else`/`while` tails attach only while deeper than it (#516).
         self.block_floors.push(line_indent);
         loop {
             self.skip_newlines();
@@ -329,9 +324,6 @@ impl Parser<'_> {
         rule_prefix: Option<String>,
     ) -> bool {
         let start = self.advance();
-        // The name token follows the `def` keyword. `span` covers the
-        // definition (`def name`), and `name_span` is the exact identifier
-        // occurrence (rename targets, not the keyword).
         let name_span = self.peek().span;
         let name = match self.expect_ident("a subroutine name after `def`") {
             Ok(name) => name,

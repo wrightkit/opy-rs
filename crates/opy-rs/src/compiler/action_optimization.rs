@@ -1,6 +1,3 @@
-//! Rewrites of single actions that the pinned OverPy applies while it writes
-//! them, independent of `#!optimizeForSize`.
-
 use workshop_rs::catalog::Kind;
 use workshop_rs::{Action, Value};
 
@@ -19,8 +16,6 @@ impl<'a> ActionOptimizer<'a> {
         Self { compiler, enabled }
     }
 
-    /// Rewrite an action in place. An action that does nothing, which the
-    /// reference leaves out, is dropped before it gets here.
     pub(super) fn action(&self, action: &mut Action) {
         let Action::Call { name, args } = action else {
             return;
@@ -64,7 +59,6 @@ impl<'a> ActionOptimizer<'a> {
         }
     }
 
-    /// A `Null` where a Boolean is expected is wrapped so that it reads as one.
     fn booleans(&self, kind: Kind, name: &str, args: &mut [Value]) {
         let entry = self.compiler.catalog.entry(kind, name);
         for (index, arg) in args.iter_mut().enumerate() {

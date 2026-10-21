@@ -1,5 +1,3 @@
-//! Canonical-WIR coverage for the supported syntax lowering surface.
-
 use std::path::{Path, PathBuf};
 
 use crate::Compiler;

@@ -1,24 +1,15 @@
-# Dependabot version updates for opy-rs.
-# Docs: https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 version: 2
 updates:
-  # Rust workspace: the root manifest governs all crates.
   - package-ecosystem: cargo
     directory: /
     schedule:
       interval: monthly
 
-  # OverPy compatibility oracle: overpy is pinned as the reference
-  # implementation and changes only through an explicit compatibility
-  # decision. Dependabot update PRs are version notifications for manual
-  # review; they do not establish a new compatibility contract and are
-  # never auto-merged.
   - package-ecosystem: npm
     directory: /tools/overpy/oracle
     schedule:
       interval: weekly
 
-  # CI workflows and their action pins.
   - package-ecosystem: github-actions
     directory: /
     schedule:

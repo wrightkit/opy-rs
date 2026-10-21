@@ -1,13 +1,5 @@
-//! The native `.opy` lexer.
-//!
-//! Produces a flat token stream (newlines and indentation included) from one
-//! source file. Comments (`#`, `/* */`) are skipped; `#!` directives are
-//! captured as a single directive token for the preprocessor. Positions are
-//! 1-based line/column, matching the Opy HIR protocol.
-
 use crate::diag::{OpyError, OpyResult, Position, Span};
 
-/// The kind of a token.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenKind {
     /// An identifier or keyword (keywords are resolved by the parser).
@@ -21,12 +13,10 @@ pub enum TokenKind {
     /// A preprocessing marker carrying the rule-prefix state active at the
     /// following top-level rule or subroutine.
     RulePrefixMarker,
-    /// `@Event` / `@Condition` / other `@` directives.
     At,
     Newline,
     /// Indentation change: the column of the current line.
     Indent(u32),
-    /// End of file.
     Eof,
     LParen,
     RParen,
@@ -63,7 +53,6 @@ pub enum TokenKind {
     LexBang,
 }
 
-/// One token with its source span and payload text.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Token {
     pub kind: TokenKind,
@@ -79,10 +68,6 @@ pub struct Token {
     /// expansion carry the use-site span: the expanded text does not exist
     /// in authored source, so the invocation is the only honest position.
     pub span: Span,
-    /// The position the indentation-sensitive parser reads for layout
-    /// decisions. It equals `span` for authored tokens; expanded tokens keep
-    /// the expansion's relative line and column structure here so blocks and
-    /// statement boundaries still resolve (#506).
     pub(crate) layout: Span,
 }
 
@@ -98,13 +83,11 @@ impl Token {
     }
 }
 
-/// The lexer input: one file's text with its file id.
 pub struct LexInput<'a> {
     pub file_id: u32,
     pub text: &'a str,
 }
 
-/// Lex one source file into a token stream.
 pub fn lex(input: LexInput<'_>) -> OpyResult<Vec<Token>> {
     Lexer::new(input.file_id, input.text).run()
 }
@@ -560,8 +543,6 @@ impl Lexer {
     }
 }
 
-/// Whether `text` is a well-formed OPY identifier: an identifier start
-/// character followed by identifier continuation characters.
 pub fn is_identifier(text: &str) -> bool {
     let mut characters = text.chars();
     characters.next().is_some_and(is_ident_start) && characters.all(is_ident_continue)
@@ -587,12 +568,10 @@ pub(crate) fn decode_string_escape(character: char) -> Option<char> {
     })
 }
 
-/// Whether `c` may start an OPY identifier.
 pub fn is_ident_start(c: char) -> bool {
     c.is_ascii_alphabetic() || c == '_'
 }
 
-/// Whether `c` may continue an OPY identifier.
 pub fn is_ident_continue(c: char) -> bool {
     c.is_ascii_alphanumeric() || c == '_'
 }

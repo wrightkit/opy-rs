@@ -1,11 +1,7 @@
-//! The number spelling of the pinned OverPy: a number is written as its
-//! JavaScript text cut after fifteen decimals, exponent kept.
-
 use workshop_rs::Value;
 
 use super::value_walk::for_each_child;
 
-/// Cut every number in a value to what the reference writes for it.
 pub(super) fn trim_numbers(value: &mut Value) {
     if let Value::Number(number) = value {
         *number = trimmed(*number);

@@ -1,9 +1,3 @@
-//! Integration tests for the vocabulary lookup surface
-//! (`opy_rs::lookup`) and the candidate-bearing diagnostics that share its
-//! ranking data: display-name and guessed-name resolution, enum member
-//! inventories, settings keys, scope/limit controls, and the `did you mean`
-//! candidates `check` and `compile` report in diagnostic messages.
-
 use std::path::Path;
 
 use opy_rs::lookup::{
@@ -72,8 +66,6 @@ fn canonical_catalog_id_resolves_to_opy_function() {
 
 #[test]
 fn declared_alias_resolves_to_its_target_function() {
-    // `buttonString` is a manifest-declared function alias of
-    // `inputBindingString`.
     let hits = results("buttonString");
     let (spelling, _) = function_hit(&hits[0]);
     assert_eq!(spelling, "inputBindingString");
@@ -85,8 +77,6 @@ fn declared_alias_resolves_to_its_target_function() {
 
 #[test]
 fn guessed_name_resolves_to_nearest_function() {
-    // The historical agent guess `startForcingPlayerToBeHero` is the upstream
-    // display name of `startForcingHero`.
     let hits = results("startForcingPlayerToBeHero");
     let (spelling, _) = function_hit(&hits[0]);
     assert_eq!(spelling, "startForcingHero");
@@ -200,10 +190,6 @@ fn legacy_hero_spelling_resolves_to_current_member() {
 
 #[test]
 fn renamed_members_report_the_reference_spelling() {
-    // Catalog member ids that are not reference spellings stay query keys;
-    // the advertised spelling is the upstream one: `busanDowntownLny` is
-    // `Map.BUSAN_DOWNTOWN_LNY`, `bountyHunter` is `Gamemode.BOUNTY_HUNTER`,
-    // and `TEAM_1` is `Team.1`.
     for (query, expected, catalog_id) in [
         (
             "Map.BUSAN_DOWNTOWN_LNY",
@@ -318,7 +304,6 @@ fn opy_only_color_members_are_lookup_visible() {
 
 #[test]
 fn member_display_name_resolves_to_enum_member() {
-    // The issue's exact acceptance phrasing: `soldier 76` → `Hero.SOLDIER`.
     for query in ["soldier 76", "Soldier: 76"] {
         let hits = results(query);
         assert!(
@@ -336,10 +321,6 @@ fn member_display_name_resolves_to_enum_member() {
 
 #[test]
 fn callable_hits_expose_parameter_facts() {
-    // The owner supplies facts only — name, type, required, default, enum
-    // domain with its member inventory — and no rendered signature string;
-    // rendering policy (defaults shown, member inlining, token budget) is
-    // Wright's (`wright#527`, ADR-0021).
     let hits = results("hudText");
     let (_, params) = function_hit(&hits[0]);
     let header = params.iter().find(|p| p.name == "header").expect("header");
@@ -378,8 +359,6 @@ fn callable_hits_expose_parameter_facts() {
         "enum params carry the domain's member inventory: {button:?}"
     );
 
-    // The inventory is complete regardless of domain size — member
-    // inlining bounds are the caller's rendering policy, not owner data.
     let hits = results("startForcingHero");
     let (_, params) = function_hit(&hits[0]);
     let hero = params
@@ -439,8 +418,6 @@ fn settings_enum_key_lists_member_values() {
 
 #[test]
 fn settings_paths_match_segment_by_segment() {
-    // A path-prefix query walks segments: `gamemodes.ffa` resolves the
-    // per-mode keys below it as structural path hits, not near-misses.
     let mut query = LookupQuery::new("gamemodes.ffa");
     query.scope = LookupScope::SETTINGS;
     let hits = lookup(&query).results().to_vec();
@@ -453,9 +430,6 @@ fn settings_paths_match_segment_by_segment() {
         "a path prefix resolves keys below it: {hits:?}"
     );
 
-    // Templated hero paths keep `<team>`/`<hero>` segments and the `%`
-    // suffix in the owner's spelling, and concrete instantiations match
-    // through the template segments.
     let hits = results("heroes.team2.ana.health");
     assert!(
         hits.iter().any(|hit| matches!(
@@ -466,8 +440,6 @@ fn settings_paths_match_segment_by_segment() {
         "concrete segments resolve the templated path verbatim: {hits:?}"
     );
 
-    // A folded query without the path's structure is a near-name guess,
-    // not a path match.
     let mut query = LookupQuery::new("gamemodesffa");
     query.scope = LookupScope::SETTINGS;
     let hits = lookup(&query).results().to_vec();
@@ -487,9 +459,6 @@ fn settings_paths_match_segment_by_segment() {
 
 #[test]
 fn handle_type_query_names_its_producer() {
-    // Issue #546: a query naming the opaque handle type — or the phrases an
-    // agent searches for it — must reach the callable producing it, not only
-    // the calls that consume it.
     for query in ["HealthPoolId", "health pool", "health pool id"] {
         let mut lookup_query = LookupQuery::new(query);
         lookup_query.limit = 10;
@@ -527,9 +496,6 @@ fn hit_key(hit: &LookupHit) -> String {
 
 #[test]
 fn producer_hits_preserve_the_surrounding_order() {
-    // Issue #546: existing results keep their order where the producer is
-    // newly inserted — filtering `producedType` hits out of the answer must
-    // restore the pre-change sequence for the issue's queries.
     for (query, expected) in [
         (
             "health pool",
@@ -625,8 +591,6 @@ fn limit_bounds_returned_hits() {
 
 #[test]
 fn empty_text_lists_the_vocabulary() {
-    // An empty text applies no text constraint: the outcome lists the
-    // in-scope entries in construction order rather than ranking guesses.
     match lookup_str("   ") {
         LookupOutcome::Matched { results, .. } => {
             assert!(!results.is_empty(), "an unconstrained listing has entries")
@@ -679,7 +643,6 @@ fn event_spelling_resolves_to_event_entry() {
 
 #[test]
 fn event_display_name_and_filters_resolve() {
-    // Display names answer with their display name.
     let mut query = LookupQuery::new("Ongoing - Each Player");
     query.scope = LookupScope::EVENTS;
     let hits = lookup(&query).results().to_vec();
@@ -696,7 +659,6 @@ fn event_display_name_and_filters_resolve() {
         }
         other => panic!("expected an event hit, got {other:?}"),
     }
-    // `global` is the one event that rejects player filters.
     let mut query = LookupQuery::new("global");
     query.scope = LookupScope::EVENTS;
     let hits = lookup(&query).results().to_vec();
@@ -712,9 +674,6 @@ fn event_display_name_and_filters_resolve() {
 
 #[test]
 fn event_scope_lists_accepted_events_only() {
-    // The listing is exactly the `@Event` acceptance set: `subroutine` is
-    // a catalog event but not an OPY `@Event` name (subroutine rules use
-    // `def`), so it must not appear or resolve.
     let mut query = LookupQuery::new("");
     query.scope = LookupScope::EVENTS;
     query.limit = usize::MAX;
@@ -743,8 +702,6 @@ fn event_scope_lists_accepted_events_only() {
 
 #[test]
 fn event_hits_appear_in_the_default_scope() {
-    // An unscoped query on a display name finds the event alongside the
-    // other namespaces.
     let hits = results("Player Died");
     assert!(
         hits.iter().any(|hit| matches!(
@@ -822,8 +779,6 @@ fn unknown_enum_member_names_domain_members_in_message() {
         "enum member candidates must include RED: {:?}",
         diagnostic.message
     );
-    // The candidate pool is the rejected member's domain, not every enum
-    // member: no other domain's members leak in.
     assert!(
         !diagnostic.message.contains("ALLY"),
         "off-domain members must not be suggested: {:?}",
@@ -833,8 +788,6 @@ fn unknown_enum_member_names_domain_members_in_message() {
 
 #[test]
 fn guessed_canonical_id_resolves_and_suggests_opy_spelling() {
-    // The `SOLDIER76` guess from the tracking issue: the nearest member
-    // candidate is the OPY spelling `Hero.SOLDIER`.
     let diagnostic =
         first_error("globalvar x\nrule \"r\":\n    @Event global\n    x = Hero.SOLDIER76\n");
     assert_eq!(diagnostic.code, "unknown-enum-member");
@@ -843,8 +796,6 @@ fn guessed_canonical_id_resolves_and_suggests_opy_spelling() {
         "SOLDIER76 suggests the Hero.SOLDIER spelling: {:?}",
         diagnostic.message
     );
-    // A catalog-id guess still resolves to the canonical member through
-    // the lookup surface (accepted spellings are not advertised).
     let hits = results("Hero.SOLDIER_76");
     assert!(
         hits.iter().any(|hit| matches!(
@@ -882,8 +833,6 @@ fn unknown_settings_key_names_sibling_keys_in_message() {
 
 #[test]
 fn compile_error_carries_the_same_message_candidates() {
-    // `compile` and `check` share one pipeline: the returned `OpyError`
-    // message names the same candidates.
     let error = opy_rs::compile(
         "globalvar x\nrule \"r\":\n    @Event global\n    x = Color.REDD\n",
         "main.opy",

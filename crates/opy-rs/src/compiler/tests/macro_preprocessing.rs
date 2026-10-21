@@ -1,5 +1,3 @@
-//! Public compile-path coverage for macro preprocessing.
-
 use std::path::{Path, PathBuf};
 
 use crate::Compiler;

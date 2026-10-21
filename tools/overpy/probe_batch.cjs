@@ -1,5 +1,3 @@
-// Compile probe programs with the pinned OverPy in one process.
-// Usage: node probe_batch.cjs <probes.json> <references.json>
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -16,9 +14,6 @@ async function main() {
       references[probe.id] = { ok: true, workshop: compiled.result };
     } catch (error) {
       const text = String(error).split("\n")[0];
-      // A source rejection always surfaces as OpyError. Anything else is a
-      // harness or oracle fault that must abort the run, not be recorded as
-      // a rejection the downstream comparison could misread as parity.
       if (!text.startsWith("OpyError:")) {
         throw new Error(`probe ${probe.id} failed outside source rejection: ${text}`);
       }

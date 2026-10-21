@@ -1,6 +1,3 @@
-//! Macro ABI fixtures: execution, argument injection, results, helpers, and
-//! error provenance.
-//!
 //! Expected behavior mirrors the pinned OverPy reference (v9.7.10):
 //! `src/compiler/tokenizer.ts` (argument injection, `resolveMacro`),
 //! `src/quickjs.ts` (result type check, console install), `src/globalVars.ts`
@@ -261,8 +258,6 @@ fn engine_intrinsics_are_available() {
 
 #[test]
 fn invocations_do_not_share_state() {
-    // Each invocation runs on a fresh engine: globals set by one macro must
-    // not leak into the next, even when reusing the same runtime instance.
     let rt = runtime();
     rt.run_macro(r#"globalThis.leak = "secret"; "ok";"#, &[], "a.js")
         .unwrap();

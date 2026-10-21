@@ -10,11 +10,8 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-/// The `wright/opy-hir` protocol name.
 pub const PROTOCOL_NAME: &str = "wright/opy-hir";
-/// The protocol major version this consumer understands.
 pub const PROTOCOL_MAJOR: u32 = 2;
-/// The protocol version emitted by this producer.
 pub const PROTOCOL_VERSION: &str = "2.0.0";
 
 /// The number of Workshop variable slots per variable set.
@@ -51,14 +48,12 @@ pub fn default_var_index(name: &str) -> Option<u32> {
     (index < DEFAULT_VAR_SLOTS).then_some(index)
 }
 
-/// Protocol envelope identity.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Protocol {
     pub name: String,
     pub version: String,
 }
 
-/// Producer identity.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Generator {
     pub name: String,
@@ -66,27 +61,23 @@ pub struct Generator {
     pub frontend: String,
 }
 
-/// A source file in the protocol's file registry.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SourceFile {
     pub id: u32,
     pub path: String,
 }
 
-/// A preprocessing define recorded for provenance.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Define {
     pub name: String,
     #[serde(default)]
     pub is_function: bool,
-    /// Whether the definition used OverPy's `#!defineMember` surface.
     #[serde(default)]
     pub is_member: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub span: Option<Span>,
 }
 
-/// A 1-based, half-open source interval.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Span {
     pub file: u32,
@@ -94,14 +85,12 @@ pub struct Span {
     pub end: Position,
 }
 
-/// A 1-based line/column position.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Position {
     pub line: u32,
     pub col: u32,
 }
 
-/// A top-level program payload.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Program {
     pub protocol: Protocol,
@@ -113,7 +102,6 @@ pub struct Program {
     pub declarations: Vec<Declaration>,
     #[serde(default)]
     pub rules: Vec<RuleEntry>,
-    /// The typed custom-game-settings block, when the source had one (#86).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub settings: Option<Settings>,
     /// Frontend preprocessing state. Strict optimization is honored by the
@@ -123,7 +111,6 @@ pub struct Program {
     pub preprocessing: PreprocessingState,
 }
 
-/// The source-level preprocessing state observed by the frontend.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct PreprocessingState {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -150,7 +137,6 @@ pub struct PreprocessingState {
     pub(crate) source_file_initial_optimization: BTreeMap<u32, OptimizationState>,
 }
 
-/// A directive value plus its source provenance.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DirectiveValue {
     pub value: String,
@@ -158,7 +144,6 @@ pub struct DirectiveValue {
     pub span: Option<Span>,
 }
 
-/// One source message and its optional localized PO values.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TranslationEntry {
     pub msgid: String,
@@ -168,7 +153,6 @@ pub struct TranslationEntry {
     pub translations: BTreeMap<String, String>,
 }
 
-/// Translation language selection and the loaded project catalog.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TranslationState {
     pub languages: Vec<String>,
@@ -178,7 +162,6 @@ pub struct TranslationState {
     pub span: Option<Span>,
 }
 
-/// Frontend-visible optimization controls consumed by lowering-dependent rules.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct OptimizationState {
     pub enabled: bool,
@@ -198,8 +181,6 @@ impl Default for OptimizationState {
     }
 }
 
-/// One preprocessing event, retained so block-scoped state transitions remain
-/// inspectable without executing a backend optimizer.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DirectiveRecord {
     pub name: String,
@@ -228,7 +209,6 @@ pub struct PreprocessingSnapshot {
     pub replacements: Vec<String>,
 }
 
-/// A custom-game-settings block (`settings { ... }`, #86).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Settings {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -237,7 +217,6 @@ pub struct Settings {
     pub children: Vec<SettingsNode>,
 }
 
-/// One member of a settings group.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum SettingsNode {
@@ -266,7 +245,6 @@ pub enum SettingsNode {
         #[serde(skip_serializing_if = "Option::is_none")]
         span: Option<Span>,
     },
-    /// A settings expression preserved without assigning it a literal type.
     Raw {
         name: String,
         value: String,
@@ -283,7 +261,6 @@ pub enum SettingsNode {
 }
 
 impl SettingsNode {
-    /// The source span of this node, if any.
     pub fn span(&self) -> Option<&Span> {
         match self {
             SettingsNode::Group { span, .. }
@@ -296,7 +273,6 @@ impl SettingsNode {
     }
 }
 
-/// One element of a settings list (corpus lists are all strings).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SettingsListElement {
     /// Literal text, or the authored expression when `evaluated` is `None`.
@@ -310,7 +286,6 @@ pub struct SettingsListElement {
     pub span: Option<Span>,
 }
 
-/// A program-scope symbol declaration.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Declaration {
@@ -320,7 +295,6 @@ pub enum Declaration {
         index: Option<u32>,
         #[serde(skip_serializing_if = "Option::is_none")]
         span: Option<Span>,
-        /// The exact span of the declared identifier token.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         name_span: Option<Span>,
         #[serde(default)]
@@ -332,7 +306,6 @@ pub enum Declaration {
         index: Option<u32>,
         #[serde(skip_serializing_if = "Option::is_none")]
         span: Option<Span>,
-        /// The exact span of the declared identifier token.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         name_span: Option<Span>,
         #[serde(default)]
@@ -344,7 +317,6 @@ pub enum Declaration {
         index: Option<u32>,
         #[serde(skip_serializing_if = "Option::is_none")]
         span: Option<Span>,
-        /// The exact span of the declared identifier token.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         name_span: Option<Span>,
     },
@@ -365,13 +337,10 @@ pub enum Declaration {
     },
 }
 
-/// An entry in `rules`: a rule or a subroutine definition.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum RuleEntry {
-    /// A rule: an object without a `kind` tag.
     Rule(Rule),
-    /// A subroutine definition: `{ "kind": "subroutineDef", ... }`.
     SubroutineDef {
         #[serde(rename = "kind")]
         kind: String,
@@ -380,7 +349,6 @@ pub enum RuleEntry {
         source_name: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         span: Option<Span>,
-        /// The exact span of the defined identifier token in `def name():`.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         name_span: Option<Span>,
         #[serde(default)]
@@ -390,13 +358,11 @@ pub enum RuleEntry {
     },
 }
 
-/// A rule with its event, conditions, and actions.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Rule {
     pub name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub span: Option<Span>,
-    /// The exact span of the rule name inside its string literal.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name_span: Option<Span>,
     #[serde(default)]
@@ -414,7 +380,6 @@ pub struct Rule {
     pub actions: Vec<Stmt>,
 }
 
-/// A source annotation retained on a rule or subroutine definition.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Annotation {
     pub name: String,
@@ -431,7 +396,6 @@ pub struct AnnotationArg {
     pub span: Option<Span>,
 }
 
-/// A rule event.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Event {
     pub name: String,
@@ -441,7 +405,6 @@ pub struct Event {
     pub span: Option<Span>,
 }
 
-/// A statement.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Stmt {
@@ -460,7 +423,6 @@ pub enum Stmt {
         branches: Vec<IfBranch>,
         #[serde(default)]
         r#else: Option<Vec<Stmt>>,
-        /// The authored `else` keyword span when the chain has an else branch.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         else_span: Option<Span>,
         /// Zero-width span at the first token past the chain: the position a
@@ -542,19 +504,16 @@ pub enum Stmt {
     },
 }
 
-/// One condition/body pair of an `if` statement.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct IfBranch {
     pub condition: Box<Expr>,
     #[serde(default)]
     pub body: Vec<Stmt>,
-    /// The authored `if`/`elif`/`else if` keyword span that opens this branch.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub marker: Option<Span>,
 }
 
 impl Stmt {
-    /// The source span of this statement, if any.
     pub fn span(&self) -> Option<&Span> {
         match self {
             Stmt::Expr { span, .. }
@@ -616,7 +575,6 @@ pub enum SwitchArm {
     },
 }
 
-/// An expression.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Expr {
@@ -715,8 +673,6 @@ pub enum Expr {
     PlayerVar {
         player: Box<Expr>,
         name: String,
-        /// The exact span of the member identifier in a source reference
-        /// such as `hostPlayer.I`.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         member_span: Option<Span>,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -775,8 +731,6 @@ pub enum Expr {
         #[serde(skip_serializing_if = "Option::is_none")]
         span: Option<Span>,
     },
-    /// An OPY source type literal, currently used by
-    /// `createWorkshopSetting` numeric ranges.
     Type {
         name: String,
         #[serde(default)]
@@ -819,7 +773,6 @@ pub enum Expr {
     },
 }
 
-/// One key/value pair in an OPY dictionary.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DictEntry {
     pub key: Box<Expr>,
@@ -829,7 +782,6 @@ pub struct DictEntry {
 }
 
 impl Expr {
-    /// The source span of this expression, if any.
     pub fn span(&self) -> Option<&Span> {
         match self {
             Expr::Number { span, .. }
@@ -896,7 +848,6 @@ impl Expr {
         }
     }
 
-    /// The protocol `kind` of this expression.
     pub fn kind_name(&self) -> &'static str {
         match self {
             Expr::Number { .. } => "number",

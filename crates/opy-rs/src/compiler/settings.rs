@@ -1,14 +1,6 @@
 use super::*;
 use workshop_rs::source::{Position as WorkshopPosition, Span as WorkshopSpan};
 
-/// Convert resolved HIR settings into the canonical Workshop settings
-/// carrier exactly as lowering does: constant expansion, then `#!extension`
-/// merging, then pass-through of members outside the settings catalog.
-/// Shared by lowering and by `check`'s emission-acceptance pass so `check`
-/// and `compile` see the same settings tree (#411). `locale` is the compile
-/// target: `settings.workshop` members carry localized `On`/`Off` and hero
-/// display names like the pinned compiler (#512). The second value lists
-/// the members passed through unchanged.
 pub(crate) fn workshop_settings(
     hir: &crate::hir::Program,
     locale: &Locale,
@@ -36,11 +28,8 @@ pub(crate) fn workshop_settings(
     Ok((settings, unknown))
 }
 
-/// A settings member the catalog does not declare, emitted as written.
 pub(crate) struct UnknownSetting {
-    /// The member's key.
     pub(crate) name: String,
-    /// The undeclared value of a catalogued key; `None` for an unknown key.
     pub(crate) value: Option<String>,
     pub(crate) span: Option<WorkshopSpan>,
 }
@@ -131,9 +120,6 @@ fn rename_member(member: &mut workshop_rs::settings::SettingsNode, name: &str) {
         | SettingsNode::List { name: slot, .. }
         | SettingsNode::Raw { name: slot, .. }
         | SettingsNode::RawValue { name: slot, .. } => *slot = name.to_string(),
-        // `Workshop` carries no member name, and a settings variant the
-        // pinned workshop-rs release adds later (a verbatim group marker)
-        // must not fail this build before its handling lands here.
         _ => {}
     }
 }
@@ -318,9 +304,6 @@ fn pass_through_unknown_members(
                             }
                         }
                     }
-                    // The flattened `general` members are not reprocessed:
-                    // only authored hero groups and hero rosters take the
-                    // hero-name and applicability passes.
                     for hero in rest.iter_mut().chain(hero_lists.iter_mut()) {
                         match hero {
                             SettingsNode::Group { name, children, .. } => {
@@ -360,9 +343,6 @@ fn pass_through_unknown_members(
                                     element.value = canonical.to_string();
                                 }
                             }
-                            // Non-group members left are hero-named leaves the
-                            // normalization above kept verbatim for the
-                            // emission table to reject.
                             _ => {}
                         }
                     }
@@ -371,11 +351,6 @@ fn pass_through_unknown_members(
                     *children = general;
                 }
             }
-            // An uncatalogued top-level group stays verbatim: upstream
-            // rejects the key, and keeping authored node shapes lets the
-            // emission table fail it as before. `check_surviving_lists`
-            // below still errors a failed evaluation in a list it holds
-            // (#512).
             _ => {}
         }
     }
@@ -408,9 +383,6 @@ fn check_surviving_lists(
     Ok(())
 }
 
-/// The source span of each list element the settings evaluator could not
-/// resolve, keyed by the converted element span (#512). Such an element is
-/// an error wherever the list is written.
 pub(super) type EvalMap = HashMap<(u32, u32, u32, u32), HirSpan>;
 
 fn eval_key(span: &WorkshopSpan) -> (u32, u32, u32, u32) {
@@ -453,7 +425,6 @@ fn pass_through_members(
     use workshop_rs::settings::{PathPart, SettingValueDomain, SettingsNode};
 
     for member in members {
-        // A mode's Boolean `enabled` is consumed by the mode header.
         if member.name() == "enabled" && matches!(path, [PathPart::Part("gamemodes"), _]) {
             continue;
         }
@@ -602,9 +573,6 @@ fn written_form(
     })
 }
 
-/// The fully verbatim form of a member: like [`written_form`], but a scalar
-/// becomes `Raw` so its name is written as authored even when the key
-/// resolves in the catalog.
 fn verbatim_form(
     node: workshop_rs::settings::SettingsNode,
     evals: &EvalMap,
@@ -893,9 +861,6 @@ fn convert_settings_node(
                     {
                         evals.insert(eval_key(span), hir_span);
                     }
-                    // Catalogued list keys (`enabledMaps`, hero rosters) read
-                    // the evaluated display text (#512); a spanless element
-                    // keeps its authored text.
                     SettingsListElement {
                         value: element.evaluated.unwrap_or(element.value),
                         variant: None,

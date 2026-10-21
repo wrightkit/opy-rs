@@ -8,7 +8,6 @@ use super::types::{
     Declaration, Event, Expr, Program, Rule, RuleEntry, SettingsNode, Span, Stmt, SwitchArm,
 };
 
-/// Render a validated program as a deterministic text dump.
 pub fn dump(program: &Program) -> String {
     let mut out = String::new();
     out.push_str(&format!(

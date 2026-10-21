@@ -1,6 +1,3 @@
-//! `#!optimizeForSize` literal replacements, applied to canonical values at the
-//! Workshop boundary so the emitted structure converges on pinned OverPy.
-
 use workshop_rs::catalog::{Kind, ParamCoercions};
 use workshop_rs::{Action, ModifyOp, Value};
 
@@ -111,7 +108,6 @@ impl<'a> SizeOptimizer<'a> {
         }
     }
 
-    /// An unused HUD text drops its color.
     fn hud_text_call(name: &str, args: &mut [Value]) {
         if name != "createHudText" {
             return;
@@ -123,7 +119,6 @@ impl<'a> SizeOptimizer<'a> {
         }
     }
 
-    /// A grapple beam has no colour.
     fn beam_call(name: &str, args: &mut [Value]) {
         if name == "createBeamEffect"
             && matches!(args.get(1), Some(Value::Enum { value, .. }) if value == "GRAPPLE")

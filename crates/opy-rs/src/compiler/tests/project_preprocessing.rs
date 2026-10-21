@@ -1,5 +1,3 @@
-//! Public project-composition coverage for project preprocessing.
-
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 

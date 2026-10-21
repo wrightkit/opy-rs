@@ -31,9 +31,7 @@ def job_lines() -> dict[str, list[str]]:
     )
     if len(parts) != 2:
         fail("release-plz.yml has no jobs section")
-    # Comments are stripped so `# needs: x` cannot fabricate or hide an edge.
     lines = [re.sub(r"(\s|^)#.*$", "", line).rstrip() for line in parts[1].splitlines()]
-    # The jobs section ends at the next top-level key.
     end = next((i for i, line in enumerate(lines) if line[:1].strip()), len(lines))
     lines = lines[:end]
     starts: dict[str, int] = {}
@@ -112,7 +110,6 @@ def main() -> None:
         if "provider" not in needs_of(job, jobs):
             fail(f"{job} does not need provider: it cannot reuse the staged artifacts")
     for job in jobs:
-        # A status-check function would let the job run despite failed needs.
         if re.search(r"(always|failure|cancelled)\s*\(", job_gate(job, jobs)):
             fail(f"{job} gates on a status-check function: failed prerequisites no longer block it")
     github_body = "\n".join(jobs["publish-provider-github"])

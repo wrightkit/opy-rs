@@ -55,8 +55,6 @@ class ProbeClassificationTests(unittest.TestCase):
         self.assertEqual(len(unexplained), 2)
 
     def test_native_accepts_on_a_canonical_probe_is_unexplained(self):
-        # The oracle rejected a declared call form that opy-rs accepts; that
-        # is an acceptance gap and must fail, not be silently counted.
         _, unexplained, generated, _ = probe_builtins.classify(
             [finding("native-accepts", "default:healer:base")], self.GAPS
         )
@@ -64,9 +62,6 @@ class ProbeClassificationTests(unittest.TestCase):
         self.assertEqual(generated, [])
 
     def test_native_accepts_on_generated_candidates_is_probe_input(self):
-        # `arg*=`, `omit-*` and `in-*` variants generate candidate inputs the
-        # generator cannot prove valid; a reference rejection there is not an
-        # acceptance-parity claim.
         _, unexplained, generated, _ = probe_builtins.classify(
             [
                 finding("native-accepts", "default:wait:arg0=null"),
@@ -96,8 +91,6 @@ class ProbeClassificationTests(unittest.TestCase):
         self.assertEqual(generated, [])
 
     def test_a_gap_detail_can_discriminate_on_the_oracle_rejection(self):
-        # `detail` also matches the recorded oracle error, so an acceptance
-        # gap can name the member or diagnostic the reference rejected.
         gaps = self.GAPS + [
             {
                 "id": "accepts",
@@ -119,8 +112,6 @@ class ProbeClassificationTests(unittest.TestCase):
         self.assertEqual(stale, ["omission", "folds", "accepts"])
 
     def test_a_gap_must_discriminate_beyond_status_and_functions(self):
-        # A gap with no variant or detail would explain any finding on its
-        # functions — including classes it was never approved for.
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary) / "gaps.json"
             path.write_text(
@@ -201,8 +192,6 @@ class ProbeExecutionTests(unittest.TestCase):
         )
 
     def test_reference_rejections_stay_attached_to_findings(self):
-        # An unexplained acceptance divergence must report what the pinned
-        # oracle rejected, not just that it rejected.
         def run(command, **kwargs):
             if command[0] == "node":
                 Path(command[-1]).write_text(

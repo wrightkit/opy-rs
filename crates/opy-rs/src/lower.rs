@@ -1,30 +1,3 @@
-//! Semantic resolution and HIR lowering (#45).
-//!
-//! Resolves the parsed CST into the opy-rs-owned Opy HIR contract
-//! ([`crate::hir::Program`]): declarations and references resolve to typed
-//! HIR nodes, custom enums fold to constants, `vect` becomes a vector,
-//! `.format()` becomes a format node, `wait` default arguments are filled,
-//! and subroutine calls become `CallSubroutine` statements. Semantic errors
-//! (unknown identifiers, unknown custom-enum members, invalid `vect` arity)
-//! are structured and source-located.
-//!
-//! Builtin action/value/member identity, action/value position, signatures
-//! and arity, receiver categories, parameter enum-domain identities, and
-//! non-contextual source aliases resolve through the OPY semantic
-//! compatibility manifest ([`crate::manifest`], issue #109) before Workshop
-//! emission: unknown or misplaced builtins fail here with structured,
-//! source-located diagnostics instead of surfacing as emitter catalog
-//! misses.
-//!
-//! Ownership boundary: enum *domains* are catalog-identity links carried by
-//! the manifest signatures, but enum *member lists* are Workshop-owned
-//! catalog content. A member access on a declared domain identity resolves
-//! as an opaque `Enum` node and member-existence/domain checks
-//! (`unknown-enum-member` for Workshop enums, `enum-domain-mismatch`) are
-//! `lowering-dependent` (issue #8) — they are not approximated here. Custom
-//! (user-declared) enum member checks are OPY-level source semantics and
-//! stay in this frontend.
-
 use std::collections::{HashMap, HashSet};
 
 use crate::hir::types::{
@@ -42,25 +15,15 @@ use workshop_rs::catalog::Catalog;
 
 const PROTOCOL_NAME: &str = "wright/opy-hir";
 
-/// The call-position context of an expression being lowered; builtin
-/// resolution checks action/value identity against this context.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum CallPosition {
-    /// A statement position (a bare expression statement).
     Statement,
-    /// A value position (conditions, assignments, call arguments, …).
     Value,
-    /// A `for ... in` iterable (only `range` is a valid builtin here).
     ForIterable,
-    /// An expression occupying a signature-approved lambda argument slot.
     LambdaArgument,
-    /// An expression in a macro body, whose final call position is determined
-    /// when the macro is expanded.
     MacroBody,
 }
 
-/// A custom-enum member with its resolved constant or the explicit source
-/// expression that the reference inlines at each use site.
 #[derive(Debug, Clone)]
 enum EnumMemberValue {
     Number(f64),
@@ -144,7 +107,6 @@ pub(crate) fn compressed_component_mode(values: &[Vec<f64>]) -> Option<(bool, f6
         .then_some((is_vector, if is_vector { 4999.0 } else { 49999.0 }))
 }
 
-/// Lower a parsed program into the Opy HIR contract.
 pub fn lower(
     program: &cst::Program,
     files: Vec<SourceFile>,
@@ -452,10 +414,6 @@ fn texture_marker(suffix: char) -> HirExpr {
     }
 }
 
-/// A `#!settings` raw-value lowerer reused across a settings block: the
-/// manifest, catalog, and program symbol tables are built once instead of
-/// once per value. Values lower through the same CST-to-HIR semantic path as
-/// ordinary OPY expressions.
 pub(crate) struct SettingsLowerer {
     lowerer: Lowerer,
 }
@@ -487,8 +445,6 @@ impl SettingsLowerer {
         Ok(Self { lowerer })
     }
 
-    /// Lower one raw settings value through the shared expression path;
-    /// per-node state is reset so each value observes a fresh context.
     pub(crate) fn lower(
         &mut self,
         text: &str,
@@ -585,8 +541,6 @@ fn render_rule_name(
         })
 }
 
-/// The name of a compiler-generated rule under the active rule prefix
-/// template: it has no prefix, no file, and is not a delimiter.
 pub(crate) fn render_generated_rule_name(name: &str, preprocessing: &PreprocessingState) -> String {
     let Some(template) = preprocessing
         .rule_prefix_template
@@ -885,10 +839,6 @@ impl Lowerer {
         }
     }
 
-    /// An error whose message names the valid spellings nearest `rejected`
-    /// in a `(did you mean …?)` suffix. `crate::matcher` ranks the pool —
-    /// the same data the resolution just failed on — so the suggestion
-    /// cannot drift from what the source accepts (issue #469).
     fn error_at_candidates(
         &mut self,
         code: &str,
@@ -901,9 +851,6 @@ impl Lowerer {
         self.error_at(code, crate::matcher::did_you_mean(message, &ranked), span);
     }
 
-    /// Like [`Lowerer::error_at_candidates`] for a closed candidate space
-    /// (an enum domain): when nothing is near, the members themselves are
-    /// the candidates, spelled out sorted and bounded.
     fn error_at_closed_candidates(
         &mut self,
         code: &str,
@@ -927,10 +874,6 @@ fn arg_span(args: &[CallArg], fallback: Span) -> Span {
     args.first().map(CallArg::span).unwrap_or(fallback)
 }
 
-/// Lower a source-level player context value without adding a new HIR node
-/// kind. `attacker` and `victim` are catalog-backed zero-argument values;
-/// using the existing `Call` node keeps their source identity and span while
-/// leaving canonical value ownership with Workshop.
 fn context_player_expr(name: &str, span: Option<Span>) -> Option<HirExpr> {
     match name {
         "eventPlayer" => Some(HirExpr::EventPlayer {
@@ -1018,8 +961,6 @@ pub fn is_reserved_name(name: &str, namespace: NameNamespace) -> bool {
     }
 }
 
-/// The upstream `opyKeywords` set (OverPy 9.7.10): grammar keywords reserved
-/// in every declaration namespace.
 const RESERVED_KEYWORDS: &[&str] = &[
     "and",
     "bool",
@@ -1053,10 +994,6 @@ const RESERVED_KEYWORDS: &[&str] = &[
     "while",
 ];
 
-/// Names upstream reserves for `globalvar` beyond the keyword set (OverPy
-/// 9.7.10 `reservedNames`): the type lattice (`typeMatrix` keys), and the
-/// bare-spelled builtins (`funcKw` entries with `args === null`) — context
-/// names, literals, and `ruleCondition`.
 const RESERVED_GLOBAL_NAMES: &[&str] = &[
     "AccelReeval",
     "Array",
@@ -1177,10 +1114,6 @@ const RESERVED_GLOBAL_NAMES: &[&str] = &[
     "void",
 ];
 
-/// Whether a CST receiver is assignable (the `.append` receiver rule): a
-/// variable name (including macro parameters), an array literal, or an index
-/// expression — matching the pinned reference, which rejects constant and
-/// function receivers ("Cannot modify or assign to …").
 fn assignable_receiver(receiver: &Expr) -> bool {
     match receiver {
         Expr::Name { name, .. } => !matches!(
@@ -1567,8 +1500,6 @@ mod tests {
         }
     }
 
-    /// Assert the expression is the catalog enum `(domain, member)` node,
-    /// ignoring its source span (the span is frontend-internal provenance).
     fn assert_enum(value: &HirExpr, domain: &str, member: &str) {
         match value {
             HirExpr::Enum {
@@ -1632,7 +1563,6 @@ mod tests {
     fn unknown_action_names_the_nearest_spellings_in_message() {
         let error = compile_error(&action_source("createHudText(g, \"t\")"), 4);
         assert_eq!(error.code, "unknown-action");
-        // "Create HUD Text" is the catalog display name of `hudText`.
         assert!(
             error.message.contains("(did you mean 'hudText'"),
             "message: {}",
@@ -1674,9 +1604,6 @@ mod tests {
 
     #[test]
     fn unknown_enum_member_names_the_domain_surface() {
-        // `Hero.SOLDIER` is an accepted source spelling naming `SOLDIER_76`;
-        // both must be candidates. (Strict upstream spellings land with
-        // #466; the pool then keeps yielding `SOLDIER`.)
         let error = compile_error(&action_source("g = Hero.SOLDIER76"), 4);
         assert_eq!(error.code, "unknown-enum-member");
         assert!(
@@ -1688,9 +1615,6 @@ mod tests {
 
     #[test]
     fn hud_reeval_string_and_color_alias_resolves_and_ranks() {
-        // `VISIBILITY_STRING_AND_COLOR` is the OverPy spelling of the
-        // catalog member `VISIBLE_TO_STRING_AND_COLOR`; it lives in
-        // `crate::enums` so the candidate pool names it too.
         let hir = crate::compile(
             &action_source("g = HudReeval.VISIBILITY_STRING_AND_COLOR"),
             "test.opy",
@@ -1739,7 +1663,6 @@ mod tests {
 
     #[test]
     fn chase_over_time_resolves_and_compiles_with_reference_signatures() {
-        // 4-argument form with an explicit reevaluation member (#106).
         let hir = crate::compile(
             &action_source("chaseOverTime(g, 10, 3, ChaseTimeReeval.NONE)"),
             "test.opy",
@@ -1763,7 +1686,6 @@ mod tests {
                 if value_type == "ChaseTimeReeval" && value == "NONE"
         ));
 
-        // 3-argument form fills the reference default member.
         let hir = crate::compile(
             &action_source("chaseOverTime(g, 10, 3)"),
             "test.opy",
@@ -1789,7 +1711,6 @@ mod tests {
 
     #[test]
     fn is_game_in_progress_resolves_as_a_builtin_value() {
-        // Generic value gap from #106: `isGameInProgress()` in a condition.
         let hir = crate::compile(
             &action_source("@Condition isGameInProgress() == true"),
             "test.opy",
@@ -1804,9 +1725,6 @@ mod tests {
 
     #[test]
     fn enum_gated_members_resolve_through_the_manifest() {
-        // Enum-gated members from #106: setInvisibility (Invis), getThrottle
-        // (member value), worldVector (Transform arg), setStatusEffect
-        // (Status arg).
         let source = "globalvar g\nrule \"r\":\n    @Event eachPlayer\n    \
             @Condition eventPlayer.getThrottle() != vect(0, 0, 0)\n    \
             @Condition worldVector(vect(1, 2, 3), eventPlayer, Transform.ROTATION) != vect(0, 0, 0)\n    \
@@ -1867,8 +1785,6 @@ mod tests {
 
     #[test]
     fn value_member_in_action_position_is_rejected() {
-        // The #106 baseline records the oracle rejecting `B.isAlive()` as a
-        // statement; the manifest enforces that contract (#109).
         let error = compile_error(
             "globalvar g\nrule \"r\":\n    @Event eachPlayer\n    eventPlayer.isAlive()\n",
             4,
@@ -1876,8 +1792,6 @@ mod tests {
         assert_eq!(error.code, "value-in-action-position");
     }
 
-    /// Compile a program and return the lowered first action's expression
-    /// (the statement expression, or the value of a leading assignment).
     fn first_action_expr(source: &str) -> HirExpr {
         let program = crate::compile(source, "test.opy", std::path::Path::new(""))
             .unwrap_or_else(|error| panic!("compile failed: {error}"));
@@ -1891,8 +1805,6 @@ mod tests {
         }
     }
 
-    /// Remove every `span`/`name_span` key from a serialized expression (the
-    /// differential suite's normalization).
     fn strip_spans(value: &mut serde_json::Value) {
         match value {
             serde_json::Value::Object(map) => {
@@ -1941,8 +1853,6 @@ mod tests {
                 if value_type == "ChaseTimeReeval" && value == "DESTINATION_AND_DURATION"
         ));
 
-        // Player-variable first arguments resolve too (the emission layer
-        // picks the player form).
         let expr = first_action_expr(
             "playervar P\nrule \"r\":\n    @Event eachPlayer\n    \
              chase(eventPlayer.P, 0, rate=1, ChaseReeval.NONE)\n",
@@ -1956,16 +1866,9 @@ mod tests {
 
     #[test]
     fn chase_reeval_is_only_a_standalone_identity_inside_the_chase_context() {
-        // `ChaseReeval` is a contextual domain, not a standalone domain
-        // identity: a bare member access outside the chase signature is
-        // rejected.
         let error = compile_error(&action_source("g = ChaseReeval.NONE"), 4);
         assert_eq!(error.code, "unsupported-member");
 
-        // Inside the chase context the member is an opaque identity
-        // dispatched to the concrete domain selected by the keyword
-        // selector; member existence in that domain is not validated here
-        // (lowering-dependent, #8).
         let expr = first_action_expr(&action_source(
             "chase(g, 10, rate=2, ChaseReeval.DESTINATION_AND_DURATION)",
         ));
@@ -1979,8 +1882,6 @@ mod tests {
                 if value_type == "ChaseRateReeval" && value == "DESTINATION_AND_DURATION"
         ));
 
-        // A non-enum 4th argument is carried structurally; the reference's
-        // "expected an enum member" rejection is lowering-dependent.
         let expr = first_action_expr(&action_source("chase(g, 10, rate=2, 5)"));
         let HirExpr::Call { name, args, .. } = &expr else {
             panic!("expected a call, got {expr:?}");
@@ -2027,9 +1928,6 @@ mod tests {
 
     #[test]
     fn keyword_binding_matches_positional_binding_in_hir() {
-        // Keyword binding consumes the manifest signatures: the bound HIR is
-        // identical to the positional form's (defaults filled the same way),
-        // modulo source spans (the keyword values sit at different columns).
         fn without_spans(expr: &HirExpr) -> serde_json::Value {
             let mut value = serde_json::to_value(expr).unwrap();
             strip_spans(&mut value);
@@ -2136,8 +2034,6 @@ mod tests {
         let error = compile_error(&action_source("g = sorted([1, 2], (key)=lambda v: -v)"), 4);
         assert_eq!(error.code, "parse-error");
 
-        // Bare `name=expr` keyword binding is unaffected, and a parenthesized
-        // name without `=` still binds positionally.
         crate::compile(
             &action_source("g = vect(x=1, y=2, z=3) + vect((g), 2, 3)"),
             "test.opy",
@@ -2160,8 +2056,6 @@ mod tests {
             assert_eq!(error.code, "parse-error", "statement: {statement}");
         }
 
-        // Array and dictionary literals keep accepting a trailing comma on
-        // both sides, as do parenthesized @Event argument lists.
         crate::compile(
             &action_source("g = [1, 2,]"),
             "test.opy",
@@ -2253,9 +2147,6 @@ mod tests {
 
     #[test]
     fn invalid_receiver_categories_are_rejected() {
-        // `.append`/`.remove` require an assignable receiver; `.format` a
-        // string literal — the reference-enforced requirements, now typed
-        // member policy (`lower::policy`, issue #458).
         let error = compile_error(&action_source("3.append(1)"), 4);
         assert_eq!(error.code, "invalid-receiver");
         assert!(error.message.contains("append"));
@@ -2286,9 +2177,6 @@ mod tests {
         .expect("a string-literal receiver compiles");
     }
 
-    /// Lower `source` against an explicitly supplied manifest. The builtin
-    /// manifest is immutable, so tests that mutate descriptive metadata use
-    /// this entry instead of [`crate::compile`].
     fn lower_with_manifest(source: &str, manifest: &'static Manifest) -> OpyResult<HirProgram> {
         let tokens = lex(LexInput {
             file_id: 0,
@@ -2314,9 +2202,6 @@ mod tests {
 
     #[test]
     fn special_enforcement_is_typed_policy_not_manifest_metadata() {
-        // #458: `param.variable` and `Function::receiver` are descriptive
-        // signature metadata. Mutating them alone must not change
-        // acceptance/rejection — enforcement is typed `lower::policy`.
         let mut file: serde_json::Value =
             serde_json::from_str(crate::manifest::MANIFEST_DATA).unwrap();
         for function in file["functions"].as_array_mut().unwrap() {
@@ -2329,9 +2214,6 @@ mod tests {
                 "append" | "remove" | "format" => {
                     function["receiver"] = "Any".into();
                 }
-                // Mark unrelated signatures with the metadata: if the flag
-                // still selected behavior, these calls would start
-                // rejecting.
                 "wait" => function["params"][0]["variable"] = true.into(),
                 "getPosition" => function["receiver"] = "Variable".into(),
                 _ => {}
@@ -2379,9 +2261,6 @@ mod tests {
 
     #[test]
     fn cross_domain_enum_arguments_resolve_as_opaque_identities() {
-        // Domain mismatches need canonical Workshop enum knowledge: a member
-        // of the wrong domain is carried as an opaque identity and the check
-        // is lowering-dependent (#8).
         let expr = first_action_expr(&action_source("chaseOverTime(g, 10, 3, Invis.ALL)"));
         let HirExpr::Call { args, .. } = &expr else {
             panic!("expected a call, got {expr:?}");
@@ -2407,9 +2286,6 @@ mod tests {
 
     #[test]
     fn non_enum_arguments_for_enum_parameters_are_carried_structurally() {
-        // Whether a non-enum value is acceptable for an enum parameter is
-        // Workshop catalog knowledge; the frontend carries the argument
-        // structurally and leaves the check to lowering (#8).
         let expr = first_action_expr(&action_source("eventPlayer.setInvisibility(g)"));
         let HirExpr::ReceiverCall { args, .. } = &expr else {
             panic!("expected a receiver call, got {expr:?}");
@@ -2475,7 +2351,6 @@ mod tests {
         let error = compile_error(member, 4);
         assert_eq!(error.code, "unknown-member");
 
-        // `.x`/`.y`/`.z` are vector component accessors, not member calls.
         for axis in ["x", "y", "z"] {
             let source = format!(
                 "globalvar g\nrule \"r\":\n    @Event eachPlayer\n    g = eventPlayer.{axis}()\n"
@@ -2532,14 +2407,11 @@ mod tests {
             }
         }
 
-        // Arguments are rejected like the manifest zero-parameter path.
         for statement in ["g = attacker(1)", "g = null(1)", "g = eventPlayer(1)"] {
             let error = compile_error(&action_source(statement), 4);
             assert_eq!(error.code, "invalid-arity", "{statement}");
         }
 
-        // In statement position a bare-spelled value diagnoses like any
-        // other value function, not as an unknown action.
         for statement in ["attacker()", "eventPlayer()", "true()"] {
             let error = compile_error(&action_source(statement), 4);
             assert_eq!(error.code, "value-in-action-position", "{statement}");
@@ -2580,8 +2452,6 @@ mod tests {
 
     #[test]
     fn source_aliases_resolve_to_canonical_names() {
-        // Non-contextual aliases rewrite to the canonical entry so identity,
-        // position, and emission use the target name.
         let hir = crate::compile(
             &action_source("stopChasingVariable(g)"),
             "test.opy",
@@ -2712,7 +2582,6 @@ mod tests {
             matches!(target.as_ref(), HirExpr::GlobalVar { name, .. } if name == "I"),
             "the implicit global resolves, got {target:?}"
         );
-        // `AA` (slot 26) and `Z` (slot 25) are default names; `i` is not.
         assert_eq!(default_var_index("I"), Some(8));
         assert_eq!(default_var_index("AA"), Some(26));
         assert_eq!(default_var_index("Z"), Some(25));

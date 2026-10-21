@@ -3,8 +3,6 @@ use super::*;
 impl Parser<'_> {
     pub(super) fn parse_variable(&mut self, declarations: &mut Vec<Decl>, global: bool) -> bool {
         let start = self.advance();
-        // The name token follows the keyword; its span is the exact declared
-        // identifier occurrence (rename targets, not the keyword/statement).
         let name_span = self.peek().span;
         let name = match self.expect_ident("a variable name after the keyword") {
             Ok(name) => name,
@@ -72,8 +70,6 @@ impl Parser<'_> {
 
     pub(super) fn parse_subroutine(&mut self, declarations: &mut Vec<Decl>) -> bool {
         let start = self.advance();
-        // The name token follows the `subroutine` keyword; its span is the
-        // exact declared identifier occurrence.
         let name_span = self.peek().span;
         let name = match self.expect_ident("a subroutine name") {
             Ok(name) => name,

@@ -11,10 +11,6 @@ impl Parser<'_> {
     ) -> Result<Expr, ()> {
         self.skip_expression_newlines();
         let then_value = self.parse_or()?;
-        // The statement-boundary heuristic compares virtual layout lines on
-        // both sides; `then_value`'s last token is the one just consumed, and
-        // its provenance span would collapse every expanded token to the
-        // macro use site (#506 re-review).
         if self.is_ident("if")
             && !self.inside_delimiter_group()
             && self.peek().layout.start.line != self.tokens[self.pos - 1].layout.end.line
@@ -46,8 +42,6 @@ impl Parser<'_> {
             return Err(());
         }
         self.bump();
-        // Conditional expressions are right-associative, so a chained form
-        // such as `a if c else b if d else e` groups at the else branch.
         let else_value = self.parse_expr_inner(true)?;
         let span = Span::new(
             then_value.span().file,
@@ -363,8 +357,6 @@ impl Parser<'_> {
         self.expect(closing, closing_text)
     }
 
-    /// `@Event name(args)`: positional expressions only (keyword arguments
-    /// are a call-argument form, not an event form).
     pub(super) fn parse_event_args(&mut self, args: &mut Vec<Expr>) -> Result<(), ()> {
         self.expect(TokenKind::LParen, "'('")?;
         self.parse_delimited_items(
@@ -622,12 +614,6 @@ impl Parser<'_> {
         }
     }
 
-    /// Parse adjacent string literals as one source-language string value.
-    ///
-    /// Newlines are only ignored while looking for another literal inside a
-    /// delimiter group. Outside a group, a newline remains a statement
-    /// boundary, matching the bounded implicit-concatenation surface used by
-    /// the OverPy examples.
     pub(super) fn parse_string_literal(&mut self) -> Expr {
         let mut first = self.advance();
         let mut value = std::mem::take(&mut first.text);
@@ -651,11 +637,6 @@ impl Parser<'_> {
         }
     }
 
-    /// Return whether the current parser position is inside `()`, `[]`, or
-    /// `{}`. The token stream retains newlines, so this keeps multiline
-    /// implicit concatenation scoped to syntactic grouping without adding
-    /// parser state to every delimiter path. Backed by the precomputed
-    /// `delimiter_depth` prefix table; reads are O(1).
     pub(super) fn inside_delimiter_group(&self) -> bool {
         self.delimiter_depth[self.pos] != 0
     }
@@ -708,10 +689,6 @@ impl Parser<'_> {
         })
     }
 
-    /// Parse the expression regions of a pinned-OverPy f-string. Double
-    /// braces are literal braces; a single brace introduces one expression.
-    /// The resulting expression tokens are shifted back into the source
-    /// string so HIR and tooling retain source provenance.
     pub(super) fn parse_f_string(
         &mut self,
         raw: &str,

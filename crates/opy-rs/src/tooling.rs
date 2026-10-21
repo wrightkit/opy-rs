@@ -1,28 +1,3 @@
-//! Workshop-independent tooling APIs: check a project and query the resolved
-//! semantic model.
-//!
-//! This module is the public tooling surface for Wright and other consumers
-//! that want to parse, check, inspect, and reason about OPY projects before
-//! any Workshop backend is connected (issue #7):
-//!
-//! * [`check`] / [`check_with_overlay`] run the full frontend pipeline
-//!   (preprocess → parse → resolve) on a main file plus its includes and
-//!   return every structured diagnostic together with the file registry.
-//!   Resolution produces the Opy HIR semantic model ([`hir::Program`]);
-//!   Workshop decompilation and catalog inspection are out of scope. Two
-//!   Workshop-bound acceptance passes keep `check` and `compile` agreeing:
-//!   the settings block is checked against the canonical emission table so
-//!   `check` never accepts a settings key `compile` would reject (issue
-//!   #411), and the compile stage — lowering, canonical validation,
-//!   localized emission, the declared post-compile hook, and re-validation
-//!   of hook-rewritten output — runs under the request locale so the
-//!   spelling rejections only emission sees (`unknown-*` member spellings,
-//!   `missing-mapping`) reach `check` too (issue #620).
-//! * [`SemanticModel`] wraps the resolved program and answers semantic
-//!   queries: declarations, rule listing, symbol/reference lookup by name or
-//!   span, custom-enum declarations, macro defines, and source provenance
-//!   (span → file id, path, line/col).
-//!
 //! Diagnostics contract: every [`Diagnostic`] carries a stable machine code,
 //! a severity, a human message, and — when known — a resolved source location
 //! (`path:line:col` through the file registry). Codes are the same ones the
@@ -105,7 +80,6 @@ impl CheckOutcome {
         }
     }
 
-    /// Whether the project checked clean.
     pub fn is_clean(&self) -> bool {
         self.diagnostics
             .iter()
@@ -199,10 +173,6 @@ pub fn check_with_overlay_and_locale(
     check_pipeline(source, main_path, root, overlay, locale, true)
 }
 
-/// The frontend stage of [`check_with_overlay_and_locale`] alone, shared
-/// with the compile-outcome pipeline: the compile-stage acceptance pass is
-/// left to the caller's own `Compiler` invocation so integration failures
-/// keep their integration classification (issue #620).
 pub(crate) fn check_frontend_with_overlay(
     source: &str,
     main_path: &str,
@@ -293,8 +263,6 @@ fn check_pipeline(
                 diagnostics.push(Diagnostic::from_error(error, &files));
                 return CheckOutcome::failure(diagnostics, files, display_root);
             }
-            // The settings emission-table check runs under the request
-            // locale, the same locale `compile` converts the block under.
             match crate::compiler::settings::workshop_settings(&hir, locale) {
                 Ok((settings, unknown)) => {
                     diagnostics.extend(unknown.into_iter().map(|member| {
@@ -332,22 +300,6 @@ fn check_pipeline(
                 return CheckOutcome::failure(diagnostics, files, display_root);
             }
             if run_compile_stage {
-                // Enum member spellings resolve under the emission locale — a
-                // member spelling valid in one locale can be unknown in the
-                // active one — and a post-compile rewrite can introduce
-                // spellings the emitter never produced, so only localized
-                // emission sees them. `check` therefore runs the same
-                // lowering, canonical validation, localized emission,
-                // post-compile hook, and re-validation of the rewritten text
-                // `compile` performs, under the same locale (issue #620).
-                //
-                // `check` surfaces exactly the spelling-rejection class
-                // (`unknown-*` spellings and `missing-mapping`), which only
-                // the hook-output revalidation produces; every other
-                // integration-stage failure — unsupported lowering surfaces,
-                // a throwing hook, malformed rewritten text — stays a
-                // `compile`-only diagnostic so `check` still analyzes
-                // projects that do not fully compile.
                 let hook = preprocessed.post_compile_hook.as_ref().map(|hook| {
                     crate::PostCompileHookRecord {
                         script: hook.path.clone(),
@@ -496,7 +448,6 @@ impl Diagnostic {
     }
 }
 
-/// The severity of a diagnostic in the frontend contract.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum DiagnosticSeverity {
@@ -513,8 +464,6 @@ impl DiagnosticSeverity {
     }
 }
 
-/// A resolved source location: a span's file id and path (through the file
-/// registry) plus its 1-based line/column interval.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct SourceLocation {
     pub file_id: u32,
@@ -524,7 +473,6 @@ pub struct SourceLocation {
 }
 
 impl SourceLocation {
-    /// Recover the frontend span (file id + positions) of this location.
     pub fn to_span(&self) -> Span {
         Span::new(self.file_id, self.start, self.end)
     }
@@ -540,8 +488,6 @@ fn resolve_span(span: Span, files: &[SourceFile]) -> Option<SourceLocation> {
     })
 }
 
-/// Resolve a span through the preprocess file registry (used for
-/// diagnostics, where the model may not exist).
 fn resolve_record_span(span: Span, files: &[FileRecord]) -> Option<SourceLocation> {
     let path = files.iter().find(|file| file.id == span.file)?.path.clone();
     Some(SourceLocation {
@@ -552,9 +498,6 @@ fn resolve_record_span(span: Span, files: &[FileRecord]) -> Option<SourceLocatio
     })
 }
 
-/// Map an Opy HIR span (the protocol type) back to the frontend span type;
-/// positions are the same 1-based source coordinates carried through
-/// lowering.
 fn to_frontend_span(span: hir::types::Span) -> Span {
     Span::new(
         span.file,
@@ -607,29 +550,22 @@ impl SemanticModel {
         model
     }
 
-    /// The HIR declarations (globals, players, subroutines, constants,
-    /// macros). Custom enums are queried through [`SemanticModel::enums`].
     pub fn declarations(&self) -> &[Declaration] {
         &self.hir.declarations
     }
 
-    /// The rule listing: rules and subroutine definitions.
     pub fn rules(&self) -> &[RuleEntry] {
         &self.hir.rules
     }
 
-    /// The recorded preprocessing defines (macro-expansion provenance).
     pub fn defines(&self) -> &[Define] {
         &self.hir.defines
     }
 
-    /// The custom-enum declarations of the project.
     pub fn enums(&self) -> &[EnumDecl] {
         &self.enums
     }
 
-    /// Every indexed program-scope symbol with its declaration site and
-    /// reference sites.
     pub fn symbols(&self) -> &[Symbol] {
         &self.symbols
     }
@@ -652,13 +588,10 @@ impl SemanticModel {
         })
     }
 
-    /// Resolve a span to its file id, path, and line/column through the file
-    /// registry.
     pub fn provenance(&self, span: Span) -> Option<SourceLocation> {
         resolve_span(span, &self.hir.files)
     }
 
-    /// The registry path of a file id.
     pub fn file(&self, id: u32) -> Option<&str> {
         self.hir
             .files
@@ -742,8 +675,6 @@ impl SemanticModel {
         }
     }
 
-    /// Record a reference site for the first symbol of `kind` named `name`.
-    /// A call site is offered to both `subroutine` and `def` bindings.
     fn attach_reference(&mut self, kind: SymbolKind, name: &str, span: Span) {
         let Some(location) = resolve_span(span, &self.hir.files) else {
             return;
@@ -841,22 +772,18 @@ impl hir::visit::Visitor for ReferenceSiteCollector {
     }
 }
 
-/// A custom `enum` declaration (CST-retained; enums fold to constants in the
-/// HIR).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct EnumDecl {
     pub name: String,
     pub members: Vec<EnumMember>,
 }
 
-/// One custom-enum member with its declaration site.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct EnumMember {
     pub name: String,
     pub span: SourceLocation,
 }
 
-/// The kind of a program-scope symbol.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SymbolKind {
@@ -868,8 +795,6 @@ pub enum SymbolKind {
     Macro,
 }
 
-/// A program-scope symbol with its declaration site and resolved reference
-/// sites.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Symbol {
     pub name: String,
@@ -878,8 +803,6 @@ pub struct Symbol {
     pub references: Vec<SourceLocation>,
 }
 
-/// Whether the interval `outer` contains the interval `inner` (half-open
-/// end positions, so a 1:1 zero-width span is contained by itself).
 fn span_contains(outer: Span, inner: Span) -> bool {
     position_leq(outer.start, inner.start) && position_leq(inner.end, outer.end)
 }
@@ -998,9 +921,6 @@ mod tests {
 
     #[test]
     fn unknown_setting_names_the_keys_valid_at_the_path() {
-        // `notASetting` sits under `gamemodes.ffa`; nothing is near, so the
-        // warning falls back to the bounded list of keys the path accepts
-        // (issue #469).
         let outcome = check_source(
             "settings {\n    \"gamemodes\": {\"ffa\": {\"notASetting\": true}}\n}\nrule \"a\":\n    @Event global\n    wait(1)\n",
         );
@@ -1067,8 +987,6 @@ mod tests {
 
     #[test]
     fn canonical_workshop_ids_are_source_diagnostics() {
-        // #410: canonical Workshop ids that upstream OverPy does not spell
-        // are rejected with a source span, not accepted as callables.
         for (statement, code) in [
             ("g = allTankHeroes()", "unknown-value"),
             ("g = lastCreatedEntity()", "unknown-value"),

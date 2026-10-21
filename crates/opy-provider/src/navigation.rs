@@ -1,14 +1,3 @@
-//! `lpp/symbols`, `lpp/definition`, and `lpp/references` (LPP spec sections
-//! 12–14).
-//!
-//! All three methods read the [`SemanticModel`] symbol index: declaration
-//! and reference sites carry frontend spans that resolve through the file
-//! registry to authored `#!include` sources. Reported locations are narrowed
-//! to the authored identifier token, so a `reset()` call site yields the
-//! `reset` range; reference sites that cannot map to authored text
-//! (macro-expanded uses report the call site) are not considered symbol
-//! positions.
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -94,9 +83,6 @@ fn parse_params<T: serde::de::DeserializeOwned>(
     serde_json::from_value(params).map_err(|_| invalid_params())
 }
 
-/// The position document's resolved project view: its check outcome, its
-/// filesystem path, the request position in frontend coordinates (1-based
-/// line, tab-expanded column), and the registry ids carrying its source.
 struct PositionView {
     outcome: CheckOutcome,
     position_path: PathBuf,
@@ -115,8 +101,6 @@ fn no_symbol(code: &'static str, uri: &str) -> HandlerError {
     HandlerError::refusal(code, json!({ "uri": uri }), "no symbol at position")
 }
 
-/// Registry ids in `outcome` whose records resolve to `path` and carry
-/// analyzed source.
 fn file_ids_covering(outcome: &CheckOutcome, path: &Path) -> BTreeSet<u32> {
     outcome
         .files
@@ -127,11 +111,6 @@ fn file_ids_covering(outcome: &CheckOutcome, path: &Path) -> BTreeSet<u32> {
         .collect()
 }
 
-/// The authored name token a declaration site presents. Global, player,
-/// subroutine, and `def` sites record a name span so [`narrow_site`]
-/// resolves directly; `macro NAME(...)`/`macro NAME = expr` declarations
-/// record a span starting at the `macro` keyword, so the name token is the
-/// first identifier spelling `name` later on the same line.
 fn declaration_token(text: &str, site: &SourceLocation, name: &str) -> Option<SiteToken> {
     let source = SourceText::new(text);
     if let Some(token) = narrow_site(&source, site, name) {
@@ -165,15 +144,12 @@ fn declaration_token(text: &str, site: &SourceLocation, name: &str) -> Option<Si
     None
 }
 
-/// Whether `position` (frontend coordinates) is on `token`.
 fn token_contains(token: &SiteToken, position: Position) -> bool {
     token.line() == position.line
         && token.col <= position.col
         && position.col < token.col + token.len()
 }
 
-/// The LPP range a site reports: the authored identifier token when found,
-/// otherwise the recorded span — always authored source coordinates.
 fn site_range(text: &str, site: &SourceLocation, token: Option<SiteToken>) -> Value {
     if let Some(token) = token {
         return token_range(&SourceText::new(text), token);
@@ -184,7 +160,6 @@ fn site_range(text: &str, site: &SourceLocation, token: Option<SiteToken>) -> Va
     })
 }
 
-/// Order locations by `range.start`, then `uri` for determinism.
 fn compare_by_range_start(a: &Value, b: &Value) -> std::cmp::Ordering {
     (
         a["range"]["start"]["line"].as_u64().unwrap_or_default(),
@@ -202,11 +177,6 @@ fn compare_by_range_start(a: &Value, b: &Value) -> std::cmp::Ordering {
         ))
 }
 
-/// The `Location` of a site for a single-document request: the position
-/// document's URI and text when the site resolves to it, else a `file:` URI
-/// and the on-disk text of the reached source. `declaration` sites use the
-/// lenient [`declaration_token`] so the reported range matches the position
-/// the hit test accepts.
 fn site_location(
     document: &Document,
     position_path: &Path,
@@ -235,10 +205,6 @@ fn site_location(
     })
 }
 
-/// Check the position document — its `#!include` and `#!mainFile` targets
-/// resolve through the filesystem and the document's own text — and place
-/// the LPP request position in it. A document with no analyzable project
-/// covering it refuses with the method's `noSymbolAtPosition` code.
 fn position_view(
     document: &Document,
     position: LspPosition,
@@ -286,10 +252,6 @@ fn position_view(
     })
 }
 
-/// The symbols whose authored name token the request position sits on —
-/// through the declaration site or one of the reference sites. A position
-/// inside a recorded span but off the authored token (a call's argument, a
-/// macro use site's replacement) is not a symbol position.
 fn symbols_at<'v>(view: &'v PositionView, document: &Document) -> Vec<&'v Symbol> {
     let model = view
         .outcome
@@ -313,10 +275,6 @@ fn symbols_at<'v>(view: &'v PositionView, document: &Document) -> Vec<&'v Symbol
         .collect()
 }
 
-/// `lpp/symbols`: each received document lists the symbols the analyzed
-/// project declares in it, in declaration order. A document that no clean
-/// outcome covers — its own fragment failed, or it is a `#!mainFile` stub —
-/// lists no symbols.
 pub(crate) fn symbols(params: Value) -> Result<Value, HandlerError> {
     let params: SymbolsParams = parse_params(params, &["documents", "projectRoot"])?;
     let Some(documents) = params.documents else {
@@ -325,11 +283,6 @@ pub(crate) fn symbols(params: Value) -> Result<Value, HandlerError> {
     validate_documents(&documents)?;
     let overlay = overlay_map(&documents, None)?;
 
-    // One project check per effective entry — the same grouping
-    // `lpp/check` uses — then each document reads its declarations from the
-    // first clean outcome whose registry covers it, so a document reached
-    // through an includer's project is attributed even when its own
-    // fragment does not analyze standalone.
     let mut groups: BTreeMap<PathBuf, Vec<&Document>> = BTreeMap::new();
     for document in documents.values() {
         let path = document_path(document)?;
@@ -400,9 +353,6 @@ pub(crate) fn symbols(params: Value) -> Result<Value, HandlerError> {
     Ok(json!({ "documents": result }))
 }
 
-/// `lpp/definition`: the declaration location(s) of the symbol at the
-/// position — a call site shared by a `subroutine` declaration and its `def`
-/// resolves both.
 pub(crate) fn definition(params: Value) -> Result<Value, HandlerError> {
     let params: PositionParams = parse_params(params, &["document", "position"])?;
     let view = position_view(
@@ -431,15 +381,10 @@ pub(crate) fn definition(params: Value) -> Result<Value, HandlerError> {
             locations.push(location);
         }
     }
-    // Multiple declarations resolve when a call site is shared by a
-    // `subroutine` and its `def`; order them deterministically.
     locations.sort_by(compare_by_range_start);
     Ok(json!({ "locations": locations }))
 }
 
-/// `lpp/references`: every reference site of the symbol at the position,
-/// sorted by `range.start`; `includeDeclaration` lists the declaration
-/// location(s) first.
 pub(crate) fn references(params: Value) -> Result<Value, HandlerError> {
     let params: ReferencesParams =
         parse_params(params, &["document", "position", "includeDeclaration"])?;
@@ -485,9 +430,6 @@ pub(crate) fn references(params: Value) -> Result<Value, HandlerError> {
             }
         }
     }
-    // A call site shared by a `subroutine` and its `def` lists both
-    // declarations; the spec orders the remaining locations by range start,
-    // so the declaration block sorts the same way for determinism.
     declarations.sort_by(compare_by_range_start);
     references.sort_by(compare_by_range_start);
     declarations.extend(references);

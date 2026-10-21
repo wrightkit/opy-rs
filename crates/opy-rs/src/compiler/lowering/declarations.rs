@@ -186,10 +186,6 @@ impl<'a> Lowering<'a> {
         let mut player_index = 0;
         let mut subroutine_index = 0;
 
-        // Declared variables in source order (for duplicate detection and
-        // initializer action order), then merged with the implicit default
-        // variables and created in Workshop index order so the emitted
-        // variable tables are reference-compatible.
         let mut planned_globals: Vec<(String, u32, Option<HirSpan>, Option<HirSpan>)> = Vec::new();
         let mut global_initializers = Vec::new();
         let mut planned_players: Vec<(String, u32, Option<HirSpan>, Option<HirSpan>)> = Vec::new();

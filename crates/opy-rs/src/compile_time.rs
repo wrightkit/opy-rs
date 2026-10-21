@@ -1,10 +1,3 @@
-//! Shared compile-time expression folding for OPY values.
-//!
-//! Settings use this same HIR expression path as ordinary OPY lowering. The
-//! evaluator is deliberately conservative: expressions that still depend on
-//! runtime values are left for normal lowering, while settings require a
-//! complete primitive result.
-
 use std::collections::HashMap;
 
 use crate::hir::Expr;
@@ -16,8 +9,6 @@ pub(crate) enum Value {
     Bool(bool),
     Array(Vec<Value>),
     Object(Vec<(Value, Value)>),
-    /// A `vect(x, y, z)` value: only `distance`/`magnitude`-family folds
-    /// and the `.x`/`.y`/`.z` component reads consume it (#512).
     Vector(Vec<Value>),
     /// JavaScript `null`: formattable as `0` upstream, and unhandled as a
     /// settings value anywhere else (#512).
@@ -937,9 +928,6 @@ fn same_spelling(left: &Expr, right: &Expr) -> bool {
     }
 }
 
-/// Upper bound on a folded string repetition so `"x" * 1e9` does not
-/// materialize a huge literal; oversized repeats stay unfolded and fail
-/// canonical validation like any other non-canonical `Multiply` call.
 const STRING_REPEAT_LIMIT: usize = 8192;
 
 fn fold_string_repetition(left: &Value, right: &Value) -> Option<Value> {
@@ -1064,8 +1052,6 @@ fn evaluate_format(text: &str, args: &[Value]) -> Option<Value> {
     Some(Value::String(output))
 }
 
-/// The length of an upstream `\{\{(\d*)\}\}` escape at `chars[0]`, when the
-/// doubled braces wrap only digits.
 fn brace_escape_len(chars: &[char]) -> Option<usize> {
     if chars.len() < 4 || chars[0] != '{' || chars[1] != '{' {
         return None;
@@ -1077,8 +1063,6 @@ fn brace_escape_len(chars: &[char]) -> Option<usize> {
     (index + 1 < chars.len() && chars[index] == '}' && chars[index + 1] == '}').then_some(index + 2)
 }
 
-/// A `\{(\d*)\}` formatter at `chars[0]`: its digits (`None` for `{}`) and
-/// the match length.
 fn format_arg_len(chars: &[char]) -> Option<(Option<String>, usize)> {
     let mut index = 1;
     while index < chars.len() && chars[index].is_ascii_digit() {
@@ -1161,7 +1145,6 @@ fn modifier_template_step(step: char, value: &str) -> Option<String> {
     (step != 'b' || big_letter_done).then_some(output)
 }
 
-/// The text an argument contributes inside a folded format expression.
 fn format_substitute(value: &Value) -> Option<String> {
     match value {
         Value::Number(value) if value.abs() <= NUMBER_LIMIT => Some(workshop_number_text(*value)),

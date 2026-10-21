@@ -1,24 +1,14 @@
 use super::*;
 
-/// One value-position call `lower_call` resolves by name rather than
-/// through the manifest.
 #[derive(Clone, Copy)]
 pub(crate) enum SpecialValueCall {
     /// `sorted(array, key)` — the key argument lowers as a lambda and only
     /// the `key=` keyword spelling is accepted.
     Sorted,
-    /// `createWorkshopSetting(type, category, name, default, sortOrder?)` —
-    /// its own arity and setting-type handling.
     CreateWorkshopSetting,
-    /// `createWorkshopSetting{Bool,Enum,Int,Float,Hero}` — passed through
-    /// verbatim as a call.
     SettingFactory,
 }
 
-/// The special-call spellings `lower_call` dispatches on. `crate::lookup`'s
-/// reported special-call names and the `crate::matcher` candidate pool must
-/// be exactly the spellings here — the lookup tests assert the tables
-/// agree (issue #469).
 pub(crate) const SPECIAL_VALUE_CALLS: &[(&str, SpecialValueCall)] = &[
     ("sorted", SpecialValueCall::Sorted),
     (
@@ -44,24 +34,15 @@ pub(crate) const SPECIAL_VALUE_CALLS: &[(&str, SpecialValueCall)] = &[
     ),
 ];
 
-/// A source-level special form: a call name the lowerer handles by name
-/// rather than through the manifest. Its parameter facts mirror the
-/// reference's declared signatures — the same `(name, type, required,
-/// default)` facts manifest-backed callables report — so `crate::lookup`
-/// describes special calls from one declaration instead of a parallel
-/// table that can drift from `SPECIAL_VALUE_CALLS` (issue #469).
 pub(crate) struct SpecialFunction {
     pub(crate) name: &'static str,
     pub(crate) params: &'static [SpecialParam],
 }
 
-/// One ordered parameter of a special call, from the reference signature.
 pub(crate) struct SpecialParam {
     pub(crate) name: &'static str,
-    /// The reference's declared argument type (`IntLiteral`, `Lambda`, …).
     pub(crate) param_type: &'static str,
     pub(crate) required: bool,
-    /// The declared default rendered in source syntax, when declared.
     pub(crate) default: Option<&'static str>,
 }
 
@@ -96,9 +77,6 @@ const fn optional(name: &'static str, param_type: &'static str) -> SpecialParam 
     }
 }
 
-/// The special-call spellings an `unknown-value` diagnostic can suggest and
-/// the lookup can describe, with the parameter facts the reference declares,
-/// in the same order `SPECIAL_VALUE_CALLS` dispatches them.
 pub(crate) const SPECIAL_FUNCTIONS: &[SpecialFunction] = &[
     SpecialFunction {
         name: "sorted",
@@ -556,8 +534,6 @@ impl Lowerer {
     }
 }
 
-/// Whether `compressed()` accepts these elements: only numbers, or only
-/// vectors of numbers.
 fn is_compressible(values: &[HirExpr]) -> bool {
     let values = values
         .iter()

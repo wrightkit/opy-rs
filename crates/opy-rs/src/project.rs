@@ -3,7 +3,6 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-/// A filesystem-backed OPY project target and the root used to resolve it.
 #[derive(Debug)]
 pub struct FilesystemProject {
     source: String,
@@ -12,7 +11,6 @@ pub struct FilesystemProject {
 }
 
 impl FilesystemProject {
-    /// Load an OPY project from a file entry or a project directory.
     pub fn load(path: &Path) -> Result<Self, FilesystemProjectError> {
         let canonical_target = path.canonicalize().map_err(|error| {
             if is_absent(error.kind()) {
@@ -44,27 +42,19 @@ impl FilesystemProject {
         })
     }
 
-    /// The source text read from the selected entry.
     pub fn source(&self) -> &str {
         &self.source
     }
 
-    /// The selected entry path used as the source identity in diagnostics.
     pub fn main_path(&self) -> &Path {
         &self.main_path
     }
 
-    /// The canonical parent directory used for project-relative resolution.
     pub fn root(&self) -> &Path {
         &self.root
     }
 }
 
-/// Whether an I/O failure means the probed path cannot exist: the final
-/// component is absent (`NotFound`), or an intermediate component is a
-/// regular file (`NotADirectory` on Unix, a not-found error on Windows).
-/// Both name an entry that does not exist rather than one that failed to
-/// load (#497).
 fn is_absent(kind: io::ErrorKind) -> bool {
     matches!(kind, io::ErrorKind::NotFound | io::ErrorKind::NotADirectory)
 }
@@ -86,7 +76,6 @@ fn default_entry(directory: &Path) -> Result<PathBuf, FilesystemProjectError> {
     ))
 }
 
-/// Failure while loading a filesystem-backed OPY project entry.
 #[derive(Debug)]
 pub enum FilesystemProjectError {
     EntryNotFound { path: PathBuf, source: io::Error },
@@ -183,9 +172,6 @@ mod tests {
         ));
     }
 
-    /// A symlink cycle fails canonicalization with `Filesystem loop`, not
-    /// `NotFound`: the failure must keep its real category instead of
-    /// masquerading as an absent entry (#484).
     #[cfg(unix)]
     #[test]
     fn unresolvable_entry_is_not_classified_as_missing() {
@@ -205,8 +191,6 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
-    /// `main.opy` present but unresolvable: the default-entry search must
-    /// report the I/O failure rather than `DefaultEntryNotFound` (#484).
     #[cfg(unix)]
     #[test]
     fn unresolvable_default_entry_is_not_classified_as_missing() {
@@ -221,8 +205,6 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
-    /// A file that resolves but cannot be read stays `EntryUnreadable`.
-    /// Skipped under root, which bypasses permission checks.
     #[cfg(unix)]
     #[test]
     fn unreadable_entry_reports_unreadable() {
@@ -245,12 +227,6 @@ mod tests {
         ));
     }
 
-    /// A directory whose only `src` is a regular file has no default entry,
-    /// the same as an empty directory (#497). Verified on Unix: `src` being
-    /// a file makes the `src/main.opy` probe fail `ENOTDIR`. Windows reports
-    /// a not-found error for the same probe, which the `is_absent`
-    /// classification covers identically; CI on Windows currently runs only a
-    /// subset of tests.
     #[test]
     fn file_named_src_is_default_entry_not_found() {
         let dir = scratch("file-src");
@@ -264,8 +240,6 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
-    /// An empty directory reports `DefaultEntryNotFound` — the baseline the
-    /// file-named-`src` case must match (#497).
     #[test]
     fn empty_directory_is_default_entry_not_found() {
         let dir = scratch("empty");
@@ -278,10 +252,6 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
-    /// A path inside a regular file names an entry that does not exist, so it
-    /// carries the not-found classification on every platform (#497). Verified
-    /// on Unix, where canonicalization fails `ENOTDIR`; Windows reports a
-    /// not-found error that lands in the same classification.
     #[test]
     fn entry_inside_a_file_is_entry_not_found() {
         let dir = scratch("notdir");

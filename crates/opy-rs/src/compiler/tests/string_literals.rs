@@ -1,5 +1,3 @@
-//! Canonical compiler coverage for string literals.
-
 use std::path::{Path, PathBuf};
 
 use crate::Compiler;
@@ -47,13 +45,9 @@ fn minimized_regression_reaches_canonical_debug_string() {
 
 #[test]
 fn unicode_escape_in_subroutine_name_reaches_canonical_workshop() {
-    // Minimized from OWBastion/Bastion commit
-    // f95d3159effed8aef0747a9fac5495e0651895b6,
-    // Bastion/src/utilities/system/savePlayerData.opy:9.
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/regressions/bastion-unicode-name.opy");
     let source = std::fs::read_to_string(&fixture).expect("Unicode regression must be readable");
-    // The names matter here, so keep the otherwise empty subroutines.
     let source = format!("#!disableOptimizations\n{source}");
     let artifact = Compiler::new()
         .expect("released workshop contract must load")
@@ -129,8 +123,6 @@ fn named_string_entities_reach_canonical_custom_strings() {
 
 #[test]
 fn modifier_format_binds_the_surviving_formatters() {
-    // opy-rs#530: `.format` on a `w`/`b`/`c` literal binds the `{n}`/`{}`
-    // formatters that survive the text rewrite, like a plain string.
     let source =
         "globalvar g\nrule \"r\":\n    @Event global\n    g = w\"a{0}b\".format(getMatchTime())\n";
     let hir = crate::compile(source, "issue-530.opy", Path::new(".")).unwrap();
@@ -270,8 +262,6 @@ fn format_arity_huge_placeholder_rejects_without_overflow() {
             .contains("Too few arguments in .format() function"),
         "the rejection must be the arity diagnostic, got: {error}"
     );
-    // A 20+-digit placeholder that cannot even parse as usize rejects the
-    // same way instead of silently skipping the check.
     let source = "globalvar g\nrule \"r\":\n    @Event global\n    g = \"{99999999999999999999}x\".format()\n";
     let hir = crate::compile(source, "format-overflow2.opy", Path::new(".")).unwrap();
     assert!(
@@ -309,9 +299,6 @@ fn f_string_defines_do_not_expand_inside_nested_literals() {
 
 #[test]
 fn f_string_function_defines_split_escaped_quote_arguments() {
-    // `P('x\'y', 'z')` must split its arguments on the top-level comma:
-    // the escaped quote does not close the literal early, and the two
-    // string arguments then fold to `x'yz` like any `a + b` concat.
     let source = "#!define P(a,b) a+b\nglobalvar g\nrule \"r\":\n    @Event global\n    g = f\"{P('x\\'y','z')}\"\n";
     let hir = crate::compile(source, "fescaped.opy", Path::new(".")).unwrap();
     let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();

@@ -1,14 +1,3 @@
-//! Opy HIR v2 — the OPY semantic model owned by `opy-rs`.
-//!
-//! The wire contract is the `wright/opy-hir` protocol, major version 2
-//! (produced as `2.0.0`), specified in `docs/hir/opy-hir-v2.md`. This module provides the serde
-//! protocol types, envelope and structural validation, and a deterministic
-//! debug dump.
-//!
-//! Ingestion order follows the spec (§8): envelope identity/version first,
-//! then unknown-node-kind rejection, then deserialization, then invariant
-//! validation. Every failure is a structured [`HirError`].
-
 pub mod dump;
 pub mod error;
 pub mod types;
@@ -35,7 +24,6 @@ pub fn parse_str(input: &str) -> Result<Program, HirError> {
     parse_value(value)
 }
 
-/// Parse and validate an Opy HIR v2 payload from a JSON value.
 pub fn parse_value(value: Value) -> Result<Program, HirError> {
     validate::check_envelope(&value)?;
     validate::check_unknown_kinds(&value)?;
@@ -52,8 +40,6 @@ impl Program {
         validate::validate_program(self)
     }
 
-    /// Render a deterministic debug dump suitable for tests and issue
-    /// reports.
     pub fn dump(&self) -> String {
         dump::dump(self)
     }

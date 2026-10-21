@@ -1,5 +1,3 @@
-//! Pinned OverPy callable-boundary regressions for #329.
-
 use std::path::Path;
 
 use crate::Compiler;

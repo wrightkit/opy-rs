@@ -1,9 +1,6 @@
-//! Manifest/catalog validation and the released Workshop integration contract.
-
 use super::*;
 use std::sync::OnceLock;
 
-/// Results of the manifest-to-catalog cross-check.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LinkReport {
     pub catalog_ids_checked: usize,
@@ -18,9 +15,6 @@ pub(crate) struct CompilerContract {
 
 static COMPILER_CONTRACT: OnceLock<Result<CompilerContract, IntegrationError>> = OnceLock::new();
 
-/// Cross-check every OPY manifest `catalogId` and domain identity against the
-/// canonical Workshop catalog. No local catalog copy or spelling allowlist is
-/// involved.
 pub(crate) fn cross_check_manifest(
     manifest: &Manifest,
     catalog: &Catalog,

@@ -1,16 +1,8 @@
-//! Integration tests for the Workshop-independent tooling API:
-//! multi-file project validation through [`opy_rs::tooling::check`],
-//! semantic queries on the resolved model, and stable diagnostic codes for
-//! representative malformed inputs.
-
 use std::path::Path;
 
 use opy_rs::diag::{Position, Span};
 use opy_rs::tooling::{self, SymbolKind, check};
 
-/// The WrightKit-authored multi-file fixture: `main.opy` includes
-/// `shared/defs.opy`, declares `playervar P`, and uses symbols declared in
-/// the included file (globalvar, subroutine, enum, macro) plus a `#!define`.
 const MULTI_MAIN: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/tests/fixtures/multi-file/main.opy"
@@ -34,9 +26,6 @@ fn multi_file_project_checks_and_resolves_end_to_end() {
     assert_eq!(outcome.files[1].path, "shared/defs.opy");
     assert_eq!(model.file(1), Some("shared/defs.opy"));
 
-    // Declarations across both files: globalvar/subroutine/macro from the
-    // include, playervar from the main file (enums are not retained in the
-    // Opy HIR; they are queried separately).
     assert_eq!(model.declarations().len(), 5);
     assert!(model
         .declarations()
@@ -47,8 +36,6 @@ fn multi_file_project_checks_and_resolves_end_to_end() {
         .iter()
         .any(|decl| matches!(decl, opy_rs::hir::types::Declaration::PlayerVariable { name, .. } if name == "P")));
 
-    // Rule listing: the rule plus the def'd subroutine (the include splices
-    // first, so the def entry precedes the rule entry).
     assert_eq!(model.rules().len(), 2);
     assert!(model.rules().iter().any(|entry| matches!(
         entry,
@@ -62,7 +49,6 @@ fn multi_file_project_checks_and_resolves_end_to_end() {
     assert_eq!(model.defines().len(), 1);
     assert_eq!(model.defines()[0].name, "SCALE");
 
-    // Custom enums are queryable even though they fold in the HIR.
     assert_eq!(model.enums().len(), 1);
     assert_eq!(model.enums()[0].name, "Direction");
     assert_eq!(model.enums()[0].members.len(), 2);
@@ -104,10 +90,6 @@ fn multi_file_project_checks_and_resolves_end_to_end() {
             .any(|symbol| symbol.kind == SymbolKind::Def)
     );
 
-    // References: uses in the main file and in the def body resolve to the
-    // included-file binding, each with its own file provenance. The
-    // augmented assignment lowers to a Binary whose left re-uses the target,
-    // so line 9 contributes two reference sites.
     assert_eq!(total.references.len(), 4);
     let main_refs: Vec<_> = total
         .references
@@ -149,8 +131,6 @@ fn multi_file_project_checks_and_resolves_end_to_end() {
         "total"
     );
 
-    // The model serializes for `opy-cli inspect` (declarations, rules,
-    // references as one JSON document).
     let json = serde_json::to_value(&model).expect("the model serializes");
     assert_eq!(json["hir"]["protocol"]["name"], "wright/opy-hir");
     assert!(json["symbols"].as_array().expect("symbols array").len() >= 5);
@@ -172,31 +152,17 @@ fn tooling_exposes_define_member_identity() {
     assert!(model.defines()[0].is_member);
 }
 
-/// Representative malformed inputs with their stable diagnostic codes (the
-/// machine contract: codes and source locations, not wording).
 #[rustfmt::skip]
 const STABLE_DIAGNOSTICS: &[(&str, &str)] = &[
-    // A bare dictionary is now lexed and rejected at the OPY semantic
-    // boundary rather than being mistaken for settings content.
     ("globalvar money\nrule \"r\":\n    @Event global\n    money += {\n        Mei.GENERIC: 10,\n    }\n", "dict-access"),
-    // Missing colon after the rule name.
     ("rule \"x\"\n    @Event global\n", "parse-error"),
-    // Unknown builtin in statement position.
     ("rule \"r\":\n    @Event global\n    frobnicate()\n", "unknown-action"),
-    // Unknown builtin in value position.
     ("globalvar x\nrule \"r\":\n    @Event global\n    x = frobnicate()\n", "unknown-value"),
-    // Undeclared identifier.
     ("globalvar x\nrule \"r\":\n    @Event global\n    x = nope\n", "unknown-identifier"),
-    // Unknown member function.
     ("rule \"r\":\n    @Event eachPlayer\n    eventPlayer.frobnicate()\n", "unknown-member"),
-    // Positional overflow.
     ("globalvar g\nrule \"r\":\n    @Event global\n    chaseOverTime(g, 10, 3, 4, 5)\n", "invalid-arity"),
-    // Value function in action position.
     ("rule \"r\":\n    @Event global\n    isGameInProgress()\n", "value-in-action-position"),
-    // Macro arity mismatch at the expansion site (`#!define` macros expand
-    // during preprocessing; `macro` statements do not arity-check).
     ("#!define double(x) x + x\nrule \"r\":\n    @Event global\n    double(1, 2)\n", "macro-arity"),
-    // Unterminated settings block.
     ("settings {\n    \"gamemodes\": {}\n", "settings-invalid"),
 ];
 
@@ -223,9 +189,6 @@ fn diagnostic_codes_are_stable_for_malformed_inputs() {
 
 #[test]
 fn workshop_script_source_reports_exactly_one_diagnostic() {
-    // opy-rs#420: pasted Workshop script must surface as exactly one
-    // `workshop-source` diagnostic through `check` — the surface Wright/LPP
-    // consume — not only at the parser layer.
     let outcome = check(
         "rule \"workshop style\" {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Wait(1, Ignore Condition);\n    }\n}\n",
         "main.opy",
@@ -264,8 +227,6 @@ fn include_failures_are_stable_and_source_located() {
         outcome.diagnostics.first().expect("include-cycle").code,
         "include-cycle"
     );
-    // The registry retains every file registered before the failure: a (main),
-    // b, and the re-included a that triggered the cycle.
     assert_eq!(outcome.files.len(), 3);
     assert_eq!(outcome.files[1].path, "b.opy");
     let _ = std::fs::remove_dir_all(&dir);
@@ -273,9 +234,6 @@ fn include_failures_are_stable_and_source_located() {
 
 #[test]
 fn all_parse_diagnostics_are_reported() {
-    // Three broken constructs — two rules missing their colon and a stray
-    // directive line — all surface as parse-error diagnostics (the parser
-    // recovers at statement boundaries; the tooling API reports every one).
     let outcome = check(
         "rule \"a\"\n    @Event global\nrule \"b\"\n",
         "main.opy",
@@ -293,9 +251,6 @@ fn all_parse_diagnostics_are_reported() {
 
 #[test]
 fn semantic_errors_follow_the_compile_first_error_contract() {
-    // `x = frobnicate()` produces two semantic errors (unknown-identifier and
-    // unknown-value); check reports the first, matching `compile`, so the two
-    // entry points never disagree about a project's verdict.
     let outcome = check(
         "rule \"r\":\n    @Event global\n    x = frobnicate()\n",
         "main.opy",
@@ -376,11 +331,6 @@ fn player_member_references_use_exact_member_span() {
 
 #[test]
 fn settings_emission_agreement_between_check_and_compile() {
-    // opy-rs#411: `check` and `compile` must agree on every settings member.
-    // A member the catalog does not declare compiles as the pinned OverPy
-    // writes it and checks with a warning rather than an error: an unknown
-    // key with a scalar, empty, list, or object value, and an enum key with
-    // an undeclared value.
     let unknown = concat!(
         "settings {\n",
         "    \"main\": {\"description\": \"t\", \"emptyKey\": \"\"},\n",
@@ -416,8 +366,6 @@ fn settings_emission_agreement_between_check_and_compile() {
         assert!(lines.contains(&line.to_string()), "{line:?} in {lines:?}");
     }
 
-    // A scalar directly under a team (upstream reads it as a hero name) still
-    // fails both entry points under the same `workshop-emission` code.
     let invalid = concat!(
         "settings {\n",
         "    \"main\": {\"description\": \"t\"},\n",
@@ -437,8 +385,6 @@ fn settings_emission_agreement_between_check_and_compile() {
     let compile_error = opy_rs::compile(invalid, "main.opy", Path::new("")).unwrap_err();
     assert_eq!(compile_error.code, "workshop-emission");
 
-    // The inherited `gamemodes.general` key that motivated the issue passes
-    // both entry points.
     let valid = concat!(
         "settings {\n",
         "    \"main\": {\"description\": \"t\"},\n",
@@ -634,7 +580,6 @@ fn settings_list_elements_evaluate_like_the_pinned_reference() {
             "element {element:?} must emit {emitted:?}: {lines:?}"
         );
     }
-    // Folded elements land in carried blocks under catalogued keys too.
     let lines = compiled_lines(concat!(
         "settings {\n",
         "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
@@ -709,9 +654,6 @@ fn settings_list_elements_the_reference_rejects_are_errors() {
             outcome.diagnostics
         );
     }
-    // The same rejections apply under a catalogued enum key: bare member
-    // names are expressions there, not literals — `[assault]` fails where
-    // `["assault"]` is carried.
     let outcome = check(
         concat!(
             "settings {\n",
@@ -764,7 +706,6 @@ fn settings_strings_with_unbound_formatters_are_errors() {
             outcome.diagnostics
         );
     }
-    // A literal scalar string with a formatter is rejected the same way.
     let outcome = check(
         concat!(
             "settings {\n",
@@ -810,7 +751,6 @@ fn settings_strings_with_unbound_formatters_are_errors() {
             outcome.diagnostics
         );
     }
-    // Escaped `{{...}}` and non-formatter braces emit verbatim.
     for (element, emitted) in [
         ("\"{{0}}\"", "{{0}}"),
         ("\"a{b}c\"", "a{b}c"),
@@ -910,7 +850,6 @@ fn settings_variadic_builtins_fold_all_arguments() {
             "element {element:?} must emit {emitted:?}: {lines:?}"
         );
     }
-    // The same folding applies to scalar settings values.
     let source = concat!(
         "settings {\n",
         "    \"gamemodes\": {\"ffa\": {\"enabled\": true, \"general\": {\"unk\": max(1, 2, 3)}}}\n",
@@ -1133,7 +1072,6 @@ fn catalogued_list_keys_reject_elements_the_reference_cannot_resolve() {
             outcome.diagnostics
         );
     }
-    // Team-level hero rosters reject unresolved elements the same way.
     let outcome = check(
         concat!(
             "settings {\n",
@@ -1153,8 +1091,6 @@ fn catalogued_list_keys_reject_elements_the_reference_cannot_resolve() {
         "a bare hero name in a team roster is an expression: {:?}",
         outcome.diagnostics
     );
-    // A resolvable element still emits its evaluated text — a quoted map
-    // name resolves to its localized display name.
     let lines = compiled_lines(concat!(
         "settings {\n",
         "    \"gamemodes\": {\"skirmish\": {\"enabled\": true, \"enabledMaps\": [\"kingsRow\"]}}\n",
@@ -1194,8 +1130,6 @@ fn settings_uncatalogued_top_level_groups_still_reject() {
             outcome.diagnostics
         );
     }
-    // A failed evaluation inside the group is still a
-    // `settings-expression`: the surviving-list check walks it verbatim.
     let outcome = check(
         concat!(
             "settings {\n",
@@ -1566,8 +1500,6 @@ fn hero_group_rename_uses_the_pinned_assign_delete_order() {
 
 #[test]
 fn general_children_are_not_reprocessed_as_hero_members() {
-    // opy-rs#495: the flattened `general` members take only the team-level
-    // pass-through — hero-name and applicability passes must not reach them.
     let lines = compiled_lines(concat!(
         "settings {\n",
         "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
@@ -1668,8 +1600,6 @@ fn both_hero_lists_in_one_team_error() {
 
 #[test]
 fn inapplicable_hero_key_with_enum_value_stays_verbatim() {
-    // opy-rs#495: a non-applicable key is unknown for that hero, so both the
-    // name and the value keep their authored spelling.
     let lines = compiled_lines(concat!(
         "settings {\n",
         "    \"gamemodes\": {\"ffa\": {\"enabled\": true}},\n",
@@ -1690,8 +1620,6 @@ fn inapplicable_hero_key_with_enum_value_stays_verbatim() {
 
 #[test]
 fn misspelled_settings_key_warns_with_a_single_candidate_suffix() {
-    // A near-miss settings key compiles unchanged like upstream; `check` warns
-    // and names the canonical key once.
     let source = concat!(
         "settings {\n",
         "    \"main\": { \"descriptino\": \"x\" },\n",
@@ -1796,9 +1724,6 @@ fn empty_block_bodies_parse_like_the_pinned_oracle() {
             .unwrap_or_else(|error| panic!("{name} must compile: {error:?}"));
     }
 
-    // The dedent-out statement is a sibling, not a body member: `if g:` gets
-    // an empty body that emits nothing and `g = 2` stays unconditional; a
-    // lone `if` whose body lowers to no actions emits nothing at all.
     let lines = compiled_lines(concat!(
         "globalvar g\n",
         "rule \"r\":\n    @Event global\n    if g:\n    g = 2\n"
@@ -1908,10 +1833,6 @@ fn elif_else_and_do_while_tails_obey_the_enclosing_block_floor() {
 
 #[test]
 fn orphan_elif_else_warns_lone_else_and_rejects_instead_of_misparsing() {
-    // opy-rs#516 review: an `elif`/`else` without a preceding `if` gets the
-    // pinned `w_lone_else` warning — but its `Else If`/`Else` marker has no
-    // canonical Workshop representation yet, so it rejects cleanly rather
-    // than parsing `else:` as a label and dropping the marker.
     for (name, keyword, source) in [
         (
             "elif after a sibling",
@@ -1957,8 +1878,6 @@ fn orphan_elif_else_warns_lone_else_and_rejects_instead_of_misparsing() {
             "{name} must reject the unrepresentable marker: {:?}",
             outcome.diagnostics
         );
-        // The `else` body must never compile as an unconditional statement —
-        // a silent `else:`-as-label misparse is the regression this guards.
         assert!(
             opy_rs::compile(source, "main.opy", Path::new("")).is_err(),
             "{name} must fail compile"
@@ -1966,12 +1885,6 @@ fn orphan_elif_else_warns_lone_else_and_rejects_instead_of_misparsing() {
     }
 }
 
-/// Issue #620: enum member spellings resolve under the active emission
-/// locale. A `#!postCompileHook` rewrite can introduce a spelling the
-/// emitter never produced — `Map(格里姆火山)` is valid under `zh-CN` but not
-/// `en-US` — so `check` runs the same compile-stage acceptance pass
-/// `compile` performs, under the same locale, and reports the same
-/// diagnostic code and location.
 #[test]
 fn check_and_compile_agree_on_locale_dependent_enum_member_spellings() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/macros");
@@ -1984,8 +1897,6 @@ fn check_and_compile_agree_on_locale_dependent_enum_member_spellings() {
     );
     let compiler = opy_rs::Compiler::new().expect("compiler initializes");
 
-    // Under `en-US` the hook-rewritten `Map(格里姆火山)` is an unknown enum
-    // member spelling; `check` and `compile` report it identically.
     let checked = tooling::check_with_language(source, "main.opy", &root, "en-US");
     let check_error = checked
         .diagnostics
@@ -2010,12 +1921,8 @@ fn check_and_compile_agree_on_locale_dependent_enum_member_spellings() {
         .expect("en-US compile must reject the residual spelling");
     assert_eq!(compile_error.code, check_error.code);
     assert_eq!(compile_error.span, check_error.span);
-    // The failure anchors at the `#!postCompileHook` directive whose rewrite
-    // introduced the spelling.
     assert_eq!(check_error.span.as_ref().unwrap().start.line, 1);
 
-    // Under `zh-CN` the same spelling is valid: both paths accept the
-    // project.
     let checked = tooling::check_with_language(source, "main.opy", &root, "zh-CN");
     assert!(
         checked.is_clean(),

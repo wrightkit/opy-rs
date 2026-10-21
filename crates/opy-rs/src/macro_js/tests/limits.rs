@@ -1,9 +1,3 @@
-//! Resource-limit and context-lifetime fixtures.
-//!
-//! Defaults and abort semantics mirror the pinned OverPy reference
-//! (`src/quickjs.ts`): deadline-based interruption (`"interrupted"`),
-//! `"out of memory"`, and `"Maximum call stack size exceeded"`.
-
 use std::time::{Duration, Instant};
 
 use crate::macro_js::error::MacroError;
@@ -12,9 +6,6 @@ use crate::macro_js::runtime::MacroRuntime;
 
 #[test]
 fn busy_loop_is_interrupted_within_budget() {
-    // The interrupt handler is deadline-based and polled by the engine, so a
-    // 50 ms budget aborts the loop at the next poll point; the assertion that
-    // the call returns quickly keeps this reliable on slow CI machines.
     let limits = Limits {
         macro_time_budget: Duration::from_millis(50),
         ..Limits::default()
@@ -66,8 +57,6 @@ fn hook_busy_loop_is_interrupted_within_budget() {
 
 #[test]
 fn memory_limit_aborts_allocation_loop() {
-    // A 2 MiB engine limit makes the allocation loop fail fast, long before
-    // the default time budget.
     let limits = Limits {
         memory_limit_bytes: 2 * 1024 * 1024,
         ..Limits::default()
@@ -89,8 +78,6 @@ fn memory_limit_aborts_allocation_loop() {
 
 #[test]
 fn stack_limit_aborts_deep_recursion() {
-    // A small stack limit trips deterministically at the first poll even in
-    // unoptimized (debug) builds.
     let limits = Limits {
         max_stack_bytes: 128 * 1024,
         ..Limits::default()
