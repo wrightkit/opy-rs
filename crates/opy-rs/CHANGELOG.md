@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.23](https://github.com/wrightkit/opy-rs/compare/v0.3.22...v0.3.23) - 2026-10-21
+
+### Fixed
+
+- *(compat)* retire the Roadhog reslot known-gap after workshop-rs 1.24 ([#636](https://github.com/wrightkit/opy-rs/pull/636))
+
+### Other
+
+- remove redundant comments ([#634](https://github.com/wrightkit/opy-rs/pull/634))
+
 ## [0.3.22](https://github.com/wrightkit/opy-rs/compare/v0.3.21...v0.3.22) - 2026-10-20
 
 ### Fixed
