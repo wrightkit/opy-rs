@@ -1,4 +1,5 @@
 use super::*;
+use crate::manifest::ReceiverCategory;
 
 impl Lowerer {
     pub(super) fn lower_expr(
@@ -1142,7 +1143,7 @@ impl Lowerer {
             bound.push(nested);
         }
 
-        for &index in policy::variable_args(&entry.id) {
+        for index in entry.variable_param_indices() {
             if let Some(Some(value)) = slots.get(index)
                 && !matches!(value, HirExpr::GlobalVar { .. } | HirExpr::PlayerVar { .. })
             {
@@ -1439,10 +1440,11 @@ impl Lowerer {
         position: CallPosition,
         span: Span,
     ) {
+        let for_iterable =
+            policy::function_context(&entry.id) == Some(policy::FunctionContext::ForIterable);
         match position {
             CallPosition::Statement => {
-                if policy::function_context(&entry.id) == Some(policy::FunctionContext::ForIterable)
-                {
+                if for_iterable {
                     self.error_at(
                         "invalid-call-context",
                         format!("'{name}' is only valid as a for-loop iterable"),
@@ -1463,9 +1465,7 @@ impl Lowerer {
                         format!("action function '{name}' cannot be used as a value"),
                         span,
                     );
-                } else if policy::function_context(&entry.id)
-                    == Some(policy::FunctionContext::ForIterable)
-                {
+                } else if for_iterable {
                     self.error_at(
                         "invalid-call-context",
                         format!("'{name}' is only valid as a for-loop iterable"),
@@ -1474,8 +1474,7 @@ impl Lowerer {
                 }
             }
             CallPosition::ForIterable => {
-                if policy::function_context(&entry.id) != Some(policy::FunctionContext::ForIterable)
-                {
+                if !for_iterable {
                     self.error_at(
                         "invalid-iterable",
                         format!("for-loop iterable '{name}' must be a range(...) call"),
@@ -1488,14 +1487,15 @@ impl Lowerer {
     }
 
     pub(super) fn check_receiver(&mut self, receiver: &Expr, entry: &Function, span: Span) {
-        let Some(requirement) = policy::member_receiver_requirement(&entry.id) else {
+        let Some(requirement) = entry.receiver.and_then(ReceiverCategory::enforced) else {
             return;
         };
         let mismatch = match requirement {
-            policy::ReceiverRequirement::StringLiteral => {
+            ReceiverCategory::String => {
                 !matches!(receiver, Expr::String { .. } | Expr::StringModifier { .. })
             }
-            policy::ReceiverRequirement::Assignable => !assignable_receiver(receiver),
+            ReceiverCategory::Variable => !assignable_receiver(receiver),
+            _ => return,
         };
         if mismatch {
             self.error_at(

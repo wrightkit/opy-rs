@@ -2201,7 +2201,7 @@ mod tests {
     }
 
     #[test]
-    fn special_enforcement_is_typed_policy_not_manifest_metadata() {
+    fn receiver_and_variable_enforcement_is_manifest_metadata() {
         let mut file: serde_json::Value =
             serde_json::from_str(crate::manifest::MANIFEST_DATA).unwrap();
         for function in file["functions"].as_array_mut().unwrap() {
@@ -2232,31 +2232,26 @@ mod tests {
             "chaseAtRate(10, 0, 2, ChaseRateReeval.NONE)",
             "chaseOverTime(10, 0, 30, ChaseTimeReeval.NONE)",
         ] {
-            let error = lower_with_manifest(&action_source(call), manifest)
-                .expect_err("the chase family still requires a variable");
-            assert_eq!(error.code, "invalid-argument", "{call}");
+            lower_with_manifest(&action_source(call), manifest).unwrap_or_else(|error| {
+                panic!("removed `variable` metadata lifts the requirement: {error}")
+            });
         }
-        lower_with_manifest(&action_source("chaseOverTime(g, 10, 3)"), manifest)
-            .expect("a variable first argument compiles");
 
         for call in ["3.append(1)", "3.remove(1)", "print(3.format(\"{}\"))"] {
-            let error = lower_with_manifest(&action_source(call), manifest)
-                .expect_err("the enforced receiver requirement still rejects");
-            assert_eq!(error.code, "invalid-receiver", "{call}");
+            lower_with_manifest(&action_source(call), manifest)
+                .unwrap_or_else(|error| panic!("`Any` receiver lifts the requirement: {error}"));
         }
-        lower_with_manifest(&action_source("g.append(1)"), manifest)
-            .expect("an assignable receiver compiles");
-        lower_with_manifest(&action_source("g = \"{}\".format(1)"), manifest)
-            .expect("a string-literal receiver compiles");
 
-        lower_with_manifest(&action_source("wait(1)"), manifest)
-            .expect("`wait`'s first argument is not variable-required");
-        lower_with_manifest(
+        let error = lower_with_manifest(&action_source("wait(1)"), manifest)
+            .expect_err("`wait`'s first argument is variable-required by metadata");
+        assert_eq!(error.code, "invalid-argument");
+        let error = lower_with_manifest(
             "globalvar g\nrule \"r\":\n    @Event eachPlayer\n    \
              g = eventPlayer.getPosition()\n",
             manifest,
         )
-        .expect("`getPosition`'s receiver is not assignable-enforced");
+        .expect_err("`getPosition`'s receiver is assignable-enforced by metadata");
+        assert_eq!(error.code, "invalid-receiver");
     }
 
     #[test]

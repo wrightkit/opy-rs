@@ -9,33 +9,9 @@ pub(crate) enum SpecialValueCall {
     SettingFactory,
 }
 
-pub(crate) const SPECIAL_VALUE_CALLS: &[(&str, SpecialValueCall)] = &[
-    ("sorted", SpecialValueCall::Sorted),
-    (
-        "createWorkshopSetting",
-        SpecialValueCall::CreateWorkshopSetting,
-    ),
-    (
-        "createWorkshopSettingBool",
-        SpecialValueCall::SettingFactory,
-    ),
-    (
-        "createWorkshopSettingEnum",
-        SpecialValueCall::SettingFactory,
-    ),
-    ("createWorkshopSettingInt", SpecialValueCall::SettingFactory),
-    (
-        "createWorkshopSettingFloat",
-        SpecialValueCall::SettingFactory,
-    ),
-    (
-        "createWorkshopSettingHero",
-        SpecialValueCall::SettingFactory,
-    ),
-];
-
 pub(crate) struct SpecialFunction {
     pub(crate) name: &'static str,
+    pub(crate) call: SpecialValueCall,
     pub(crate) params: &'static [SpecialParam],
 }
 
@@ -80,6 +56,7 @@ const fn optional(name: &'static str, param_type: &'static str) -> SpecialParam 
 pub(crate) const SPECIAL_FUNCTIONS: &[SpecialFunction] = &[
     SpecialFunction {
         name: "sorted",
+        call: SpecialValueCall::Sorted,
         params: &[
             required("array", "Array"),
             // The reference's signature names the slot `lambda`; `key` is
@@ -89,6 +66,7 @@ pub(crate) const SPECIAL_FUNCTIONS: &[SpecialFunction] = &[
     },
     SpecialFunction {
         name: "createWorkshopSetting",
+        call: SpecialValueCall::CreateWorkshopSetting,
         params: &[
             required("type", "Type"),
             required("category", "CustomStringLiteral"),
@@ -99,6 +77,7 @@ pub(crate) const SPECIAL_FUNCTIONS: &[SpecialFunction] = &[
     },
     SpecialFunction {
         name: "createWorkshopSettingBool",
+        call: SpecialValueCall::SettingFactory,
         params: &[
             required("category", "CustomStringLiteral"),
             required("name", "CustomStringLiteral"),
@@ -108,6 +87,7 @@ pub(crate) const SPECIAL_FUNCTIONS: &[SpecialFunction] = &[
     },
     SpecialFunction {
         name: "createWorkshopSettingEnum",
+        call: SpecialValueCall::SettingFactory,
         params: &[
             required("category", "CustomStringLiteral"),
             required("name", "CustomStringLiteral"),
@@ -118,6 +98,7 @@ pub(crate) const SPECIAL_FUNCTIONS: &[SpecialFunction] = &[
     },
     SpecialFunction {
         name: "createWorkshopSettingInt",
+        call: SpecialValueCall::SettingFactory,
         params: &[
             required("category", "CustomStringLiteral"),
             required("name", "CustomStringLiteral"),
@@ -129,6 +110,7 @@ pub(crate) const SPECIAL_FUNCTIONS: &[SpecialFunction] = &[
     },
     SpecialFunction {
         name: "createWorkshopSettingFloat",
+        call: SpecialValueCall::SettingFactory,
         params: &[
             required("category", "CustomStringLiteral"),
             required("name", "CustomStringLiteral"),
@@ -140,6 +122,7 @@ pub(crate) const SPECIAL_FUNCTIONS: &[SpecialFunction] = &[
     },
     SpecialFunction {
         name: "createWorkshopSettingHero",
+        call: SpecialValueCall::SettingFactory,
         params: &[
             required("category", "CustomStringLiteral"),
             required("name", "CustomStringLiteral"),
@@ -151,10 +134,10 @@ pub(crate) const SPECIAL_FUNCTIONS: &[SpecialFunction] = &[
 
 impl SpecialValueCall {
     pub(crate) fn from_name(name: &str) -> Option<SpecialValueCall> {
-        SPECIAL_VALUE_CALLS
+        SPECIAL_FUNCTIONS
             .iter()
-            .find(|(spelling, _)| *spelling == name)
-            .map(|(_, special)| *special)
+            .find(|function| function.name == name)
+            .map(|function| function.call)
     }
 }
 

@@ -14,141 +14,201 @@ use crate::{
     path_to_file_uri, resolved_path, same_path, validate_documents,
 };
 
-const CROSS_FILE_CODES: [&str; 7] = [
-    "include-not-found",
-    "main-file-not-found",
-    "script-not-found",
-    "unknown-identifier",
-    "unknown-action",
-    "unknown-value",
-    "unknown-member",
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DiagnosticClass {
+    DocumentSyntax,
+    MissingSource,
+    NameBinding,
+    MergedTable,
+    MacroTable,
+    Script,
+    ExternalFile,
+    Catalog,
+    Capability,
+    Semantic,
+    Internal,
+    WarningOnly,
+}
+
+const CODE_CLASSES: &[(DiagnosticClass, &[&str])] = &[
+    (
+        DiagnosticClass::DocumentSyntax,
+        &[
+            "lex-error",
+            "parse-error",
+            "workshop-source",
+            "directive-invalid",
+            "unsupported-directive",
+            "include-invalid",
+            "define-invalid",
+            "main-file-invalid",
+            "main-file-placement",
+            "rule-prefix-invalid",
+            "settings-invalid",
+            "settings-placement",
+            "macro-invalid",
+            "do-while-placement",
+            "invalid-string-entity",
+            "unknown-string-entity",
+            "script-invalid",
+            "enum-increment",
+        ],
+    ),
+    (
+        DiagnosticClass::MissingSource,
+        &[
+            "include-not-found",
+            "main-file-not-found",
+            "script-not-found",
+            "unknown-identifier",
+            "unknown-action",
+            "unknown-value",
+            "unknown-member",
+        ],
+    ),
+    (
+        DiagnosticClass::NameBinding,
+        &[
+            "duplicate-argument",
+            "duplicate-declaration",
+            "duplicate-definition",
+            "duplicate-rule-name",
+            "enum-type-without-member",
+            "invalid-arity",
+            "vect-arity",
+            "unresolved-reference",
+            "unknown-keyword",
+        ],
+    ),
+    (
+        DiagnosticClass::MergedTable,
+        &[
+            "rule-prefix-template-duplicate",
+            "replacement-duplicate",
+            "post-compile-hook-duplicate",
+            "macro-redeclaration",
+        ],
+    ),
+    (
+        DiagnosticClass::MacroTable,
+        &["macro-arity", "macro-recursion"],
+    ),
+    (
+        DiagnosticClass::Script,
+        &[
+            "script-error",
+            "script-timeout",
+            "script-stack-limit",
+            "script-memory-limit",
+            "script-result-not-string",
+            "script-internal",
+        ],
+    ),
+    (
+        DiagnosticClass::ExternalFile,
+        &[
+            "include-cycle",
+            "settings-not-found",
+            "translations-invalid",
+            "settings-expression",
+            "rule-prefix-template-invalid",
+        ],
+    ),
+    (
+        DiagnosticClass::Catalog,
+        &[
+            "catalog-error",
+            "manifest-error",
+            "unknown-enum-member",
+            "missing-mapping",
+            "unknown-texture-member",
+        ],
+    ),
+    (
+        DiagnosticClass::Capability,
+        &[
+            "backend-directive-unsupported",
+            "four-dimensional-assignment",
+            "four-dimensional-delete",
+            "index-collision",
+            "index-exhausted",
+            "index-out-of-range",
+            "random-indexed-delete",
+            "split-dict-array-arguments",
+            "split-dict-array-arity",
+            "split-dict-array-key",
+            "symbol-collision",
+            "workshop-action-layout",
+            "unsupported-action-call",
+            "unsupported-construct",
+            "unsupported-control-flow",
+            "unsupported-dangling",
+            "unsupported-duplicate-name",
+            "unsupported-enum-domain",
+            "unsupported-enum-domain-mismatch",
+            "unsupported-enum-member",
+            "unsupported-index",
+            "unsupported-indexed-initializer",
+            "unsupported-integration-surface",
+            "unsupported-invalid-argument",
+            "unsupported-invalid-arity",
+            "unsupported-localized-string",
+            "unsupported-member",
+            "unsupported-member-assignment",
+            "unsupported-missing-argument",
+            "unsupported-modify-op",
+            "unsupported-non-finite-number",
+            "unsupported-per-player-loop",
+            "unsupported-rule-order",
+            "unsupported-settings",
+            "unsupported-subroutine-value",
+            "unsupported-value-call",
+        ],
+    ),
+    (
+        DiagnosticClass::Semantic,
+        &[
+            "action-in-value-position",
+            "break-context",
+            "continue-context",
+            "dict-access",
+            "invalid-argument",
+            "invalid-call-context",
+            "invalid-identifier",
+            "invalid-iterable",
+            "invalid-range-binder",
+            "invalid-receiver",
+            "invalid-span",
+            "invalid-string-modifier",
+            "invalid-structure",
+            "keyword-required",
+            "keyword-unsupported",
+            "lambda-context",
+            "missing-argument",
+            "positional-after-keyword",
+            "settings-hero-lists",
+            "settings-workshop-value",
+            "tabular-arguments",
+            "value-in-action-position",
+        ],
+    ),
+    (
+        DiagnosticClass::Internal,
+        &[
+            "incompatible-protocol",
+            "malformed-payload",
+            "unsupported-node",
+            "workshop-emission",
+        ],
+    ),
+    (DiagnosticClass::WarningOnly, &["unknown-setting"]),
 ];
 
-const DOCUMENT_SYNTAX_CODES: [&str; 18] = [
-    "lex-error",
-    "parse-error",
-    "workshop-source",
-    "directive-invalid",
-    "unsupported-directive",
-    "include-invalid",
-    "define-invalid",
-    "main-file-invalid",
-    "main-file-placement",
-    "rule-prefix-invalid",
-    "settings-invalid",
-    "settings-placement",
-    "macro-invalid",
-    "do-while-placement",
-    "invalid-string-entity",
-    "unknown-string-entity",
-    "script-invalid",
-    "enum-increment",
-];
-
-#[cfg(test)]
-const EXCLUDED_CODES: &[&str] = &[
-    "action-in-value-position",
-    "backend-directive-unsupported",
-    "break-context",
-    "catalog-error",
-    "continue-context",
-    "dict-access",
-    "duplicate-argument",
-    "duplicate-declaration",
-    "duplicate-definition",
-    "duplicate-rule-name",
-    "enum-type-without-member",
-    "four-dimensional-assignment",
-    "four-dimensional-delete",
-    "include-cycle",
-    "include-not-found",
-    "incompatible-protocol",
-    "index-collision",
-    "index-exhausted",
-    "index-out-of-range",
-    "invalid-argument",
-    "invalid-arity",
-    "invalid-call-context",
-    "invalid-identifier",
-    "invalid-iterable",
-    "invalid-range-binder",
-    "invalid-receiver",
-    "invalid-span",
-    "invalid-string-modifier",
-    "invalid-structure",
-    "keyword-required",
-    "keyword-unsupported",
-    "lambda-context",
-    "macro-arity",
-    "macro-recursion",
-    "macro-redeclaration",
-    "main-file-not-found",
-    "malformed-payload",
-    "manifest-error",
-    "missing-argument",
-    "missing-mapping",
-    "positional-after-keyword",
-    "post-compile-hook-duplicate",
-    "random-indexed-delete",
-    "replacement-duplicate",
-    "rule-prefix-template-duplicate",
-    "rule-prefix-template-invalid",
-    "script-error",
-    "script-internal",
-    "script-memory-limit",
-    "script-not-found",
-    "script-result-not-string",
-    "script-stack-limit",
-    "script-timeout",
-    "settings-expression",
-    "settings-hero-lists",
-    "settings-not-found",
-    "settings-workshop-value",
-    "split-dict-array-arguments",
-    "split-dict-array-arity",
-    "split-dict-array-key",
-    "symbol-collision",
-    "tabular-arguments",
-    "translations-invalid",
-    "unknown-action",
-    "unknown-enum-member",
-    "unknown-identifier",
-    "unknown-keyword",
-    "unknown-member",
-    "unknown-setting",
-    "unknown-texture-member",
-    "unknown-value",
-    "unresolved-reference",
-    "unsupported-action-call",
-    "unsupported-construct",
-    "unsupported-control-flow",
-    "unsupported-dangling",
-    "unsupported-duplicate-name",
-    "unsupported-enum-domain",
-    "unsupported-enum-domain-mismatch",
-    "unsupported-enum-member",
-    "unsupported-index",
-    "unsupported-indexed-initializer",
-    "unsupported-integration-surface",
-    "unsupported-invalid-argument",
-    "unsupported-invalid-arity",
-    "unsupported-localized-string",
-    "unsupported-member",
-    "unsupported-member-assignment",
-    "unsupported-missing-argument",
-    "unsupported-modify-op",
-    "unsupported-node",
-    "unsupported-non-finite-number",
-    "unsupported-per-player-loop",
-    "unsupported-rule-order",
-    "unsupported-settings",
-    "unsupported-subroutine-value",
-    "unsupported-value-call",
-    "value-in-action-position",
-    "vect-arity",
-    "workshop-action-layout",
-    "workshop-emission",
-];
+fn class_of(code: &str) -> Option<DiagnosticClass> {
+    CODE_CLASSES
+        .iter()
+        .find_map(|(class, codes)| codes.contains(&code).then_some(*class))
+}
 
 #[cfg(test)]
 const NON_DIAGNOSTIC_LITERALS: &[&str] = &["kebab-case", "non-empty"];
@@ -464,15 +524,24 @@ pub(crate) fn site_contains(
     file_ids.contains(&site.file_id) && site.start <= position && position < site.end
 }
 
+const MAIN_FILE_STUB_ID: u32 = 0;
+
+fn is_main_file_redirect_stub(
+    outcome: &opy_rs::tooling::CheckOutcome,
+    file: &opy_rs::preprocess::FileRecord,
+) -> bool {
+    file.id == MAIN_FILE_STUB_ID
+        && outcome
+            .model
+            .as_ref()
+            .is_some_and(|model| model.hir.preprocessing.main_file.is_some())
+}
+
 pub(crate) fn carries_source(
     outcome: &opy_rs::tooling::CheckOutcome,
     file: &opy_rs::preprocess::FileRecord,
 ) -> bool {
-    file.id != 0
-        || outcome
-            .model
-            .as_ref()
-            .is_none_or(|model| model.hir.preprocessing.main_file.is_none())
+    !is_main_file_redirect_stub(outcome, file)
 }
 
 fn refusal(code: &'static str, details: Value, message: impl Into<String>) -> HandlerError {
@@ -603,7 +672,7 @@ fn model_view(
     let missing: Vec<&str> = outcome
         .diagnostics
         .iter()
-        .filter(|diagnostic| CROSS_FILE_CODES.contains(&diagnostic.code.as_str()))
+        .filter(|diagnostic| class_of(&diagnostic.code) == Some(DiagnosticClass::MissingSource))
         .map(|diagnostic| diagnostic.message.as_str())
         .collect();
     if !missing.is_empty() {
@@ -1025,7 +1094,7 @@ pub(crate) fn validate_edits(params: Value) -> Result<Value, HandlerError> {
         opy_rs::tooling::check_with_overlay(&result, &path_string(&path), &root, &overlay);
     let malformed = outcome.diagnostics.iter().any(|diagnostic| {
         diagnostic.severity == opy_rs::tooling::DiagnosticSeverity::Error
-            && DOCUMENT_SYNTAX_CODES.contains(&diagnostic.code.as_str())
+            && class_of(&diagnostic.code) == Some(DiagnosticClass::DocumentSyntax)
             && diagnostic.span.as_ref().is_some_and(|span| {
                 same_path(&resolved_path(&outcome.display_root, &span.path), &path)
             })
@@ -1037,137 +1106,4 @@ pub(crate) fn validate_edits(params: Value) -> Result<Value, HandlerError> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use std::collections::BTreeSet;
-    use std::fs;
-    use std::path::{Path, PathBuf};
-
-    #[test]
-    fn syntax_error_classification_is_exhaustive() {
-        let mut found = BTreeSet::new();
-        collect_literals(
-            &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../opy-rs/src"),
-            &mut found,
-        );
-
-        let syntax: BTreeSet<&str> = DOCUMENT_SYNTAX_CODES.iter().copied().collect();
-        let excluded: BTreeSet<&str> = EXCLUDED_CODES.iter().copied().collect();
-        let non_code: BTreeSet<&str> = NON_DIAGNOSTIC_LITERALS.iter().copied().collect();
-        let listed: BTreeSet<&str> = syntax.union(&excluded).copied().collect();
-        assert!(
-            syntax.is_disjoint(&excluded)
-                && syntax.is_disjoint(&non_code)
-                && excluded.is_disjoint(&non_code),
-            "a literal appears in more than one classification list"
-        );
-
-        let unclassified: Vec<&String> = found
-            .iter()
-            .filter(|code| !listed.contains(code.as_str()) && !non_code.contains(code.as_str()))
-            .collect();
-        let stale: Vec<&str> = listed
-            .iter()
-            .chain(non_code.iter())
-            .copied()
-            .filter(|code| !found.contains(*code))
-            .collect();
-        assert!(
-            unclassified.is_empty() && stale.is_empty(),
-            "unclassified literals: {unclassified:?}; listed but never emitted: {stale:?}"
-        );
-    }
-
-    fn collect_literals(dir: &Path, found: &mut BTreeSet<String>) {
-        for entry in fs::read_dir(dir).expect("read opy-rs sources") {
-            let path = entry.expect("dir entry").path();
-            let name = path.file_name().unwrap_or_default().to_string_lossy();
-            if path.is_dir() {
-                if name != "tests" {
-                    collect_literals(&path, found);
-                }
-            } else if name.ends_with(".rs") && !name.starts_with("test_") {
-                let source = fs::read_to_string(&path).expect("read source file");
-                let source = source.split("#[cfg(test)]").next().unwrap_or("");
-                scan(source, found);
-            }
-        }
-    }
-
-    fn scan(source: &str, found: &mut BTreeSet<String>) {
-        let bytes = source.as_bytes();
-        let mut i = 0;
-        while i < bytes.len() {
-            match bytes[i] {
-                b'/' if bytes.get(i + 1) == Some(&b'/') => {
-                    i = bytes[i..]
-                        .iter()
-                        .position(|b| *b == b'\n')
-                        .map(|end| i + end)
-                        .unwrap_or(bytes.len());
-                }
-                b'/' if bytes.get(i + 1) == Some(&b'*') => {
-                    i += 2;
-                    while i + 1 < bytes.len() && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
-                        i += 1;
-                    }
-                    i += 2;
-                }
-                b'r' => {
-                    let mut hashes = 0;
-                    while bytes.get(i + 1 + hashes) == Some(&b'#') {
-                        hashes += 1;
-                    }
-                    if bytes.get(i + 1 + hashes) == Some(&b'"') {
-                        let mut j = i + 2 + hashes;
-                        while j < bytes.len()
-                            && !(bytes[j] == b'"'
-                                && (0..hashes).all(|h| bytes.get(j + 1 + h) == Some(&b'#')))
-                        {
-                            j += 1;
-                        }
-                        i = j + 1 + hashes;
-                    } else {
-                        i += 1;
-                    }
-                }
-                b'"' => {
-                    let start = i + 1;
-                    let mut j = start;
-                    while j < bytes.len() && bytes[j] != b'"' {
-                        j += usize::from(bytes[j] == b'\\') + 1;
-                    }
-                    let text = &source[start..j.min(bytes.len())];
-                    if is_code_shape(text) {
-                        found.insert(text.to_string());
-                    }
-                    i = j + 1;
-                }
-                b'\'' => {
-                    let next = bytes.get(i + 1).copied();
-                    let after = if next == Some(b'\\') {
-                        (i + 2..bytes.len().min(i + 8))
-                            .find(|&j| bytes[j] == b'\'')
-                            .map(|j| j + 1)
-                    } else if bytes.get(i + 2) == Some(&b'\'') {
-                        Some(i + 3)
-                    } else {
-                        None
-                    };
-                    i = after.unwrap_or(i + 1);
-                }
-                _ => i += 1,
-            }
-        }
-    }
-
-    fn is_code_shape(text: &str) -> bool {
-        text.contains('-')
-            && text.split('-').all(|part| {
-                !part.is_empty()
-                    && part
-                        .bytes()
-                        .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
-            })
-    }
-}
+mod tests;

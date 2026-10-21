@@ -11,14 +11,7 @@ impl Parser<'_> {
     ) -> Result<Expr, ()> {
         self.skip_expression_newlines();
         let then_value = self.parse_or()?;
-        if self.is_ident("if")
-            && !self.inside_delimiter_group()
-            && self.peek().layout.start.line != self.tokens[self.pos - 1].layout.end.line
-            && self.newline_after_line(
-                self.tokens[self.pos - 1].layout.file,
-                self.tokens[self.pos - 1].layout.end.line,
-            )
-        {
+        if self.is_ident("if") && self.if_is_past_then_value_layout_break() {
             return Ok(then_value);
         }
         if allow_multiline_conditional && self.inside_delimiter_group() {
@@ -639,6 +632,13 @@ impl Parser<'_> {
 
     pub(super) fn inside_delimiter_group(&self) -> bool {
         self.delimiter_depth[self.pos] != 0
+    }
+
+    fn if_is_past_then_value_layout_break(&self) -> bool {
+        let then = &self.tokens[self.pos - 1];
+        !self.inside_delimiter_group()
+            && self.peek().layout.start.line != then.layout.end.line
+            && self.newline_after_line(then.layout.file, then.layout.end.line)
     }
 
     pub(super) fn parse_dict(&mut self) -> Result<Expr, ()> {

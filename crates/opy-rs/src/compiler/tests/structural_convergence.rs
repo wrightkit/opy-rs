@@ -170,7 +170,7 @@ fn size_optimization_action_rewrites_match_the_pinned_oracle() {
 }
 
 #[test]
-fn context_player_components_stay_rejected_under_canonical_validation() {
+fn context_player_components_reject_as_expected_pending_workshop_admission() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/corpus/synthetic/context-player-components");
     let source = std::fs::read_to_string(dir.join("source.opy")).expect("source must be readable");
