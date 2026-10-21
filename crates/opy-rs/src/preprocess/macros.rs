@@ -6,11 +6,8 @@ pub(crate) struct MacroDef {
     pub(crate) name: String,
     pub(crate) params: Vec<String>,
     pub(crate) body_text: String,
-    /// True when the body came from a `#!define name(args) value` form.
     pub(crate) is_function: bool,
-    /// True when the replacement spans multiple source lines.
     pub(super) is_multiline: bool,
-    /// The resolved `__script__` backing, when the replacement is one.
     pub(crate) script: Option<ScriptMacro>,
 }
 
@@ -18,12 +15,7 @@ pub(super) struct MacroArgument {
     pub(super) raw: String,
 }
 
-/// The byte offsets of each line start in one source text, so
-/// position → byte-offset lookups do not rescan the file from its start
-/// per macro argument.
 pub(super) struct LineOffsets {
-    /// Byte offset of each line's first character, one entry per line;
-    /// `starts[0]` is 0. The last entry covers to the end of the text.
     starts: Vec<usize>,
 }
 
@@ -38,21 +30,13 @@ impl LineOffsets {
         LineOffsets { starts }
     }
 
-    /// The byte offset of a 1-based line/column position, or `None` when
-    /// the position is outside the text. Positions index characters, so
-    /// the offset is `col - 1` characters past the line's start.
     fn offset_of(&self, text: &str, position: crate::diag::Position) -> Option<usize> {
         let width = position.col.checked_sub(1)? as usize;
         let line = position.line as usize;
         let start = *self.starts.get(line.checked_sub(1)?)?;
-        // `line` is within the file; walk its characters until the column
-        // is consumed. The column may land one past the last character of
-        // a line (the position after the final `\n`-free character or the
-        // newline itself), which resolves to the next line's start.
         let mut chars_seen = 0usize;
         for (offset, character) in text[start..].char_indices() {
             if character == '\n' {
-                // Columns past the newline do not exist on this line.
                 return (chars_seen == width).then_some(start + offset);
             }
             if chars_seen == width {
@@ -186,8 +170,6 @@ impl Preprocessor {
         Ok(out)
     }
 
-    /// Expand one position of `tokens` directly into `output`, returning
-    /// the next index to process.
     pub(super) fn expand_one(
         &self,
         tokens: &[Token],
@@ -445,15 +427,6 @@ fn raw_arg_text(tokens: &[Token]) -> String {
     out
 }
 
-/// Give every token produced by an expansion the use-site span as its
-/// authored provenance while keeping the expansion's relative layout for
-/// the parser. The expanded text does not appear in authored source, so
-/// the authored macro name is the only honest `span`: offsetting it by the
-/// expansion's own width recorded positions past the authored line, and a
-/// multi-line expansion attributed its later tokens to unrelated authored
-/// lines (#506). `layout` keeps the shifted coordinates anchored at the
-/// invocation's layout position because the indentation-sensitive parser
-/// reads it for block structure.
 pub(super) fn attribute_expansion_spans(tokens: &mut [Token], use_site: &Token) {
     for token in tokens {
         token.layout = Span::new(
@@ -503,9 +476,6 @@ pub(crate) fn expand_define_text(text: &str, macros: &[MacroDef]) -> Result<Stri
     ))
 }
 
-/// Index just past the quoted literal starting at `chars[start]` (which is
-/// `'` or `"`), honoring backslash escapes; `chars.len()` when the literal
-/// is unterminated.
 fn quoted_literal_end(chars: &[char], start: usize) -> usize {
     let quote = chars[start];
     let mut index = start + 1;
@@ -564,7 +534,6 @@ fn expand_function_define(text: &str, mac: &MacroDef) -> String {
     let mut index = 0;
     while index < chars.len() {
         if matches!(chars[index], '"' | '\'') {
-            // A macro name inside a nested string literal is literal text.
             index = quoted_literal_end(&chars, index);
             continue;
         }

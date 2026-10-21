@@ -1,9 +1,4 @@
 #!/usr/bin/env node
-// Extract the pinned compiler's `__on__`/`__off__` settings-workshop token
-// translations into `crates/opy-rs/src/compiler/data/workshop_tokens.json`.
-// `settings.workshop` members are emitted verbatim by the canonical emitter,
-// so opy-rs bakes the compile-target text itself — from the same
-// `customGameSettingsKw` entries the pinned compiler translates (#512).
 const fs = require("fs");
 const path = require("path");
 

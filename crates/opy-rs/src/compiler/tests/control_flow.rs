@@ -1,5 +1,3 @@
-//! Oracle-backed control-flow lowering and behavior evidence.
-
 use std::path::{Path, PathBuf};
 
 use crate::Compiler;
@@ -318,8 +316,6 @@ fn nested_switch_break_matches_upstream_noop_elision() {
 
 #[test]
 fn if_chain_markers_map_to_authored_branch_keywords() {
-    // `elif`/`else`/`End` marker spans let consumers derive authored branch
-    // boundaries without knowing OPY syntax (wright lint fixes, #583).
     let source = "globalvar total\n\nrule \"r\":\n    @Event global\n    if total == 1:\n        total = 2\n    elif total == 1:\n        total = 3\n    else:\n        total = 4\n    total = 5\n";
     let (report, mapped) = Compiler::new()
         .unwrap()
@@ -347,7 +343,6 @@ fn if_chain_markers_map_to_authored_branch_keywords() {
     assert_eq!(position(0), workshop_rs::source::Position::new(5, 5));
     assert_eq!(position(2), workshop_rs::source::Position::new(7, 5));
     assert_eq!(position(4), workshop_rs::source::Position::new(9, 5));
-    // The `End` marker is a zero-width span at the dedent boundary.
     let end = program.action_span(0, 6).unwrap();
     assert_eq!(end.start, end.end);
     assert_eq!(end.start, workshop_rs::source::Position::new(11, 5));
@@ -355,8 +350,6 @@ fn if_chain_markers_map_to_authored_branch_keywords() {
 
 #[test]
 fn if_chain_end_marker_at_eof_uses_the_eof_position() {
-    // A chain closed by end-of-file has no dedent token: `End` maps to a
-    // zero-width span at EOF so the final branch's extent still derives.
     let source = "globalvar total\n\nrule \"r\":\n    @Event global\n    if total == 1:\n        total = 2\n    elif total == 1:\n        total = 3";
     let (report, mapped) = Compiler::new()
         .unwrap()

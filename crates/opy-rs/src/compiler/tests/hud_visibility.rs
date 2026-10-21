@@ -1,5 +1,3 @@
-//! Canonical WIR lowering coverage for HUD visibility.
-
 use std::path::{Path, PathBuf};
 
 use crate::Compiler;
@@ -60,8 +58,6 @@ fn invalid_spec_visibility_members_keep_source_attributed_diagnostics() {
     let error =
         crate::compile(source, "source.opy", Path::new(".")).expect_err("invalid member must fail");
     assert_eq!(error.code, "unknown-enum-member");
-    // The message carries the member candidates of the SpecVisibility
-    // domain (issue #469).
     assert!(
         error
             .message

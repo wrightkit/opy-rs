@@ -1,21 +1,7 @@
-// Audits manifest function parameter names against the pinned OverPy 9.7.10
-// `funcKw` tables, the same tables `parseArgs` uses to bind `name=` keyword
-// arguments. Every manifest param name must match the upstream arg name at
-// its position, so upstream keyword spellings are accepted and others are
-// rejected.
-//
-//   pnpm install --dir tools/overpy/oracle
-//   node tools/overpy/audit_param_names.cjs
-//
 // Member calls pass the receiver to `parseArgs` ahead of the call args, so
 // member params are compared against `args.slice(1)`. Entries that model
 // that receiver slot as a param (for example `.toArray`) carry a recorded
 // exemption instead.
-//
-// Every entry is compared. The only exemptions are the entries in `EXEMPT`,
-// whose names cannot be compared positionally, each with its reason. Any other
-// divergence, an `alternateNames` spelling beyond upstream, or a manifest entry
-// with no upstream counterpart fails the audit.
 const fs = require("fs");
 const path = require("path");
 const { loadFuncKw } = require("./oracle_func_kw.cjs");
@@ -55,8 +41,6 @@ loadFuncKw((funcKw) => {
     const params = (fn.params ?? []).map((param) => param.name);
     const alternate = (fn.params ?? []).flatMap((param) => param.alternateNames ?? []);
     if (recorded || alternate.length) {
-      // A recorded reason waives name parity. `alternateNames` on an
-      // otherwise non-exempt entry accepts spellings upstream rejects.
       (recorded ? exempt : divergent).push(
         recorded ? fn.id : [fn.id, params, args, alternate],
       );

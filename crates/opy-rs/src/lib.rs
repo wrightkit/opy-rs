@@ -1,36 +1,3 @@
-//! The standalone OverPy-compatible `.opy` implementation (opy-rs).
-//!
-//! Owns the OPY source-language surface of the `opy-rs` repository: a lexer,
-//! an indentation-aware CST/parser with structured diagnostics and recovery,
-//! token-level preprocessing (includes and `#!define`/`#!defineMember` macros), semantic
-//! resolution, and lowering into the opy-rs-owned Opy HIR contract
-//! ([`hir::Program`]). Everything from source through the Opy HIR semantic
-//! model is Workshop-independent: source analysis never depends on `workshop-rs`,
-//! OverPy, or Node. The bounded source-to-Workshop compiler is exposed from
-//! this same crate behind the explicit [`Compiler`] API.
-//!
-//! Pipeline: [`lexer::lex`] → [`preprocess::preprocess`] →
-//! [`parser::parse`] → [`lower::lower`] → Opy HIR ([`hir`]).
-//!
-//! OverPy-compatible `__script__("…")` macros execute at compile time through
-//! the bounded embedded macro runtime: script macros expand
-//! during preprocessing with the reference's argument-injection ABI, and
-//! resource limits mirror the pinned reference constants
-//! (`macro_js::Limits::default()`). Script-macro expansion is
-//! compile-time behavior and is source-supported.
-//!
-//! `#!postCompileHook` is recognized, parsed, validated, and recorded at the
-//! source stage (see [`preprocess`] and [`CompileOutcome::post_compile_hook`]).
-//! The hook executes against the final Workshop text produced by lowering —
-//! in [`Compiler`] compilation and in [`tooling::check`]'s compile-stage
-//! acceptance pass, which re-validates hook-rewritten output under the
-//! request locale (issue #620). The frontend pipeline itself never
-//! fabricates a Workshop payload.
-//!
-//! This crate owns the OverPy source-language implementation, its bounded
-//! compiler, Workshop→OPY reconstruction, and the isolated differential
-//! harness entry points.
-
 pub(crate) mod compile_time;
 pub(crate) mod compiler;
 pub mod cst;
@@ -160,19 +127,10 @@ pub struct CompileOutcome {
     pub post_compile_hook: Option<PostCompileHookRecord>,
 }
 
-/// The recorded declaration of a `#!postCompileHook` script.
-///
-/// Execution against the final Workshop text is lowering-dependent
-/// (workshop-rs emission, issue #8), so it happens in the compile stage and
-/// in `check`'s compile-stage acceptance pass (issue #620) — never in the
-/// frontend, which fabricates no Workshop payload.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PostCompileHookRecord {
-    /// The resolved project-relative script path.
     pub script: String,
-    /// The resolved script source, retained for the backend hook ABI.
     pub source: String,
-    /// The directive's source span, when known.
     pub span: Option<Span>,
 }
 
@@ -209,8 +167,6 @@ pub fn compile_with_overlay_outcome_with_locale(
     locale: &workshop_rs::catalog::Locale,
 ) -> CompileOutcome {
     let outcome = tooling::check_frontend_with_overlay(source, main_path, root, overlay, locale);
-    // Every failed check carries at least one error diagnostic, so a None model
-    // always yields an error (the compile outcome invariant).
     let error = outcome
         .diagnostics
         .iter()

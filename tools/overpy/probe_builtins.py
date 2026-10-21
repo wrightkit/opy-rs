@@ -52,13 +52,6 @@ def function_of(probe_id: str) -> str:
     return probe_id.split(":")[1]
 
 
-# Variants that generate a candidate input rather than a canonical call form:
-# literal substitutions (`arg2=null`), defaulted-argument omissions
-# (`omit-from-*`, `omit-arg*`), and slots that wrap what they cannot hold
-# (`in-boolean`, `in-replacement`). A reference rejection of one of these
-# says the generated candidate was invalid input, not that acceptance
-# diverged; everything else (`base`, `sort-order`, `bool`, `int`, `float`,
-# `name`, `spelling`, ...) is a declared form whose rejection claims parity.
 GENERATED_CANDIDATE = re.compile(r"^(arg\d+=|omit-|in-)")
 
 
@@ -69,8 +62,6 @@ def is_generated_candidate(probe_id: str) -> bool:
 def load_gaps(path: Path = GAPS) -> list[dict]:
     gaps = json.loads(path.read_text(encoding="utf-8"))["gaps"]
     for gap in gaps:
-        # A gap must discriminate by variant or detail; a status plus a
-        # function list alone would swallow a whole divergence class.
         if not gap.get("variant") and not gap.get("detail"):
             raise RuntimeError(
                 f"probe gap {gap.get('id')!r} needs a variant or a detail to match"
@@ -133,9 +124,6 @@ def compare_batch(binary: Path, selected: list[dict], scratch: Path) -> dict:
     for finding in report.get("findings", []):
         reference = reference_map.get(finding["id"])
         if isinstance(reference, dict) and not reference.get("ok", True):
-            # Keep the oracle's reason on the finding so an unexplained
-            # acceptance divergence reports what the pinned reference
-            # rejected, not just that it rejected.
             finding["referenceError"] = reference.get("error", "")
     return report
 
@@ -199,8 +187,6 @@ def main() -> int:
         stale = []
 
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))["functions"]
-    # `:name` probes exercise name resolution only; they are not valid sample
-    # calls and must not count toward call-shape coverage.
     probed = {
         function_of(p["id"]) for p in selected if p["id"].rsplit(":", 1)[-1] != "name"
     }
@@ -215,9 +201,6 @@ def main() -> int:
         rejected = f"  (oracle: {reference[:100]})" if reference else ""
         print(f"    {finding['status']} {finding['id']} {finding['detail'][:100]}{rejected}")
     if generated:
-        # Not contract claims: the reference rejected a generated candidate,
-        # so acceptance parity was never in question. They still print with
-        # their oracle reason instead of disappearing into a status count.
         print(f"  probe-input: {len(generated)} generated candidates the oracle rejected")
         for name, count in sorted(
             Counter(function_of(f["id"]) for f in generated).items()

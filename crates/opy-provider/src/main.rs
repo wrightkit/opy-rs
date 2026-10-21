@@ -1,9 +1,3 @@
-//! First-party OPY Language Provider Protocol process.
-//!
-//! The process is deliberately a thin owner-side adapter: OPY project loading,
-//! preprocessing, diagnostics, and compilation remain in `opy-rs`. Only the
-//! LPP envelope and source-oriented projections live here.
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::{self, BufRead, BufWriter, Write};
@@ -34,20 +28,14 @@ const RESOLVE_IDS_VERSION: &str = "1.6";
 const SERVER_NAME: &str = "opy-provider";
 const LANGUAGE_ID: &str = "opy";
 const LANGUAGE_EXTENSIONS: [&str; 1] = ["opy"];
-// The payload is canonical Workshop text; the envelope remains opaque to LPP.
 const WORKSHOP_ARTIFACT_FORMAT: &str = "workshop-rs/text-v1";
 const MAPPED_ARTIFACT_FORMAT: &str = "workshop-rs/mapped-text-v1";
 
-/// Whether the negotiated `protocol_version` is `minimum` or later.
 fn version_at_least(protocol_version: &str, minimum: &str) -> bool {
     let rank = |version: &str| PROTOCOL_VERSIONS.iter().position(|known| *known == version);
     rank(protocol_version) >= rank(minimum)
 }
 
-/// Whether `capability` is implemented by this first-party provider. All
-/// advertised capabilities are enabled; `projectLoading` is advertised only
-/// under the version-gated negotiation path in `dispatch`, never through
-/// `capability_for`/`enabled`.
 fn capability_enabled(capability: &str) -> bool {
     matches!(
         capability,
@@ -66,9 +54,6 @@ fn capability_enabled(capability: &str) -> bool {
     )
 }
 
-/// The advertised capabilities for `protocol_version`; every implemented
-/// capability is enabled, with version-gated names added at their
-/// introduction versions.
 fn capabilities_json(protocol_version: &str) -> Value {
     let mut capabilities = json!({
         "check": true,
@@ -95,8 +80,6 @@ fn capabilities_json(protocol_version: &str) -> Value {
     capabilities
 }
 
-/// The minimum protocol version a method capability can be negotiated at,
-/// when the method does not exist in earlier sessions.
 fn capability_min_version(capability: &str) -> Option<&'static str> {
     Some(match capability {
         "lookup" => LOOKUP_VERSION,
@@ -244,7 +227,6 @@ enum ProjectTargetKind {
     Directory,
 }
 
-/// `lpp/lookup` params (LPP 1.5 `name-lookup.md` §21.1).
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct LookupParams {
@@ -262,15 +244,12 @@ struct LookupParams {
     limit: Option<u64>,
 }
 
-/// One `within` selector: `{ "kind": "...", "value": "..." }`; `kind` is
-/// validated against the closed set in `lookup_within`.
 #[derive(Debug, Deserialize)]
 struct LookupWithinParam {
     kind: String,
     value: String,
 }
 
-/// `lpp/resolveIds` params (LPP 1.6 `resolve-ids.md` §22.1).
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ResolveIdsParams {
@@ -281,8 +260,6 @@ struct ResolveIdsParams {
     enums: BTreeMap<String, Vec<String>>,
 }
 
-/// `lpp/reconstruct` params (`analysis-and-compilation.md` §11.1): the
-/// artifact envelope is opaque — `content` is interpreted by `format` alone.
 #[derive(Debug, Deserialize)]
 struct ReconstructParams {
     artifact: ReconstructArtifact,
@@ -294,11 +271,8 @@ struct ReconstructArtifact {
     content: String,
 }
 
-/// The bound applied when an `lpp/lookup` request omits `limit`.
 const DEFAULT_LOOKUP_LIMIT: u64 = 20;
 
-/// The most ids (calls plus enum members, duplicates counted) one
-/// `lpp/resolveIds` request may carry (`resolve-ids.md` §22.1).
 const RESOLVE_IDS_MAX_IDS: usize = 1024;
 
 #[derive(Debug)]
@@ -312,7 +286,6 @@ struct LoadedProject {
 #[derive(Debug)]
 struct LoadedDocuments {
     documents: BTreeMap<String, Document>,
-    /// The request's `locale` parameter, or the `en-US` default.
     locale: String,
 }
 
@@ -627,8 +600,6 @@ impl Server {
         Ok(result)
     }
 
-    /// `lpp/lookup` — served from the language vocabulary alone; a loaded
-    /// project is never required.
     fn lookup(&self, value: Value) -> Result<Value, HandlerError> {
         let within_value = value.get("within").cloned();
         let params: LookupParams =
@@ -640,8 +611,6 @@ impl Server {
             return Err(HandlerError::invalid_params());
         }
         let within = params.within.as_ref().map(lookup_within).transpose()?;
-        // The OPY catalog serves `en-US` display names; that is also the
-        // deterministic fallback the spec permits for any requested locale.
         let query = LookupQuery {
             text: params.query.unwrap_or_default(),
             scope: LookupScope::ALL,
@@ -651,7 +620,6 @@ impl Server {
         };
         let scoped = query.within.is_some();
         let mut outcome = opy_lookup(&query);
-        // A settings enum domain answers under `within: "enum"` too.
         if let (LookupOutcome::UnknownWithin { .. }, Some(LookupWithin::Enum(domain))) =
             (&outcome, &query.within)
         {
@@ -688,10 +656,6 @@ impl Server {
         }
     }
 
-    /// `lpp/resolveIds` — answered from the language vocabulary alone
-    /// (`resolve-ids.md` §22.1): the request carries no target and a loaded
-    /// project is never required. Ids with no dedicated OPY spelling are
-    /// omitted rather than guessed.
     fn resolve_ids(&self, value: Value) -> Result<Value, HandlerError> {
         let params: ResolveIdsParams =
             serde_json::from_value(value).map_err(|_| HandlerError::invalid_params())?;
@@ -725,8 +689,6 @@ impl Server {
     }
 }
 
-/// The identity prefixes the provider issues and accepts back as `within`
-/// values (`name-lookup.md` §21.2: clients must not parse identities).
 const CALLABLE_IDENTITY: &str = "opy:callable/";
 const ENUM_IDENTITY: &str = "opy:enum/";
 const ENUM_MEMBER_IDENTITY: &str = "opy:enum-member/";
@@ -735,10 +697,6 @@ const SETTING_PATH_IDENTITY: &str = "opy:setting-path/";
 const PARAM_IDENTITY: &str = "opy:param/";
 const EVENT_IDENTITY: &str = "opy:event/";
 
-/// Map a wire `within` selector to the vocabulary scope. `callable`/`enum`
-/// values are provider-issued identities (a bare spelling is accepted for
-/// convenience); `settings` takes a raw path prefix. A kind outside the
-/// closed set is `Invalid params`.
 fn lookup_within(within: &LookupWithinParam) -> Result<LookupWithin, HandlerError> {
     let value = within.value.as_str();
     Ok(match within.kind.as_str() {
@@ -749,21 +707,14 @@ fn lookup_within(within: &LookupWithinParam) -> Result<LookupWithin, HandlerErro
     })
 }
 
-/// The scope name behind an identity, or the raw value when it is not an
-/// `opy:` identity of that kind (an unknown name resolves to an
-/// `unknownWithin` refusal downstream, not a param error).
 fn identity_value<'a>(value: &'a str, prefix: &str) -> &'a str {
     value.strip_prefix(prefix).unwrap_or(value)
 }
 
-/// The last segment of a settings path; a scoped settings listing spells
-/// each child by its own segment (`name-lookup.md` §21.3).
 fn path_segment(path: &str) -> &str {
     path.rsplit('.').next().unwrap_or(path)
 }
 
-/// The LPP wire entry for one `opy_rs::lookup` hit. `scoped` is set inside
-/// a `within` listing, where settings children spell their own segment.
 fn lookup_entry(hit: &LookupHit, scoped: bool) -> Value {
     match hit {
         LookupHit::Function {
@@ -838,7 +789,6 @@ fn lookup_entry(hit: &LookupHit, scoped: bool) -> Value {
             callable, param, ..
         } => {
             let mut fact = callable_param_wire(param);
-            // The parameter's `name` is the entry spelling (§21.2).
             fact.as_object_mut()
                 .expect("parameter object")
                 .remove("name");
@@ -871,8 +821,6 @@ fn lookup_entry(hit: &LookupHit, scoped: bool) -> Value {
     }
 }
 
-/// The wire form of one callable parameter (§21.4): name, type, required,
-/// optional default and the enum domain it accepts.
 fn callable_param_wire(param: &LookupParam) -> Value {
     let mut wire = json!({
         "name": param.name,
@@ -900,7 +848,6 @@ fn callable_param_wire(param: &LookupParam) -> Value {
     wire
 }
 
-/// The wire form of a settings value form (§21.2 `setting`).
 fn setting_wire(value: &SettingValueForm) -> Value {
     let mut wire = json!({ "type": value.kind.as_str() });
     if let Some(min) = value.min {
@@ -932,7 +879,6 @@ enum ArtifactFormat {
     Mapped,
 }
 
-/// The `acceptedArtifactFormats` of an `lpp/compile` request; valid only in LPP 1.4 sessions.
 fn accepted_artifact_formats(
     params: &Value,
     protocol_version: &str,
@@ -960,20 +906,6 @@ fn accepted_artifact_formats(
     Ok(Some(formats))
 }
 
-/// `lpp/reconstruct` (`analysis-and-compilation.md` §11): the inverse of
-/// `lpp/compile` for the artifact formats this provider emits.
-/// `workshop-rs/mapped-text-v1` reconstructs from its `text` member — issue
-/// spans are artifact-text provenance for every accepted format, so the
-/// optional source map is left unapplied (reconstruction must never depend
-/// on metadata the canonical model does not guarantee).
-///
-/// Failure classes follow §11.3: an unknown format is the
-/// `reconstruct.artifactFormatUnsupported` refusal (its `details.format`
-/// echoes the request); a malformed payload in a supported format is
-/// `invalidArtifact`; a parsed program outside the reconstruction surface is
-/// a refusal. §18.3 confines refusal `details` to `refusalCode` plus
-/// spec-owned echo keys, so every issue code and span is carried in
-/// `message` — `refusalCode` names the first (primary) issue's stable code.
 fn reconstruct(value: Value) -> Result<Value, HandlerError> {
     let params: ReconstructParams =
         serde_json::from_value(value).map_err(|_| HandlerError::invalid_params())?;
@@ -997,9 +929,6 @@ fn reconstruct(value: Value) -> Result<Value, HandlerError> {
         details: json!({ "code": "catalog-init" }),
         message: format!("cannot load the Workshop catalog: {error}"),
     })?;
-    // The artifact envelope carries no locale, so the text's client language
-    // is detected — the same `resolve_locale` the client uses — to accept an
-    // artifact in any locale this provider's `lpp/compile` can emit.
     let locale = workshop_rs::detect::resolve_locale(&text, catalog, None)
         .map_err(|error| invalid_artifact(error.to_string()))?;
     let program = workshop_rs::parser::parse(&text, catalog, &locale)
@@ -1007,9 +936,6 @@ fn reconstruct(value: Value) -> Result<Value, HandlerError> {
     match opy_rs::reconstruct::reconstruct(&program) {
         Ok(source) => Ok(json!({ "source": source })),
         Err(error) => {
-            // `manifest-error`/`catalog-error` are environment failures, not
-            // declines of the artifact (the contract's guard classes); they
-            // report as provider failures rather than refusals.
             if error
                 .issues
                 .iter()
@@ -1032,13 +958,10 @@ fn reconstruct(value: Value) -> Result<Value, HandlerError> {
     }
 }
 
-/// The stable code of the first issue a `ReconstructError` carries; the
-/// error is only ever constructed with at least one issue.
 fn issue_code(error: &opy_rs::reconstruct::ReconstructError) -> Option<&'static str> {
     error.issues.first().map(|issue| issue.code)
 }
 
-/// A malformed artifact payload in a supported format (`§11.3`).
 fn invalid_artifact(reason: String) -> HandlerError {
     HandlerError::Lpp {
         kind: "invalidArtifact",
@@ -1047,7 +970,6 @@ fn invalid_artifact(reason: String) -> HandlerError {
     }
 }
 
-/// The first accepted format this provider produces; `None` when none is producible.
 fn select_artifact_format(accepted: Option<&[String]>) -> Option<ArtifactFormat> {
     let Some(accepted) = accepted else {
         return Some(ArtifactFormat::Text);
@@ -1059,7 +981,6 @@ fn select_artifact_format(accepted: Option<&[String]>) -> Option<ArtifactFormat>
     })
 }
 
-/// Build the artifact envelope. `uri_for` turns a mapped file path into its document URI.
 fn artifact_json(
     format: Option<ArtifactFormat>,
     text: &str,
@@ -1338,12 +1259,6 @@ fn document_overlays(
         .collect()
 }
 
-/// The effective check entry for `document`: a first-line `#!mainFile`
-/// directive resolves to its target when the target exists on disk —
-/// documents redirecting to the same entry run the same project parse, so
-/// checking them individually would repeat that parse once per document.
-/// An unreadable or malformed redirect keeps the document as its own entry,
-/// preserving its own `main-file-*` refusal.
 pub(crate) fn effective_entry(document: &Document, path: &Path) -> PathBuf {
     let Some(target) = opy_rs::preprocess::main_file_directive(&document.text) else {
         return path.to_path_buf();
@@ -1358,10 +1273,6 @@ pub(crate) fn effective_entry(document: &Document, path: &Path) -> PathBuf {
     }
 }
 
-/// The lexically normalized tail of an `#!include` target: `.` segments are
-/// dropped and `name/..` pairs cancelled. A target that escapes its includer's
-/// directory can still name a supplied document under a different include base;
-/// matching the remainder by suffix is the safe approximation for deferral.
 fn include_remainder(target: &str) -> PathBuf {
     let mut parts: Vec<&str> = Vec::new();
     for part in target.split('/') {
@@ -1396,15 +1307,6 @@ fn check_documents(
             .push(document);
     }
 
-    // One project parse per effective entry. Two disciplines keep the shared
-    // parses faithful:
-    //
-    // - Coverage counts only a *completed* analysis: `CheckOutcome.files` on
-    //   a failed check is the registry reached before the failure, not a set
-    //   of analyzed documents, so only a clean outcome covers them.
-    // - Standalone fallbacks run after the includers, not in path order: a
-    //   member that sorts before its root would otherwise report
-    //   out-of-context errors the entry parse never produces.
     let canonical = edits::normalized;
     let supplied: BTreeSet<PathBuf> = documents
         .values()
@@ -1418,27 +1320,17 @@ fn check_documents(
             continue;
         };
         for target in opy_rs::preprocess::include_directives(&document.text) {
-            // `Preprocessor::include` normalizes `\` to `/` before joining —
-            // match that spelling so `.\\member.opy` marks its member too.
             let target = target.replace('\\', "/");
             let candidate = canonical(&base.join(&target));
             if supplied.contains(&candidate) {
                 included.insert(candidate);
             } else if candidate.is_dir() {
-                // `#!include dir` splices every `.opy` file in the directory.
                 for member in &supplied {
                     if member.parent() == Some(candidate.as_path()) {
                         included.insert(member.clone());
                     }
                 }
             } else {
-                // `#!include "../x"` spellings can escape the includer's
-                // directory: the preprocessor resolves them against the last
-                // macro file's directory (`Preprocessor::include_base`), which
-                // this static scan cannot reproduce. Mark every supplied
-                // document the normalized remainder could name instead.
-                // Over-marking is safe — deferral only delays a document's own
-                // check, and an uncovered member still runs afterwards.
                 let remainder = include_remainder(&target);
                 if remainder.as_os_str().is_empty() {
                     continue;
@@ -1500,16 +1392,11 @@ fn check_documents(
     };
 
     for (entry, members) in groups {
-        // The entry document itself is the faithful representative when it is
-        // in the set; otherwise any member's redirect reaches the same parse.
         let representative = members
             .iter()
             .copied()
             .find(|document| document_path(document).is_ok_and(|path| same_path(&path, &entry)))
             .unwrap_or_else(|| members[0]);
-        // A single document that is its own entry may still be another
-        // supplied document's include member; defer those until the roots —
-        // redirect groups and non-included self entries — have run.
         let self_entry = members.len() == 1
             && document_path(representative).is_ok_and(|path| same_path(&path, &entry));
         if self_entry && included.contains(&canonical(&entry)) {
@@ -1809,7 +1696,6 @@ fn file_entries(project: &LoadedProject, paths: &[String]) -> Vec<FileEntry> {
     paths
         .into_iter()
         .map(|path| FileEntry {
-            // Filesystem-loaded documents all echo the entry version.
             version: project.entry_version,
             path,
             diagnostics: Vec::new(),
@@ -1817,8 +1703,6 @@ fn file_entries(project: &LoadedProject, paths: &[String]) -> Vec<FileEntry> {
         .collect()
 }
 
-/// The LPP diagnostic object for one frontend diagnostic; `position_for`
-/// resolves a frontend `(path, line, col)` endpoint into an LPP position.
 fn diagnostic_json(
     location: Option<&SourceLocation>,
     severity: &opy_rs::tooling::DiagnosticSeverity,
@@ -1835,8 +1719,6 @@ fn diagnostic_json(
     })
 }
 
-/// The LPP range of a frontend location — `(0, 0)-(0, 0)` when absent —
-/// with `position_for` resolving a `(path, line, col)` endpoint.
 fn diagnostic_range(
     location: Option<&SourceLocation>,
     position_for: impl Fn(&str, u32, u32) -> Value,
@@ -1868,9 +1750,6 @@ fn project_lsp_position(
     lsp_position(&source, line, col)
 }
 
-/// The LPP position of a 1-based frontend `(line, col)`: frontend columns
-/// expand tabs to four columns, so the column first maps to a character
-/// index within the line and only then counts UTF-16 units.
 fn lsp_position(source: &str, line: u32, col: u32) -> Value {
     let character = edits::SourceText::new(source)
         .line_text(line.saturating_sub(1) as usize)

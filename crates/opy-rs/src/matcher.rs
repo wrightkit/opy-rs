@@ -1,36 +1,16 @@
-//! The shared nearest-spelling matcher for rejected OPY input (issue #469).
-//!
-//! One fold/score/rank pipeline produces the `did you mean` candidates on
-//! `unknown-action`, `unknown-value`, `unknown-member`, `unknown-enum-member`
-//! and rejected settings keys, over the same manifest, catalog and settings
-//! data the compiler resolves against — the owner ships no second name
-//! table. The vocabulary lookup (issue #465) ranks through this matcher, so
-//! a rejection's candidates match the top entries of a lookup on the
-//! rejected spelling.
-//!
-//! Every returned list is deterministic: equal scores order by the
-//! candidate's spelling, and lists are bounded to [`CANDIDATE_LIMIT`].
-
 use workshop_rs::catalog::{Catalog, Kind, Locale};
 use workshop_rs::settings::{self, PathPart, SettingValueDomain};
 
 use crate::manifest::{AliasKind, Function, FunctionKind, Manifest};
 
-/// The bound on any reported candidate list.
 pub(crate) const CANDIDATE_LIMIT: usize = 8;
 
-/// One reportable spelling plus every form it matches on: the owner
-/// spelling itself, `en-US` catalog display names, and reviewed source
-/// aliases. Display-name forms keep display-name guesses ("Create HUD
-/// Text") fold-exact against the spelling they name (`hudText`).
 pub(crate) struct MatchCandidate {
     spelling: String,
     forms: Vec<String>,
 }
 
 impl MatchCandidate {
-    /// A candidate that matches on its spelling alone (user-defined names,
-    /// settings keys, enum members without a catalog display name).
     fn bare(spelling: impl Into<String>) -> MatchCandidate {
         let spelling = spelling.into();
         MatchCandidate {
@@ -39,8 +19,6 @@ impl MatchCandidate {
         }
     }
 
-    /// A manifest-declared callable: its source id and the `en-US` display
-    /// spellings of its catalog entry.
     fn function(function: &Function, catalog: &Catalog) -> MatchCandidate {
         let mut forms = vec![function.id.clone()];
         if let Some(catalog_id) = &function.catalog_id {
@@ -60,7 +38,6 @@ impl MatchCandidate {
     }
 }
 
-/// Bare candidates for spellings that have no catalog display forms.
 pub(crate) fn bare_candidates<I, S>(spellings: I) -> Vec<MatchCandidate>
 where
     I: IntoIterator<Item = S>,
@@ -69,13 +46,7 @@ where
     spellings.into_iter().map(MatchCandidate::bare).collect()
 }
 
-/// The value-position call spellings an `unknown-value` diagnostic can
-/// suggest: manifest values, their reviewed aliases, and the by-name
-/// special calls (`sorted`, `createWorkshopSetting*`).
 pub(crate) fn value_candidates(manifest: &Manifest, catalog: &Catalog) -> Vec<MatchCandidate> {
-    // Member values join the pool too: a receiverless guess still finds the
-    // name (`startForcingPlayerToBeHero` names `startForcingHero`); a wrong
-    // call shape is a separate diagnostic axis from the spelling.
     let mut pool = function_candidates(manifest, catalog, FunctionKind::is_value);
     pool.extend(
         crate::lower::special_forms::SPECIAL_VALUE_CALLS
@@ -85,24 +56,14 @@ pub(crate) fn value_candidates(manifest: &Manifest, catalog: &Catalog) -> Vec<Ma
     pool
 }
 
-/// The statement-position call spellings an `unknown-action` diagnostic
-/// can suggest, member actions included (see [`value_candidates`]).
 pub(crate) fn action_candidates(manifest: &Manifest, catalog: &Catalog) -> Vec<MatchCandidate> {
     function_candidates(manifest, catalog, FunctionKind::is_action)
 }
 
-/// The member-call spellings an `unknown-member` diagnostic can suggest
-/// (`eventPlayer.member(...)`, `player.member`).
 pub(crate) fn member_candidates(manifest: &Manifest, catalog: &Catalog) -> Vec<MatchCandidate> {
     function_candidates(manifest, catalog, FunctionKind::is_member)
 }
 
-/// The members of a builtin domain an `unknown-enum-member` diagnostic
-/// can suggest. The pool is the resolver's own acceptance surface:
-/// [`crate::enums::domain_members`] reports the canonical OPY spellings
-/// (so `SOLDIER`, never the catalog id `SOLDIER_76`), the reference
-/// aliases the same table declares (`MCCREE`), and the `en-US` display
-/// names.
 pub(crate) fn enum_member_candidates(
     catalog: &Catalog,
     source_domain: &str,
@@ -131,9 +92,6 @@ fn function_candidates(
         .filter(|function| position(function.kind))
         .map(|function| MatchCandidate::function(function, catalog))
         .collect();
-    // A declared source alias is an accepted spelling in its own right, so it
-    // is a candidate of its own (`buttonStr` names `buttonString`, not the
-    // alias's canonical target).
     pool.extend(
         manifest
             .aliases()
@@ -146,8 +104,6 @@ fn function_candidates(
     pool
 }
 
-/// The function an alias resolves to, through its declared kind. `lookup`
-/// matches aliases to their targets through this same resolution.
 pub(crate) fn alias_target<'a>(
     alias: &crate::manifest::Alias,
     manifest: &'a Manifest,
@@ -158,9 +114,6 @@ pub(crate) fn alias_target<'a>(
     }
 }
 
-/// Fold a spelling or phrase to a comparable form: lowercase letters and
-/// digits only; `_`, `.`, `:`, `%`, and whitespace are dropped. The
-/// lookup (`crate::lookup`) folds through this same function.
 pub(crate) fn fold(text: &str) -> String {
     text.chars()
         .filter(|c| c.is_alphanumeric())
@@ -168,10 +121,6 @@ pub(crate) fn fold(text: &str) -> String {
         .collect()
 }
 
-/// Score a folded query against one match form; lower is closer,
-/// `None` is unrelated. Exact folded equality beats prefix beats
-/// substring beats edit distance. Callers ranking one query against
-/// many forms fold the query once; the form still folds inside.
 pub(crate) fn score_folded(query: &str, form: &str) -> Option<u32> {
     let form = fold(form);
     if query.is_empty() || form.is_empty() {
@@ -186,35 +135,20 @@ pub(crate) fn score_folded(query: &str, form: &str) -> Option<u32> {
     if query.starts_with(&form) {
         return Some((query.len() - form.len()) as u32 + 4);
     }
-    // Substring matching on very short spellings is pure noise (a one-letter
-    // display name like Icon's "X" hides inside unrelated folds).
     if form.len().min(query.len()) >= 3 && (form.contains(query) || query.contains(&form)) {
         return Some((form.len().max(query.len()) - form.len().min(query.len())) as u32 + 10);
     }
     let distance = levenshtein(query, &form);
-    // Short names need tight edits; longer names admit proportionally
-    // larger distance (a ≥50%-similar guess like `startForcingPlayerToBeHero`
-    // still finds `startForcingHero`).
     let close = distance * 3 <= query.len() as u32 + 1
         || distance * 2 <= query.len().max(form.len()) as u32;
     close.then_some(distance * 10 + 20)
 }
 
-/// Segment-aware scoring for a settings path: the query's dot-separated
-/// segments must be a prefix of the path's segments, where a template
-/// segment (`<team>`, `<hero>`) accepts any segment spelling and the last
-/// query segment may be a prefix of its path segment. `None` when the
-/// query is not a path prefix — near-name ranking falls back to
-/// [`score_folded`].
 #[cfg(test)]
 fn path_score(query: &str, path: &str) -> Option<u32> {
     path_score_folded(&fold_path_query(query).0, path)
 }
 
-/// [`path_score`] with the query's dot-separated segments already
-/// [`fold`]ed, for ranking loops that score one query against many
-/// paths. Lookup settings queries score `MatchKind::Path` forms
-/// through this.
 pub(crate) fn path_score_folded(segments: &[String], path: &str) -> Option<u32> {
     if segments.iter().any(String::is_empty) {
         return None;
@@ -239,9 +173,6 @@ pub(crate) fn path_score_folded(segments: &[String], path: &str) -> Option<u32> 
     Some(penalty + (path_segments.len() - segments.len()) as u32)
 }
 
-/// [`path_score`] query preparation for a ranking loop: the
-/// dot-separated folded segments plus the whole folded query for
-/// near-name fallback scoring.
 pub(crate) fn fold_path_query(query: &str) -> (Vec<String>, String) {
     (query.trim().split('.').map(fold).collect(), fold(query))
 }
@@ -264,10 +195,6 @@ fn levenshtein(a: &str, b: &str) -> u32 {
     row[b.len()]
 }
 
-/// Rank `pool` by closeness to `query`, best first, bounded to
-/// [`CANDIDATE_LIMIT`]. A candidate's score is its best match form; the
-/// reported text is always the owner spelling. Ties order by spelling so
-/// repeated runs return the same list in the same order.
 pub(crate) fn rank(query: &str, pool: &[MatchCandidate]) -> Vec<String> {
     let query = fold(query);
     let mut scored: Vec<(u32, &str)> = pool
@@ -290,10 +217,6 @@ pub(crate) fn rank(query: &str, pool: &[MatchCandidate]) -> Vec<String> {
         .collect()
 }
 
-/// Rank `pool`, falling back to the whole pool spelled out (sorted,
-/// bounded) when nothing is near: for a closed candidate space — an
-/// enum domain's members, the keys valid at one settings path — the
-/// candidates are literally its members.
 pub(crate) fn rank_closed(query: &str, pool: &[MatchCandidate]) -> Vec<String> {
     let ranked = rank(query, pool);
     if !ranked.is_empty() {
@@ -309,11 +232,6 @@ pub(crate) fn rank_closed(query: &str, pool: &[MatchCandidate]) -> Vec<String> {
     spellings
 }
 
-/// Append a `(did you mean …?)` suffix naming the closest `ranked`
-/// candidates (at most three; the list must already be [`rank`]ed). A
-/// message that already ends in one — a canonical settings rejection
-/// embeds its own suggestion — has it replaced, so the rejection reports
-/// one candidate list, not two.
 pub(crate) fn did_you_mean(message: String, ranked: &[String]) -> String {
     let Some((first, rest)) = ranked.split_first() else {
         return message;
@@ -335,12 +253,6 @@ pub(crate) fn did_you_mean(message: String, ranked: &[String]) -> String {
     }
 }
 
-/// The candidates a settings-emission rejection carries: the leaf keys or
-/// enum members valid at the rejected member's path, resolved by walking
-/// the source `settings` tree to the reported span. The owner's own single
-/// `suggestion` (already in the message) is the candidate of record for
-/// positions whose spelling pool is not enumerable through the public
-/// settings API (hero group names, list element spellings).
 pub(crate) fn settings_member_candidates(
     hir_settings: Option<&crate::hir::Settings>,
     error: &workshop_rs::WorkshopError,
@@ -372,8 +284,6 @@ pub(crate) fn settings_member_candidates(
                 suggestion.into_iter().map(str::to_string).collect()
             }
         }
-        // A leaf member: the key either resolves (the value or kind is the
-        // problem) or is itself outside the emission table.
         Some(SettingsMatch::Member { path, name }) => {
             let member_path: Vec<PathPart<'_>> = {
                 let mut full = path;
@@ -382,8 +292,6 @@ pub(crate) fn settings_member_candidates(
             };
             match settings::definition(&member_path) {
                 Some(definition) => {
-                    // A `BoolEnum` key is Boolean-typed over an enum domain
-                    // and accepts `true` only.
                     if matches!(definition.domain(), SettingValueDomain::Boolean)
                         && definition.enum_members().next().is_some()
                     {
@@ -402,8 +310,6 @@ pub(crate) fn settings_member_candidates(
                 }
             }
         }
-        // A hero group under `heroes.<team>`: hero names are the accepted
-        // spelling pool, which the owner only exposes through `suggestion`.
         Some(SettingsMatch::Group { path })
             if matches!(
                 path.as_slice(),
@@ -412,16 +318,11 @@ pub(crate) fn settings_member_candidates(
         {
             suggestion.into_iter().map(str::to_string).collect()
         }
-        // A team group or a structural rejection: no enumerable pool.
         Some(SettingsMatch::Group { .. }) => Vec::new(),
-        // No node matched the reported span (list-element spans land here):
-        // the owner's suggestion is the only available candidate.
         None => suggestion.into_iter().map(str::to_string).collect(),
     }
 }
 
-/// The leaf keys valid at `parent_path` — every declaration whose last part
-/// resolves at that parent (so `gamemodes.ffa` inherits `gamemodes.general`).
 pub(crate) fn sibling_keys(parent_path: &[PathPart<'_>]) -> Vec<String> {
     let mut keys: Vec<String> = Vec::new();
     for definition in settings::definitions() {
@@ -437,7 +338,6 @@ pub(crate) fn sibling_keys(parent_path: &[PathPart<'_>]) -> Vec<String> {
     keys
 }
 
-/// The settings node found at a reported span, with its emission-table path.
 enum SettingsMatch<'a> {
     Member {
         path: Vec<PathPart<'a>>,
@@ -448,9 +348,6 @@ enum SettingsMatch<'a> {
     },
 }
 
-/// Walk the settings tree to the node whose span the rejection reported,
-/// building the emission-table path (`gamemodes.<mode>`, `heroes.<team>`,
-/// `heroes.<team>.<hero>`) on the way down.
 fn find_settings_node<'a>(
     children: &'a [crate::hir::types::SettingsNode],
     path: &mut Vec<PathPart<'a>>,
@@ -479,7 +376,6 @@ fn find_settings_node<'a>(
     None
 }
 
-/// The path part a group name occupies, given the path so far.
 fn settings_path_part<'a>(name: &'a str, path: &[PathPart<'a>]) -> PathPart<'a> {
     match path {
         [PathPart::Part("heroes")] => PathPart::Team,
@@ -488,7 +384,6 @@ fn settings_path_part<'a>(name: &'a str, path: &[PathPart<'a>]) -> PathPart<'a> 
     }
 }
 
-/// Whether the HIR node span is the span a `WorkshopError` reported.
 fn settings_span_matches(
     span: Option<&crate::hir::Span>,
     reported: &workshop_rs::source::Span,
@@ -541,9 +436,6 @@ mod tests {
 
     #[test]
     fn did_you_mean_replaces_an_embedded_suggestion() {
-        // A canonical settings rejection already carries its own `did you
-        // mean` suffix; the ranked candidates replace it instead of
-        // stacking a second one.
         let base = "settings key 'main.descriptino' is outside the emission table \
                     (did you mean 'Description'?)"
             .to_string();
@@ -552,8 +444,6 @@ mod tests {
             "settings key 'main.descriptino' is outside the emission table \
              (did you mean 'description'?)"
         );
-        // With no candidates the owner's suffix stays — it is the only
-        // candidate information the rejection carries.
         assert_eq!(did_you_mean(base.clone(), &[]), base);
     }
 
@@ -588,9 +478,7 @@ mod tests {
         let manifest = Manifest::builtin().expect("builtin manifest");
         let catalog = Catalog::builtin().expect("builtin catalog");
         let pool = action_candidates(manifest, &catalog);
-        // The Workshop display name "Create HUD Text" folds onto `hudText`.
         assert_eq!(rank("createHudText", &pool)[0], "hudText");
-        // A receiverless guess at a member action still finds its name.
         assert_eq!(
             rank("startForcingPlayerToBeHero", &pool)[0],
             "startForcingHero"
@@ -612,16 +500,12 @@ mod tests {
             "the catalog id is never a candidate: {ranked:?}"
         );
         assert_eq!(rank("MCCEE", &pool)[0], "MCCREE");
-        // Display names match too ("Blizzard World" names `Map.BLIZZ_WORLD`;
-        // the catalog id `BLIZZARD_WORLD` is not one).
         let map_pool = enum_member_candidates(&catalog, "Map");
         let ranked = rank("blizzard world", &map_pool);
         assert_eq!(ranked[0], "BLIZZ_WORLD");
         assert!(!ranked.iter().any(|spelling| spelling == "BLIZZARD_WORLD"));
     }
 
-    /// The candidate pool is exactly the resolver's reported surface: every
-    /// `domain_members` spelling and alias, nothing else.
     #[test]
     fn enum_member_candidates_match_the_lookup_surface() {
         let catalog = Catalog::builtin().expect("builtin catalog");
@@ -641,7 +525,6 @@ mod tests {
 
     #[test]
     fn path_score_matches_segment_by_segment() {
-        // A template segment accepts any spelling and `%` stays in the leaf.
         assert_eq!(
             path_score(
                 "heroes.team1.junkrat.health%",
@@ -649,8 +532,6 @@ mod tests {
             ),
             Some(0)
         );
-        // Path prefixes answer their path; non-prefixes fall back to the
-        // folded near-name score.
         assert_eq!(
             path_score("gamemodes.ffa", "gamemodes.general.scoreToWin"),
             None

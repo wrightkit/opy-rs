@@ -198,8 +198,6 @@ def main(argv: list[str] | None = None) -> int:
         result_path.parent.mkdir(parents=True, exist_ok=True)
         result_path.write_text(json.dumps(native, indent=2, sort_keys=True) + "\n")
 
-    # Keep expectation loading, project-input validation, stage comparison, and
-    # blocking status classification in the existing independent comparator.
     try:
         return diff.run_compiler(
             FIXTURES,

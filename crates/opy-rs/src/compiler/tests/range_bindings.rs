@@ -1,5 +1,3 @@
-//! Oracle-backed player-variable range-for evidence.
-
 use std::path::{Path, PathBuf};
 
 use crate::Compiler;

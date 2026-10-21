@@ -1,5 +1,3 @@
-//! Public compile-path coverage for project loading.
-
 use std::collections::BTreeMap;
 use std::path::Path;
 

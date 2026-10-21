@@ -1,8 +1,3 @@
-//! Custom String formatting as the pinned OverPy writes it: nested strings
-//! merge into their parent, constant arguments become text, and a string that
-//! is too long or has too many distinct arguments is split into nested
-//! strings.
-
 use workshop_rs::Value;
 
 use super::operator_optimization::same;
@@ -18,8 +13,6 @@ pub(super) enum Token {
     Argument(Value),
 }
 
-/// The tokens of a `customString` call: literal text and one argument per
-/// placeholder occurrence.
 pub(super) fn tokens(value: &Value) -> Option<Vec<Token>> {
     let Value::Call { name, args } = value else {
         return None;
@@ -52,7 +45,6 @@ pub(super) fn tokens(value: &Value) -> Option<Vec<Token>> {
     Some(tokens)
 }
 
-/// Splices nested strings and turns constant arguments into text.
 pub(super) fn merge(parts: Vec<Token>) -> (Vec<Token>, bool) {
     let mut changed = false;
     let mut merged: Vec<Token> = Vec::new();
@@ -99,7 +91,6 @@ fn push_text(tokens: &mut Vec<Token>, token: Token) {
     tokens.push(token);
 }
 
-/// A string with one numbered placeholder per argument occurrence.
 pub(super) fn unsplit(tokens: Vec<Token>) -> Value {
     let mut text = String::new();
     let mut arguments = Vec::new();
@@ -118,7 +109,6 @@ pub(super) fn unsplit(tokens: Vec<Token>) -> Value {
     )
 }
 
-/// Splits every custom string in the tree into strings the Workshop accepts.
 pub(super) fn split_all(value: &mut Value) {
     for_each_child(value, split_all);
     if let Some(tokens) = tokens(value) {

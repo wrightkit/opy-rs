@@ -1,5 +1,3 @@
-//! Indexed assignment lowering and catalog numeric coercion coverage.
-
 use std::path::{Path, PathBuf};
 
 use crate::Compiler;

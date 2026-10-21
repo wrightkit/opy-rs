@@ -1,15 +1,9 @@
-//! Structural convergence with the pinned OverPy output.
-//!
-//! Each fixture pairs OPY source with the pinned oracle snapshot. Native output
-//! must parse to a canonical Workshop program structurally equal to it.
-
 use std::path::Path;
 
 use crate::Compiler;
 use workshop_rs::catalog::{Catalog, Locale};
 use workshop_rs::roundtrip::equivalent;
 
-/// Everything the program says except where the text put it.
 fn structure(program: &workshop_rs::Program) -> String {
     format!(
         "{:#?}{:#?}{:#?}{:#?}{:#?}",
@@ -177,14 +171,6 @@ fn size_optimization_action_rewrites_match_the_pinned_oracle() {
 
 #[test]
 fn context_player_components_stay_rejected_under_canonical_validation() {
-    // Pending workshop-rs admission evidence (ADR-0014): the pinned OverPy
-    // emits `X Component Of(Event Player)`, but a bare Player has no
-    // acceptance evidence for the component positions, so canonical
-    // validation rejects them — a regression against the `eventPlayer.x`
-    // behavior that compiled since #414, named as the consequence of
-    // wrightkit/workshop-rs#336 option 1 and implemented by #350.
-    // `context-player-component-validation` records the same gap for the
-    // other context-player receivers.
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/corpus/synthetic/context-player-components");
     let source = std::fs::read_to_string(dir.join("source.opy")).expect("source must be readable");
@@ -293,7 +279,6 @@ fn a_numeric_literal_in_a_team_position_emits_the_canonical_member() {
             artifact.emitted
         );
     }
-    // Keyword binding resolves the same way.
     let source = "globalvar g\nrule \"x\":\n    @Event eachPlayer\n    g = getPlayersInRadius(eventPlayer.getPosition(), 5, team = 2)\n";
     let hir = crate::compile(source, "source.opy", dir).expect("source must resolve");
     let artifact = Compiler::new()
@@ -307,9 +292,6 @@ fn a_numeric_literal_in_a_team_position_emits_the_canonical_member() {
         "{}",
         artifact.emitted
     );
-    // A number that spells no `Team.{n}` member stays a number and keeps
-    // the declared-type rejection — the same exception family, one side of
-    // the boundary already covered by `Team.{n}` spellings.
     for argument in ["0", "3", "-1", "2.5"] {
         assert_rejected(
             &format!(
@@ -346,8 +328,6 @@ fn a_non_finite_log_fold_keeps_the_pre_fold_expansion() {
         "{}",
         artifact.emitted
     );
-    // A non-finite operand keeps the whole call on the expansion it emitted
-    // before folding, rather than a mix of folded and expanded operands.
     assert!(
         artifact.emitted.contains(
             "Divide(Multiply(10000, Subtract(Raise To Power(0, 0.0001), 1)), Multiply(10000, Subtract(Raise To Power(10, 0.0001), 1)))"
@@ -355,7 +335,6 @@ fn a_non_finite_log_fold_keeps_the_pre_fold_expansion() {
         "{}",
         artifact.emitted
     );
-    // `log(100, 0)` still folds to the finite `0`, exactly as the reference.
     assert!(
         artifact.emitted.contains("Set Global Variable(v, 0);"),
         "{}",
@@ -471,8 +450,6 @@ fn button_to_string_expands_with_the_canonical_array_wrap() {
         "globalvar a\nrule \"x\":\n    @Event global\n    a = buttonToString(Button.JUMP)\n",
     );
     assert!(emitted.contains(BUTTON_TO_STRING_EXPANSION), "{emitted}");
-    // Without the `Array(` wrap the emission is the reference's own text,
-    // which canonical validation cannot represent.
     let reference_shape = BUTTON_TO_STRING_EXPANSION.replacen(
         "Array(Input Binding String(Button(Jump)))",
         "Input Binding String(Button(Jump))",
@@ -552,9 +529,6 @@ fn literal_domain_members_emit_the_reference_display_names() {
             emitted = artifact.emitted
         );
     }
-    // `Color.LIGHT_RED` is the same OverPy-only member through the `Color`
-    // receiver, where the pinned upstream itself emits `rgb(...)`: both
-    // spellings produce the one canonical color call, never an empty slot.
     assert_eq!(
         artifact
             .emitted

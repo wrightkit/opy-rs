@@ -1,10 +1,3 @@
-//! Operator-level value optimization applied at the Workshop boundary.
-//!
-//! The pinned OverPy reference folds and simplifies operators bottom-up while
-//! it builds a rule, so the emitted structure depends on those rewrites. This
-//! pass applies the same rewrites to the canonical value tree of one action or
-//! condition under the optimization state active at its source location.
-
 use workshop_rs::catalog::Kind;
 use workshop_rs::{Action, ModifyOp, Value};
 
@@ -12,7 +5,6 @@ use super::Compiler;
 use super::string_format;
 use crate::compile_time::round_half_up;
 
-/// Folded numbers beyond this magnitude keep their operator form.
 pub(crate) const NUMBER_LIMIT: f64 = 1e7;
 
 const RANDOM_CALLS: [&str; 4] = [
@@ -32,7 +24,6 @@ impl<'a> OperatorOptimizer<'a> {
         Self { compiler, strict }
     }
 
-    /// Whether a value is definitely truthy or falsy, when it is constant.
     pub(super) fn constant_truth(&self, value: &Value) -> Option<bool> {
         if falsy(value) {
             Some(false)
@@ -43,9 +34,6 @@ impl<'a> OperatorOptimizer<'a> {
         }
     }
 
-    /// The comparison a rule condition is emitted as: comparisons stay as
-    /// they are, `not x` becomes `x == False`, Boolean values `x == True`, and
-    /// any other value `x != False`.
     pub(super) fn wrap_condition(&self, value: Value) -> Value {
         match value {
             Value::Call { name, args }
@@ -62,8 +50,6 @@ impl<'a> OperatorOptimizer<'a> {
         }
     }
 
-    /// Apply the rule of one node; a rewrite that changes the head is applied
-    /// again to its result, as the reference does.
     pub(super) fn node(&self, value: Value) -> Value {
         let value = literal_array(value);
         let head = head_of(&value);
@@ -659,8 +645,6 @@ impl<'a> OperatorOptimizer<'a> {
         Rewrite::Same(call("stringReplace", vec![text, search, replacement]))
     }
 
-    /// The position of a literal in a literal array, or `-1`; a search that
-    /// cannot be decided keeps the array only up to its first equal element.
     fn index_of(&self, args: Vec<Value>) -> Rewrite {
         let [array, needle] = two(args);
         let mut elements = match literal_array(array.clone()) {
@@ -694,8 +678,6 @@ impl<'a> OperatorOptimizer<'a> {
         ))
     }
 
-    /// Nested strings merge into their parent, and constant arguments become
-    /// text.
     fn custom_string(args: Vec<Value>) -> Rewrite {
         let value = call("customString", args);
         let Some(tokens) = string_format::tokens(&value) else {
@@ -953,9 +935,6 @@ impl<'a> OperatorOptimizer<'a> {
         }
     }
 
-    /// A value whose identity the reference can tell at compile time: numbers,
-    /// enum constants, vectors and colours of them, and text. Booleans, `Null`
-    /// and arrays are not.
     fn constant(&self, value: &Value) -> bool {
         match value {
             Value::Number(_) | Value::Enum { .. } => true,
@@ -1023,7 +1002,6 @@ fn three(args: Vec<Value>) -> [Value; 3] {
     args.try_into().expect("operator arity")
 }
 
-/// The text of a string literal that carries no format arguments.
 pub(super) fn literal_text(value: &Value) -> Option<&str> {
     match value {
         Value::String(text) => Some(text),
@@ -1035,7 +1013,6 @@ pub(super) fn literal_text(value: &Value) -> Option<&str> {
     }
 }
 
-/// The team on the other side of a team constant.
 fn opposite_of(team: &Value) -> Option<Value> {
     let Value::Enum { value_type, value } = team else {
         return None;
@@ -1083,7 +1060,6 @@ pub(super) fn number_components(value: &Value) -> Option<[f64; 3]> {
     }
 }
 
-/// A numeric vector, written as its direction constant when it is one.
 fn vector(components: [f64; 3]) -> Value {
     let name = match components {
         [1.0, 0.0, 0.0] => Some("LEFT"),
@@ -1229,7 +1205,6 @@ fn negates(value: &Value, other: &Value) -> bool {
     negated(value).is_some_and(|inner| same(inner, other))
 }
 
-/// Structural equality that never treats random calls as equal.
 pub(super) fn same(left: &Value, right: &Value) -> bool {
     match (left, right) {
         (Value::Number(a), Value::Number(b)) => a == b,
@@ -1297,7 +1272,6 @@ fn mentions_element(value: &Value) -> bool {
     }
 }
 
-/// An `Array(...)` or `Empty Array` call is the array literal it constructs.
 fn literal_array(value: Value) -> Value {
     match value {
         Value::Call { name, args } if matches!(name.as_str(), "array" | "emptyArray") => {
@@ -1323,7 +1297,6 @@ fn modify_operation(name: &str) -> Option<ModifyOp> {
     })
 }
 
-/// The operand of `target = target <op> operand`.
 fn self_operand(
     name: &str,
     args: &[Value],
@@ -1336,7 +1309,6 @@ fn self_operand(
     Some((op, args[1].clone()))
 }
 
-/// `x = x <op> y` is the modification `x <op>= y`.
 pub(super) fn self_modification(action: &Action) -> Option<Action> {
     match action {
         Action::SetGlobalVariable {
@@ -1407,7 +1379,6 @@ pub(super) fn self_modification(action: &Action) -> Option<Action> {
     }
 }
 
-/// Array literals are written as the `Array` call.
 fn array_call(value: Value) -> Value {
     match value {
         Value::Array(elements) if elements.is_empty() => Value::Call {
@@ -1422,8 +1393,6 @@ fn array_call(value: Value) -> Value {
     }
 }
 
-/// Canonical optimizer output: array literals surface as `Array`/`Empty Array`
-/// calls at every level, not the internal `Value::Array` form.
 fn canonical(value: Value) -> Value {
     match array_call(value) {
         Value::Call { name, args } => Value::Call {

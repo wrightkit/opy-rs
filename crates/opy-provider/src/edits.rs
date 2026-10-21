@@ -1,15 +1,3 @@
-//! `lpp/rename` and `lpp/validateEdits` (LPP spec sections 15 and 16).
-//!
-//! Rename is semantic, not textual: sites come from [`SemanticModel`]
-//! (declaration plus resolved references) and every recorded span is narrowed
-//! to the authored identifier token — the source text at a site must spell
-//! the symbol name exactly. Sites that do not map to authored text (macro
-//! expansions report the use site) refuse the rename instead of emitting a
-//! partial edit set. Applying the result and re-checking the project proves
-//! the rename: the new model must bind the same kind group at the same sites
-//! under the new name, which catches collisions, shadowing, and
-//! context-name capture (builtins, `eventPlayer`, enum domains, ...).
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -26,10 +14,6 @@ use crate::{
     path_to_file_uri, resolved_path, same_path, validate_documents,
 };
 
-/// Diagnostics that describe sources or bindings outside a single document;
-/// `lpp/rename` reads them as missing project sources. `lpp/validateEdits`
-/// never blocks on them: a fragment's unresolved includes and foreign names
-/// say nothing about the document's own text.
 const CROSS_FILE_CODES: [&str; 7] = [
     "include-not-found",
     "main-file-not-found",
@@ -40,15 +24,6 @@ const CROSS_FILE_CODES: [&str; 7] = [
     "unknown-member",
 ];
 
-/// Error codes for text malformed within a single document — lexer, parser,
-/// and directive verdicts that need no project context. `lpp/validateEdits`
-/// reports `syntaxError` only for one of these attributed to the validated
-/// document itself; every diagnostic whose verdict depends on sibling
-/// sources or bindings defers to the client's post-edit project `lpp/check`.
-///
-/// Intentionally deferred, so a fragment's own edits stay `valid` here and
-/// the project's `lpp/check` arbitrates — see `EXCLUDED_CODES` below for the
-/// classified inventory.
 const DOCUMENT_SYNTAX_CODES: [&str; 18] = [
     "lex-error",
     "parse-error",
@@ -70,44 +45,6 @@ const DOCUMENT_SYNTAX_CODES: [&str; 18] = [
     "enum-increment",
 ];
 
-/// Emitted diagnostic codes that never produce `syntaxError`, each class
-/// documented so new codes are triaged, not silently absorbed. A code lands
-/// here when its verdict can depend on project context, when it is not
-/// malformation at all, or when `check` never emits it. The exhaustive
-/// partition is enforced by `syntax_error_classification_is_exhaustive`.
-///
-/// - name/binding verdicts (`unknown-*`, `duplicate-*`, `invalid-arity`,
-///   `unresolved-reference`, `enum-type-without-member`, …) — the referent
-///   may be declared in a sibling file;
-/// - merged-table duplicates (`rule-prefix-template-duplicate`,
-///   `replacement-duplicate`, `post-compile-hook-duplicate`,
-///   `macro-redeclaration`) — the earlier entry may come from an include;
-/// - macro-table verdicts (`macro-arity`, `macro-recursion`) — the macro
-///   definition may come from an include;
-/// - script resolution and execution verdicts (`script-not-found`,
-///   `script-error`, `script-timeout`, `script-stack-limit`,
-///   `script-memory-limit`, `script-result-not-string`, `script-internal`)
-///   — the script file and its run live outside the document;
-/// - external-file verdicts (`include-not-found`, `include-cycle`,
-///   `settings-not-found`, `translations-invalid`, `settings-expression`,
-///   `rule-prefix-template-invalid`) — the source text or constants the
-///   verdict needs live outside the document;
-/// - catalog/environment verdicts (`catalog-error`, `manifest-error`,
-///   `unknown-enum-member`, `missing-mapping`) — fixed-vocabulary and
-///   request-locale questions the client's project check answers the same
-///   way;
-/// - capability verdicts (`unsupported-*`, `backend-directive-unsupported`,
-///   `unsupported-integration-surface`) — well-formed but unsupported
-///   constructs are not malformed text; the `reconstruct` family's codes
-///   are also unreachable from `check` and live here for the same reason;
-/// - semantic and structural verdicts (`invalid-*`, `break-context`,
-///   `continue-context`, `dict-access`, `lambda-context`, …) — the context
-///   they judge may be pasted or bound by a sibling file;
-/// - internal/protocol errors (`incompatible-protocol`,
-///   `malformed-payload`, `unsupported-node`, `workshop-emission`) — not
-///   source malformation;
-/// - `unknown-setting` is warning-severity, so the severity gate already
-///   excludes it.
 #[cfg(test)]
 const EXCLUDED_CODES: &[&str] = &[
     "action-in-value-position",
@@ -213,10 +150,6 @@ const EXCLUDED_CODES: &[&str] = &[
     "workshop-emission",
 ];
 
-/// Kebab-case literals in `opy-rs` sources that are not diagnostic codes —
-/// serde attributes, assertion messages, and similar data. The
-/// classification test requires every code-shaped literal to appear in
-/// exactly one list, so non-codes need an explicit home too.
 #[cfg(test)]
 const NON_DIAGNOSTIC_LITERALS: &[&str] = &["kebab-case", "non-empty"];
 
@@ -255,35 +188,25 @@ struct ValidateEditsParams {
     edits: Vec<TextEditParam>,
 }
 
-/// The checked model view of a document set: the outcome produced by using
-/// `entry_uri` as the entry, plus the display root its file-registry paths
-/// resolve against (the `#!mainFile` effective directory when the entry
-/// redirects the project root).
 struct ModelView {
     outcome: opy_rs::tooling::CheckOutcome,
     display_root: PathBuf,
     entry_uri: String,
 }
 
-/// An authored identifier token a semantic site narrows to.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct SiteToken {
-    /// 1-based frontend column of the token start.
     pub(crate) col: u32,
-    /// 0-based line index for text access.
     pub(crate) line_index: usize,
-    /// Char-index range of the token within its line.
     pub(crate) start_index: usize,
     pub(crate) end_index: usize,
 }
 
 impl SiteToken {
-    /// The token's 1-based frontend line.
     pub(crate) fn line(&self) -> u32 {
         self.line_index as u32 + 1
     }
 
-    /// The token's length in characters (identifier characters are width 1).
     pub(crate) fn len(&self) -> u32 {
         (self.end_index - self.start_index) as u32
     }
@@ -308,7 +231,6 @@ impl<'a> SourceText<'a> {
         Self { text, line_starts }
     }
 
-    /// Byte range of `line`, excluding a trailing `"\n"` or `"\r\n"`.
     fn line_byte_range(&self, line: usize) -> (usize, usize) {
         let start = self.line_starts[line];
         let mut end = self
@@ -316,9 +238,6 @@ impl<'a> SourceText<'a> {
             .get(line + 1)
             .copied()
             .unwrap_or(self.text.len());
-        // The trailing "\n"/"\r\n" belongs to the previous line: a document
-        // ending in a newline has an implicit empty last line, so only strip
-        // when the terminator lies inside this line's byte range.
         if end > start && self.text.as_bytes()[end - 1] == b'\n' {
             end -= 1;
             if end > start && self.text.as_bytes()[end - 1] == b'\r' {
@@ -335,9 +254,6 @@ impl<'a> SourceText<'a> {
         })
     }
 
-    /// Byte offset of an LPP position; `None` when the position is outside
-    /// the document or inside a supplementary-plane character. A position at
-    /// the end of a line is valid.
     fn byte_of(&self, position: LspPosition) -> Option<usize> {
         let start = *self.line_starts.get(position.line as usize)?;
         let line_text = self.line_text(position.line as usize)?;
@@ -357,8 +273,6 @@ impl<'a> SourceText<'a> {
     }
 }
 
-/// The frontend column of `index` (a char index) within `line`: 1-based, and
-/// `\t` spans four columns — the lexer advances the column by four per tab.
 pub(crate) fn frontend_column(line: &str, index: usize) -> u32 {
     line.chars()
         .take(index)
@@ -367,8 +281,6 @@ pub(crate) fn frontend_column(line: &str, index: usize) -> u32 {
         + 1
 }
 
-/// The char index at 1-based frontend `column` within `line`; `None` when the
-/// column lands inside a tab's span or beyond the line's end.
 pub(crate) fn char_index_at_column(line: &str, column: u32) -> Option<usize> {
     let mut current = 1u32;
     for (index, ch) in line.chars().enumerate() {
@@ -380,9 +292,6 @@ pub(crate) fn char_index_at_column(line: &str, column: u32) -> Option<usize> {
     (current == column).then(|| line.chars().count())
 }
 
-/// The char index at UTF-16 unit `character` within `line`; `None` when the
-/// unit lands inside a supplementary-plane character or beyond the line's
-/// end.
 pub(crate) fn char_index_at_utf16(line: &str, character: u32) -> Option<usize> {
     let mut units = 0u32;
     for (index, ch) in line.chars().enumerate() {
@@ -397,7 +306,6 @@ pub(crate) fn char_index_at_utf16(line: &str, character: u32) -> Option<usize> {
     (units == character).then(|| line.chars().count())
 }
 
-/// UTF-16 units consumed by `line`'s first `index` characters.
 fn utf16_column(line: &str, index: usize) -> u32 {
     line.chars()
         .take(index)
@@ -405,10 +313,6 @@ fn utf16_column(line: &str, index: usize) -> u32 {
         .sum()
 }
 
-/// The UTF-16 `character` unit of 1-based frontend `column` within `line`.
-/// The lexer expands `\t` to four columns; a column inside a tab's span or
-/// past the line's end clamps to the next boundary so diagnostics always
-/// project to a valid LPP position.
 pub(crate) fn utf16_character(line: &str, column: u32) -> u32 {
     let mut units = 0u32;
     let mut current = 1u32;
@@ -422,7 +326,6 @@ pub(crate) fn utf16_character(line: &str, column: u32) -> u32 {
     units
 }
 
-/// The byte offset of `index` (a char index) within `line`.
 fn byte_of_char_index(line: &str, index: usize) -> usize {
     line.char_indices()
         .nth(index)
@@ -430,8 +333,6 @@ fn byte_of_char_index(line: &str, index: usize) -> usize {
         .unwrap_or(line.len())
 }
 
-/// The identifier token of `line` starting at char `index`, as a char-index
-/// range; `None` when no identifier starts there.
 pub(crate) fn ident_token_at(line: &str, index: usize) -> Option<(usize, usize)> {
     let (byte, first) = line.char_indices().nth(index)?;
     if !is_ident_start(first) {
@@ -444,13 +345,8 @@ pub(crate) fn ident_token_at(line: &str, index: usize) -> Option<(usize, usize)>
     Some((index, index + len))
 }
 
-/// Whether `text` spells `name` as an identifier token. Comments and string
-/// literals never produce `Ident` tokens, so they don't count; directive
-/// payloads (`#!define ALIAS total`) are scanned for a word-boundary match
-/// since a rename must still rewrite the replacement body.
 fn mentions_identifier(text: &str, name: &str) -> bool {
     let Ok(tokens) = lexer::lex(lexer::LexInput { file_id: 0, text }) else {
-        // Unlexable text may still hold the name — stay conservative.
         return true;
     };
     tokens.iter().any(|token| match token.kind {
@@ -463,19 +359,16 @@ fn mentions_identifier(text: &str, name: &str) -> bool {
     })
 }
 
-/// The parent directory of `path`, or `"."` for a bare file name.
 pub(crate) fn document_root(path: &Path) -> PathBuf {
     path.parent()
         .map(Path::to_path_buf)
         .unwrap_or_else(|| PathBuf::from("."))
 }
 
-/// A path in canonical form when it exists, verbatim otherwise.
 pub(crate) fn normalized(path: &Path) -> PathBuf {
     path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
 }
 
-/// The supplied document whose URI resolves to `path` under `root`.
 fn supplied_document_for_path<'d>(
     documents: &'d BTreeMap<String, Document>,
     root: &Path,
@@ -488,10 +381,6 @@ fn supplied_document_for_path<'d>(
     })
 }
 
-/// Overlay map keyed by both the raw and canonicalized document path so
-/// include and `#!mainFile` resolution hit open buffers regardless of
-/// symlink normalization. `texts` overrides document contents — used to
-/// re-check the renamed project.
 pub(crate) fn overlay_map(
     documents: &BTreeMap<String, Document>,
     texts: Option<&BTreeMap<String, String>>,
@@ -510,10 +399,6 @@ pub(crate) fn overlay_map(
     Ok(overlays)
 }
 
-/// Narrow a recorded semantic location to the authored identifier token at
-/// its start. Returns `None` when the location does not spell `name` exactly
-/// in the source — macro-expanded or generated sites report positions whose
-/// text cannot be rewritten for this symbol.
 pub(crate) fn narrow_site(
     source: &SourceText,
     location: &SourceLocation,
@@ -536,7 +421,6 @@ pub(crate) fn narrow_site(
     })
 }
 
-/// The LPP range of a narrowed token.
 pub(crate) fn token_range(source: &SourceText, token: SiteToken) -> Value {
     let line = source.line_text(token.line_index).unwrap_or_default();
     json!({
@@ -545,7 +429,6 @@ pub(crate) fn token_range(source: &SourceText, token: SiteToken) -> Value {
     })
 }
 
-/// Byte range of a narrowed token inside `text`.
 fn token_byte_range(source: &SourceText, token: SiteToken) -> Option<(usize, usize)> {
     let (line_start, _) = source.line_byte_range(token.line_index);
     let line = source.line_text(token.line_index)?;
@@ -555,13 +438,6 @@ fn token_byte_range(source: &SourceText, token: SiteToken) -> Option<(usize, usi
     ))
 }
 
-/// The symbol-kind group a rename of `symbol` must rewrite together, or
-/// `None` when the symbol is outside the renameable scope. A `subroutine`
-/// declaration and a `def` of the same name index as separate symbols but
-/// share one call-site namespace, so they move as one group — every `def`
-/// also materializes an implicit same-name `Subroutine` declaration, so a
-/// `Def` hit is always that subroutine's implementation body. Constants and
-/// macros are unsupported rename targets.
 fn rename_group(symbol: &Symbol) -> Option<&'static [SymbolKind]> {
     const CALLABLE: &[SymbolKind] = &[SymbolKind::Subroutine, SymbolKind::Def];
     match symbol.kind {
@@ -572,7 +448,6 @@ fn rename_group(symbol: &Symbol) -> Option<&'static [SymbolKind]> {
     }
 }
 
-/// The upstream declaration namespace a rename group's name occupies.
 fn rename_namespace(kind: SymbolKind) -> NameNamespace {
     match kind {
         SymbolKind::Global => NameNamespace::Global,
@@ -581,7 +456,6 @@ fn rename_namespace(kind: SymbolKind) -> NameNamespace {
     }
 }
 
-/// Whether `span` (half-open `[start, end)`) contains the point `position`.
 pub(crate) fn site_contains(
     site: &SourceLocation,
     file_ids: &BTreeSet<u32>,
@@ -590,11 +464,6 @@ pub(crate) fn site_contains(
     file_ids.contains(&site.file_id) && site.start <= position && position < site.end
 }
 
-/// Whether `file` in `outcome`'s registry carries analyzed source. Under a
-/// `#!mainFile` redirect the requested entry keeps record id 0 as a stub: the
-/// preprocessor swaps in the redirect target, so the entry's own text is
-/// never analyzed and no symbol site references id 0. A path matching only
-/// that record is not covered by the view.
 pub(crate) fn carries_source(
     outcome: &opy_rs::tooling::CheckOutcome,
     file: &opy_rs::preprocess::FileRecord,
@@ -618,11 +487,6 @@ fn no_symbol(uri: &str) -> HandlerError {
     )
 }
 
-/// Evaluate `f` once per candidate, in parallel across the available cores,
-/// returning one slot per candidate in order. Each evaluation is a full
-/// project check — the dominant cost of `lpp/rename` on large document
-/// sets — and independent of every other, so parallel evaluation is
-/// observationally identical to the serial scan.
 fn evaluate_candidates<T: Send>(
     candidates: &[&Document],
     f: &(impl Fn(&Document) -> T + Sync),
@@ -659,10 +523,6 @@ fn evaluate_candidates<T: Send>(
         .collect()
 }
 
-/// Pick the check whose file registry covers the position document and the
-/// most supplied documents: a document reached through `#!include` only
-/// resolves through the project that includes it, so every supplied document
-/// is tried as a candidate entry and the widest successful view wins.
 fn model_view(
     documents: &BTreeMap<String, Document>,
     position_document: &Document,
@@ -674,16 +534,6 @@ fn model_view(
         .map(document_path)
         .collect::<Result<Vec<_>, _>>()?;
 
-    // Each candidate check is one full project load, so the scan is
-    // O(entries × project): past a few dozen supplied documents a serial
-    // loop outruns the client's request timeout. Two facts keep the cost
-    // bounded without changing the result: candidates sharing an
-    // effective entry (typically via `#!mainFile`) produce identical
-    // outcomes, so each unique entry is checked once; and the checks are
-    // independent — each outcome is a pure function of the document and
-    // the shared overlay — so they evaluate in parallel. Selection still
-    // runs in document order below and keeps the first strictly-best
-    // score, identical to the serial scan.
     let evaluate = |document: &Document| {
         let path = document_path(document).expect("paths collected above");
         let root = document_root(&path);
@@ -742,10 +592,6 @@ fn model_view(
         return Ok(view);
     }
 
-    // No supplied entry produced an analyzable project covering the position
-    // document. Report what the document's own check found: missing project
-    // sources refuse as `requiresDocument`; otherwise the document cannot be
-    // analyzed and the position has no resolvable symbol.
     let path = document_path(position_document)?;
     let root = document_root(&path);
     let outcome = opy_rs::tooling::check_with_overlay(
@@ -767,10 +613,6 @@ fn model_view(
             "the symbol resolves through sources not in the received document set",
         ));
     }
-    // The position document analyzed cleanly but no supplied view covers it
-    // as project content — a `#!mainFile` file whose resolved project does
-    // not include it. Name the entry it resolves through so the caller knows
-    // what to supply.
     if let Some(model) = outcome.model.as_ref()
         && model.hir.preprocessing.main_file.is_some()
         && let Some(target) = outcome.files.iter().find(|file| file.id == 1)
@@ -785,10 +627,6 @@ fn model_view(
     Err(no_symbol(&position_document.uri))
 }
 
-/// Re-check the renamed project and verify the new-name symbols bind exactly
-/// the moved sites. Any binding change — collision, shadowing, capture by a
-/// builtin or context name, or a site that stops being authored text —
-/// refuses the rename.
 fn verify_rename(
     documents: &BTreeMap<String, Document>,
     view: &ModelView,
@@ -826,8 +664,6 @@ fn verify_rename(
         edited.insert(uri.clone(), result);
     }
 
-    // Expected post-rename sites: the narrowed tokens shifted by the
-    // same-line edits that precede them.
     let new_len = new_name.chars().count() as i64;
     let mut expected = BTreeSet::new();
     for (uri, tokens) in sites {
@@ -863,9 +699,6 @@ fn verify_rename(
         return Err(collision());
     };
 
-    // Actual post-rename sites: every new-name site of the renamed kind
-    // group. Sites that fail to narrow against authored text are kept under
-    // their raw span so they can only mismatch.
     let mut actual = BTreeSet::new();
     for symbol in model
         .symbols()
@@ -904,7 +737,6 @@ fn verify_rename(
     Ok(())
 }
 
-/// `lpp/rename`: semantic rename across the received document set.
 pub(crate) fn rename(params: Value) -> Result<Value, HandlerError> {
     let params: RenameParams =
         serde_json::from_value(params).map_err(|_| HandlerError::Standard {
@@ -933,8 +765,6 @@ pub(crate) fn rename(params: Value) -> Result<Value, HandlerError> {
         .as_ref()
         .expect("view guarantees a model");
 
-    // The request position is LPP (0-based line, UTF-16 units); the model
-    // records frontend positions (1-based, tab-expanded columns).
     let source = SourceText::new(&position_document.text);
     let invalid_position = || HandlerError::Lpp {
         kind: "invalidPosition",
@@ -953,10 +783,6 @@ pub(crate) fn rename(params: Value) -> Result<Value, HandlerError> {
     let position = Position::new(params.position.line + 1, frontend_column(line, index));
 
     let position_path = document_path(position_document)?;
-    // A document can appear in the registry more than once — as the
-    // `#!mainFile` request stub (id 0, no analyzed content) and as a real
-    // include. The position can sit on sites under any content-bearing
-    // record resolving to it.
     let file_ids: BTreeSet<u32> = view
         .outcome
         .files
@@ -974,9 +800,6 @@ pub(crate) fn rename(params: Value) -> Result<Value, HandlerError> {
         return Err(no_symbol(&position_document.uri));
     }
 
-    // Candidate symbols whose declaration or reference spans contain the
-    // position. A narrowed hit means the position sits on the authored token
-    // that spells the symbol name.
     let mut narrowed_hits: Vec<&Symbol> = Vec::new();
     let mut containing: Vec<&Symbol> = Vec::new();
     for symbol in model.symbols() {
@@ -1000,8 +823,6 @@ pub(crate) fn rename(params: Value) -> Result<Value, HandlerError> {
             containing.push(symbol);
         }
     }
-    // Prefer a renameable hit: a call site shared by a `subroutine` and a
-    // `def` of the same name lands on both symbols.
     let symbol = narrowed_hits
         .iter()
         .copied()
@@ -1032,9 +853,6 @@ pub(crate) fn rename(params: Value) -> Result<Value, HandlerError> {
     };
     let name = symbol.name.clone();
 
-    // The upstream compiler reserves different names per declaration
-    // namespace (`x`/`y`/`z` for player variables, keywords and builtin
-    // spellings elsewhere); `is_reserved_name` owns the exact sets.
     if is_reserved_name(&params.new_name, rename_namespace(symbol.kind)) {
         return Err(refusal(
             "rename.invalidName",
@@ -1148,7 +966,6 @@ pub(crate) fn rename(params: Value) -> Result<Value, HandlerError> {
     Ok(json!({ "edits": edits }))
 }
 
-/// `lpp/validateEdits`: normative edit application (spec section 16.3).
 pub(crate) fn validate_edits(params: Value) -> Result<Value, HandlerError> {
     let params: ValidateEditsParams =
         serde_json::from_value(params).map_err(|_| HandlerError::Standard {
@@ -1204,13 +1021,6 @@ pub(crate) fn validate_edits(params: Value) -> Result<Value, HandlerError> {
     let root = document_root(&path);
     let overlay = overlay_map(&singleton, None)?;
 
-    // `syntaxError` is strictly malformed text of the validated document: a
-    // fragment's cross-file edits are well-formed only in composition with
-    // the sibling edits the request cannot see, so every diagnostic whose
-    // verdict depends on project sources or bindings — name resolution,
-    // include resolution, duplicate declarations — defers to the client's
-    // post-edit project `lpp/check`. Diagnostics a sibling file's own text
-    // produces attribute to that file, not to this document.
     let outcome =
         opy_rs::tooling::check_with_overlay(&result, &path_string(&path), &root, &overlay);
     let malformed = outcome.diagnostics.iter().any(|diagnostic| {
@@ -1233,11 +1043,6 @@ mod tests {
     use std::fs;
     use std::path::{Path, PathBuf};
 
-    /// opy-rs#591: every kebab-case literal the compiler can emit must be
-    /// classified — in `DOCUMENT_SYNTAX_CODES`, in `EXCLUDED_CODES`, or in
-    /// `NON_DIAGNOSTIC_LITERALS` for literals that are not diagnostic codes
-    /// at all. A new code fails here until it is placed deliberately; that
-    /// is the guard against the allowlist's fail-open failure class.
     #[test]
     fn syntax_error_classification_is_exhaustive() {
         let mut found = BTreeSet::new();
@@ -1273,9 +1078,6 @@ mod tests {
         );
     }
 
-    /// Collect kebab-case string literals from `dir`'s Rust sources,
-    /// skipping `tests/` directories, `test_*.rs` files, and `#[cfg(test)]`
-    /// module tails.
     fn collect_literals(dir: &Path, found: &mut BTreeSet<String>) {
         for entry in fs::read_dir(dir).expect("read opy-rs sources") {
             let path = entry.expect("dir entry").path();
@@ -1292,8 +1094,6 @@ mod tests {
         }
     }
 
-    /// Extract `"..."` string literals, skipping comments, char literals,
-    /// and raw strings.
     fn scan(source: &str, found: &mut BTreeSet<String>) {
         let bytes = source.as_bytes();
         let mut i = 0;
@@ -1344,8 +1144,6 @@ mod tests {
                     i = j + 1;
                 }
                 b'\'' => {
-                    // A `'` starts a char literal only if a matching `'`
-                    // follows one char or escape; otherwise it is a lifetime.
                     let next = bytes.get(i + 1).copied();
                     let after = if next == Some(b'\\') {
                         (i + 2..bytes.len().min(i + 8))

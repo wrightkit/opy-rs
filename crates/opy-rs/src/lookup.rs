@@ -1,16 +1,3 @@
-//! OPY vocabulary lookup: display names and guesses resolve to OPY spellings,
-//! parameter facts, enum members, and settings keys through the same manifest,
-//! catalog, and settings tables `check`/`compile` resolve against.
-//!
-//! This module is the answer surface for agents; it owns no data of its own.
-//! Callable spellings and parameter facts come from the compatibility manifest,
-//! enum members, event entries, and display names come from the `workshop-rs`
-//! catalog, and settings vocabulary comes from the `workshop-rs` emission
-//! table (which it expands to every effective path, including inherited
-//! per-mode keys).
-//! The same scoring helpers feed the candidate lists unknown-name diagnostics
-//! carry, so lookup results and rejection diagnostics cannot drift.
-
 use serde::Serialize;
 use workshop_rs::catalog::{Catalog, Kind};
 use workshop_rs::settings::{self, PathPart, SettingValueDomain};
@@ -18,10 +5,8 @@ use workshop_rs::settings::{self, PathPart, SettingValueDomain};
 use crate::lower::special_forms::SPECIAL_FUNCTIONS;
 use crate::manifest::{Function, FunctionKind, Manifest, Param, ParamDefault, ReceiverCategory};
 
-/// The default bound on returned hits; also the diagnostic candidate bound.
 pub const DEFAULT_LIMIT: usize = 8;
 
-/// A lookup request.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LookupQuery {
     /// The name or guess to resolve: an OPY spelling, a canonical Workshop
@@ -29,11 +14,7 @@ pub struct LookupQuery {
     /// applies no text constraint and lists the in-scope entries instead of
     /// scoring them.
     pub text: String,
-    /// The namespaces the query searches; `LookupScope::ALL` is the default.
-    /// `within` selects its own namespace when set.
     pub scope: LookupScope,
-    /// Restricts the answer to the children of one named scope instead of
-    /// searching every candidate in `scope`.
     pub within: Option<LookupWithin>,
     /// The display-name locale to read; only `en-US` is supported.
     /// Localized display names remain `workshop-rs`-owned and are answered
@@ -44,7 +25,6 @@ pub struct LookupQuery {
 }
 
 impl LookupQuery {
-    /// A query across every namespace.
     pub fn new(text: impl Into<String>) -> LookupQuery {
         LookupQuery {
             text: text.into(),
@@ -56,50 +36,40 @@ impl LookupQuery {
     }
 }
 
-/// The namespaces a query searches.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LookupScope {
-    /// Callable spellings and parameter facts.
     pub functions: bool,
-    /// Enum domains and members.
     pub enums: bool,
-    /// Settings keys and value forms.
     pub settings: bool,
-    /// Rule events the `@Event` header accepts.
     pub events: bool,
 }
 
 impl LookupScope {
-    /// Every namespace.
     pub const ALL: LookupScope = LookupScope {
         functions: true,
         enums: true,
         settings: true,
         events: true,
     };
-    /// Callables only.
     pub const FUNCTIONS: LookupScope = LookupScope {
         functions: true,
         enums: false,
         settings: false,
         events: false,
     };
-    /// Enum domains and members only.
     pub const ENUMS: LookupScope = LookupScope {
         functions: false,
         enums: true,
         settings: false,
         events: false,
     };
-    /// Settings only.
     pub const SETTINGS: LookupScope = LookupScope {
         functions: false,
         enums: false,
         settings: true,
         events: false,
     };
-    /// `@Event` spellings only.
     pub const EVENTS: LookupScope = LookupScope {
         functions: false,
         enums: false,
@@ -112,25 +82,16 @@ impl LookupScope {
     }
 }
 
-/// A named scope whose children a lookup lists instead of searching every
-/// namespace. `text` still filters or ranks the children; each variant names
-/// the scope in the vocabulary's own terms.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", tag = "kind", content = "value")]
 pub enum LookupWithin {
-    /// The parameters of the callable with this OPY spelling, in call order.
     Callable(String),
-    /// The member entries of this OPY enum domain, in domain order.
     Enum(String),
-    /// The settings keys and intermediate path segments directly below this
-    /// settings path prefix; an empty value lists the root.
     Settings(String),
-    /// The accepted member spellings of a settings enum domain.
     SettingEnum(String),
 }
 
 impl LookupWithin {
-    /// The namespace this scope's children belong to.
     fn scope(&self) -> LookupScope {
         match self {
             LookupWithin::Callable(_) => LookupScope::FUNCTIONS,
@@ -140,7 +101,6 @@ impl LookupWithin {
     }
 }
 
-/// The result of a lookup.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(
     rename_all = "camelCase",
@@ -148,34 +108,23 @@ impl LookupWithin {
     tag = "kind"
 )]
 pub enum LookupOutcome {
-    /// The query was answered (possibly with no hits when nothing matched).
     Matched {
-        /// The namespaces searched.
         scope: LookupScope,
-        /// The maximum number of hits the bound permitted.
         limit: usize,
-        /// The hits, best matches first.
         results: Vec<LookupHit>,
     },
     /// The `within` selector names no scope the vocabulary knows; the
     /// request carried no matches because the scope itself does not exist.
     UnknownWithin {
-        /// The selector that named nothing.
         within: LookupWithin,
     },
-    /// The query is valid but the requested capability is not served:
-    /// nothing was searched.
     Unsupported {
-        /// The namespaces that would have been searched.
         scope: LookupScope,
-        /// Why the query cannot be answered (e.g. localized display names
-        /// are `workshop-rs`-owned).
         reason: String,
     },
 }
 
 impl LookupOutcome {
-    /// The hits of a `Matched` outcome, else an empty slice.
     pub fn results(&self) -> &[LookupHit] {
         match self {
             LookupOutcome::Matched { results, .. } => results,
@@ -184,30 +133,22 @@ impl LookupOutcome {
     }
 }
 
-/// Which spelling form a hit matched on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum MatchKind {
-    /// The OPY source spelling (e.g. `hudText`, `Hero.SOLDIER`).
     OpySpelling,
-    /// The canonical Workshop id (e.g. `createHudText`).
     CatalogId,
-    /// A Workshop display name (e.g. `Create HUD Text`).
     DisplayName,
-    /// A declared OPY alias spelling (e.g. `getPlayers`).
     Alias,
-    /// A settings path (e.g. `gamemodes.ffa.scoreToWin`).
     Path,
     /// The opaque handle type the callable produces (e.g. `HealthPoolId`):
     /// a type-name query reaches the callables whose catalog entry returns
     /// that type, not only the calls that consume it.
     ProducedType,
-    /// No form matched exactly; the hit is the closest near-spelling.
     Near,
 }
 
 impl MatchKind {
-    /// The serialized kind label.
     pub fn as_str(&self) -> &'static str {
         match self {
             MatchKind::OpySpelling => "opySpelling",
@@ -221,15 +162,11 @@ impl MatchKind {
     }
 }
 
-/// One lookup hit.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "hit")]
 pub enum LookupHit {
-    /// A callable.
     Function {
-        /// The OPY call spelling (member calls carry their member name).
         spelling: String,
-        /// Whether the callable is an action, a value, or a member call.
         function_kind: LookupFunctionKind,
         /// The declared receiver category of a member call — how it is
         /// invoked (`eventPlayer.setMoveSpeed(…)` takes a `Player`
@@ -239,108 +176,65 @@ pub enum LookupHit {
         /// Whether the argument count is unbounded (`.format` placeholders).
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         unbounded: bool,
-        /// The parameters in call order: the owner facts Wright renders
-        /// into a signature string.
         params: Vec<LookupParam>,
-        /// The canonical catalog id the callable emits, when linked.
         catalog_id: Option<String>,
-        /// The English display name the catalog records, when linked.
         #[serde(skip_serializing_if = "Option::is_none")]
         display_name: Option<String>,
-        /// Which spelling form matched.
         matched_on: MatchKind,
     },
-    /// A callable enum domain.
     EnumDomain {
-        /// The OPY domain spelling (`Domain.MEMBER` head).
         domain: String,
         /// The members the domain accepts, or `None` when the domain is
         /// manifest-only/contextual and carries no standalone member list.
         members: Option<Vec<EnumMemberEntry>>,
-        /// The English display name the catalog records, when linked.
         #[serde(skip_serializing_if = "Option::is_none")]
         display_name: Option<String>,
-        /// Which spelling form matched.
         matched_on: MatchKind,
     },
-    /// One enum member.
     EnumMember {
-        /// The OPY spelling (`Hero.SOLDIER`).
         spelling: String,
-        /// The domain it belongs to.
         domain: String,
-        /// The canonical catalog member id it lowers to.
         member: String,
-        /// The English display name, when the catalog provides one.
         display_name: Option<String>,
-        /// The other source spellings the member accepts.
         aliases: Vec<String>,
-        /// Which spelling form matched.
         matched_on: MatchKind,
     },
-    /// A settings key.
     Setting {
         /// The effective `settings` path; per-team/per-hero slots stay
         /// templated as `heroes.<team>.<hero>.<key>`.
         path: String,
-        /// The English display name.
         display_name: Option<String>,
-        /// The accepted value form.
         value: SettingValueForm,
-        /// Which spelling form matched.
         matched_on: MatchKind,
     },
-    /// One parameter of a callable, listed inside a `LookupWithin::Callable`
-    /// scope.
     Parameter {
-        /// The callable's OPY spelling.
         callable: String,
-        /// The parameter facts.
         param: LookupParam,
-        /// Which spelling form matched.
         matched_on: MatchKind,
     },
-    /// An intermediate settings path segment, listed inside a
-    /// `LookupWithin::Settings` scope. It names a scope, not a key.
     SettingPath {
-        /// The settings path this node represents.
         path: String,
-        /// Which spelling form matched.
         matched_on: MatchKind,
     },
-    /// A rule event the `@Event` header accepts. For events the OPY
-    /// spelling is also the canonical catalog id (`playerDied`,
-    /// `global`, `eachPlayer`).
     Event {
-        /// The `@Event` spelling.
         spelling: String,
-        /// Whether the event accepts `@Team`/`@Hero`/`@Slot` filters;
-        /// `global` events reject them.
         accepts_filters: bool,
-        /// The English display name, when the catalog provides one.
         #[serde(skip_serializing_if = "Option::is_none")]
         display_name: Option<String>,
-        /// Which spelling form matched.
         matched_on: MatchKind,
     },
 }
 
-/// The call position a function hit occupies.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum LookupFunctionKind {
-    /// A statement-position action.
     Action,
-    /// A value-position function or special form.
     Value,
-    /// An action that takes an event-player receiver.
     MemberAction,
-    /// A value that takes a receiver.
     MemberValue,
 }
 
 impl LookupFunctionKind {
-    /// The serialized kind label.
     pub fn as_str(&self) -> &'static str {
         match self {
             LookupFunctionKind::Action => "action",
@@ -351,93 +245,62 @@ impl LookupFunctionKind {
     }
 }
 
-/// One ordered parameter of a callable: the owner facts a caller renders.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LookupParam {
-    /// The canonical OPY keyword spelling.
     pub name: String,
-    /// The alternate keyword spellings the slot accepts.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub alternate_names: Vec<String>,
-    /// Whether the slot must be supplied.
     pub required: bool,
-    /// The enum domain the slot takes, when it takes one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub domain: Option<String>,
-    /// Every member spelling of that domain, when it is an enum slot —
-    /// the owner supplies the full inventory; which members a signature
-    /// renders is the caller's policy.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub members: Option<Vec<EnumMemberEntry>>,
-    /// The semantic type the catalog records for the slot.
     #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
     pub param_type: Option<String>,
-    /// The default value, rendered in source syntax.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default: Option<String>,
 }
 
-/// One member of an enum domain.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EnumMemberEntry {
-    /// The OPY member spelling (`Hero.SOLDIER` minus its head).
     pub spelling: String,
-    /// The canonical catalog member id it lowers to.
     pub id: String,
-    /// The English display name, when the catalog provides one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
-    /// The other source spellings the member accepts.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub aliases: Vec<String>,
 }
 
-/// The value form a settings key accepts.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SettingValueForm {
-    /// The value shape.
     pub kind: SettingValueKind,
-    /// The settings enum domain an `enum` key accepts members of.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub domain: Option<String>,
-    /// The member spellings an `enum` slot accepts.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub members: Vec<String>,
-    /// The numeric bounds the table declares, when it declares them.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub min: Option<f64>,
-    /// The numeric upper bound, when declared.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max: Option<f64>,
 }
 
-/// The value shape a settings key accepts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum SettingValueKind {
-    /// `key` with no value.
     Presence,
-    /// `true` or `false`.
     Boolean,
-    /// A number literal.
     Number,
-    /// A number interpreted as a percent.
     Percent,
-    /// A string literal.
     String,
-    /// One of the `members` spellings.
     Enum,
-    /// A list of map names.
     MapList,
-    /// A list of hero names.
     HeroList,
 }
 
 impl SettingValueKind {
-    /// The serialized kind label.
     pub fn as_str(&self) -> &'static str {
         match self {
             SettingValueKind::Presence => "presence",
@@ -517,31 +380,10 @@ pub fn lookup(query: &LookupQuery) -> LookupOutcome {
     }
 }
 
-/// Lookup with a default query (all namespaces, `DEFAULT_LIMIT`).
 pub fn lookup_str(text: &str) -> LookupOutcome {
     lookup(&LookupQuery::new(text))
 }
 
-// lpp/resolveIds — canonical Workshop id → OPY spelling (issue #515)
-
-/// Canonical call ids whose OPY spelling is source syntax rather than a
-/// manifest-declared callable name: every entry inverts an accepted OPY
-/// surface form (`compiler::lowering` emits the canonical id from this
-/// spelling). Several spellings may lower to one canonical id; the table
-/// records the dedicated form (`x += v` sugar aside, `appendToArray` is
-/// spelled `append`, the `chase*` player calls `chaseAtRate`/
-/// `chaseOverTime`).
-///
-/// Canonical ids absent here and unclaimed by a manifest `catalogId` have
-/// no dedicated OPY spelling and stay unresolved: assignments and member
-/// writes (`setGlobalVariable`, `assignMember`), declared names
-/// (`globalVariable`, `playerVariable`, `callSubroutine`, `memberAccess`),
-/// the dedent marker (`end`), literal, index, member-access, and ternary
-/// forms (`array`, `emptyArray`, `valueInArray`, `firstOf`, `ifThenElse`),
-/// lambda binders (`currentArrayElement`, `currentArrayIndex`), compound
-/// conditionals (`abortIf`, `loopIf`, `skipIf`, `loopIfConditionIsTrue`,
-/// `__abortIfConditionIsTrue__`), and spellings an argument selects
-/// (`roundToInteger`).
 const SYNTAX_SPELLINGS: &[(&str, &str)] = &[
     ("add", "+"),
     ("subtract", "-"),
@@ -560,9 +402,6 @@ const SYNTAX_SPELLINGS: &[(&str, &str)] = &[
     ("not", "not"),
     ("-", "-"),
     ("arrayContains", "in"),
-    // Member calls and special forms the manifest marks `special-lowering`
-    // (it claims no `catalogId`, but each canonical id still has exactly
-    // one dedicated OPY spelling).
     ("appendToArray", "append"),
     ("removeFromArray", "exclude"),
     ("removeFromArrayByIndex", "del"),
@@ -593,39 +432,23 @@ const SYNTAX_SPELLINGS: &[(&str, &str)] = &[
     ("true", "true"),
     ("false", "false"),
     ("null", "null"),
-    // Canonical direction constants the language spells as `Vector` enum
-    // members rather than bare calls.
     ("up", "Vector.UP"),
     ("down", "Vector.DOWN"),
     ("left", "Vector.LEFT"),
     ("right", "Vector.RIGHT"),
     ("forward", "Vector.FORWARD"),
     ("backward", "Vector.BACKWARD"),
-    // The variable-kind target the manifest cannot claim for one spelling.
     ("chasePlayerVariableAtRate", "chaseAtRate"),
     ("chasePlayerVariableOverTime", "chaseOverTime"),
     ("stopChasingPlayerVariable", "stopChasingVariable"),
 ];
 
-/// `lpp/resolveIds` backing: the OPY spelling a canonical Workshop action,
-/// value, or operator id compiles from — the manifest `catalogId` link for
-/// declared callables, else [`SYNTAX_SPELLINGS`] for the ids source syntax
-/// produces. `None` when no dedicated OPY spelling exists or the id is
-/// unknown.
 pub fn call_spelling(canonical_id: &str) -> Option<&'static str> {
     let manifest = Manifest::builtin().ok()?;
     let catalog = Catalog::builtin_ref().ok()?;
-    // A manifest entry's canonical identity is its `catalogId`, or — when
-    // it declares none — its own `id` when that id is a canonical call
-    // (`startRule`); a `catalogId`-free source name that is not a canonical
-    // id (`log`, `all`) claims nothing.
     let is_canonical = |id: &str| {
         catalog.entry(Kind::Value, id).is_some() || catalog.entry(Kind::Action, id).is_some()
     };
-    // Distinct spellings may share one canonical id (`getPlayers` and
-    // `getAllPlayers` both claim `allPlayers`): prefer the entry whose own
-    // id is the canonical name, matching `resolve_call_entry` in
-    // `compiler::reconstruct`.
     manifest
         .functions()
         .iter()
@@ -642,11 +465,6 @@ pub fn call_spelling(canonical_id: &str) -> Option<&'static str> {
         })
 }
 
-/// `lpp/resolveIds` backing: the OPY member spelling for a canonical enum
-/// `domain`/`member` pair — the member half of the `Domain.MEMBER`
-/// spelling `lpp/lookup` reports. `None` for unknown pairs, for domains
-/// and members the reference does not spell in source, and for OPY-only
-/// members with no canonical id.
 pub fn enum_member_spelling<'a>(domain: &'a str, member: &'a str) -> Option<&'a str> {
     let catalog = Catalog::builtin_ref().ok()?;
     let enum_domain = catalog.enum_domain(domain)?;
@@ -662,14 +480,10 @@ pub fn enum_member_spelling<'a>(domain: &'a str, member: &'a str) -> Option<&'a 
 
 struct ScoredHit<'c> {
     score: u32,
-    /// The kind and `structural` flag `with_match_kind` needs — the
-    /// un-stamped hit stays borrowed until the result list is bounded.
     stamp: (MatchKind, bool),
     candidate: &'c Candidate,
 }
 
-/// The lexicographic hit order for equal scores: a kind rank, then the
-/// hit's spelling.
 fn sort_key(hit: &LookupHit) -> (u8, String) {
     match hit {
         LookupHit::Function { spelling, .. } => (0, spelling.clone()),
@@ -685,8 +499,6 @@ fn sort_key(hit: &LookupHit) -> (u8, String) {
 }
 
 impl LookupHit {
-    /// Restamp `matched_on` for a listed answer: no text constraint scored,
-    /// so the entry's own primary form is what it answers to.
     fn listed(self) -> LookupHit {
         let kind = match &self {
             LookupHit::Setting { .. } | LookupHit::SettingPath { .. } => MatchKind::Path,
@@ -695,9 +507,6 @@ impl LookupHit {
         self.with_match_kind(kind, 0, false)
     }
 
-    /// Stamp the matched-on kind: a folded-equal or structurally matching
-    /// (settings path-prefix) form reports its own kind; other hits are
-    /// `Near` near-misses.
     fn with_match_kind(self, kind: MatchKind, score: u32, structural: bool) -> LookupHit {
         let matched_on = if score == 0 || structural {
             kind
@@ -784,8 +593,6 @@ impl LookupHit {
     }
 }
 
-/// One searchable entry: every spelling form it answers to plus the payload
-/// returned when one matches.
 #[derive(Clone)]
 struct Candidate {
     forms: Vec<(String, MatchKind)>,
@@ -812,10 +619,6 @@ impl<'a> Index<'a> {
         index
     }
 
-    /// Rank `candidates` under `query` bounded to `limit`: a non-empty text
-    /// scores each candidate's best-matching form through the shared matcher
-    /// pipeline, while an empty text lists the candidates in their
-    /// construction order. Hits are cloned only after the bound applies.
     fn rank<'c>(
         &self,
         candidates: impl Iterator<Item = &'c Candidate>,
@@ -828,8 +631,6 @@ impl<'a> Index<'a> {
                 .map(|candidate| candidate.hit.clone().listed())
                 .collect();
         }
-        // Fold the query once per rank call: `path_score`'s segment split
-        // and `score`'s fold are per-query, not per-form, work.
         let (path_segments, folded) = crate::matcher::fold_path_query(&query.text);
         let hits: Vec<ScoredHit<'c>> = candidates
             .filter_map(|candidate| {
@@ -837,28 +638,18 @@ impl<'a> Index<'a> {
                     .forms
                     .iter()
                     .filter_map(|(form, kind)| {
-                        // Settings paths match segment by segment: structure,
-                        // template segments and `%` suffixes stay meaningful
-                        // for exact/path-prefix queries; the folded `score`
-                        // only serves near-name ranking. Both scorers live in
-                        // `crate::matcher` — the same pipeline that produces
-                        // the `did you mean` candidates on rejected names.
                         let (scored, structural) = if *kind == MatchKind::Path {
                             match crate::matcher::path_score_folded(&path_segments, form) {
                                 Some(s) => (Some(s), true),
                                 None => (crate::matcher::score_folded(&folded, form), false),
                             }
                         } else {
-                            // A produced-type form always reports the
-                            // relation it matched, near or exact.
                             (
                                 crate::matcher::score_folded(&folded, form),
                                 *kind == MatchKind::ProducedType,
                             )
                         };
                         scored.map(|s| {
-                            // A raw (case-insensitive) hit reports the form
-                            // the user actually typed when folds collide.
                             (
                                 s,
                                 form.eq_ignore_ascii_case(query.text.trim()),
@@ -875,9 +666,6 @@ impl<'a> Index<'a> {
                     })
             })
             .collect();
-        // The sort key is computed once per candidate and travels with it;
-        // `sort_by` is stable, so equal (score, key) pairs keep their
-        // candidate-iteration order, matching the previous behavior.
         let mut ranked: Vec<((u8, String), ScoredHit<'c>)> = hits
             .into_iter()
             .map(|hit| (sort_key(&hit.candidate.hit), hit))
@@ -907,8 +695,6 @@ impl<'a> Index<'a> {
         }
     }
 
-    /// The child candidates of one `within` scope, or `None` when `within`
-    /// names no scope the index knows.
     fn children(&self, within: &LookupWithin) -> Option<Vec<Candidate>> {
         match within {
             LookupWithin::Callable(name) => self.callable_children(name),
@@ -918,8 +704,6 @@ impl<'a> Index<'a> {
         }
     }
 
-    /// One candidate per declared parameter of the callable `name` (its OPY
-    /// spelling), in call order.
     fn callable_children(&self, name: &str) -> Option<Vec<Candidate>> {
         self.candidates
             .iter()
@@ -952,8 +736,6 @@ impl<'a> Index<'a> {
             })
     }
 
-    /// One candidate per member of the enum domain `domain`, in domain
-    /// order. A manifest-only domain is an existing but empty scope.
     fn enum_children(&self, domain: &str) -> Option<Vec<Candidate>> {
         let known = self.candidates.iter().any(|candidate| {
             matches!(&candidate.hit, LookupHit::EnumDomain { domain: d, .. } if d == domain)
@@ -973,10 +755,6 @@ impl<'a> Index<'a> {
         )
     }
 
-    /// The settings keys and intermediate path segments directly below
-    /// `prefix`, in settings-table order; an empty prefix lists the root.
-    /// `None` when `prefix` is not a proper segment-wise prefix of any
-    /// settings path.
     fn settings_children(&self, prefix: &str) -> Option<Vec<Candidate>> {
         let prefix_segments: Vec<&str> =
             prefix.split('.').filter(|part| !part.is_empty()).collect();
@@ -1021,8 +799,6 @@ impl<'a> Index<'a> {
         (!children.is_empty()).then_some(children)
     }
 
-    /// One candidate per accepted member of a settings enum domain, in
-    /// table order. `None` when `domain` is not a settings enum domain.
     fn setting_enum_children(&self, domain: &str) -> Option<Vec<Candidate>> {
         let mut members: Vec<(String, String)> = Vec::new();
         for definition in settings::definitions() {
@@ -1176,9 +952,6 @@ impl<'a> Index<'a> {
                     .or(catalog_domain)
                     .map(|domain| crate::enums::opy_domain(&domain).to_string());
                 let required = !param.optional && param.default.is_none();
-                // An enum slot carries its domain's full member inventory:
-                // which members a rendered signature shows is the caller's
-                // (Wright's) policy, not the owner's.
                 let members = domain
                     .as_deref()
                     .and_then(|domain| crate::enums::domain_members(domain, self.catalog))
@@ -1200,9 +973,6 @@ impl<'a> Index<'a> {
             .collect()
     }
 
-    /// The catalog parameter index a manifest parameter occupies: member
-    /// calls carry a receiver slot the manifest does not list, so they shift
-    /// by one when the catalog side names a receiver first.
     fn catalog_param_index(
         &self,
         entry: Option<&workshop_rs::catalog::CatalogEntry>,
@@ -1218,8 +988,6 @@ impl<'a> Index<'a> {
             0
         };
         if count == function.params.len() + offset {
-            // Aligned declarations: the semantic name resolves the slot,
-            // else position wins.
             let candidate = index + offset;
             match (0..count).position(|i| {
                 entry.param_name(i).is_some_and(|name| {
@@ -1274,8 +1042,6 @@ impl<'a> Index<'a> {
         }
     }
 
-    /// The member candidate the enum domain index and a `within: enum`
-    /// scope share, so a member answers to the same forms in both.
     fn member_candidate(&self, domain: &str, member: &crate::enums::DomainMember) -> Candidate {
         let entry = member_entry(member);
         let mut forms = vec![
@@ -1307,12 +1073,6 @@ impl<'a> Index<'a> {
         }
     }
 
-    /// Every enum domain the lookup reports: catalog domains under their
-    /// reference source spelling (`Clipping` reports as `Clip`), plus
-    /// source-level alias domains (`AsyncBehavior`) and manifest-only
-    /// signature domains. Catalog domains that are not `Domain.MEMBER`
-    /// sources in the reference (`EventTeam`, `Rounding`, …) are not
-    /// reported — their members are spellings upstream rejects.
     fn lookup_domains(&self) -> Vec<String> {
         let mut domains: Vec<String> = self
             .catalog
@@ -1346,9 +1106,6 @@ impl<'a> Index<'a> {
         for definition in settings::definitions() {
             self.push_setting(definition.path(), &definition);
         }
-        // Per-mode keys inherited from `gamemodes.general` answer to their
-        // effective path: the table resolves them through lookup, so index
-        // the same way emission does rather than re-declaring them.
         let modes: Vec<String> = settings::definitions()
             .filter_map(|definition| {
                 let mut parts = definition.path().split('.');
@@ -1382,7 +1139,6 @@ impl<'a> Index<'a> {
                 if let Some(resolved) = settings::definition(&probe) {
                     let path = format!("gamemodes.{mode}.{leaf}");
                     if resolved.path() != path {
-                        // The resolution is the inherited general entry.
                         self.push_setting(&path, &resolved);
                     }
                 }
@@ -1411,12 +1167,6 @@ impl<'a> Index<'a> {
         });
     }
 
-    /// One candidate per event the `@Event` header accepts. The
-    /// acceptance set is the lowerer's: `global`, `eachPlayer`, and the
-    /// `player_event_kind` names — the catalog's `subroutine` event is
-    /// not an `@Event` name (subroutine rules use `def`), so it is
-    /// excluded. `global` rejects player filters; the others accept
-    /// `@Team`/`@Hero`/`@Slot`.
     fn index_events(&mut self) {
         let locale = crate::enums::en_us();
         for entry in self.catalog.entries_of(Kind::Event) {
@@ -1445,16 +1195,10 @@ impl<'a> Index<'a> {
     }
 }
 
-/// The catalog's opaque handle types are exactly the `…Id` types:
-/// `getLastCreated*`/`getLast*` values return them and the calls that
-/// consume the handle declare them as parameter types. Other semantic
-/// types stay unindexed as produced forms so a query like `player` or
-/// `vector` does not match every callable returning one.
 fn is_handle_type(type_name: &str) -> bool {
     type_name.ends_with("Id")
 }
 
-/// Render a manifest `DomainMember` as a lookup member entry.
 fn member_entry(member: &crate::enums::DomainMember) -> EnumMemberEntry {
     EnumMemberEntry {
         spelling: member.member.clone(),
@@ -1467,7 +1211,6 @@ fn member_entry(member: &crate::enums::DomainMember) -> EnumMemberEntry {
     }
 }
 
-/// The value form of one settings table definition.
 fn setting_value_form(definition: &settings::SettingDefinition) -> SettingValueForm {
     let (kind, domain, min, max) = match definition.domain() {
         SettingValueDomain::PresenceOnly => (SettingValueKind::Presence, None, None, None),
@@ -1488,8 +1231,6 @@ fn setting_value_form(definition: &settings::SettingDefinition) -> SettingValueF
         // must be mapped here rather than silently re-typed.
         other => unreachable!("unhandled SettingValueDomain variant {other:?}"),
     };
-    // A `BoolEnum` key is Boolean-typed over an enum domain and accepts
-    // `true` only; a plain `Enum` key accepts its member ids.
     let members: Vec<String> =
         if kind == SettingValueKind::Boolean && definition.enum_members().next().is_some() {
             vec!["true".to_string()]
@@ -1508,7 +1249,6 @@ fn setting_value_form(definition: &settings::SettingDefinition) -> SettingValueF
     }
 }
 
-/// Render a parameter default in source syntax.
 fn default_text(default: &ParamDefault, domain: Option<&str>, catalog: &Catalog) -> String {
     match default {
         ParamDefault::Null { .. } => "null".to_string(),
@@ -1561,9 +1301,6 @@ mod tests {
     use super::*;
     use workshop_rs::catalog::Catalog;
 
-    /// The lookup cannot claim a member spelling the lowerer would reject:
-    /// every member and alias `domain_members` reports must resolve through
-    /// `canonical_member`, the same function lowering calls.
     #[test]
     fn reported_member_spellings_resolve_through_lowering() {
         let catalog = Catalog::builtin().expect("bundled catalog");
@@ -1575,9 +1312,6 @@ mod tests {
             };
             for member in &members {
                 for spelling in std::iter::once(&member.member).chain(&member.aliases) {
-                    // OPY-only `Color` members lower to `rgb(...)` calls
-                    // through `extra_color_member` rather than a canonical
-                    // member id.
                     let resolves = crate::enums::canonical_member(&domain, spelling, &catalog)
                         .is_some()
                         || (domain == "Color"
@@ -1591,9 +1325,6 @@ mod tests {
         }
     }
 
-    /// Every function spelling a lookup hit reports must resolve through
-    /// the same manifest the lowerer resolves: lookup data is never a
-    /// second table.
     #[test]
     fn reported_function_spellings_resolve_through_the_manifest() {
         let manifest = Manifest::builtin().expect("bundled manifest");
@@ -1609,11 +1340,6 @@ mod tests {
                 function.id
             );
         }
-        // Special-call spellings must be exactly the names `lower_call`
-        // dispatches on: `SPECIAL_VALUE_CALLS` is the descriptor the resolver
-        // consults and `SPECIAL_FUNCTIONS` is declared in the same module, so
-        // a dropped or renamed special form makes the reported set disagree
-        // and fails here.
         let reported: Vec<&str> = SPECIAL_FUNCTIONS
             .iter()
             .map(|special| special.name)
@@ -1626,9 +1352,6 @@ mod tests {
             reported, dispatched,
             "reported special-call spellings must be the dispatched set"
         );
-        // Each reported special must resolve through the real lowerer: a
-        // call in value position is `unknown-value` when the dispatch table
-        // no longer recognizes the name.
         for special in SPECIAL_FUNCTIONS {
             let source = format!(
                 "globalvar x\nrule \"r\":\n    @Event global\n    x = {}()\n",
@@ -1647,14 +1370,6 @@ mod tests {
         }
     }
 
-    /// Every member alias the lookup reports must be an OPY spelling the
-    /// pinned reference accepts — never a canonical catalog id
-    /// (`Hero.SOLDIER_76` is a reference rejection, not an alias). The
-    /// upstream-accepted extra spellings are the legacy hero names
-    /// `MCCREE`/`HAMMOND` and the `HudPosition.ACTUALLY_LEFT` emit alias
-    /// (overpy 9.7.10 rewrites all three in member access); `opy-compat
-    /// probe-generate` emits a `:spelling` probe per reported spelling so
-    /// the same set is checked against the oracle.
     #[test]
     fn reported_member_aliases_are_reference_spellings() {
         let catalog = Catalog::builtin().expect("bundled catalog");
@@ -1683,8 +1398,6 @@ mod tests {
         );
     }
 
-    /// Ranking goes through the shared `crate::matcher` pipeline: exact and
-    /// near matches come first, the rejected spelling is not a candidate.
     #[test]
     fn rank_prefers_close_spellings() {
         let pool = crate::matcher::bare_candidates(["hudText", "smallMessage", "destroyIcon"]);
@@ -1696,8 +1409,6 @@ mod tests {
         );
     }
 
-    /// The settings candidate walk finds sibling keys of an unknown member
-    /// at a per-mode path (inherited `gamemodes.general` keys included).
     #[test]
     fn sibling_keys_cover_inherited_gamemode_keys() {
         let keys =
@@ -1718,8 +1429,6 @@ mod tests {
         }
     }
 
-    /// A `within: callable` scope lists the callable's declared parameters
-    /// as `Parameter` hits in call order, not ranked text matches.
     #[test]
     fn within_callable_lists_params_in_call_order() {
         let LookupOutcome::Matched { results, .. } =
@@ -1744,10 +1453,6 @@ mod tests {
         };
     }
 
-    /// A `within: enum` scope lists the domain's member spellings in domain
-    /// order; a `within: settings` scope lists immediate children — leaf
-    /// keys as `Setting` hits, intermediate segments as `SettingPath` hits —
-    /// and an empty prefix lists the root.
     #[test]
     fn within_scopes_list_their_children() {
         let LookupOutcome::Matched { results, .. } =
@@ -1792,9 +1497,6 @@ mod tests {
         };
     }
 
-    /// A settings enum domain (`lobby.mapRotation` accepts `afterAGame`…)
-    /// answers under `LookupWithin::SettingEnum` with the member spellings
-    /// the settings table declares; it is not an OPY enum domain.
     #[test]
     fn within_settings_enum_lists_accepted_members() {
         let LookupOutcome::Matched { results, .. } = lookup(&within_query(
@@ -1819,8 +1521,6 @@ mod tests {
         };
     }
 
-    /// An empty text lists the scope's children in construction order with
-    /// each hit's primary match kind stamped; it is not a `Near` ranking.
     #[test]
     fn empty_text_lists_children_in_stable_order() {
         let outcome_a = lookup(&within_query(LookupWithin::Enum("Button".to_string())));
@@ -1841,10 +1541,6 @@ mod tests {
         );
     }
 
-    /// `call_spelling` reports a spelling for every canonical call id a
-    /// manifest entry claims, and the reported spelling is one of the
-    /// claiming entries — never a canonical id itself when the language
-    /// spells it differently (`createHudText` -> `hudText`).
     #[test]
     fn call_spelling_reports_an_accepted_spelling() {
         let manifest = Manifest::builtin().expect("bundled manifest");
@@ -1864,9 +1560,6 @@ mod tests {
         }
     }
 
-    /// `SYNTAX_SPELLINGS` entries resolve, and ids that are not canonical
-    /// calls — source-only spellings like `evalOnce` or `all` — resolve
-    /// nothing.
     #[test]
     fn call_spelling_answers_only_canonical_ids() {
         for (canonical_id, spelling) in SYNTAX_SPELLINGS {
@@ -1890,9 +1583,6 @@ mod tests {
         }
     }
 
-    /// `enum_member_spelling` reports the member half of the same
-    /// `Domain.MEMBER` spelling `lpp/lookup` reports — renamed domains and
-    /// members included — and nothing for unknown or non-source pairs.
     #[test]
     fn enum_member_spelling_matches_the_member_table() {
         assert_eq!(enum_member_spelling("Status", "STUNNED"), Some("STUNNED"));
@@ -1906,10 +1596,6 @@ mod tests {
         assert_eq!(enum_member_spelling("NoSuchDomain", "ANY"), None);
     }
 
-    /// A type-name query reaches the producer of every catalog handle type
-    /// (`…Id`): the (type, producer) pairs are derived from catalog return
-    /// types, so a catalog update extending the family extends the check
-    /// (issue #546).
     #[test]
     fn every_produced_handle_type_reaches_its_producer() {
         let catalog = Catalog::builtin().expect("bundled catalog");

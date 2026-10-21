@@ -1,5 +1,3 @@
-//! Oracle-backed catalog/member/enum lowering evidence.
-
 use std::path::{Path, PathBuf};
 
 use crate::Compiler;

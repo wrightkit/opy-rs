@@ -1,5 +1,3 @@
-//! Process-level contract tests for the first-party OPY provider.
-
 use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
@@ -473,8 +471,6 @@ fn check_project_main_file_error_reports_effective_document_uris() {
     let documents = checked["result"]["documents"]
         .as_array()
         .expect("documents");
-    // The file registry resolves against the `#!mainFile` effective directory
-    // (`sub/`), not the directory that held the entry source.
     let fixture = Path::new(MAIN_FILE_ERROR_ENTRY)
         .parent()
         .expect("fixture directory");
@@ -498,8 +494,6 @@ fn check_project_main_file_error_reports_effective_document_uris() {
     assert_eq!(documents[0]["diagnostics"], json!([]));
     let diagnostics = documents[1]["diagnostics"].as_array().expect("diagnostics");
     assert_eq!(diagnostics.len(), 2);
-    // `rule "broken"` misses its colon at line 3 column 14; `@Event` is then
-    // an unexpected token at line 4 column 5.
     assert_eq!(
         diagnostics[0],
         json!({
@@ -573,12 +567,6 @@ fn check_project_main_file_subdirectory_reports_effective_document_uris() {
 
 #[test]
 fn document_check_deduplicates_documents_sharing_one_effective_entry() {
-    // `rename-main-file`: member.opy and stray.opy redirect to main.opy via
-    // first-line `#!mainFile`; caller.opy is included by main.opy and carries
-    // no directive of its own. Documents sharing one effective entry must not
-    // re-run its project parse per document, diagnostics must stay on the
-    // document that produced them, and a document already analyzed inside an
-    // entry's include closure must not get a second, out-of-context parse.
     let root = Path::new(RENAME_MAIN_FILE_ROOT);
     let uris: BTreeMap<&str, String> = ["main.opy", "caller.opy", "stray.opy", "env/member.opy"]
         .into_iter()
@@ -624,11 +612,6 @@ fn document_check_deduplicates_documents_sharing_one_effective_entry() {
     let mut session = Session::spawn();
     session.initialize();
 
-    // Clean project: one entry parse covers main, member, and caller through
-    // the include closure. caller.opy's `worker()` resolves against
-    // member.opy in context — a standalone parse would have reported
-    // `unknown action 'worker'` — so an empty caller result proves it was not
-    // re-checked out of context.
     let all = ["main.opy", "caller.opy", "stray.opy", "env/member.opy"];
     let clean = check(&mut session, 2, document_map(&all, &|_, _| {}));
     assert_eq!(clean.len(), 4);
@@ -642,12 +625,6 @@ fn document_check_deduplicates_documents_sharing_one_effective_entry() {
         );
     }
 
-    // Ordering must not depend on paths sorting: with member's redirect
-    // removed, all three supplied documents are self entries and caller/member
-    // sort before their includer. main.opy's parse still covers them — none
-    // gets a standalone parse that would flag `worker()`. The include spelling
-    // `".\\caller.opy"` is accepted by the preprocessor (`\` normalizes to
-    // `/`), so it must defer the member the same way.
     let unordered = check(
         &mut session,
         3,
@@ -673,10 +650,6 @@ fn document_check_deduplicates_documents_sharing_one_effective_entry() {
         );
     }
 
-    // A failed project check does not establish coverage: caller is
-    // registered (included before the failing member) but never analyzed, so
-    // it keeps its standalone fallback. stray redirects but is never parsed,
-    // so its own text contributes nothing.
     let broken = check(
         &mut session,
         4,
@@ -717,13 +690,6 @@ fn document_check_deduplicates_documents_sharing_one_effective_entry() {
 
 #[test]
 fn document_check_defers_members_reached_through_escaping_includes() {
-    // `#!include "../core.opy"` in main.opy escapes its own directory; the
-    // preprocessor resolves it against the last macro file's directory
-    // (composition/), so the real project parse still covers core.opy and
-    // member/m.opy. A literal join against the includer's directory cannot
-    // name that target — without the normalized-remainder fallback core.opy
-    // parses standalone and reports `unknown identifier 'shared'` inside
-    // member/m.opy even though the project is valid.
     let root = Path::new(INCLUDE_PARENT_ESCAPE_ROOT);
     let members = [
         "main.opy",
@@ -779,9 +745,6 @@ fn document_check_defers_members_reached_through_escaping_includes() {
         );
     }
 
-    // Without the entry document nothing covers the members: deferral must
-    // not hide diagnostics — core.opy still parses standalone and the
-    // missing `shared` declaration surfaces on the member that uses it.
     let orphaned: Vec<&str> = members
         .iter()
         .copied()
@@ -889,9 +852,6 @@ fn check_maps_tab_expanded_columns_to_utf16_positions() {
         .as_array()
         .expect("diagnostics");
     assert_eq!(diagnostics.len(), 1);
-    // Line 3 is `\tbad ║`: the frontend column is 9 because the tab expands to
-    // four columns, but the UTF-16 character is 5. A raw character-index
-    // projection would report 8.
     assert_eq!(
         diagnostics[0],
         json!({
@@ -943,7 +903,6 @@ fn document_check_maps_bmp_and_supplementary_columns_to_utf16() {
             .unwrap_or_else(|| panic!("document {uri}"))["diagnostics"]
             .clone()
     };
-    // `\tbad ║`: the BMP character is one UTF-16 unit.
     assert_eq!(
         diagnostics_of("file:///pos/bmp.opy")[0]["range"],
         json!({
@@ -951,7 +910,6 @@ fn document_check_maps_bmp_and_supplementary_columns_to_utf16() {
             "end": { "line": 2, "character": 6 },
         })
     );
-    // `\tbad 𝓧`: the supplementary character is a surrogate pair.
     assert_eq!(
         diagnostics_of("file:///pos/supplementary.opy")[0]["range"],
         json!({
@@ -1003,8 +961,6 @@ fn document_check_reports_effective_main_file_and_include_uris() {
             .unwrap_or_else(|| panic!("document {uri}"))["diagnostics"]
             .clone()
     };
-    // The diagnostics found through the redirected effective main file and its
-    // include resolve against `sub/` and land on the supplied documents.
     assert_eq!(diagnostics_of("file:///proj/source.opy"), json!([]));
     let entry_diagnostics = diagnostics_of("file:///proj/sub/entry.opy");
     assert_eq!(
@@ -1241,8 +1197,6 @@ fn entry_errors_follow_lpp_11_project_loading_contract() {
     session.shutdown();
 }
 
-/// An entry that fails to resolve for a reason other than absence maps to
-/// `entryUnreadable`, not `entryNotFound` (opy-rs#484).
 #[cfg(unix)]
 #[test]
 fn unresolvable_entry_reports_unreadable_reason() {
@@ -1252,8 +1206,6 @@ fn unresolvable_entry_reports_unreadable_reason() {
     // A self-referential symlink fails canonicalization with ELOOP.
     let entry = dir.join("main.opy");
     std::os::unix::fs::symlink(std::path::Path::new("main.opy"), &entry).unwrap();
-    // file_uri() canonicalizes, which is exactly the operation under test
-    // here, so the URI is assembled by hand.
     let uri = format!("file://{}", entry.display());
 
     let mut session = Session::spawn();
@@ -1282,9 +1234,6 @@ fn unresolvable_entry_reports_unreadable_reason() {
     session.shutdown();
 }
 
-/// A directory whose `src` is a regular file has no default entry, so a
-/// directory target reports `targetNotFound` — the same reason as an empty
-/// directory — instead of `targetUnreadable` (opy-rs#497).
 #[test]
 fn directory_target_with_file_named_src_reports_not_found() {
     let dir = std::env::temp_dir().join(format!("opy-lpp-file-src-{}", std::process::id()));
@@ -1523,8 +1472,6 @@ fn mapped_columns_are_unicode_scalar_values() {
         Some(json!([MAPPED_V1])),
     );
     let document = mapped_document(&response);
-    // `    total = "héllo ✓" == "界" and 1` is 30 scalar values from column 5; bytes or
-    // UTF-16 units would give a different end column.
     let action = mapped_span(&document, "action", &[("rule", 0), ("action", 0)]).expect("action");
     assert_eq!(span_text(action), (0, 5, 5, 5, 35));
     session.shutdown();
@@ -1552,14 +1499,11 @@ fn mapped_includes_carry_their_own_document_uris_and_macros_map_to_the_invocatio
         .position(|uri| *uri == file_uri(&format!("{MAPPED_FIXTURES}/lib.opy")))
         .expect("included document URI");
 
-    // The included file's rule is emitted first and maps into `lib.opy`.
     let lib_rule = mapped_span(&document, "rule", &[("rule", 0)]).expect("lib rule");
     assert_eq!(span_text(lib_rule).0, lib_index as u64);
     let main_rule = mapped_span(&document, "rule", &[("rule", 1)]).expect("main rule");
     assert_eq!(span_text(main_rule).0, main_index as u64);
 
-    // `bump(total)` is line 6 of `main.opy`: the macro-expanded modification maps to it,
-    // not to the `#!define` in `lib.opy`.
     let expanded = mapped_span(&document, "action", &[("rule", 1), ("action", 1)]).expect("bump");
     let (file, start_line, start_column, end_line, _) = span_text(expanded);
     assert_eq!(
@@ -1608,7 +1552,6 @@ fn hir_macro_expansions_map_to_the_invocation_site() {
         Some(json!([MAPPED_V1])),
     );
     let document = mapped_document(&response);
-    // `twice(3)` is line 9; its two expanded actions map there, the plain `wait(2)` to line 10.
     for action in 0..2 {
         let span = mapped_span(&document, "action", &[("rule", 0), ("action", action)])
             .expect("expanded action");
@@ -1630,7 +1573,6 @@ fn generated_helper_nodes_are_unmapped() {
     );
     let document = mapped_document(&response);
     let rules = document["shape"]["rules"].as_array().expect("rules");
-    // The translation/initializer rule is generated: it precedes the authored rule and has no entry.
     assert!(rules.len() >= 2, "expected a generated helper rule");
     let authored = rules.len() - 1;
     assert!(mapped_span(&document, "rule", &[("rule", authored)]).is_some());
@@ -1663,7 +1605,6 @@ fn document_requests_map_to_supplied_document_uris() {
     session.shutdown();
 }
 
-/// Compile `main` to `mapped-text-v1` and prove the mapping applies to the re-parsed text.
 fn assert_mapping_applies_to_reparsed_text(main: &str) {
     let mut session = Session::spawn();
     session.initialize_version("1.4");
@@ -1731,8 +1672,6 @@ fn macro_definition_spans_stay_in_the_shared_lowering() {
     let artifact = compiler
         .compile_source_artifact(&source, &path, Path::new(MAPPED_FIXTURES))
         .expect("compiles");
-    // Only the mapped artifact relocates expansions; the shared lowering (which diagnostics
-    // read) keeps the macro body span on line 4.
     let span = artifact
         .wir
         .action_span(0, 0)
@@ -1740,8 +1679,6 @@ fn macro_definition_spans_stay_in_the_shared_lowering() {
     assert_eq!(span.start.line, 4);
 }
 
-/// A canonical Workshop program outside the OPY reconstruction surface: three
-/// distinct constructs refuse, each with a stable code and a source span.
 const REFUSED_ARTIFACT: &str = concat!(
     "variables {\n",
     "    global:\n",
@@ -1777,8 +1714,6 @@ fn reconstruct_is_advertised_and_returns_opy_for_each_emitted_artifact_format() 
         json!(true)
     );
 
-    // `lpp/reconstruct` inverts `lpp/compile` for every artifact format the
-    // provider can emit: the same OPY source comes back either way.
     let text = compile_entry(&mut session, BASIC_RULE, Some(json!([TEXT_V1, MAPPED_V1])))["result"]
         ["artifact"]
         .clone();
@@ -1859,8 +1794,6 @@ fn reconstruct_rejects_unknown_formats_and_malformed_artifacts() {
         })
     );
 
-    // A malformed payload in a supported format is `invalidArtifact`: the
-    // Workshop text cannot be parsed, and the mapped payload is not JSON.
     let malformed_text = reconstruct_artifact(
         &mut session,
         json!({ "format": TEXT_V1, "content": "rule (broken" }),
@@ -1896,8 +1829,6 @@ fn reconstruct_rejects_unknown_formats_and_malformed_artifacts() {
 const RENAME_MAIN_URI: &str = "file:///project/main.opy";
 const RENAME_DEFS_URI: &str = "file:///project/shared/defs.opy";
 
-/// Line 6 of `main` is tab-indented: `\t` occupies one UTF-16 unit in the
-/// returned ranges but four frontend columns in the semantic model.
 const RENAME_MAIN: &str = concat!(
     "#!include \"shared/defs.opy\"\n",
     "\n",
@@ -1980,7 +1911,6 @@ fn sorted_ranges(edits: &Value) -> Vec<(u32, u32, u32)> {
         .collect()
 }
 
-/// The byte offset of `units` UTF-16 code units into `line`.
 fn utf16_byte_offset(line: &str, units: usize) -> usize {
     let mut used = 0usize;
     for (byte, ch) in line.char_indices() {
@@ -1993,9 +1923,6 @@ fn utf16_byte_offset(line: &str, units: usize) -> usize {
     line.len()
 }
 
-/// Apply `edits` (original-source UTF-16 coordinates) to `text` and return
-/// the edited source. Edits on one line apply right-to-left so earlier
-/// replacements don't shift later offsets.
 fn apply_text_edits(text: &str, edits: &Value) -> String {
     let mut lines: Vec<String> = text.split_inclusive('\n').map(str::to_string).collect();
     let mut per_line: BTreeMap<usize, Vec<(usize, usize, String)>> = BTreeMap::new();
@@ -2043,8 +1970,6 @@ fn rename_global_covers_declaration_and_references_across_documents() {
         .find(|edit| edit["documentUri"] == RENAME_MAIN_URI)
         .expect("main edits");
     assert_eq!(main["version"], 3);
-    // `scoreBank` sites in main: the tab-indented `+=` target and the
-    // assignment value — UTF-16 characters, sorted by range start.
     assert_eq!(sorted_ranges(main), vec![(6, 1, 10), (7, 21, 30)]);
 
     let defs = edits
@@ -2089,12 +2014,6 @@ fn rename_global_covers_declaration_and_references_across_documents() {
     session.shutdown();
 }
 
-/// A cross-file rename validates one edited document at a time while the
-/// project still holds the pre-edit siblings (opy-rs#576). Renaming a
-/// subroutine whose declaration lives in an `#!include`d file leaves the
-/// entry document temporarily referencing a name the on-disk declaration
-/// does not define — a resolution verdict that only composes once the
-/// sibling edits land, not malformed text in the validated document.
 #[test]
 fn validate_edits_accepts_fragments_of_a_cross_file_rename() {
     let dir = std::env::temp_dir().join(format!("opy-lpp-fragval-{}", std::process::id()));
@@ -2139,9 +2058,6 @@ fn validate_edits_accepts_fragments_of_a_cross_file_rename() {
         .find(|edit| edit["documentUri"] == defs_uri)
         .expect("defs edits");
 
-    // Validating the entry document alone still sees the stale on-disk
-    // declaration, so `performTask` resolves to nothing — a fragment-level
-    // semantic diagnostic that must not be a `syntaxError`.
     for (id, uri, text, doc_edits) in [
         (3, &main_uri, main, main_edits),
         (4, &defs_uri, defs, defs_edits),
@@ -2167,8 +2083,6 @@ fn validate_edits_accepts_fragments_of_a_cross_file_rename() {
         );
     }
 
-    // The composed transaction is clean: the client's post-edit project
-    // `lpp/check` is the semantic authority, and it passes here.
     let checked = session.request(json!({
         "jsonrpc": "2.0",
         "id": 5,
@@ -2203,7 +2117,6 @@ fn rename_player_and_subroutine_cover_their_binding_groups() {
     let mut session = Session::spawn();
     session.initialize();
 
-    // Player rename: declaration plus the `eventPlayer.hp` member token only.
     let renamed = session.request(rename_request(
         2,
         rename_documents(3, 5),
@@ -2217,8 +2130,6 @@ fn rename_player_and_subroutine_cover_their_binding_groups() {
     assert_eq!(edits[0]["documentUri"], RENAME_MAIN_URI);
     assert_eq!(sorted_ranges(&edits[0]), vec![(2, 10, 12), (7, 16, 18)]);
 
-    // Subroutine rename rewrites the `subroutine` declaration, the `def`
-    // implementation name, and every call site — one binding group.
     let renamed = session.request(rename_request(
         3,
         rename_documents(3, 5),
@@ -2248,7 +2159,6 @@ fn rename_refusals_are_structured() {
     session.initialize();
     let documents = || rename_documents(3, 5);
 
-    // Invalid identifiers and reserved words refuse before any analysis.
     let invalid = session.request(rename_request(2, documents(), RENAME_MAIN_URI, 7, 25, "9x"));
     assert_eq!(refusal_code(&invalid), "rename.invalidName");
     let reserved = session.request(rename_request(
@@ -2278,7 +2188,6 @@ fn rename_refusals_are_structured() {
     ));
     assert_eq!(refusal_code(&captured), "rename.invalidName");
 
-    // Renaming onto an existing global duplicates the declaration.
     let colliding = session.request(rename_request(
         7,
         documents(),
@@ -2289,8 +2198,6 @@ fn rename_refusals_are_structured() {
     ));
     assert_eq!(refusal_code(&colliding), "rename.nameCollision");
 
-    // A reference inside an unsent project file refuses instead of producing
-    // a partial edit set.
     let partial = session.request(rename_request(
         8,
         json!({
@@ -2320,8 +2227,6 @@ fn rename_refusals_are_structured() {
         "the refusal names the missing include: {details}"
     );
 
-    // When the missing file exists on disk the model still resolves the
-    // include, so the refusal names the exact document holding a rename site.
     let main_uri = file_uri(MULTI_FILE_MAIN);
     let on_disk = session.request(rename_request(
         10,
@@ -2350,7 +2255,6 @@ fn rename_refusals_are_structured() {
             .any(|uri| uri.as_str().is_some_and(|uri| uri.ends_with("defs.opy")))
     );
 
-    // The position document must be part of the request's document set.
     let outside = session.request(rename_request(
         9,
         documents(),
@@ -2378,10 +2282,6 @@ fn rename_through_main_file_member_names_the_documents_to_supply() {
         })
     };
 
-    // A member file whose `#!mainFile` resolves on disk is analyzed under its
-    // include record; the registry's entry record for it is a redirect stub.
-    // Rename must find the symbol anyway and report the unsupplied site
-    // document, not `noSymbolAtPosition`.
     let member = document("env/member.opy");
     let member_uri = member["uri"].as_str().expect("member uri").to_string();
     let partial = session.request(rename_request(
@@ -2402,8 +2302,6 @@ fn rename_through_main_file_member_names_the_documents_to_supply() {
         "the refusal names the unsupplied site document: {partial}"
     );
 
-    // Supplying the site documents — the project entry is not required —
-    // completes the rename across the member and the call site.
     let caller = document("caller.opy");
     let caller_uri = caller["uri"].as_str().expect("caller uri").to_string();
     let renamed = session.request(rename_request(
@@ -2430,9 +2328,6 @@ fn rename_through_main_file_member_names_the_documents_to_supply() {
         .expect("caller edits");
     assert_eq!(sorted_ranges(caller_edits), vec![(2, 4, 10)]);
 
-    // A `#!mainFile` file that the resolved project does not include is still
-    // a document-set problem: the refusal names the entry it resolves
-    // through.
     let stray = document("stray.opy");
     let stray_uri = stray["uri"].as_str().expect("stray uri").to_string();
     let uncovered = session.request(rename_request(
@@ -2453,8 +2348,6 @@ fn rename_through_main_file_member_names_the_documents_to_supply() {
         "the refusal names the entry the file resolves through: {uncovered}"
     );
 
-    // A position on no symbol inside a covered member still reports
-    // `noSymbolAtPosition`.
     let blank = session.request(rename_request(
         5,
         json!({ member_uri.clone(): member }),
@@ -2472,8 +2365,6 @@ fn rename_refuses_unsupported_kinds_and_expanded_sites() {
     let mut session = Session::spawn();
     session.initialize();
 
-    // `macro NAME = value` indexes a Constant; `macro NAME(args):` a Macro.
-    // Both stay outside the renameable scope.
     let source = concat!(
         "macro LIMIT = 4\n",
         "\n",
@@ -2498,9 +2389,6 @@ fn rename_refuses_unsupported_kinds_and_expanded_sites() {
     let macro_call = session.request(rename_request(4, documents(), uri, 8, 5, "triple"));
     assert_eq!(refusal_code(&macro_call), "rename.unsupportedSymbolKind");
 
-    // A `#!define` alias expands to a generated `scoreBank` token at the use
-    // site; that reference does not spell authored text, so the rename must
-    // refuse rather than emit a partial set.
     let aliased = concat!(
         "#!define ALIAS scoreBank\n",
         "\n",
@@ -2610,8 +2498,6 @@ fn validate_edits_applies_normative_rules() {
     );
     assert_eq!(valid["result"], json!({ "valid": true, "version": 7 }));
 
-    // Overlaps report the later edit's index in the original request order:
-    // request edit 1 sorts first and overlaps request edit 0.
     let overlap = validate(
         &mut session,
         3,
@@ -2627,7 +2513,6 @@ fn validate_edits_applies_normative_rules() {
         })
     );
 
-    // Out-of-bounds and reversed ranges report the first offending index.
     let bounds = validate(&mut session, 4, json!([edit(99, 0, 1, "x")]));
     assert_eq!(
         bounds["result"],
@@ -2641,9 +2526,6 @@ fn validate_edits_applies_normative_rules() {
     let reversed = validate(&mut session, 5, json!([edit(6, 10, 1, "x")]));
     assert_eq!(reversed["result"]["reason"], "rangeOutOfBounds");
 
-    // A result that no longer parses reports `syntaxError` without an index.
-    // (A standalone document: an unresolvable `#!include` would short-circuit
-    // checking before the parser runs.)
     let standalone = session.request(json!({
         "jsonrpc": "2.0",
         "id": 6,
@@ -2669,9 +2551,6 @@ fn validate_edits_applies_normative_rules() {
         json!({ "valid": false, "version": 4, "reason": "syntaxError" })
     );
 
-    // A fragment referencing cross-file names is well-formed for this
-    // single-document validation; cross-file checking is the client's
-    // follow-up `lpp/check`.
     let fragment = session.request(json!({
         "jsonrpc": "2.0",
         "id": 7,
@@ -2694,10 +2573,6 @@ fn validate_edits_applies_normative_rules() {
     }));
     assert_eq!(fragment["result"], json!({ "valid": true, "version": 11 }));
 
-    // A semantic diagnostic the edits *introduce* is not malformed text:
-    // `wiat` parses and type-checks locally, so whether it names a real
-    // action is a project question the client's post-edit `lpp/check`
-    // decides, not a `syntaxError`.
     let introduced = session.request(json!({
         "jsonrpc": "2.0",
         "id": 8,
@@ -2724,7 +2599,6 @@ fn validate_edits_applies_normative_rules() {
         "an introduced unknown-action is a semantic diagnostic, not malformed syntax"
     );
 
-    // The first offending index is the earliest bad edit in request order.
     let multi = validate(
         &mut session,
         9,
@@ -2744,8 +2618,6 @@ fn validate_edits_applies_normative_rules() {
         })
     );
 
-    // String entities are fixed vocabulary: a malformed `\&entity;` escape in
-    // the document's own text is a `syntaxError`, not a deferred verdict.
     let entity = |session: &mut Session, id: i64, new_text: &str| {
         session.request(json!({
             "jsonrpc": "2.0",
@@ -2779,10 +2651,6 @@ fn validate_edits_applies_normative_rules() {
         "an unterminated entity in the edited document is a syntaxError"
     );
 
-    // Directive-text malformation in the document itself is `syntaxError`
-    // even though the directive names an external script — the verdict is
-    // about the line's shape, not the file. Enum auto-increment depends
-    // only on the same-block predecessor, also document-local.
     let malformed_doc = |session: &mut Session, id: i64, text: &str| {
         session.request(json!({
             "jsonrpc": "2.0",
@@ -2824,9 +2692,6 @@ fn validate_edits_applies_normative_rules() {
 
 #[test]
 fn end_of_document_positions_do_not_panic() {
-    // A document ending in a newline has an implicit empty last line; a
-    // position or range endpoint on it must produce a structured result, not
-    // a provider crash.
     let mut session = Session::spawn();
     session.initialize();
     let uri = "file:///project/eof.opy";
@@ -2891,9 +2756,6 @@ fn end_of_document_positions_do_not_panic() {
 
 #[test]
 fn rename_refuses_when_a_received_document_escapes_the_project_view() {
-    // Two project roots share one include: the analysis covers one root, so
-    // the other received document's references would be left dangling. The
-    // provider must refuse instead of shipping a partial edit set.
     let mut session = Session::spawn();
     session.initialize();
     let shared_uri = "file:///project/shared.opy";
@@ -2931,8 +2793,6 @@ fn rename_refuses_when_a_received_document_escapes_the_project_view() {
         "the refusal names the document outside the analyzed view"
     );
 
-    // A received document outside the view that never mentions the symbol is
-    // an unrelated buffer, not a rename target — the rename proceeds.
     let unrelated = session.request(rename_request(
         3,
         documents("globalvar other = 1\n"),
@@ -2979,12 +2839,9 @@ fn rename_refuses_upstream_reserved_names_per_namespace() {
     ));
     assert_eq!(refusal_code(&context), "rename.invalidName");
 
-    // Player variables reserve only the member axis names.
     let axis = session.request(rename_request(4, documents(), RENAME_MAIN_URI, 7, 16, "x"));
     assert_eq!(refusal_code(&axis), "rename.invalidName");
 
-    // A keyword reserved in every namespace still refuses for subroutines;
-    // so do builtins callable with an empty argument list.
     let keyword = session.request(rename_request(
         5,
         documents(),
@@ -3026,9 +2883,6 @@ const NAV_DEFS: &str = concat!(
     "/../opy-rs/tests/fixtures/multi-file/shared/defs.opy"
 );
 
-/// A `Document` JSON object read from a fixture file on disk — the position
-/// methods receive only the position document, so `#!include` targets
-/// resolve through the filesystem.
 fn fixture_document(path: &str, version: i64) -> Value {
     json!({
         "uri": file_uri(path),
@@ -3079,8 +2933,6 @@ fn symbols_list_each_documents_declarations_in_map_key_order() {
         },
     }));
     let documents = listed["result"]["documents"].as_array().expect("documents");
-    // The `documents` array is ordered by the request's map key:
-    // `main.opy` sorts before `shared/defs.opy`.
     assert_eq!(documents.len(), 2);
     assert_eq!(documents[0]["uri"], main_uri);
     assert_eq!(documents[0]["version"], 3);
@@ -3099,11 +2951,6 @@ fn symbols_list_each_documents_declarations_in_map_key_order() {
     );
     assert_eq!(documents[1]["uri"], defs_uri);
     assert_eq!(documents[1]["version"], 7);
-    // Declaration order within the included file; `kind` serializes the
-    // semantic `SymbolKind`, `range` is the authored name token — the macro
-    // declaration's recorded span starts at the `macro` keyword, so the
-    // range points at `doubleIt`. A `def` also materializes an implicit
-    // same-name `subroutine` declaration at the same site.
     assert_eq!(
         documents[1]["symbols"],
         json!([
@@ -3154,11 +3001,6 @@ fn symbols_list_each_documents_declarations_in_map_key_order() {
 
 #[test]
 fn symbols_attribute_included_declarations_through_the_project_view() {
-    // `rename-main-file`: member.opy and stray.opy redirect to main.opy via
-    // `#!mainFile`; caller.opy is included by main.opy and cannot analyze
-    // standalone (`worker()` is unknown without member.opy). With main.opy
-    // absent from the set, member.opy's declarations are still attributed
-    // because the redirecting check covers it through the include closure.
     let root = Path::new(RENAME_MAIN_FILE_ROOT);
     let uris: BTreeMap<&str, String> = ["caller.opy", "env/member.opy", "stray.opy"]
         .into_iter()
@@ -3188,8 +3030,6 @@ fn symbols_attribute_included_declarations_through_the_project_view() {
     }));
     let documents = listed["result"]["documents"].as_array().expect("documents");
     assert_eq!(documents.len(), 3);
-    // caller.opy declares nothing; the symbols it would report come only
-    // from the covering project view.
     assert_eq!(documents[0]["uri"], uris["caller.opy"]);
     assert_eq!(documents[0]["symbols"], json!([]));
     assert_eq!(documents[1]["uri"], uris["env/member.opy"]);
@@ -3214,8 +3054,6 @@ fn symbols_attribute_included_declarations_through_the_project_view() {
             },
         ])
     );
-    // stray.opy's `#!mainFile` makes its own record a stub: the `def orphan`
-    // it spells is never analyzed, so it declares no symbols.
     assert_eq!(documents[2]["uri"], uris["stray.opy"]);
     assert_eq!(documents[2]["symbols"], json!([]));
     session.shutdown();
@@ -3262,8 +3100,6 @@ fn definition_returns_authored_include_declarations() {
     let defs_uri = file_uri(NAV_DEFS);
     let document = fixture_document(MULTI_FILE_MAIN, 5);
 
-    // `resetScore()` in main.opy resolves to the `subroutine` declaration
-    // written inside the `#!include`d shared/defs.opy.
     let resolved = session.request(position_request(
         "lpp/definition",
         2,
@@ -3285,7 +3121,6 @@ fn definition_returns_authored_include_declarations() {
         ])
     );
 
-    // `total` in `total += I * SCALE` → `globalvar total` in the include.
     let resolved = session.request(position_request(
         "lpp/definition",
         3,
@@ -3307,8 +3142,6 @@ fn definition_returns_authored_include_declarations() {
         ])
     );
 
-    // `eventPlayer.P`'s member resolves to `playervar P` in the same
-    // document — the request URI is echoed, not a canonicalized path.
     let resolved = session.request(position_request(
         "lpp/definition",
         4,
@@ -3330,9 +3163,6 @@ fn definition_returns_authored_include_declarations() {
         ])
     );
 
-    // `doubleIt(3)` is a macro call: the macro declaration's recorded span
-    // starts at the `macro` keyword, so the location narrows to the authored
-    // `doubleIt` name token inside shared/defs.opy.
     let resolved = session.request(position_request(
         "lpp/definition",
         5,
@@ -3363,8 +3193,6 @@ fn definition_on_a_declaration_returns_the_declaration_itself() {
     let defs_uri = file_uri(NAV_DEFS);
     let document = fixture_document(NAV_DEFS, 7);
 
-    // A position on `total` in `globalvar total = 0` returns that same
-    // declaration — the request document is defs.opy itself.
     let resolved = session.request(position_request(
         "lpp/definition",
         2,
@@ -3395,10 +3223,6 @@ fn references_list_declaration_first_then_sites_sorted_by_start() {
     let defs_uri = file_uri(NAV_DEFS);
     let document = fixture_document(MULTI_FILE_MAIN, 5);
 
-    // `total` sites: the `globalvar` declaration in shared/defs.opy plus
-    // references in main.opy (lines 8 and 9) and inside `def finish()` in
-    // shared/defs.opy (line 12). `includeDeclaration: true` lists the
-    // declaration first; the rest sort by `range.start`.
     let resolved = session.request(position_request(
         "lpp/references",
         2,
@@ -3441,7 +3265,6 @@ fn references_list_declaration_first_then_sites_sorted_by_start() {
         ])
     );
 
-    // `includeDeclaration: false` drops only the declaration location.
     let resolved = session.request(position_request(
         "lpp/references",
         3,
@@ -3486,10 +3309,6 @@ fn navigation_refusals_and_invalid_positions_are_structured() {
     let main_uri = file_uri(MULTI_FILE_MAIN);
     let document = fixture_document(MULTI_FILE_MAIN, 5);
 
-    // The position sits on `@Event`, which is not a symbol site: the methods
-    // refuse with their own `noSymbolAtPosition` code echoing the request
-    // document URI — not `invalidPosition`, which is reserved for positions
-    // outside the document.
     let refused = session.request(position_request("lpp/definition", 2, &document, 6, 5, None));
     assert_eq!(refused["error"]["code"], -32000);
     assert_eq!(
@@ -3517,8 +3336,6 @@ fn navigation_refusals_and_invalid_positions_are_structured() {
         })
     );
 
-    // A position beyond the document's lines, and one beyond a line's end,
-    // are `invalidPosition` LPP errors carrying `{uri, position}`.
     for (method, id, line, character, include_declaration) in [
         ("lpp/definition", 4, 99, 0, None),
         ("lpp/references", 5, 4, 999, Some(false)),
@@ -3553,8 +3370,6 @@ fn lookup_request(id: i64, params: Value) -> Value {
     })
 }
 
-/// `lookup` is negotiated only at LPP 1.5: the capability is absent at 1.4
-/// and an `lpp/lookup` request there is `capabilityUnavailable`.
 #[test]
 fn lookup_capability_is_negotiated_at_1_5() {
     let mut session = Session::spawn();
@@ -3587,8 +3402,6 @@ fn lookup_capability_is_negotiated_at_1_5() {
     session.shutdown();
 }
 
-/// An `lpp/lookup` answer comes from the language vocabulary: the session
-/// never loads a project or opens a document.
 #[test]
 fn lookup_resolves_names_without_a_project() {
     let mut session = Session::spawn();
@@ -3609,8 +3422,6 @@ fn lookup_resolves_names_without_a_project() {
             .is_some_and(|params| !params.is_empty())
     );
 
-    // A display-name guess resolves to the OPY spelling through the same
-    // vocabulary ("Wait Until" is the catalog name of `waitUntil`).
     let display = session.request(lookup_request(
         3,
         json!({ "languageId": "opy", "query": "Wait Until", "limit": 3 }),
@@ -3625,10 +3436,6 @@ fn lookup_resolves_names_without_a_project() {
     session.shutdown();
 }
 
-/// `within` selects the scope the listing draws from: a callable identity
-/// lists parameters in call order, an enum domain identity lists members in
-/// domain order, and a settings prefix lists immediate children spelled by
-/// their own segment.
 #[test]
 fn lookup_within_scopes_list_children() {
     let mut session = Session::spawn();
@@ -3718,8 +3525,6 @@ fn lookup_within_scopes_list_children() {
         "a settings leaf is not a scope"
     );
 
-    // A settings enum domain answers under `within: "enum"` with the member
-    // spellings the settings table declares.
     let settings_enum = session.request(lookup_request(
         7,
         json!({
@@ -3737,8 +3542,6 @@ fn lookup_within_scopes_list_children() {
     session.shutdown();
 }
 
-/// Repeated requests return identical entries, `limit` bounds the result,
-/// and `kind` filters by the entry's provider-defined kind.
 #[test]
 fn lookup_results_are_deterministic_bounded_and_kind_filtered() {
     let mut session = Session::spawn();
@@ -3792,8 +3595,6 @@ fn lookup_results_are_deterministic_bounded_and_kind_filtered() {
     session.shutdown();
 }
 
-/// `kind: "event"` returns the `@Event` vocabulary: spelling, display
-/// name, and whether the event accepts player filters.
 #[test]
 fn lookup_events_return_the_event_vocabulary() {
     let mut session = Session::spawn();
@@ -3837,8 +3638,6 @@ fn lookup_events_return_the_event_vocabulary() {
     session.shutdown();
 }
 
-/// Params that do not match the schema are `-32602`; a language the
-/// provider does not serve is `invalidLanguage`.
 #[test]
 fn lookup_validates_params() {
     let mut session = Session::spawn();
@@ -3904,8 +3703,6 @@ fn resolve_ids_request(id: i64, params: Value) -> Value {
     })
 }
 
-/// `resolveIds` is negotiated only at LPP 1.6: the capability is absent at
-/// 1.5 and an `lpp/resolveIds` request there is `capabilityUnavailable`.
 #[test]
 fn resolve_ids_capability_is_negotiated_at_1_6() {
     let mut session = Session::spawn();
@@ -3938,9 +3735,6 @@ fn resolve_ids_capability_is_negotiated_at_1_6() {
     session.shutdown();
 }
 
-/// An `lpp/resolveIds` answer comes from the language vocabulary — the
-/// session never loads a project — and every spelling it reports agrees
-/// with what `lpp/lookup` reports for the same canonical id.
 #[test]
 fn resolve_ids_answers_from_vocabulary_without_a_project() {
     let mut session = Session::spawn();
@@ -3953,9 +3747,6 @@ fn resolve_ids_answers_from_vocabulary_without_a_project() {
             "calls": [
                 "applyImpulse",
                 "setStatusEffect",
-                // Canonical ids whose OPY spellings differ from the id
-                // (`createHudText` -> `hudText`) — the answer must come
-                // from the manifest link, not from the id itself.
                 "createHudText",
                 "lastCreatedEntity",
                 "isButtonHeld",
@@ -3969,8 +3760,6 @@ fn resolve_ids_answers_from_vocabulary_without_a_project() {
     ));
     let result = &response["result"];
     for (id, spelling) in result["calls"].as_object().expect("calls map") {
-        // The resolved spelling is one `lpp/lookup` reports when queried
-        // with the canonical id.
         let lookup = session.request(lookup_request(
             100,
             json!({ "languageId": "opy", "query": id, "limit": 10 }),
@@ -3992,9 +3781,6 @@ fn resolve_ids_answers_from_vocabulary_without_a_project() {
     assert_eq!(result["calls"]["lastCreatedEntity"], "getLastCreatedEntity");
     assert_eq!(result["calls"]["isButtonHeld"], "isHoldingButton");
 
-    // Enum member spellings agree with `lpp/lookup`: the `Domain.MEMBER`
-    // spelling — under the domain's OPY name (`Clipping` -> `Clip`) — is
-    // itself a spelling lookup reports.
     let enums = result["enums"].as_object().expect("enums map");
     let mut request_id = 200;
     for (domain, members) in enums {
@@ -4027,8 +3813,6 @@ fn resolve_ids_answers_from_vocabulary_without_a_project() {
     session.shutdown();
 }
 
-/// Operators, delimited statements, and the member-call forms the manifest
-/// marks `special-lowering` spell to source syntax, not bare call names.
 #[test]
 fn resolve_ids_spells_operators_and_source_forms() {
     let mut session = Session::spawn();
@@ -4068,10 +3852,6 @@ fn resolve_ids_spells_operators_and_source_forms() {
     session.shutdown();
 }
 
-/// Ids with no dedicated OPY spelling — unknown ids, canonical-only forms
-/// (assignments, index access, ternary), non-canonical source names
-/// (`evalOnce`, `all`), and members of domains the source language does
-/// not spell — are omitted rather than guessed.
 #[test]
 fn resolve_ids_omits_unspelled_and_unknown_ids() {
     let mut session = Session::spawn();
@@ -4083,20 +3863,14 @@ fn resolve_ids_omits_unspelled_and_unknown_ids() {
             "languageId": "opy",
             "calls": [
                 "notAnId",
-                // An OPY spelling, not a canonical id: `evaluateOnce` is
-                // the canonical name of `evalOnce`.
                 "evalOnce",
-                // OPY-only builtins that lower elsewhere are not ids.
                 "all", "log", "getPlayers",
-                // Canonical forms with no dedicated source spelling.
                 "end", "setGlobalVariable", "globalVariable",
                 "callSubroutine", "valueInArray", "firstOf",
                 "ifThenElse", "roundToInteger", "loopIf",
             ],
             "enums": {
                 "Status": ["STUNNED", "NO_SUCH_MEMBER"],
-                // `Rounding` selects between round/ceil/floor — not
-                // spelled as a source enum.
                 "Rounding": ["DOWN"],
                 "NoSuchDomain": ["ANY"],
             },
@@ -4112,8 +3886,6 @@ fn resolve_ids_omits_unspelled_and_unknown_ids() {
     session.shutdown();
 }
 
-/// An empty request resolves to empty maps; the same request answers
-/// identically twice.
 #[test]
 fn resolve_ids_empty_and_deterministic() {
     let mut session = Session::spawn();
@@ -4133,8 +3905,6 @@ fn resolve_ids_empty_and_deterministic() {
     session.shutdown();
 }
 
-/// Params that do not match the schema are `-32602`; a language the
-/// provider does not serve is `invalidLanguage`.
 #[test]
 fn resolve_ids_validates_params() {
     let mut session = Session::spawn();
@@ -4192,8 +3962,6 @@ fn resolve_ids_validates_params() {
     session.shutdown();
 }
 
-/// At most 1024 ids per request, counting calls and enum members together
-/// with duplicates; over the bound is `-32602`, never truncated.
 #[test]
 fn resolve_ids_bounds_the_total_ids() {
     let mut session = Session::spawn();
@@ -4233,23 +4001,6 @@ fn resolve_ids_bounds_the_total_ids() {
     session.shutdown();
 }
 
-// ---------------------------------------------------------------------------
-// Provider/core outcome parity (opy-rs#559)
-//
-// `lpp/check` and `lpp/compile` are owner-side projections of the standalone
-// core outcomes: on the same inputs they must agree with
-// `opy_rs::tooling::check` / `compile_with_overlay_outcome` (plus
-// `Compiler::compile_outcome_report_*` for the artifact) rather than
-// re-deriving the effective entry, the analysis, or the source identity —
-// the divergences fixed in #257, #456, and #480. These tests replay the core
-// pipeline over the inputs each request carries and compare the wire result
-// on document identity and processing order plus every diagnostic's code,
-// severity, message, and effective source location. Only the LPP
-// presentation differs: `file://` URIs and 0-based UTF-16 positions.
-// ---------------------------------------------------------------------------
-
-/// A diagnostic view shared by `tooling::Diagnostic` (check) and
-/// `CompileDiagnostic` (compile) so one expectation serves both.
 trait CoreDiagnostic {
     fn severity(&self) -> &'static str;
     fn code(&self) -> &str;
@@ -4287,8 +4038,6 @@ impl CoreDiagnostic for opy_rs::CompileDiagnostic {
     }
 }
 
-/// The absolute path a core file-registry display path resolves to under
-/// `display_root` (the provider's `resolved_path`).
 fn core_path(display_root: &Path, display_path: &str) -> PathBuf {
     let path = Path::new(display_path);
     if path.is_absolute() {
@@ -4298,7 +4047,6 @@ fn core_path(display_root: &Path, display_path: &str) -> PathBuf {
     }
 }
 
-/// The expected `file://` URI of a core display path.
 fn core_uri(display_root: &Path, display_path: &str) -> String {
     file_uri(
         core_path(display_root, display_path)
@@ -4307,10 +4055,6 @@ fn core_uri(display_root: &Path, display_path: &str) -> String {
     )
 }
 
-/// The UTF-16 `character` an LPP position reports for a 1-based frontend
-/// column within `line` (`\t` spans four frontend columns). This is the
-/// conformance projection the wire format fixes, recomputed here so the
-/// tests verify the provider's presentation rather than trusting it.
 fn utf16_character(line: &str, column: u32) -> u32 {
     let mut units = 0u32;
     let mut current = 1u32;
@@ -4324,9 +4068,6 @@ fn utf16_character(line: &str, column: u32) -> u32 {
     units
 }
 
-/// The expected LPP range of a resolved core location, projected from the
-/// real source text under `display_root`; a span-less diagnostic reports
-/// the document origin like the provider's `unwrap_or(0)` fallback.
 fn expected_range(
     display_root: &Path,
     location: Option<&opy_rs::tooling::SourceLocation>,
@@ -4353,11 +4094,6 @@ fn expected_range(
     })
 }
 
-/// The expected `documents` payload for an entry-mode check or compile: one
-/// document per file-registry entry in registry order (the observable
-/// processing order), each carrying the entry version, and every core
-/// diagnostic attributed to the document its span names — a diagnostic
-/// whose span resolves to no registry path lands on the first document.
 fn expected_entry_documents<D: CoreDiagnostic>(
     entry_version: i64,
     files: &[opy_rs::preprocess::FileRecord],
@@ -4397,9 +4133,6 @@ fn expected_entry_documents<D: CoreDiagnostic>(
         .collect()
 }
 
-/// The `sourceIdentity` the provider must report: the SHA-256 of the
-/// *effective* primary source — the `#!mainFile` target's text when the
-/// loaded entry redirects, the entry text itself otherwise.
 fn expected_source_identity(project: &opy_rs::FilesystemProject) -> String {
     let effective = opy_rs::preprocess::main_file_directive(project.source())
         .and_then(|target| {
@@ -4417,13 +4150,6 @@ fn expected_source_identity(project: &opy_rs::FilesystemProject) -> String {
     hex
 }
 
-/// `lpp/check` on a filesystem entry must project the standalone core check:
-/// the document list follows the file registry the check produced (identity
-/// and processing order, including the `#!mainFile` effective entry), and
-/// every diagnostic keeps its code, severity, message, and effective
-/// location. A provider that rechecked the loaded file directly, flattened
-/// severities, or resolved display paths against the wrong root diverges
-/// from the computed expectation here.
 #[test]
 fn entry_check_projects_the_core_check_outcome() {
     let mut session = Session::spawn();
@@ -4447,7 +4173,6 @@ fn entry_check_projects_the_core_check_outcome() {
         ),
     ] {
         id += 1;
-        // Replay the exact load and check the provider performs.
         let path = Path::new(entry).canonicalize().expect("fixture entry");
         let project = opy_rs::FilesystemProject::load(&path).expect("project loads");
         let outcome = opy_rs::tooling::check(
@@ -4482,12 +4207,6 @@ fn entry_check_projects_the_core_check_outcome() {
     session.shutdown();
 }
 
-/// Failures before a model exists stay faithful in both request shapes: an
-/// include member's errors land on that member's document, a required
-/// source that cannot be loaded maps to the project load failure instead of
-/// a documents payload (the registry reached before the failure is not a
-/// completed analysis), and the same failure on the documents surface keeps
-/// the core diagnostic on the supplied document.
 #[test]
 fn entry_check_projects_include_failures_and_load_errors() {
     let dir = std::env::temp_dir().join(format!("opy-lpp-parity-{}", std::process::id()));
@@ -4497,7 +4216,6 @@ fn entry_check_projects_include_failures_and_load_errors() {
     let mut session = Session::spawn();
     session.initialize();
 
-    // A broken include member reports on its own document, not the entry's.
     let broken = dir.join("broken-include");
     std::fs::create_dir_all(&broken).expect("fixture dir");
     std::fs::write(
@@ -4536,7 +4254,6 @@ fn entry_check_projects_include_failures_and_load_errors() {
         "an include member's diagnostics must land on the member document"
     );
 
-    // A missing include is a project load failure, not a documents payload.
     let missing = dir.join("missing-include");
     std::fs::create_dir_all(&missing).expect("fixture dir");
     std::fs::write(
@@ -4551,8 +4268,6 @@ fn entry_check_projects_include_failures_and_load_errors() {
         &project.main_path().to_string_lossy(),
         project.root(),
     );
-    // Premise: the core check reports a required-source failure, so the
-    // provider must surface the load failure rather than project documents.
     assert!(
         outcome
             .diagnostics
@@ -4578,8 +4293,6 @@ fn entry_check_projects_include_failures_and_load_errors() {
         "requiredSourceUnavailable"
     );
 
-    // On the documents surface the same failure keeps its core diagnostic on
-    // the supplied document — failure context the provider must not drop.
     let path = main.canonicalize().expect("main path");
     let uri = format!("file://{}", path.to_string_lossy());
     let text = std::fs::read_to_string(&main).expect("main text");
@@ -4628,11 +4341,6 @@ fn entry_check_projects_include_failures_and_load_errors() {
     session.shutdown();
 }
 
-/// A documents-set `lpp/check` must agree with the core outcomes the set
-/// resolves to: one project analysis per effective entry (`#!mainFile`
-/// deduplicates members), coverage credited only on a *completed* check —
-/// a file registry captured before a failure is not analysis — and include
-/// members ordered after their includers, never checked out of context.
 #[test]
 fn document_set_check_projects_the_core_check_outcome() {
     let root = Path::new(RENAME_MAIN_FILE_ROOT);
@@ -4655,8 +4363,6 @@ fn document_set_check_projects_the_core_check_outcome() {
             })
             .collect()
     };
-    // The same overlay map `document_overlays` builds from the request:
-    // each document's file path to its supplied text.
     let overlay_map = |texts: &BTreeMap<&str, String>| -> BTreeMap<String, String> {
         texts
             .iter()
@@ -4676,7 +4382,6 @@ fn document_set_check_projects_the_core_check_outcome() {
             .collect::<serde_json::Map<String, Value>>()
             .into()
     };
-    // The supplied document a core span names, like `supplied_uri_for_path`.
     let supplied_uri = |display_root: &Path, span_path: &str| -> Option<String> {
         let resolved = core_path(display_root, span_path);
         let resolved = resolved.canonicalize().unwrap_or(resolved);
@@ -4684,9 +4389,6 @@ fn document_set_check_projects_the_core_check_outcome() {
             .iter()
             .find_map(|(member, path)| (path == &resolved).then(|| uris[*member].clone()))
     };
-    // The per-URI diagnostics when `outcome` is the analysis that ran: every
-    // diagnostic lands on the supplied document its span names, or on the
-    // checked entry's document when it names no supplied file.
     let attribute =
         |outcome: &opy_rs::tooling::CheckOutcome, fallback: &str| -> BTreeMap<String, Vec<Value>> {
             let mut by_uri: BTreeMap<String, Vec<Value>> = BTreeMap::new();
@@ -4706,7 +4408,6 @@ fn document_set_check_projects_the_core_check_outcome() {
             }
             by_uri
         };
-    // The wire document list is the supplied documents in URI order.
     let expected_documents =
         |texts: &BTreeMap<&str, String>, by_uri: &BTreeMap<String, Vec<Value>>| -> Vec<Value> {
             let mut uris_sorted: Vec<&String> = texts.keys().map(|member| &uris[*member]).collect();
@@ -4745,10 +4446,6 @@ fn document_set_check_projects_the_core_check_outcome() {
     let mut session = Session::spawn();
     session.initialize();
 
-    // Clean project: stray and member redirect to main, so one analysis
-    // covers main, member, and caller. Premise asserts keep the scenario
-    // load-bearing: a standalone caller reports worker() as unknown, so a
-    // provider that parsed members out of context diverges observably.
     let clean = texts(&|_, _| {});
     let group = check_on(&clean, "main.opy");
     assert!(group.is_clean(), "clean fixture premise");
@@ -4762,9 +4459,6 @@ fn document_set_check_projects_the_core_check_outcome() {
         "covered members must report the shared analysis, not a standalone parse"
     );
 
-    // Broken member: the group registers caller before failing inside
-    // member, so caller was never analyzed — its deferred standalone check
-    // still runs and reports, and stray's unparsed stub stays clean.
     let broken = texts(&|member, text| match member {
         "main.opy" => {
             *text = text.replacen(
@@ -4798,11 +4492,6 @@ fn document_set_check_projects_the_core_check_outcome() {
     session.shutdown();
 }
 
-/// `lpp/compile` must follow the same effective entry and project load as
-/// the core compile: an artifact appears exactly when the core compile
-/// succeeds (and is the core workshop text), diagnostics match the core
-/// compile report, and `sourceIdentity` hashes the *effective* primary
-/// source — never the stub the loaded entry happened to carry.
 #[test]
 fn entry_compile_projects_the_core_compile_outcome() {
     let compiler = opy_rs::Compiler::new().expect("compiler");
@@ -4823,8 +4512,6 @@ fn entry_compile_projects_the_core_compile_outcome() {
         ("integration failure on a resolved model", UNSUPPORTED),
     ] {
         id += 1;
-        // Replay the load, frontend outcome, and compile report the provider
-        // is supposed to project.
         let path = Path::new(entry).canonicalize().expect("fixture entry");
         let project = opy_rs::FilesystemProject::load(&path).expect("project loads");
         let outcome = opy_rs::compile_with_overlay_outcome(
@@ -4884,10 +4571,6 @@ fn entry_compile_projects_the_core_compile_outcome() {
     session.shutdown();
 }
 
-/// A documents-mode `lpp/compile` agrees with the core compile run on the
-/// supplied text: no artifact when the core compile fails, and a lowering
-/// failure reports the integration diagnostic on the document instead of an
-/// artifact.
 #[test]
 fn document_compile_projects_the_core_compile_outcome() {
     let compiler = opy_rs::Compiler::new().expect("compiler");
@@ -4905,7 +4588,6 @@ fn document_compile_projects_the_core_compile_outcome() {
         let text = std::fs::read_to_string(path).expect("fixture source");
         let document_path = Path::new(path).canonicalize().expect("fixture path");
         let root = document_path.parent().expect("document directory");
-        // Replay the provider's single-document overlay and compile outcome.
         let overlays =
             BTreeMap::from([(document_path.to_string_lossy().into_owned(), text.clone())]);
         let outcome = opy_rs::compile_with_overlay_outcome(
@@ -4914,9 +4596,6 @@ fn document_compile_projects_the_core_compile_outcome() {
             root,
             &overlays,
         );
-        // Expected diagnostics: the outcome's own diagnostics (all landing
-        // on the one supplied document), then the integration diagnostic the
-        // provider appends at the document origin when lowering fails.
         let mut diagnostics: Vec<Value> = outcome
             .diagnostics
             .iter()
@@ -4980,11 +4659,6 @@ fn document_compile_projects_the_core_compile_outcome() {
     session.shutdown();
 }
 
-/// Issue #620: enum member spellings resolve under the request `locale`. A
-/// `#!postCompileHook` rewrite can introduce a spelling the emitter never
-/// produced — `Map(格里姆火山)` is valid under `zh-CN` but unknown under
-/// `en-US` — so `lpp/check` reports the same diagnostic `lpp/compile`
-/// reports, at the same location.
 #[test]
 fn check_and_compile_share_the_request_locale_for_member_spellings() {
     const LOCALE_HOOK: &str = concat!(
@@ -5001,8 +4675,6 @@ fn check_and_compile_share_the_request_locale_for_member_spellings() {
         })
     };
 
-    // Under `en-US` the residual `Map(格里姆火山)` is an unknown member
-    // spelling: both requests reject it under the same code and range.
     let checked = session.request(json!({
         "jsonrpc": "2.0",
         "id": 2,
@@ -5024,7 +4696,6 @@ fn check_and_compile_share_the_request_locale_for_member_spellings() {
     assert_eq!(compile_diagnostic["code"], "unknown-enum-member");
     assert_eq!(compile_diagnostic["range"], check_diagnostic["range"]);
 
-    // Under `zh-CN` the same spelling is valid: both accept it.
     let checked = session.request(json!({
         "jsonrpc": "2.0",
         "id": 4,

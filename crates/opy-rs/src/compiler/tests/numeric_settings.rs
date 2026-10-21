@@ -1,5 +1,3 @@
-//! Numeric range setting coverage.
-
 use std::path::{Path, PathBuf};
 
 use crate::hir::Expr;

@@ -260,8 +260,6 @@ impl<'a> Lowering<'a> {
         let Some(translations) = self.hir.preprocessing.translations.as_ref() else {
             return Vec::new();
         };
-        // `keepUnusedTranslations` is rejected as unsupported before lowering,
-        // so the used (msgid, context) pairs are the only keys ever written.
         let mut keys = self.translation_uses.clone();
         keys.sort();
         keys.dedup();

@@ -1,68 +1,3 @@
-//! Native-vs-reference differential suite.
-//!
-//! Runs the compatibility corpus
-//! (`crates/opy-rs/tests/fixtures/corpus/**/fixture.json`) through the native frontend and
-//! compares the outcome against the recorded reference result
-//! (`oracle.json`, produced by `tools/overpy/run_oracle.py` against the
-//! pinned OverPy 9.7.17 oracle).
-//!
-//! # What is compared
-//!
-//! The recorded reference result contains the oracle's **Workshop text output**,
-//! not a reference HIR (the wright adapter HIR fixtures do not exist in this
-//! repository). The parity contract is observable semantics, not byte
-//! identity, so the suite compares the supported observable boundaries:
-//!
-//! * **Status parity** — the native frontend must resolve a fixture the
-//!   oracle accepts, and must reject a fixture the oracle rejects (with a
-//!   structured diagnostic). This is the primary, CI-enforced contract.
-//! * **Expected outcome** — each fixture manifest declares the native outcome
-//!   and its relationship to the oracle; behavior outside that declaration is
-//!   a `divergence` and fails the suite.
-//! * **Structural self-check** (always runs) — a resolved program must pass
-//!   Opy HIR v2 validation, must round-trip through the wire payload
-//!   (`parse_value(serde_json::to_value(program))`), and its debug dump must
-//!   be deterministic.
-//! * **Rule-name parity** (informational) — the ordered authored rule names
-//!   in the native HIR are compared against `rule ("…")` entries in the
-//!   oracle Workshop text, after normalizing away reference-synthesized
-//!   `Initialize …`/`Subroutine …` rules (their synthesis is
-//!   lowering-dependent in opy-rs; see the canonical language-support contract).
-//!   Mismatches are
-//!   recorded in the report as explicit gap entries; they do not fail the
-//!   suite because text-shape differences at the emission boundary are not
-//!   the compatibility contract.
-//!
-//! # Normalization rules
-//!
-//! * Span endpoints (`span` objects) are removed from the emitted native HIR
-//!   JSON dumps (`target/opy-differential/<fixture>.native.json`):
-//!   frontend-internal source mapping that the reference result does not
-//!   record. `protocol`/`generator` identities are contract fields and are
-//!   kept verbatim.
-//! * Reference synthesized rules (`Initialize global variables`,
-//!   `Initialize player variables`, `Subroutine …`) are dropped from the
-//!   rule-name comparison because their emission is lowering-dependent.
-//! * Diagnostic wording is never compared; only status and the stable
-//!   diagnostic `code` (where the fixture manifest pins one).
-//!
-//! # Degradation
-//!
-//! When a fixture has no `oracle.json` (reference artifacts absent), the
-//! oracle comparison is skipped with a clear message and the entry is marked
-//! `skip`; the structural self-check and the expected-outcome contract still
-//! run. This keeps the suite runnable in `cargo test` without Node or OverPy
-//! installed.
-//!
-//! # Report
-//!
-//! A machine-readable report is written to
-//! `target/opy-differential-report.json` listing per-fixture native status and
-//! relationship classification (`match` / `known-gap` /
-//! `unexpected-divergence` / `inconclusive`), the native diagnostic code, the
-//! reference status, and rule-name comparison. A reference-success/native-failure case is never
-//! classified as a match.
-//!
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -117,7 +52,6 @@ fn load_fixture(path: &Path) -> (String, String, String, String, bool, Option<St
     )
 }
 
-/// Collect authored rule names from the native HIR in program order.
 fn native_rule_names(program: &opy_rs::hir::Program) -> Vec<String> {
     program
         .rules
@@ -131,8 +65,6 @@ fn native_rule_names(program: &opy_rs::hir::Program) -> Vec<String> {
         .collect()
 }
 
-/// Collect `rule ("name")` occurrences from the oracle Workshop text in order,
-/// dropping reference-synthesized `Initialize …`/`Subroutine …` rules.
 fn reference_rule_names(workshop: &str) -> Vec<String> {
     let mut names = Vec::new();
     let mut rest = workshop;
@@ -148,8 +80,6 @@ fn reference_rule_names(workshop: &str) -> Vec<String> {
     names
 }
 
-/// Remove frontend-internal span endpoints from the native wire payload
-/// (documented normalization; protocol/generator identities are kept).
 fn strip_spans(value: &mut Value) {
     match value {
         Value::Object(map) => {
@@ -167,8 +97,6 @@ fn strip_spans(value: &mut Value) {
     }
 }
 
-/// Run one fixture through the native frontend plus the structural
-/// self-checks, and emit its normalized native HIR JSON dump.
 fn run_native(
     source: &str,
     source_name: &str,
@@ -242,7 +170,6 @@ fn native_and_reference_agree_on_the_corpus() {
         let source = std::fs::read_to_string(&source_path)
             .unwrap_or_else(|error| panic!("cannot read {}: {error}", source_path.display()));
 
-        // Native side: preprocess -> parse -> lower (never requires Node).
         let native = run_native(&source, &source_name, &fixture_dir, &id);
         let native_ok = native.is_ok();
         let native_entry = match &native {
@@ -254,8 +181,6 @@ fn native_and_reference_agree_on_the_corpus() {
             }),
         };
 
-        // Reference side: the recorded oracle snapshot (absent -> skip with a
-        // clear message; the structural/table contract still ran above).
         let snapshot_path = fixture_dir.join("oracle.json");
         let snapshot_present = snapshot_path.is_file();
         let reference_status = if snapshot_present {
@@ -284,7 +209,6 @@ fn native_and_reference_agree_on_the_corpus() {
         } else {
             "divergence"
         };
-        // The report summary keys the counts by camelCase status labels.
         let status_key = match status {
             "expected-diagnostic" => "expectedDiagnostic",
             other => other,
@@ -301,8 +225,6 @@ fn native_and_reference_agree_on_the_corpus() {
             ));
         }
 
-        // Reference status parity: informational when the manifest deliberately
-        // declares a known gap between native and reference behavior.
         let reference_gap = match &reference_status {
             Some(reference_status) => (*reference_status == "success") != native_ok,
             None => false,
@@ -335,7 +257,6 @@ fn native_and_reference_agree_on_the_corpus() {
             "match"
         };
 
-        // Rule-name parity (informational, opt-in per fixture).
         let rule_names_entry = if compare_rule_names && snapshot_present {
             match &native {
                 Ok(program) => {

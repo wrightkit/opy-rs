@@ -1,5 +1,3 @@
-//! Inventory-backed builtin and alias coverage.
-
 use std::path::Path;
 
 use crate::Compiler;

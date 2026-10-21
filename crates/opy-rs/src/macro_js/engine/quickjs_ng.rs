@@ -75,9 +75,9 @@ impl QuickJsEngine {
                 self.context,
                 Some(console_log),
                 c"log".as_ptr(),
-                0, // length: variadic
-                0, // magic: unused
-                1, // data_len
+                0,
+                0,
+                1,
                 &sink_value as *const q::JSValue as *mut q::JSValue,
             );
             q::JS_FreeValue(self.context, sink_value);

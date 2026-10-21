@@ -1,20 +1,9 @@
-//! The argument positions where pinned OverPy 9.7.10 rewrites a literal under
-//! `#!optimizeForSize`, keyed by catalog call name and argument position.
-//! `tools/overpy/upstream-literal-flags.json` records OverPy's own flags and
-//! `slots_cover_the_upstream_flags` checks this policy against them.
-
-/// How OverPy rewrites a literal in one argument position.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Slot {
-    /// `0` becomes `False` and `1` becomes `True`.
     Boolean,
-    /// Only `1` becomes `True`.
     TrueOnly,
-    /// Only `0` becomes `False`.
     FalseOnly,
-    /// `0` becomes `Null`.
     ZeroAsNull,
-    /// A zero vector becomes `Null`.
     ZeroVectorAsNull,
 }
 
@@ -86,8 +75,6 @@ fn is_boolean_slot(name: &str, index: usize) -> bool {
 mod tests {
     use super::{Slot, slot};
 
-    /// Every flag pinned OverPy sets is honored, and no position it leaves
-    /// unflagged is rewritten.
     #[test]
     fn slots_cover_the_upstream_flags() {
         let path = concat!(

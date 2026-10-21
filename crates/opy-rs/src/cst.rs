@@ -1,41 +1,25 @@
-//! The frontend's concrete syntax tree (CST).
-//!
-//! Source-preserving syntax structure with spans on every node, produced by
-//! [`crate::parser`] and consumed by [`crate::lower`] (and, in later
-//! milestones, language services). Nodes are deliberately close to the Opy
-//! HIR contract so lowering stays a small, reviewable mapping; unresolved
-//! names and member accesses remain explicit until semantic resolution.
-
 use crate::diag::Span;
 
-/// A parsed program: declarations and rule/subroutine entries.
 #[derive(Debug, Clone)]
 pub struct Program {
     pub declarations: Vec<Decl>,
     pub rules: Vec<RuleEntry>,
-    /// All top-level forms in source order. The category-specific vectors are
-    /// retained for the HIR-shaped parser API, while lowering uses this list
-    /// for scope and visibility decisions.
     pub top_level: Vec<TopLevel>,
-    /// The parsed `settings { ... }` block, when present (#86).
     pub settings: Option<Settings>,
 }
 
-/// A top-level declaration or rule entry in source order.
 #[derive(Debug, Clone)]
 pub enum TopLevel {
     Declaration(Decl),
     Rule(RuleEntry),
 }
 
-/// A parsed `settings { ... }` block (JSONC, #86).
 #[derive(Debug, Clone)]
 pub struct Settings {
     pub span: Span,
     pub children: Vec<SettingsNode>,
 }
 
-/// One member of a settings group.
 #[derive(Debug, Clone)]
 pub enum SettingsNode {
     Group {
@@ -58,7 +42,6 @@ pub enum SettingsNode {
         value: String,
         span: Span,
     },
-    /// An unquoted settings expression preserved without assigning it a type.
     Raw {
         name: String,
         value: String,
@@ -71,27 +54,19 @@ pub enum SettingsNode {
     },
 }
 
-/// One element of a settings list.
 #[derive(Debug, Clone)]
 pub struct SettingsListElement {
-    /// Literal text (string content, normalized number) or, when `expr` is
-    /// set, expression source to be evaluated like the pinned settings
-    /// evaluator does (#512).
     pub value: String,
-    /// `value` is an expression to evaluate, not literal text.
     pub expr: bool,
     pub span: Span,
 }
 
-/// A program-scope declaration.
 #[derive(Debug, Clone)]
 pub enum Decl {
     GlobalVariable {
         name: String,
-        /// An explicit Workshop index (`globalvar x 100`), when given.
         index: Option<u32>,
         span: Span,
-        /// The exact span of the declared identifier token.
         name_span: Span,
         initializer: Option<Expr>,
     },
@@ -99,33 +74,25 @@ pub enum Decl {
         name: String,
         index: Option<u32>,
         span: Span,
-        /// The exact span of the declared identifier token.
         name_span: Span,
         initializer: Option<Expr>,
     },
     Subroutine {
         name: String,
-        /// The pinned slot from `subroutine name index`.
         index: Option<u32>,
         span: Span,
-        /// The exact span of the declared identifier token.
         name_span: Span,
     },
-    /// A user-defined `enum`; members fold to numeric constants unless an
-    /// explicit `= value` supplies a different expression.
     Enum {
         name: String,
-        /// `(name, explicit `= expression`, member span)` per member.
         members: Vec<(String, Option<Expr>, Span)>,
         span: Span,
     },
-    /// A source-level constant declared with `macro name = expression`.
     Constant {
         name: String,
         value: Expr,
         span: Span,
     },
-    /// A `macro` declaration with parameterized statement body.
     Macro {
         name: String,
         args: Vec<String>,
@@ -134,7 +101,6 @@ pub enum Decl {
     },
 }
 
-/// A rule or a subroutine definition.
 #[derive(Debug, Clone)]
 pub enum RuleEntry {
     Rule(Rule),
@@ -142,7 +108,6 @@ pub enum RuleEntry {
         name: String,
         presentation_name: Option<String>,
         span: Span,
-        /// The exact span of the defined identifier token in `def name():`.
         name_span: Span,
         body: Vec<Stmt>,
         annotations: Vec<Annotation>,
@@ -150,12 +115,10 @@ pub enum RuleEntry {
     },
 }
 
-/// A rule with its event, conditions, and actions.
 #[derive(Debug, Clone)]
 pub struct Rule {
     pub name: String,
     pub span: Span,
-    /// The exact span of the rule name inside its string literal.
     pub name_span: Span,
     pub disabled: bool,
     pub delimiter: bool,
@@ -167,7 +130,6 @@ pub struct Rule {
     pub actions: Vec<Stmt>,
 }
 
-/// A source annotation retained for tooling and provenance.
 #[derive(Debug, Clone)]
 pub struct Annotation {
     pub name: String,
@@ -175,15 +137,12 @@ pub struct Annotation {
     pub span: Span,
 }
 
-/// One raw annotation argument. Values such as heroes, teams, and slots stay
-/// opaque here because their canonical domains belong to workshop-rs.
 #[derive(Debug, Clone)]
 pub struct AnnotationArg {
     pub text: String,
     pub span: Span,
 }
 
-/// A rule event or an `@Event` directive.
 #[derive(Debug, Clone)]
 pub struct Event {
     pub name: String,
@@ -191,7 +150,6 @@ pub struct Event {
     pub span: Span,
 }
 
-/// A statement.
 #[derive(Debug, Clone)]
 pub enum Stmt {
     Expr {
@@ -206,10 +164,7 @@ pub enum Stmt {
     If {
         branches: Vec<IfBranch>,
         r#else: Option<Vec<Stmt>>,
-        /// The span of the `else` keyword, when the chain has an else branch.
         else_span: Option<Span>,
-        /// Zero-width span at the first token past the chain (dedent or EOF):
-        /// the position a Workshop `End` marker would occupy.
         end_span: Span,
         /// The chain began with an `elif`/`else` in statement position (no
         /// preceding `if`): the reference emits `Else If`/`Else` markers
@@ -266,7 +221,6 @@ pub enum Stmt {
     },
 }
 
-/// One source-ordered arm in a switch statement.
 #[derive(Debug, Clone)]
 pub enum SwitchArm {
     Case {
@@ -280,29 +234,19 @@ pub enum SwitchArm {
     },
 }
 
-/// One condition/body pair of an `if`.
 #[derive(Debug, Clone)]
 pub struct IfBranch {
-    /// The span of the `if`, `elif`, or `else` keyword that opens this branch.
     pub marker: Span,
     pub condition: Expr,
     pub body: Vec<Stmt>,
 }
 
-/// One call argument: either positional (`expr`) or keyword (`name = expr`,
-/// issue #110). Keyword arguments keep the name token's exact span so binding
-/// diagnostics are source-located on the name (unknown/duplicate keyword) or
-/// the value (enum-domain, arity of the value expression) as appropriate.
 #[derive(Debug, Clone)]
 pub struct CallArg {
-    /// The keyword name and its exact span, when this is a `name = expr`
-    /// argument.
     pub keyword: Option<(String, Span)>,
-    /// The argument's value expression.
     pub value: Expr,
 }
 
-/// An expression.
 #[derive(Debug, Clone)]
 pub enum Expr {
     Number {
@@ -354,44 +298,32 @@ pub enum Expr {
         /// `fw` and applies them in a fixed pipeline order.
         modifier: String,
         value: String,
-        /// The decoded f-string template, with interpolation placeholders
-        /// normalized to `{0}`, `{1}`, …; present when `f` is among the
-        /// modifiers.
         format_text: Option<String>,
-        /// Expressions parsed from f-string interpolation regions, in source
-        /// order. Their spans point into the original string literal.
         interpolations: Vec<Expr>,
         span: Span,
     },
-    /// A plain function call.
     Call {
         name: String,
         args: Vec<CallArg>,
         debug_source: Option<String>,
         span: Span,
     },
-    /// A call on a receiver (`x.f(...)`).
     ReceiverCall {
         receiver: Box<Expr>,
         name: String,
         args: Vec<CallArg>,
         span: Span,
     },
-    /// An unresolved identifier (resolved during lowering).
     Name {
         name: String,
         span: Span,
     },
-    /// A member access `x.y` (resolved during lowering).
     Member {
         receiver: Box<Expr>,
         member: String,
-        /// The exact span of the member identifier after `.`.
         member_span: Span,
         span: Span,
     },
-    /// A source type literal used by `createWorkshopSetting`, such as
-    /// `float[0.5:10]`.
     Type {
         name: String,
         args: Vec<Expr>,
@@ -421,7 +353,6 @@ pub enum Expr {
     },
 }
 
-/// One key/value pair in an OPY dictionary literal.
 #[derive(Debug, Clone)]
 pub struct DictEntry {
     pub key: Expr,
@@ -430,7 +361,6 @@ pub struct DictEntry {
 }
 
 impl Expr {
-    /// The source span of this expression.
     pub fn span(&self) -> Span {
         match self {
             Expr::Number { span, .. }
@@ -456,7 +386,6 @@ impl Expr {
 }
 
 impl Stmt {
-    /// The source span of this statement.
     pub fn span(&self) -> Span {
         match self {
             Stmt::Expr { span, .. }
@@ -478,8 +407,6 @@ impl Stmt {
 }
 
 impl CallArg {
-    /// The source span of this argument: the keyword name when keyword, the
-    /// value expression otherwise.
     pub fn span(&self) -> Span {
         match &self.keyword {
             Some((_, name_span)) => {

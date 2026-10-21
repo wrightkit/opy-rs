@@ -1,30 +1,3 @@
-//! The upstream decompiler corpus gate (`wrightkit/opy-rs#604`).
-//!
-//! The reconstruction contract's input-coverage bar is the pinned upstream
-//! `decompileAllRules` decompiler: the 16 `src/tests/decompiler/*.txt` inputs
-//! of `overpy@9.7.17` at content commit
-//! `5a7d0e294b8cad73b9701987bb584d0551d7fa4d`, vendored under
-//! `tests/fixtures/reconstruction/` (attribution and provenance in its
-//! `README.md`).
-//!
-//! For each input the harness runs the contract pipeline end to end:
-//! `workshop_rs::parser` → [`reconstruct`] → OPY compile →
-//! `workshop_rs::parser` → `workshop_rs::compare::equivalent`. The recorded
-//! outcome for every input lives in `fixtures/reconstruction/classification.json`:
-//!
-//! - `equivalent` — reconstructs and recompiles to a program behaviorally
-//!   equivalent to the input under the relaxed comparator;
-//! - `refused` — reconstruction refuses; `codes` records the exact refusal
-//!   code set, each drawn from the contract's refusal-code inventory;
-//! - `unparseable` — the canonical `workshop_rs::parser` rejects the input
-//!   before reconstruction runs. This is a `workshop-rs` boundary gap, not
-//!   a reconstruction refusal: `cause` records the rejected surface so the
-//!   gap stays visible until the canonical parser accepts it.
-//!
-//! The gate fails when the actual outcome differs from the checked-in
-//! record, when a refused input reports a code outside the contract's
-//! inventory, or when a fixture file or classification entry is added or
-//! dropped without the other — every coverage change lands in review.
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
@@ -38,10 +11,6 @@ fn fixtures_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/reconstruction")
 }
 
-/// Every refusal code the implementation can emit — the contract's
-/// refusal-code inventory in `docs/architecture/reconstruction.md`. A
-/// `refused` classification may record only codes from this set; a new code
-/// enters the inventory with the contract change that introduces it.
 const REFUSAL_CODES: &[&str] = &[
     "manifest-error",
     "catalog-error",
@@ -68,14 +37,10 @@ const REFUSAL_CODES: &[&str] = &[
     "unsupported-value-call",
 ];
 
-/// One corpus outcome as the checked-in classification records it.
 #[derive(Debug, PartialEq, Eq)]
 enum Outcome {
-    /// Reconstructed and recompiled to an equivalent program.
     Equivalent,
-    /// Reconstruction refused with this exact set of refusal codes.
     Refused(BTreeSet<String>),
-    /// `workshop_rs::parser` rejected the input before reconstruction.
     Unparseable,
 }
 
@@ -92,7 +57,6 @@ impl Outcome {
     }
 }
 
-/// The recorded classification for one corpus input.
 struct Recorded {
     id: String,
     file: String,
@@ -100,9 +64,6 @@ struct Recorded {
     outcome: Outcome,
 }
 
-/// Load and validate `classification.json`: statuses well formed, refused
-/// codes drawn from the contract inventory, `codes` present exactly on
-/// `refused` entries.
 fn load_classification() -> Result<Vec<Recorded>, String> {
     let path = fixtures_dir().join("classification.json");
     let record: Value = serde_json::from_str(
@@ -181,7 +142,6 @@ fn load_classification() -> Result<Vec<Recorded>, String> {
     Ok(entries)
 }
 
-/// Run the contract pipeline over one input and classify the outcome.
 fn classify(text: &str, catalog: &Catalog, locale: &Locale, compiler: &Compiler) -> Outcome {
     let Ok(program) = workshop_rs::parser::parse(text, catalog, locale) else {
         return Outcome::Unparseable;
@@ -192,8 +152,6 @@ fn classify(text: &str, catalog: &Catalog, locale: &Locale, compiler: &Compiler)
             return Outcome::Refused(error.issues.iter().map(|i| i.code.to_string()).collect());
         }
     };
-    // Reconstructed OPY must check clean and recompile to an equivalent
-    // program; anything else is a defect, never a recorded classification.
     let artifact = compiler
         .compile_source_artifact(&opy, "reconstructed.opy", Path::new("."))
         .unwrap_or_else(|e| panic!("reconstructed OPY does not recompile: {e:?}\n{opy}"));
@@ -214,8 +172,6 @@ fn upstream_decompiler_corpus_matches_the_recorded_classification() {
     let compiler = Compiler::new().expect("compiler loads");
     let entries = load_classification().unwrap_or_else(|e| panic!("{e}"));
 
-    // The fixture directory and the classification must describe the same
-    // corpus: a stray or missing `.txt` fails the gate.
     let mut on_disk: BTreeSet<String> = std::fs::read_dir(fixtures_dir())
         .expect("fixture directory reads")
         .filter_map(|entry| entry.unwrap().file_name().into_string().ok())

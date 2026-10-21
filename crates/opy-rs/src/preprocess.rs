@@ -1,44 +1,3 @@
-//! `.opy` preprocessing: includes, `#!define`/`#!defineMember` macros (textual and
-//! `__script__` JavaScript-backed), `#!postCompileHook`, and expansion.
-//!
-//! Operates at the token level, matching the reference frontend's observable
-//! behavior: `#!include "file.opy"` splices the included file's tokens at the
-//! directive site; `#!define NAME value` and `#!define name(args) value`
-//! register macros that expand at their use sites, recursively (a macro may
-//! reference earlier macros). The output is a single-file token stream whose
-//! spans point at use sites, mirroring the reference adapter's provenance
-//! convention (the HIR file registry records the included sources). Invalid
-//! include graphs (cycles, missing files) and recursive defines fail
-//! deterministically with structured diagnostics that name the offending file/line.
-//!
-//! # JavaScript macros and hooks
-//!
-//! A function-like define whose replacement starts with `__script__("…")`
-//! (OverPy 9.7.10 ABI, `src/compiler/tokenizer.ts`) is a script macro: the
-//! script path resolves relative to the definition file (missing files are a
-//! `script-not-found` diagnostic, mirroring the reference's ENOENT failure),
-//! and each expansion runs the script through [`crate::macro_js::MacroRuntime`]
-//! with the call-site arguments injected as `var <name>=<raw>;` declarations
-//! (the reference's `resolveMacro`). The string completion value is lexed
-//! back into the token stream at the call site, with the reference's
-//! per-line indentation rule applied to the text; the frontend token model
-//! makes indentation unobservable (the parser never consumes it), so the rule
-//! is preserved in the expansion text only. Runtime failures map to the
-//! structured `script-*` diagnostics with the script path, line, and column.
-//!
-//! `#!postCompileHook "hook.js"` registers the post-compile hook script
-//! (duplicate declarations are rejected like the reference). The frontend
-//! recognizes, parses, validates, and records the directive only — it never
-//! executes the hook: real hook execution receives the final Workshop text
-//! produced by lowering and is lowering-dependent (workshop-rs emission,
-//! issue #8); the frontend never fabricates a Workshop payload.
-//!
-//! Boundary: `__script__` macros expand at compile time through the runtime
-//! (source-supported); `#!postCompileHook` is recorded and executed only
-//! against the real Workshop output (lowering-dependent). The runtime's hook
-//! ABI is tested separately on synthetic content in the internal macro runtime
-//! module (see its `hooks` test suite).
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
@@ -58,7 +17,6 @@ mod scripts;
 use macros::{MacroArgument, MacroDef};
 use project::{display_path, first_main_file_directive};
 
-/// A recorded preprocessing define (HIR provenance).
 #[derive(Debug, Clone, PartialEq)]
 pub struct DefineRecord {
     pub name: String,
@@ -67,61 +25,36 @@ pub struct DefineRecord {
     pub span: Option<Span>,
 }
 
-/// A resolved `__script__("…")` macro backing.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScriptMacro {
-    /// The resolved project-relative script path, used for diagnostics and
-    /// runtime attribution.
     pub path: String,
-    /// The script text, read at the define site.
     pub source: String,
 }
 
-/// A registered `#!postCompileHook` script (the declaration record).
-///
-/// The frontend recognizes, parses, validates, and records the directive; it
-/// never executes the hook. Execution against the final Workshop text is
-/// lowering-dependent (issue #8).
 #[derive(Debug, Clone, PartialEq)]
 pub struct PostCompileHook {
-    /// The resolved project-relative script path.
     pub path: String,
-    /// The script text, read at the directive site.
     pub source: String,
-    /// The directive's source span, used for error attribution.
     pub span: Span,
 }
 
-/// The result of preprocessing.
 #[derive(Debug, Clone)]
 pub struct Preprocessed {
-    /// The expanded, single-file token stream.
     pub tokens: Vec<Token>,
-    /// The recorded defines in definition order.
     pub defines: Vec<DefineRecord>,
-    /// The live `#!define` macro table at the end of preprocessing; the
-    /// parser re-expands these inside f-string interpolations, which the
-    /// token-level pass cannot see.
     pub(crate) text_macros: Vec<macros::MacroDef>,
-    /// The project `settings { ... }` block, when present (#86).
     pub settings: Option<SettingsBlock>,
-    /// Warnings emitted while composing the project.
     pub warnings: Vec<PreprocessWarning>,
-    /// The registered `#!postCompileHook` script, when declared.
     pub post_compile_hook: Option<PostCompileHook>,
-    /// Frontend-visible preprocessing state; strict-sensitive lowering is
-    /// handled by the native compiler while other backend effects are not run.
     pub preprocessing: PreprocessingState,
 }
 
-/// The output file registry, in include order, preserving source provenance.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FileRecord {
     pub id: u32,
     pub path: String,
 }
 
-/// A source-attributed preprocessing warning.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PreprocessWarning {
     pub code: String,
@@ -160,7 +93,6 @@ pub fn include_directives(text: &str) -> Vec<String> {
         .collect()
 }
 
-/// Preprocess the main source text with its include root.
 pub fn preprocess(
     main_text: &str,
     main_path: &str,
@@ -206,8 +138,6 @@ impl PreprocessOutcome {
     }
 }
 
-/// Preprocess with open-document overlays while retaining the file registry
-/// registered so far on failure.
 pub fn preprocess_with_overlay_outcome(
     main_text: &str,
     main_path: &str,
@@ -330,8 +260,6 @@ pub fn preprocess_with_overlay_outcome(
         pre.record("mainFile", Some(&main_file), span);
     }
     let source_text = owned_main_text.as_deref().unwrap_or(main_text);
-    // The project settings block is extracted before lexing and blanked out of
-    // the owning file's lexed text, so the lexer never sees its braces (#86).
     let settings = match crate::settings::find_blocks(source_text, source_file_id) {
         Ok(mut blocks) => blocks.pop(),
         Err(error) => return PreprocessOutcome::failure(error, pre),
@@ -444,16 +372,11 @@ fn external_text_span(file: u32, text: &str) -> Span {
 }
 
 struct Preprocessor {
-    /// The append-only file registry: a record's `id` is always its index
-    /// (`files.len()` at registration), so no separate counter is needed.
     files: Vec<FileRecord>,
     root: PathBuf,
     display_root: PathBuf,
     overlay: BTreeMap<String, String>,
     source_texts: BTreeMap<u32, String>,
-    /// Per-file line-start offsets, built once on the first macro-argument
-    /// raw-text lookup in that file (borrowed because `expand`/`expand_one`
-    /// run under `&self`).
     line_offsets: std::cell::RefCell<BTreeMap<u32, macros::LineOffsets>>,
     include_stack: Vec<PathBuf>,
     // OverPy retains this file context after multiline macro expansion in an
@@ -562,10 +485,6 @@ impl Preprocessor {
         file_id
     }
 
-    /// Apply the same token macro expansion used by ordinary OPY source to
-    /// the extracted settings values. Settings are removed before the source
-    /// token stream is processed, so this pass is the point where `#!define`
-    /// values become visible to the settings parser.
     pub(super) fn expand_settings(&self, block: SettingsBlock) -> OpyResult<SettingsBlock> {
         // A block that does not lex — an empty radix literal such as `0x`,
         // which the pinned tokenizer still reads as one word token — carries
@@ -749,9 +668,6 @@ mod tests {
 
     #[test]
     fn expanded_tokens_carry_the_use_site_span() {
-        // #506: an expansion wider than its invocation must not record
-        // positions past the authored line; every expanded token attributes
-        // to the authored macro name.
         let (pre, _) = preprocess(
             "#!define T a_much_wider_replacement + another_token\nrule \"r\":\n    x = T\n",
             "main.opy",
@@ -776,8 +692,6 @@ mod tests {
                 token.text
             );
         }
-        // `T` sits at 3:9-3:10 in the authored source; the replacement is far
-        // wider, so shifted coordinates would have overrun the line.
         assert_eq!(use_site.start, crate::diag::Position::new(3, 9));
         assert_eq!(use_site.end, crate::diag::Position::new(3, 10));
     }
@@ -930,9 +844,6 @@ mod tests {
 
     #[test]
     fn multiline_define_expanded_tokens_attribute_to_the_use_site() {
-        // #506: a multi-line expansion attributes every token to the
-        // invocation — shifted line numbers would point at unrelated
-        // authored lines.
         let (pre, _) = preprocess(
             "#!define block() A = 1\\\n    A = 2\nblock()\n",
             "main.opy",
@@ -1103,7 +1014,6 @@ mod tests {
 
     #[test]
     fn dict_literal_braces_reach_the_parser() {
-        // Scoped settings lexing must not consume expression-level braces.
         let (pre, _) = preprocess(
             "rule \"r\":\n    money += {\n        Mei.GENERIC: 10,\n    }\n",
             "main.opy",

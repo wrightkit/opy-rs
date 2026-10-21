@@ -1,16 +1,10 @@
 use super::*;
 
 impl Parser<'_> {
-    /// The column of the header that opened the block containing the
-    /// statement being parsed, when any — the floor an `elif`/`else`/`while`
-    /// tail must stay deeper than to still belong inside (#516).
     fn enclosing_floor(&self) -> Option<u32> {
         self.block_floors.last().copied()
     }
 
-    /// Parse a `:`-opened block at `body_indent`, recording `header_col` — the
-    /// column of the construct that opened it — as the enclosing floor for the
-    /// statements inside.
     pub(super) fn parse_child_block(&mut self, header_col: u32, body_indent: u32) -> Vec<Stmt> {
         self.block_floors.push(header_col);
         let block = self.parse_block(body_indent);
@@ -298,11 +292,6 @@ impl Parser<'_> {
         self.finish_if_chain(start.span, line_indent, branches, false)
     }
 
-    /// Collect `elif`/`else` continuations at the chain's column (or at a
-    /// mid-dedent column still inside the enclosing block) and build the
-    /// `Stmt::If`. `orphan` marks a chain that began with an `elif`/`else`
-    /// rather than `if`: the reference emits `Else If`/`Else` markers instead
-    /// of `If` (#516).
     fn finish_if_chain(
         &mut self,
         start_span: Span,
@@ -319,12 +308,7 @@ impl Parser<'_> {
             if self.peek_kind() == TokenKind::Eof
                 || column > line_indent
                 || (column != line_indent && self.open_if_indents.contains(&column))
-                // A candidate at or shallower than the enclosing block's
-                // header column belongs outside the block: the chain ends and
-                // the line surfaces at its real level (#516).
-                || self
-                    .enclosing_floor()
-                    .is_some_and(|floor| column <= floor)
+                || self.enclosing_floor().is_some_and(|floor| column <= floor)
             {
                 self.pos = save;
                 break;
@@ -370,8 +354,6 @@ impl Parser<'_> {
                 break;
             }
         }
-        // The chain ends where the next statement at a shallower indent (or
-        // EOF) begins; that position stands in for Workshop's explicit `End`.
         let end_span = self.boundary_span();
         Ok(Stmt::If {
             branches,
@@ -383,8 +365,6 @@ impl Parser<'_> {
         })
     }
 
-    /// A zero-width span at the next statement boundary after skipped
-    /// newlines: the position a Workshop `End` marker would occupy.
     fn boundary_span(&mut self) -> Span {
         let save = self.pos;
         self.skip_newlines();
@@ -393,10 +373,6 @@ impl Parser<'_> {
         Span::new(boundary.file, boundary.start, boundary.start)
     }
 
-    /// An `elif`/`else` reached in statement position — no `if` precedes it in
-    /// this block. The pinned reference emits the marker anyway (`Else
-    /// If`/`Else`, an orphan `else if` emits `Else`) and warns `w_lone_else`;
-    /// a following `elif`/`else` at the same column chains to it (#516).
     fn parse_orphan_else(&mut self) -> Result<Stmt, ()> {
         let start = self.advance();
         let line_indent = start.layout.start.col;
@@ -444,9 +420,6 @@ impl Parser<'_> {
     pub(super) fn parse_colon_body(&mut self, line_indent: u32) -> Result<Vec<Stmt>, ()> {
         self.last_colon_body_continued = false;
         if matches!(self.peek_kind(), TokenKind::Newline | TokenKind::Eof) {
-            // A `:`-headed body may be empty: a next line at `line_indent` or
-            // shallower belongs to the enclosing block, not to this body
-            // (#516).
             Ok(self
                 .block_indent(line_indent)
                 .map(|body_indent| self.parse_child_block(line_indent, body_indent))

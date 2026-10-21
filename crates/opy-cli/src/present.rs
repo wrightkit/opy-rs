@@ -268,14 +268,12 @@ fn emit_summary(command: &str, status: &str) {
     }
 }
 
-/// Workflow command properties additionally escape `:` and `,`.
 pub(crate) fn escape_workflow_property(value: &str) -> String {
     escape_workflow_data(value)
         .replace(':', "%3A")
         .replace(',', "%2C")
 }
 
-/// Workflow command data escapes the GitHub Actions command delimiters.
 pub(crate) fn escape_workflow_data(value: &str) -> String {
     value
         .replace('%', "%25")

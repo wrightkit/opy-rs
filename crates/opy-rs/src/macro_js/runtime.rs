@@ -6,24 +6,13 @@ use super::error::{MacroError, ScriptError};
 use super::helpers::Helpers;
 use super::limits::Limits;
 
-/// One macro argument: the declared parameter name and the **raw** call-site
-/// argument text.
-///
-/// The value is injected verbatim as `var <name>=<value>;` ahead of the script
-/// source, exactly like the OverPy reference (`resolveMacro` in
-/// `src/compiler/tokenizer.ts`). Argument-count validation against the macro
-/// declaration belongs to the frontend, which knows the declared parameters.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct MacroArg {
-    /// Parameter name as declared in the macro.
     pub(crate) name: String,
-    /// Raw textual argument from the call site.
     pub(crate) value: String,
 }
 
 impl MacroArg {
-    /// Creates a macro argument from the declared parameter name and the raw
-    /// call-site text.
     pub(crate) fn new(name: impl Into<String>, value: impl Into<String>) -> Self {
         Self {
             name: name.into(),
@@ -32,23 +21,12 @@ impl MacroArg {
     }
 }
 
-/// The outcome of a successful macro or hook invocation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct MacroResult {
-    /// The script's string completion value: expanded text for macros, the
-    /// transformed content for hooks.
     pub(crate) text: String,
-    /// Lines written via `console.log(...)`, in order, one entry per call
-    /// (arguments rendered with `String()` semantics and joined on `" "`).
     pub(crate) console_output: Vec<String>,
 }
 
-/// Reusable runtime for JavaScript-backed macros and post-compile hooks.
-///
-/// Each invocation spins up a fresh embedded engine instance (runtime +
-/// context) with the configured [`Limits`] and helper surface, evaluates the
-/// script, and tears the engine down. The runtime itself is reusable, but no
-/// JavaScript state is shared across invocations.
 #[derive(Debug)]
 pub(crate) struct MacroRuntime {
     limits: Limits,
@@ -68,15 +46,6 @@ impl MacroRuntime {
         self.helpers = helpers;
     }
 
-    /// Executes a macro script.
-    ///
-    /// `source` is the script's text (the file content the frontend resolved
-    /// from `__script__("...")`). `args` are injected as `var` declarations;
-    /// `script_name` is used for error attribution and must be the resolved
-    /// script path/name the frontend knows.
-    ///
-    /// Returns the string completion value as the expanded text, or a
-    /// structured error.
     pub(crate) fn run_macro(
         &self,
         source: &str,
@@ -100,13 +69,6 @@ impl MacroRuntime {
         )
     }
 
-    /// Executes a post-compile hook script against `content`.
-    ///
-    /// Mirrors the OverPy `#!postCompileHook` ABI (`src/compiler/tokenizer.ts`):
-    /// the script receives the content JSON-escaped as
-    /// `var content = "...";` and must return the transformed content as a
-    /// string. This works against synthetic/content inputs now; wiring to
-    /// actual Workshop emission is lowering-dependent.
     pub(crate) fn run_hook(
         &self,
         source: &str,
@@ -180,14 +142,10 @@ impl MacroRuntime {
     }
 }
 
-/// The constant objects the reference always defines (`src/globalVars.ts`).
 const BUILTIN_OBJECTS: [&str; 6] = ["Map", "Hero", "Gamemode", "Color", "Team", "Button"];
 
-/// Filename used for the internal helpers script; the helpers are static and
-/// cannot throw, so this never surfaces in errors.
 const BUILTINS_FILENAME: &str = "<opy-rs-macro-runtime-builtins>";
 
-/// The `vect` helper from the reference's `builtInJsFunctions` block.
 const VECT_HELPER: &str = r#"function vect(x, y, z) {
     return {
         x: x,
@@ -200,8 +158,6 @@ const VECT_HELPER: &str = r#"function vect(x, y, z) {
 }
 "#;
 
-/// Builds the helpers script: `vect` plus the six constant objects, always
-/// defined and populated from [`Helpers`] entries.
 fn builtins_source(helpers: &Helpers) -> String {
     let mut source = String::from(VECT_HELPER);
     for object in BUILTIN_OBJECTS {
@@ -236,9 +192,6 @@ fn json_string_literal(value: &str) -> String {
     literal
 }
 
-/// Maps an engine failure to a public error, adjusting stack line numbers so
-/// they refer to the user's script text (the injected prologue is subtracted,
-/// mirroring the reference's `normalizeScriptError`).
 fn map_engine_error(error: EngineError, script_name: &str, line_adjust: usize) -> MacroError {
     match error {
         EngineError::Exception { message, stack } => {
@@ -257,8 +210,6 @@ fn map_engine_error(error: EngineError, script_name: &str, line_adjust: usize) -
     }
 }
 
-/// Finds the first stack frame referencing `script_name` and returns its
-/// line/column, with the line adjusted to the user's script.
 fn first_frame_position(stack: &str, script_name: &str, line_adjust: usize) -> Option<(u32, u32)> {
     let needle = format!("{script_name}:");
     let pos = stack.find(&needle)?;
@@ -280,8 +231,6 @@ fn first_frame_position(stack: &str, script_name: &str, line_adjust: usize) -> O
     Some((adjusted_line(line, line_adjust), column))
 }
 
-/// Rewrites every `script_name:LINE:COL` occurrence in the stack so line
-/// numbers refer to the user's script text.
 fn adjust_stack(stack: &str, script_name: &str, line_adjust: usize) -> String {
     let needle = format!("{script_name}:");
     let mut out = String::with_capacity(stack.len());
@@ -304,8 +253,6 @@ fn adjust_stack(stack: &str, script_name: &str, line_adjust: usize) -> String {
     out
 }
 
-/// Subtracts the prologue line count, keeping a minimum of 1 (the reference
-/// uses `Math.max(1, line - lineOffset)`).
 fn adjusted_line(line: u32, line_adjust: usize) -> u32 {
     line.saturating_sub(line_adjust as u32).max(1)
 }

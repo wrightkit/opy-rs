@@ -399,9 +399,6 @@ impl<'a> Lowering<'a> {
         // table (`@Slot mccree` is a reference rejection).
         let member =
             enums::filter_member("Hero", &spelling, self.compiler.catalog).map_err(|error| {
-                // A `Hero.X`/`Team.X` argument spells the catalog member in
-                // `X`; probe it for a spelled-out correction before falling
-                // back to the generic message.
                 let member_part = argument
                     .text
                     .split_once('.')
@@ -592,9 +589,6 @@ impl<'a> Lowering<'a> {
         Ok(actions)
     }
 
-    /// `if condition: return` and `if condition: loop()` lower to a single
-    /// conditional action; with optimization a constant condition removes the
-    /// condition entirely.
     fn lower_terminal_if(
         &mut self,
         branch: &hir::types::IfBranch,
@@ -683,11 +677,6 @@ impl<'a> Lowering<'a> {
                     self.unsupported("backward goto is not representable in canonical WIR", span)
                 );
             }
-            // A deferred goto may sit inside a structured action, so this
-            // slice is not necessarily a standalone valid action sequence.
-            // The flat lowering stream has one action id per native action,
-            // including the structural markers that the jump must cross.
-            // Instructions dropped from the output must not widen the jump.
             let width = self.useful_actions(&actions[position + 1..target]).len();
             let distance = self.push_number(width as f64);
             let Some(Action::Call { args, .. }) = self.actions.get_mut(action) else {
@@ -901,11 +890,6 @@ impl<'a> Lowering<'a> {
         result
     }
 
-    /// Attribute the flattened `If`/`Else If`/`Else`/`End` markers of one
-    /// lowered `if` chain to the authored `elif`/`else`/dedent positions
-    /// instead of the `if` keyword span the blanket origin marker set.
-    /// Nested block openers consume `depth` so only this chain's markers are
-    /// matched.
     fn mark_if_chain_origins(
         &mut self,
         branches: &[hir::types::IfBranch],
@@ -919,10 +903,6 @@ impl<'a> Lowering<'a> {
             match self.actions.get(*action) {
                 Some(Action::If { .. }) => {
                     if depth == 0 {
-                        // The opener's marker is the `if` keyword itself —
-                        // the first branch's marker span — so lowering paths
-                        // that bypass the statement's blanket origin still
-                        // anchor the chain head.
                         if let Some(marker) = branches.first().and_then(|branch| branch.marker) {
                             self.action_origins[*action] = Some(marker);
                         }
@@ -1637,8 +1617,6 @@ impl<'a> Lowering<'a> {
             .collect();
         let offset_values = self.lower_array(offset_values);
         let offset_value = self.value(offset_values).clone();
-        // The selector's `valueInArray` already references the `offsets` node;
-        // replacing it in place fills the placeholder the selector holds.
         let Some(node) = self.values.get_mut(offsets) else {
             unreachable!("switch offset placeholder must exist")
         };
@@ -1790,8 +1768,6 @@ impl<'a> Lowering<'a> {
         fallback_span: Option<HirSpan>,
     ) -> Result<usize, IntegrationError> {
         let public_actions = self.public_actions(actions);
-        // action_width only consults the variable/subroutine declarations and
-        // builds its own rule; no other program state is read.
         let mut program = workshop_rs::Program::new();
         program.global_variables = self.program.global_variables.clone();
         program.player_variables = self.program.player_variables.clone();

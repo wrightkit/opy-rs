@@ -29,8 +29,6 @@ pub(crate) type MacroBindings<'a> = HashMap<&'a str, Expr>;
 pub(crate) struct MacroExpander<'a> {
     macros: HashMap<&'a str, (&'a [String], &'a [Stmt])>,
     stack: Vec<String>,
-    /// Relocate expanded spans to the invocation site; only the source
-    /// attribution pass sets it, so diagnostics keep the definition spans.
     attribute_to_site: bool,
 }
 
@@ -57,7 +55,6 @@ pub(crate) fn expand_macros(program: &hir::Program) -> Result<hir::Program, Inte
     expand_macros_with(program, false)
 }
 
-/// Expand macros with every expanded span attributed to its invocation site.
 pub(crate) fn expand_macros_attributed(
     program: &hir::Program,
 ) -> Result<hir::Program, IntegrationError> {

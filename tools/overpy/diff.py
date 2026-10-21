@@ -33,9 +33,6 @@ EXPECTED_COMPILER_COMPARISONS = {
 SOURCE_VISIBLE_CONTRACTS = {"debug-element-count"}
 NUMBER_TOKEN = re.compile(r"\d[\d.]*")
 
-# These rules classify the pinned oracle's recorded diagnostics, not a
-# support inventory. The native side uses structured diagnostic codes below;
-# the reference side intentionally derives its frontier from oracle text.
 REFERENCE_FRONTIER_RULES = (
     ("Invalid content before string", "lex", "lex-error"),
     ("ENOENT:", "preprocess", "script-not-found"),
@@ -210,8 +207,6 @@ def load_compiler_expectations(
                 raise DiffError(f"{fixture}: semantic-wir match requires equivalence")
             if case["relationship"] == "known-gap" and semantic_equivalent:
                 raise DiffError(f"{fixture}: semantic-wir known-gap requires non-equivalence")
-            # A recorded gap pins the exact differences it was approved for;
-            # a second divergence in the same fixture cannot hide behind it.
             pin = case.get("semanticDifferenceSha256")
             if semantic_equivalent:
                 if pin is not None:
@@ -734,12 +729,6 @@ def compare_compiler_fixture(
             )
             equivalent = semantic.get("equivalent")
             differences = semantic.get("differences")
-            # A comparison is coherent only when its verdict and its recorded
-            # evidence agree: `equivalent` claims the two programs converge
-            # exactly when no structural difference was recorded. A comparator
-            # that reports equivalence over a non-empty difference list, or a
-            # gap with no difference to show, is comparing something other
-            # than the two programs it names.
             consistent = (
                 equivalent is True
                 and (differences is None or differences == [])
@@ -878,8 +867,6 @@ def compare_compiler_fixture(
                 else "regression"
             )
     if expectation["relationship"] == "match" and oracle_status != native_status:
-        # Acceptance itself diverged inside a fixture that claims parity;
-        # no comparison stage may turn that into a match.
         stages.append(
             stage(
                 "acceptance-status",

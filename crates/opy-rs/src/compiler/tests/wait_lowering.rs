@@ -1,5 +1,3 @@
-//! Wait lowering against the pinned OverPy default and size-optimization semantics.
-
 use std::{collections::BTreeMap, path::Path};
 
 use crate::Compiler;

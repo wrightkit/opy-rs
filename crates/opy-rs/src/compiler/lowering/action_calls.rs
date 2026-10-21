@@ -454,8 +454,6 @@ impl<'a> Lowering<'a> {
             return Err(self.unsupported(format!("'{name}' is not a member action"), span));
         }
 
-        // `append` is an OPY mutation, represented by the canonical variable
-        // modify actions rather than a catalog action call.
         if matches!(function.id.as_str(), "append" | "remove") {
             let [value] = args else {
                 return Err(self.unsupported(

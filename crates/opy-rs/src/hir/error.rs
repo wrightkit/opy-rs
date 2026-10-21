@@ -6,17 +6,22 @@
 
 use crate::hir::types::Span;
 
-/// A structured Opy HIR v2 ingestion error.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HirError {
-    /// The payload is not valid JSON or does not fit the protocol envelope.
-    Malformed { code: &'static str, message: String },
+    Malformed {
+        code: &'static str,
+        message: String,
+    },
     /// Protocol identity or major version is not supported. Reported before
     /// any program-body inspection.
-    IncompatibleProtocol { expected: String, received: String },
-    /// A node kind the consumer does not understand.
-    UnsupportedNode { kind: String, span: Option<Span> },
-    /// A structural, provenance, identifier, or reference invariant failed.
+    IncompatibleProtocol {
+        expected: String,
+        received: String,
+    },
+    UnsupportedNode {
+        kind: String,
+        span: Option<Span>,
+    },
     Invalid {
         code: &'static str,
         message: String,
@@ -34,7 +39,6 @@ impl HirError {
         }
     }
 
-    /// Human-readable message.
     pub fn message(&self) -> String {
         match self {
             HirError::Malformed { message, .. } | HirError::Invalid { message, .. } => {
@@ -49,7 +53,6 @@ impl HirError {
         }
     }
 
-    /// The offending source span, when known.
     pub fn span(&self) -> Option<&Span> {
         match self {
             HirError::UnsupportedNode { span, .. } | HirError::Invalid { span, .. } => {
@@ -77,7 +80,6 @@ impl From<serde_json::Error> for HirError {
     }
 }
 
-/// Shorthand for an invalid-payload error with a stable code.
 pub(crate) fn invalid(
     code: &'static str,
     message: impl Into<String>,

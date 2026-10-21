@@ -29,32 +29,17 @@ const EMPTY_STRING_NAME: &str = "__emptyString__";
 enum Value {
     Number(f64),
     String(String),
-    /// Canonical localized-string preset id (Workshop `String` presets; the
-    /// OPY `l"..."` literal lowers here, wrapped in a `string` call).
     LocalizedString(String),
     Bool(bool),
     Null,
     Array(Vec<ValueId>),
-    Vector {
-        x: ValueId,
-        y: ValueId,
-        z: ValueId,
-    },
-    Enum {
-        value_type: String,
-        value: String,
-    },
+    Vector { x: ValueId, y: ValueId, z: ValueId },
+    Enum { value_type: String, value: String },
     GlobalVariable(String),
-    PlayerVariable {
-        player: ValueId,
-        variable: String,
-    },
+    PlayerVariable { player: ValueId, variable: String },
     Subroutine(String),
     EventPlayer,
-    Call {
-        name: String,
-        args: Vec<ValueId>,
-    },
+    Call { name: String, args: Vec<ValueId> },
 }
 
 #[derive(Debug, Clone)]
@@ -133,13 +118,7 @@ pub(crate) struct Lowering<'a> {
     optimized_nodes: HashMap<ValueId, bool>,
     optimization_mark: Option<bool>,
     optimization_override: Option<OptimizationState>,
-    /// Per-file `#!` directive lookup built once from the recorded
-    /// preprocessing events, so `optimization_state_at` does not scan every
-    /// directive for every lowered value.
     optimization_index: OptimizationIndex,
-    /// Every span handed to `optimization_state_at`, recorded so tests can
-    /// diff the index against the previous linear scan over real lowered
-    /// workloads.
     #[cfg(test)]
     pub(in crate::compiler) optimization_queries: std::cell::RefCell<Vec<Option<HirSpan>>>,
     used_maps: Vec<&'static str>,
@@ -162,14 +141,6 @@ type SwitchBreak = (usize, HirSpan);
 type LoweredSwitchBody = (Vec<ActionId>, Option<SwitchBreak>);
 type LoweredSwitchArm<'a> = (Option<&'a Expr>, Vec<ActionId>, Option<SwitchBreak>);
 
-/// Per-file index over `hir::PreprocessingState::directives` used by
-/// `optimization_state_at`.
-///
-/// Entries are the recorded directive events grouped by source file, each in
-/// the order they appear in `directives` (which is source order per file),
-/// carrying their start position and the optimization state they establish.
-/// Lookups reuse the same ordering the linear scan relied on: the last entry
-/// at or before the query position wins.
 pub(super) struct OptimizationIndex {
     files: HashMap<u32, Vec<(hir::Position, OptimizationState)>>,
 }
@@ -189,8 +160,6 @@ impl OptimizationIndex {
         Self { files }
     }
 
-    /// The state established by the last directive at or before `position`
-    /// in `file`, mirroring the linear scan's semantics exactly.
     fn state_at(&self, file: u32, position: hir::Position) -> Option<&OptimizationState> {
         let entries = self.files.get(&file)?;
         let index = entries.partition_point(|(start, _)| {
@@ -371,8 +340,6 @@ impl<'a> Lowering<'a> {
         let id = self.values.len();
         self.values.push(value);
         if let Some(strict) = self.optimization_mark {
-            // Nodes synthesized while lowering a source expression optimize
-            // like the expression's own nodes.
             self.optimized_nodes.insert(id, strict);
         }
         #[cfg(test)]
@@ -790,7 +757,6 @@ impl<'a> Lowering<'a> {
         )))
     }
 
-    /// Modifications the pinned reference drops as useless instructions.
     fn useful_actions(&self, actions: &[ActionId]) -> Vec<ActionId> {
         actions
             .iter()
@@ -1491,10 +1457,6 @@ fn is_membership_literal(expr: &hir::Expr, strict: bool) -> bool {
     }
 }
 
-/// Canonical call heads the pinned reference does not wrap in
-/// `Update Every Frame` when they appear as the `String Replace`
-/// replacement: the self-reevaluating forms in the upstream `.replace`
-/// emission whitelist.
 const STRING_REPLACE_PASSTHROUGH_CALLS: &[&str] = &[
     "abilityIconString",
     "add",
@@ -1543,10 +1505,6 @@ const STRING_REPLACE_PASSTHROUGH_CALLS: &[&str] = &[
     "valueInArray",
 ];
 
-/// Whether the reference keeps a `String Replace` replacement unwrapped:
-/// the call whitelist plus the node kinds it names (`__array__`,
-/// `__customString__`, `__localizedString__`, `__globalVar__`,
-/// `__playerVar__`, `__color__`).
 fn string_replace_passthrough(value: &workshop_rs::Value) -> bool {
     match value {
         workshop_rs::Value::Array(_)
@@ -1985,9 +1943,6 @@ fn modify_operator(op: &str) -> Option<(ModifyOp, &'static str)> {
     })
 }
 
-/// Words the Workshop refuses in a rule name. Each entry is the text before the
-/// soft hyphen, the text after it, and whether the word must stand alone.
-/// The pinned OverPy applies them in this order, each over the whole name.
 const FILTERED_RULE_NAME_WORDS: [(&str, &str, bool); 28] = [
     ("1", "488", false),
     ("a", "ccount", false),
@@ -2019,9 +1974,6 @@ const FILTERED_RULE_NAME_WORDS: [(&str, &str, bool); 28] = [
     ("s", "witzerland", true),
 ];
 
-/// Rule names and the `Mode Name` and `Description` settings strings lose
-/// invisible formatting characters, and the Workshop's filtered words are split
-/// with a soft hyphen, as the pinned OverPy does when it writes them.
 pub(super) fn escape_bad_words(name: &str) -> String {
     let mut text: Vec<char> = crate::lower::strip_rule_name_formatting(name).collect();
     for (head, tail, standalone) in FILTERED_RULE_NAME_WORDS {
@@ -2040,8 +1992,6 @@ fn is_word_character(character: char) -> bool {
     character.is_ascii_alphanumeric() || character == '_'
 }
 
-/// Puts a soft hyphen between `head` and `tail` in every case-insensitive
-/// occurrence of `head` + `tail`, left to right without overlap.
 fn split_filtered_word(text: &[char], head: &str, tail: &str, standalone: bool) -> Vec<char> {
     let word: Vec<char> = head.chars().chain(tail.chars()).collect();
     let head_length = head.chars().count();
@@ -2072,8 +2022,6 @@ fn split_filtered_word(text: &[char], head: &str, tail: &str, standalone: bool) 
     result
 }
 
-/// The canonical Workshop value for an OverPy setting function, and its
-/// parameter count without the trailing sort order.
 fn workshop_setting_call(name: &str) -> (&str, usize) {
     match name {
         "createWorkshopSettingBool" => ("workshopSettingToggle", 3),
@@ -2106,8 +2054,6 @@ fn split_spaced_rigger(text: &[char]) -> Vec<char> {
     result
 }
 
-/// Where the soft hyphen goes and where the match ends when `r i gg e r`
-/// starts at `start`.
 fn spaced_rigger_match(text: &[char], start: usize) -> Option<(usize, usize)> {
     let mut position = start + 1;
     let mut split = None;
@@ -2136,8 +2082,6 @@ const BUGGED_MAPS: [&str; 4] = ["COLOSSEO", "ESPERANCA", "SAMOA", "THRONE_OF_ANU
 /// with `THRONE_OF_ANUBIS` as it is, though a bare current map still filters it.
 const TEXT_COMPARED_MAPS: [&str; 3] = ["COLOSSEO", "ESPERANCA", "SAMOA"];
 
-/// The maps named anywhere in the program whose value comparison the
-/// Workshop gets wrong.
 fn used_bugged_maps(hir: &hir::Program) -> Vec<&'static str> {
     struct MapFinder<'a> {
         found: &'a mut HashSet<String>,

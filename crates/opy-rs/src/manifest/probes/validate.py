@@ -31,7 +31,6 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-# crates/opy-rs/src/manifest/probes -> repository root (5 levels up).
 WORKSPACE = os.path.abspath(os.path.join(HERE, "..", "..", "..", "..", ".."))
 ORACLE = os.path.join(
     WORKSPACE, "tools", "overpy", "oracle", "node_modules", "overpy", "cli.js"

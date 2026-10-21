@@ -53,8 +53,6 @@ impl Preprocessor {
         span: Span,
         out: &mut Vec<Token>,
     ) -> OpyResult<()> {
-        // Includes resolve relative to the source file containing the
-        // directive. The main source uses the project root as its base.
         let include = include.replace('\\', "/");
         let candidate = self.include_base().join(&include);
         let canonical = std::fs::canonicalize(&candidate).ok();

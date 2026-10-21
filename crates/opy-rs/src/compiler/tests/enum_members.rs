@@ -1,5 +1,3 @@
-//! Oracle-backed coverage for numeric enum members.
-
 use std::path::{Path, PathBuf};
 
 use crate::{CompileFailureClass, CompileStatus, Compiler};
@@ -57,8 +55,6 @@ fn invalid_numeric_and_named_team_members_keep_frontend_diagnostics() {
             .first()
             .expect("invalid member must report a diagnostic");
         assert_eq!(diagnostic.code, "unknown-enum-member");
-        // The message carries the member candidates of the Team domain
-        // (issue #469).
         assert!(
             diagnostic
                 .message

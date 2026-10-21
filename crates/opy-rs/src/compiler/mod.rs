@@ -1,10 +1,3 @@
-//! OPY-to-Workshop integration, kept behind the `opy-rs` library boundary.
-//!
-//! This module consumes the public `workshop-rs` contract, checks OPY manifest
-//! links against the canonical catalog, and lowers supported OPY program
-//! structure into the canonical Workshop `Program` before validation and
-//! deterministic Workshop emission.
-
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use crate::hir::{self, Expr, RuleEntry, Span as HirSpan, Stmt, SwitchArm, default_var_index};
@@ -306,17 +299,14 @@ fn collect_element_nodes<'a>(
     }
 }
 
-/// Version of the machine-readable compile report contract.
 pub const COMPILE_SCHEMA_VERSION: u32 = 1;
 
-/// Stable identity of the compiler that produced a compile report.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct CompilerIdentity {
     pub name: &'static str,
     pub version: &'static str,
 }
 
-/// Whether compilation produced a valid Workshop artifact.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum CompileStatus {
@@ -324,7 +314,6 @@ pub enum CompileStatus {
     Failure,
 }
 
-/// Stable classification for a compile failure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum CompileFailureClass {
@@ -332,7 +321,6 @@ pub enum CompileFailureClass {
     Integration,
 }
 
-/// A versioned, source-attributed diagnostic exposed by the compile API.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CompileDiagnostic {
@@ -344,7 +332,6 @@ pub struct CompileDiagnostic {
     pub script: Option<ScriptDiagnostic>,
 }
 
-/// The machine-readable result for one compile operation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CompileResult {
@@ -357,7 +344,6 @@ pub struct CompileResult {
     pub workshop: String,
 }
 
-/// Complete versioned compile report for CLI, CI, and embedding consumers.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CompileReport {
@@ -376,7 +362,6 @@ impl CompilerIdentity {
     }
 }
 
-/// A source-attributed integration diagnostic.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IntegrationDiagnostic {
     pub code: String,
@@ -385,7 +370,6 @@ pub struct IntegrationDiagnostic {
     pub script: Option<Box<ScriptDiagnostic>>,
 }
 
-/// Script-runtime provenance retained alongside the OPY directive anchor.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ScriptDiagnostic {
@@ -406,7 +390,6 @@ impl IntegrationDiagnostic {
     }
 }
 
-/// An integration boundary failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IntegrationError {
     pub diagnostic: IntegrationDiagnostic,
@@ -476,13 +459,10 @@ impl Compiler {
         self.links
     }
 
-    /// Lower a resolved OPY HIR program into the canonical Workshop `Program`, validate it
-    /// against the canonical catalog, and emit deterministic en-US Workshop.
     pub fn compile_hir(&self, hir: &hir::Program) -> Result<CompilationArtifact, IntegrationError> {
         self.compile_hir_with_locale(hir, &Locale::new("en-US"))
     }
 
-    /// Lower and emit using a locale declared by the canonical catalog.
     pub fn compile_hir_with_locale(
         &self,
         hir: &hir::Program,
@@ -573,8 +553,6 @@ impl Compiler {
         self.compile_hir_mapped_with_locale(hir, &Locale::new("en-US"))
     }
 
-    /// [`Self::compile_hir_mapped`] using a locale declared by the canonical
-    /// catalog.
     pub fn compile_hir_mapped_with_locale(
         &self,
         hir: &hir::Program,
@@ -594,16 +572,6 @@ impl Compiler {
         Ok((artifact, mapped))
     }
 
-    /// Pair emitted Workshop `text` with the source map of its authored origin.
-    /// `hir` is the program `text` was emitted from in this operation. Spans
-    /// come from a second lowering that attributes macro-expanded code to its
-    /// invocation site, so diagnostics keep their spans.
-    ///
-    /// When `text` is still this program's verbatim emission the map applies
-    /// by construction, so the proof is discharged without re-parsing. Text
-    /// rewritten by post-compile directives or hooks is instead proven against
-    /// its re-parse, so a program shape that differs is reported instead of
-    /// yielding displaced spans.
     fn mapped_text(
         &self,
         hir: &hir::Program,
@@ -630,14 +598,6 @@ impl Compiler {
         Ok(MappedText::new(text.to_owned(), map))
     }
 
-    /// Re-parse hook-rewritten Workshop `text` under `locale` and re-run the
-    /// canonical validation and emission a consumer of the artifact applies.
-    /// Emission output round-trips under its own locale by construction, but
-    /// a post-compile rewrite can introduce spellings the emitter never
-    /// produced — an enum member spelling valid in one locale and unknown in
-    /// the active one — which is rejected here instead of surfacing only in
-    /// the artifact's consumer (issue #620). `span` anchors the failure at
-    /// the declaring post-compile directive.
     fn validate_final_output(
         &self,
         hir: &hir::Program,
@@ -667,11 +627,6 @@ impl Compiler {
         Ok(())
     }
 
-    /// Compile source using the default `en-US` catalog locale.
-    ///
-    /// This is the ordinary embedding API. It returns Workshop text and does
-    /// not require callers to construct a `workshop-rs` locale or understand
-    /// canonical Workshop types.
     pub fn compile_source(
         &self,
         source: &str,
@@ -681,8 +636,6 @@ impl Compiler {
         self.compile_source_with_language(source, main_path, root, "en-US")
     }
 
-    /// Compile source using a catalog locale name without exposing the
-    /// `workshop-rs` locale type to ordinary embedding callers.
     pub fn compile_source_with_language(
         &self,
         source: &str,
@@ -694,10 +647,6 @@ impl Compiler {
             .map(CompilationArtifact::into_output)
     }
 
-    /// Compile source with an explicit canonical Workshop locale.
-    ///
-    /// This is an advanced integration API. Use [`Self::compile_source`] or
-    /// [`Self::compile_source_with_language`] for ordinary embedding.
     pub fn compile_source_with_locale(
         &self,
         source: &str,
@@ -708,8 +657,6 @@ impl Compiler {
         self.compile_source_internal(source, main_path, root, locale)
     }
 
-    /// Compile source and return the canonical Workshop artifact for advanced
-    /// integrations.
     pub fn compile_source_artifact(
         &self,
         source: &str,
@@ -719,8 +666,6 @@ impl Compiler {
         self.compile_source_with_locale(source, main_path, root, &Locale::new("en-US"))
     }
 
-    /// Compile source into the versioned machine-readable result contract
-    /// using the default `en-US` catalog locale.
     pub fn compile_source_report(
         &self,
         source: &str,
@@ -730,8 +675,6 @@ impl Compiler {
         self.compile_source_report_with_language(source, main_path, root, "en-US")
     }
 
-    /// Compile source into the versioned machine-readable result contract
-    /// using a catalog locale name.
     pub fn compile_source_report_with_language(
         &self,
         source: &str,
@@ -742,8 +685,6 @@ impl Compiler {
         self.compile_source_report_with_locale(source, main_path, root, &Locale::new(language))
     }
 
-    /// Compile source into the report contract with an explicit canonical
-    /// Workshop locale. This is an advanced integration API.
     pub fn compile_source_report_with_locale(
         &self,
         source: &str,
@@ -755,8 +696,6 @@ impl Compiler {
             .0
     }
 
-    /// Like [`Compiler::compile_source_report_with_language`], and on success
-    /// also returns the mapped Workshop text of the same compile.
     pub fn compile_source_report_mapped_with_language(
         &self,
         source: &str,
@@ -767,10 +706,6 @@ impl Compiler {
         self.compile_source_report_impl(source, main_path, root, &Locale::new(language), true)
     }
 
-    /// Compile a resolved [`crate::CompileOutcome`] into the report contract
-    /// using a catalog locale name, reusing the caller's frontend result
-    /// instead of re-running preprocessing, parsing, and lowering. This is an
-    /// advanced integration API for hosts that already ran the frontend.
     pub fn compile_outcome_report_with_language(
         &self,
         outcome: crate::CompileOutcome,
@@ -781,8 +716,6 @@ impl Compiler {
             .0
     }
 
-    /// Like [`Self::compile_outcome_report_with_language`], and on success also
-    /// returns the mapped Workshop text of the same compile.
     pub fn compile_outcome_report_mapped_with_language(
         &self,
         outcome: crate::CompileOutcome,
@@ -945,13 +878,6 @@ pub(crate) fn workshop_error_span(
     }
 }
 
-/// The diagnostic code a re-emission failure carries at the hook-output
-/// boundary. `Unknown` spellings report `unknown-{kind}` — the same code the
-/// frontend assigns enum member rejections and Wright's `workshop_diag`
-/// mapping derives — so a localized spelling the active locale rejects keeps
-/// one code wherever it is discovered (issue #620). `check` surfaces exactly
-/// this spelling-rejection class while every other emission failure stays
-/// `workshop-emission`.
 fn spelling_rejection_code(error: &workshop_rs::WorkshopError) -> String {
     match error {
         workshop_rs::WorkshopError::Unknown { kind, .. }
@@ -1099,10 +1025,6 @@ fn normalize_workshop(text: &str) -> String {
     }
 }
 
-/// A source compile result for ordinary embedding callers.
-///
-/// The result contains only emitted text and hook output. Callers that need
-/// the canonical Workshop `Program` should use the explicit advanced artifact APIs instead.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompileOutput {
     /// Workshop text after a declared post-compile hook, if any.
@@ -1113,8 +1035,6 @@ pub struct CompileOutput {
     pub hook_console_output: Vec<String>,
 }
 
-/// A validated canonical Workshop `Program` and its emitted Workshop artifact for advanced
-/// integrations.
 pub struct CompilationArtifact {
     pub wir: Program,
     pub emitted: String,
@@ -1321,10 +1241,6 @@ mod tests {
 
     #[test]
     fn stale_catalog_links_fail_explicitly() {
-        // A manifest whose entry links to a catalog id the catalog does not
-        // declare is invalid input; construct it before `Manifest::load`, the
-        // supported custom-manifest boundary, rather than mutating validated
-        // state (#455).
         let mut data: serde_json::Value =
             serde_json::from_str(crate::manifest::MANIFEST_DATA).unwrap();
         data["functions"][0]["catalogId"] = serde_json::json!("missing-catalog-id");
@@ -1388,8 +1304,6 @@ mod tests {
                 .line,
             5
         );
-        // The `End` marker stands at the dedent boundary — the first token
-        // after the chain — rather than the `if` keyword line.
         assert_eq!(artifact.wir.action_span(1, 2).unwrap().start.line, 6);
     }
 
@@ -1503,7 +1417,6 @@ mod tests {
             by_name,
             std::collections::BTreeMap::from([("first", 1), ("reserved", 0), ("next", 2)])
         );
-        // Variable tables are emitted in Workshop index order.
         let indices = artifact
             .wir
             .global_variables
@@ -2049,8 +1962,6 @@ rule "expressions":
         .unwrap();
         let artifact = compiler.compile_hir(&hir).unwrap();
         assert!(artifact.emitted.contains("Global.total == 0;"));
-        // `not (pos == vect(0, 0, 0))` lowers to the negated comparison,
-        // mirroring the pinned OverPy oracle.
         assert!(artifact.emitted.contains("Global.pos != Vector(0, 0, 0);"));
         assert!(
             artifact

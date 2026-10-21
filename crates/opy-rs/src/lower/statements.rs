@@ -104,8 +104,6 @@ impl Lowerer {
     ) -> HirStmt {
         match stmt {
             Stmt::Expr { expr, span } => {
-                // A bare call of a declared subroutine becomes
-                // `CallSubroutine` (reference behavior).
                 if let Expr::Call { name, args, .. } = expr
                     && self.subroutine_visible(name)
                     && args.is_empty()

@@ -1,5 +1,3 @@
-//! Source-semantic failure-frontier evidence.
-
 use std::path::Path;
 
 use crate::{CompileFailureClass, CompileStatus, Compiler};

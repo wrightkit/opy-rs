@@ -1,5 +1,3 @@
-//! Scoped directive lowering against the pinned canonical-WIR oracle.
-
 use std::path::{Path, PathBuf};
 
 use crate::Compiler;

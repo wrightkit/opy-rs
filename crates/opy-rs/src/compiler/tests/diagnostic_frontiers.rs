@@ -1,5 +1,3 @@
-//! Pinned source failure-frontier coverage for real and synthetic projects.
-
 use std::path::{Path, PathBuf};
 
 use crate::{CompileFailureClass, CompileStatus, Compiler};

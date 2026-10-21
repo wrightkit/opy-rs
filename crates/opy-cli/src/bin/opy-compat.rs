@@ -1,9 +1,3 @@
-//! Internal compatibility comparison producer.
-//!
-//! This target is built only by the compatibility gate. It is deliberately
-//! separate from `opy-cli compile`: pinned oracle input must never become part
-//! of the supported compiler API or report schema.
-
 #[path = "opy-compat/probe.rs"]
 mod probe;
 #[path = "opy-compat/structural.rs"]
@@ -166,9 +160,6 @@ fn run() -> Result<CompatibilityResult, String> {
     })
 }
 
-/// `project-compare --source <entry> --root <dir> --reference <workshop>`:
-/// compile a project natively and compare it with an already compiled
-/// reference output.
 fn project_compare<I: Iterator<Item = String>>(mut args: I) -> Result<ProjectComparison, String> {
     let (mut source, mut root, mut reference) = (None, None, None);
     while let Some(argument) = args.next() {
@@ -200,9 +191,6 @@ fn project_compare<I: Iterator<Item = String>>(mut args: I) -> Result<ProjectCom
     })
 }
 
-/// Compile `source_text` natively and parse both it and the reference output
-/// with the same parser, so representation choices in the in-memory program do
-/// not count.
 fn compile_and_parse(
     source: &std::path::Path,
     root: &std::path::Path,

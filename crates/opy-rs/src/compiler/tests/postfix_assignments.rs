@@ -1,5 +1,3 @@
-//! Oracle-backed postfix increment/decrement assignment evidence.
-
 use std::path::{Path, PathBuf};
 
 use crate::Compiler;

@@ -1,11 +1,3 @@
-//! Equivalence checks for the per-file `#!` directive index behind
-//! `optimization_state_at`.
-//!
-//! The lowering path once answered every query with a linear scan over all
-//! recorded directive events; the index must return the same state for every
-//! span lowering ever asks about. The old scan is retained as
-//! `Lowering::optimization_state_scan` (test-only) and is the oracle here.
-
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -13,7 +5,6 @@ use crate::compiler::{Compiler, Lowering};
 use crate::hir::{self, Position, Span};
 use workshop_rs::catalog::Locale;
 
-/// Bastion project checkout used by the issue-596 measurement harness.
 const BASTION_PROJECT_ENV: &str = "OPY_BASTION_PROJECT";
 
 fn bastion_project() -> Option<PathBuf> {
@@ -23,9 +14,6 @@ fn bastion_project() -> Option<PathBuf> {
 fn lower_and_collect_queries(hir: &hir::Program) -> Vec<Option<Span>> {
     let compiler = Compiler::new().expect("Workshop contract must load");
     let mut lowering = Lowering::new(&compiler, hir);
-    // Lower as much as the program supports; a fixture that reaches an
-    // unsupported backend surface still exercises every query recorded on
-    // the way to the error.
     let _ = lowering
         .copy_files(&Locale::new("en-US"))
         .and_then(|_| lowering.lower_declarations())
@@ -38,8 +26,6 @@ fn assert_index_matches_scan(hir: &hir::Program, spans: &[Option<Span>]) {
     let lowering = Lowering::new(&compiler, hir);
     for (index, span) in spans.iter().enumerate() {
         let via_index = lowering.optimization_state_at(span.as_ref());
-        // `optimization_state_at` records the query again; drop the extra
-        // entries so the collected span set is compared once.
         lowering.optimization_queries.take();
         let via_scan = lowering.optimization_state_scan(span.as_ref());
         assert_eq!(
@@ -51,10 +37,6 @@ fn assert_index_matches_scan(hir: &hir::Program, spans: &[Option<Span>]) {
 
 #[test]
 fn optimization_index_matches_scan_on_synthetic_edge_cases() {
-    // Exercise every span shape `optimization_state_at` sees: no span,
-    // positions before the first directive of a file, between directives,
-    // on the same line/col boundary as a directive, in included files, and
-    // spans referencing files that carry no directives at all.
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/corpus/synthetic/optimization-state-edge");
     let source = std::fs::read_to_string(dir.join("source.opy")).unwrap();
@@ -63,9 +45,6 @@ fn optimization_index_matches_scan_on_synthetic_edge_cases() {
     let mut spans = lower_and_collect_queries(&hir);
     spans.push(None);
 
-    // Hand-picked edge spans: unknown file ids, positions before any
-    // directive of a directive-bearing file, exact directive positions, and
-    // end-of-file positions.
     let files: Vec<u32> = hir
         .preprocessing
         .directives
@@ -81,7 +60,6 @@ fn optimization_index_matches_scan_on_synthetic_edge_cases() {
     };
     for directive in &hir.preprocessing.directives {
         if let Some(directive_span) = directive.span {
-            // At the directive itself and one column before it.
             spans.push(Some(directive_span));
             spans.push(Some(Span {
                 start: position(
@@ -90,7 +68,6 @@ fn optimization_index_matches_scan_on_synthetic_edge_cases() {
                 ),
                 ..directive_span
             }));
-            // The end position of the directive line's file.
             spans.push(Some(span(
                 directive_span.file,
                 directive_span.end.line,
@@ -108,10 +85,6 @@ fn optimization_index_matches_scan_on_synthetic_edge_cases() {
 
 #[test]
 fn optimization_index_matches_scan_over_corpus_fixtures() {
-    // Every span lowered by the shipped corpus fixtures must agree between
-    // the index and the linear scan. This is the broad regression net for
-    // `#!` directive scoping (`#!optimizeFor`, `#!optimizeSize`, …) across
-    // multi-file projects.
     let corpus = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("..")
         .join("..")
@@ -135,10 +108,6 @@ fn optimization_index_matches_scan_over_corpus_fixtures() {
 
 #[test]
 fn optimization_index_matches_scan_on_bastion_project() {
-    // The full Bastion workload from issue #596: every span the lowering
-    // pass queries must return the same state from the index as from the
-    // original linear scan. Skipped unless OPY_BASTION_PROJECT points at a
-    // Bastion checkout.
     let Some(project_dir) = bastion_project() else {
         eprintln!("skipping Bastion equivalence check: {BASTION_PROJECT_ENV} is not set");
         return;

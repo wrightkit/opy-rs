@@ -1,5 +1,3 @@
-//! Canonical compiler coverage for string continuations.
-
 use std::path::Path;
 
 use crate::Compiler;

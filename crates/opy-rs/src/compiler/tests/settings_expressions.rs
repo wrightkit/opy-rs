@@ -1,5 +1,3 @@
-//! Settings compile-time expression coverage.
-
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -382,7 +380,6 @@ fn general_keys_reject_directly_under_teams_and_accept_under_general() {
             CompileStatus::Failure,
             "{team} general keys directly under the team must reject"
         );
-        // `check` and `compile` share the emission-acceptance pass (#411).
         let outcome = crate::tooling::check(&direct, "issue-545.opy", Path::new("."));
         for key in general_keys {
             let needle = format!("'{key}'");
@@ -443,8 +440,6 @@ fn general_keys_compile_under_a_concrete_hero() {
 
 #[test]
 fn misplaced_general_key_names_general_as_the_valid_location() {
-    // #545 asks the rejection to name the valid location: a catalogued
-    // `general` key at the hero-name position suggests the `general` group.
     let source = source_with_settings(
         "settings { \"gamemodes\": {}, \"heroes\": { \"allTeams\": { \"health%\": 100 } } }",
     );
