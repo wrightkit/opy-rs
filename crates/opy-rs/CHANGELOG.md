@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.22](https://github.com/wrightkit/opy-rs/compare/v0.3.21...v0.3.22) - 2026-10-20
+
+### Fixed
+
+- *(opy-rs)* build settings conversion against workshop-rs 1.22 ([#632](https://github.com/wrightkit/opy-rs/pull/632))
+- *(opy-rs)* regenerate hero settings applicability from the 9.7.17 oracle ([#629](https://github.com/wrightkit/opy-rs/pull/629))
+- *(opy-rs)* keep literal 1 in rule-condition comparison operands under optimizeForSize ([#628](https://github.com/wrightkit/opy-rs/pull/628))
+
 ## [0.3.21](https://github.com/wrightkit/opy-rs/compare/v0.3.20...v0.3.21) - 2026-10-20
 
 ### Fixed
