@@ -209,7 +209,7 @@ mod tests {
     #[test]
     fn unreadable_entry_reports_unreadable() {
         use std::os::unix::fs::PermissionsExt;
-        if unsafe { libc::geteuid() } == 0 {
+        if nix::unistd::geteuid().is_root() {
             return;
         }
         let dir = scratch("denied");

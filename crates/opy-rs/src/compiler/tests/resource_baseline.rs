@@ -537,19 +537,15 @@ fn rustc_version() -> String {
 
 #[cfg(unix)]
 fn peak_rss_bytes() -> Option<u64> {
-    let mut usage = std::mem::MaybeUninit::<libc::rusage>::zeroed();
-    let result = unsafe { libc::getrusage(libc::RUSAGE_SELF, usage.as_mut_ptr()) };
-    if result != 0 {
-        return None;
-    }
-    let usage = unsafe { usage.assume_init() };
+    let usage = nix::sys::resource::getrusage(nix::sys::resource::UsageWho::RUSAGE_SELF).ok()?;
+    // `ru_maxrss` is bytes on macOS and kilobytes on Linux.
     #[cfg(target_os = "macos")]
     {
-        u64::try_from(usage.ru_maxrss).ok()
+        u64::try_from(usage.max_rss()).ok()
     }
     #[cfg(not(target_os = "macos"))]
     {
-        u64::try_from(usage.ru_maxrss).ok()?.checked_mul(1024)
+        u64::try_from(usage.max_rss()).ok()?.checked_mul(1024)
     }
 }
 
