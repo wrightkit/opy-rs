@@ -17,7 +17,7 @@ use crate::manifest::{Function, FunctionKind, Manifest};
 mod settings;
 mod settings_json;
 
-const DECLARATION_SLOT_RANGE: std::ops::RangeInclusive<u32> = 0..=127;
+const DECLARATION_SLOT_RANGE: std::ops::Range<u32> = 0..128;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReconstructIssue {
@@ -741,12 +741,11 @@ impl<'a> Emitter<'a> {
                 if dunder != high {
                     continue;
                 }
+                let mut range = DECLARATION_SLOT_RANGE;
                 let slot = if high {
-                    DECLARATION_SLOT_RANGE
-                        .rev()
-                        .find(|slot| !taken.contains(slot))
+                    range.rev().find(|slot| !taken.contains(slot))
                 } else {
-                    DECLARATION_SLOT_RANGE.find(|slot| !taken.contains(slot))
+                    range.find(|slot| !taken.contains(slot))
                 };
                 if slot != Some(index) {
                     self.issues.push(ReconstructIssue {
