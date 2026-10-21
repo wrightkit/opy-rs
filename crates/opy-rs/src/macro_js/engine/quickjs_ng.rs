@@ -36,6 +36,9 @@ impl QuickJsEngine {
         crate::resource_metrics::record_macro_engine_creation();
         #[cfg(test)]
         let started = Instant::now();
+        // SAFETY: `runtime`/`context` are created here, owned by the returned
+        // engine, and freed once in `Drop`; every JS_* call uses those live
+        // engine-owned pointers.
         unsafe {
             let runtime = q::JS_NewRuntime();
             if runtime.is_null() {
@@ -64,6 +67,9 @@ impl QuickJsEngine {
     }
 
     pub(crate) fn install_console(&mut self) -> Result<(), EngineError> {
+        // SAFETY: `self.context` is live for the engine lifetime and `sink_value`
+        // carries a pointer to `self.console_lines`, which the engine owns for
+        // as long as the context exists (freed after it in `Drop`).
         unsafe {
             let sink_value = q::JS_Ext_NewPointer(
                 q::JS_TAG_UNDEFINED,
@@ -111,6 +117,9 @@ impl QuickJsEngine {
             .map_err(|_| EngineError::Internal("script contains a NUL byte".into()))?;
         let filename = CString::new(filename)
             .map_err(|_| EngineError::Internal("script name contains a NUL byte".into()))?;
+        // SAFETY: `self.runtime`/`self.context` are live; `source` and
+        // `filename` outlive the `JS_Eval` call; every JSValue obtained here is
+        // freed before returning.
         unsafe {
             // Anchor the stack-size measurement at this entry point so the JS
             // stack limit is measured from here rather than from wherever the
@@ -160,6 +169,9 @@ impl QuickJsEngine {
 
     pub(crate) fn set_interrupt_deadline(&mut self, deadline: Option<Instant>) {
         self.interrupt_deadline = deadline;
+        // SAFETY: `self.runtime` is live; `opaque` points at the engine-owned
+        // `interrupt_deadline`, which stays valid while the handler is armed
+        // (it is disarmed in `Drop` before the runtime is freed).
         unsafe {
             q::JS_SetInterruptHandler(
                 self.runtime,
@@ -181,6 +193,8 @@ impl QuickJsEngine {
     /// `obj` must be a live JSValue owned by `self.context`; the property is
     /// freed before returning.
     unsafe fn prop_string_or(&self, obj: q::JSValue, name: &CStr, fallback: String) -> String {
+        // SAFETY: `self.context` and `obj` satisfy this fn's contract; `value`
+        // is freed before returning.
         unsafe {
             let value = q::JS_GetPropertyStr(self.context, obj, name.as_ptr());
             let is_string = q::JS_Ext_IsString(value);
@@ -200,6 +214,8 @@ impl QuickJsEngine {
     ///
     /// `value` must be a live JSValue owned by `self.context`.
     unsafe fn value_string(&self, value: q::JSValue) -> String {
+        // SAFETY: `self.context` and `value` satisfy this fn's contract; `raw`
+        // is freed before returning and the pending exception is cleared.
         unsafe {
             let raw = q::JS_ToCStringLen2(self.context, ptr::null_mut(), value, true);
             if raw.is_null() {
@@ -224,6 +240,8 @@ impl QuickJsEngine {
     ///
     /// `value` must be a live JSValue owned by `self.context`.
     unsafe fn typeof_name(&self, value: q::JSValue) -> &'static str {
+        // SAFETY: `self.context` and `value` satisfy this fn's contract; the
+        // tag predicates borrow `value` without taking ownership.
         unsafe {
             if q::JS_Ext_IsUndefined(value) {
                 "undefined"
@@ -255,6 +273,8 @@ impl QuickJsEngine {
     /// Must only be called right after a QuickJS call failed with a pending
     /// exception on `self.context`.
     unsafe fn internal_from_pending(&self, context: &str) -> EngineError {
+        // SAFETY: `self.context` is live per this fn's contract; `exception`
+        // is owned and freed before the block ends.
         let message = unsafe {
             if q::JS_HasException(self.context) {
                 let exception = q::JS_GetException(self.context);
@@ -273,6 +293,8 @@ impl Drop for QuickJsEngine {
     fn drop(&mut self) {
         #[cfg(test)]
         let started = Instant::now();
+        // SAFETY: the interrupt handler is disarmed first so it cannot observe
+        // freed state, then the engine-owned context and runtime are freed once.
         unsafe {
             q::JS_SetInterruptHandler(self.runtime, None, ptr::null_mut());
             q::JS_FreeContext(self.context);
@@ -295,6 +317,9 @@ impl Drop for QuickJsEngine {
 /// `opaque` must point to the engine's `interrupt_deadline` field; the handler
 /// is only invoked while the engine is alive (during JS execution).
 unsafe extern "C" fn interrupt_handler(_runtime: *mut q::JSRuntime, opaque: *mut c_void) -> c_int {
+    // SAFETY: `opaque` is the pointer to the engine's `interrupt_deadline`
+    // field armed in `set_interrupt_deadline`; the handler runs only while the
+    // engine is alive, so the pointee is valid.
     let deadline = unsafe { &*(opaque as *const Option<Instant>) };
     match deadline {
         Some(deadline) if Instant::now() >= *deadline => 1,
@@ -318,13 +343,20 @@ unsafe extern "C" fn console_log(
     _magic: c_int,
     func_data: *mut q::JSValue,
 ) -> q::JSValue {
+    // SAFETY: `func_data` carries the pointer to the engine's `console_lines`
+    // created in `install_console`; the engine outlives this call.
     let sink = unsafe { &mut *((*func_data).u.ptr as *mut Vec<String>) };
     let mut rendered = Vec::with_capacity(argc as usize);
     for i in 0..argc {
+        // SAFETY: QuickJS passes `argv` pointing at `argc` live JSValues owned
+        // by `context`.
         let arg = unsafe { *argv.add(i as usize) };
+        // SAFETY: `arg` is a live JSValue owned by `context`, as `stringify_arg`
+        // requires.
         rendered.push(unsafe { stringify_arg(context, arg) });
     }
     sink.push(rendered.join(" "));
+    // SAFETY: constructing a tagged undefined value touches no borrowed state.
     unsafe { q::JS_Ext_NewSpecialValue(q::JS_TAG_UNDEFINED, 0) }
 }
 
@@ -336,14 +368,22 @@ unsafe extern "C" fn console_log(
 ///
 /// `arg` must be a live JSValue owned by `context`.
 unsafe fn stringify_arg(context: *mut q::JSContext, arg: q::JSValue) -> String {
+    // SAFETY: `context` and `arg` satisfy this fn's contract; `raw`, when
+    // non-null, is context-owned and freed before returning.
     let raw = unsafe { q::JS_ToCStringLen2(context, ptr::null_mut(), arg, true) };
     if raw.is_null() {
+        // SAFETY: `context` is live.
         if unsafe { q::JS_HasException(context) } {
+            // SAFETY: `context` is live and carries a pending exception; the
+            // returned value is owned and freed next.
             let exception = unsafe { q::JS_GetException(context) };
+            // SAFETY: `exception` is owned by this scope and freed once.
             unsafe { q::JS_FreeValue(context, exception) };
         }
         return String::from("[unserializable]");
     }
+    // SAFETY: `raw` is a context-owned C string; it is copied out and freed
+    // before returning.
     unsafe {
         let s = CStr::from_ptr(raw).to_string_lossy().into_owned();
         q::JS_FreeCString(context, raw);

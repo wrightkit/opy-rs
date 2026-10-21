@@ -1,3 +1,5 @@
+// The QuickJS-NG FFI boundary is the workspace's only allowed `unsafe` site.
+#[allow(unsafe_code)]
 pub(crate) mod quickjs_ng;
 
 use std::fmt;
