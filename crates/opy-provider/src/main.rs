@@ -17,6 +17,8 @@ use workshop_rs::program::MappedText;
 
 mod edits;
 mod navigation;
+mod uri;
+use uri::{file_uri_path, filesystem_path, path_to_file_uri};
 
 const PROTOCOL_VERSIONS: [&str; 7] = ["1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6"];
 const PROJECT_LOADING_VERSION: &str = "1.1";
@@ -1774,97 +1776,6 @@ fn resolved_path(root: &Path, path: &str) -> PathBuf {
     }
 }
 
-fn filesystem_path(value: &str) -> Option<PathBuf> {
-    if let Some(path) = value.strip_prefix("file://") {
-        let path = if path.starts_with('/') {
-            path
-        } else {
-            return None;
-        };
-        return Some(PathBuf::from(percent_decode(path)?));
-    }
-    // A `scheme:` prefix makes `value` a URI, not a filesystem path — a
-    // document URI like `untitled:Untitled-1` must not silently resolve
-    // against the provider's working directory. A single letter before ':'
-    // is a Windows drive (`C:`), not a scheme.
-    if let Some(end) = value.find(':') {
-        let scheme = &value[..end];
-        if scheme.len() > 1
-            && scheme.starts_with(|c: char| c.is_ascii_alphabetic())
-            && scheme
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
-        {
-            return None;
-        }
-    }
-    Some(PathBuf::from(value))
-}
-
-fn file_uri_path(value: &str) -> Option<PathBuf> {
-    let path = value.strip_prefix("file://")?;
-    if !path.starts_with('/') {
-        return None;
-    }
-    let path = percent_decode(path)?;
-    #[cfg(windows)]
-    let path = path
-        .strip_prefix('/')
-        .filter(|path| {
-            let bytes = path.as_bytes();
-            bytes.first().is_some_and(u8::is_ascii_alphabetic)
-                && bytes.get(1) == Some(&b':')
-                && bytes.get(2) == Some(&b'/')
-        })
-        .unwrap_or(&path);
-    Some(PathBuf::from(path))
-}
-
-fn percent_decode(value: &str) -> Option<String> {
-    let bytes = value.as_bytes();
-    let mut decoded = Vec::with_capacity(bytes.len());
-    let mut index = 0;
-    while index < bytes.len() {
-        if bytes[index] == b'%' {
-            let high = bytes
-                .get(index + 1)
-                .and_then(|byte| (*byte as char).to_digit(16))?;
-            let low = bytes
-                .get(index + 2)
-                .and_then(|byte| (*byte as char).to_digit(16))?;
-            decoded.push((high * 16 + low) as u8);
-            index += 3;
-        } else {
-            decoded.push(bytes[index]);
-            index += 1;
-        }
-    }
-    String::from_utf8(decoded).ok()
-}
-
-fn path_to_file_uri(path: &Path) -> String {
-    let raw = path_string(path);
-    let mut uri = String::from("file://");
-    for byte in raw.bytes() {
-        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'/' | b'~') {
-            uri.push(byte as char);
-        } else {
-            uri.push('%');
-            uri.push(
-                char::from_digit(u32::from(byte >> 4), 16)
-                    .expect("hex digit")
-                    .to_ascii_uppercase(),
-            );
-            uri.push(
-                char::from_digit(u32::from(byte & 0x0f), 16)
-                    .expect("hex digit")
-                    .to_ascii_uppercase(),
-            );
-        }
-    }
-    uri
-}
-
 fn ok(id: Value, result: Value) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "result": result })
 }
@@ -1900,26 +1811,6 @@ fn error_response(id: Value, error: HandlerError) -> Value {
 mod tests {
     use super::*;
     use std::fs;
-
-    #[test]
-    fn file_uri_round_trips_spaces_and_unicode() {
-        let path = Path::new("/project/中文 file.opy");
-        assert_eq!(
-            filesystem_path(&path_to_file_uri(path)),
-            Some(path.to_path_buf())
-        );
-    }
-
-    #[test]
-    fn file_uri_path_handles_windows_drive_letter_uris() {
-        let path = file_uri_path("file:///D:/path/to/project.opy").expect("file URI path");
-        let expected = if cfg!(windows) {
-            PathBuf::from("D:/path/to/project.opy")
-        } else {
-            PathBuf::from("/D:/path/to/project.opy")
-        };
-        assert_eq!(path, expected);
-    }
 
     #[test]
     fn initialize_advertises_only_implemented_capabilities() {
