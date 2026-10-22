@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.24](https://github.com/wrightkit/opy-rs/compare/v0.3.23...v0.3.24) - 2026-10-21
+
+### Other
+
+- deny unsafe code outside the QuickJS FFI boundary ([#639](https://github.com/wrightkit/opy-rs/pull/639))
+
 ## [0.3.23](https://github.com/wrightkit/opy-rs/compare/v0.3.22...v0.3.23) - 2026-10-21
 
 ### Fixed
