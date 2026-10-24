@@ -22,7 +22,8 @@ jobs:
         Reconstruction corpus gate,
         Release promotion order,
         JS runtime on macos-latest,
-        JS runtime on windows-latest
+        JS runtime on windows-latest,
+        Workflow lint / Lint workflows
     secrets:
       github-token: ${{ secrets.GH_TOKEN }}
       cargo-registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
