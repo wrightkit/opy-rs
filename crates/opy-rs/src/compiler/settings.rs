@@ -1,22 +1,18 @@
 use super::*;
+use workshop_rs::settings::SettingsNode;
 use workshop_rs::source::{Position as WorkshopPosition, Span as WorkshopSpan};
 
 pub(crate) fn workshop_settings(
     hir: &crate::hir::Program,
     locale: &Locale,
 ) -> Result<(Option<workshop_rs::settings::Settings>, Vec<UnknownSetting>), IntegrationError> {
-    let settings_constants: HashMap<String, &Expr> = hir
-        .declarations
-        .iter()
-        .filter_map(|declaration| match declaration {
-            hir::Declaration::Constant { name, value, .. } => Some((name.clone(), value.as_ref())),
-            _ => None,
-        })
-        .collect();
     let (mut settings, evals) = merge_extensions(
-        hir.settings
-            .clone()
-            .map(|settings| expand_settings_constants(settings, &settings_constants)),
+        hir.settings.clone().map(|settings| {
+            expand_settings_constants(
+                settings,
+                &crate::settings::declaration_constants(&hir.declarations),
+            )
+        }),
         &hir.preprocessing.directives,
         locale,
     )?;
@@ -110,7 +106,6 @@ pub(crate) fn canonical_hero_name(name: &str) -> &str {
 }
 
 fn rename_member(member: &mut workshop_rs::settings::SettingsNode, name: &str) {
-    use workshop_rs::settings::SettingsNode;
     match member {
         SettingsNode::Group { name: slot, .. }
         | SettingsNode::Number { name: slot, .. }
@@ -121,6 +116,17 @@ fn rename_member(member: &mut workshop_rs::settings::SettingsNode, name: &str) {
         | SettingsNode::Raw { name: slot, .. }
         | SettingsNode::RawValue { name: slot, .. } => *slot = name.to_string(),
         _ => {}
+    }
+}
+
+/// Upstream's assign+delete rename landing: overwrite the same-named member or push at the end.
+fn insert_collapsing(members: &mut Vec<SettingsNode>, moved: SettingsNode) {
+    match members
+        .iter_mut()
+        .find(|member| member.name() == moved.name())
+    {
+        Some(dest) => *dest = moved,
+        None => members.push(moved),
     }
 }
 
@@ -136,7 +142,7 @@ fn pass_through_unknown_members(
     settings: &mut workshop_rs::settings::Settings,
     evals: &EvalMap,
 ) -> Result<Vec<UnknownSetting>, IntegrationError> {
-    use workshop_rs::settings::{PathPart, SettingsNode};
+    use workshop_rs::settings::PathPart;
 
     let mut unknown = Vec::new();
     for group in &mut settings.children {
@@ -191,13 +197,7 @@ fn pass_through_unknown_members(
                                     }));
                                 }
                                 SettingsNode::List { elements, .. } => {
-                                    for (index, element) in elements.iter().enumerate() {
-                                        general.push(SettingsNode::Raw {
-                                            name: index.to_string(),
-                                            value: list_element_text(element, evals)?,
-                                            span: element.span,
-                                        });
-                                    }
+                                    general.extend(index_keyed_raw(&elements, evals)?);
                                 }
                                 _ => {}
                             },
@@ -206,13 +206,8 @@ fn pass_through_unknown_members(
                     }
                     let team_path = [PathPart::Part("heroes"), PathPart::Team];
                     pass_through_members(&mut general, &team_path, &mut unknown, None, evals)?;
-                    let mut enabled = false;
-                    let mut disabled = false;
-                    for child in &rest {
-                        enabled |= child.name() == "enabledHeroes";
-                        disabled |= child.name() == "disabledHeroes";
-                    }
-                    if enabled && disabled {
+                    let has = |key: &str| rest.iter().any(|child| child.name() == key);
+                    if has("enabledHeroes") && has("disabledHeroes") {
                         return Err(IntegrationError::new(
                             "settings-hero-lists",
                             format!(
@@ -249,14 +244,7 @@ fn pass_through_unknown_members(
                                 elements,
                                 span,
                             } if resolves_to_hero(name) => {
-                                let mut children = Vec::with_capacity(elements.len());
-                                for (index, element) in elements.iter().enumerate() {
-                                    children.push(SettingsNode::Raw {
-                                        name: index.to_string(),
-                                        value: list_element_text(element, evals)?,
-                                        span: element.span,
-                                    });
-                                }
+                                let children = index_keyed_raw(elements, evals)?;
                                 *member = SettingsNode::Group {
                                     name: std::mem::take(name),
                                     children,
@@ -298,10 +286,7 @@ fn pass_through_unknown_members(
                             if let SettingsNode::Group { name, .. } = &mut moved {
                                 *name = (*canonical).to_string();
                             }
-                            match rest.iter_mut().find(|m| m.name() == *canonical) {
-                                Some(dest) => *dest = moved,
-                                None => rest.push(moved),
-                            }
+                            insert_collapsing(&mut rest, moved);
                         }
                     }
                     for hero in rest.iter_mut().chain(hero_lists.iter_mut()) {
@@ -319,10 +304,7 @@ fn pass_through_unknown_members(
                                 {
                                     let mut moved = children.remove(source);
                                     rename_member(&mut moved, "ability1Kb%");
-                                    match children.iter_mut().find(|m| m.name() == "ability1Kb%") {
-                                        Some(dest) => *dest = moved,
-                                        None => children.push(moved),
-                                    }
+                                    insert_collapsing(children, moved);
                                 }
                                 let path =
                                     [PathPart::Part("heroes"), PathPart::Team, PathPart::Hero];
@@ -366,7 +348,6 @@ fn check_surviving_lists(
     members: &[workshop_rs::settings::SettingsNode],
     evals: &EvalMap,
 ) -> Result<(), IntegrationError> {
-    use workshop_rs::settings::SettingsNode;
     for member in members {
         match member {
             SettingsNode::List { elements, .. } => {
@@ -415,6 +396,24 @@ fn list_element_text(
     }
 }
 
+/// The index-keyed `Raw` members upstream's `Object.keys` iteration of a
+/// settings list value produces (`"0"` through `"n-1"` with each element's
+/// written text).
+fn index_keyed_raw(
+    elements: &[workshop_rs::settings::SettingsListElement],
+    evals: &EvalMap,
+) -> Result<Vec<workshop_rs::settings::SettingsNode>, IntegrationError> {
+    let mut members = Vec::with_capacity(elements.len());
+    for (index, element) in elements.iter().enumerate() {
+        members.push(SettingsNode::Raw {
+            name: index.to_string(),
+            value: list_element_text(element, evals)?,
+            span: element.span,
+        });
+    }
+    Ok(members)
+}
+
 fn pass_through_members(
     members: &mut [workshop_rs::settings::SettingsNode],
     path: &[workshop_rs::settings::PathPart<'_>],
@@ -422,7 +421,7 @@ fn pass_through_members(
     hero: Option<&str>,
     evals: &EvalMap,
 ) -> Result<(), IntegrationError> {
-    use workshop_rs::settings::{PathPart, SettingValueDomain, SettingsNode};
+    use workshop_rs::settings::{PathPart, SettingValueDomain};
 
     for member in members {
         if member.name() == "enabled" && matches!(path, [PathPart::Part("gamemodes"), _]) {
@@ -527,8 +526,6 @@ fn written_form(
     node: workshop_rs::settings::SettingsNode,
     evals: &EvalMap,
 ) -> Result<workshop_rs::settings::SettingsNode, IntegrationError> {
-    use workshop_rs::settings::SettingsNode;
-
     Ok(match node {
         SettingsNode::List {
             name,
@@ -577,8 +574,6 @@ fn verbatim_form(
     node: workshop_rs::settings::SettingsNode,
     evals: &EvalMap,
 ) -> Result<workshop_rs::settings::SettingsNode, IntegrationError> {
-    use workshop_rs::settings::SettingsNode;
-
     match scalar_text(&node) {
         Some(value) => Ok(SettingsNode::Raw {
             name: node.name().to_string(),
@@ -591,8 +586,6 @@ fn verbatim_form(
 
 /// A scalar value as JavaScript's `String(value)` writes it.
 fn scalar_text(node: &workshop_rs::settings::SettingsNode) -> Option<String> {
-    use workshop_rs::settings::SettingsNode;
-
     match node {
         SettingsNode::Number { value, .. } => Some(super::number_format::javascript_text(*value)),
         SettingsNode::Bool { value, .. } => Some(value.to_string()),
@@ -707,17 +700,14 @@ fn expand_settings_node(
             name,
             children,
             span,
-        } => {
-            let children = children
+        } => SettingsNode::Group {
+            name,
+            children: children
                 .into_iter()
                 .map(|child| expand_settings_node(child, constants))
-                .collect::<Vec<_>>();
-            SettingsNode::Group {
-                name,
-                children,
-                span,
-            }
-        }
+                .collect(),
+            span,
+        },
         SettingsNode::Raw { name, value, span } => constants
             .get(&value)
             .and_then(|expr| settings_node_from_expr(name.clone(), expr, constants, span))

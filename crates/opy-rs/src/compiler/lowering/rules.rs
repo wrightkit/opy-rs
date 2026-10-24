@@ -32,13 +32,11 @@ impl<'a> Lowering<'a> {
         for expr in &rule.conditions {
             Self::split_rule_condition(expr, &mut condition_exprs);
         }
-        let conditions = condition_exprs.iter().copied();
-        let conditions = self.lower_values(conditions)?;
+        let conditions = self.lower_values(condition_exprs.iter().copied())?;
         let previous_conditions = self.current_rule_conditions.replace(conditions.clone());
         let lowered_actions = self.lower_actions(&rule.actions, None);
         self.current_rule_conditions = previous_conditions;
-        let mut actions = Vec::new();
-        actions.extend(lowered_actions?);
+        let actions = lowered_actions?;
         let optimization = self.optimization_state_at(rule.span.as_ref());
         if optimization.enabled
             && !rule.delimiter
@@ -46,9 +44,8 @@ impl<'a> Lowering<'a> {
         {
             return Ok(());
         }
-        let elide_noop_switch = actions.is_empty()
-            && rule.actions.len() == 1
-            && matches!(rule.actions.first(), Some(Stmt::Switch { .. }));
+        let elide_noop_switch =
+            actions.is_empty() && matches!(rule.actions.as_slice(), [Stmt::Switch { .. }]);
         if elide_noop_switch && !rule.disabled {
             return Ok(());
         }
@@ -152,8 +149,7 @@ impl<'a> Lowering<'a> {
                 name_span.or(span),
             ));
         }
-        let mut actions = Vec::new();
-        actions.extend(self.lower_actions(body, None)?);
+        let actions = self.lower_actions(body, None)?;
         let event = Event::Subroutine(self.program.subroutines[subroutine].name.clone());
         if self.optimization_state_at(span.as_ref()).enabled
             && !self.has_meaningful_rule_action(&actions, &event)
@@ -290,32 +286,52 @@ impl<'a> Lowering<'a> {
         }
     }
 
+    fn event_filter_annotations<'b>(
+        &self,
+        annotations: &'b [hir::Annotation],
+        name: &str,
+    ) -> Result<Vec<&'b hir::Annotation>, IntegrationError> {
+        let matches = annotations
+            .iter()
+            .filter(|annotation| annotation.name == name)
+            .collect::<Vec<_>>();
+        if matches.len() > 1 {
+            return Err(self.unsupported(
+                format!("an event cannot have multiple @{name} filters"),
+                matches[1].span.or(matches[0].span),
+            ));
+        }
+        Ok(matches)
+    }
+
+    fn single_filter_argument<'b>(
+        &self,
+        annotation: &'b hir::Annotation,
+    ) -> Result<&'b hir::AnnotationArg, IntegrationError> {
+        let argument = annotation.args.first().ok_or_else(|| {
+            self.unsupported(
+                format!("@{} requires one filter value", annotation.name),
+                annotation.span,
+            )
+        })?;
+        if annotation.args.len() != 1 {
+            return Err(self.unsupported(
+                format!("@{} requires exactly one filter value", annotation.name),
+                annotation.span,
+            ));
+        }
+        Ok(argument)
+    }
+
     fn lower_event_team(
         &self,
         annotations: &[hir::Annotation],
     ) -> Result<EventTeam, IntegrationError> {
-        let team_annotations = annotations
-            .iter()
-            .filter(|annotation| annotation.name == "Team")
-            .collect::<Vec<_>>();
-        if team_annotations.len() > 1 {
-            return Err(self.unsupported(
-                "an event cannot have multiple @Team filters",
-                team_annotations[1].span.or(team_annotations[0].span),
-            ));
-        }
-        let Some(annotation) = team_annotations.first() else {
+        let team_annotations = self.event_filter_annotations(annotations, "Team")?;
+        let Some(&annotation) = team_annotations.first() else {
             return Ok(EventTeam::All);
         };
-        let argument = annotation
-            .args
-            .first()
-            .ok_or_else(|| self.unsupported("@Team requires one filter value", annotation.span))?;
-        if annotation.args.len() != 1 {
-            return Err(
-                self.unsupported("@Team requires exactly one filter value", annotation.span)
-            );
-        }
+        let argument = self.single_filter_argument(annotation)?;
         // Upstream `eventTeamKw` accepts exactly the keys "1", "2", "all";
         // a `Team.X`/`Hero.X` argument reduces through the annotation
         // normalization first (issue #466).
@@ -337,17 +353,7 @@ impl<'a> Lowering<'a> {
     ) -> Result<EventTarget, IntegrationError> {
         let mut filters = Vec::new();
         for name in ["Slot", "Hero"] {
-            let matches = annotations
-                .iter()
-                .filter(|annotation| annotation.name == name)
-                .collect::<Vec<_>>();
-            if matches.len() > 1 {
-                return Err(self.unsupported(
-                    format!("an event cannot have multiple @{name} filters"),
-                    matches[1].span.or(matches[0].span),
-                ));
-            }
-            filters.extend(matches);
+            filters.extend(self.event_filter_annotations(annotations, name)?);
         }
         if filters.len() > 1 {
             return Err(self.unsupported(
@@ -355,21 +361,10 @@ impl<'a> Lowering<'a> {
                 filters[1].span.or(filters[0].span),
             ));
         }
-        let Some(annotation) = filters.first() else {
+        let Some(&annotation) = filters.first() else {
             return Ok(EventTarget::All);
         };
-        let argument = annotation.args.first().ok_or_else(|| {
-            self.unsupported(
-                format!("@{} requires one filter value", annotation.name),
-                annotation.span,
-            )
-        })?;
-        if annotation.args.len() != 1 {
-            return Err(self.unsupported(
-                format!("@{} requires exactly one filter value", annotation.name),
-                annotation.span,
-            ));
-        }
+        let argument = self.single_filter_argument(annotation)?;
         // Upstream `eventPlayerKw` is shared between @Slot and @Hero: its
         // keys are "all", the slot numbers "0".."11", and the `heroKw`
         // keywords. `Team.X`/`Hero.X` arguments reduce through
@@ -404,7 +399,7 @@ impl<'a> Lowering<'a> {
                     .split_once('.')
                     .map(|(_, member)| member)
                     .unwrap_or(argument.text.as_str());
-                let hint = match error {
+                let hint_of = |error: enums::EnumMemberError| match error {
                     enums::EnumMemberError::Misspelled(spelling) => format!(
                         "; the OverPy spelling is '{}'",
                         enums::upper_case_to_camel_case(spelling)
@@ -412,18 +407,16 @@ impl<'a> Lowering<'a> {
                     enums::EnumMemberError::Unspellable => {
                         "; the canonical member has no OverPy spelling".to_string()
                     }
+                    enums::EnumMemberError::Unknown => String::new(),
+                };
+                let hint = match error {
                     enums::EnumMemberError::Unknown => {
                         match enums::filter_member("Hero", member_part, self.compiler.catalog) {
-                            Err(enums::EnumMemberError::Misspelled(spelling)) => format!(
-                                "; the OverPy spelling is '{}'",
-                                enums::upper_case_to_camel_case(spelling)
-                            ),
-                            Err(enums::EnumMemberError::Unspellable) => {
-                                "; the canonical member has no OverPy spelling".to_string()
-                            }
-                            _ => String::new(),
+                            Err(error) => hint_of(error),
+                            Ok(_) => String::new(),
                         }
                     }
+                    error => hint_of(error),
                 };
                 self.unsupported(
                     format!("unknown event player filter '{}'{}", argument.text, hint),
@@ -450,9 +443,7 @@ impl<'a> Lowering<'a> {
         let mut actions = Vec::new();
         let mut labels = HashMap::new();
         let mut gotos = Vec::new();
-        let mut index = 0;
-        while index < statements.len() {
-            let statement = &statements[index];
+        for (index, statement) in statements.iter().enumerate() {
             let optimization = self.optimization_state_at(statement.span());
             if optimization.enabled
                 && optimization.for_size
@@ -494,13 +485,11 @@ impl<'a> Lowering<'a> {
                         self.mark_action_origins(std::slice::from_ref(&skip), *span);
                         actions.push(skip);
                         actions.extend(body);
-                        index += 1;
                         continue;
                     }
                 }
             }
             if self.lower_conditional_label_jump(statement, &mut actions)? {
-                index += 1;
                 continue;
             }
             if let Some((condition, offset, span)) = direct_conditional_dynamic_goto(statement) {
@@ -513,7 +502,6 @@ impl<'a> Lowering<'a> {
                 self.mark_action_origins(std::slice::from_ref(&goto), span);
                 actions.push(goto);
                 actions.push(self.push_call_action("disabledAbort", &[]));
-                index += 1;
                 continue;
             }
             match statement {
@@ -531,7 +519,6 @@ impl<'a> Lowering<'a> {
                         let loop_action = self.push_call_action("loop", &[]);
                         self.mark_action_origins(std::slice::from_ref(&loop_action), *span);
                         actions.push(loop_action);
-                        index += 1;
                         continue;
                     }
                     let placeholder = self.push_number(0.0);
@@ -549,7 +536,6 @@ impl<'a> Lowering<'a> {
                 }
                 _ => actions.extend(self.lower_action(statement, break_target)?),
             }
-            index += 1;
         }
         for (action, position, label, offset, span) in gotos {
             let distance = if let Some(offset) = offset {
@@ -602,6 +588,12 @@ impl<'a> Lowering<'a> {
             Stmt::Expr { expr, .. }
                 if matches!(expr.as_ref(), Expr::Call { name, args, .. } if name == "loop" && args.is_empty())
         );
+        let loop_names = (
+            "loop",
+            "loopIf",
+            "loopIfConditionIsTrue",
+            "__loopIfConditionIsFalse__",
+        );
         let (unconditional, conditional, on_true, on_false) = match child {
             Stmt::Return { .. } => (
                 "abort",
@@ -611,18 +603,8 @@ impl<'a> Lowering<'a> {
             ),
             Stmt::Goto {
                 rule_start: true, ..
-            } => (
-                "loop",
-                "loopIf",
-                "loopIfConditionIsTrue",
-                "__loopIfConditionIsFalse__",
-            ),
-            _ if is_loop_call => (
-                "loop",
-                "loopIf",
-                "loopIfConditionIsTrue",
-                "__loopIfConditionIsFalse__",
-            ),
+            } => loop_names,
+            _ if is_loop_call => loop_names,
             _ => return Ok(None),
         };
         let is_rule_condition =
@@ -903,15 +885,7 @@ impl<'a> Lowering<'a> {
             match self.actions.get(*action) {
                 Some(Action::If { .. }) => {
                     if depth == 0 {
-                        if let Some(marker) = branches.first().and_then(|branch| branch.marker) {
-                            self.action_origins[*action] = Some(marker);
-                        }
-                        self.mark_action_argument_origins(
-                            *action,
-                            [branches
-                                .first()
-                                .and_then(|branch| branch.condition.span().copied())],
-                        );
+                        self.mark_branch_origin(*action, branches.first());
                     }
                     depth += 1;
                 }
@@ -922,15 +896,7 @@ impl<'a> Lowering<'a> {
                 ) => depth += 1,
                 Some(Action::ElseIf { .. }) if depth == 1 => {
                     branch += 1;
-                    if let Some(marker) = branches.get(branch).and_then(|branch| branch.marker) {
-                        self.action_origins[*action] = Some(marker);
-                    }
-                    self.mark_action_argument_origins(
-                        *action,
-                        [branches
-                            .get(branch)
-                            .and_then(|branch| branch.condition.span().copied())],
-                    );
+                    self.mark_branch_origin(*action, branches.get(branch));
                 }
                 Some(Action::Else) if depth == 1 => {
                     if let Some(span) = else_span {
@@ -950,6 +916,16 @@ impl<'a> Lowering<'a> {
         }
     }
 
+    fn mark_branch_origin(&mut self, action: ActionId, branch: Option<&hir::types::IfBranch>) {
+        if let Some(marker) = branch.and_then(|branch| branch.marker) {
+            self.action_origins[action] = Some(marker);
+        }
+        self.mark_action_argument_origins(
+            action,
+            [branch.and_then(|branch| branch.condition.span().copied())],
+        );
+    }
+
     fn mark_statement_argument_origins(&mut self, statement: &Stmt, actions: &[ActionId]) {
         match statement {
             Stmt::Assign { target, value, .. } => {
@@ -964,22 +940,16 @@ impl<'a> Lowering<'a> {
                     Expr::Binary { right, .. } => right.span().copied(),
                     _ => value_span,
                 };
+                let player_span = match &**target {
+                    Expr::PlayerVar { player, .. } => player.span().copied(),
+                    _ => None,
+                };
                 for action in actions {
                     let spans = match self.actions.get(*action) {
                         Some(Action::SetGlobalVariable { .. }) => vec![value_span],
                         Some(Action::ModifyGlobalVariable { .. }) => vec![modified_value_span],
-                        Some(Action::SetPlayerVariable { .. }) => {
-                            let player_span = match &**target {
-                                Expr::PlayerVar { player, .. } => player.span().copied(),
-                                _ => None,
-                            };
-                            vec![player_span, value_span]
-                        }
+                        Some(Action::SetPlayerVariable { .. }) => vec![player_span, value_span],
                         Some(Action::ModifyPlayerVariable { .. }) => {
-                            let player_span = match &**target {
-                                Expr::PlayerVar { player, .. } => player.span().copied(),
-                                _ => None,
-                            };
                             vec![player_span, modified_value_span]
                         }
                         Some(Action::Call { name, .. })
@@ -1109,7 +1079,8 @@ impl<'a> Lowering<'a> {
         if !self
             .visible_labels
             .iter()
-            .any(|labels| labels.iter().any(|candidate| candidate == label))
+            .flatten()
+            .any(|candidate| candidate == label)
         {
             return Ok(false);
         }
@@ -1381,34 +1352,27 @@ impl<'a> Lowering<'a> {
                 continue;
             }
             let direct_break = matches!(statement, Stmt::Break { .. });
-            let conditional_break = match statement {
+            let conditional_break = matches!(
+                statement,
                 Stmt::If {
                     branches,
                     r#else: None,
                     ..
-                } if branches.len() == 1 => {
-                    matches!(branches[0].body.as_slice(), [Stmt::Break { .. }])
-                }
-                _ => false,
-            };
+                } if branches.len() == 1
+                    && matches!(branches[0].body.as_slice(), [Stmt::Break { .. }])
+            );
 
             if direct_break || conditional_break {
                 let tail = self.lower_do_while_body(&statements[index + 1..])?;
                 let distance = self.canonical_action_width(&tail, statement.span().copied())? + 1;
-                let (name, args, _span) = if let Stmt::Break { span } = statement {
-                    ("skip", Vec::new(), *span)
-                } else if let Stmt::If { branches, span, .. } = statement {
-                    (
-                        "skipIf",
-                        vec![self.lower_value(&branches[0].condition)?],
-                        *span,
-                    )
-                } else {
-                    unreachable!("break shape was checked above")
+                let (name, mut args) = match statement {
+                    Stmt::Break { .. } => ("skip", Vec::new()),
+                    Stmt::If { branches, .. } => {
+                        ("skipIf", vec![self.lower_value(&branches[0].condition)?])
+                    }
+                    _ => unreachable!("break shape was checked above"),
                 };
-                let distance = self.push_number(distance as f64);
-                let mut args = args;
-                args.push(distance);
+                args.push(self.push_number(distance as f64));
                 let skip = self.push_call_action(name, &args);
                 self.mark_action_origins(std::slice::from_ref(&skip), statement.span().copied());
                 actions.push(skip);
@@ -1437,17 +1401,16 @@ impl<'a> Lowering<'a> {
                 iterable.span().copied(),
             ));
         }
-        let number = |this: &mut Self, value: f64| this.push_number(value);
         match args.as_slice() {
             [stop] => Ok((
-                number(self, 0.0),
+                self.push_number(0.0),
                 self.lower_value(stop)?,
-                number(self, 1.0),
+                self.push_number(1.0),
             )),
             [start, stop] => Ok((
                 self.lower_value(start)?,
                 self.lower_value(stop)?,
-                number(self, 1.0),
+                self.push_number(1.0),
             )),
             [start, stop, step] => Ok((
                 self.lower_value(start)?,
@@ -1484,11 +1447,8 @@ impl<'a> Lowering<'a> {
         let mut legacy_offset = 0;
         let mut legacy_default_offset = None;
 
-        let mut reverse_bodies = (loop_continue.is_some() && !do_while_continue).then(|| {
-            (0..arms.len())
-                .map(|_| None)
-                .collect::<Vec<Option<LoweredSwitchBody>>>()
-        });
+        let mut reverse_bodies =
+            (loop_continue.is_some() && !do_while_continue).then(|| vec![None; arms.len()]);
         if let Some((outer_after, structural_after)) = loop_continue {
             let mut future = Vec::new();
             for index in (0..arms.len()).rev() {

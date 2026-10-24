@@ -148,9 +148,6 @@ pub fn find_blocks(text: &str, file_id: u32) -> OpyResult<Vec<SettingsBlock>> {
             }
             continue;
         }
-        if line_start && enum_indent.is_some_and(|indent| line_indent <= indent) {
-            enum_indent = None;
-        }
         line_start = false;
         tail_start = false;
         scanner.advance_by(1);
@@ -261,19 +258,16 @@ fn match_block(
                         .get(text_start_offset.expect("text start offset set on '{'")..scanner.pos)
                         .unwrap_or_default()
                         .to_string();
+                    let text_start = text_start.expect("text start set on '{'");
                     return Ok(SettingsBlock {
                         text,
                         span: Span::new(keyword_span.file, keyword_start, scanner.here_after(1)),
                         keyword_span,
                         start: keyword_offset,
                         end: scanner.char_pos + 1,
-                        text_start: text_start.expect("text start set on '{'"),
+                        text_start,
                         content_file: keyword_span.file,
-                        content_span: Span::new(
-                            keyword_span.file,
-                            text_start.expect("text start set on '{'"),
-                            scanner.here(),
-                        ),
+                        content_span: Span::new(keyword_span.file, text_start, scanner.here()),
                         external_path: None,
                     });
                 }
@@ -340,18 +334,11 @@ pub(crate) fn resolve_hir_settings(
     program: &mut hir::Program,
     cst_program: &cst::Program,
 ) -> OpyResult<()> {
-    let constants = program
-        .declarations
-        .iter()
-        .filter_map(|declaration| match declaration {
-            hir::Declaration::Constant { name, value, .. } => Some((name.clone(), value.as_ref())),
-            _ => None,
-        })
-        .collect::<HashMap<_, _>>();
-    let mut expander = crate::compiler::MacroExpander::from_declarations(&program.declarations);
     let Some(settings) = program.settings.take() else {
         return Ok(());
     };
+    let constants = declaration_constants(&program.declarations);
+    let mut expander = crate::compiler::MacroExpander::from_declarations(&program.declarations);
     let mut lowerer = crate::lower::SettingsLowerer::new(cst_program)?;
     let children = settings
         .children
@@ -363,6 +350,18 @@ pub(crate) fn resolve_hir_settings(
         children,
     });
     Ok(())
+}
+
+pub(crate) fn declaration_constants(
+    declarations: &[hir::Declaration],
+) -> HashMap<String, &hir::Expr> {
+    declarations
+        .iter()
+        .filter_map(|declaration| match declaration {
+            hir::Declaration::Constant { name, value, .. } => Some((name.clone(), value.as_ref())),
+            _ => None,
+        })
+        .collect()
 }
 
 fn resolve_hir_node(
@@ -392,7 +391,7 @@ fn resolve_hir_node(
                 ));
             };
             let diag_span = hir_span_to_diag_span(span);
-            let value = eval_settings_text(&value, span, constants, expander, lowerer, true)?;
+            let value = eval_settings_text(&value, span, constants, expander, lowerer)?;
             node_from_value(name, value, diag_span)
         }
         // The pinned OverPy evaluates each settings list element through its
@@ -412,16 +411,10 @@ fn resolve_hir_node(
                     if element.evaluated.is_none()
                         && let Some(span) = element.span
                     {
-                        element.evaluated = eval_settings_text(
-                            &element.value,
-                            span,
-                            constants,
-                            expander,
-                            lowerer,
-                            true,
-                        )
-                        .ok()
-                        .and_then(|value| display_value(&value).ok());
+                        element.evaluated =
+                            eval_settings_text(&element.value, span, constants, expander, lowerer)
+                                .ok()
+                                .and_then(|value| display_value(&value).ok());
                     }
                     element
                 })
@@ -456,7 +449,6 @@ fn eval_settings_text(
     constants: &HashMap<String, &hir::Expr>,
     expander: &mut crate::compiler::MacroExpander<'_>,
     lowerer: &mut crate::lower::SettingsLowerer,
-    strict: bool,
 ) -> OpyResult<crate::compile_time::Value> {
     let diag_span = hir_span_to_diag_span(span);
     let expression = lowerer
@@ -477,11 +469,8 @@ fn eval_settings_text(
             OpyError::at(error.diagnostic.code, error.diagnostic.message, error_span)
         })?;
     let mut stack = Vec::new();
-    let value = if strict {
-        crate::compile_time::evaluate_settings(&expression, constants, &HashMap::new(), &mut stack)
-    } else {
-        crate::compile_time::evaluate(&expression, constants, &HashMap::new(), &mut stack)
-    };
+    let value =
+        crate::compile_time::evaluate_settings(&expression, constants, &HashMap::new(), &mut stack);
     value.ok_or_else(|| {
         settings_expression_error(
             diag_span,
@@ -641,19 +630,9 @@ fn js_number_value(text: &str) -> Option<f64> {
         }
         return Some(if seen { value } else { f64::NAN });
     }
-    let strict_radix = text
-        .strip_prefix("0X")
-        .map(|digits| (digits, 16))
-        .or_else(|| {
-            text.strip_prefix("0o")
-                .or_else(|| text.strip_prefix("0O"))
-                .map(|digits| (digits, 8))
-        })
-        .or_else(|| {
-            text.strip_prefix("0b")
-                .or_else(|| text.strip_prefix("0B"))
-                .map(|digits| (digits, 2))
-        });
+    let strict_radix = [("0X", 16), ("0o", 8), ("0O", 8), ("0b", 2), ("0B", 2)]
+        .iter()
+        .find_map(|(prefix, radix)| text.strip_prefix(prefix).map(|digits| (digits, *radix)));
     if let Some((digits, radix)) = strict_radix {
         return Some(
             (!digits.is_empty())
@@ -671,6 +650,7 @@ fn js_number_value(text: &str) -> Option<f64> {
     Some(text.parse::<f64>().unwrap_or(f64::NAN))
 }
 
+#[derive(Clone, Copy)]
 struct Cursor<'a> {
     text: &'a str,
     pos: usize,
@@ -788,37 +768,24 @@ enum ScalarValue {
 impl Cursor<'_> {
     fn skip_whitespace(&mut self) {
         loop {
-            while let Some(ch) = self.peek() {
-                if ch.is_whitespace() {
-                    self.advance();
-                } else {
-                    break;
-                }
+            while self.peek().is_some_and(|ch| ch.is_whitespace()) {
+                self.advance();
             }
             if self.peek() == Some('#') {
-                while self.peek().is_some_and(|ch| ch != '\n') {
-                    self.advance();
-                }
+                self.skip_to_eol();
                 continue;
             }
             if self.text[self.pos..].starts_with("//") {
-                self.advance();
-                self.advance();
-                while self.peek().is_some_and(|ch| ch != '\n') {
-                    self.advance();
-                }
+                self.advance_by(2);
+                self.skip_to_eol();
                 continue;
             }
             if self.text[self.pos..].starts_with("/*") {
-                self.advance();
-                self.advance();
+                self.advance_by(2);
                 while self.peek().is_some() && !self.text[self.pos..].starts_with("*/") {
                     self.advance();
                 }
-                if self.text[self.pos..].starts_with("*/") {
-                    self.advance();
-                    self.advance();
-                }
+                self.advance_by(2);
                 continue;
             }
             break;
@@ -835,6 +802,17 @@ impl Cursor<'_> {
 
     fn error_at(&self, code: &str, message: String, span: Span) -> OpyError {
         OpyError::at(code, message, span)
+    }
+
+    fn at_members_end(&mut self, root: bool) -> bool {
+        if (!root && self.peek() == Some('}')) || (root && self.pos >= self.text.len()) {
+            if !root {
+                self.advance();
+            }
+            true
+        } else {
+            false
+        }
     }
 
     fn parse_object(&mut self) -> OpyResult<(Vec<cst::SettingsNode>, Span)> {
@@ -854,10 +832,7 @@ impl Cursor<'_> {
         let mut nodes = Vec::new();
         let mut names = Vec::new();
         self.skip_whitespace();
-        if (!root && self.peek() == Some('}')) || (root && self.pos >= self.text.len()) {
-            if !root {
-                self.advance();
-            }
+        if self.at_members_end(root) {
             return Ok(nodes);
         }
         loop {
@@ -898,11 +873,7 @@ impl Cursor<'_> {
                 Some(',') => {
                     self.advance();
                     self.skip_whitespace();
-                    if (!root && self.peek() == Some('}')) || (root && self.pos >= self.text.len())
-                    {
-                        if !root {
-                            self.advance();
-                        }
+                    if self.at_members_end(root) {
                         return Ok(nodes);
                     }
                 }
@@ -930,7 +901,7 @@ impl Cursor<'_> {
     fn parse_value(&mut self) -> OpyResult<(cst::SettingsNode, Position)> {
         let start = self.here();
         let ch = self.peek();
-        let saved = (self.pos, self.char_pos, self.line, self.col);
+        let saved = *self;
         let scalar = match ch {
             Some('"') | Some('\'') => {
                 let value = self.parse_string_expression().ok_or_else(|| {
@@ -981,10 +952,7 @@ impl Cursor<'_> {
                     },
                 }
             } else {
-                self.pos = saved.0;
-                self.char_pos = saved.1;
-                self.line = saved.2;
-                self.col = saved.3;
+                *self = saved;
                 cst::SettingsNode::Raw {
                     name: String::new(),
                     value: self.parse_expression_value(),
@@ -996,10 +964,7 @@ impl Cursor<'_> {
                 Some('[') => {
                     let elements = self.parse_list()?;
                     if self.is_expression_continuation() {
-                        self.pos = saved.0;
-                        self.char_pos = saved.1;
-                        self.line = saved.2;
-                        self.col = saved.3;
+                        *self = saved;
                         cst::SettingsNode::Raw {
                             name: String::new(),
                             value: self.parse_expression_value(),
@@ -1016,10 +981,7 @@ impl Cursor<'_> {
                 Some('{') => {
                     let (children, _) = self.parse_object()?;
                     if self.is_expression_continuation() {
-                        self.pos = saved.0;
-                        self.char_pos = saved.1;
-                        self.line = saved.2;
-                        self.col = saved.3;
+                        *self = saved;
                         cst::SettingsNode::Raw {
                             name: String::new(),
                             value: self.parse_expression_value(),
@@ -1066,21 +1028,13 @@ impl Cursor<'_> {
                 continue;
             }
             match ch {
-                '"' | '\'' => {
-                    quote = Some(ch);
-                    value.push(self.advance().expect("peeked character exists"));
-                }
-                '(' | '[' | '{' => {
-                    depth += 1;
-                    value.push(self.advance().expect("peeked character exists"));
-                }
+                '"' | '\'' => quote = Some(ch),
+                '(' | '[' | '{' => depth += 1,
                 ']' | ',' | '}' if depth == 0 => break,
-                ')' | ']' | '}' => {
-                    depth = depth.saturating_sub(1);
-                    value.push(self.advance().expect("peeked character exists"));
-                }
-                _ => value.push(self.advance().expect("peeked character exists")),
+                ')' | ']' | '}' => depth = depth.saturating_sub(1),
+                _ => {}
             }
+            value.push(self.advance().expect("peeked character exists"));
         }
         value.trim().to_string()
     }
@@ -1097,6 +1051,12 @@ impl Cursor<'_> {
             }
         }
         Ok(())
+    }
+
+    fn take_digits(&mut self, text: &mut String) {
+        while self.peek().is_some_and(|c| c.is_ascii_digit()) {
+            text.push(self.advance().unwrap());
+        }
     }
 
     /// Read one settings number literal the way the pinned OverPy tokenizer
@@ -1143,13 +1103,7 @@ impl Cursor<'_> {
             let value = if digits == 0 { f64::NAN } else { value };
             return Ok(if text.starts_with('-') { -value } else { value });
         }
-        while let Some(c) = self.peek() {
-            if c.is_ascii_digit() {
-                text.push(self.advance().unwrap());
-            } else {
-                break;
-            }
-        }
+        self.take_digits(&mut text);
         // `.` joins the literal only between digits — `1.5` is one number
         // upstream while `2.` and `-.5` split the dot into member access.
         if self.peek() == Some('.')
@@ -1157,25 +1111,13 @@ impl Cursor<'_> {
             && self.peek_at(1).is_some_and(|c| c.is_ascii_digit())
         {
             text.push(self.advance().unwrap());
-            while let Some(c) = self.peek() {
-                if c.is_ascii_digit() {
-                    text.push(self.advance().unwrap());
-                } else {
-                    break;
-                }
-            }
+            self.take_digits(&mut text);
         }
         if matches!(self.peek(), Some('e' | 'E'))
             && self.peek_at(1).is_some_and(|c| c.is_ascii_digit())
         {
             text.push(self.advance().unwrap());
-            while let Some(c) = self.peek() {
-                if c.is_ascii_digit() {
-                    text.push(self.advance().unwrap());
-                } else {
-                    break;
-                }
-            }
+            self.take_digits(&mut text);
         }
         text.parse::<f64>().map_err(|_| {
             self.error_at(
@@ -1277,13 +1219,10 @@ impl Cursor<'_> {
     fn parse_string_expression(&mut self) -> Option<String> {
         let mut value = self.parse_string_value()?;
         loop {
-            let saved = (self.pos, self.char_pos, self.line, self.col);
+            let saved = *self;
             self.skip_whitespace();
             if self.peek() != Some('"') && self.peek() != Some('\'') {
-                self.pos = saved.0;
-                self.char_pos = saved.1;
-                self.line = saved.2;
-                self.col = saved.3;
+                *self = saved;
                 break;
             }
             let next = self.parse_string_value()?;
@@ -1309,44 +1248,23 @@ impl Cursor<'_> {
 
 fn build_node(
     key: String,
-    node: cst::SettingsNode,
+    mut node: cst::SettingsNode,
     value_end: Position,
     key_start: Position,
     file: u32,
 ) -> cst::SettingsNode {
-    let span = Span::new(file, key_start, value_end);
-    match node {
-        cst::SettingsNode::Group { children, .. } => cst::SettingsNode::Group {
-            name: key,
-            children,
-            span,
-        },
-        cst::SettingsNode::Number { value, .. } => cst::SettingsNode::Number {
-            name: key,
-            value,
-            span,
-        },
-        cst::SettingsNode::Bool { value, .. } => cst::SettingsNode::Bool {
-            name: key,
-            value,
-            span,
-        },
-        cst::SettingsNode::String { value, .. } => cst::SettingsNode::String {
-            name: key,
-            value,
-            span,
-        },
-        cst::SettingsNode::Raw { value, .. } => cst::SettingsNode::Raw {
-            name: key,
-            value,
-            span,
-        },
-        cst::SettingsNode::List { elements, .. } => cst::SettingsNode::List {
-            name: key,
-            elements,
-            span,
-        },
+    match &mut node {
+        cst::SettingsNode::Group { name, span, .. }
+        | cst::SettingsNode::Number { name, span, .. }
+        | cst::SettingsNode::Bool { name, span, .. }
+        | cst::SettingsNode::String { name, span, .. }
+        | cst::SettingsNode::Raw { name, span, .. }
+        | cst::SettingsNode::List { name, span, .. } => {
+            *name = key;
+            *span = Span::new(file, key_start, value_end);
+        }
     }
+    node
 }
 
 #[cfg(test)]

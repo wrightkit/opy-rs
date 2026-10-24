@@ -291,7 +291,7 @@ impl Parser<'_> {
         self.errors.push(OpyError::at("parse-error", message, span));
     }
 
-    pub(super) fn workshop_construct(&self, top_level: bool) -> Option<(Span, String)> {
+    fn workshop_construct(&self, top_level: bool) -> Option<(Span, String)> {
         let mut end = self.pos;
         while !matches!(self.tokens[end].kind, TokenKind::Newline | TokenKind::Eof) {
             end += 1;
@@ -319,10 +319,8 @@ impl Parser<'_> {
             TokenKind::LBrace => {
                 return Some((first.span, BRACE_BLOCKS.to_string()));
             }
-            _ => {}
-        }
-        if first.kind != TokenKind::Ident {
-            return None;
+            TokenKind::Ident => {}
+            _ => return None,
         }
         if line
             .get(1)
@@ -359,7 +357,7 @@ impl Parser<'_> {
         None
     }
 
-    pub(super) fn report_workshop_source(&mut self, span: Span, detail: &str) {
+    fn report_workshop_source(&mut self, span: Span, detail: &str) {
         if self.workshop_source_reported {
             return;
         }
@@ -371,7 +369,7 @@ impl Parser<'_> {
         ));
     }
 
-    pub(super) fn skip_workshop_construct(&mut self) {
+    fn skip_workshop_construct(&mut self) {
         let mut depth = 0u32;
         loop {
             match self.peek_kind() {
@@ -385,7 +383,7 @@ impl Parser<'_> {
         }
     }
 
-    pub(super) fn expect_block_colon(&mut self, colon_context: &str) -> Result<(), ()> {
+    fn expect_block_colon(&mut self, colon_context: &str) -> Result<(), ()> {
         if self.peek_kind() == TokenKind::LBrace {
             let span = self.peek().span;
             self.report_workshop_source(span, BRACE_BLOCKS);
@@ -425,8 +423,7 @@ impl Parser<'_> {
                         rules.last().expect("rule was appended").clone(),
                     ));
                 }
-            }
-            if !ok {
+            } else {
                 self.recover_line();
             }
         }
@@ -489,7 +486,7 @@ impl Parser<'_> {
         (indent > line_indent).then_some(indent)
     }
 
-    pub(super) fn expect_block_indent(
+    fn expect_block_indent(
         &mut self,
         line_indent: u32,
         colon_context: &str,
@@ -595,13 +592,43 @@ mod tests {
         parse(&tokens).errors
     }
 
+    #[track_caller]
+    fn expect_rule(program: &Program, index: usize) -> &Rule {
+        let RuleEntry::Rule(rule) = &program.rules[index] else {
+            panic!("expected rule");
+        };
+        rule
+    }
+
+    #[track_caller]
+    fn expect_expr_stmt(rule: &Rule, index: usize) -> &Expr {
+        let Stmt::Expr { expr, .. } = &rule.actions[index] else {
+            panic!("expected expression statement");
+        };
+        expr
+    }
+
+    #[track_caller]
+    fn expect_enum_members(program: &Program, index: usize) -> &[(String, Option<Expr>, Span)] {
+        let Decl::Enum { members, .. } = &program.declarations[index] else {
+            panic!("expected enum");
+        };
+        members
+    }
+
+    #[track_caller]
+    fn expect_subroutine_annotations(program: &Program, index: usize) -> &[Annotation] {
+        let RuleEntry::SubroutineDef { annotations, .. } = &program.rules[index] else {
+            panic!("expected subroutine");
+        };
+        annotations
+    }
+
     #[test]
     fn parses_basic_rule() {
         let program = parse_ok("rule \"setup\":\n    @Event global\n    disableInspector()\n");
         assert_eq!(program.rules.len(), 1);
-        let RuleEntry::Rule(rule) = &program.rules[0] else {
-            panic!("expected rule");
-        };
+        let rule = expect_rule(&program, 0);
         assert_eq!(rule.name, "setup");
         assert_eq!(rule.event.name, "global");
         assert_eq!(rule.actions.len(), 1);
@@ -613,9 +640,7 @@ mod tests {
         // augmented assignment (`a **= b` ⇔ `a = a ** b`).
         let program =
             parse_ok("globalvar a\nrule \"r\":\n    @Event global\n    a = 2\n    a **= 3\n");
-        let RuleEntry::Rule(rule) = &program.rules[0] else {
-            panic!("expected rule");
-        };
+        let rule = expect_rule(&program, 0);
         let Stmt::Assign {
             value,
             target: assigned_target,
@@ -643,9 +668,7 @@ mod tests {
     fn parses_postfix_increment_and_decrement_as_modifications() {
         let program =
             parse_ok("globalvar value\nrule \"r\":\n    @Event global\n    value++\n    value--\n");
-        let RuleEntry::Rule(rule) = &program.rules[0] else {
-            panic!("expected a rule");
-        };
+        let rule = expect_rule(&program, 0);
         for (statement, expected_op) in [(&rule.actions[0], "+"), (&rule.actions[1], "-")] {
             let Stmt::Assign { target, value, .. } = statement else {
                 panic!("expected a postfix assignment");
@@ -708,9 +731,7 @@ mod tests {
         let program = parse_ok(
             "globalvar index = 0\n\nrule \"r\":\n    @Event global\n    for index in range(3):\n        if index == 0:\n            debug(index)\n        elif index == 1:\n            debug(index)\n        else:\n            debug(index)\n    while index < 3:\n        index += 1\n        wait()\n",
         );
-        let RuleEntry::Rule(rule) = &program.rules[0] else {
-            panic!();
-        };
+        let rule = expect_rule(&program, 0);
         assert!(matches!(rule.actions[0], Stmt::For { .. }));
         let Stmt::For { body, .. } = &rule.actions[0] else {
             panic!();
@@ -745,9 +766,7 @@ mod tests {
             "    goto loc + value\n",
             "    target:\n",
         ));
-        let RuleEntry::Rule(rule) = &program.rules[0] else {
-            panic!("expected rule");
-        };
+        let rule = expect_rule(&program, 0);
         assert!(matches!(rule.actions[0], Stmt::Delete { .. }));
         for (statement, expected) in [(&rule.actions[1], "min"), (&rule.actions[2], "max")] {
             let Stmt::Assign { value, .. } = statement else {
@@ -910,9 +929,7 @@ mod tests {
         let program = parse_ok(
             "globalvar x\nrule \"r\":\n    @Event global\n    switch x:\n        case 0x10:\n            x = 1 in [1, 2]\n        default:\n            do:\n                x = {\"x\": 1}[\"x\"]\n            while x not in [2, 3]\n    x = [value * 2 for value, index in [1, 2] if value > index]\n    x = sorted([1, 2], key=lambda value: value)\n    x = w\"wide\"\n",
         );
-        let RuleEntry::Rule(rule) = &program.rules[0] else {
-            panic!("expected rule");
-        };
+        let rule = expect_rule(&program, 0);
         assert!(matches!(rule.actions[0], Stmt::Switch { .. }));
         assert!(matches!(rule.actions[1], Stmt::Assign { .. }));
     }
@@ -929,9 +946,7 @@ mod tests {
     #[test]
     fn parses_explicit_enum_member_values() {
         let program = parse_ok("enum EventType:\n    BUFF = 0\n    DEBUFF\n    MECH = 2\n");
-        let Decl::Enum { members, .. } = &program.declarations[0] else {
-            panic!("expected enum");
-        };
+        let members = expect_enum_members(&program, 0);
         assert_eq!(
             members
                 .iter()
@@ -949,9 +964,7 @@ mod tests {
         let program = parse_ok(
             "enum E:\n    A, B\n    settings {\n        \"k\": 1\n    }\n    C junk = 2\n",
         );
-        let Decl::Enum { members, .. } = &program.declarations[0] else {
-            panic!("expected enum");
-        };
+        let members = expect_enum_members(&program, 0);
         assert_eq!(
             members
                 .iter()
@@ -961,9 +974,7 @@ mod tests {
         );
 
         let program = parse_ok("enum E: settings {}\n");
-        let Decl::Enum { members, .. } = &program.declarations[0] else {
-            panic!("expected enum");
-        };
+        let members = expect_enum_members(&program, 0);
         assert_eq!(members[0].0, "settings");
     }
 
@@ -972,9 +983,7 @@ mod tests {
         let program = parse_ok(
             "globalvar p\nrule \"r\":\n    @Event global\n    p = [\n        vect(1, 0, 0),\n        vect(2, 0, 0),\n    ]\n",
         );
-        let RuleEntry::Rule(rule) = &program.rules[0] else {
-            panic!();
-        };
+        let rule = expect_rule(&program, 0);
         let Stmt::Assign { value, .. } = &rule.actions[0] else {
             panic!();
         };
@@ -1072,9 +1081,7 @@ mod tests {
     #[test]
     fn precedence_parses_python_like() {
         let program = parse_ok("globalvar x\nrule \"r\":\n    @Event global\n    x = 1 + 2 * 3\n");
-        let RuleEntry::Rule(rule) = &program.rules[0] else {
-            panic!();
-        };
+        let rule = expect_rule(&program, 0);
         let Stmt::Assign { value, .. } = &rule.actions[0] else {
             panic!();
         };
@@ -1097,12 +1104,8 @@ mod tests {
         let program = parse_ok(
             "rule \"r\":\n    @Event global\n    debug(1 if true else 2 if false else 3)\n",
         );
-        let RuleEntry::Rule(rule) = &program.rules[0] else {
-            panic!("expected a rule");
-        };
-        let Stmt::Expr { expr, .. } = &rule.actions[0] else {
-            panic!("expected an expression statement");
-        };
+        let rule = expect_rule(&program, 0);
+        let expr = expect_expr_stmt(rule, 0);
         let Expr::Call { args, .. } = expr else {
             panic!("expected a call");
         };
@@ -1133,12 +1136,8 @@ mod tests {
         let program = parse_ok(
             "rule \"r\":\n    @Event global\n    debug((1 if true else 2) if false else 3)\n",
         );
-        let RuleEntry::Rule(rule) = &program.rules[0] else {
-            panic!("expected a rule");
-        };
-        let Stmt::Expr { expr, .. } = &rule.actions[0] else {
-            panic!("expected an expression statement");
-        };
+        let rule = expect_rule(&program, 0);
+        let expr = expect_expr_stmt(rule, 0);
         let Expr::Call { args, .. } = expr else {
             panic!("expected a call");
         };
@@ -1163,12 +1162,8 @@ mod tests {
     fn parses_receiver_calls() {
         let program =
             parse_ok("rule \"r\":\n    @Event eachPlayer\n    eventPlayer.setMoveSpeed(100)\n");
-        let RuleEntry::Rule(rule) = &program.rules[0] else {
-            panic!("expected rule");
-        };
-        let Stmt::Expr { expr, .. } = &rule.actions[0] else {
-            panic!("expected expression statement, got {:?}", rule.actions[0]);
-        };
+        let rule = expect_rule(&program, 0);
+        let expr = expect_expr_stmt(rule, 0);
         let Expr::ReceiverCall {
             receiver,
             name,
@@ -1192,12 +1187,8 @@ mod tests {
     fn parses_keyword_arguments_with_name_spans() {
         let program =
             parse_ok("rule \"r\":\n    @Event global\n    wait(time=1)\n    debug(g == 1)\n");
-        let RuleEntry::Rule(rule) = &program.rules[0] else {
-            panic!("expected rule");
-        };
-        let Stmt::Expr { expr, .. } = &rule.actions[0] else {
-            panic!("expected expression statement");
-        };
+        let rule = expect_rule(&program, 0);
+        let expr = expect_expr_stmt(rule, 0);
         let Expr::Call { args, .. } = expr else {
             panic!("expected a call, got {expr:?}");
         };
@@ -1206,9 +1197,7 @@ mod tests {
         assert_eq!(span.start.line, 3);
         assert!(matches!(&args[0].value, Expr::Number { .. }));
 
-        let Stmt::Expr { expr, .. } = &rule.actions[1] else {
-            panic!("expected expression statement");
-        };
+        let expr = expect_expr_stmt(rule, 1);
         let Expr::Call { args, .. } = expr else {
             panic!("expected a call, got {expr:?}");
         };
@@ -1219,12 +1208,8 @@ mod tests {
     #[test]
     fn adjacent_string_literals_concatenate_and_preserve_span() {
         let program = parse_ok("rule \"r\":\n    @Event global\n    debug(\"one\" \"two\")\n");
-        let RuleEntry::Rule(rule) = &program.rules[0] else {
-            panic!("expected rule");
-        };
-        let Stmt::Expr { expr, .. } = &rule.actions[0] else {
-            panic!("expected expression statement");
-        };
+        let rule = expect_rule(&program, 0);
+        let expr = expect_expr_stmt(rule, 0);
         let Expr::Call { args, .. } = expr else {
             panic!("expected call");
         };
@@ -1241,12 +1226,8 @@ mod tests {
     fn multiline_adjacent_string_literals_concatenate_inside_group() {
         let program =
             parse_ok("rule \"r\":\n    @Event global\n    debug(\"one\"\n        \"two\")\n");
-        let RuleEntry::Rule(rule) = &program.rules[0] else {
-            panic!("expected rule");
-        };
-        let Stmt::Expr { expr, .. } = &rule.actions[0] else {
-            panic!("expected expression statement");
-        };
+        let rule = expect_rule(&program, 0);
+        let expr = expect_expr_stmt(rule, 0);
         let Expr::Call { args, .. } = expr else {
             panic!("expected call");
         };
@@ -1259,9 +1240,7 @@ mod tests {
     #[test]
     fn newline_outside_group_keeps_adjacent_literals_as_statements() {
         let program = parse_ok("rule \"r\":\n    @Event global\n    \"one\"\n    \"two\"\n");
-        let RuleEntry::Rule(rule) = &program.rules[0] else {
-            panic!("expected rule");
-        };
+        let rule = expect_rule(&program, 0);
         assert_eq!(rule.actions.len(), 2);
     }
 
@@ -1277,12 +1256,8 @@ mod tests {
         let program = parse_ok(
             "rule \"r\":\n    @Event eachPlayer\n    getPlayersInRadius(eventPlayer, 10).setStatusEffect(eventPlayer, 30)\n",
         );
-        let RuleEntry::Rule(rule) = &program.rules[0] else {
-            panic!("expected rule");
-        };
-        let Stmt::Expr { expr, .. } = &rule.actions[0] else {
-            panic!("expected expression statement");
-        };
+        let rule = expect_rule(&program, 0);
+        let expr = expect_expr_stmt(rule, 0);
         let Expr::ReceiverCall {
             receiver,
             name,
@@ -1304,9 +1279,7 @@ mod tests {
     fn member_without_call_is_not_a_call() {
         let program =
             parse_ok("rule \"r\":\n    @Event eachPlayer\n    x = eventPlayer.moveSpeed\n");
-        let RuleEntry::Rule(rule) = &program.rules[0] else {
-            panic!("expected rule");
-        };
+        let rule = expect_rule(&program, 0);
         let Stmt::Assign { value, .. } = &rule.actions[0] else {
             panic!("expected assignment");
         };
@@ -1321,13 +1294,9 @@ mod tests {
         let program = parse_ok(
             "subroutine helper\ndef helper():\n    @Name \"renamed\"\n    @SuppressWarnings unusedVariable\n    pass\nrule \"r\":\n    @Event eachPlayer\n    @Team 1\n    @Hero dmon\n    @Disabled\n    @Delimiter\n    @NewPage \"Page\"\n    @SuppressWarnings unusedVariable\n    pass\n",
         );
-        let RuleEntry::SubroutineDef { annotations, .. } = &program.rules[0] else {
-            panic!("expected subroutine");
-        };
+        let annotations = expect_subroutine_annotations(&program, 0);
         assert_eq!(annotations.len(), 2);
-        let RuleEntry::Rule(rule) = &program.rules[1] else {
-            panic!("expected rule");
-        };
+        let rule = expect_rule(&program, 1);
         assert!(rule.disabled);
         assert!(rule.delimiter);
         assert_eq!(rule.new_page.as_deref(), Some("Page"));
@@ -1349,20 +1318,14 @@ rule "pa\ufeffssed":
     debug(f"pa\ufeffssed {1}")
 "#,
         );
-        let RuleEntry::SubroutineDef { annotations, .. } = &program.rules[0] else {
-            panic!("expected subroutine");
-        };
+        let annotations = expect_subroutine_annotations(&program, 0);
         assert_eq!(annotations[0].args[0].text, "\"helper\u{feff}name\"");
 
-        let RuleEntry::Rule(rule) = &program.rules[1] else {
-            panic!("expected rule");
-        };
+        let rule = expect_rule(&program, 1);
         assert_eq!(rule.name, "pa\u{feff}ssed");
         assert_eq!(rule.name_span.start.col, 7);
         assert_eq!(rule.name_span.end.col, 19);
-        let Stmt::Expr { expr, .. } = &rule.actions[0] else {
-            panic!("expected debug expression");
-        };
+        let expr = expect_expr_stmt(rule, 0);
         let Expr::Call { args, .. } = expr else {
             panic!("expected debug call");
         };
@@ -1370,9 +1333,7 @@ rule "pa\ufeffssed":
             &args[0].value,
             Expr::String { value, .. } if value == "pa\u{feff}ssed"
         ));
-        let Stmt::Expr { expr, .. } = &rule.actions[1] else {
-            panic!("expected formatted debug expression");
-        };
+        let expr = expect_expr_stmt(rule, 1);
         let Expr::Call { args, .. } = expr else {
             panic!("expected formatted debug call");
         };

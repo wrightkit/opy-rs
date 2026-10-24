@@ -4,7 +4,7 @@ use std::io::{self, BufRead, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 use opy_rs::lookup::{
-    LookupHit, LookupOutcome, LookupParam, LookupQuery, LookupScope, LookupWithin,
+    EnumMemberEntry, LookupHit, LookupOutcome, LookupParam, LookupQuery, LookupScope, LookupWithin,
     SettingValueForm, lookup as opy_lookup,
 };
 use opy_rs::tooling::{CheckOutcome, Diagnostic as OpyDiagnostic, SourceLocation};
@@ -36,24 +36,6 @@ const MAPPED_ARTIFACT_FORMAT: &str = "workshop-rs/mapped-text-v1";
 fn version_at_least(protocol_version: &str, minimum: &str) -> bool {
     let rank = |version: &str| PROTOCOL_VERSIONS.iter().position(|known| *known == version);
     rank(protocol_version) >= rank(minimum)
-}
-
-fn capability_enabled(capability: &str) -> bool {
-    matches!(
-        capability,
-        "check"
-            | "compile"
-            | "reconstruct"
-            | "projectLoading"
-            | "sourceIdentity"
-            | "symbols"
-            | "definition"
-            | "references"
-            | "rename"
-            | "editValidation"
-            | "lookup"
-            | "resolveIds"
-    )
 }
 
 fn capabilities_json(protocol_version: &str) -> Value {
@@ -229,6 +211,33 @@ enum ProjectTargetKind {
     Directory,
 }
 
+impl ProjectTargetKind {
+    fn name(self) -> &'static str {
+        match self {
+            ProjectTargetKind::File => "entry",
+            ProjectTargetKind::Directory => "target",
+        }
+    }
+
+    fn reason(self, absent: bool) -> &'static str {
+        match (absent, self) {
+            (true, ProjectTargetKind::File) => "entryNotFound",
+            (true, ProjectTargetKind::Directory) => "targetNotFound",
+            (false, ProjectTargetKind::File) => "entryUnreadable",
+            (false, ProjectTargetKind::Directory) => "targetUnreadable",
+        }
+    }
+
+    fn mismatch(self) -> (&'static str, &'static str) {
+        match self {
+            ProjectTargetKind::File => ("entryNotFile", "project entry is not a file"),
+            ProjectTargetKind::Directory => {
+                ("targetNotDirectory", "project target is not a directory")
+            }
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct LookupParams {
@@ -344,7 +353,7 @@ impl Server {
             Ok(value) => value,
             Err(_) => return Some(standard_error(Value::Null, -32700, "Parse error")),
         };
-        if parsed.is_array() || !parsed.is_object() {
+        if !parsed.is_object() {
             return Some(standard_error(Value::Null, -32600, "Invalid Request"));
         }
         let mut parsed = parsed;
@@ -457,9 +466,8 @@ impl Server {
                 "capability 'projectLoading' is not available",
             );
         }
-        if !capability_enabled(capability)
-            || capability_min_version(capability)
-                .is_some_and(|minimum| !version_at_least(protocol_version, minimum))
+        if capability_min_version(capability)
+            .is_some_and(|minimum| !version_at_least(protocol_version, minimum))
         {
             return lpp_error(
                 id,
@@ -492,10 +500,7 @@ impl Server {
 
     fn check(&mut self, value: Value) -> Result<Value, HandlerError> {
         let params: ProjectParams =
-            serde_json::from_value(value).map_err(|_| HandlerError::Standard {
-                code: -32602,
-                message: "Invalid params",
-            })?;
+            serde_json::from_value(value).map_err(|_| HandlerError::invalid_params())?;
         match load_project(
             params,
             self.protocol_version.as_deref().expect("initialized"),
@@ -523,10 +528,7 @@ impl Server {
         )?;
         let format = select_artifact_format(accepted.as_deref());
         let params: ProjectParams =
-            serde_json::from_value(value).map_err(|_| HandlerError::Standard {
-                code: -32602,
-                message: "Invalid params",
-            })?;
+            serde_json::from_value(value).map_err(|_| HandlerError::invalid_params())?;
         let loaded = load_project(
             params,
             self.protocol_version.as_deref().expect("initialized"),
@@ -544,14 +546,7 @@ impl Server {
                 return compile_document(self, &request, format);
             }
         };
-        if self.compiler.is_none() {
-            self.compiler = Some(Compiler::new().map_err(|error| HandlerError::Lpp {
-                kind: "providerFailure",
-                details: json!({ "code": "compiler-init" }),
-                message: format!("cannot initialize compiler: {error}"),
-            })?);
-        }
-        let compiler = self.compiler.as_ref().expect("compiler initialized");
+        let compiler = self.ensure_compiler()?;
         let main_path = path_string(project.filesystem.main_path());
         let outcome = opy_rs::compile_with_overlay_outcome_with_locale(
             project.filesystem.source(),
@@ -689,6 +684,17 @@ impl Server {
             .collect();
         Ok(json!({ "calls": calls, "enums": enums }))
     }
+
+    fn ensure_compiler(&mut self) -> Result<&Compiler, HandlerError> {
+        if self.compiler.is_none() {
+            self.compiler = Some(Compiler::new().map_err(|error| HandlerError::Lpp {
+                kind: "providerFailure",
+                details: json!({ "code": "compiler-init" }),
+                message: format!("cannot initialize compiler: {error}"),
+            })?);
+        }
+        Ok(self.compiler.as_ref().expect("compiler initialized"))
+    }
 }
 
 const CALLABLE_IDENTITY: &str = "opy:callable/";
@@ -714,7 +720,7 @@ fn identity_value<'a>(value: &'a str, prefix: &str) -> &'a str {
 }
 
 fn path_segment(path: &str) -> &str {
-    path.rsplit('.').next().unwrap_or(path)
+    path.rsplit('.').next().unwrap_or_default()
 }
 
 fn lookup_entry(hit: &LookupHit, scoped: bool) -> Value {
@@ -754,13 +760,7 @@ fn lookup_entry(hit: &LookupHit, scoped: bool) -> Value {
                 "displayName": display_name.as_deref().unwrap_or(domain),
             });
             if let Some(members) = members {
-                entry["enum"] = json!({
-                    "domain": format!("{ENUM_IDENTITY}{domain}"),
-                    "members": members
-                        .iter()
-                        .map(|member| member.spelling.clone())
-                        .collect::<Vec<_>>(),
-                });
+                entry["enum"] = enum_wire(domain, member_spellings(members));
             }
             entry
         }
@@ -833,19 +833,14 @@ fn callable_param_wire(param: &LookupParam) -> Value {
         wire["default"] = json!(default);
     }
     if let Some(domain) = &param.domain {
-        wire["enum"] = json!({
-            "domain": format!("{ENUM_IDENTITY}{domain}"),
-            "members": param
+        wire["enum"] = enum_wire(
+            domain,
+            param
                 .members
                 .as_ref()
-                .map(|members| {
-                    members
-                        .iter()
-                        .map(|member| member.spelling.clone())
-                        .collect::<Vec<_>>()
-                })
+                .map(|members| member_spellings(members))
                 .unwrap_or_default(),
-        });
+        );
     }
     wire
 }
@@ -859,12 +854,23 @@ fn setting_wire(value: &SettingValueForm) -> Value {
         wire["maximum"] = json!(max);
     }
     if let Some(domain) = &value.domain {
-        wire["enum"] = json!({
-            "domain": format!("{ENUM_IDENTITY}{domain}"),
-            "members": value.members,
-        });
+        wire["enum"] = enum_wire(domain, value.members.clone());
     }
     wire
+}
+
+fn member_spellings(members: &[EnumMemberEntry]) -> Vec<String> {
+    members
+        .iter()
+        .map(|member| member.spelling.clone())
+        .collect()
+}
+
+fn enum_wire(domain: &str, members: Vec<String>) -> Value {
+    json!({
+        "domain": format!("{ENUM_IDENTITY}{domain}"),
+        "members": members,
+    })
 }
 
 fn invalid_language(language_id: &str) -> HandlerError {
@@ -888,10 +894,7 @@ fn accepted_artifact_formats(
     let Some(value) = params.get("acceptedArtifactFormats") else {
         return Ok(None);
     };
-    let invalid = || HandlerError::Standard {
-        code: -32602,
-        message: "Invalid params",
-    };
+    let invalid = HandlerError::invalid_params;
     if !version_at_least(protocol_version, ARTIFACT_NEGOTIATION_VERSION) {
         return Err(invalid());
     }
@@ -1077,10 +1080,7 @@ fn load_project(
             }))
         }
         (None, Some(entry)) => load_entry(entry, locale, protocol_version),
-        _ => Err(HandlerError::Standard {
-            code: -32602,
-            message: "Invalid params",
-        }),
+        _ => Err(HandlerError::invalid_params()),
     }
 }
 
@@ -1090,10 +1090,7 @@ fn load_entry(
     protocol_version: &str,
 ) -> Result<LoadedRequest, HandlerError> {
     let target_kind = project_target_kind(&entry, protocol_version)?;
-    let target_name = match target_kind {
-        ProjectTargetKind::File => "entry",
-        ProjectTargetKind::Directory => "target",
-    };
+    let target_name = target_kind.name();
     if entry.language_id != LANGUAGE_ID {
         return Err(HandlerError::invalid_entry(
             &entry.uri,
@@ -1120,17 +1117,7 @@ fn load_entry(
     })?;
     validate_target_kind(&path, &entry.uri, target_kind)?;
     let filesystem = opy_rs::FilesystemProject::load(&path).map_err(|error| {
-        let reason = if error.is_entry_not_found() {
-            match target_kind {
-                ProjectTargetKind::File => "entryNotFound",
-                ProjectTargetKind::Directory => "targetNotFound",
-            }
-        } else {
-            match target_kind {
-                ProjectTargetKind::File => "entryUnreadable",
-                ProjectTargetKind::Directory => "targetUnreadable",
-            }
-        };
+        let reason = target_kind.reason(error.is_entry_not_found());
         HandlerError::project_load_failed(
             &entry.uri,
             reason,
@@ -1181,16 +1168,8 @@ fn validate_target_kind(
             error.kind(),
             std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory
         );
-        let reason = match (absent, target_kind) {
-            (true, ProjectTargetKind::File) => "entryNotFound",
-            (true, ProjectTargetKind::Directory) => "targetNotFound",
-            (false, ProjectTargetKind::File) => "entryUnreadable",
-            (false, ProjectTargetKind::Directory) => "targetUnreadable",
-        };
-        let target_name = match target_kind {
-            ProjectTargetKind::File => "entry",
-            ProjectTargetKind::Directory => "target",
-        };
+        let reason = target_kind.reason(absent);
+        let target_name = target_kind.name();
         HandlerError::project_load_failed(
             entry_uri,
             reason,
@@ -1205,10 +1184,7 @@ fn validate_target_kind(
     if matches_kind {
         return Ok(());
     }
-    let (reason, message) = match target_kind {
-        ProjectTargetKind::File => ("entryNotFile", "project entry is not a file"),
-        ProjectTargetKind::Directory => ("targetNotDirectory", "project target is not a directory"),
-    };
+    let (reason, message) = target_kind.mismatch();
     Err(HandlerError::project_load_failed(
         entry_uri,
         reason,
@@ -1226,11 +1202,7 @@ fn validate_documents(documents: &BTreeMap<String, Document>) -> Result<(), Hand
             ));
         }
         if document.language_id != LANGUAGE_ID {
-            return Err(HandlerError::Lpp {
-                kind: "invalidLanguage",
-                details: json!({ "languageId": document.language_id }),
-                message: format!("language not served by provider: {}", document.language_id),
-            });
+            return Err(invalid_language(&document.language_id));
         }
         if document.version < 0 {
             return Err(HandlerError::invalid_document(
@@ -1257,6 +1229,31 @@ fn document_overlays(
                 path_string(&document_path(document)?),
                 document.text.clone(),
             ))
+        })
+        .collect()
+}
+
+fn empty_diagnostics(documents: &BTreeMap<String, Document>) -> BTreeMap<String, Vec<Value>> {
+    documents
+        .keys()
+        .map(|uri| (uri.clone(), Vec::new()))
+        .collect()
+}
+
+fn document_results(
+    documents: &BTreeMap<String, Document>,
+    mut diagnostics_by_uri: BTreeMap<String, Vec<Value>>,
+) -> Vec<Value> {
+    documents
+        .iter()
+        .map(|(uri, document)| {
+            json!({
+                "uri": uri,
+                "version": document.version,
+                "diagnostics": diagnostics_by_uri
+                    .remove(uri)
+                    .expect("diagnostics initialized"),
+            })
         })
         .collect()
 }
@@ -1295,10 +1292,7 @@ fn check_documents(
 ) -> Result<Value, HandlerError> {
     let locale = Locale::new(locale);
     let overlays = document_overlays(documents)?;
-    let mut diagnostics_by_uri = documents
-        .keys()
-        .map(|uri| (uri.clone(), Vec::new()))
-        .collect::<BTreeMap<String, Vec<Value>>>();
+    let mut diagnostics_by_uri = empty_diagnostics(documents);
 
     let mut groups: BTreeMap<PathBuf, Vec<&Document>> = BTreeMap::new();
     for document in documents.values() {
@@ -1379,7 +1373,8 @@ fn check_documents(
                 .span
                 .as_ref()
                 .and_then(|span| {
-                    supplied_uri_for_path(documents, &outcome.display_root, &span.path)
+                    edits::supplied_document_for_path(documents, &outcome.display_root, &span.path)
+                        .map(|document| document.uri.clone())
                 })
                 .unwrap_or_else(|| representative.uri.clone());
             let value = diagnostic_json_for_documents(documents, &outcome.display_root, diagnostic);
@@ -1415,16 +1410,7 @@ fn check_documents(
     }
 
     Ok(json!({
-        "documents": documents
-            .iter()
-            .map(|(uri, document)| json!({
-                "uri": uri,
-                "version": document.version,
-                "diagnostics": diagnostics_by_uri
-                    .remove(uri)
-                    .expect("diagnostics initialized"),
-            }))
-            .collect::<Vec<_>>(),
+        "documents": document_results(documents, diagnostics_by_uri),
     }))
 }
 
@@ -1441,13 +1427,7 @@ fn compile_document(
         .unwrap_or_else(|| PathBuf::from("."));
     let overlays = document_overlays(&request.documents)?;
     let locale = Locale::new(&request.locale);
-    if server.compiler.is_none() {
-        server.compiler = Some(Compiler::new().map_err(|error| HandlerError::Lpp {
-            kind: "providerFailure",
-            details: json!({ "code": "compiler-init" }),
-            message: format!("cannot initialize compiler: {error}"),
-        })?);
-    }
+    let compiler = server.ensure_compiler()?;
     let outcome = opy_rs::compile_with_overlay_outcome_with_locale(
         &document.text,
         &path_string(&path),
@@ -1455,17 +1435,18 @@ fn compile_document(
         &overlays,
         &locale,
     );
-    let mut diagnostics_by_uri = request
-        .documents
-        .keys()
-        .map(|uri| (uri.clone(), Vec::new()))
-        .collect::<BTreeMap<String, Vec<Value>>>();
+    let mut diagnostics_by_uri = empty_diagnostics(&request.documents);
     for diagnostic in &outcome.diagnostics {
         let target_uri = diagnostic
             .span
             .as_ref()
             .and_then(|span| {
-                supplied_uri_for_path(&request.documents, &outcome.display_root, &span.path)
+                edits::supplied_document_for_path(
+                    &request.documents,
+                    &outcome.display_root,
+                    &span.path,
+                )
+                .map(|document| document.uri.clone())
             })
             .unwrap_or_else(|| uri.clone());
         diagnostics_by_uri
@@ -1477,7 +1458,6 @@ fn compile_document(
                 diagnostic,
             ));
     }
-    let compiler = server.compiler.as_ref().expect("compiler initialized");
     let artifact = match outcome.hir.as_ref() {
         Some(hir) => {
             let compiled = if format == Some(ArtifactFormat::Mapped) {
@@ -1503,10 +1483,15 @@ fn compile_document(
                     &artifact.final_output,
                     mapped.as_ref(),
                     &|path| {
-                        supplied_uri_for_path(&request.documents, &outcome.display_root, path)
-                            .unwrap_or_else(|| {
-                                path_to_file_uri(&resolved_path(&outcome.display_root, path))
-                            })
+                        edits::supplied_document_for_path(
+                            &request.documents,
+                            &outcome.display_root,
+                            path,
+                        )
+                        .map(|document| document.uri.clone())
+                        .unwrap_or_else(|| {
+                            path_to_file_uri(&resolved_path(&outcome.display_root, path))
+                        })
                     },
                 )?),
                 Err(error) => {
@@ -1530,19 +1515,7 @@ fn compile_document(
         }
         None => None,
     };
-    let diagnostics = request
-        .documents
-        .iter()
-        .map(|(uri, document)| {
-            json!({
-                "uri": uri,
-                "version": document.version,
-                "diagnostics": diagnostics_by_uri
-                    .remove(uri)
-                    .expect("diagnostics initialized"),
-            })
-        })
-        .collect::<Vec<_>>();
+    let diagnostics = document_results(&request.documents, diagnostics_by_uri);
     Ok(json!({ "diagnostics": diagnostics, "artifact": artifact }))
 }
 
@@ -1564,18 +1537,6 @@ fn ensure_entry_sources_loaded(
         ));
     }
     Ok(())
-}
-
-fn supplied_uri_for_path(
-    documents: &BTreeMap<String, Document>,
-    display_root: &Path,
-    path: &str,
-) -> Option<String> {
-    let resolved = resolved_path(display_root, path);
-    documents.iter().find_map(|(uri, document)| {
-        let document_path = filesystem_path(&document.uri)?;
-        (same_path(&document_path, &resolved)).then(|| uri.clone())
-    })
 }
 
 fn same_path(left: &Path, right: &Path) -> bool {
@@ -1603,15 +1564,9 @@ fn document_lsp_position(
     line: u32,
     col: u32,
 ) -> Value {
-    let resolved = resolved_path(display_root, path);
-    let source = documents
-        .values()
-        .find(|document| {
-            filesystem_path(&document.uri)
-                .is_some_and(|document_path| same_path(&document_path, &resolved))
-        })
+    let source = edits::supplied_document_for_path(documents, display_root, path)
         .map(|document| document.text.clone())
-        .or_else(|| std::fs::read_to_string(&resolved).ok())
+        .or_else(|| std::fs::read_to_string(resolved_path(display_root, path)).ok())
         .unwrap_or_default();
     lsp_position(&source, line, col)
 }
@@ -1626,17 +1581,15 @@ fn check_result(project: &LoadedProject, outcome: &CheckOutcome) -> Value {
             .collect::<Vec<_>>(),
     );
     for diagnostic in &outcome.diagnostics {
-        let path = diagnostic.span.as_ref().map(|span| span.path.as_str());
-        let index = path
-            .and_then(|path| entries.iter().position(|entry| entry.path == path))
-            .unwrap_or(0);
-        entries[index].diagnostics.push(diagnostic_json(
+        push_diagnostic(
+            &mut entries,
+            project,
+            &outcome.display_root,
             diagnostic.span.as_ref(),
             &diagnostic.severity,
             &diagnostic.code,
             &diagnostic.message,
-            |path, line, col| project_lsp_position(project, &outcome.display_root, path, line, col),
-        ));
+        );
     }
     json!({
         "documents": entries
@@ -1654,22 +1607,42 @@ fn compile_diagnostics(
 ) -> Vec<Value> {
     let mut entries = file_entries(project, paths);
     for diagnostic in diagnostics {
-        let path = diagnostic.span.as_ref().map(|span| span.path.as_str());
-        let index = path
-            .and_then(|path| entries.iter().position(|entry| entry.path == path))
-            .unwrap_or(0);
-        entries[index].diagnostics.push(diagnostic_json(
+        push_diagnostic(
+            &mut entries,
+            project,
+            display_root,
             diagnostic.span.as_ref(),
             &diagnostic.severity,
             &diagnostic.code,
             &diagnostic.message,
-            |path, line, col| project_lsp_position(project, display_root, path, line, col),
-        ));
+        );
     }
     entries
         .into_iter()
         .map(|entry| entry.json(display_root))
         .collect()
+}
+
+fn push_diagnostic(
+    entries: &mut [FileEntry],
+    project: &LoadedProject,
+    display_root: &Path,
+    span: Option<&SourceLocation>,
+    severity: &opy_rs::tooling::DiagnosticSeverity,
+    code: &str,
+    message: &str,
+) {
+    let path = span.map(|span| span.path.as_str());
+    let index = path
+        .and_then(|path| entries.iter().position(|entry| entry.path == path))
+        .unwrap_or(0);
+    entries[index].diagnostics.push(diagnostic_json(
+        span,
+        severity,
+        code,
+        message,
+        |path, line, col| project_lsp_position(project, display_root, path, line, col),
+    ));
 }
 
 #[derive(Debug)]

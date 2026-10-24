@@ -78,11 +78,7 @@ impl Preprocessor {
         let (name, rest) = split_directive(text);
         if name == "include" {
             let rest = rest.trim();
-            let include = rest
-                .strip_prefix('"')
-                .and_then(|r| r.strip_suffix('"'))
-                .or_else(|| rest.strip_prefix('\'').and_then(|r| r.strip_suffix('\'')));
-            let Some(include) = include else {
+            let Some(include) = strip_quoted(rest) else {
                 return Err(OpyError::at(
                     "include-invalid",
                     format!(
@@ -330,7 +326,7 @@ impl Preprocessor {
     }
 }
 
-fn split_directive(text: &str) -> (&str, &str) {
+pub(super) fn split_directive(text: &str) -> (&str, &str) {
     text.split_once(char::is_whitespace)
         .map_or((text, ""), |(name, rest)| (name, rest))
 }
