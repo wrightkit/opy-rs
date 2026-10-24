@@ -5,10 +5,7 @@ impl Parser<'_> {
         self.parse_expr_inner(false)
     }
 
-    pub(super) fn parse_expr_inner(
-        &mut self,
-        allow_multiline_conditional: bool,
-    ) -> Result<Expr, ()> {
+    fn parse_expr_inner(&mut self, allow_multiline_conditional: bool) -> Result<Expr, ()> {
         self.skip_expression_newlines();
         let then_value = self.parse_or()?;
         if self.is_ident("if") && self.if_is_past_then_value_layout_break() {
@@ -31,8 +28,7 @@ impl Parser<'_> {
                 self.pos = conditional_start;
                 return Ok(then_value);
             }
-            self.error_at_current("expected `else` in conditional expression".to_string());
-            return Err(());
+            return self.fail("expected `else` in conditional expression".to_string());
         }
         self.bump();
         let else_value = self.parse_expr_inner(true)?;
@@ -49,11 +45,11 @@ impl Parser<'_> {
         })
     }
 
-    pub(super) fn parse_or(&mut self) -> Result<Expr, ()> {
+    fn parse_or(&mut self) -> Result<Expr, ()> {
         self.parse_ident_chain("or", |parser| parser.parse_and())
     }
 
-    pub(super) fn parse_and(&mut self) -> Result<Expr, ()> {
+    fn parse_and(&mut self) -> Result<Expr, ()> {
         self.parse_ident_chain("and", |parser| parser.parse_not())
     }
 
@@ -77,23 +73,18 @@ impl Parser<'_> {
         Ok(left)
     }
 
-    pub(super) fn parse_not(&mut self) -> Result<Expr, ()> {
+    fn parse_not(&mut self) -> Result<Expr, ()> {
         self.skip_expression_newlines();
         if self.is_ident("not") {
             let start = self.advance();
             self.skip_expression_newlines();
             let operand = self.parse_not()?;
-            let end = operand.span().end;
-            return Ok(Expr::Unary {
-                op: "not".to_string(),
-                operand: Box::new(operand),
-                span: Span::new(start.span.file, start.span.start, end),
-            });
+            return Ok(unary_op("not", start.span, operand));
         }
         self.parse_comparison()
     }
 
-    pub(super) fn parse_comparison(&mut self) -> Result<Expr, ()> {
+    fn parse_comparison(&mut self) -> Result<Expr, ()> {
         self.skip_expression_newlines();
         let mut left = self.parse_additive()?;
         loop {
@@ -120,7 +111,7 @@ impl Parser<'_> {
         Ok(left)
     }
 
-    pub(super) fn parse_additive(&mut self) -> Result<Expr, ()> {
+    fn parse_additive(&mut self) -> Result<Expr, ()> {
         self.skip_expression_newlines();
         let mut left = self.parse_multiplicative()?;
         loop {
@@ -130,11 +121,7 @@ impl Parser<'_> {
             {
                 let operator = self.advance();
                 let operand = self.parse_unary()?;
-                let unary = Expr::Unary {
-                    op: "-".to_string(),
-                    span: Span::new(operator.span.file, operator.span.start, operand.span().end),
-                    operand: Box::new(operand),
-                };
+                let unary = unary_op("-", operator.span, operand);
                 let right = self.parse_multiplicative_tail(unary)?;
                 left = binary("-", left, right);
                 continue;
@@ -152,13 +139,13 @@ impl Parser<'_> {
         Ok(left)
     }
 
-    pub(super) fn parse_multiplicative(&mut self) -> Result<Expr, ()> {
+    fn parse_multiplicative(&mut self) -> Result<Expr, ()> {
         self.skip_expression_newlines();
         let left = self.parse_unary()?;
         self.parse_multiplicative_tail(left)
     }
 
-    pub(super) fn parse_multiplicative_tail(&mut self, mut left: Expr) -> Result<Expr, ()> {
+    fn parse_multiplicative_tail(&mut self, mut left: Expr) -> Result<Expr, ()> {
         loop {
             self.skip_expression_newlines();
             let op = match self.peek_kind() {
@@ -175,31 +162,22 @@ impl Parser<'_> {
         Ok(left)
     }
 
-    pub(super) fn parse_unary(&mut self) -> Result<Expr, ()> {
+    fn parse_unary(&mut self) -> Result<Expr, ()> {
         self.skip_expression_newlines();
         if matches!(self.peek_kind(), TokenKind::Minus | TokenKind::Decrement) {
             let start = self.advance();
             self.skip_expression_newlines();
             let operand = self.parse_unary()?;
-            let end = operand.span().end;
-            let unary = Expr::Unary {
-                op: "-".to_string(),
-                operand: Box::new(operand),
-                span: Span::new(start.span.file, start.span.start, end),
-            };
+            let unary = unary_op("-", start.span, operand);
             if start.kind == TokenKind::Decrement {
-                return Ok(Expr::Unary {
-                    op: "-".to_string(),
-                    operand: Box::new(unary),
-                    span: Span::new(start.span.file, start.span.start, end),
-                });
+                return Ok(unary_op("-", start.span, unary));
             }
             return Ok(unary);
         }
         self.parse_power()
     }
 
-    pub(super) fn parse_power(&mut self) -> Result<Expr, ()> {
+    fn parse_power(&mut self) -> Result<Expr, ()> {
         let base = self.parse_postfix()?;
         self.skip_expression_newlines();
         if self.peek_kind() == TokenKind::DoubleStar {
@@ -242,12 +220,7 @@ impl Parser<'_> {
                             span: Span::new(span.file, span.start, end),
                         },
                         _other => {
-                            self.errors.push(OpyError::at(
-                                "parse-error",
-                                "cannot call this expression".to_string(),
-                                self.peek().span,
-                            ));
-                            return Err(());
+                            return self.fail("cannot call this expression".to_string());
                         }
                     };
                 }
@@ -259,10 +232,8 @@ impl Parser<'_> {
                         let maximum = self.parse_expr()?;
                         let end = self.expect(TokenKind::RBracket, "']'")?.span.end;
                         let Expr::Name { name, span } = &base else {
-                            self.error_at_current(
-                                "a range type must start with a type name".to_string(),
-                            );
-                            return Err(());
+                            return self
+                                .fail("a range type must start with a type name".to_string());
                         };
                         base = Expr::Type {
                             name: name.clone(),
@@ -284,20 +255,18 @@ impl Parser<'_> {
                 }
                 TokenKind::Dot => {
                     self.bump();
-                    let member_token = self.peek().clone();
                     let member = match self.peek_kind() {
-                        TokenKind::Ident | TokenKind::Number => self.advance().text,
+                        TokenKind::Ident | TokenKind::Number => self.advance(),
                         _ => {
-                            self.error_at_current("expected a member name after '.'".to_string());
-                            return Err(());
+                            return self.fail("expected a member name after '.'".to_string());
                         }
                     };
-                    let member_span = member_token.span;
+                    let member_span = member.span;
                     let end = member_span.end;
                     let span = Span::new(base.span().file, base.span().start, end);
                     base = Expr::Member {
                         receiver: Box::new(base),
-                        member,
+                        member: member.text,
                         member_span,
                         span,
                     };
@@ -322,8 +291,7 @@ impl Parser<'_> {
         if self.peek_kind() == closing && !allow_trailing_comma {
             // The reference keeps the empty segment after a trailing comma
             // and rejects it (issue #444); array literals allow it.
-            self.error_at_current("expected an item after ','".to_string());
-            return Err(());
+            return self.fail("expected an item after ','".to_string());
         }
         Ok(self.peek_kind() != closing)
     }
@@ -360,9 +328,7 @@ impl Parser<'_> {
             |parser| {
                 let expr = parser.parse_expr()?;
                 if parser.peek_kind() == TokenKind::Assign {
-                    parser
-                        .error_at_current("keyword arguments are not valid in @Event".to_string());
-                    return Err(());
+                    return parser.fail("keyword arguments are not valid in @Event".to_string());
                 }
                 Ok(expr)
             },
@@ -371,7 +337,7 @@ impl Parser<'_> {
         Ok(())
     }
 
-    pub(super) fn parse_call_args(&mut self, args: &mut Vec<CallArg>) -> Result<(), ()> {
+    fn parse_call_args(&mut self, args: &mut Vec<CallArg>) -> Result<(), ()> {
         self.expect(TokenKind::LParen, "'('")?;
         self.parse_delimited_items(
             args,
@@ -390,10 +356,8 @@ impl Parser<'_> {
                 let expr = parser.parse_expr()?;
                 if parser.peek_kind() == TokenKind::Assign {
                     let (true, Expr::Name { name, span }) = (bare_name, expr) else {
-                        parser.error_at_current(
-                            "expected a keyword name before '=' in this call".to_string(),
-                        );
-                        return Err(());
+                        return parser
+                            .fail("expected a keyword name before '=' in this call".to_string());
                     };
                     parser.advance();
                     let value = parser.parse_expr()?;
@@ -413,7 +377,7 @@ impl Parser<'_> {
         Ok(())
     }
 
-    pub(super) fn parse_primary(&mut self) -> Result<Expr, ()> {
+    fn parse_primary(&mut self) -> Result<Expr, ()> {
         let token = self.peek();
         match token.kind {
             TokenKind::Number => {
@@ -556,8 +520,7 @@ impl Parser<'_> {
                     };
                     self.skip_newlines();
                     if !self.is_ident("in") {
-                        self.error_at_current("expected `in` in list comprehension".to_string());
-                        return Err(());
+                        return self.fail("expected `in` in list comprehension".to_string());
                     }
                     self.bump();
                     self.skip_newlines();
@@ -600,14 +563,11 @@ impl Parser<'_> {
                 })
             }
             TokenKind::LBrace => self.parse_dict(),
-            _ => {
-                self.error_at_current(format!("expected an expression but found '{}'", token.text));
-                Err(())
-            }
+            _ => self.fail(format!("expected an expression but found '{}'", token.text)),
         }
     }
 
-    pub(super) fn parse_string_literal(&mut self) -> Expr {
+    fn parse_string_literal(&mut self) -> Expr {
         let mut first = self.advance();
         let mut value = std::mem::take(&mut first.text);
         let mut end = first.span.end;
@@ -641,7 +601,7 @@ impl Parser<'_> {
             && self.newline_after_line(then.layout.file, then.layout.end.line)
     }
 
-    pub(super) fn parse_dict(&mut self) -> Result<Expr, ()> {
+    fn parse_dict(&mut self) -> Result<Expr, ()> {
         let open = self.advance();
         let mut entries = Vec::new();
         let end = self
@@ -667,7 +627,7 @@ impl Parser<'_> {
         })
     }
 
-    pub(super) fn parse_lambda(&mut self, start: Span) -> Result<Expr, ()> {
+    fn parse_lambda(&mut self, start: Span) -> Result<Expr, ()> {
         let mut params = Vec::new();
         loop {
             let param = self.expect(TokenKind::Ident, "a lambda parameter")?;
@@ -689,11 +649,7 @@ impl Parser<'_> {
         })
     }
 
-    pub(super) fn parse_f_string(
-        &mut self,
-        raw: &str,
-        string_span: Span,
-    ) -> Result<(String, Vec<Expr>), ()> {
+    fn parse_f_string(&mut self, raw: &str, string_span: Span) -> Result<(String, Vec<Expr>), ()> {
         let chars: Vec<char> = raw.chars().collect();
         let mut text = String::new();
         let mut interpolations = Vec::new();
@@ -711,16 +667,15 @@ impl Parser<'_> {
                 '{' => {
                     let end = self.find_f_string_end(&chars, index + 1);
                     let Some(end) = end else {
-                        self.errors.push(OpyError::at(
+                        return self.fail_at(
                             "parse-error",
                             "unterminated f-string interpolation".to_string(),
                             string_span,
-                        ));
-                        return Err(());
+                        );
                     };
                     let expression: String = chars[index + 1..end].iter().collect();
                     if expression.trim().is_empty() {
-                        self.errors.push(OpyError::at(
+                        return self.fail_at(
                             "parse-error",
                             "f-string interpolation cannot be empty".to_string(),
                             crate::parser::bounded_span(
@@ -737,8 +692,7 @@ impl Parser<'_> {
                                 ),
                                 string_span,
                             ),
-                        ));
-                        return Err(());
+                        );
                     }
                     let origin = Position::new(
                         string_span.start.line,
@@ -762,12 +716,11 @@ impl Parser<'_> {
                     index = end + 1;
                 }
                 '}' => {
-                    self.errors.push(OpyError::at(
+                    return self.fail_at(
                         "parse-error",
                         "single '}' is not valid in an f-string".to_string(),
                         string_span,
-                    ));
-                    return Err(());
+                    );
                 }
                 '\\' if index + 1 < chars.len() => {
                     if chars[index + 1] == '&' {
@@ -779,21 +732,19 @@ impl Parser<'_> {
                             name_end += 1;
                         }
                         if name_end == name_start || chars.get(name_end) != Some(&';') {
-                            self.errors.push(OpyError::at(
+                            return self.fail_at(
                                 "invalid-string-entity",
                                 "string entity must have the form \\&name;".to_string(),
                                 string_span,
-                            ));
-                            return Err(());
+                            );
                         }
                         let name: String = chars[name_start..name_end].iter().collect();
                         let Some(decoded) = crate::string_entities::codepoint(&name) else {
-                            self.errors.push(OpyError::at(
+                            return self.fail_at(
                                 "unknown-string-entity",
                                 format!("unknown string entity '&{name};'"),
                                 string_span,
-                            ));
-                            return Err(());
+                            );
                         };
                         text.push(decoded);
                         index = name_end + 1;
@@ -808,12 +759,11 @@ impl Parser<'_> {
                                 .iter()
                                 .all(|character| character.is_ascii_hexdigit())
                         {
-                            self.errors.push(OpyError::at(
+                            return self.fail_at(
                                 "lex-error",
                                 format!("expected {digits} hexadecimal digits after '\\{escaped}'"),
                                 string_span,
-                            ));
-                            return Err(());
+                            );
                         }
                         let codepoint = chars[digits_start..digits_start + digits]
                             .iter()
@@ -824,12 +774,11 @@ impl Parser<'_> {
                         continue;
                     }
                     let Some(decoded) = decode_string_escape(chars[index + 1]) else {
-                        self.errors.push(OpyError::at(
+                        return self.fail_at(
                             "lex-error",
                             format!("unknown escape sequence '\\{}'", chars[index + 1]),
                             string_span,
-                        ));
-                        return Err(());
+                        );
                     };
                     text.push(decoded);
                     index += 2;
@@ -843,7 +792,7 @@ impl Parser<'_> {
         Ok((text, interpolations))
     }
 
-    pub(super) fn find_f_string_end(&self, chars: &[char], start: usize) -> Option<usize> {
+    fn find_f_string_end(&self, chars: &[char], start: usize) -> Option<usize> {
         let mut nested_braces = 0;
         let mut quote = None;
         let mut escaped = false;
@@ -871,6 +820,25 @@ impl Parser<'_> {
             }
         }
         None
+    }
+
+    fn fail<T>(&mut self, message: String) -> Result<T, ()> {
+        self.error_at_current(message);
+        Err(())
+    }
+
+    fn fail_at<T>(&mut self, code: &str, message: String, span: Span) -> Result<T, ()> {
+        self.errors.push(OpyError::at(code, message, span));
+        Err(())
+    }
+}
+
+fn unary_op(op: &str, start: Span, operand: Expr) -> Expr {
+    let span = Span::new(start.file, start.start, operand.span().end);
+    Expr::Unary {
+        op: op.to_string(),
+        operand: Box::new(operand),
+        span,
     }
 }
 

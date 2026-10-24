@@ -115,27 +115,29 @@ pub fn lower(
     lower_with_preprocessing(program, files, defines, &PreprocessingState::default())
 }
 
-pub fn lower_with_preprocessing(
-    program: &cst::Program,
-    files: Vec<SourceFile>,
-    defines: Vec<Define>,
-    preprocessing: &PreprocessingState,
-) -> OpyResult<HirProgram> {
-    let manifest = match Manifest::builtin() {
-        Ok(manifest) => manifest,
-        Err(error) => {
-            return Err(OpyError::new(
-                "manifest-error",
-                format!("cannot load the OPY semantic compatibility manifest: {error}"),
-            ));
-        }
-    };
+fn builtin_manifest_and_catalog() -> OpyResult<(&'static Manifest, &'static Catalog)> {
+    let manifest = Manifest::builtin().map_err(|error| {
+        OpyError::new(
+            "manifest-error",
+            format!("cannot load the OPY semantic compatibility manifest: {error}"),
+        )
+    })?;
     let catalog = Catalog::builtin_ref().map_err(|error| {
         OpyError::new(
             "catalog-error",
             format!("cannot load the Workshop catalog: {error}"),
         )
     })?;
+    Ok((manifest, catalog))
+}
+
+pub fn lower_with_preprocessing(
+    program: &cst::Program,
+    files: Vec<SourceFile>,
+    defines: Vec<Define>,
+    preprocessing: &PreprocessingState,
+) -> OpyResult<HirProgram> {
+    let (manifest, catalog) = builtin_manifest_and_catalog()?;
     lower_program(program, files, defines, preprocessing, manifest, catalog)
 }
 
@@ -308,21 +310,11 @@ fn texture_setup_rule() -> RuleEntry {
 }
 
 fn synthetic_call(name: &str, args: Vec<HirExpr>) -> HirExpr {
-    HirExpr::Call {
-        name: name.to_string(),
-        args,
-        debug_source: None,
-        span: None,
-    }
+    call_expr(name, args, None, None)
 }
 
 fn synthetic_method(receiver: HirExpr, name: &str, args: Vec<HirExpr>) -> HirExpr {
-    HirExpr::ReceiverCall {
-        receiver: Box::new(receiver),
-        name: name.to_string(),
-        args,
-        span: None,
-    }
+    receiver_call_expr(receiver, name, args, None)
 }
 
 fn synthetic_enum(value_type: &str, value: &str) -> HirExpr {
@@ -420,18 +412,7 @@ pub(crate) struct SettingsLowerer {
 
 impl SettingsLowerer {
     pub(crate) fn new(program: &cst::Program) -> OpyResult<Self> {
-        let manifest = Manifest::builtin().map_err(|error| {
-            OpyError::new(
-                "manifest-error",
-                format!("cannot load the OPY semantic compatibility manifest: {error}"),
-            )
-        })?;
-        let catalog = Catalog::builtin_ref().map_err(|error| {
-            OpyError::new(
-                "catalog-error",
-                format!("cannot load the Workshop catalog: {error}"),
-            )
-        })?;
+        let (manifest, catalog) = builtin_manifest_and_catalog()?;
         let mut lowerer = Lowerer::new(manifest, catalog);
         lowerer.current_order = program.top_level.len();
         lowerer.allow_dict_literal = true;
@@ -586,12 +567,7 @@ fn title_case(value: &str) -> String {
             capitalize = false;
         } else {
             result.push(ch);
-            if !ch.is_whitespace() && ch != '/' {
-                capitalize = false;
-            }
-        }
-        if ch == '/' || ch.is_whitespace() {
-            capitalize = true;
+            capitalize = ch == '/' || ch.is_whitespace();
         }
     }
     result
@@ -659,17 +635,13 @@ fn evaluate_condition(value: &str, values: &[(&str, TemplateValue)]) -> Result<b
 
 fn evaluate_string(value: &str, values: &[(&str, TemplateValue)]) -> Result<String, String> {
     let value = value.trim();
-    if let Some(body) = value
-        .strip_prefix("f\"")
-        .and_then(|body| body.strip_suffix('"'))
-    {
-        return interpolate_fstring(body, values);
-    }
-    if let Some(body) = value
-        .strip_prefix("f'")
-        .and_then(|body| body.strip_suffix('\''))
-    {
-        return interpolate_fstring(body, values);
+    for (prefix, quote) in [("f\"", '"'), ("f'", '\'')] {
+        if let Some(body) = value
+            .strip_prefix(prefix)
+            .and_then(|body| body.strip_suffix(quote))
+        {
+            return interpolate_fstring(body, values);
+        }
     }
     if value.len() >= 2
         && ((value.starts_with('"') && value.ends_with('"'))
@@ -705,18 +677,14 @@ fn lookup_template_value(
     values: &[(&str, TemplateValue)],
 ) -> Result<TemplateValue, String> {
     let value = value.trim();
-    let (base, mut methods) = value
-        .split_once('.')
-        .map_or((value, ""), |(base, methods)| (base, methods));
+    let (base, mut methods) = value.split_once('.').unwrap_or((value, ""));
     let mut result = values
         .iter()
         .find(|(name, _)| *name == base)
         .map(|(_, value)| value.clone())
         .ok_or_else(|| format!("unsupported expression '{value}'"))?;
     while !methods.is_empty() {
-        let (method, rest) = methods
-            .split_once('.')
-            .map_or((methods, ""), |(method, rest)| (method, rest));
+        let (method, rest) = methods.split_once('.').unwrap_or((methods, ""));
         if method == "upper()" {
             result = TemplateValue::String(as_string(&result).to_uppercase());
         } else if method == "lower()" {
@@ -862,6 +830,26 @@ impl Lowerer {
         let ranked = crate::matcher::rank_closed(rejected, pool);
         self.error_at(code, crate::matcher::did_you_mean(message, &ranked), span);
     }
+
+    fn reject_keyword_args(&mut self, kind: &str, id: &str, args: &[cst::CallArg]) {
+        for arg in args {
+            if let Some((keyword, span)) = &arg.keyword {
+                self.error_at(
+                    "keyword-unsupported",
+                    format!("{kind} '{id}' does not accept keyword arguments ('{keyword}')"),
+                    *span,
+                );
+            }
+        }
+    }
+
+    fn with_dict_literal<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
+        let previous = self.allow_dict_literal;
+        self.allow_dict_literal = true;
+        let result = f(self);
+        self.allow_dict_literal = previous;
+        result
+    }
 }
 
 fn keyword_spellings(param: &Param) -> Vec<String> {
@@ -874,22 +862,78 @@ fn arg_span(args: &[CallArg], fallback: Span) -> Span {
     args.first().map(CallArg::span).unwrap_or(fallback)
 }
 
+fn call_expr(
+    name: impl Into<String>,
+    args: Vec<HirExpr>,
+    debug_source: Option<String>,
+    span: Option<HirSpan>,
+) -> HirExpr {
+    HirExpr::Call {
+        name: name.into(),
+        args,
+        debug_source,
+        span,
+    }
+}
+
+fn member_expr(receiver: HirExpr, member: &str, member_span: Span, span: Span) -> HirExpr {
+    HirExpr::Member {
+        receiver: Box::new(receiver),
+        member: member.to_string(),
+        member_span: Some(member_span.into()),
+        span: Some(span.into()),
+    }
+}
+
+fn player_var_expr(player: HirExpr, member: &str, member_span: Span, span: Span) -> HirExpr {
+    HirExpr::PlayerVar {
+        player: Box::new(player),
+        name: member.to_string(),
+        member_span: Some(member_span.into()),
+        span: Some(span.into()),
+    }
+}
+
+fn receiver_call_expr(
+    receiver: HirExpr,
+    name: impl Into<String>,
+    args: Vec<HirExpr>,
+    span: Option<HirSpan>,
+) -> HirExpr {
+    HirExpr::ReceiverCall {
+        receiver: Box::new(receiver),
+        name: name.into(),
+        args,
+        span,
+    }
+}
+
 fn context_player_expr(name: &str, span: Option<Span>) -> Option<HirExpr> {
     match name {
         "eventPlayer" => Some(HirExpr::EventPlayer {
             span: span.map(Into::into),
         }),
-        "localPlayer" | "attacker" | "victim" | "healer" | "healee" => Some(HirExpr::Call {
-            name: name.to_string(),
-            args: Vec::new(),
-            debug_source: None,
-            span: span.map(Into::into),
-        }),
+        "localPlayer" | "attacker" | "victim" | "healer" | "healee" => {
+            Some(call_expr(name, Vec::new(), None, span.map(Into::into)))
+        }
         "hostPlayer" => Some(HirExpr::HostPlayer {
             span: span.map(Into::into),
         }),
         _ => None,
     }
+}
+
+fn context_player_receiver(name: &str, receiver_span: Span) -> Option<HirExpr> {
+    if !matches!(
+        name,
+        "eventPlayer" | "hostPlayer" | "localPlayer" | "attacker" | "victim"
+    ) {
+        return None;
+    }
+    context_player_expr(
+        name,
+        (!matches!(name, "eventPlayer" | "hostPlayer")).then_some(receiver_span),
+    )
 }
 
 /// The bare-spelled values a call with an empty argument list resolves to:
@@ -905,12 +949,8 @@ fn bare_spelled_value_expr(name: &str, span: Option<Span>) -> Option<HirExpr> {
         return Some(player);
     }
     match name {
-        "true" => Some(HirExpr::Bool {
-            value: true,
-            span: span.map(Into::into),
-        }),
-        "false" => Some(HirExpr::Bool {
-            value: false,
+        "true" | "false" => Some(HirExpr::Bool {
+            value: name == "true",
             span: span.map(Into::into),
         }),
         "null" => Some(HirExpr::Null {
@@ -1180,10 +1220,21 @@ mod tests {
         lower(&program, vec![], vec![]).expect("lowers without errors")
     }
 
-    fn rule_conditions_and_actions(hir: &HirProgram) -> (&Vec<HirExpr>, &Vec<HirStmt>) {
-        let HirRuleEntry::Rule(rule) = &hir.rules[0] else {
+    #[track_caller]
+    fn compile_hir(source: &str) -> OpyResult<HirProgram> {
+        crate::compile(source, "test.opy", std::path::Path::new(""))
+    }
+
+    #[track_caller]
+    fn first_rule(hir: &HirProgram) -> &Rule {
+        let RuleEntry::Rule(rule) = &hir.rules[0] else {
             panic!("expected a rule");
         };
+        rule
+    }
+
+    fn rule_conditions_and_actions(hir: &HirProgram) -> (&Vec<HirExpr>, &Vec<HirStmt>) {
+        let rule = first_rule(hir);
         (&rule.conditions, &rule.actions)
     }
 
@@ -1283,9 +1334,7 @@ mod tests {
                 let hir = lower_ok(&format!(
                     "globalvar g\nrule \"r\":\n    @Event {event}\n    g = {receiver_name}.{axis}\n"
                 ));
-                let HirRuleEntry::Rule(rule) = &hir.rules[0] else {
-                    panic!("expected a rule");
-                };
+                let rule = first_rule(&hir);
                 let HirStmt::Assign { value, .. } = &rule.actions[0] else {
                     panic!("expected an assign statement");
                 };
@@ -1463,11 +1512,8 @@ mod tests {
     }
 
     fn lowered_value(source: &str) -> HirExpr {
-        let program = crate::compile(source, "test.opy", std::path::Path::new(""))
-            .unwrap_or_else(|error| panic!("compile failed: {error}"));
-        let RuleEntry::Rule(rule) = &program.rules[0] else {
-            panic!("expected a rule");
-        };
+        let program = compile_hir(source).unwrap_or_else(|error| panic!("compile failed: {error}"));
+        let rule = first_rule(&program);
         let HirStmt::Assign { value, .. } = &rule.actions[0] else {
             panic!("expected an assign statement");
         };
@@ -1514,10 +1560,8 @@ mod tests {
 
     #[test]
     fn unknown_chase_time_reeval_member_is_rejected_by_the_catalog() {
-        let error = crate::compile(
+        let error = compile_hir(
             "globalvar g\nrule \"r\":\n    @Event global\n    g = ChaseTimeReeval.NOPE\n",
-            "test.opy",
-            std::path::Path::new(""),
         )
         .expect_err("unknown catalog member must be rejected");
         assert_eq!(error.code, "unknown-enum-member");
@@ -1525,10 +1569,8 @@ mod tests {
 
     #[test]
     fn unknown_enum_receiver_is_an_unsupported_member_error() {
-        let error = crate::compile(
+        let error = compile_hir(
             "globalvar g\nrule \"r\":\n    @Event global\n    g = NotARealEnum.MEMBER\n",
-            "test.opy",
-            std::path::Path::new(""),
         )
         .expect_err("an unknown enum type must fail");
         assert_eq!(error.code, "unsupported-member");
@@ -1538,18 +1580,15 @@ mod tests {
 
     #[test]
     fn unknown_texture_member_is_rejected_by_the_source_surface() {
-        let error = crate::compile(
+        let error = compile_hir(
             "globalvar g\nrule \"r\":\n    @Event global\n    g = Texture.NOT_A_TEXTURE\n",
-            "test.opy",
-            std::path::Path::new(""),
         )
         .expect_err("unknown texture member must be rejected");
         assert_eq!(error.code, "unknown-texture-member");
     }
 
     fn compile_error(source: &str, line: u32) -> OpyError {
-        let error = crate::compile(source, "test.opy", std::path::Path::new(""))
-            .expect_err("expected a compile failure");
+        let error = compile_hir(source).expect_err("expected a compile failure");
         let span = error.span.expect("the error is source-located");
         assert_eq!(span.start.line, line, "code '{}'", error.code);
         error
@@ -1615,15 +1654,9 @@ mod tests {
 
     #[test]
     fn hud_reeval_string_and_color_alias_resolves_and_ranks() {
-        let hir = crate::compile(
-            &action_source("g = HudReeval.VISIBILITY_STRING_AND_COLOR"),
-            "test.opy",
-            std::path::Path::new(""),
-        )
-        .expect("the accepted alternate resolves");
-        let RuleEntry::Rule(rule) = &hir.rules[0] else {
-            panic!("expected a rule");
-        };
+        let hir = compile_hir(&action_source("g = HudReeval.VISIBILITY_STRING_AND_COLOR"))
+            .expect("the accepted alternate resolves");
+        let rule = first_rule(&hir);
         let HirStmt::Assign { value, .. } = &rule.actions[0] else {
             panic!("expected an assignment");
         };
@@ -1663,15 +1696,11 @@ mod tests {
 
     #[test]
     fn chase_over_time_resolves_and_compiles_with_reference_signatures() {
-        let hir = crate::compile(
-            &action_source("chaseOverTime(g, 10, 3, ChaseTimeReeval.NONE)"),
-            "test.opy",
-            std::path::Path::new(""),
-        )
+        let hir = compile_hir(&action_source(
+            "chaseOverTime(g, 10, 3, ChaseTimeReeval.NONE)",
+        ))
         .expect("reference-supported chaseOverTime compiles");
-        let RuleEntry::Rule(rule) = &hir.rules[0] else {
-            panic!("expected a rule");
-        };
+        let rule = first_rule(&hir);
         let HirStmt::Expr { expr, .. } = &rule.actions[0] else {
             panic!("expected expression statement");
         };
@@ -1686,15 +1715,9 @@ mod tests {
                 if value_type == "ChaseTimeReeval" && value == "NONE"
         ));
 
-        let hir = crate::compile(
-            &action_source("chaseOverTime(g, 10, 3)"),
-            "test.opy",
-            std::path::Path::new(""),
-        )
-        .expect("default-reevaluation chaseOverTime compiles");
-        let RuleEntry::Rule(rule) = &hir.rules[0] else {
-            panic!("expected a rule");
-        };
+        let hir = compile_hir(&action_source("chaseOverTime(g, 10, 3)"))
+            .expect("default-reevaluation chaseOverTime compiles");
+        let rule = first_rule(&hir);
         let HirStmt::Expr { expr, .. } = &rule.actions[0] else {
             panic!("expected expression statement");
         };
@@ -1711,15 +1734,9 @@ mod tests {
 
     #[test]
     fn is_game_in_progress_resolves_as_a_builtin_value() {
-        let hir = crate::compile(
-            &action_source("@Condition isGameInProgress() == true"),
-            "test.opy",
-            std::path::Path::new(""),
-        )
-        .expect("reference-supported isGameInProgress compiles");
-        let RuleEntry::Rule(rule) = &hir.rules[0] else {
-            panic!("expected a rule");
-        };
+        let hir = compile_hir(&action_source("@Condition isGameInProgress() == true"))
+            .expect("reference-supported isGameInProgress compiles");
+        let rule = first_rule(&hir);
         assert!(matches!(&rule.conditions[0], HirExpr::Binary { .. }));
     }
 
@@ -1730,11 +1747,8 @@ mod tests {
             @Condition worldVector(vect(1, 2, 3), eventPlayer, Transform.ROTATION) != vect(0, 0, 0)\n    \
             eventPlayer.setInvisibility(Invis.ALL)\n    \
             eventPlayer.setStatusEffect(eventPlayer, Status.ROOTED, 2)\n";
-        let hir = crate::compile(source, "test.opy", std::path::Path::new(""))
-            .expect("enum-gated members compile");
-        let RuleEntry::Rule(rule) = &hir.rules[0] else {
-            panic!("expected a rule");
-        };
+        let hir = compile_hir(source).expect("enum-gated members compile");
+        let rule = first_rule(&hir);
         assert_eq!(rule.actions.len(), 2);
     }
 
@@ -1742,17 +1756,13 @@ mod tests {
     fn get_players_in_radius_fills_reference_enum_defaults() {
         // 2-argument form fills Team.ALL and LosCheck.OFF (reference
         // emission: `Players Within Radius(..., All Teams, Off)`).
-        let hir = crate::compile(
+        let hir = compile_hir(
             "globalvar g\nrule \"r\":\n    @Event eachPlayer\n    \
              @Condition len(getPlayersInRadius(eventPlayer.getPosition(), 10)) > 0\n    \
              disableInspector()\n",
-            "test.opy",
-            std::path::Path::new(""),
         )
         .expect("getPlayersInRadius with defaults compiles");
-        let RuleEntry::Rule(rule) = &hir.rules[0] else {
-            panic!("expected a rule");
-        };
+        let rule = first_rule(&hir);
         let HirExpr::Binary { left, .. } = &rule.conditions[0] else {
             panic!("expected a comparison");
         };
@@ -1793,11 +1803,8 @@ mod tests {
     }
 
     fn first_action_expr(source: &str) -> HirExpr {
-        let program = crate::compile(source, "test.opy", std::path::Path::new(""))
-            .unwrap_or_else(|error| panic!("compile failed: {error}"));
-        let RuleEntry::Rule(rule) = &program.rules[0] else {
-            panic!("expected a rule");
-        };
+        let program = compile_hir(source).unwrap_or_else(|error| panic!("compile failed: {error}"));
+        let rule = first_rule(&program);
         match &rule.actions[0] {
             HirStmt::Expr { expr, .. } => (**expr).clone(),
             HirStmt::Assign { value, .. } => (**value).clone(),
@@ -1918,12 +1925,8 @@ mod tests {
         );
         assert_eq!(error.code, "invalid-argument");
 
-        crate::compile(
-            &action_source("chaseAtRate(g, 0, 2, ChaseRateReeval.NONE)"),
-            "test.opy",
-            std::path::Path::new(""),
-        )
-        .expect("a variable first argument compiles");
+        compile_hir(&action_source("chaseAtRate(g, 0, 2, ChaseRateReeval.NONE)"))
+            .expect("a variable first argument compiles");
     }
 
     #[test]
@@ -2034,12 +2037,8 @@ mod tests {
         let error = compile_error(&action_source("g = sorted([1, 2], (key)=lambda v: -v)"), 4);
         assert_eq!(error.code, "parse-error");
 
-        crate::compile(
-            &action_source("g = vect(x=1, y=2, z=3) + vect((g), 2, 3)"),
-            "test.opy",
-            std::path::Path::new(""),
-        )
-        .expect("bare keyword arguments compile");
+        compile_hir(&action_source("g = vect(x=1, y=2, z=3) + vect((g), 2, 3)"))
+            .expect("bare keyword arguments compile");
     }
 
     #[test]
@@ -2056,24 +2055,11 @@ mod tests {
             assert_eq!(error.code, "parse-error", "statement: {statement}");
         }
 
-        crate::compile(
-            &action_source("g = [1, 2,]"),
-            "test.opy",
-            std::path::Path::new(""),
-        )
-        .expect("array literal trailing comma compiles");
-        crate::compile(
-            &action_source("g = {\"a\": 1,}[\"a\"]"),
-            "test.opy",
-            std::path::Path::new(""),
-        )
-        .expect("dict literal trailing comma compiles");
-        crate::compile(
-            "rule \"r\":\n    @Event playerDied(victim,)\n    wait(1)\n",
-            "test.opy",
-            std::path::Path::new(""),
-        )
-        .expect("@Event argument trailing comma compiles");
+        compile_hir(&action_source("g = [1, 2,]")).expect("array literal trailing comma compiles");
+        compile_hir(&action_source("g = {\"a\": 1,}[\"a\"]"))
+            .expect("dict literal trailing comma compiles");
+        compile_hir("rule \"r\":\n    @Event playerDied(victim,)\n    wait(1)\n")
+            .expect("@Event argument trailing comma compiles");
     }
 
     #[test]
@@ -2093,12 +2079,8 @@ mod tests {
             assert_eq!(error.code, "lambda-context", "statement: {statement}");
         }
 
-        crate::compile(
-            &action_source("g = sorted([1, 2], key=lambda v: -v)"),
-            "test.opy",
-            std::path::Path::new(""),
-        )
-        .expect("bare lambda key compiles");
+        compile_hir(&action_source("g = sorted([1, 2], key=lambda v: -v)"))
+            .expect("bare lambda key compiles");
     }
 
     #[test]
@@ -2163,18 +2145,10 @@ mod tests {
         assert_eq!(error.code, "invalid-receiver");
         assert!(error.message.contains("format"));
 
-        crate::compile(
-            &action_source("g.append(1)\n    g.remove(1)"),
-            "test.opy",
-            std::path::Path::new(""),
-        )
-        .expect("assignable receivers compile");
-        crate::compile(
-            &action_source("g = \"{}\".format(1)"),
-            "test.opy",
-            std::path::Path::new(""),
-        )
-        .expect("a string-literal receiver compiles");
+        compile_hir(&action_source("g.append(1)\n    g.remove(1)"))
+            .expect("assignable receivers compile");
+        compile_hir(&action_source("g = \"{}\".format(1)"))
+            .expect("a string-literal receiver compiles");
     }
 
     fn lower_with_manifest(source: &str, manifest: &'static Manifest) -> OpyResult<HirProgram> {
@@ -2354,10 +2328,8 @@ mod tests {
             assert_eq!(error.code, "unknown-member", "{axis}()");
         }
 
-        crate::compile(
+        compile_hir(
             "globalvar g\nrule \"r\":\n    @Event eachPlayer\n    g = evalOnce(1)\n    g = getLastCreatedEntity()\n    g = getLastCreatedText()\n    g = getTankHeroes()\n    g = getDamageHeroes()\n    g = getSupportHeroes()\n    g = eventPlayer.isHoldingButton(Button.PRIMARY_FIRE)\n    destroyAllHudTexts()\n",
-            "test.opy",
-            std::path::Path::new(""),
         )
         .expect("the upstream spellings compile");
     }
@@ -2437,25 +2409,15 @@ mod tests {
         let error = compile_error(&action_source("for g in [1, 2]:\n        debug(g)"), 4);
         assert_eq!(error.code, "invalid-iterable");
 
-        crate::compile(
-            &action_source("for g in range(3):\n        debug(g)"),
-            "test.opy",
-            std::path::Path::new(""),
-        )
-        .expect("the for-header range form compiles");
+        compile_hir(&action_source("for g in range(3):\n        debug(g)"))
+            .expect("the for-header range form compiles");
     }
 
     #[test]
     fn source_aliases_resolve_to_canonical_names() {
-        let hir = crate::compile(
-            &action_source("stopChasingVariable(g)"),
-            "test.opy",
-            std::path::Path::new(""),
-        )
-        .expect("the alias target compiles");
-        let RuleEntry::Rule(rule) = &hir.rules[0] else {
-            panic!("expected a rule");
-        };
+        let hir = compile_hir(&action_source("stopChasingVariable(g)"))
+            .expect("the alias target compiles");
+        let rule = first_rule(&hir);
         let HirStmt::Expr { expr, .. } = &rule.actions[0] else {
             panic!("expected expression statement");
         };
@@ -2464,18 +2426,14 @@ mod tests {
         };
         assert_eq!(name, "stopChasingVariable");
 
-        let hir = crate::compile(
+        let hir = compile_hir(
             "globalvar g\nrule \"r\":\n    @Event eachPlayer\n    \
              @Condition eventPlayer.getCurrentHero() != null\n    \
              @Condition eventPlayer.hasStatusEffect(Status.BURNING) == false\n    \
              disableInspector()\n",
-            "test.opy",
-            std::path::Path::new(""),
         )
         .expect("member aliases compile");
-        let RuleEntry::Rule(rule) = &hir.rules[0] else {
-            panic!("expected a rule");
-        };
+        let rule = first_rule(&hir);
         let HirExpr::Binary { left, .. } = &rule.conditions[0] else {
             panic!("expected a comparison");
         };
@@ -2491,8 +2449,7 @@ mod tests {
             "globalvar g\nrule \"r\":\n    @Event global\n    g = Color.CYAN\n",
             "globalvar g\nrule \"r\":\n    @Event global\n    g = DynamicEffect.SPARKLES\n",
         ] {
-            let error = crate::compile(source, "test.opy", std::path::Path::new(""))
-                .expect_err("unknown catalog member must be rejected");
+            let error = compile_hir(source).expect_err("unknown catalog member must be rejected");
             assert_eq!(error.code, "unknown-enum-member");
         }
     }

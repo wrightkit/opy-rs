@@ -338,12 +338,12 @@ impl Lowerer {
                 );
                 return HirExpr::Null { span: None };
             }
-            return HirExpr::PlayerVar {
-                player: Box::new(self.lower_expr(receiver, macro_params, CallPosition::Value)),
-                name: member.clone(),
-                member_span: Some((*member_span).into()),
-                span: Some((*span).into()),
-            };
+            return player_var_expr(
+                self.lower_expr(receiver, macro_params, CallPosition::Value),
+                member,
+                *member_span,
+                *span,
+            );
         }
         let lowered = self.lower_expr(variable, macro_params, CallPosition::Value);
         if !matches!(

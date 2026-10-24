@@ -8,9 +8,9 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::edits::{
-    LspPosition, SiteToken, SourceText, carries_source, char_index_at_column, char_index_at_utf16,
-    document_root, frontend_column, ident_token_at, narrow_site, normalized, overlay_map,
-    token_range,
+    LspPosition, SiteToken, SourceText, char_index_at_column, char_index_at_utf16, document_root,
+    file_ids_covering, frontend_column, ident_token_at, invalid_position, narrow_site, normalized,
+    overlay_map, token_range,
 };
 use crate::{
     Document, HandlerError, document_path, effective_entry, lsp_position, path_string,
@@ -78,9 +78,9 @@ fn parse_params<T: serde::de::DeserializeOwned>(
             SPEC_PARAM_FIELDS.contains(&key.as_str()) && !allowed.contains(&key.as_str())
         })
     {
-        return Err(invalid_params());
+        return Err(HandlerError::invalid_params());
     }
-    serde_json::from_value(params).map_err(|_| invalid_params())
+    serde_json::from_value(params).map_err(|_| HandlerError::invalid_params())
 }
 
 struct PositionView {
@@ -90,25 +90,8 @@ struct PositionView {
     position: Position,
 }
 
-fn invalid_params() -> HandlerError {
-    HandlerError::Standard {
-        code: -32602,
-        message: "Invalid params",
-    }
-}
-
 fn no_symbol(code: &'static str, uri: &str) -> HandlerError {
     HandlerError::refusal(code, json!({ "uri": uri }), "no symbol at position")
-}
-
-fn file_ids_covering(outcome: &CheckOutcome, path: &Path) -> BTreeSet<u32> {
-    outcome
-        .files
-        .iter()
-        .filter(|file| carries_source(outcome, file))
-        .filter(|file| same_path(&resolved_path(&outcome.display_root, &file.path), path))
-        .map(|file| file.id)
-        .collect()
 }
 
 fn declaration_token(text: &str, site: &SourceLocation, name: &str) -> Option<SiteToken> {
@@ -213,20 +196,12 @@ fn position_view(
     let mut singleton = BTreeMap::new();
     singleton.insert(document.uri.clone(), document.clone());
     validate_documents(&singleton)?;
-    let invalid_position = || HandlerError::Lpp {
-        kind: "invalidPosition",
-        details: json!({
-            "uri": document.uri,
-            "position": { "line": position.line, "character": position.character },
-        }),
-        message: "position outside document".to_string(),
-    };
     let source = SourceText::new(&document.text);
     let Some(line) = source.line_text(position.line as usize) else {
-        return Err(invalid_position());
+        return Err(invalid_position(&document.uri, position));
     };
     let Some(index) = char_index_at_utf16(line, position.character) else {
-        return Err(invalid_position());
+        return Err(invalid_position(&document.uri, position));
     };
     let frontend_position = Position::new(position.line + 1, frontend_column(line, index));
     let position_path = document_path(document)?;
@@ -278,7 +253,7 @@ fn symbols_at<'v>(view: &'v PositionView, document: &Document) -> Vec<&'v Symbol
 pub(crate) fn symbols(params: Value) -> Result<Value, HandlerError> {
     let params: SymbolsParams = parse_params(params, &["documents", "projectRoot"])?;
     let Some(documents) = params.documents else {
-        return Err(invalid_params());
+        return Err(HandlerError::invalid_params());
     };
     validate_documents(&documents)?;
     let overlay = overlay_map(&documents, None)?;

@@ -57,33 +57,29 @@ impl std::error::Error for ReconstructError {}
 /// and Workshop catalog (`en-US`). Returns all diagnostics when a construct
 /// cannot be represented in OPY.
 pub fn reconstruct(program: &Program) -> Result<String, ReconstructError> {
-    let manifest = match Manifest::builtin() {
-        Ok(manifest) => manifest,
-        Err(error) => {
-            return Err(ReconstructError {
-                issues: vec![ReconstructIssue {
-                    code: "manifest-error",
-                    message: format!(
-                        "cannot load the OPY semantic compatibility manifest: {error}"
-                    ),
-                    span: None,
-                }],
-            });
-        }
-    };
-    let catalog = match Catalog::builtin_ref() {
-        Ok(catalog) => catalog,
-        Err(error) => {
-            return Err(ReconstructError {
-                issues: vec![ReconstructIssue {
-                    code: "catalog-error",
-                    message: format!("cannot load the Workshop catalog: {error}"),
-                    span: None,
-                }],
-            });
-        }
-    };
+    let manifest = Manifest::builtin().map_err(|error| {
+        single_issue(
+            "manifest-error",
+            format!("cannot load the OPY semantic compatibility manifest: {error}"),
+        )
+    })?;
+    let catalog = Catalog::builtin_ref().map_err(|error| {
+        single_issue(
+            "catalog-error",
+            format!("cannot load the Workshop catalog: {error}"),
+        )
+    })?;
     reconstruct_with(program, manifest, catalog, &Locale::new("en-US"))
+}
+
+fn single_issue(code: &'static str, message: String) -> ReconstructError {
+    ReconstructError {
+        issues: vec![ReconstructIssue {
+            code,
+            message,
+            span: None,
+        }],
+    }
 }
 
 /// The context-sensitive form of [`reconstruct`]: resolves identities through
@@ -167,7 +163,7 @@ struct Emitter<'a> {
 
 type IndexedRule<'a> = (usize, &'a Rule);
 
-type Initializers = std::collections::HashMap<usize, (Value, Option<Span>)>;
+type Initializers = HashMap<usize, (Value, Option<Span>)>;
 
 struct RuleLayout<'a> {
     global_init: Option<Initializers>,
@@ -256,35 +252,45 @@ impl<'a> Emitter<'a> {
     }
 
     fn validate_tables(&mut self) {
+        self.check_declaration_table(
+            "global variable",
+            self.program
+                .global_variables
+                .iter()
+                .map(|variable| (variable.name.as_str(), variable.index)),
+        );
+        self.check_declaration_table(
+            "player variable",
+            self.program
+                .player_variables
+                .iter()
+                .map(|variable| (variable.name.as_str(), variable.index)),
+        );
+        self.check_declaration_table(
+            "subroutine",
+            self.program
+                .subroutines
+                .iter()
+                .map(|subroutine| (subroutine.name.as_str(), subroutine.index)),
+        );
+    }
+
+    fn check_declaration_table<'b>(
+        &mut self,
+        kind: &str,
+        entries: impl Iterator<Item = (&'b str, Option<u32>)>,
+    ) {
+        let mut seen = HashSet::new();
         let mut taken = HashSet::new();
-        for (position, variable) in self.program.global_variables.iter().enumerate() {
-            self.check_duplicate_name(&variable.name, position, "global variable", None);
-            self.check_index(
-                variable.index.unwrap_or(position as u32),
-                &mut taken,
-                "global variable",
-                &variable.name,
-            );
-        }
-        taken.clear();
-        for (position, variable) in self.program.player_variables.iter().enumerate() {
-            self.check_duplicate_name(&variable.name, position, "player variable", None);
-            self.check_index(
-                variable.index.unwrap_or(position as u32),
-                &mut taken,
-                "player variable",
-                &variable.name,
-            );
-        }
-        taken.clear();
-        for (position, subroutine) in self.program.subroutines.iter().enumerate() {
-            self.check_duplicate_name(&subroutine.name, position, "subroutine", None);
-            self.check_index(
-                subroutine.index.unwrap_or(position as u32),
-                &mut taken,
-                "subroutine",
-                &subroutine.name,
-            );
+        for (position, (name, index)) in entries.enumerate() {
+            if !seen.insert(name) {
+                self.issue(
+                    "unsupported-duplicate-name",
+                    format!("duplicate {kind} name '{name}'"),
+                    None,
+                );
+            }
+            self.check_index(index.unwrap_or(position as u32), &mut taken, kind, name);
         }
     }
 
@@ -300,45 +306,6 @@ impl<'a> Emitter<'a> {
                 "unsupported-index",
                 format!("{kind} '{name}' shares declaration index {index} with a sibling"),
                 None,
-            );
-        }
-    }
-
-    fn check_duplicate_name(
-        &mut self,
-        name: &str,
-        position: usize,
-        kind: &str,
-        span: Option<Span>,
-    ) {
-        let duplicate = match kind {
-            "global variable" => self
-                .program
-                .global_variables
-                .iter()
-                .enumerate()
-                .take(position)
-                .any(|(_, other)| other.name == name),
-            "player variable" => self
-                .program
-                .player_variables
-                .iter()
-                .enumerate()
-                .take(position)
-                .any(|(_, other)| other.name == name),
-            _ => self
-                .program
-                .subroutines
-                .iter()
-                .enumerate()
-                .take(position)
-                .any(|(_, other)| other.name == name),
-        };
-        if duplicate {
-            self.issue(
-                "unsupported-duplicate-name",
-                format!("duplicate {kind} name '{name}'"),
-                span,
             );
         }
     }
@@ -502,7 +469,7 @@ impl<'a> Emitter<'a> {
             self.out.push('\n');
         }
 
-        let mut defined = std::collections::HashSet::new();
+        let mut defined = HashSet::new();
         for (rule_index, rule) in &layout.sub_rules {
             let Event::Subroutine(subroutine_name) = &rule.event else {
                 continue;
@@ -557,12 +524,7 @@ impl<'a> Emitter<'a> {
                     self.emit_commented_condition(*rule_index, condition_index, condition);
                     continue;
                 }
-                self.out.push_str("    @Condition ");
-                self.emit_value(
-                    &condition.value,
-                    self.program.condition_span(*rule_index, condition_index),
-                );
-                self.out.push('\n');
+                self.emit_condition_line(*rule_index, condition_index, condition);
             }
             self.emit_actions(*rule_index, &rule.actions, 1);
             self.out.push('\n');
@@ -578,6 +540,20 @@ impl<'a> Emitter<'a> {
         self.out.push_str("    pass\n");
     }
 
+    fn emit_condition_line(
+        &mut self,
+        rule_index: usize,
+        condition_index: usize,
+        condition: &Condition,
+    ) {
+        self.out.push_str("    @Condition ");
+        self.emit_value(
+            &condition.value,
+            self.program.condition_span(rule_index, condition_index),
+        );
+        self.out.push('\n');
+    }
+
     fn emit_commented_condition(
         &mut self,
         rule_index: usize,
@@ -585,12 +561,7 @@ impl<'a> Emitter<'a> {
         condition: &Condition,
     ) {
         let scratch = std::mem::take(&mut self.out);
-        self.out.push_str("    @Condition ");
-        self.emit_value(
-            &condition.value,
-            self.program.condition_span(rule_index, condition_index),
-        );
-        self.out.push('\n');
+        self.emit_condition_line(rule_index, condition_index, condition);
         self.flush_commented(scratch, 1);
     }
 
@@ -712,7 +683,7 @@ impl<'a> Emitter<'a> {
         &mut self,
         global: bool,
         order: &[(usize, u32)],
-        initializers: &HashMap<usize, (Value, Option<Span>)>,
+        initializers: &Initializers,
     ) {
         let kind = if global { "globalvar" } else { "playervar" };
         let (variables, names) = if global {
@@ -772,7 +743,7 @@ impl<'a> Emitter<'a> {
     fn emit_actions(&mut self, rule_index: usize, actions: &[Action], level: usize) {
         self.labels.clear();
         self.skip_labels.clear();
-        self.plan_labels(rule_index, actions);
+        self.plan_labels(actions);
         let mut position = 0;
         self.emit_action_block(rule_index, actions, &mut position, level);
         self.emit_labels_at(actions.len(), level);
@@ -785,8 +756,7 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    fn plan_labels(&mut self, rule_index: usize, actions: &[Action]) {
-        let _ = rule_index;
+    fn plan_labels(&mut self, actions: &[Action]) {
         let mut depth = vec![0usize; actions.len() + 1];
         for (index, action) in actions.iter().enumerate() {
             depth[index + 1] = match action {
@@ -986,10 +956,7 @@ impl<'a> Emitter<'a> {
                         .action_argument_span(rule_index, action_index, 0),
                 );
                 self.out.push_str(":\n");
-                self.loop_depth += 1;
-                self.emit_action_block(rule_index, actions, position, level + 1);
-                self.loop_depth -= 1;
-                self.require_end(rule_index, actions, position, "while", span);
+                self.emit_loop_tail(rule_index, actions, position, level, "while", span);
             }
             Action::ForGlobalVariable {
                 variable,
@@ -998,12 +965,7 @@ impl<'a> Emitter<'a> {
                 step,
             } => {
                 let span = self.program.action_span(rule_index, action_index);
-                let Some(declaration) = self
-                    .program
-                    .global_variables
-                    .iter()
-                    .find(|declaration| declaration.name == *variable)
-                else {
+                if !declared(&self.program.global_variables, variable) {
                     self.issue(
                         "unsupported-dangling",
                         format!("unknown loop variable '{variable}'"),
@@ -1011,27 +973,14 @@ impl<'a> Emitter<'a> {
                     );
                     self.skip_action_block(actions, position);
                     return;
-                };
+                }
                 self.out.push_str(&Self::indent(level));
                 self.out.push_str("for ");
-                self.out
-                    .push_str(emitted(&self.global_names, &declaration.name));
+                self.out.push_str(emitted(&self.global_names, variable));
                 self.out.push_str(" in range(");
-                for (arg_index, value) in [start, stop, step].into_iter().enumerate() {
-                    if arg_index > 0 {
-                        self.out.push_str(", ");
-                    }
-                    self.emit_value(
-                        value,
-                        self.program
-                            .action_argument_span(rule_index, action_index, arg_index),
-                    );
-                }
+                self.emit_range_args(rule_index, action_index, 0, [start, stop, step]);
                 self.out.push_str("):\n");
-                self.loop_depth += 1;
-                self.emit_action_block(rule_index, actions, position, level + 1);
-                self.loop_depth -= 1;
-                self.require_end(rule_index, actions, position, "for", span);
+                self.emit_loop_tail(rule_index, actions, position, level, "for", span);
             }
             Action::ForPlayerVariable {
                 player,
@@ -1041,12 +990,7 @@ impl<'a> Emitter<'a> {
                 step,
             } => {
                 let span = self.program.action_span(rule_index, action_index);
-                if !self
-                    .program
-                    .player_variables
-                    .iter()
-                    .any(|declaration| declaration.name == *variable)
-                {
+                if !declared(&self.program.player_variables, variable) {
                     self.issue(
                         "unsupported-dangling",
                         format!("unknown loop variable '{variable}'"),
@@ -1065,21 +1009,9 @@ impl<'a> Emitter<'a> {
                 self.out.push('.');
                 self.out.push_str(emitted(&self.player_names, variable));
                 self.out.push_str(" in range(");
-                for (arg_index, value) in [start, stop, step].into_iter().enumerate() {
-                    if arg_index > 0 {
-                        self.out.push_str(", ");
-                    }
-                    self.emit_value(
-                        value,
-                        self.program
-                            .action_argument_span(rule_index, action_index, arg_index + 2),
-                    );
-                }
+                self.emit_range_args(rule_index, action_index, 2, [start, stop, step]);
                 self.out.push_str("):\n");
-                self.loop_depth += 1;
-                self.emit_action_block(rule_index, actions, position, level + 1);
-                self.loop_depth -= 1;
-                self.require_end(rule_index, actions, position, "for", span);
+                self.emit_loop_tail(rule_index, actions, position, level, "for", span);
             }
             _ => self.emit_action(rule_index, action_index, action, level),
         }
@@ -1103,6 +1035,40 @@ impl<'a> Emitter<'a> {
                 _ => {}
             }
         }
+    }
+
+    fn emit_range_args(
+        &mut self,
+        rule_index: usize,
+        action_index: usize,
+        base: usize,
+        bounds: [&Value; 3],
+    ) {
+        for (arg_index, value) in bounds.into_iter().enumerate() {
+            if arg_index > 0 {
+                self.out.push_str(", ");
+            }
+            self.emit_value(
+                value,
+                self.program
+                    .action_argument_span(rule_index, action_index, base + arg_index),
+            );
+        }
+    }
+
+    fn emit_loop_tail(
+        &mut self,
+        rule_index: usize,
+        actions: &[Action],
+        position: &mut usize,
+        level: usize,
+        kind: &str,
+        span: Option<Span>,
+    ) {
+        self.loop_depth += 1;
+        self.emit_action_block(rule_index, actions, position, level + 1);
+        self.loop_depth -= 1;
+        self.require_end(rule_index, actions, position, kind, span);
     }
 
     fn require_end(
@@ -1220,37 +1186,14 @@ impl<'a> Emitter<'a> {
                     .push_str(emitted(&self.subroutine_emitted, subroutine));
                 self.out.push_str("()\n");
             }
-            Action::If { .. } | Action::ElseIf { .. } | Action::Else | Action::End => self.issue(
+            Action::Call { name, args } => {
+                self.emit_call_action(rule_index, action_index, name, args, &indent, span);
+            }
+            _ => self.issue(
                 "unsupported-control-flow",
                 "unexpected control-flow marker in Workshop action sequence",
                 span,
             ),
-            Action::While { .. } => self.issue(
-                "unsupported-control-flow",
-                "unexpected while action in Workshop action sequence",
-                span,
-            ),
-            Action::ForGlobalVariable { .. } => self.issue(
-                "unsupported-control-flow",
-                "unexpected for action in Workshop action sequence",
-                span,
-            ),
-            Action::ForPlayerVariable { .. } => {
-                self.issue(
-                    "unsupported-per-player-loop",
-                    "For Player Variable is outside the reconstruction surface \
-                     (the OPY `for` form binds a global variable)",
-                    span,
-                );
-            }
-            Action::Disabled { action: inner } => {
-                let scratch = std::mem::take(&mut self.out);
-                self.emit_action(rule_index, action_index, inner, level);
-                self.flush_commented(scratch, level);
-            }
-            Action::Call { name, args } => {
-                self.emit_call_action(rule_index, action_index, name, args, &indent, span);
-            }
         }
     }
 
@@ -1258,13 +1201,17 @@ impl<'a> Emitter<'a> {
         matches!(value, Value::EventPlayer)
     }
 
+    fn emit_parenthesized(&mut self, value: &Value, span: Option<Span>) {
+        self.out.push('(');
+        self.emit_value(value, span);
+        self.out.push(')');
+    }
+
     fn emit_player_variable_receiver(&mut self, player: &Value, span: Option<Span>) {
         if self.is_event_player(player) {
             self.out.push_str("eventPlayer");
         } else {
-            self.out.push('(');
-            self.emit_value(player, span);
-            self.out.push(')');
+            self.emit_parenthesized(player, span);
         }
     }
 
@@ -1315,17 +1262,14 @@ impl<'a> Emitter<'a> {
     ) {
         let indent = Self::indent(level);
         match op {
-            ModifyOp::AppendToArray => {
+            ModifyOp::AppendToArray | ModifyOp::RemoveFromArrayByValue => {
                 self.out.push_str(&indent);
                 self.out.push_str(name);
-                self.out.push_str(".append(");
-                self.emit_value(value, span);
-                self.out.push_str(")\n");
-            }
-            ModifyOp::RemoveFromArrayByValue => {
-                self.out.push_str(&indent);
-                self.out.push_str(name);
-                self.out.push_str(".remove(");
+                self.out.push_str(match op {
+                    ModifyOp::AppendToArray => ".append(",
+                    ModifyOp::RemoveFromArrayByValue => ".remove(",
+                    _ => unreachable!(),
+                });
                 self.emit_value(value, span);
                 self.out.push_str(")\n");
             }
@@ -1381,6 +1325,50 @@ impl<'a> Emitter<'a> {
         }
     }
 
+    fn resolve_entry(
+        &mut self,
+        name: &str,
+        kind: FunctionKind,
+        args_len: usize,
+        code: &'static str,
+        span: Option<Span>,
+    ) -> Option<(&'a Function, bool)> {
+        match Self::resolve_call_entry(self.manifest, name, kind, args_len) {
+            Ok(call) => Some(call),
+            Err(message) => {
+                self.issue(code, message, span);
+                None
+            }
+        }
+    }
+
+    // A bare call spelled like a declared subroutine resolves to the
+    // subroutine on re-lowering — at any arity — so an emitted call
+    // whose spelling collides with an emitted subroutine name cannot
+    // reproduce the builtin.
+    fn check_name_collision(
+        &mut self,
+        code: &'static str,
+        kind: &str,
+        name: &str,
+        entry: &Function,
+        member: bool,
+        span: Option<Span>,
+    ) -> bool {
+        if member || !self.emitted_subroutine_names.contains(entry.id.as_str()) {
+            return false;
+        }
+        self.issue(
+            code,
+            format!(
+                "{kind} '{name}' is ambiguous with a subroutine of the same \
+                 emitted name on the OPY surface"
+            ),
+            span,
+        );
+        true
+    }
+
     fn emit_call_action(
         &mut self,
         rule_index: usize,
@@ -1404,27 +1392,23 @@ impl<'a> Emitter<'a> {
         if self.emit_syntax_action(rule_index, action_index, name, args, indent, span) {
             return;
         }
-        let (entry, member) =
-            match Self::resolve_call_entry(self.manifest, name, FunctionKind::Action, args.len()) {
-                Ok(call) => call,
-                Err(message) => {
-                    self.issue("unsupported-action-call", message, span);
-                    return;
-                }
-            };
-        // A bare call spelled like a declared subroutine resolves to the
-        // subroutine on re-lowering — at any arity — so an emitted call
-        // whose spelling collides with an emitted subroutine name cannot
-        // reproduce the builtin.
-        if !member && self.emitted_subroutine_names.contains(entry.id.as_str()) {
-            self.issue(
-                "unsupported-action-call",
-                format!(
-                    "action '{name}' is ambiguous with a subroutine of the same \
-                     emitted name on the OPY surface"
-                ),
-                span,
-            );
+        let Some((entry, member)) = self.resolve_entry(
+            name,
+            FunctionKind::Action,
+            args.len(),
+            "unsupported-action-call",
+            span,
+        ) else {
+            return;
+        };
+        if self.check_name_collision(
+            "unsupported-action-call",
+            "action",
+            name,
+            entry,
+            member,
+            span,
+        ) {
             return;
         }
         let argument_spans: Vec<Option<Span>> = (0..args.len())
@@ -1536,20 +1520,28 @@ impl<'a> Emitter<'a> {
                 }
                 true
             }
-            "abort" => {
+            "abort" | "loop" => {
                 if !args.is_empty() {
-                    self.issue("unsupported-action-call", "abort takes no arguments", span);
+                    self.issue(
+                        "unsupported-action-call",
+                        format!("{name} takes no arguments"),
+                        span,
+                    );
                     return true;
                 }
                 self.out.push_str(indent);
-                self.out.push_str("return\n");
+                self.out.push_str(if name == "abort" {
+                    "return\n"
+                } else {
+                    "loop()\n"
+                });
                 true
             }
-            "abortIf" => {
+            "abortIf" | "loopIf" => {
                 let [condition] = args else {
                     self.issue(
                         "unsupported-action-call",
-                        "abortIf requires exactly one condition argument",
+                        format!("{name} requires exactly one condition argument"),
                         span,
                     );
                     return true;
@@ -1559,33 +1551,11 @@ impl<'a> Emitter<'a> {
                 self.emit_value(condition, arg_span(0));
                 self.out.push_str(":\n");
                 self.out.push_str(indent);
-                self.out.push_str("    return\n");
-                true
-            }
-            "loop" => {
-                if !args.is_empty() {
-                    self.issue("unsupported-action-call", "loop takes no arguments", span);
-                    return true;
-                }
-                self.out.push_str(indent);
-                self.out.push_str("loop()\n");
-                true
-            }
-            "loopIf" => {
-                let [condition] = args else {
-                    self.issue(
-                        "unsupported-action-call",
-                        "loopIf requires exactly one condition argument",
-                        span,
-                    );
-                    return true;
-                };
-                self.out.push_str(indent);
-                self.out.push_str("if ");
-                self.emit_value(condition, arg_span(0));
-                self.out.push_str(":\n");
-                self.out.push_str(indent);
-                self.out.push_str("    loop()\n");
+                self.out.push_str(if name == "abortIf" {
+                    "    return\n"
+                } else {
+                    "    loop()\n"
+                });
                 true
             }
             // `break` re-lowers to the same canonical call inside a loop body;
@@ -1852,7 +1822,7 @@ impl<'a> Emitter<'a> {
             );
             return;
         }
-        for (_index, param) in entry.params.iter().enumerate().skip(params.len()) {
+        for param in entry.params.iter().skip(params.len()) {
             if !param.optional {
                 self.issue(
                     "unsupported-missing-argument",
@@ -1923,11 +1893,10 @@ impl<'a> Emitter<'a> {
         arg: &Value,
         span: Option<Span>,
     ) {
-        if let Some(domain) = entry
-            .params
-            .get(index)
-            .and_then(|param| param.domain.as_ref())
-        {
+        let Some(param) = entry.params.get(index) else {
+            return;
+        };
+        if let Some(domain) = param.domain.as_ref() {
             match arg {
                 Value::Enum { value_type, value } if value_type == domain => {
                     if !self.enum_member_in_domain(domain, value) {
@@ -1969,7 +1938,7 @@ impl<'a> Emitter<'a> {
                 }
             }
         }
-        if entry.params.get(index).is_some_and(|param| param.variable) {
+        if param.variable {
             let is_variable =
                 matches!(arg, Value::GlobalVariable(_) | Value::PlayerVariable { .. });
             if !is_variable {
@@ -2046,12 +2015,7 @@ impl<'a> Emitter<'a> {
                 self.emit_enum(value_type, value, span);
             }
             Value::GlobalVariable(variable) => {
-                if !self
-                    .program
-                    .global_variables
-                    .iter()
-                    .any(|declaration| declaration.name == *variable)
-                {
+                if !declared(&self.program.global_variables, variable) {
                     self.issue(
                         "unsupported-dangling",
                         format!("unknown global variable '{variable}'"),
@@ -2062,12 +2026,7 @@ impl<'a> Emitter<'a> {
                 self.out.push_str(emitted(&self.global_names, variable));
             }
             Value::PlayerVariable { player, variable } => {
-                if !self
-                    .program
-                    .player_variables
-                    .iter()
-                    .any(|declaration| declaration.name == *variable)
-                {
+                if !declared(&self.program.player_variables, variable) {
                     self.issue(
                         "unsupported-dangling",
                         format!("unknown player variable '{variable}'"),
@@ -2161,9 +2120,8 @@ impl<'a> Emitter<'a> {
         let uses_index = uses_call(body, "currentArrayIndex");
         let element = self.fresh_generated_name("__elem");
         let index = uses_index.then(|| self.fresh_generated_name("__idx"));
-        self.out.push('(');
-        self.emit_value(receiver, span);
-        self.out.push_str(").");
+        self.emit_parenthesized(receiver, span);
+        self.out.push('.');
         self.out.push_str(member_call);
         self.out.push_str("(lambda ");
         self.out.push_str(&element);
@@ -2179,8 +2137,7 @@ impl<'a> Emitter<'a> {
     }
 
     fn emit_sorted(&mut self, array: &Value, key: &Value, span: Option<Span>) {
-        if matches!(key, Value::Call { name, args } if name == "currentArrayElement" && args.is_empty())
-        {
+        if is_current_element(key) {
             self.out.push_str("sorted(");
             self.emit_value(array, span);
             self.out.push(')');
@@ -2234,9 +2191,8 @@ impl<'a> Emitter<'a> {
                     );
                     return true;
                 }
-                self.out.push('(');
-                self.emit_value(array, span);
-                self.out.push_str(")[");
+                self.emit_parenthesized(array, span);
+                self.out.push('[');
                 self.emit_value(index, span);
                 self.out.push(']');
                 true
@@ -2245,12 +2201,14 @@ impl<'a> Emitter<'a> {
                 let [array] = args else {
                     return false;
                 };
-                self.out.push('(');
-                self.emit_value(array, span);
-                self.out.push_str(")[0]");
+                self.emit_parenthesized(array, span);
+                self.out.push_str("[0]");
                 true
             }
-            "emptyArray" if args.is_empty() => {
+            "emptyArray" => {
+                let [] = args else {
+                    return false;
+                };
                 self.out.push_str("[]");
                 true
             }
@@ -2260,9 +2218,8 @@ impl<'a> Emitter<'a> {
                 let [array, start, count] = args else {
                     return false;
                 };
-                self.out.push('(');
-                self.emit_value(array, span);
-                self.out.push_str(").slice(");
+                self.emit_parenthesized(array, span);
+                self.out.push_str(".slice(");
                 self.emit_value(start, span);
                 if !matches!(count, Value::Number(n) if *n == 999_999_999_999.0) {
                     self.out.push_str(", ");
@@ -2285,18 +2242,23 @@ impl<'a> Emitter<'a> {
                 true
             }
             "roundToInteger" => {
-                let [value, rounding] = args else {
+                let [
+                    value,
+                    Value::Enum {
+                        value_type,
+                        value: rounding,
+                    },
+                ] = args
+                else {
                     return false;
                 };
-                let spelling = match rounding {
-                    Value::Enum { value_type, value } if value_type == "Rounding" => {
-                        match value.as_str() {
-                            "UP" => "ceil",
-                            "DOWN" => "floor",
-                            "NEAREST" => "round",
-                            _ => return false,
-                        }
-                    }
+                if value_type != "Rounding" {
+                    return false;
+                }
+                let spelling = match rounding.as_str() {
+                    "UP" => "ceil",
+                    "DOWN" => "floor",
+                    "NEAREST" => "round",
                     _ => return false,
                 };
                 self.out.push_str(spelling);
@@ -2331,8 +2293,7 @@ impl<'a> Emitter<'a> {
                     return false;
                 };
                 let member = if name == "isTrueForAll" { "all" } else { "any" };
-                if matches!(condition, Value::Call { name, args } if name == "currentArrayElement" && args.is_empty())
-                {
+                if is_current_element(condition) {
                     self.out.push_str(member);
                     self.out.push('(');
                     self.emit_value(array, span);
@@ -2354,33 +2315,20 @@ impl<'a> Emitter<'a> {
                 true
             }
             "string" => {
-                let [localized, ..] = args else {
-                    return false;
-                };
-                let Value::LocalizedString(id) = localized else {
+                let [Value::LocalizedString(id), ..] = args else {
                     return false;
                 };
                 self.emit_localized_literal(id, span);
                 if args.len() > 1 {
-                    self.out.push_str(".format(");
-                    for (index, arg) in args.iter().skip(1).enumerate() {
-                        if index > 0 {
-                            self.out.push_str(", ");
-                        }
-                        self.emit_value(arg, span);
-                    }
-                    self.out.push(')');
+                    self.emit_format_args(&args[1..], span);
                 }
                 true
             }
             "memberAccess" => {
-                let [receiver, member] = args else {
+                let [receiver, Value::String(member)] = args else {
                     return false;
                 };
-                let Value::String(member) = member else {
-                    return false;
-                };
-                if !is_simple_ident(member) {
+                if !is_identifier(member) {
                     self.issue(
                         "unsupported-value-call",
                         format!("member name '{member}' is not a plain OPY identifier"),
@@ -2388,9 +2336,8 @@ impl<'a> Emitter<'a> {
                     );
                     return true;
                 }
-                self.out.push('(');
-                self.emit_value(receiver, span);
-                self.out.push_str(").");
+                self.emit_parenthesized(receiver, span);
+                self.out.push('.');
                 self.out.push_str(member);
                 true
             }
@@ -2398,9 +2345,8 @@ impl<'a> Emitter<'a> {
                 let [receiver] = args else {
                     return false;
                 };
-                self.out.push('(');
-                self.emit_value(receiver, span);
-                self.out.push_str(").");
+                self.emit_parenthesized(receiver, span);
+                self.out.push('.');
                 self.out.push_str(match name {
                     "__xComponentOf__" => "x",
                     "__yComponentOf__" => "y",
@@ -2411,7 +2357,7 @@ impl<'a> Emitter<'a> {
             "currentArrayElement" if args.is_empty() => {
                 match self.lambda_binders.last() {
                     Some((element, _)) => {
-                        self.out.push_str(&element.clone());
+                        self.out.push_str(element);
                     }
                     None => {
                         self.issue(
@@ -2426,7 +2372,7 @@ impl<'a> Emitter<'a> {
             "currentArrayIndex" if args.is_empty() => {
                 match self.lambda_binders.last() {
                     Some((_, Some(index))) => {
-                        self.out.push_str(&index.clone());
+                        self.out.push_str(index);
                     }
                     Some(_) => {
                         self.issue(
@@ -2447,6 +2393,17 @@ impl<'a> Emitter<'a> {
             }
             _ => false,
         }
+    }
+
+    fn emit_format_args(&mut self, args: &[Value], span: Option<Span>) {
+        self.out.push_str(".format(");
+        for (index, arg) in args.iter().enumerate() {
+            if index > 0 {
+                self.out.push_str(", ");
+            }
+            self.emit_value(arg, span);
+        }
+        self.out.push(')');
     }
 
     fn emit_value_call(&mut self, name: &str, args: &[Value], span: Option<Span>) {
@@ -2498,14 +2455,7 @@ impl<'a> Emitter<'a> {
                 return;
             };
             self.emit_string_literal(text);
-            self.out.push_str(".format(");
-            for (index, arg) in args.iter().skip(1).enumerate() {
-                if index > 0 {
-                    self.out.push_str(", ");
-                }
-                self.emit_value(arg, span);
-            }
-            self.out.push(')');
+            self.emit_format_args(&args[1..], span);
             return;
         }
         if DEDICATED_VALUE_NAMES.contains(&name) {
@@ -2519,14 +2469,15 @@ impl<'a> Emitter<'a> {
             );
             return;
         }
-        let (entry, member) =
-            match Self::resolve_call_entry(self.manifest, name, FunctionKind::Value, args.len()) {
-                Ok(call) => call,
-                Err(message) => {
-                    self.issue("unsupported-value-call", message, span);
-                    return;
-                }
-            };
+        let Some((entry, member)) = self.resolve_entry(
+            name,
+            FunctionKind::Value,
+            args.len(),
+            "unsupported-value-call",
+            span,
+        ) else {
+            return;
+        };
         if !member && crate::lower::policy::function_context(&entry.id).is_some() {
             self.issue(
                 "unsupported-value-call",
@@ -2538,15 +2489,7 @@ impl<'a> Emitter<'a> {
             );
             return;
         }
-        if !member && self.emitted_subroutine_names.contains(entry.id.as_str()) {
-            self.issue(
-                "unsupported-value-call",
-                format!(
-                    "value '{name}' is ambiguous with a subroutine of the same \
-                     emitted name on the OPY surface"
-                ),
-                span,
-            );
+        if self.check_name_collision("unsupported-value-call", "value", name, entry, member, span) {
             return;
         }
         self.emit_manifest_call(entry, args, member, span, &[]);
@@ -2603,13 +2546,12 @@ fn literal_positive_int(value: &Value) -> Option<usize> {
     (number.is_finite() && number.fract() == 0.0 && *number >= 0.0).then_some(*number as usize)
 }
 
-fn is_simple_ident(name: &str) -> bool {
-    let mut chars = name.chars();
-    match chars.next() {
-        Some(first) if first.is_ascii_alphabetic() || first == '_' => {}
-        _ => return false,
-    }
-    chars.all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+fn declared(variables: &[Variable], name: &str) -> bool {
+    variables.iter().any(|variable| variable.name == name)
+}
+
+fn is_current_element(value: &Value) -> bool {
+    matches!(value, Value::Call { name, args } if name == "currentArrayElement" && args.is_empty())
 }
 
 fn display_names(prefixes: &[String]) -> HashSet<String> {
@@ -2622,9 +2564,13 @@ fn display_names(prefixes: &[String]) -> HashSet<String> {
         .collect()
 }
 
+fn normalized_whitespace(text: &str) -> bool {
+    text.split_whitespace().collect::<Vec<_>>().join(" ") == text
+}
+
 fn emittable_member_name(name: &str) -> bool {
     !name.is_empty()
-        && name.split_whitespace().collect::<Vec<_>>().join(" ") == name
+        && normalized_whitespace(name)
         && !name
             .chars()
             .any(|c| matches!(c, ':' | '{' | '}' | '"' | '#' | '\'' | '\u{FEFF}'))
@@ -2632,7 +2578,7 @@ fn emittable_member_name(name: &str) -> bool {
 
 fn emittable_raw_value(value: &str) -> bool {
     !value.is_empty()
-        && value.split_whitespace().collect::<Vec<_>>().join(" ") == value
+        && normalized_whitespace(value)
         && !value
             .chars()
             .any(|c| matches!(c, '{' | '}' | '"' | '#' | '\'' | '\u{FEFF}'))

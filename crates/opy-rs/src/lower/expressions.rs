@@ -206,10 +206,8 @@ impl Lowerer {
                 span,
             } => self.lower_member(receiver, member, *member_span, *span, macro_params),
             Expr::Index { array, index, span } => {
-                let previous = self.allow_dict_literal;
-                self.allow_dict_literal = true;
-                let array = self.lower_expr(array, macro_params, CallPosition::Value);
-                self.allow_dict_literal = previous;
+                let array = self
+                    .with_dict_literal(|s| s.lower_expr(array, macro_params, CallPosition::Value));
                 HirExpr::Index {
                     array: Box::new(array),
                     index: Box::new(self.lower_expr(index, macro_params, CallPosition::Value)),
@@ -295,24 +293,16 @@ impl Lowerer {
             return player;
         }
         match name {
-            "RULE_CONDITION" | "ruleCondition" => HirExpr::Call {
-                name: "ruleCondition".to_string(),
-                args: Vec::new(),
-                debug_source: None,
-                span: Some(span.into()),
-            },
+            "RULE_CONDITION" | "ruleCondition" => {
+                call_expr("ruleCondition", Vec::new(), None, Some(span.into()))
+            }
             "eventAbility"
             | "eventDamage"
             | "eventDirection"
             | "eventHealing"
             | "eventWasCriticalHit"
             | "eventWasEnvironment"
-            | "eventWasHealthPack" => HirExpr::Call {
-                name: name.to_string(),
-                args: Vec::new(),
-                debug_source: None,
-                span: Some(span.into()),
-            },
+            | "eventWasHealthPack" => call_expr(name, Vec::new(), None, Some(span.into())),
             _ if self.global_visible(name) => HirExpr::GlobalVar {
                 name: name.to_string(),
                 span: Some(span.into()),
@@ -377,31 +367,36 @@ impl Lowerer {
                 other => other,
             };
             if self.enum_visible(enum_name) {
-                let members = self
+                let member_value = self
                     .enums
                     .get(enum_name)
-                    .expect("enum span and members agree")
-                    .clone();
-                if let Some(entry) = members.iter().find(|entry| entry.name == member) {
-                    return match &entry.value {
+                    .and_then(|members| members.iter().find(|entry| entry.name == member))
+                    .map(|entry| entry.value.clone());
+                if let Some(value) = member_value {
+                    return match value {
                         EnumMemberValue::Number(value) => HirExpr::Number {
-                            value: *value,
-                            text: crate::compiler::number_format::javascript_text(*value),
+                            value,
+                            text: crate::compiler::number_format::javascript_text(value),
                             span: Some(span.into()),
                         },
                         EnumMemberValue::Expr(expr) => {
-                            self.lower_expr(&expr.clone(), macro_params, CallPosition::Value)
+                            self.lower_expr(&expr, macro_params, CallPosition::Value)
                         }
                     };
                 }
+                let pool = crate::matcher::bare_candidates(
+                    self.enums
+                        .get(enum_name)
+                        .expect("enum span and members agree")
+                        .iter()
+                        .map(|entry| entry.name.clone()),
+                );
                 self.error_at_closed_candidates(
                     "unknown-enum-member",
                     format!("enum '{name}' has no member '{member}'"),
                     span,
                     member,
-                    &crate::matcher::bare_candidates(
-                        members.iter().map(|entry| entry.name.clone()),
-                    ),
+                    &pool,
                 );
                 return HirExpr::Null { span: None };
             }
@@ -475,14 +470,14 @@ impl Lowerer {
                         text: value.to_string(),
                         span: Some(span.into()),
                     };
-                    return HirExpr::Call {
-                        name: "rgb".to_string(),
+                    return call_expr(
+                        "rgb",
                         // The reference binds the declared alpha default
                         // (255) for these OverPy-only constants.
-                        args: vec![number(red), number(green), number(blue), number(255)],
-                        debug_source: None,
-                        span: Some(span.into()),
-                    };
+                        vec![number(red), number(green), number(blue), number(255)],
+                        None,
+                        Some(span.into()),
+                    );
                 }
             }
             // Builtin Workshop enum: only the domain names and member
@@ -543,23 +538,9 @@ impl Lowerer {
                     }
                 }
             }
-            if matches!(
-                name.as_str(),
-                "eventPlayer" | "hostPlayer" | "localPlayer" | "attacker" | "victim"
-            ) {
-                let player = context_player_expr(
-                    name,
-                    (!matches!(name.as_str(), "eventPlayer" | "hostPlayer"))
-                        .then_some(receiver.span()),
-                )
-                .expect("context-player receiver name is exhaustive");
+            if let Some(player) = context_player_receiver(name, receiver.span()) {
                 if matches!(member, "x" | "y" | "z") {
-                    return HirExpr::Member {
-                        receiver: Box::new(player),
-                        member: member.to_string(),
-                        member_span: Some(member_span.into()),
-                        span: Some(span.into()),
-                    };
+                    return member_expr(player, member, member_span, span);
                 }
                 if default_var_index(member).is_none() && !self.player_visible(member) {
                     let mut pool = crate::matcher::member_candidates(self.manifest, self.catalog);
@@ -573,12 +554,7 @@ impl Lowerer {
                     );
                     return HirExpr::Null { span: None };
                 }
-                return HirExpr::PlayerVar {
-                    player: Box::new(player),
-                    name: member.to_string(),
-                    member_span: Some(member_span.into()),
-                    span: Some(span.into()),
-                };
+                return player_var_expr(player, member, member_span, span);
             }
             if name == "random" {
                 self.error_at(
@@ -589,12 +565,12 @@ impl Lowerer {
                 return HirExpr::Null { span: None };
             }
             if self.player_visible(member) {
-                return HirExpr::PlayerVar {
-                    player: Box::new(self.lower_expr(receiver, macro_params, CallPosition::Value)),
-                    name: member.to_string(),
-                    member_span: Some(member_span.into()),
-                    span: Some(span.into()),
-                };
+                return player_var_expr(
+                    self.lower_expr(receiver, macro_params, CallPosition::Value),
+                    member,
+                    member_span,
+                    span,
+                );
             }
             if self.global_visible(name)
                 || self.player_visible(name)
@@ -608,12 +584,7 @@ impl Lowerer {
                 } else {
                     self.lower_name(name, receiver.span(), &[])
                 };
-                return HirExpr::Member {
-                    receiver: Box::new(receiver),
-                    member: member.to_string(),
-                    member_span: Some(member_span.into()),
-                    span: Some(span.into()),
-                };
+                return member_expr(receiver, member, member_span, span);
             }
         }
         // `number . number` merges into one literal upstream — the
@@ -636,20 +607,20 @@ impl Lowerer {
             };
         }
         if self.player_visible(member) {
-            return HirExpr::PlayerVar {
-                player: Box::new(self.lower_expr(receiver, macro_params, CallPosition::Value)),
-                name: member.to_string(),
-                member_span: Some(member_span.into()),
-                span: Some(span.into()),
-            };
+            return player_var_expr(
+                self.lower_expr(receiver, macro_params, CallPosition::Value),
+                member,
+                member_span,
+                span,
+            );
         }
         if matches!(member, "x" | "y" | "z") {
-            return HirExpr::Member {
-                receiver: Box::new(self.lower_expr(receiver, macro_params, CallPosition::Value)),
-                member: member.to_string(),
-                member_span: Some(member_span.into()),
-                span: Some(span.into()),
-            };
+            return member_expr(
+                self.lower_expr(receiver, macro_params, CallPosition::Value),
+                member,
+                member_span,
+                span,
+            );
         }
         self.error_at(
             "unsupported-member",
@@ -685,26 +656,27 @@ impl Lowerer {
                 );
                 return HirExpr::Null { span: None };
             }
-            return HirExpr::Call {
-                name: name.to_string(),
-                args: self.lower_arg_values(args, macro_params),
-                debug_source: None,
-                span: Some(span.into()),
-            };
+            return call_expr(
+                name,
+                self.lower_arg_values(args, macro_params),
+                None,
+                Some(span.into()),
+            );
         }
         if name == "compressed" {
-            return HirExpr::Call {
-                name: name.to_string(),
-                args: self.lower_arg_values(args, macro_params),
-                debug_source: None,
-                span: Some(span.into()),
-            };
+            return call_expr(
+                name,
+                self.lower_arg_values(args, macro_params),
+                None,
+                Some(span.into()),
+            );
         }
         if let Some(special) = special_forms::SpecialValueCall::from_name(name) {
             return self.lower_special_call(special, name, args, span, macro_params);
         }
+        let entry = self.manifest.resolve_function(name);
         if !self.macro_visible(name) && !self.subroutine_visible(name) {
-            match self.manifest.resolve_function(name) {
+            match entry {
                 Some(entry) => self.check_call_position(name, entry, position, span),
                 None => {
                     // A bare-spelled value called with an empty argument
@@ -741,27 +713,22 @@ impl Lowerer {
                         }
                         return bare;
                     }
-                    let (code, message) = match position {
-                        CallPosition::Statement => {
-                            ("unknown-action", format!("unknown action '{name}'"))
-                        }
-                        CallPosition::Value => ("unknown-value", format!("unknown value '{name}'")),
+                    let (code, message, pool) = match position {
+                        CallPosition::Statement => (
+                            "unknown-action",
+                            format!("unknown action '{name}'"),
+                            crate::matcher::action_candidates(self.manifest, self.catalog),
+                        ),
                         CallPosition::ForIterable => (
                             "invalid-iterable",
                             format!("for-loop iterable '{name}' must be a range(...) call"),
+                            Vec::new(),
                         ),
-                        CallPosition::LambdaArgument | CallPosition::MacroBody => {
-                            ("unknown-value", format!("unknown value '{name}'"))
-                        }
-                    };
-                    let pool = match code {
-                        "unknown-action" => {
-                            crate::matcher::action_candidates(self.manifest, self.catalog)
-                        }
-                        "unknown-value" => {
-                            crate::matcher::value_candidates(self.manifest, self.catalog)
-                        }
-                        _ => Vec::new(),
+                        _ => (
+                            "unknown-value",
+                            format!("unknown value '{name}'"),
+                            crate::matcher::value_candidates(self.manifest, self.catalog),
+                        ),
                     };
                     self.error_at_candidates(code, message, span, name, &pool);
                 }
@@ -769,7 +736,7 @@ impl Lowerer {
         }
         match name {
             "vect" => {
-                let (bound, _) = match self.manifest.resolve_function(name) {
+                let (bound, _) = match entry {
                     Some(entry) => self.bind_args(entry, args, span, macro_params),
                     None => (self.lower_arg_values(args, macro_params), None),
                 };
@@ -793,18 +760,7 @@ impl Lowerer {
             }
             _ => {
                 if self.macro_visible(name) {
-                    for arg in args {
-                        if let Some((keyword, span)) = &arg.keyword {
-                            self.error_at(
-                                "keyword-unsupported",
-                                format!(
-                                    "macro '{name}' does not accept keyword \
-                                     arguments ('{keyword}')"
-                                ),
-                                *span,
-                            );
-                        }
-                    }
+                    self.reject_keyword_args("macro", name, args);
                     return HirExpr::MacroCall {
                         name: name.to_string(),
                         args: self.lower_arg_values(args, macro_params),
@@ -824,53 +780,41 @@ impl Lowerer {
                                 } = &arg.value
                                 && self.subroutine_visible(subroutine)
                             {
-                                return HirExpr::Call {
-                                    name: subroutine.clone(),
-                                    args: Vec::new(),
-                                    debug_source: None,
-                                    span: Some((*span).into()),
-                                };
+                                return call_expr(
+                                    subroutine.clone(),
+                                    Vec::new(),
+                                    None,
+                                    Some((*span).into()),
+                                );
                             }
                             self.lower_expr(&arg.value, macro_params, CallPosition::Value)
                         })
                         .collect();
-                    return HirExpr::Call {
-                        name: name.to_string(),
-                        args: lowered,
-                        debug_source: None,
-                        span: Some(span.into()),
-                    };
+                    return call_expr(name, lowered, None, Some(span.into()));
                 }
-                match self.manifest.resolve_function(name) {
+                match entry {
                     Some(entry) => {
+                        let debug_src =
+                            debug_source.map(str::to_string).filter(|_| name == "debug");
                         if self.subroutine_visible(name) {
-                            return HirExpr::Call {
-                                name: name.to_string(),
-                                args: self.lower_arg_values(args, macro_params),
-                                debug_source: (name == "debug")
-                                    .then(|| debug_source.map(str::to_string))
-                                    .flatten(),
-                                span: Some(span.into()),
-                            };
+                            return call_expr(
+                                name,
+                                self.lower_arg_values(args, macro_params),
+                                debug_src,
+                                Some(span.into()),
+                            );
                         }
                         let (bound, selector) = self.bind_args(entry, args, span, macro_params);
                         let (call_name, bound) =
                             self.resolve_contextual_domain(entry, bound, selector.as_deref());
-                        HirExpr::Call {
-                            name: call_name,
-                            args: bound,
-                            debug_source: (name == "debug")
-                                .then(|| debug_source.map(str::to_string))
-                                .flatten(),
-                            span: Some(span.into()),
-                        }
+                        call_expr(call_name, bound, debug_src, Some(span.into()))
                     }
-                    None => HirExpr::Call {
-                        name: name.to_string(),
-                        args: self.lower_arg_values(args, macro_params),
-                        debug_source: None,
-                        span: Some(span.into()),
-                    },
+                    None => call_expr(
+                        name,
+                        self.lower_arg_values(args, macro_params),
+                        None,
+                        Some(span.into()),
+                    ),
                 }
             }
         }
@@ -1008,9 +952,8 @@ impl Lowerer {
                             arg.value.span(),
                         );
                     }
-                    let index = arg_index;
-                    if index < entry.params.len() {
-                        let param = &entry.params[index];
+                    if arg_index < entry.params.len() {
+                        let param = &entry.params[arg_index];
                         if param.keyword_only {
                             binding_error = true;
                             self.error_at(
@@ -1018,16 +961,20 @@ impl Lowerer {
                                 format!(
                                     "argument {} of '{}' must be passed as a keyword \
                                      (name = value; accepted names: {})",
-                                    index + 1,
+                                    arg_index + 1,
                                     entry.id,
                                     keyword_spellings(param).join(", ")
                                 ),
                                 arg.value.span(),
                             );
                         }
-                        if slots[index].is_none() {
-                            slots[index] =
-                                Some(self.lower_call_arg_value(entry, index, arg, macro_params));
+                        if slots[arg_index].is_none() {
+                            slots[arg_index] = Some(self.lower_call_arg_value(
+                                entry,
+                                arg_index,
+                                arg,
+                                macro_params,
+                            ));
                         }
                     } else {
                         overflow.push(self.lower_expr(
@@ -1056,19 +1003,18 @@ impl Lowerer {
                 Some(value) => bound.push(value.clone()),
                 None => match &param.default {
                     Some(ParamDefault::Call { call, args }) => {
-                        bound.push(HirExpr::Call {
-                            name: call.clone(),
-                            args: args
-                                .iter()
+                        bound.push(call_expr(
+                            call.clone(),
+                            args.iter()
                                 .map(|value| HirExpr::Number {
                                     value: *value,
                                     text: format!("{value}"),
                                     span: None,
                                 })
                                 .collect(),
-                            debug_source: None,
-                            span: None,
-                        });
+                            None,
+                            None,
+                        ));
                     }
                     Some(ParamDefault::Null { .. }) => {
                         bound.push(HirExpr::Null { span: None });
@@ -1126,25 +1072,20 @@ impl Lowerer {
             tail.push(bound.pop().unwrap_or(HirExpr::Null { span: None }));
             tail.append(&mut overflow);
             let last = tail.pop().expect("overflow is non-empty");
-            let mut nested = HirExpr::Call {
-                name: entry.id.clone(),
-                args: vec![tail.pop().expect("a bound tail precedes overflow"), last],
-                debug_source: None,
-                span: None,
-            };
+            let mut nested = call_expr(
+                entry.id.clone(),
+                vec![tail.pop().expect("a bound tail precedes overflow"), last],
+                None,
+                None,
+            );
             while let Some(arg) = tail.pop() {
-                nested = HirExpr::Call {
-                    name: entry.id.clone(),
-                    args: vec![arg, nested],
-                    debug_source: None,
-                    span: None,
-                };
+                nested = call_expr(entry.id.clone(), vec![arg, nested], None, None);
             }
             bound.push(nested);
         }
 
         for index in entry.variable_param_indices() {
-            if let Some(Some(value)) = slots.get(index)
+            if let Some(value) = &slots[index]
                 && !matches!(value, HirExpr::GlobalVar { .. } | HirExpr::PlayerVar { .. })
             {
                 self.error_at(
@@ -1285,12 +1226,12 @@ impl Lowerer {
             };
         }
         if name == "getOppositeTeam" {
-            return HirExpr::ReceiverCall {
-                receiver: Box::new(self.lower_expr(receiver, macro_params, CallPosition::Value)),
-                name: "getOppositeTeam".to_string(),
-                args: self.lower_arg_values(args, macro_params),
-                span: Some(span.into()),
-            };
+            return receiver_call_expr(
+                self.lower_expr(receiver, macro_params, CallPosition::Value),
+                "getOppositeTeam",
+                self.lower_arg_values(args, macro_params),
+                Some(span.into()),
+            );
         }
         if name == "toArray"
             && let Expr::Name {
@@ -1299,38 +1240,27 @@ impl Lowerer {
             && (self.manifest.domain_identity(type_name)
                 || self.catalog.enum_domain(type_name).is_some())
         {
-            return HirExpr::ReceiverCall {
-                receiver: Box::new(HirExpr::Type {
+            return receiver_call_expr(
+                HirExpr::Type {
                     name: type_name.clone(),
                     args: Vec::new(),
                     span: Some(receiver.span().into()),
-                }),
-                name: name.to_string(),
-                args: self.lower_arg_values(args, macro_params),
-                span: Some(span.into()),
-            };
+                },
+                name,
+                self.lower_arg_values(args, macro_params),
+                Some(span.into()),
+            );
         }
         if matches!(name, "map" | "filter" | "all" | "any") {
             // The reference parser special-cases these member calls to a bare
             // `lambda x: expr` argument; keyword spellings cannot be written.
-            for arg in args {
-                if let Some((keyword, span)) = &arg.keyword {
-                    self.error_at(
-                        "keyword-unsupported",
-                        format!(
-                            "function '{name}' does not accept keyword arguments ('{keyword}')"
-                        ),
-                        *span,
-                    );
-                }
-            }
-            let lowered = HirExpr::ReceiverCall {
-                receiver: Box::new(self.lower_expr(receiver, macro_params, CallPosition::Value)),
-                name: name.to_string(),
-                args: self.lower_arg_values_with_lambda(args, macro_params, |index, _| index == 0),
-                span: Some(span.into()),
-            };
-            return lowered;
+            self.reject_keyword_args("function", name, args);
+            return receiver_call_expr(
+                self.lower_expr(receiver, macro_params, CallPosition::Value),
+                name,
+                self.lower_arg_values_with_lambda(args, macro_params, |index, _| index == 0),
+                Some(span.into()),
+            );
         }
         if let Expr::Name { name: root, .. } = receiver
             && root == "random"
@@ -1351,32 +1281,10 @@ impl Lowerer {
         // the surviving `{n}`/`{}` formatters (`w"a{0}b".format("x")` emits
         // `ａxｂ`; #530). `f`-string and unsupported-modifier receivers keep
         // the manifest member path.
-        let format_text = if name == "format" {
-            match receiver {
-                Expr::String { value, .. } => Some(value.clone()),
-                Expr::StringModifier {
-                    modifier, value, ..
-                } => crate::compile_time::modifier_template(modifier, value),
-                _ => None,
-            }
-        } else {
-            None
-        };
-        if let Some(format_text) = format_text {
-            if args.iter().any(|arg| arg.keyword.is_some()) {
-                for arg in args {
-                    if let Some((keyword, span)) = &arg.keyword {
-                        self.error_at(
-                            "keyword-unsupported",
-                            format!(
-                                "function 'format' does not accept keyword \
-                                 arguments ('{keyword}')"
-                            ),
-                            *span,
-                        );
-                    }
-                }
-            }
+        if name == "format"
+            && let Some(format_text) = format_receiver_text(receiver)
+        {
+            self.reject_keyword_args("function", name, args);
             let lowered: Vec<HirExpr> = self.lower_arg_values(args, macro_params);
             if let Some(entry) = self.manifest.resolve_member("format") {
                 self.check_call_position("format", entry, position, span);
@@ -1406,31 +1314,16 @@ impl Lowerer {
             }
         };
         if let Expr::Name { name: root, .. } = receiver
-            && matches!(
-                root.as_str(),
-                "eventPlayer" | "hostPlayer" | "localPlayer" | "attacker" | "victim"
-            )
+            && let Some(player) = context_player_receiver(root, receiver.span())
         {
-            return HirExpr::ReceiverCall {
-                receiver: Box::new(
-                    context_player_expr(
-                        root,
-                        (!matches!(root.as_str(), "eventPlayer" | "hostPlayer"))
-                            .then_some(receiver.span()),
-                    )
-                    .expect("context-player receiver name is exhaustive"),
-                ),
-                name: member_name,
-                args: lowered,
-                span: Some(span.into()),
-            };
+            return receiver_call_expr(player, member_name, lowered, Some(span.into()));
         }
-        HirExpr::ReceiverCall {
-            receiver: Box::new(self.lower_expr(receiver, macro_params, CallPosition::Value)),
-            name: member_name,
-            args: lowered,
-            span: Some(span.into()),
-        }
+        receiver_call_expr(
+            self.lower_expr(receiver, macro_params, CallPosition::Value),
+            member_name,
+            lowered,
+            Some(span.into()),
+        )
     }
 
     pub(super) fn check_call_position(
@@ -1443,46 +1336,34 @@ impl Lowerer {
         let for_iterable =
             policy::function_context(&entry.id) == Some(policy::FunctionContext::ForIterable);
         match position {
-            CallPosition::Statement => {
-                if for_iterable {
-                    self.error_at(
-                        "invalid-call-context",
-                        format!("'{name}' is only valid as a for-loop iterable"),
-                        span,
-                    );
-                } else if entry.kind.is_value() {
-                    self.error_at(
-                        "value-in-action-position",
-                        format!("value function '{name}' cannot be used as an action"),
-                        span,
-                    );
-                }
+            CallPosition::Statement if for_iterable => self.error_at(
+                "invalid-call-context",
+                format!("'{name}' is only valid as a for-loop iterable"),
+                span,
+            ),
+            CallPosition::Statement if entry.kind.is_value() => self.error_at(
+                "value-in-action-position",
+                format!("value function '{name}' cannot be used as an action"),
+                span,
+            ),
+            CallPosition::Value | CallPosition::LambdaArgument if entry.kind.is_action() => {
+                self.error_at(
+                    "action-in-value-position",
+                    format!("action function '{name}' cannot be used as a value"),
+                    span,
+                );
             }
-            CallPosition::Value | CallPosition::LambdaArgument => {
-                if entry.kind.is_action() {
-                    self.error_at(
-                        "action-in-value-position",
-                        format!("action function '{name}' cannot be used as a value"),
-                        span,
-                    );
-                } else if for_iterable {
-                    self.error_at(
-                        "invalid-call-context",
-                        format!("'{name}' is only valid as a for-loop iterable"),
-                        span,
-                    );
-                }
-            }
-            CallPosition::ForIterable => {
-                if !for_iterable {
-                    self.error_at(
-                        "invalid-iterable",
-                        format!("for-loop iterable '{name}' must be a range(...) call"),
-                        span,
-                    );
-                }
-            }
-            CallPosition::MacroBody => {}
+            CallPosition::Value | CallPosition::LambdaArgument if for_iterable => self.error_at(
+                "invalid-call-context",
+                format!("'{name}' is only valid as a for-loop iterable"),
+                span,
+            ),
+            CallPosition::ForIterable if !for_iterable => self.error_at(
+                "invalid-iterable",
+                format!("for-loop iterable '{name}' must be a range(...) call"),
+                span,
+            ),
+            _ => {}
         }
     }
 
@@ -1575,5 +1456,15 @@ impl Lowerer {
             }],
             span: Some(span.into()),
         }
+    }
+}
+
+fn format_receiver_text(receiver: &Expr) -> Option<String> {
+    match receiver {
+        Expr::String { value, .. } => Some(value.clone()),
+        Expr::StringModifier {
+            modifier, value, ..
+        } => crate::compile_time::modifier_template(modifier, value),
+        _ => None,
     }
 }

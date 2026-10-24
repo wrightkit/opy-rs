@@ -94,17 +94,16 @@ fn eval(
         // `null` is a formattable `0` upstream and unhandled elsewhere; it
         // stays unresolvable outside settings eval (#512).
         Expr::Null { .. } => settings.then_some(Value::Null),
-        Expr::Array { elements, .. } => Some(Value::Array(
-            elements
-                .iter()
-                .map(|element| eval(element, constants, bindings, stack, settings))
-                .collect::<Option<Vec<_>>>()?,
-        )),
-        Expr::Vector { x, y, z, .. } => Some(Value::Vector(vec![
-            eval(x, constants, bindings, stack, settings)?,
-            eval(y, constants, bindings, stack, settings)?,
-            eval(z, constants, bindings, stack, settings)?,
-        ])),
+        Expr::Array { elements, .. } => Some(Value::Array(eval_args(
+            elements, constants, bindings, stack, settings,
+        )?)),
+        Expr::Vector { x, y, z, .. } => Some(Value::Vector(eval_args(
+            [x.as_ref(), y.as_ref(), z.as_ref()],
+            constants,
+            bindings,
+            stack,
+            settings,
+        )?)),
         Expr::Dict { entries, .. } => Some(Value::Object(
             entries
                 .iter()
@@ -133,7 +132,7 @@ fn eval(
                 // remain unresolved and error (#512).
                 return (settings && name == "Infinity").then_some(Value::Number(f64::INFINITY));
             };
-            if stack.iter().any(|active| active == name) {
+            if stack.contains(name) {
                 return None;
             }
             stack.push(name.clone());
@@ -142,27 +141,20 @@ fn eval(
             result
         }
         Expr::Format { text, args, .. } => {
-            let values = args
-                .iter()
-                .map(|arg| eval(arg, constants, bindings, stack, settings))
-                .collect::<Option<Vec<_>>>()?;
+            let values = eval_args(args, constants, bindings, stack, settings)?;
             evaluate_format(text, &values)
         }
         Expr::Binary {
             op, left, right, ..
-        } if matches!(op.as_str(), "in" | "not in") => {
-            let needle = eval(left, constants, bindings, stack, settings)?;
-            let haystack = eval(right, constants, bindings, stack, settings)?;
-            evaluate_membership(op, left, right, &needle, &haystack, constants)
+        } => {
+            let left_value = eval(left, constants, bindings, stack, settings)?;
+            let right_value = eval(right, constants, bindings, stack, settings)?;
+            if matches!(op.as_str(), "in" | "not in") {
+                evaluate_membership(op, left, right, &left_value, &right_value, constants)
+            } else {
+                evaluate_binary(op, left_value, right_value, settings)
+            }
         }
-        Expr::Binary {
-            op, left, right, ..
-        } => evaluate_binary(
-            op,
-            eval(left, constants, bindings, stack, settings)?,
-            eval(right, constants, bindings, stack, settings)?,
-            settings,
-        ),
         Expr::Conditional {
             then_value: then_expr,
             condition,
@@ -215,13 +207,14 @@ fn eval(
         Expr::Member {
             receiver, member, ..
         } => {
-            match (
-                eval(receiver, constants, bindings, stack, settings)?,
-                member.as_str(),
-            ) {
-                (Value::Vector(values), "x") => values.into_iter().next(),
-                (Value::Vector(values), "y") => values.into_iter().nth(1),
-                (Value::Vector(values), "z") => values.into_iter().nth(2),
+            let index = match member.as_str() {
+                "x" => 0,
+                "y" => 1,
+                "z" => 2,
+                _ => return None,
+            };
+            match eval(receiver, constants, bindings, stack, settings)? {
+                Value::Vector(values) => values.into_iter().nth(index),
                 _ => None,
             }
         }
@@ -233,21 +226,33 @@ fn eval(
             args,
             ..
         } => {
-            let mut values = vec![eval(receiver, constants, bindings, stack, settings)?];
-            for arg in args {
-                values.push(eval(arg, constants, bindings, stack, settings)?);
-            }
+            let values = eval_args(
+                std::iter::once(receiver.as_ref()).chain(args),
+                constants,
+                bindings,
+                stack,
+                settings,
+            )?;
             evaluate_builtin(name, &values)
         }
         Expr::Call { name, args, .. } => {
-            let values = args
-                .iter()
-                .map(|arg| eval(arg, constants, bindings, stack, settings))
-                .collect::<Option<Vec<_>>>()?;
+            let values = eval_args(args, constants, bindings, stack, settings)?;
             evaluate_builtin(name, &values)
         }
         _ => None,
     }
+}
+
+fn eval_args<'a>(
+    args: impl IntoIterator<Item = &'a Expr>,
+    constants: &HashMap<String, &Expr>,
+    bindings: &HashMap<String, Value>,
+    stack: &mut Vec<String>,
+    settings: bool,
+) -> Option<Vec<Value>> {
+    args.into_iter()
+        .map(|arg| eval(arg, constants, bindings, stack, settings))
+        .collect()
 }
 
 /// The pinned optimizer's foldable builtins: every function that folds on
@@ -273,6 +278,12 @@ fn evaluate_builtin(name: &str, values: &[Value]) -> Option<Value> {
             _ => None,
         }
     }
+    let vector3 = |value: &Value| -> Option<[f64; 3]> {
+        let [x, y, z] = vector(value)? else {
+            return None;
+        };
+        Some([number(x)?, number(y)?, number(z)?])
+    };
 
     let unary = |function: &dyn Fn(f64) -> f64| match values {
         [value] => number(value).map(function).map(Value::Number),
@@ -301,10 +312,11 @@ fn evaluate_builtin(name: &str, values: &[Value]) -> Option<Value> {
                 // `Math.max` keeps NaN, which fails the upstream bounds
                 // test and yields `""` — `f64::max` would clamp it to 0.
                 let index = js_max(0.0, number(index)?);
-                if index.is_nan() || index >= text.encode_utf16().count() as f64 {
+                let units: Vec<u16> = text.encode_utf16().collect();
+                if index.is_nan() || index >= units.len() as f64 {
                     return Some(Value::String(String::new()));
                 }
-                let unit = text.encode_utf16().nth(index as usize)?;
+                let unit = units.get(index as usize).copied()?;
                 // A lone surrogate emits the replacement character
                 // upstream, not an error.
                 Some(Value::String(String::from_utf16_lossy(&[unit])))
@@ -329,14 +341,8 @@ fn evaluate_builtin(name: &str, values: &[Value]) -> Option<Value> {
         },
         "crossProduct" => match values {
             [a, b] => {
-                let [ax, ay, az] = vector(a)? else {
-                    return None;
-                };
-                let [bx, by, bz] = vector(b)? else {
-                    return None;
-                };
-                let (ax, ay, az) = (number(ax)?, number(ay)?, number(az)?);
-                let (bx, by, bz) = (number(bx)?, number(by)?, number(bz)?);
+                let [ax, ay, az] = vector3(a)?;
+                let [bx, by, bz] = vector3(b)?;
                 Some(Value::Vector(vec![
                     Value::Number(ay * bz - az * by),
                     Value::Number(az * bx - ax * bz),
@@ -347,33 +353,19 @@ fn evaluate_builtin(name: &str, values: &[Value]) -> Option<Value> {
         },
         "distance" => match values {
             [a, b] => {
-                let [x1, y1, z1] = vector(a)? else {
-                    return None;
-                };
-                let [x2, y2, z2] = vector(b)? else {
-                    return None;
-                };
+                let [x1, y1, z1] = vector3(a)?;
+                let [x2, y2, z2] = vector3(b)?;
                 Some(Value::Number(libm::sqrt(
-                    libm::pow(number(x1)? - number(x2)?, 2.0)
-                        + libm::pow(number(y1)? - number(y2)?, 2.0)
-                        + libm::pow(number(z1)? - number(z2)?, 2.0),
+                    libm::pow(x1 - x2, 2.0) + libm::pow(y1 - y2, 2.0) + libm::pow(z1 - z2, 2.0),
                 )))
             }
             _ => None,
         },
         "dotProduct" => match values {
             [a, b] => {
-                let [x1, y1, z1] = vector(a)? else {
-                    return None;
-                };
-                let [x2, y2, z2] = vector(b)? else {
-                    return None;
-                };
-                Some(Value::Number(
-                    number(x1)? * number(x2)?
-                        + number(y1)? * number(y2)?
-                        + number(z1)? * number(z2)?,
-                ))
+                let [x1, y1, z1] = vector3(a)?;
+                let [x2, y2, z2] = vector3(b)?;
+                Some(Value::Number(x1 * x2 + y1 * y2 + z1 * z2))
             }
             _ => None,
         },
@@ -428,11 +420,9 @@ fn evaluate_builtin(name: &str, values: &[Value]) -> Option<Value> {
         },
         "magnitude" => match values {
             [arg] => {
-                let [x, y, z] = vector(arg)? else { return None };
+                let [x, y, z] = vector3(arg)?;
                 Some(Value::Number(libm::sqrt(
-                    libm::pow(number(x)?, 2.0)
-                        + libm::pow(number(y)?, 2.0)
-                        + libm::pow(number(z)?, 2.0),
+                    libm::pow(x, 2.0) + libm::pow(y, 2.0) + libm::pow(z, 2.0),
                 )))
             }
             _ => None,
@@ -536,16 +526,12 @@ fn evaluate_builtin(name: &str, values: &[Value]) -> Option<Value> {
         "tanDeg" => unary(&|value| libm::tan(value * degrees)),
         "vectorTowards" => match values {
             [a, b] => {
-                let [x1, y1, z1] = vector(a)? else {
-                    return None;
-                };
-                let [x2, y2, z2] = vector(b)? else {
-                    return None;
-                };
+                let [x1, y1, z1] = vector3(a)?;
+                let [x2, y2, z2] = vector3(b)?;
                 Some(Value::Vector(vec![
-                    Value::Number(number(x2)? - number(x1)?),
-                    Value::Number(number(y2)? - number(y1)?),
-                    Value::Number(number(z2)? - number(z1)?),
+                    Value::Number(x2 - x1),
+                    Value::Number(y2 - y1),
+                    Value::Number(z2 - z1),
                 ]))
             }
             _ => None,
@@ -557,18 +543,18 @@ fn evaluate_builtin(name: &str, values: &[Value]) -> Option<Value> {
 /// JavaScript `Math.min`/`Math.max`: `NaN` poisons the result, unlike the
 /// Rust `f64` methods which skip it.
 fn js_min(left: f64, right: f64) -> f64 {
-    if left.is_nan() || right.is_nan() {
-        f64::NAN
-    } else {
-        left.min(right)
-    }
+    js_fold(left, right, f64::min)
 }
 
 fn js_max(left: f64, right: f64) -> f64 {
+    js_fold(left, right, f64::max)
+}
+
+fn js_fold(left: f64, right: f64, function: fn(f64, f64) -> f64) -> f64 {
     if left.is_nan() || right.is_nan() {
         f64::NAN
     } else {
-        left.max(right)
+        function(left, right)
     }
 }
 
@@ -583,6 +569,18 @@ fn js_clamp(value: f64) -> f64 {
     }
 }
 
+/// `astIsLiteral(vect)` holds when every component is literal upstream,
+/// so `==`/`!=` fold literal vector compares (#512).
+fn is_literal(value: &Value) -> bool {
+    match value {
+        Value::Number(_) | Value::String(_) => true,
+        Value::Vector(components) => components
+            .iter()
+            .all(|component| matches!(component, Value::Number(_) | Value::String(_))),
+        _ => false,
+    }
+}
+
 /// Constant folding of the pinned optimizer's binary operators. Numeric
 /// folds only apply while the result stays within `NUMBER_LIMIT`;
 /// afterwards the identity rules (`a + 0`, `a * 1`, `b / 1`, …) still
@@ -591,22 +589,16 @@ fn evaluate_binary(op: &str, left: Value, right: Value, settings: bool) -> Optio
     let is_zero = |value: &Value| matches!(value, Value::Number(number) if *number == 0.0);
     let is_one = |value: &Value| matches!(value, Value::Number(number) if *number == 1.0);
     let is_bool = |value: &Value| matches!(value, Value::Bool(_));
-    // `astIsLiteral(vect)` holds when every component is literal upstream,
-    // so `==`/`!=` fold literal vector compares (#512).
-    let is_literal = |value: &Value| match value {
-        Value::Number(_) | Value::String(_) => true,
-        Value::Vector(components) => components
-            .iter()
-            .all(|component| matches!(component, Value::Number(_) | Value::String(_))),
-        _ => false,
-    };
     let is_falsy = |value: &Value| truthiness(value) == Some(false);
     let folded = |result: f64| (result.abs() <= NUMBER_LIMIT).then_some(Value::Number(result));
+    let fold_numbers =
+        |left: &Value, right: &Value, function: fn(f64, f64) -> f64| match (left, right) {
+            (Value::Number(left), Value::Number(right)) => folded(function(*left, *right)),
+            _ => None,
+        };
     match op {
         "+" => {
-            if let (Value::Number(left), Value::Number(right)) = (&left, &right)
-                && let result @ Some(_) = folded(left + right)
-            {
+            if let result @ Some(_) = fold_numbers(&left, &right, |a, b| a + b) {
                 return result;
             }
             if is_zero(&left) {
@@ -626,9 +618,7 @@ fn evaluate_binary(op: &str, left: Value, right: Value, settings: bool) -> Optio
             None
         }
         "-" => {
-            if let (Value::Number(left), Value::Number(right)) = (&left, &right)
-                && let result @ Some(_) = folded(left - right)
-            {
+            if let result @ Some(_) = fold_numbers(&left, &right, |a, b| a - b) {
                 return result;
             }
             if is_zero(&right) {
@@ -650,9 +640,7 @@ fn evaluate_binary(op: &str, left: Value, right: Value, settings: bool) -> Optio
             if !settings && let Some(repeated) = fold_string_repetition(&left, &right) {
                 return Some(repeated);
             }
-            if let (Value::Number(left), Value::Number(right)) = (&left, &right)
-                && let result @ Some(_) = folded(left * right)
-            {
+            if let result @ Some(_) = fold_numbers(&left, &right, |a, b| a * b) {
                 return result;
             }
             if is_one(&left) {
@@ -667,9 +655,7 @@ fn evaluate_binary(op: &str, left: Value, right: Value, settings: bool) -> Optio
             None
         }
         "/" => {
-            if let (Value::Number(left), Value::Number(right)) = (&left, &right)
-                && let result @ Some(_) = folded(left / right)
-            {
+            if let result @ Some(_) = fold_numbers(&left, &right, |a, b| a / b) {
                 return result;
             }
             if is_one(&right) {
@@ -769,33 +755,10 @@ fn evaluate_binary(op: &str, left: Value, right: Value, settings: bool) -> Optio
             }
             None
         }
-        "!=" => {
-            if let (Value::Number(left), Value::Number(right)) = (&left, &right) {
-                return Some(Value::Bool(left != right));
-            }
-            if values_equal(&left, &right) {
-                return Some(Value::Bool(false));
-            }
-            if is_literal(&left) && is_literal(&right) {
-                return Some(Value::Bool(true));
-            }
-            match (&left, &right) {
-                (left, right) if is_bool(left) && is_falsy(right) => {
-                    return Some(left.clone());
-                }
-                (left, right) if is_bool(right) && is_falsy(left) => {
-                    return Some(right.clone());
-                }
-                (Value::Bool(left), right) if *right == Value::Bool(true) => {
-                    return Some(Value::Bool(!left));
-                }
-                (left, Value::Bool(right)) if *left == Value::Bool(true) => {
-                    return Some(Value::Bool(!right));
-                }
-                _ => {}
-            }
-            None
-        }
+        "!=" => evaluate_binary("==", left, right, settings).map(|value| match value {
+            Value::Bool(value) => Value::Bool(!value),
+            other => other,
+        }),
         // Comparisons fold on numbers; equal structures fold `<`/`>` to
         // false and `<=`/`>=` to true (`[1] <= [1]` emits `true`; #512).
         "<" | "<=" | ">" | ">=" => {
@@ -853,18 +816,11 @@ fn evaluate_membership(
     {
         return Some(Value::Bool(op == "in"));
     }
-    let literal = |value: &Value| match value {
-        Value::Number(_) | Value::String(_) => true,
-        Value::Vector(components) => components
-            .iter()
-            .all(|component| matches!(component, Value::Number(_) | Value::String(_))),
-        _ => false,
-    };
     // A non-literal needle keeps `Array Contains` standing upstream, and a
     // literal needle with surviving elements reduces to `Equals` or a
     // filtered array — neither shape is expressible here, so only the
     // exhausted filter folds.
-    if literal(needle) && elements.iter().all(literal) {
+    if is_literal(needle) && elements.iter().all(is_literal) {
         return Some(Value::Bool(op == "not in"));
     }
     None

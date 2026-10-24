@@ -158,7 +158,6 @@ const CODE_CLASSES: &[(DiagnosticClass, &[&str])] = &[
             "unsupported-missing-argument",
             "unsupported-modify-op",
             "unsupported-non-finite-number",
-            "unsupported-per-player-loop",
             "unsupported-rule-order",
             "unsupported-settings",
             "unsupported-subroutine-value",
@@ -316,20 +315,8 @@ impl<'a> SourceText<'a> {
 
     fn byte_of(&self, position: LspPosition) -> Option<usize> {
         let start = *self.line_starts.get(position.line as usize)?;
-        let line_text = self.line_text(position.line as usize)?;
-        let mut units = 0u32;
-        let mut byte = line_text.len();
-        for (index, ch) in line_text.char_indices() {
-            if units == position.character {
-                byte = index;
-                break;
-            }
-            if units + ch.len_utf16() as u32 > position.character {
-                return None;
-            }
-            units += ch.len_utf16() as u32;
-        }
-        (units == position.character).then(|| start + byte)
+        let line = self.line_text(position.line as usize)?;
+        Some(start + byte_of_char_index(line, char_index_at_utf16(line, position.character)?))
     }
 }
 
@@ -429,7 +416,7 @@ pub(crate) fn normalized(path: &Path) -> PathBuf {
     path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
 }
 
-fn supplied_document_for_path<'d>(
+pub(crate) fn supplied_document_for_path<'d>(
     documents: &'d BTreeMap<String, Document>,
     root: &Path,
     path: &str,
@@ -468,11 +455,7 @@ pub(crate) fn narrow_site(
     let line = source.line_text(line_index)?;
     let index = char_index_at_column(line, location.start.col)?;
     let (start_index, end_index) = ident_token_at(line, index)?;
-    let token: String = line
-        .chars()
-        .skip(start_index)
-        .take(end_index - start_index)
-        .collect();
+    let token = &line[byte_of_char_index(line, start_index)..byte_of_char_index(line, end_index)];
     (token == name).then_some(SiteToken {
         col: location.start.col,
         line_index,
@@ -544,6 +527,19 @@ pub(crate) fn carries_source(
     !is_main_file_redirect_stub(outcome, file)
 }
 
+pub(crate) fn file_ids_covering(
+    outcome: &opy_rs::tooling::CheckOutcome,
+    path: &Path,
+) -> BTreeSet<u32> {
+    outcome
+        .files
+        .iter()
+        .filter(|file| carries_source(outcome, file))
+        .filter(|file| same_path(&resolved_path(&outcome.display_root, &file.path), path))
+        .map(|file| file.id)
+        .collect()
+}
+
 fn refusal(code: &'static str, details: Value, message: impl Into<String>) -> HandlerError {
     HandlerError::refusal(code, details, message)
 }
@@ -554,6 +550,17 @@ fn no_symbol(uri: &str) -> HandlerError {
         json!({ "uri": uri }),
         "no symbol at position",
     )
+}
+
+pub(crate) fn invalid_position(uri: &str, position: LspPosition) -> HandlerError {
+    HandlerError::Lpp {
+        kind: "invalidPosition",
+        details: json!({
+            "uri": uri,
+            "position": { "line": position.line, "character": position.character },
+        }),
+        message: "position outside document".to_string(),
+    }
 }
 
 fn evaluate_candidates<T: Send>(
@@ -567,29 +574,17 @@ fn evaluate_candidates<T: Send>(
     if workers <= 1 {
         return candidates.iter().map(|document| f(document)).collect();
     }
-    let next = std::sync::atomic::AtomicUsize::new(0);
-    let slots: Vec<std::sync::Mutex<Option<T>>> = (0..candidates.len())
-        .map(|_| std::sync::Mutex::new(None))
-        .collect();
+    let chunk = candidates.len().div_ceil(workers);
     std::thread::scope(|scope| {
-        for _ in 0..workers {
-            scope.spawn(|| {
-                loop {
-                    let index = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                    let Some(slot) = slots.get(index) else { break };
-                    *slot.lock().expect("unpoisoned slot") = Some(f(candidates[index]));
-                }
-            });
-        }
-    });
-    slots
-        .into_iter()
-        .map(|slot| {
-            slot.into_inner()
-                .expect("unpoisoned slot")
-                .expect("every index evaluated")
-        })
-        .collect()
+        let handles: Vec<_> = candidates
+            .chunks(chunk)
+            .map(|c| scope.spawn(|| c.iter().map(|d| f(d)).collect::<Vec<_>>()))
+            .collect();
+        handles
+            .into_iter()
+            .flat_map(|h| h.join().expect("worker"))
+            .collect()
+    })
 }
 
 fn model_view(
@@ -696,6 +691,18 @@ fn model_view(
     Err(no_symbol(&position_document.uri))
 }
 
+fn splice<'a>(text: &str, edits: impl Iterator<Item = (usize, usize, &'a str)>) -> String {
+    let mut result = String::with_capacity(text.len());
+    let mut cursor = 0;
+    for (start, end, replacement) in edits {
+        result.push_str(&text[cursor..start]);
+        result.push_str(replacement);
+        cursor = end;
+    }
+    result.push_str(&text[cursor..]);
+    result
+}
+
 fn verify_rename(
     documents: &BTreeMap<String, Document>,
     view: &ModelView,
@@ -722,14 +729,10 @@ fn verify_rename(
             };
             ranges.push(range);
         }
-        let mut result = String::with_capacity(document.text.len());
-        let mut cursor = 0;
-        for (start, end) in ranges {
-            result.push_str(&document.text[cursor..start]);
-            result.push_str(new_name);
-            cursor = end;
-        }
-        result.push_str(&document.text[cursor..]);
+        let result = splice(
+            &document.text,
+            ranges.iter().map(|&(start, end)| (start, end, new_name)),
+        );
         edited.insert(uri.clone(), result);
     }
 
@@ -808,10 +811,7 @@ fn verify_rename(
 
 pub(crate) fn rename(params: Value) -> Result<Value, HandlerError> {
     let params: RenameParams =
-        serde_json::from_value(params).map_err(|_| HandlerError::Standard {
-            code: -32602,
-            message: "Invalid params",
-        })?;
+        serde_json::from_value(params).map_err(|_| HandlerError::invalid_params())?;
     validate_documents(&params.documents)?;
     if !is_identifier(&params.new_name) {
         return Err(refusal(
@@ -835,36 +835,16 @@ pub(crate) fn rename(params: Value) -> Result<Value, HandlerError> {
         .expect("view guarantees a model");
 
     let source = SourceText::new(&position_document.text);
-    let invalid_position = || HandlerError::Lpp {
-        kind: "invalidPosition",
-        details: json!({
-            "uri": position_document.uri,
-            "position": { "line": params.position.line, "character": params.position.character },
-        }),
-        message: "position outside document".to_string(),
-    };
     let Some(line) = source.line_text(params.position.line as usize) else {
-        return Err(invalid_position());
+        return Err(invalid_position(&position_document.uri, params.position));
     };
     let Some(index) = char_index_at_utf16(line, params.position.character) else {
-        return Err(invalid_position());
+        return Err(invalid_position(&position_document.uri, params.position));
     };
     let position = Position::new(params.position.line + 1, frontend_column(line, index));
 
     let position_path = document_path(position_document)?;
-    let file_ids: BTreeSet<u32> = view
-        .outcome
-        .files
-        .iter()
-        .filter(|file| carries_source(&view.outcome, file))
-        .filter(|file| {
-            same_path(
-                &resolved_path(&view.display_root, &file.path),
-                &position_path,
-            )
-        })
-        .map(|file| file.id)
-        .collect();
+    let file_ids = file_ids_covering(&view.outcome, &position_path);
     if file_ids.is_empty() {
         return Err(no_symbol(&position_document.uri));
     }
@@ -1037,10 +1017,7 @@ pub(crate) fn rename(params: Value) -> Result<Value, HandlerError> {
 
 pub(crate) fn validate_edits(params: Value) -> Result<Value, HandlerError> {
     let params: ValidateEditsParams =
-        serde_json::from_value(params).map_err(|_| HandlerError::Standard {
-            code: -32602,
-            message: "Invalid params",
-        })?;
+        serde_json::from_value(params).map_err(|_| HandlerError::invalid_params())?;
     let document = params.document;
     let mut singleton = BTreeMap::new();
     singleton.insert(document.uri.clone(), document.clone());
@@ -1077,14 +1054,16 @@ pub(crate) fn validate_edits(params: Value) -> Result<Value, HandlerError> {
         }
     }
 
-    let mut result = String::with_capacity(document.text.len());
-    let mut cursor = 0;
-    for &index in &order {
-        result.push_str(&document.text[cursor..resolved[index].0]);
-        result.push_str(&params.edits[index].new_text);
-        cursor = resolved[index].1;
-    }
-    result.push_str(&document.text[cursor..]);
+    let result = splice(
+        &document.text,
+        order.iter().map(|&index| {
+            (
+                resolved[index].0,
+                resolved[index].1,
+                params.edits[index].new_text.as_str(),
+            )
+        }),
+    );
 
     let path = document_path(&document)?;
     let root = document_root(&path);

@@ -14,6 +14,15 @@ const RANDOM_CALLS: [&str; 4] = [
     "randomizedArray",
 ];
 
+const NAMED_VECTORS: [(&str, [f64; 3]); 6] = [
+    ("LEFT", [1.0, 0.0, 0.0]),
+    ("RIGHT", [-1.0, 0.0, 0.0]),
+    ("UP", [0.0, 1.0, 0.0]),
+    ("DOWN", [0.0, -1.0, 0.0]),
+    ("FORWARD", [0.0, 0.0, 1.0]),
+    ("BACKWARD", [0.0, 0.0, -1.0]),
+];
+
 pub(super) struct OperatorOptimizer<'a> {
     compiler: &'a Compiler,
     strict: bool,
@@ -52,7 +61,7 @@ impl<'a> OperatorOptimizer<'a> {
 
     pub(super) fn node(&self, value: Value) -> Value {
         let value = literal_array(value);
-        let head = head_of(&value);
+        let head = head_of(&value).to_owned();
         let rewritten = match self.rewrite(value) {
             Rewrite::Same(value) => return canonical(value),
             Rewrite::Changed(value) => value,
@@ -71,10 +80,10 @@ impl<'a> OperatorOptimizer<'a> {
         match (name.as_str(), args.len()) {
             ("==", 2) => self.equals(args, true),
             ("!=", 2) => self.equals(args, false),
-            ("<", 2) => Self::ordering("<", args, |a, b| a < b, false),
-            ("<=", 2) => Self::ordering("<=", args, |a, b| a <= b, true),
-            (">", 2) => Self::ordering(">", args, |a, b| a > b, false),
-            (">=", 2) => Self::ordering(">=", args, |a, b| a >= b, true),
+            ("<", 2) => Self::ordering("<", args, |a, b| a < b),
+            ("<=", 2) => Self::ordering("<=", args, |a, b| a <= b),
+            (">", 2) => Self::ordering(">", args, |a, b| a > b),
+            (">=", 2) => Self::ordering(">=", args, |a, b| a >= b),
             ("not", 1) => self.not(args),
             ("and", 2) | ("or", 2) => self.logical(args, &name),
             ("ifThenElse", 3) => self.if_then_else(args),
@@ -118,8 +127,8 @@ impl<'a> OperatorOptimizer<'a> {
             ("normalize", 1) => Self::normalize(args),
             ("strLen", 1) => Self::string_length(args),
             ("squareRoot", 1) => self.square_root(args),
-            ("min", 2) => Self::extremum("min", args, f64::min),
-            ("max", 2) => Self::extremum("max", args, f64::max),
+            ("min", 2) => Self::binary("min", args, f64::min),
+            ("max", 2) => Self::binary("max", args, f64::max),
             ("magnitude", 1) => Self::magnitude(args),
             ("distance", 2) => Self::distance(args),
             ("dotProduct", 2) => Self::dot_product(args),
@@ -190,18 +199,13 @@ impl<'a> OperatorOptimizer<'a> {
         Rewrite::Same(call(name, vec![left, right]))
     }
 
-    fn ordering(
-        name: &str,
-        args: Vec<Value>,
-        compare: fn(f64, f64) -> bool,
-        reflexive: bool,
-    ) -> Rewrite {
+    fn ordering(name: &str, args: Vec<Value>, compare: fn(f64, f64) -> bool) -> Rewrite {
         let [left, right] = two(args);
         if let (Value::Number(a), Value::Number(b)) = (&left, &right) {
             return Rewrite::Changed(Value::Bool(compare(*a, *b)));
         }
         if same(&left, &right) {
-            return Rewrite::Changed(Value::Bool(reflexive));
+            return Rewrite::Changed(Value::Bool(compare(0.0, 0.0)));
         }
         Rewrite::Same(call(name, vec![left, right]))
     }
@@ -490,10 +494,7 @@ impl<'a> OperatorOptimizer<'a> {
             && name == "vectorTowards"
             && args.len() == 2
         {
-            let Value::Call { args, .. } = operand else {
-                unreachable!()
-            };
-            return Rewrite::Changed(call("directionTowards", args));
+            return Rewrite::Changed(call("directionTowards", args.clone()));
         }
         let Some(components) = number_components(&operand) else {
             return Rewrite::Same(call("normalize", vec![operand]));
@@ -532,10 +533,6 @@ impl<'a> OperatorOptimizer<'a> {
             }
             other => Rewrite::Same(call("squareRoot", vec![other])),
         }
-    }
-
-    fn extremum(name: &str, args: Vec<Value>, apply: fn(f64, f64) -> f64) -> Rewrite {
-        Self::binary(name, args, apply)
     }
 
     fn magnitude(args: Vec<Value>) -> Rewrite {
@@ -647,10 +644,9 @@ impl<'a> OperatorOptimizer<'a> {
 
     fn index_of(&self, args: Vec<Value>) -> Rewrite {
         let [array, needle] = two(args);
-        let mut elements = match literal_array(array.clone()) {
+        let mut elements = match literal_array(array) {
             Value::Array(elements) => elements,
-            Value::Call { name, args } if name == "emptyArray" && args.is_empty() => Vec::new(),
-            _ => return Rewrite::Same(call("indexOfArrayValue", vec![array, needle])),
+            other => return Rewrite::Same(call("indexOfArrayValue", vec![other, needle])),
         };
         if elements.is_empty() {
             return Rewrite::Changed(Value::Number(-1.0));
@@ -870,7 +866,11 @@ impl<'a> OperatorOptimizer<'a> {
     fn component(args: Vec<Value>, axis: usize) -> Rewrite {
         let [operand] = one(args);
         match operand {
-            Value::Vector { x, y, z } => Rewrite::Changed([*x, *y, *z][axis].clone()),
+            Value::Vector { x, y, z } => Rewrite::Changed(match axis {
+                0 => *x,
+                1 => *y,
+                _ => *z,
+            }),
             // `vect` args flow through as the raw member, constants or not.
             Value::Call { name, mut args } if name == "vector" && args.len() == 3 => {
                 Rewrite::Changed(args.swap_remove(axis))
@@ -885,7 +885,7 @@ impl<'a> OperatorOptimizer<'a> {
         }
     }
 
-    pub(super) fn boolean(&self, value: &Value) -> bool {
+    fn boolean(&self, value: &Value) -> bool {
         match value {
             Value::Bool(_) => true,
             Value::Call { name, .. } => {
@@ -936,27 +936,31 @@ impl<'a> OperatorOptimizer<'a> {
     }
 
     fn constant(&self, value: &Value) -> bool {
-        match value {
-            Value::Number(_) | Value::Enum { .. } => true,
-            Value::Vector { x, y, z } => self.constant(x) && self.constant(y) && self.constant(z),
-            Value::String(_) => !self.strict,
-            Value::Call { name, args } if name == "customString" => args.len() == 1 && !self.strict,
-            Value::Call { name, args } if matches!(name.as_str(), "vector" | "customColor") => {
-                args.iter().all(|arg| self.constant(arg))
-            }
-            _ => false,
-        }
+        self.constant_like(value, true)
     }
 
     /// The reference's `astIsLiteral`: numbers, literal vectors, enum
     /// constants and text — but not booleans, `null`, or arrays, whose
     /// catalog entries carry no `isLiteral` flag.
     fn literal(&self, value: &Value) -> bool {
+        self.constant_like(value, false)
+    }
+
+    fn constant_like(&self, value: &Value, calls: bool) -> bool {
         match value {
             Value::Number(_) | Value::Enum { .. } => true,
-            Value::Vector { x, y, z } => self.literal(x) && self.literal(y) && self.literal(z),
+            Value::Vector { x, y, z } => {
+                self.constant_like(x, calls)
+                    && self.constant_like(y, calls)
+                    && self.constant_like(z, calls)
+            }
             Value::String(_) => !self.strict,
             Value::Call { name, args } if name == "customString" => args.len() == 1 && !self.strict,
+            Value::Call { name, args }
+                if calls && matches!(name.as_str(), "vector" | "customColor") =>
+            {
+                args.iter().all(|arg| self.constant_like(arg, calls))
+            }
             _ => false,
         }
     }
@@ -967,15 +971,15 @@ enum Rewrite {
     Changed(Value),
 }
 
-fn head_of(value: &Value) -> String {
+fn head_of(value: &Value) -> &str {
     match value {
-        Value::Call { name, .. } => name.clone(),
-        Value::Number(_) => "#number".to_string(),
-        Value::Bool(_) => "#bool".to_string(),
-        Value::Null => "#null".to_string(),
-        Value::Array(_) => "#array".to_string(),
-        Value::Vector { .. } => "#vector".to_string(),
-        _ => "#other".to_string(),
+        Value::Call { name, .. } => name,
+        Value::Number(_) => "#number",
+        Value::Bool(_) => "#bool",
+        Value::Null => "#null",
+        Value::Array(_) => "#array",
+        Value::Vector { .. } => "#vector",
+        _ => "#other",
     }
 }
 
@@ -1047,29 +1051,18 @@ pub(super) fn number_components(value: &Value) -> Option<[f64; 3]> {
             (Value::Number(x), Value::Number(y), Value::Number(z)) => Some([*x, *y, *z]),
             _ => None,
         },
-        Value::Enum { value_type, value } if value_type == "Vector" => match value.as_str() {
-            "LEFT" => Some([1.0, 0.0, 0.0]),
-            "RIGHT" => Some([-1.0, 0.0, 0.0]),
-            "UP" => Some([0.0, 1.0, 0.0]),
-            "DOWN" => Some([0.0, -1.0, 0.0]),
-            "FORWARD" => Some([0.0, 0.0, 1.0]),
-            "BACKWARD" => Some([0.0, 0.0, -1.0]),
-            _ => None,
-        },
+        Value::Enum { value_type, value } if value_type == "Vector" => NAMED_VECTORS
+            .iter()
+            .find_map(|&(name, components)| (value.as_str() == name).then_some(components)),
         _ => None,
     }
 }
 
 fn vector(components: [f64; 3]) -> Value {
-    let name = match components {
-        [1.0, 0.0, 0.0] => Some("LEFT"),
-        [-1.0, 0.0, 0.0] => Some("RIGHT"),
-        [0.0, 1.0, 0.0] => Some("UP"),
-        [0.0, -1.0, 0.0] => Some("DOWN"),
-        [0.0, 0.0, 1.0] => Some("FORWARD"),
-        [0.0, 0.0, -1.0] => Some("BACKWARD"),
-        _ => None,
-    };
+    let name = NAMED_VECTORS
+        .iter()
+        .find(|&&(_, expected)| expected == components)
+        .map(|&(name, _)| name);
     if let Some(name) = name {
         return Value::Enum {
             value_type: "Vector".to_string(),

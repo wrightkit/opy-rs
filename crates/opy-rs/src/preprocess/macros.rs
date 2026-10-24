@@ -363,34 +363,22 @@ impl Preprocessor {
                             token.span,
                         ));
                     }
-                    if mac.is_function {
-                        if index + 1 < tokens.len() && tokens[index + 1].kind == TokenKind::LParen {
-                            let (args, after) = self.collect_args(tokens, index + 1)?;
-                            let mut expanded =
-                                self.expand_macro(mac, args, token, line_indent(tokens, index))?;
-                            stack.push(name.clone());
-                            self.expand_into(&mut expanded, stack, depth + 1)?;
-                            stack.pop();
-                            out.append(&mut expanded);
-                            index = after;
-                            continue;
-                        }
-                        let mut expanded =
-                            self.expand_macro(mac, Vec::new(), token, line_indent(tokens, index))?;
-                        stack.push(name.clone());
-                        self.expand_into(&mut expanded, stack, depth + 1)?;
-                        stack.pop();
-                        out.append(&mut expanded);
-                        index += 1;
-                        continue;
-                    }
+                    let (args, after) = if mac.is_function
+                        && tokens
+                            .get(index + 1)
+                            .is_some_and(|next| next.kind == TokenKind::LParen)
+                    {
+                        self.collect_args(tokens, index + 1)?
+                    } else {
+                        (Vec::new(), index + 1)
+                    };
                     let mut expanded =
-                        self.expand_macro(mac, Vec::new(), token, line_indent(tokens, index))?;
+                        self.expand_macro(mac, args, token, line_indent(tokens, index))?;
                     stack.push(name.clone());
                     self.expand_into(&mut expanded, stack, depth + 1)?;
                     stack.pop();
                     out.append(&mut expanded);
-                    index += 1;
+                    index = after;
                     continue;
                 }
             }
