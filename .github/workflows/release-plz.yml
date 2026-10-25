@@ -310,6 +310,38 @@ jobs:
     environment: release
 
     steps:
+      # A manual re-run of an old run bypasses the concurrency ordering, so the
+      # pointer write itself is version-monotonic: equal versions pass for
+      # idempotent re-runs, older versions refuse.
+      - name: Guard latest pointer order
+        env:
+          RELEASE_TAG: ${{ needs.release-context.outputs.opy_release_tag }}
+          R2_PUBLIC_BASE_URL: https://releases.wrightkit.dev
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${RELEASE_TAG#v}"
+          body="$(mktemp)"
+          trap 'rm -f "$body"' EXIT
+          http_code="$(curl --silent --show-error --location \
+            -o "$body" -w '%{http_code}' \
+            "$R2_PUBLIC_BASE_URL/opy-rs/latest/version")"
+          if [ "$http_code" = 404 ]; then
+            echo "no published latest version; $VERSION becomes the first"
+            exit 0
+          fi
+          if [ "$http_code" != 200 ]; then
+            echo "cannot read opy-rs/latest/version (HTTP $http_code); refusing to advance" >&2
+            exit 1
+          fi
+          current="$(tr -d '[:space:]' < "$body")"
+          lowest="$(printf '%s\n%s\n' "$current" "$VERSION" | sort -V | head -n1)"
+          if [ "$lowest" = "$VERSION" ] && [ "$current" != "$VERSION" ]; then
+            echo "refusing to advance latest to $VERSION: published latest is $current" >&2
+            exit 1
+          fi
+          echo "latest guard passed: $VERSION >= $current"
+
       - name: Advance latest provider version
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}

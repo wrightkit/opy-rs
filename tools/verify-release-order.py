@@ -163,6 +163,9 @@ def main() -> None:
     for job in ("publish-provider-r2", "advance-latest"):
         if environment_of(job, jobs) != "release":
             fail(f"{job} does not run in environment: release (holds R2 secrets unprotected)")
+    advance_body = "\n".join(jobs["advance-latest"])
+    if "sort -V" not in advance_body:
+        fail("advance-latest has no version-monotonic guard: a re-run of an old run can regress latest/version")
     print("ok: opy-rs release promotes only after verified provider R2 staging")
 
 
