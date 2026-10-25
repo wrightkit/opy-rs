@@ -72,7 +72,9 @@ Once the draft carries the complete artifact set and the R2 objects pass
 public verification, `promote-release` publishes the GitHub Release; it runs in
 the protected `release` environment, so any required-reviewer rule configured
 there also gates promotion. Only then does `advance-latest` write the released
-semantic version as plain text to:
+semantic version as plain text — and it refuses to move the pointer backward,
+so re-running a superseded release run fails at the guard rather than
+regressing `latest`:
 
 ```text
 https://releases.wrightkit.dev/opy-rs/latest/version

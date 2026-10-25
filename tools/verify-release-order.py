@@ -166,6 +166,8 @@ def main() -> None:
     advance_body = "\n".join(jobs["advance-latest"])
     if "sort -V" not in advance_body:
         fail("advance-latest has no version-monotonic guard: a re-run of an old run can regress latest/version")
+    if "put-object" in advance_body and advance_body.index("sort -V") > advance_body.index("put-object"):
+        fail("the version-monotonic guard must precede the pointer write in advance-latest")
     print("ok: opy-rs release promotes only after verified provider R2 staging")
 
 
