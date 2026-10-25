@@ -7,6 +7,13 @@ on:
       - "**/*.md"
       - "docs/**"
 
+# Runs serialize across the publication tail: an older run's advance-latest can
+# never land after a newer one and regress opy-rs/latest/version. A newer push
+# replaces the pending run, so the latest main state is always what publishes.
+concurrency:
+  group: opy-rs-release
+  cancel-in-progress: false
+
 jobs:
   release-plz:
     uses: wrightkit/.github/.github/workflows/release-plz-crates.yml@main
@@ -33,6 +40,7 @@ jobs:
     if: needs.release-plz.outputs.releases_created == 'true'
     needs: release-plz
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       opy_release_created: ${{ steps.resolve.outputs.opy_release_created }}
       opy_release_tag: ${{ steps.resolve.outputs.opy_release_tag }}
@@ -58,6 +66,7 @@ jobs:
     if: needs.release-context.outputs.opy_release_created == 'true'
     needs: release-context
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -124,6 +133,7 @@ jobs:
       - release-context
       - provider
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
 
@@ -170,6 +180,8 @@ jobs:
       - release-context
       - provider
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: release
 
     steps:
       - name: Download all target artifacts
@@ -273,6 +285,7 @@ jobs:
       - publish-provider-github
       - publish-provider-r2
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     environment: release
     permissions:
       contents: write
@@ -293,8 +306,42 @@ jobs:
       - release-context
       - promote-release
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: release
 
     steps:
+      # A manual re-run of an old run bypasses the concurrency ordering, so the
+      # pointer write itself is version-monotonic: equal versions pass for
+      # idempotent re-runs, older versions refuse.
+      - name: Guard latest pointer order
+        env:
+          RELEASE_TAG: ${{ needs.release-context.outputs.opy_release_tag }}
+          R2_PUBLIC_BASE_URL: https://releases.wrightkit.dev
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${RELEASE_TAG#v}"
+          body="$(mktemp)"
+          trap 'rm -f "$body"' EXIT
+          http_code="$(curl --silent --show-error --location \
+            -o "$body" -w '%{http_code}' \
+            "$R2_PUBLIC_BASE_URL/opy-rs/latest/version")"
+          if [ "$http_code" = 404 ]; then
+            echo "no published latest version; $VERSION becomes the first"
+            exit 0
+          fi
+          if [ "$http_code" != 200 ]; then
+            echo "cannot read opy-rs/latest/version (HTTP $http_code); refusing to advance" >&2
+            exit 1
+          fi
+          current="$(tr -d '[:space:]' < "$body")"
+          lowest="$(printf '%s\n%s\n' "$current" "$VERSION" | sort -V | head -n1)"
+          if [ "$lowest" = "$VERSION" ] && [ "$current" != "$VERSION" ]; then
+            echo "refusing to advance latest to $VERSION: published latest is $current" >&2
+            exit 1
+          fi
+          echo "latest guard passed: $VERSION >= $current"
+
       - name: Advance latest provider version
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
