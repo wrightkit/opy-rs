@@ -116,7 +116,7 @@ impl Preprocessor {
             .or_else(|| {
                 canonical
                     .as_ref()
-                    .and_then(|path| self.overlay.get(&path.to_string_lossy().into_owned()))
+                    .and_then(|path| self.overlay.get(path.to_string_lossy().as_ref()))
             })
             .cloned();
         let uses_overlay = overlay_text.is_some();

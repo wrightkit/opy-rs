@@ -85,10 +85,11 @@ pub fn include_directives(text: &str) -> Vec<String> {
         .filter(|token| token.kind == TokenKind::Directive)
         .filter_map(|token| {
             let text = token.text.trim();
-            let (name, rest) = text.split_once(char::is_whitespace).unwrap_or((text, ""));
+            let (name, rest) = directives::split_directive(text);
             (name == "include")
-                .then(|| directives::strip_quoted(rest.trim()).map(str::to_string))
-                .flatten()
+                .then(|| rest.trim())
+                .and_then(directives::strip_quoted)
+                .map(str::to_string)
         })
         .collect()
 }
@@ -171,9 +172,8 @@ pub fn preprocess_with_overlay_outcome(
     let mut owned_main_text = None;
     let mut source_file_id = 0;
     let first_line = main_text.lines().next().unwrap_or_default();
-    if first_line.trim_start().starts_with("#!mainFile")
-        && first_main_file_directive(main_text).is_none()
-    {
+    let main_file_directive = first_main_file_directive(main_text);
+    if first_line.trim_start().starts_with("#!mainFile") && main_file_directive.is_none() {
         let span = Span::new(
             0,
             crate::diag::Position::new(1, 1),
@@ -188,16 +188,16 @@ pub fn preprocess_with_overlay_outcome(
             pre,
         );
     }
-    if let Some((main_file, span)) = first_main_file_directive(main_text) {
+    if let Some((main_file, span)) = main_file_directive {
         let candidate = pre.root.join(&main_file);
         let canonical = std::fs::canonicalize(&candidate).ok();
         let overlay_text = overlay
             .get(&main_file)
-            .or_else(|| overlay.get(&candidate.to_string_lossy().into_owned()))
+            .or_else(|| overlay.get(candidate.to_string_lossy().as_ref()))
             .or_else(|| {
                 canonical
                     .as_ref()
-                    .and_then(|path| overlay.get(&path.to_string_lossy().into_owned()))
+                    .and_then(|path| overlay.get(path.to_string_lossy().as_ref()))
             })
             .cloned();
         let (text, canonical_path, new_root) = match overlay_text {
@@ -264,27 +264,20 @@ pub fn preprocess_with_overlay_outcome(
         Ok(mut blocks) => blocks.pop(),
         Err(error) => return PreprocessOutcome::failure(error, pre),
     };
-    let settings = match settings {
-        Some(block) => match pre.resolve_settings_source(block) {
-            Ok(block) => Some(block),
-            Err(error) => return PreprocessOutcome::failure(error, pre),
-        },
-        None => None,
+    let settings = match settings
+        .map(|block| pre.resolve_settings_source(block))
+        .transpose()
+    {
+        Ok(settings) => settings,
+        Err(error) => return PreprocessOutcome::failure(error, pre),
     };
-    let tokens = match &settings {
-        Some(block) => {
-            let sanitized = crate::settings::sanitize_for_lex(source_text, block);
-            lex(LexInput {
-                file_id: source_file_id,
-                text: &sanitized,
-            })
-        }
-        None => lex(LexInput {
-            file_id: source_file_id,
-            text: source_text,
-        }),
-    };
-    let mut tokens = match tokens {
+    let sanitized = settings
+        .as_ref()
+        .map(|block| crate::settings::sanitize_for_lex(source_text, block));
+    let mut tokens = match lex(LexInput {
+        file_id: source_file_id,
+        text: sanitized.as_deref().unwrap_or(source_text),
+    }) {
         Ok(tokens) => tokens,
         Err(error) => return PreprocessOutcome::failure(error, pre),
     };
@@ -354,16 +347,11 @@ fn shift_settings_span(span: Span, origin: crate::diag::Position) -> Span {
 }
 
 fn external_text_span(file: u32, text: &str) -> Span {
-    let mut line = 1;
-    let mut col = 1;
-    for character in text.chars() {
-        if character == '\n' {
-            line += 1;
-            col = 1;
-        } else {
-            col += 1;
-        }
-    }
+    let line = text.matches('\n').count() as u32 + 1;
+    let col = text
+        .rsplit('\n')
+        .next()
+        .map_or(1, |tail| tail.chars().count() as u32 + 1);
     Span::new(
         file,
         crate::diag::Position::new(1, 1),
@@ -415,7 +403,7 @@ impl Preprocessor {
                 continue;
             };
             let file_id = self.register_external_file(&po_path, language, text.clone());
-            let parsed = parse_po(&text, language, Some(external_text_span(file_id, &text)))?;
+            let parsed = parse_po(&text, language, external_text_span(file_id, &text))?;
             for entry in parsed {
                 let key = (entry.context.clone(), entry.msgid.clone());
                 entries
@@ -509,12 +497,7 @@ impl Preprocessor {
     }
 }
 
-fn parse_po(text: &str, language: &str, span: Option<Span>) -> OpyResult<Vec<TranslationEntry>> {
-    let span = span.unwrap_or(Span::new(
-        0,
-        crate::diag::Position::new(1, 1),
-        crate::diag::Position::new(1, 1),
-    ));
+fn parse_po(text: &str, language: &str, span: Span) -> OpyResult<Vec<TranslationEntry>> {
     let mut header_language = None;
     let mut entries = Vec::new();
     let mut current: Option<(Option<String>, String, String)> = None;
@@ -540,13 +523,7 @@ fn parse_po(text: &str, language: &str, span: Option<Span>) -> OpyResult<Vec<Tra
             continue;
         }
         if trimmed.starts_with('"') {
-            let value = serde_json::from_str::<String>(trimmed).map_err(|error| {
-                OpyError::at(
-                    "translations-invalid",
-                    format!("malformed PO string: {error}"),
-                    span,
-                )
-            })?;
+            let value = po_quoted(trimmed, span)?;
             let Some((context, msgid, msgstr)) = current.as_mut() else {
                 return Err(OpyError::at(
                     "translations-invalid",
@@ -566,70 +543,31 @@ fn parse_po(text: &str, language: &str, span: Option<Span>) -> OpyResult<Vec<Tra
                     ));
                 }
             }
-            if msgid.is_empty() {
-                for line in msgstr.lines() {
-                    if let Some(value) = line.strip_prefix("Language:") {
-                        header_language = Some(value.trim().to_string());
-                    }
-                }
+            if msgid.is_empty()
+                && let Some(language) = po_language(msgstr)
+            {
+                header_language = Some(language);
             }
             continue;
         }
         let (name, value) = trimmed
             .split_once(' ')
             .ok_or_else(|| OpyError::at("translations-invalid", "malformed PO entry", span))?;
-        let value = serde_json::from_str::<String>(value).map_err(|error| {
-            OpyError::at(
+        let value = po_quoted(value, span)?;
+        if !matches!(name, "msgctxt" | "msgid" | "msgstr") {
+            return Err(OpyError::at(
                 "translations-invalid",
-                format!("malformed PO string: {error}"),
+                format!("unsupported PO field '{name}'"),
                 span,
-            )
-        })?;
+            ));
+        }
+        let entry = current.get_or_insert_with(|| (None, String::new(), String::new()));
         match name {
-            "msgctxt" => {
-                if let Some((context, _, _)) = current.as_mut() {
-                    *context = Some(value);
-                } else {
-                    current = Some((Some(value), String::new(), String::new()));
-                }
-                field = Some("msgctxt");
-            }
-            "msgid" => {
-                if let Some((_, msgid, _)) = current.as_mut() {
-                    *msgid = value;
-                } else {
-                    current = Some((None, value, String::new()));
-                }
-                field = Some("msgid");
-            }
-            "msgstr" => {
-                if let Some((_, _, msgstr)) = current.as_mut() {
-                    *msgstr = value;
-                } else {
-                    current = Some((None, String::new(), value));
-                }
-                field = Some("msgstr");
-            }
-            _ => {
-                return Err(OpyError::at(
-                    "translations-invalid",
-                    format!("unsupported PO field '{name}'"),
-                    span,
-                ));
-            }
+            "msgctxt" => entry.0 = Some(value),
+            "msgid" => entry.1 = value,
+            _ => entry.2 = value,
         }
-        if name == "msgstr"
-            && current
-                .as_ref()
-                .is_some_and(|(_, msgid, _)| msgid.is_empty())
-            && let Some((_, value, _)) = current.as_ref()
-        {
-            for line in value.lines() {
-                if let Some(value) = line.strip_prefix("Language:") {
-                    header_language = Some(value.trim().to_string());
-                }
-            }
-        }
+        field = Some(name);
     }
     if header_language.as_deref() != Some(language) {
         return Err(OpyError::at(
@@ -639,6 +577,24 @@ fn parse_po(text: &str, language: &str, span: Option<Span>) -> OpyResult<Vec<Tra
         ));
     }
     Ok(entries)
+}
+
+fn po_quoted(text: &str, span: Span) -> OpyResult<String> {
+    serde_json::from_str::<String>(text).map_err(|error| {
+        OpyError::at(
+            "translations-invalid",
+            format!("malformed PO string: {error}"),
+            span,
+        )
+    })
+}
+
+fn po_language(msgstr: &str) -> Option<String> {
+    msgstr
+        .lines()
+        .filter_map(|line| line.strip_prefix("Language:").map(str::trim))
+        .next_back()
+        .map(str::to_string)
 }
 
 #[cfg(test)]

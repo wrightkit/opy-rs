@@ -44,23 +44,21 @@ fn has_directive(hir: &hir::Program, name: &str) -> bool {
 }
 
 fn omit_declaration_sections(output: &str, program: &workshop_rs::Program) -> String {
-    let mut markers = Vec::new();
-    for variable in program
+    let markers: Vec<String> = program
         .global_variables
         .iter()
-        .chain(program.player_variables.iter())
-    {
-        markers.push(variable.index.map_or_else(
-            || variable.name.clone(),
-            |index| format!("{index}: {}", variable.name),
-        ));
-    }
-    markers.extend(program.subroutines.iter().map(|subroutine| {
-        subroutine.index.map_or_else(
-            || subroutine.name.clone(),
-            |index| format!("{index}: {}", subroutine.name),
+        .chain(&program.player_variables)
+        .map(|variable| (variable.index, variable.name.as_str()))
+        .chain(
+            program
+                .subroutines
+                .iter()
+                .map(|subroutine| (subroutine.index, subroutine.name.as_str())),
         )
-    }));
+        .map(|(index, name)| {
+            index.map_or_else(|| name.to_string(), |index| format!("{index}: {name}"))
+        })
+        .collect();
     if markers.is_empty() {
         return output.to_string();
     }
@@ -151,6 +149,10 @@ fn emit_debug_element_counts(
     let mut in_actions = false;
     let mut in_conditions = false;
     let mut action_index = 0;
+    let annotate_count = |count: usize, line: &str| {
+        let suffix = if count == 1 { "element" } else { "elements" };
+        format!("{} // {count} {suffix}\n", line.trim_end_matches('\n'))
+    };
     for line in output.split_inclusive('\n') {
         let trimmed = line.trim();
         if line.starts_with("rule (") {
@@ -184,25 +186,17 @@ fn emit_debug_element_counts(
         } else if trimmed == "actions {" {
             in_conditions = false;
             in_actions = true;
-        } else if in_actions && line.starts_with("    }") {
+        } else if (in_actions || in_conditions) && line.starts_with("    }") {
             in_actions = false;
-        } else if in_conditions && line.starts_with("    }") {
             in_conditions = false;
         }
 
         if in_conditions
             && line.starts_with("        ")
             && trimmed.ends_with(';')
-            && let Some(condition) = conditions.get(condition_index)
+            && let Some(node) = conditions.get(condition_index)
         {
-            let condition_count = debug_condition_count(condition);
-            let suffix = if condition_count == 1 {
-                "element"
-            } else {
-                "elements"
-            };
-            annotated.push_str(line.trim_end_matches('\n'));
-            annotated.push_str(&format!(" // {condition_count} {suffix}\n"));
+            annotated.push_str(&annotate_count(debug_condition_count(node), line));
             condition_index += 1;
             continue;
         }
@@ -210,16 +204,9 @@ fn emit_debug_element_counts(
         if in_actions
             && line.starts_with("        ")
             && trimmed.ends_with(';')
-            && let Some(action) = actions.get(action_index)
+            && let Some(node) = actions.get(action_index)
         {
-            let action_count = debug_action_local_count(action);
-            let suffix = if action_count == 1 {
-                "element"
-            } else {
-                "elements"
-            };
-            annotated.push_str(line.trim_end_matches('\n'));
-            annotated.push_str(&format!(" // {action_count} {suffix}\n"));
+            annotated.push_str(&annotate_count(debug_action_local_count(node), line));
             action_index += 1;
             continue;
         }
@@ -248,18 +235,12 @@ fn debug_condition_count(node: &workshop_rs::actions::ElementCountNode) -> usize
 }
 
 fn debug_action_local_count(node: &workshop_rs::actions::ElementCountNode) -> usize {
-    let values = node
+    1 + node
         .children
         .iter()
         .filter(|child| child.kind == workshop_rs::actions::ElementNodeKind::Value)
-        .map(debug_value_count)
-        .sum::<usize>();
-    let value_arguments = node
-        .children
-        .iter()
-        .filter(|child| child.kind == workshop_rs::actions::ElementNodeKind::Value)
-        .count();
-    1 + values.saturating_sub(value_arguments)
+        .map(|child| debug_value_count(child) - 1)
+        .sum::<usize>()
 }
 
 fn debug_action_count(node: &workshop_rs::actions::ElementCountNode) -> usize {
@@ -477,45 +458,29 @@ impl Compiler {
         }
         reject_unlowered_directives(hir)?;
         let expanded_hir = expand_macros(hir)?;
-        let mut lowering = Lowering::new(self, &expanded_hir);
-        lowering.copy_files(locale)?;
-        lowering.lower_declarations()?;
-        lowering.lower_rules()?;
+        let lowering = self.fully_lowered(&expanded_hir, locale)?;
         let translation_files = lowering.translation_files();
 
         let program = lowering.program;
-        program.validate().map_err(|error| {
+        let to_error = |code: &str, error: workshop_rs::WorkshopError| {
             IntegrationError::new(
-                "workshop-validation",
+                code,
                 error.to_string(),
                 workshop_error_span(&error)
                     .and_then(|span| hir_span_from_workshop(span, &expanded_hir)),
             )
-        })?;
-        workshop_rs::validate::validate_canonical_ids(&program, self.catalog).map_err(|error| {
-            IntegrationError::new(
-                "catalog-validation",
-                error.to_string(),
-                workshop_error_span(&error)
-                    .and_then(|span| hir_span_from_workshop(span, &expanded_hir)),
-            )
-        })?;
+        };
+        program
+            .validate()
+            .map_err(|error| to_error("workshop-validation", error))?;
+        workshop_rs::validate::validate_canonical_ids(&program, self.catalog)
+            .map_err(|error| to_error("catalog-validation", error))?;
         let exclude_variables = has_directive(&expanded_hir, "excludeVariablesInCompilation");
         let emitted =
             workshop_rs::emitter::emit(&program, self.catalog, locale).map_err(|error| {
-                IntegrationError::new(
-                    "workshop-emission",
-                    crate::matcher::did_you_mean(
-                        error.to_string(),
-                        &crate::matcher::settings_member_candidates(
-                            expanded_hir.settings.as_ref(),
-                            &error,
-                            None,
-                        ),
-                    ),
-                    workshop_error_span(&error)
-                        .and_then(|span| hir_span_from_workshop(span, &expanded_hir)),
-                )
+                let span = workshop_error_span(&error)
+                    .and_then(|span| hir_span_from_workshop(span, &expanded_hir));
+                self.emission_error(&expanded_hir, error, "workshop-emission", span)
             })?;
         let emitted = if exclude_variables {
             omit_declaration_sections(&emitted, &program)
@@ -572,6 +537,18 @@ impl Compiler {
         Ok((artifact, mapped))
     }
 
+    fn fully_lowered<'a>(
+        &'a self,
+        hir: &'a hir::Program,
+        locale: &Locale,
+    ) -> Result<Lowering<'a>, IntegrationError> {
+        let mut lowering = Lowering::new(self, hir);
+        lowering.copy_files(locale)?;
+        lowering.lower_declarations()?;
+        lowering.lower_rules()?;
+        Ok(lowering)
+    }
+
     fn mapped_text(
         &self,
         hir: &hir::Program,
@@ -579,10 +556,7 @@ impl Compiler {
         locale: &Locale,
     ) -> Result<MappedText, IntegrationError> {
         let expanded = expand_macros_attributed(hir)?;
-        let mut lowering = Lowering::new(self, &expanded);
-        lowering.copy_files(locale)?;
-        lowering.lower_declarations()?;
-        lowering.lower_rules()?;
+        let lowering = self.fully_lowered(&expanded, locale)?;
         let map = SourceMap::extract(&lowering.program);
         let verbatim_emission = workshop_rs::emitter::emit(&lowering.program, self.catalog, locale)
             .is_ok_and(|emitted| emitted == text);
@@ -598,6 +572,23 @@ impl Compiler {
         Ok(MappedText::new(text.to_owned(), map))
     }
 
+    fn emission_error(
+        &self,
+        hir: &hir::Program,
+        error: workshop_rs::WorkshopError,
+        code: impl Into<String>,
+        span: Option<HirSpan>,
+    ) -> IntegrationError {
+        IntegrationError::new(
+            code,
+            crate::matcher::did_you_mean(
+                error.to_string(),
+                &crate::matcher::settings_member_candidates(hir.settings.as_ref(), &error, None),
+            ),
+            span,
+        )
+    }
+
     fn validate_final_output(
         &self,
         hir: &hir::Program,
@@ -611,18 +602,8 @@ impl Compiler {
             IntegrationError::new("workshop-validation", error.to_string(), span)
         })?;
         workshop_rs::emitter::emit(&reparsed, self.catalog, locale).map_err(|error| {
-            IntegrationError::new(
-                spelling_rejection_code(&error),
-                crate::matcher::did_you_mean(
-                    error.to_string(),
-                    &crate::matcher::settings_member_candidates(
-                        hir.settings.as_ref(),
-                        &error,
-                        None,
-                    ),
-                ),
-                span,
-            )
+            let code = spelling_rejection_code(&error);
+            self.emission_error(hir, error, code, span)
         })?;
         Ok(())
     }
@@ -908,6 +889,15 @@ fn hir_span_from_workshop(span: workshop_rs::source::Span, hir: &hir::Program) -
 }
 
 impl CompileReport {
+    fn new(compiler: CompilerIdentity, catalog: CatalogIdentity, compile: CompileResult) -> Self {
+        Self {
+            schema_version: COMPILE_SCHEMA_VERSION,
+            compiler,
+            catalog,
+            compile,
+        }
+    }
+
     fn success(
         compiler: CompilerIdentity,
         catalog: CatalogIdentity,
@@ -915,11 +905,10 @@ impl CompileReport {
         diagnostics: Vec<CompileDiagnostic>,
     ) -> Self {
         let workshop = normalize_workshop(&artifact.final_output);
-        Self {
-            schema_version: COMPILE_SCHEMA_VERSION,
+        Self::new(
             compiler,
             catalog,
-            compile: CompileResult {
+            CompileResult {
                 status: CompileStatus::Success,
                 exit_code: 0,
                 failure_class: None,
@@ -928,7 +917,7 @@ impl CompileReport {
                 workshop_exact: artifact.final_output,
                 workshop,
             },
-        }
+        )
     }
 
     fn failure(
@@ -937,11 +926,10 @@ impl CompileReport {
         failure_class: CompileFailureClass,
         diagnostics: Vec<CompileDiagnostic>,
     ) -> Self {
-        Self {
-            schema_version: COMPILE_SCHEMA_VERSION,
+        Self::new(
             compiler,
             catalog,
-            compile: CompileResult {
+            CompileResult {
                 status: CompileStatus::Failure,
                 exit_code: 1,
                 failure_class: Some(failure_class),
@@ -950,7 +938,7 @@ impl CompileReport {
                 workshop_exact: String::new(),
                 workshop: String::new(),
             },
-        }
+        )
     }
 }
 

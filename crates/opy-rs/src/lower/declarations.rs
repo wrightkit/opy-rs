@@ -52,10 +52,8 @@ impl Lowerer {
             }),
             Decl::Enum { .. } => None,
             Decl::Constant { name, value, span } => {
-                let previous = self.allow_dict_literal;
-                self.allow_dict_literal = true;
-                let value = self.lower_expr(value, &[], CallPosition::Value);
-                self.allow_dict_literal = previous;
+                let value =
+                    self.with_dict_literal(|s| s.lower_expr(value, &[], CallPosition::Value));
                 Some(Declaration::Constant {
                     name: name.clone(),
                     span: Some(span.into()),

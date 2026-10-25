@@ -17,14 +17,17 @@ impl<'a> Lowering<'a> {
             &mut self.optimization_mark,
             optimization.enabled.then_some(optimization.strict),
         );
-        let result = self.lower_value_unoptimized(expr);
+        let result = self.lower_value_unoptimized(expr, &optimization);
         self.optimization_mark = previous;
         result
     }
 
-    fn lower_value_unoptimized(&mut self, expr: &Expr) -> Result<ValueId, IntegrationError> {
+    fn lower_value_unoptimized(
+        &mut self,
+        expr: &Expr,
+        optimization: &OptimizationState,
+    ) -> Result<ValueId, IntegrationError> {
         let span = expr.span().copied();
-        let optimization = self.optimization_state_at(span.as_ref());
         if optimization.enabled
             && !optimization.strict
             && (matches!(expr, Expr::Binary { .. } | Expr::Unary { .. })
@@ -106,10 +109,7 @@ impl<'a> Lowering<'a> {
                 }
             }
             Expr::EventPlayer { .. } => Value::EventPlayer,
-            Expr::HostPlayer { .. } => Value::Call {
-                name: "hostPlayer".to_string(),
-                args: Vec::new(),
-            },
+            Expr::HostPlayer { .. } => return Ok(self.push_call("hostPlayer", Vec::new())),
             Expr::Enum {
                 value_type,
                 value,
@@ -132,20 +132,14 @@ impl<'a> Lowering<'a> {
                         span,
                     ));
                 }
-                let member = Value::Enum {
-                    value_type: value_type.clone(),
-                    value: value.to_string(),
-                };
+                let member = enum_value(value_type, value);
                 // A `*Literal` member emits the bare display-name lookup,
                 // without the canonical wrapper (`Game Mode(...)`, `Hero(...)`).
                 if *literal {
                     member
                 } else if value_type == "Gamemode" {
                     let member = self.push_value(member);
-                    Value::Call {
-                        name: "gameMode".to_string(),
-                        args: vec![member],
-                    }
+                    return Ok(self.push_call("gameMode", vec![member]));
                 } else {
                     member
                 }
@@ -159,10 +153,7 @@ impl<'a> Lowering<'a> {
                 let y = self.lower_value(y)?;
                 let z = self.lower_value(z)?;
                 if let Some(member) = self.canonical_vector_member(x, y, z) {
-                    Value::Enum {
-                        value_type: "Vector".to_string(),
-                        value: member.to_string(),
-                    }
+                    enum_value("Vector", member)
                 } else {
                     Value::Call {
                         name: "vector".to_string(),
@@ -178,7 +169,7 @@ impl<'a> Lowering<'a> {
                 // The reference substitutes the definition at the use site, so
                 // the whole subtree optimizes under the caller's state rather
                 // than the definition's spans.
-                let override_state = self.optimization_state_at(span.as_ref());
+                let override_state = optimization.clone();
                 let previous = self.optimization_override.replace(override_state);
                 let value = self.lower_value(const_expr);
                 self.optimization_override = previous;
@@ -201,14 +192,13 @@ impl<'a> Lowering<'a> {
                 // The pinned OverPy oracle lowers a literal zero-index read
                 // (`arr[0]`, `arr[0.0]`) to `firstOf(arr)`; non-zero indexes
                 // and indexed writes keep the indexed forms.
+                let array = self.lower_value(array)?;
                 if matches!(index.as_ref(), Expr::Number { value, .. } if *value == 0.0) {
-                    let array = self.lower_value(array)?;
                     Value::Call {
                         name: "firstOf".to_string(),
                         args: vec![array],
                     }
                 } else {
-                    let array = self.lower_value(array)?;
                     let index = self.lower_value(index)?;
                     Value::Call {
                         name: "valueInArray".to_string(),
@@ -225,16 +215,12 @@ impl<'a> Lowering<'a> {
                     return Err(self.unsupported(error, span));
                 }
                 if dynamic_args.is_empty() {
-                    let value = format_text;
-                    return Ok(self.lower_custom_string(value));
+                    return Ok(self.lower_custom_string(format_text));
                 }
                 if dynamic_args.len() <= 3 {
                     let text_node = self.push_value(Value::String(format_text));
                     let mut call_args = vec![text_node];
-                    for arg in dynamic_args {
-                        let arg = self.lower_value(arg)?;
-                        call_args.push(arg);
-                    }
+                    call_args.extend(self.lower_values(dynamic_args)?);
                     Value::Call {
                         name: "customString".to_string(),
                         args: call_args,
@@ -246,8 +232,7 @@ impl<'a> Lowering<'a> {
                             span,
                         )
                     })?;
-                    let lowered_args = dynamic_args.iter().copied();
-                    let lowered_args = self.lower_values(lowered_args)?;
+                    let lowered_args = self.lower_values(dynamic_args)?;
                     let mut parts = Vec::with_capacity(chunks.len());
                     for (chunk, indices) in chunks {
                         let text = self.push_value(Value::String(chunk));
@@ -289,7 +274,7 @@ impl<'a> Lowering<'a> {
                 // folds true; a literal needle filters literal elements and
                 // folds `False` on empty, an `Equals` on a single survivor,
                 // or a reduced `Array Contains` otherwise (#512).
-                if self.optimization_state_at(span.as_ref()).enabled
+                if optimization.enabled
                     && matches!(op.as_str(), "in" | "not in")
                     && let Expr::Array { elements, .. } = right.as_ref()
                 {
@@ -307,7 +292,7 @@ impl<'a> Lowering<'a> {
                         let folded = self.push_value(Value::Bool(true));
                         return Ok(finish(self, folded));
                     }
-                    let strict = self.strict_optimization_active(expr);
+                    let strict = optimization.strict;
                     if is_membership_literal(left.as_ref(), strict) {
                         let survivors: Vec<&Expr> = elements
                             .iter()
@@ -338,14 +323,14 @@ impl<'a> Lowering<'a> {
                     }
                 }
                 if op == "=="
-                    && self.optimization_state_at(span.as_ref()).enabled
+                    && optimization.enabled
                     && let Some(value) = self.lower_current_map_equality(left, right)
                 {
                     return Ok(value);
                 }
                 let left = self.lower_value(left)?;
                 let right = self.lower_value(right)?;
-                if self.optimization_state_at(span.as_ref()).enabled
+                if optimization.enabled
                     && let Some(value) = self.fold_numeric_binary(op, left, right)
                 {
                     Value::Number(value)
@@ -356,10 +341,7 @@ impl<'a> Lowering<'a> {
                     }
                 } else if op == "not in" {
                     let contains = self.push_call("arrayContains", vec![right, left]);
-                    Value::Call {
-                        name: "not".to_string(),
-                        args: vec![contains],
-                    }
+                    return Ok(self.push_call("not", vec![contains]));
                 } else {
                     let name = match op.as_str() {
                         "==" | "!=" | "<" | "<=" | ">" | ">=" | "and" | "or" => op,
@@ -471,10 +453,7 @@ impl<'a> Lowering<'a> {
                             .to_string(),
                     ));
                     let padded = self.push_call("customString", vec![labels, element]);
-                    let up = self.push_value(Value::Enum {
-                        value_type: "Vector".to_string(),
-                        value: "UP".to_string(),
-                    });
+                    let up = self.push_value(enum_value("Vector", "UP"));
                     let first_up = self.push_call("firstOf", vec![up]);
                     let segments = self.push_call("stringSplit", vec![padded, first_up]);
                     let element = self.push_call("currentArrayElement", Vec::new());
@@ -543,11 +522,7 @@ impl<'a> Lowering<'a> {
                 if name == "getRealPlayersInRadius" {
                     let lowered = self.lower_values(args)?;
                     let players = self.push_call("getPlayersInRadius", lowered);
-                    let current = self.push_call("currentArrayElement", Vec::new());
-                    let alive = self.push_call("isAlive", vec![current]);
-                    let spawned = self.push_call("hasSpawned", vec![current]);
-                    let condition = self.push_call("and", vec![alive, spawned]);
-                    return Ok(self.push_call("filteredArray", vec![players, condition]));
+                    return Ok(self.filter_living_spawned(players));
                 }
                 if name == "lineIntersectsSphere" {
                     let [line_start, line_direction, sphere_center, sphere_radius] =
@@ -752,10 +727,7 @@ impl<'a> Lowering<'a> {
                     let sixty = self.push_number(60.0);
                     let hour_value =
                         self.push_call("divide", vec![time, three_thousand_six_hundred]);
-                    let down = self.push_value(Value::Enum {
-                        value_type: "Rounding".to_string(),
-                        value: "DOWN".to_string(),
-                    });
+                    let down = self.push_value(enum_value("Rounding", "DOWN"));
                     let hour = self.push_call("roundToInteger", vec![hour_value, down]);
                     let minute_remainder =
                         self.push_call("modulo", vec![time, three_thousand_six_hundred]);
@@ -787,11 +759,8 @@ impl<'a> Lowering<'a> {
                         vec![template, hour, minute_text, second_text],
                     ));
                 }
-                if name == "compressed" {
-                    return self.lower_compressed(args, span);
-                }
-                if name == "compress" {
-                    return self.lower_compress(args, span);
+                if matches!(name.as_str(), "compressed" | "compress") {
+                    return self.lower_compressed_mode(args, span, name == "compressed");
                 }
                 if name == "getSign" {
                     let [number] = args.as_slice() else {
@@ -826,19 +795,14 @@ impl<'a> Lowering<'a> {
                     // folding `Math.log` when the operand is a constant, so the
                     // expansion waits for the optimized arguments at
                     // materialization.
-                    let args = args
-                        .iter()
-                        .map(|arg| self.lower_value(arg))
-                        .collect::<Result<_, _>>()?;
+                    let args = self.lower_values(args)?;
                     return Ok(self.push_call("log", args));
                 }
                 if name == "getCurrentMap" && args.is_empty() && !self.used_maps.is_empty() {
                     return Ok(self.lower_bugged_current_map());
                 }
-                if matches!(name.as_str(), "attacker" | "victim") && args.is_empty() {
-                    return Ok(self.push_call(name, Vec::new()));
-                }
-                if name == "localPlayer" && args.is_empty() {
+                if matches!(name.as_str(), "attacker" | "victim" | "localPlayer") && args.is_empty()
+                {
                     return Ok(self.push_call(name, Vec::new()));
                 }
                 if name == "ruleCondition" {
@@ -859,10 +823,7 @@ impl<'a> Lowering<'a> {
                     let y = self.lower_value(&args[1])?;
                     let z = self.lower_value(&args[2])?;
                     if let Some(member) = self.canonical_vector_member(x, y, z) {
-                        Value::Enum {
-                            value_type: "Vector".to_string(),
-                            value: member.to_string(),
-                        }
+                        enum_value("Vector", member)
                     } else {
                         Value::Vector { x, y, z }
                     }
@@ -885,11 +846,7 @@ impl<'a> Lowering<'a> {
                         args: lowered,
                     }
                 } else if matches!(name.as_str(), "all" | "any") {
-                    let call_name = if name == "all" {
-                        "isTrueForAll"
-                    } else {
-                        "isTrueForAny"
-                    };
+                    let call_name = all_any_call_name(name);
                     let [array] = args.as_slice() else {
                         return Err(self.unsupported(
                             format!("{name} requires exactly one array argument"),
@@ -941,10 +898,7 @@ impl<'a> Lowering<'a> {
                         "round" => "NEAREST",
                         _ => unreachable!(),
                     };
-                    let rounding = self.push_value(Value::Enum {
-                        value_type: "Rounding".to_string(),
-                        value: rounding.to_string(),
-                    });
+                    let rounding = self.push_value(enum_value("Rounding", rounding));
                     let value = self.lower_value(value)?;
                     Value::Call {
                         name: "roundToInteger".to_string(),
@@ -1073,12 +1027,7 @@ impl<'a> Lowering<'a> {
                     let values = domain
                         .members
                         .iter()
-                        .map(|member| {
-                            self.push_value(Value::Enum {
-                                value_type: domain_name.to_string(),
-                                value: member.member.clone(),
-                            })
-                        })
+                        .map(|member| self.push_value(enum_value(domain_name, &member.member)))
                         .collect();
                     return Ok(self.push_call("array", values));
                 }
@@ -1098,15 +1047,9 @@ impl<'a> Lowering<'a> {
                             ));
                         }
                     };
-                    let args = vec![receiver, condition];
                     return Ok(self.push_value(Value::Call {
-                        name: if name == "all" {
-                            "isTrueForAll"
-                        } else {
-                            "isTrueForAny"
-                        }
-                        .to_string(),
-                        args,
+                        name: all_any_call_name(name).to_string(),
+                        args: vec![receiver, condition],
                     }));
                 }
                 let function = self.compiler.manifest.resolve_member(name).ok_or_else(|| {
@@ -1167,11 +1110,7 @@ impl<'a> Lowering<'a> {
                     let view_angle = self.lower_value(view_angle)?;
                     let players =
                         self.push_call("getPlayersInViewAngle", vec![receiver, team, view_angle]);
-                    let current = self.push_call("currentArrayElement", Vec::new());
-                    let alive = self.push_call("isAlive", vec![current]);
-                    let spawned = self.push_call("hasSpawned", vec![current]);
-                    let condition = self.push_call("and", vec![alive, spawned]);
-                    return Ok(self.push_call("filteredArray", vec![players, condition]));
+                    return Ok(self.filter_living_spawned(players));
                 }
                 if matches!(
                     function.id.as_str(),
@@ -1303,14 +1242,9 @@ impl<'a> Lowering<'a> {
                 receiver, member, ..
             } => {
                 let receiver = self.lower_value(receiver)?;
-                if let Some(name) = match member.as_str() {
-                    "x" => Some("__xComponentOf__"),
-                    "y" => Some("__yComponentOf__"),
-                    "z" => Some("__zComponentOf__"),
-                    _ => None,
-                } {
+                if matches!(member.as_str(), "x" | "y" | "z") {
                     Value::Call {
-                        name: name.to_string(),
+                        name: format!("__{member}ComponentOf__"),
                         args: vec![receiver],
                     }
                 } else {
@@ -1342,11 +1276,10 @@ impl<'a> Lowering<'a> {
                 } else {
                     iterable
                 };
-                let binding = ArrayBinding {
+                self.array_bindings.push(ArrayBinding {
                     element: variable.clone(),
                     index: index.clone(),
-                };
-                self.array_bindings.push(binding);
+                });
                 let predicate = condition
                     .as_deref()
                     .map(|condition| self.lower_value(condition));
@@ -1463,10 +1396,7 @@ impl<'a> Lowering<'a> {
             _ => return None,
         };
         let current = self.push_call("currentMap", Vec::new());
-        let map_value = self.push_value(Value::Enum {
-            value_type: "Map".to_string(),
-            value: map.clone(),
-        });
+        let map_value = self.push_value(enum_value("Map", &map));
         if !TEXT_COMPARED_MAPS.contains(&map.as_str()) {
             return Some(self.push_call("==", vec![current, map_value]));
         }
@@ -1484,12 +1414,7 @@ impl<'a> Lowering<'a> {
             .used_maps
             .clone()
             .into_iter()
-            .map(|map| {
-                self.push_value(Value::Enum {
-                    value_type: "Map".to_string(),
-                    value: map.to_string(),
-                })
-            })
+            .map(|map| self.push_value(enum_value("Map", map)))
             .collect();
         maps.push(self.push_call("currentMap", Vec::new()));
         let candidates = self.push_call("array", maps);
@@ -1502,6 +1427,14 @@ impl<'a> Lowering<'a> {
         let matches = self.push_call("==", vec![current_text, element_text]);
         let filtered = self.push_call("filteredArray", vec![candidates, matches]);
         self.push_call("firstOf", vec![filtered])
+    }
+
+    fn filter_living_spawned(&mut self, players: ValueId) -> ValueId {
+        let current = self.push_call("currentArrayElement", Vec::new());
+        let alive = self.push_call("isAlive", vec![current]);
+        let spawned = self.push_call("hasSpawned", vec![current]);
+        let condition = self.push_call("and", vec![alive, spawned]);
+        self.push_call("filteredArray", vec![players, condition])
     }
 
     pub(super) fn apply_replacements_to_values(
@@ -1589,14 +1522,6 @@ impl<'a> Lowering<'a> {
             }
             _ => value_id,
         }
-    }
-
-    fn lower_compressed(
-        &mut self,
-        args: &[Expr],
-        span: Option<HirSpan>,
-    ) -> Result<ValueId, IntegrationError> {
-        self.lower_compressed_mode(args, span, true)
     }
 
     fn lower_decompression(
@@ -1746,12 +1671,9 @@ impl<'a> Lowering<'a> {
         } else {
             -50000.0
         };
-        let adjusted = flattened
+        let mut strings = flattened
             .iter()
             .map(|value| value - compression_offset)
-            .collect::<Vec<_>>();
-        let mut strings = adjusted
-            .iter()
             .map(|value| {
                 format!("{value:.max_decimals$}")
                     .replace('.', "")
@@ -1768,8 +1690,6 @@ impl<'a> Lowering<'a> {
                 }
                 min_decimal_place += 1;
             }
-        } else {
-            min_decimal_place = if is_vector { -2 } else { -3 };
         }
         let max_decimal_place = if decode {
             min_decimal_place + strings.iter().map(String::len).max().unwrap_or_default() as i32
@@ -1872,18 +1792,6 @@ impl<'a> Lowering<'a> {
             self.push_call("mappedArray", vec![decoded, number])
         };
         Ok(value)
-    }
-
-    fn lower_compress(
-        &mut self,
-        args: &[Expr],
-        span: Option<HirSpan>,
-    ) -> Result<ValueId, IntegrationError> {
-        self.lower_compressed_mode(args, span, false)
-    }
-
-    fn strict_optimization_active(&self, expr: &Expr) -> bool {
-        self.optimization_state_at(expr.span()).strict
     }
 
     pub(in crate::compiler) fn optimization_state_at(
@@ -2020,13 +1928,10 @@ impl<'a> Lowering<'a> {
             return Err(self.unsupported("len requires exactly one argument", span));
         };
         let array = self.lower_value(array)?;
-        let rewrite = if self.optimization_state_at(span.as_ref()).enabled {
-            match self.value(array) {
-                Value::Call { name, args } => {
-                    Self::len_player_set_call(name).map(|name| (name, args.clone()))
-                }
-                _ => None,
-            }
+        let rewrite = if self.optimization_state_at(span.as_ref()).enabled
+            && let Value::Call { name, args } = self.value(array)
+        {
+            Self::len_player_set_call(name).map(|name| (name, args.clone()))
         } else {
             None
         };
@@ -2148,5 +2053,20 @@ impl<'a> Lowering<'a> {
         }
         lowered.push(self.lower_value(sort_order)?);
         Ok(self.push_call(workshop_setting_call(catalog_name).0, lowered))
+    }
+}
+
+fn enum_value(value_type: &str, value: &str) -> Value {
+    Value::Enum {
+        value_type: value_type.to_string(),
+        value: value.to_string(),
+    }
+}
+
+fn all_any_call_name(name: &str) -> &'static str {
+    if name == "all" {
+        "isTrueForAll"
+    } else {
+        "isTrueForAny"
     }
 }

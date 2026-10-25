@@ -165,14 +165,40 @@ fn compressed_literal_values(expr: &Expr) -> Option<Vec<f64>> {
 }
 
 fn is_compressible_column(values: &[&Expr]) -> bool {
-    let Some(numbers) = values
+    values
         .iter()
         .map(|value| compressed_literal_values(value))
         .collect::<Option<Vec<_>>>()
-    else {
-        return false;
+        .is_some_and(|numbers| is_compressible_components(&numbers))
+}
+
+fn bool_arg(args: &[cst::CallArg], index: usize) -> bool {
+    matches!(
+        args.get(index).map(|arg| &arg.value),
+        Some(Expr::Bool { value: true, .. })
+    )
+}
+
+fn compressed_column_assign(
+    target: HirExpr,
+    elements: Vec<HirExpr>,
+    compressible: bool,
+    span: Span,
+) -> HirStmt {
+    let value = HirExpr::Array {
+        elements,
+        span: Some(span.into()),
     };
-    is_compressible_components(&numbers)
+    let value = if compressible {
+        call_expr("compressed", vec![value], None, Some(span.into()))
+    } else {
+        value
+    };
+    HirStmt::Assign {
+        target: Box::new(target),
+        value: Box::new(value),
+        span: Some(span.into()),
+    }
 }
 
 fn is_compressible_components(values: &[Vec<f64>]) -> bool {
@@ -231,10 +257,7 @@ impl Lowerer {
             );
             return Vec::new();
         }
-        let compress = matches!(
-            args.get(2).map(|arg| &arg.value),
-            Some(cst::Expr::Bool { value: true, .. })
-        );
+        let compress = bool_arg(args, 2);
         let mut result = Vec::with_capacity(targets.len());
         for (column, target) in targets.iter().enumerate() {
             let target = self.lower_expr(target, macro_params, CallPosition::Value);
@@ -247,25 +270,12 @@ impl Lowerer {
                 .iter()
                 .map(|value| self.lower_expr(value, macro_params, CallPosition::Value))
                 .collect();
-            let value = HirExpr::Array {
-                elements: column_values,
-                span: Some(span.into()),
-            };
-            let value = if compress && is_compressible_column(&column_values_cst) {
-                HirExpr::Call {
-                    name: "compressed".to_string(),
-                    args: vec![value],
-                    debug_source: None,
-                    span: Some(span.into()),
-                }
-            } else {
-                value
-            };
-            result.push(HirStmt::Assign {
-                target: Box::new(target),
-                value: Box::new(value),
-                span: Some(span.into()),
-            });
+            result.push(compressed_column_assign(
+                target,
+                column_values,
+                compress && is_compressible_column(&column_values_cst),
+                span,
+            ));
         }
         result
     }
@@ -276,15 +286,10 @@ impl Lowerer {
         span: Span,
         macro_params: &[String],
     ) -> Vec<HirStmt> {
-        let Some(fields) = args.first().map(|arg| &arg.value) else {
-            self.error_at(
-                "split-dict-array-arity",
-                "splitDictArray requires a field mapping and data array".to_string(),
-                span,
-            );
-            return Vec::new();
-        };
-        let Some(rows) = args.get(1).map(|arg| &arg.value) else {
+        let (Some(fields), Some(rows)) = (
+            args.first().map(|arg| &arg.value),
+            args.get(1).map(|arg| &arg.value),
+        ) else {
             self.error_at(
                 "split-dict-array-arity",
                 "splitDictArray requires a field mapping and data array".to_string(),
@@ -313,10 +318,7 @@ impl Lowerer {
             return Vec::new();
         };
 
-        let compress = matches!(
-            args.get(2).map(|arg| &arg.value),
-            Some(Expr::Bool { value: true, .. })
-        );
+        let compress = bool_arg(args, 2);
         let mut result = Vec::with_capacity(field_entries.len());
         for field in field_entries {
             let Some(field_name) = expr_identifier(&field.key) else {
@@ -328,42 +330,23 @@ impl Lowerer {
                 continue;
             };
             let target = self.lower_expr(&field.value, macro_params, CallPosition::Value);
-            let previous = self.allow_dict_literal;
-            self.allow_dict_literal = true;
-            let values: Vec<HirExpr> = elements
-                .iter()
-                .map(|element| match element {
-                    Expr::Dict { entries, .. } => entries
-                        .iter()
-                        .find(|entry| expr_identifier(&entry.key) == Some(field_name))
-                        .map(|entry| {
-                            self.lower_expr(&entry.value, macro_params, CallPosition::Value)
-                        })
-                        .unwrap_or(HirExpr::Null { span: None }),
-                    _ => HirExpr::Null { span: None },
-                })
-                .collect();
-            self.allow_dict_literal = previous;
-            let compressible = compress && is_compressible(&values);
-            let array = HirExpr::Array {
-                elements: values,
-                span: Some(span.into()),
-            };
-            let value = if compressible {
-                HirExpr::Call {
-                    name: "compressed".to_string(),
-                    args: vec![array],
-                    debug_source: None,
-                    span: Some(span.into()),
-                }
-            } else {
-                array
-            };
-            result.push(HirStmt::Assign {
-                target: Box::new(target),
-                value: Box::new(value),
-                span: Some(span.into()),
+            let values: Vec<HirExpr> = self.with_dict_literal(|s| {
+                elements
+                    .iter()
+                    .map(|element| match element {
+                        Expr::Dict { entries, .. } => entries
+                            .iter()
+                            .find(|entry| expr_identifier(&entry.key) == Some(field_name))
+                            .map(|entry| {
+                                s.lower_expr(&entry.value, macro_params, CallPosition::Value)
+                            })
+                            .unwrap_or(HirExpr::Null { span: None }),
+                        _ => HirExpr::Null { span: None },
+                    })
+                    .collect()
             });
+            let compressible = compress && is_compressible(&values);
+            result.push(compressed_column_assign(target, values, compressible, span));
         }
         result
     }
@@ -408,21 +391,21 @@ impl Lowerer {
                         );
                     }
                 }
-                HirExpr::Call {
-                    name: name.to_string(),
-                    args: self.lower_arg_values_with_lambda(args, macro_params, |index, arg| {
+                call_expr(
+                    name,
+                    self.lower_arg_values_with_lambda(args, macro_params, |index, arg| {
                         index == 1 || arg.keyword.as_ref().is_some_and(|(name, _)| name == "key")
                     }),
-                    debug_source: None,
-                    span: Some(span.into()),
-                }
+                    None,
+                    Some(span.into()),
+                )
             }
-            SpecialValueCall::SettingFactory => HirExpr::Call {
-                name: name.to_string(),
-                args: self.lower_arg_values(args, macro_params),
-                debug_source: None,
-                span: Some(span.into()),
-            },
+            SpecialValueCall::SettingFactory => call_expr(
+                name,
+                self.lower_arg_values(args, macro_params),
+                None,
+                Some(span.into()),
+            ),
         }
     }
 
@@ -443,17 +426,7 @@ impl Lowerer {
             );
             return HirExpr::Null { span: None };
         }
-        for arg in args {
-            if let Some((keyword, keyword_span)) = &arg.keyword {
-                self.error_at(
-                    "keyword-unsupported",
-                    format!(
-                        "function 'createWorkshopSetting' does not accept keyword arguments ('{keyword}')"
-                    ),
-                    *keyword_span,
-                );
-            }
-        }
+        self.reject_keyword_args("function", "createWorkshopSetting", args);
 
         let setting_type = match &args[0].value {
             Expr::Type {
@@ -485,13 +458,13 @@ impl Lowerer {
                 HirExpr::Null { span: None }
             }
         };
-        let mut lowered = Vec::with_capacity(5);
-        lowered.push(setting_type);
-        lowered.extend(
-            args[1..]
-                .iter()
-                .map(|arg| self.lower_expr(&arg.value, macro_params, CallPosition::Value)),
-        );
+        let mut lowered: Vec<HirExpr> = std::iter::once(setting_type)
+            .chain(
+                args[1..]
+                    .iter()
+                    .map(|arg| self.lower_expr(&arg.value, macro_params, CallPosition::Value)),
+            )
+            .collect();
         if args.len() == 4 {
             lowered.push(HirExpr::Number {
                 value: 0.0,
@@ -499,21 +472,15 @@ impl Lowerer {
                 span: None,
             });
         }
-        HirExpr::Call {
-            name: "createWorkshopSetting".to_string(),
-            args: lowered,
-            debug_source: None,
-            span: Some(span.into()),
-        }
+        call_expr("createWorkshopSetting", lowered, None, Some(span.into()))
     }
 
     pub(super) fn qualified_macro_for_member(&self, member: &str) -> Option<String> {
         let suffix = format!(".{member}");
         self.macro_declarations
             .iter()
-            .filter(|(name, order)| name.ends_with(&suffix) && **order <= self.current_order)
+            .find(|(name, order)| name.ends_with(&suffix) && **order <= self.current_order)
             .map(|(name, _)| name.clone())
-            .next()
     }
 }
 

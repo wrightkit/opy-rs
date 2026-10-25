@@ -499,96 +499,33 @@ fn sort_key(hit: &LookupHit) -> (u8, String) {
 }
 
 impl LookupHit {
-    fn listed(self) -> LookupHit {
+    fn listed(mut self) -> LookupHit {
         let kind = match &self {
             LookupHit::Setting { .. } | LookupHit::SettingPath { .. } => MatchKind::Path,
             _ => MatchKind::OpySpelling,
         };
-        self.with_match_kind(kind, 0, false)
+        *self.matched_on_mut() = kind;
+        self
     }
 
-    fn with_match_kind(self, kind: MatchKind, score: u32, structural: bool) -> LookupHit {
-        let matched_on = if score == 0 || structural {
+    fn with_match_kind(mut self, kind: MatchKind, score: u32, structural: bool) -> LookupHit {
+        *self.matched_on_mut() = if score == 0 || structural {
             kind
         } else {
             MatchKind::Near
         };
+        self
+    }
+
+    fn matched_on_mut(&mut self) -> &mut MatchKind {
         match self {
-            LookupHit::Function {
-                spelling,
-                function_kind,
-                receiver,
-                unbounded,
-                params,
-                catalog_id,
-                display_name,
-                ..
-            } => LookupHit::Function {
-                spelling,
-                function_kind,
-                receiver,
-                unbounded,
-                params,
-                catalog_id,
-                display_name,
-                matched_on,
-            },
-            LookupHit::EnumDomain {
-                domain,
-                members,
-                display_name,
-                ..
-            } => LookupHit::EnumDomain {
-                domain,
-                members,
-                display_name,
-                matched_on,
-            },
-            LookupHit::EnumMember {
-                spelling,
-                domain,
-                member,
-                display_name,
-                aliases,
-                ..
-            } => LookupHit::EnumMember {
-                spelling,
-                domain,
-                member,
-                display_name,
-                aliases,
-                matched_on,
-            },
-            LookupHit::Setting {
-                path,
-                display_name,
-                value,
-                ..
-            } => LookupHit::Setting {
-                path,
-                display_name,
-                value,
-                matched_on,
-            },
-            LookupHit::Parameter {
-                callable, param, ..
-            } => LookupHit::Parameter {
-                callable,
-                param,
-                matched_on,
-            },
-            LookupHit::SettingPath { path, .. } => LookupHit::SettingPath { path, matched_on },
-            LookupHit::Event {
-                spelling,
-                accepts_filters,
-                display_name,
-                ..
-            } => LookupHit::Event {
-                spelling,
-                accepts_filters,
-                display_name,
-                matched_on,
-            },
+            LookupHit::Function { matched_on, .. }
+            | LookupHit::EnumDomain { matched_on, .. }
+            | LookupHit::EnumMember { matched_on, .. }
+            | LookupHit::Setting { matched_on, .. }
+            | LookupHit::Parameter { matched_on, .. }
+            | LookupHit::SettingPath { matched_on, .. }
+            | LookupHit::Event { matched_on, .. } => matched_on,
         }
     }
 }
@@ -632,6 +569,7 @@ impl<'a> Index<'a> {
                 .collect();
         }
         let (path_segments, folded) = crate::matcher::fold_path_query(&query.text);
+        let trimmed = query.text.trim();
         let hits: Vec<ScoredHit<'c>> = candidates
             .filter_map(|candidate| {
                 candidate
@@ -649,14 +587,7 @@ impl<'a> Index<'a> {
                                 *kind == MatchKind::ProducedType,
                             )
                         };
-                        scored.map(|s| {
-                            (
-                                s,
-                                form.eq_ignore_ascii_case(query.text.trim()),
-                                *kind,
-                                structural,
-                            )
-                        })
+                        scored.map(|s| (s, form.eq_ignore_ascii_case(trimmed), *kind, structural))
                     })
                     .min_by_key(|(s, exact, _, _)| (*s, !*exact))
                     .map(|(s, _, kind, structural)| ScoredHit {
@@ -844,10 +775,7 @@ impl<'a> Index<'a> {
                     FunctionKind::Value | FunctionKind::MemberValue => Kind::Value,
                 };
                 if let Some(entry) = self.catalog.entry(kind, catalog_id) {
-                    if let Some(spelling) = entry.spelling(&locale) {
-                        display_name = Some(spelling.to_string());
-                        forms.push((spelling.to_string(), MatchKind::DisplayName));
-                    }
+                    display_name = entry.spelling(&locale).map(str::to_string);
                     for spelling in entry.spellings(&locale) {
                         forms.push((spelling.clone(), MatchKind::DisplayName));
                     }
@@ -982,27 +910,21 @@ impl<'a> Index<'a> {
     ) -> Option<usize> {
         let entry = entry?;
         let count = entry.param_count();
-        let offset = if function.kind.is_member() && count == function.params.len() + 1 {
-            1
-        } else {
-            0
+        let offset = usize::from(function.kind.is_member() && count == function.params.len() + 1);
+        let folded = crate::matcher::fold(&param.name);
+        let by_name = |i: usize| {
+            entry
+                .param_name(i)
+                .is_some_and(|name| crate::matcher::fold(name) == folded)
         };
         if count == function.params.len() + offset {
             let candidate = index + offset;
-            match (0..count).position(|i| {
-                entry.param_name(i).is_some_and(|name| {
-                    crate::matcher::fold(name) == crate::matcher::fold(&param.name)
-                })
-            }) {
+            match (0..count).position(&by_name) {
                 Some(i) => Some(i),
                 None => (candidate < count).then_some(candidate),
             }
         } else {
-            (0..count).find(|&i| {
-                entry.param_name(i).is_some_and(|name| {
-                    crate::matcher::fold(name) == crate::matcher::fold(&param.name)
-                })
-            })
+            (0..count).find(|&i| by_name(i))
         }
     }
 
@@ -1103,29 +1025,18 @@ impl<'a> Index<'a> {
     }
 
     fn index_settings(&mut self) {
+        let mut modes: Vec<String> = Vec::new();
         for definition in settings::definitions() {
             self.push_setting(definition.path(), &definition);
-        }
-        let modes: Vec<String> = settings::definitions()
-            .filter_map(|definition| {
-                let mut parts = definition.path().split('.');
-                match (parts.next(), parts.next(), parts.next()) {
-                    (Some("gamemodes"), Some(mode), Some(_)) if mode != "general" => {
-                        Some(mode.to_string())
-                    }
-                    _ => None,
-                }
-            })
-            .collect();
-        let modes: Vec<String> = {
-            let mut seen = Vec::new();
-            for mode in modes {
-                if !seen.contains(&mode) {
-                    seen.push(mode);
-                }
+            let mut parts = definition.path().split('.');
+            if let (Some("gamemodes"), Some(mode), Some(_)) =
+                (parts.next(), parts.next(), parts.next())
+                && mode != "general"
+                && !modes.iter().any(|known| known == mode)
+            {
+                modes.push(mode.to_string());
             }
-            seen
-        };
+        }
         for definition in settings::definitions() {
             let Some(leaf) = definition.path().strip_prefix("gamemodes.general.") else {
                 continue;
@@ -1249,27 +1160,23 @@ fn setting_value_form(definition: &settings::SettingDefinition) -> SettingValueF
     }
 }
 
+fn default_number(value: f64) -> String {
+    if value.fract() == 0.0 {
+        format!("{}", value as i64)
+    } else {
+        value.to_string()
+    }
+}
+
 fn default_text(default: &ParamDefault, domain: Option<&str>, catalog: &Catalog) -> String {
     match default {
         ParamDefault::Null { .. } => "null".to_string(),
         ParamDefault::Bool(value) => value.to_string(),
-        ParamDefault::Number(value) => {
-            if value.fract() == 0.0 {
-                format!("{}", *value as i64)
-            } else {
-                value.to_string()
-            }
-        }
+        ParamDefault::Number(value) => default_number(*value),
         ParamDefault::Call { call, args } => {
             let args = args
                 .iter()
-                .map(|arg| {
-                    if arg.fract() == 0.0 {
-                        format!("{}", *arg as i64)
-                    } else {
-                        arg.to_string()
-                    }
-                })
+                .map(|arg| default_number(*arg))
                 .collect::<Vec<_>>()
                 .join(", ");
             format!("{call}({args})")

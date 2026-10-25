@@ -169,30 +169,36 @@ impl OptimizationIndex {
     }
 }
 
-fn pure_continue_conditions(statement: &Stmt) -> Option<Vec<&Expr>> {
-    if matches!(statement, Stmt::Continue { .. }) {
-        return Some(Vec::new());
+fn pure_guarded_conditions<'s, T>(
+    statement: &'s Stmt,
+    leaf: impl Fn(&'s Stmt) -> Option<T> + Copy,
+) -> Option<(Vec<&'s Expr>, T)> {
+    if let Some(value) = leaf(statement) {
+        return Some((Vec::new(), value));
     }
     let (condition, body, _) = single_if_statement(statement)?;
-    let mut conditions = pure_continue_conditions(body)?;
+    let (mut conditions, value) = pure_guarded_conditions(body, leaf)?;
     conditions.insert(0, condition);
-    Some(conditions)
+    Some((conditions, value))
+}
+
+fn pure_continue_conditions(statement: &Stmt) -> Option<Vec<&Expr>> {
+    pure_guarded_conditions(statement, |statement| {
+        matches!(statement, Stmt::Continue { .. }).then_some(())
+    })
+    .map(|(conditions, ())| conditions)
 }
 
 fn pure_goto_conditions(statement: &Stmt) -> Option<(Vec<&Expr>, &str)> {
-    if let Stmt::Goto {
-        label: Some(label),
-        offset: None,
-        rule_start: false,
-        ..
-    } = statement
-    {
-        return Some((Vec::new(), label.as_str()));
-    }
-    let (condition, body, _) = single_if_statement(statement)?;
-    let (mut conditions, label) = pure_goto_conditions(body)?;
-    conditions.insert(0, condition);
-    Some((conditions, label))
+    pure_guarded_conditions(statement, |statement| match statement {
+        Stmt::Goto {
+            label: Some(label),
+            offset: None,
+            rule_start: false,
+            ..
+        } => Some(label.as_str()),
+        _ => None,
+    })
 }
 
 fn single_if_statement(statement: &Stmt) -> Option<(&Expr, &Stmt, Option<HirSpan>)> {
@@ -214,12 +220,25 @@ fn single_if_statement(statement: &Stmt) -> Option<(&Expr, &Stmt, Option<HirSpan
     Some((&branch.condition, body, *span))
 }
 
-fn direct_conditional_goto(statement: &Stmt) -> Option<(&Expr, &str, Option<HirSpan>)> {
+fn conditional_goto(statement: &Stmt) -> Option<(&Expr, &Stmt, Option<HirSpan>)> {
     let (condition, body, span) = single_if_statement(statement)?;
+    if !matches!(
+        body,
+        Stmt::Goto {
+            rule_start: false,
+            ..
+        }
+    ) {
+        return None;
+    }
+    Some((condition, body, span))
+}
+
+fn direct_conditional_goto(statement: &Stmt) -> Option<(&Expr, &str, Option<HirSpan>)> {
+    let (condition, body, span) = conditional_goto(statement)?;
     let Stmt::Goto {
         label: Some(label),
         offset: None,
-        rule_start: false,
         ..
     } = body
     else {
@@ -229,11 +248,10 @@ fn direct_conditional_goto(statement: &Stmt) -> Option<(&Expr, &str, Option<HirS
 }
 
 fn direct_conditional_dynamic_goto(statement: &Stmt) -> Option<(&Expr, &Expr, Option<HirSpan>)> {
-    let (condition, body, span) = single_if_statement(statement)?;
+    let (condition, body, span) = conditional_goto(statement)?;
     let Stmt::Goto {
         label: None,
         offset: Some(offset),
-        rule_start: false,
         ..
     } = body
     else {
@@ -329,11 +347,7 @@ impl<'a> Lowering<'a> {
         } else {
             "array"
         };
-        let elements = self.normalize_contextual_arguments(name, elements);
-        self.push_value(Value::Call {
-            name: name.to_string(),
-            args: elements,
-        })
+        self.push_call(name, elements)
     }
 
     fn push_value(&mut self, value: Value) -> ValueId {
@@ -399,10 +413,8 @@ impl<'a> Lowering<'a> {
         call_id: &str,
         mut args: Vec<ValueId>,
     ) -> Vec<ValueId> {
-        let mut index = 0;
-        while index < args.len() {
-            args[index] = self.normalize_contextual_argument(call_id, index, args[index]);
-            index += 1;
+        for (index, arg) in args.iter_mut().enumerate() {
+            *arg = self.normalize_contextual_argument(call_id, index, *arg);
         }
         args
     }
@@ -417,28 +429,20 @@ impl<'a> Lowering<'a> {
         text: &str,
         args: &'b [hir::Expr],
     ) -> (String, Vec<&'b hir::Expr>) {
-        let values = args
-            .iter()
-            .map(|arg| {
-                let mut stack = Vec::new();
-                crate::compile_time::evaluate(arg, &self.constants, &HashMap::new(), &mut stack)
-                    .and_then(crate::compile_time::display)
-            })
-            .collect::<Vec<_>>();
-        let dynamic_indexes = values
-            .iter()
-            .enumerate()
-            .filter_map(|(index, value)| value.is_none().then_some(index))
-            .collect::<Vec<_>>();
-        let dynamic_args = dynamic_indexes
-            .iter()
-            .map(|index| &args[*index])
-            .collect::<Vec<_>>();
-        let dynamic_position = dynamic_indexes
-            .iter()
-            .enumerate()
-            .map(|(position, index)| (*index, position))
-            .collect::<HashMap<_, _>>();
+        let bindings = HashMap::new();
+        let mut values = Vec::with_capacity(args.len());
+        let mut dynamic_args = Vec::new();
+        let mut dynamic_position = HashMap::new();
+        for (index, arg) in args.iter().enumerate() {
+            let mut stack = Vec::new();
+            let value = crate::compile_time::evaluate(arg, &self.constants, &bindings, &mut stack)
+                .and_then(crate::compile_time::display);
+            if value.is_none() {
+                dynamic_position.insert(index, dynamic_args.len());
+                dynamic_args.push(arg);
+            }
+            values.push(value);
+        }
 
         let canonical = canonical_format_text(text);
         let mut output = String::with_capacity(canonical.len());
@@ -479,12 +483,19 @@ impl<'a> Lowering<'a> {
         self.push_value(Value::Number(value))
     }
 
-    fn canonical_vector_member(&self, x: ValueId, y: ValueId, z: ValueId) -> Option<&'static str> {
-        let number = |id| match self.values.get(id)? {
+    fn number_value(&self, id: ValueId) -> Option<f64> {
+        match self.values.get(id)? {
             Value::Number(value) => Some(*value),
             _ => None,
-        };
-        match (number(x), number(y), number(z)) {
+        }
+    }
+
+    fn canonical_vector_member(&self, x: ValueId, y: ValueId, z: ValueId) -> Option<&'static str> {
+        match (
+            self.number_value(x),
+            self.number_value(y),
+            self.number_value(z),
+        ) {
             (Some(1.0), Some(0.0), Some(0.0)) => Some("LEFT"),
             (Some(-1.0), Some(0.0), Some(0.0)) => Some("RIGHT"),
             (Some(0.0), Some(1.0), Some(0.0)) => Some("UP"),
@@ -496,12 +507,8 @@ impl<'a> Lowering<'a> {
     }
 
     fn fold_numeric_binary(&self, op: &str, left: ValueId, right: ValueId) -> Option<f64> {
-        let number = |id| match self.values.get(id)? {
-            Value::Number(value) => Some(*value),
-            _ => None,
-        };
-        let left = number(left)?;
-        let right = number(right)?;
+        let left = self.number_value(left)?;
+        let right = self.number_value(right)?;
         let value = match op {
             "+" => left + right,
             "-" => left - right,
@@ -515,7 +522,7 @@ impl<'a> Lowering<'a> {
     }
 
     fn value_is_number(&self, id: ValueId, expected: f64) -> bool {
-        matches!(self.values.get(id), Some(Value::Number(value)) if *value == expected)
+        self.number_value(id) == Some(expected)
     }
 
     fn value_is_empty_string(&self, id: ValueId) -> bool {
@@ -764,21 +771,24 @@ impl<'a> Lowering<'a> {
             .filter(|id| {
                 let optimization = self.optimization_state_at(self.action_origins[*id].as_ref());
                 if optimization.enabled {
-                    if let Action::Call { name, args } = &self.actions[*id]
-                        && name == "createHudText"
-                        && args.len() > 3
-                        && args[1..=3].iter().all(|text| {
-                            let text = self.materialize_value(*text);
-                            matches!(text, workshop_rs::Value::Null) || is_empty_string(&text)
-                        })
-                    {
-                        return false;
-                    }
-                    if let Action::Call { name, args } = &self.actions[*id]
-                        && name == "addToTeamScore"
-                        && args.get(1).is_some_and(|score| self.value_is_number(*score, 0.0))
-                    {
-                        return false;
+                    if let Action::Call { name, args } = &self.actions[*id] {
+                        let skip = match name.as_str() {
+                            "createHudText" => {
+                                args.len() > 3
+                                    && args[1..=3].iter().all(|text| {
+                                        let text = self.materialize_value(*text);
+                                        matches!(text, workshop_rs::Value::Null)
+                                            || is_empty_string(&text)
+                                    })
+                            }
+                            "addToTeamScore" => args
+                                .get(1)
+                                .is_some_and(|score| self.value_is_number(*score, 0.0)),
+                            _ => false,
+                        };
+                        if skip {
+                            return false;
+                        }
                     }
                     let assigns_itself = match &self.actions[*id] {
                         Action::SetGlobalVariable { variable, value } => {
@@ -830,12 +840,7 @@ impl<'a> Lowering<'a> {
                     split_all(value);
                 }
                 if is_zero_skip(&action) {
-                    action = workshop_rs::Action::Disabled {
-                        action: Box::new(workshop_rs::Action::Call {
-                            name: "abort".to_string(),
-                            args: Vec::new(),
-                        }),
-                    };
+                    action = disabled_abort();
                 }
                 if optimization.enabled
                     && let Some(modification) = self_modification(&action)
@@ -931,12 +936,7 @@ impl<'a> Lowering<'a> {
                 step: self.materialize_value(*step),
             },
             Action::End => workshop_rs::Action::End,
-            Action::Call { name, .. } if name == "disabledAbort" => workshop_rs::Action::Disabled {
-                action: Box::new(workshop_rs::Action::Call {
-                    name: "abort".to_string(),
-                    args: Vec::new(),
-                }),
-            },
+            Action::Call { name, .. } if name == "disabledAbort" => disabled_abort(),
             Action::Call { name, args } => workshop_rs::Action::Call {
                 name: name.clone(),
                 args: args
@@ -1025,23 +1025,22 @@ fn implicit_default_variables(
     BTreeMap<String, Option<HirSpan>>,
     BTreeMap<String, Option<HirSpan>>,
 ) {
+    let mut declared_globals = HashSet::new();
+    let mut declared_players = HashSet::new();
+    for declaration in &hir.declarations {
+        match declaration {
+            hir::Declaration::GlobalVariable { name, .. } => {
+                declared_globals.insert(name.as_str());
+            }
+            hir::Declaration::PlayerVariable { name, .. } => {
+                declared_players.insert(name.as_str());
+            }
+            _ => {}
+        }
+    }
     let mut collector = ImplicitVariableCollector {
-        declared_globals: hir
-            .declarations
-            .iter()
-            .filter_map(|declaration| match declaration {
-                hir::Declaration::GlobalVariable { name, .. } => Some(name.as_str()),
-                _ => None,
-            })
-            .collect(),
-        declared_players: hir
-            .declarations
-            .iter()
-            .filter_map(|declaration| match declaration {
-                hir::Declaration::PlayerVariable { name, .. } => Some(name.as_str()),
-                _ => None,
-            })
-            .collect(),
+        declared_globals,
+        declared_players,
         globals: BTreeMap::new(),
         players: BTreeMap::new(),
     };
@@ -1069,12 +1068,7 @@ fn implicit_default_variables(
             }
         }
     }
-    if hir
-        .preprocessing
-        .directives
-        .iter()
-        .any(|directive| directive.name == "translateWithPlayerVar")
-    {
+    if has_directive(hir, "translateWithPlayerVar") {
         collector
             .players
             .insert("__languageIndex__".to_string(), None);
@@ -1655,7 +1649,7 @@ fn format_arity_error(text: &str, arg_count: usize) -> Option<String> {
                 index += 2 + close;
                 continue;
             }
-            if !inner.is_empty() && inner.chars().all(|c| c.is_ascii_digit()) {
+            if inner.chars().all(|c| c.is_ascii_digit()) {
                 let placeholder = inner.parse::<usize>().unwrap_or(usize::MAX);
                 numbered_max = Some(numbered_max.map_or(placeholder, |max| max.max(placeholder)));
                 index += 2 + close;
@@ -1770,14 +1764,7 @@ fn debug_expr_text(expr: &Expr) -> String {
         }
         Expr::Bool { value, .. } => value.to_string(),
         Expr::Null { .. } => "null".to_string(),
-        Expr::Array { elements, .. } => format!(
-            "[{}]",
-            elements
-                .iter()
-                .map(debug_expr_text)
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
+        Expr::Array { elements, .. } => format!("[{}]", debug_expr_join(elements, ", ")),
         Expr::Dict { entries, .. } => format!(
             "{{{}}}",
             entries
@@ -1823,14 +1810,7 @@ fn debug_expr_text(expr: &Expr) -> String {
             if args.is_empty() {
                 name.clone()
             } else {
-                format!(
-                    "{}[{}]",
-                    name,
-                    args.iter()
-                        .map(debug_expr_text)
-                        .collect::<Vec<_>>()
-                        .join(": ")
-                )
+                format!("{}[{}]", name, debug_expr_join(args, ": "))
             }
         }
         Expr::Vector { x, y, z, .. } => format!(
@@ -1857,14 +1837,9 @@ fn debug_expr_text(expr: &Expr) -> String {
                 debug_expr_text(&args[1])
             )
         }
-        Expr::Call { name, args, .. } | Expr::MacroCall { name, args, .. } => format!(
-            "{}({})",
-            name,
-            args.iter()
-                .map(debug_expr_text)
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
+        Expr::Call { name, args, .. } | Expr::MacroCall { name, args, .. } => {
+            format!("{}({})", name, debug_expr_join(args, ", "))
+        }
         Expr::ReceiverCall {
             receiver,
             name,
@@ -1874,10 +1849,7 @@ fn debug_expr_text(expr: &Expr) -> String {
             "{}.{}({})",
             debug_expr_text(receiver),
             name,
-            args.iter()
-                .map(debug_expr_text)
-                .collect::<Vec<_>>()
-                .join(", ")
+            debug_expr_join(args, ", ")
         ),
         Expr::Binary {
             left, op, right, ..
@@ -1902,15 +1874,17 @@ fn debug_expr_text(expr: &Expr) -> String {
         Expr::Index { array, index, .. } => {
             format!("{}[{}]", debug_expr_text(array), debug_expr_text(index))
         }
-        Expr::Format { text, args, .. } => format!(
-            "\"{}\".format({})",
-            text,
-            args.iter()
-                .map(debug_expr_text)
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
+        Expr::Format { text, args, .. } => {
+            format!("\"{}\".format({})", text, debug_expr_join(args, ", "))
+        }
     }
+}
+
+fn debug_expr_join(args: &[Expr], sep: &str) -> String {
+    args.iter()
+        .map(debug_expr_text)
+        .collect::<Vec<_>>()
+        .join(sep)
 }
 
 fn canonical_debug_text(text: &str) -> String {
@@ -2107,6 +2081,15 @@ fn used_bugged_maps(hir: &hir::Program) -> Vec<&'static str> {
         .into_iter()
         .filter(|map| found.contains(*map))
         .collect()
+}
+
+fn disabled_abort() -> workshop_rs::Action {
+    workshop_rs::Action::Disabled {
+        action: Box::new(workshop_rs::Action::Call {
+            name: "abort".to_string(),
+            args: Vec::new(),
+        }),
+    }
 }
 
 /// A skip over nothing does nothing; the pinned OverPy writes it as a
