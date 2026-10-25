@@ -39,6 +39,7 @@ jobs:
     name: Compiler compatibility gate
     needs: rust-quality
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
       - name: Check out repository
@@ -107,6 +108,7 @@ jobs:
     name: Reconstruction corpus gate
     needs: rust-quality
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     steps:
       - name: Check out repository
@@ -126,6 +128,7 @@ jobs:
     name: JS runtime on ${{ matrix.os }}
     needs: rust-quality
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -152,6 +155,7 @@ jobs:
   release-order:
     name: Release promotion order
     runs-on: ubuntu-latest
+    timeout-minutes: 5
 
     steps:
       - name: Check out repository

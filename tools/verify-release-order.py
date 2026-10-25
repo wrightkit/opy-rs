@@ -78,6 +78,30 @@ def job_gate(job: str, jobs: dict[str, list[str]]) -> str:
     return " ".join(gate)
 
 
+def require_serialized_release() -> None:
+    """Overlapping release runs must not be able to regress latest/version."""
+    head = (REPO_ROOT / ".github/workflows/release-plz.yml").read_text().split("\njobs:", 1)[0]
+    head = "\n".join(re.sub(r"(\s|^)#.*$", "", line) for line in head.splitlines())
+    if not re.search(r"(?m)^concurrency:\s*$", head):
+        fail("release-plz.yml has no concurrency group: runs can overlap and regress latest/version")
+    block = head.split("concurrency:", 1)[1]
+    if not re.search(r"(?m)^\s+group:\s*\S+\s*$", block):
+        fail("release-plz.yml concurrency has no group")
+    if not re.search(r"(?m)^\s+cancel-in-progress:\s*false\s*$", block):
+        fail(
+            "release-plz.yml concurrency must set cancel-in-progress: false: "
+            "cancelling an in-flight run lets an older queued run outrun a newer release"
+        )
+
+
+def environment_of(job: str, jobs: dict[str, list[str]]) -> str | None:
+    for line in jobs[job]:
+        head = re.match(r"^    environment:\s*(.+?)\s*$", line)
+        if head:
+            return head.group(1)
+    return None
+
+
 def require_draft_release() -> None:
     config = "\n".join(
         re.sub(r"(\s|^)#.*$", "", line)
@@ -96,6 +120,7 @@ def require_draft_release() -> None:
 
 def main() -> None:
     require_draft_release()
+    require_serialized_release()
     jobs = job_lines()
     for job in (
         "provider",
@@ -135,6 +160,9 @@ def main() -> None:
         fail("publish-provider-r2 still advances the version pointer inside the R2 job")
     if "latest/version" not in "\n".join(jobs["advance-latest"]):
         fail("advance-latest does not write the opy-rs/latest/version pointer")
+    for job in ("publish-provider-r2", "advance-latest"):
+        if environment_of(job, jobs) != "release":
+            fail(f"{job} does not run in environment: release (holds R2 secrets unprotected)")
     print("ok: opy-rs release promotes only after verified provider R2 staging")
 
 
