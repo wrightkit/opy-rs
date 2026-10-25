@@ -104,6 +104,10 @@ jobs:
             target/opy-rs-structural-gate-report.json
           if-no-files-found: ignore
 
+  # Deliberate re-execution: rust-quality runs the corpus test binary under
+  # --all-features, but this job exercises the default feature set — the
+  # feature identity consumers actually build against — so a feature-gated
+  # reconstruction path cannot hide behind optional features (#646).
   reconstruction-corpus:
     name: Reconstruction corpus gate
     needs: rust-quality
