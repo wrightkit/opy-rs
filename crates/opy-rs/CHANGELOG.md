@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.26](https://github.com/wrightkit/opy-rs/compare/v0.3.25...v0.3.26) - 2026-10-25
+
+### Other
+
+- consolidate duplicated helpers and remove dead paths ([#643](https://github.com/wrightkit/opy-rs/pull/643))
+
 ## [0.3.24](https://github.com/wrightkit/opy-rs/compare/v0.3.23...v0.3.24) - 2026-10-21
 
 ### Other
