@@ -26,4 +26,5 @@ version_group = "opy-rs"
 # archives produced by the release workflow (#645).
 [[package]]
 name = "opy-provider"
+publish = false
 release = false
