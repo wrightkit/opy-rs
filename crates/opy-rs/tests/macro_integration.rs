@@ -184,3 +184,22 @@ fn script_macro_arity_is_validated_like_other_macros() {
     .unwrap_err();
     assert_eq!(error.code, "macro-arity");
 }
+
+#[test]
+fn compile_time_scripts_are_listed_in_the_files_table() {
+    let hook = outcome("hook.opy");
+    assert!(
+        hook.files.iter().any(|file| file.path == "hook.js"),
+        "{:?}",
+        hook.files
+    );
+
+    let source = "#!define twice(x) __script__(\"notstring.js\")\n#!define again(x) __script__(\"notstring.js\")\nrule \"r\":\n    pass\n";
+    let macro_files =
+        compile_with_overlay_outcome(source, "main.opy", &fixture_dir(), &Default::default()).files;
+    let scripts: Vec<_> = macro_files
+        .iter()
+        .filter(|file| file.path == "notstring.js")
+        .collect();
+    assert_eq!(scripts.len(), 1, "{macro_files:?}");
+}

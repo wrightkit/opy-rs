@@ -4,7 +4,7 @@ use super::*;
 
 impl Preprocessor {
     pub(super) fn resolve_script(
-        &self,
+        &mut self,
         path: &str,
         span: Span,
         base: &Path,
@@ -47,6 +47,14 @@ impl Preprocessor {
                 })?
             }
         };
+        if !self.files.iter().any(|file| file.path == resolved_path) {
+            let id = self.files.len() as u32;
+            self.source_texts.insert(id, source.clone());
+            self.files.push(FileRecord {
+                id,
+                path: resolved_path.clone(),
+            });
+        }
         Ok(ScriptMacro {
             path: resolved_path,
             source,

@@ -186,7 +186,7 @@ fn entry_check_loads_the_owner_project_closure_without_documents() {
     let compiled_documents = compiled["result"]["diagnostics"]
         .as_array()
         .expect("compile diagnostics documents");
-    assert_eq!(compiled_documents.len(), 5, "all reachable source files");
+    assert_eq!(compiled_documents.len(), 7, "all reachable source files");
     assert!(
         compiled_documents
             .iter()
