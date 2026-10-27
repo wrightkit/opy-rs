@@ -6,11 +6,14 @@ is created as a draft (`git_release_draft` in `release-plz.toml`) and becomes
 public only after the provider artifact set is verified.
 
 The two publishable workspace packages share one version group: `opy-rs` and
-`opy-cli`. Compiler lowering and the JavaScript macro runtime are internal
-`opy-rs` modules, not independently published packages. The release PR updates
-package versions, internal dependency versions, and the generated changelog.
-Merging that PR into `main` runs `release-plz release`; pull-request heads do
-not publish packages.
+`opy-cli`. `opy-provider` is not a crates.io package: it declares
+`publish = false`, `release-plz.toml` excludes it with `release = false`, and
+it is distributed only as the version-pinned release archives described below.
+Compiler lowering and the JavaScript macro runtime are internal `opy-rs`
+modules, not independently published packages. The release PR updates package
+versions, internal dependency versions, and the generated changelog. Merging
+that PR into `main` runs `release-plz release`; pull-request heads do not
+publish packages.
 
 Previously published versions of the removed packages remain available; only
 future publication is removed.
