@@ -25,6 +25,8 @@ fn directory_includes_are_sorted_and_preserve_nested_source_ownership() {
             "modules/a.opy",
             "modules/nested/first.opy",
             "modules/nested/scripted.opy",
+            "modules/nested/scripts/add.js",
+            "modules/nested/scripts/fail.js",
             "modules/rules.opy",
         ]
     );

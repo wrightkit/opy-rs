@@ -112,7 +112,8 @@ impl Preprocessor {
                     span,
                 ));
             }
-            let hook = self.resolve_script(path, span, &self.root)?;
+            let root = self.root.clone();
+            let hook = self.resolve_script(path, span, &root)?;
             self.post_compile_hook = Some(PostCompileHook {
                 path: hook.path,
                 source: hook.source,
