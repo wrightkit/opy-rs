@@ -21,3 +21,9 @@ git_release_draft = true
 [[package]]
 name = "opy-cli"
 version_group = "opy-rs"
+
+# opy-provider is not a crates.io package; it ships as version-pinned release
+# archives produced by the release workflow (#645).
+[[package]]
+name = "opy-provider"
+release = false

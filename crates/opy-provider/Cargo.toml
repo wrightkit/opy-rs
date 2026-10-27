@@ -5,6 +5,9 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 description = "First-party Language Provider Protocol process for OverPy projects."
+# Distributed as version-pinned release archives, not as a crates.io package
+# (#645).
+publish = false
 
 [[bin]]
 name = "opy-provider"
