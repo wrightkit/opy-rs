@@ -23,7 +23,7 @@ type SubroutineId = usize;
 use workshop_rs::{Event, EventTarget, EventTeam, ModifyOp, PlayerEventKind};
 
 const COMPRESSION_ALPHABET_NAME: &str = "__compressionAlphabet__";
-const EMPTY_STRING_NAME: &str = "__emptyString__";
+pub(super) const EMPTY_STRING_NAME: &str = "__emptyString__";
 
 #[derive(Debug, Clone)]
 enum Value {
@@ -98,8 +98,8 @@ enum Action {
 }
 
 pub(crate) struct Lowering<'a> {
-    compiler: &'a Compiler,
-    hir: &'a hir::Program,
+    pub(super) compiler: &'a Compiler,
+    pub(super) hir: &'a hir::Program,
     pub(super) program: Program,
     values: Vec<Value>,
     actions: Vec<Action>,
@@ -525,10 +525,6 @@ impl<'a> Lowering<'a> {
         self.number_value(id) == Some(expected)
     }
 
-    fn value_is_empty_string(&self, id: ValueId) -> bool {
-        matches!(self.values.get(id), Some(Value::String(value)) if value.is_empty())
-    }
-
     fn push_action(&mut self, action: Action) -> ActionId {
         let id = self.actions.len();
         self.actions.push(action);
@@ -849,7 +845,7 @@ impl<'a> Lowering<'a> {
                 }
                 ActionOptimizer::new(self.compiler, optimization.enabled).action(&mut action);
                 if optimization.enabled && optimization.for_size {
-                    SizeOptimizer::new(self.compiler).action(&mut action);
+                    SizeOptimizer::new(self).action(&mut action);
                 }
                 ActionOptimizer::new(self.compiler, optimization.enabled)
                     .wrap_booleans(&mut action);

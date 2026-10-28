@@ -61,7 +61,7 @@ impl<'a> Lowering<'a> {
                     split_all(&mut condition);
                     let optimization = self.optimization_state_at(expr.span());
                     if optimization.enabled && optimization.for_size {
-                        SizeOptimizer::new(self.compiler).condition(&mut condition);
+                        SizeOptimizer::new(self).condition(&mut condition);
                     }
                     let mut condition = OperatorOptimizer::new(self.compiler, optimization.strict)
                         .wrap_condition(condition);

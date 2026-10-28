@@ -190,6 +190,16 @@ fn condition_operands_skip_the_variable_replacement() {
 }
 
 #[test]
+fn dedicated_action_values_take_the_empty_array_replacement() {
+    assert_converges("structural-size-directive-empty-array");
+}
+
+#[test]
+fn dedicated_action_values_take_the_variable_replacement() {
+    assert_converges("structural-size-directive-variable");
+}
+
+#[test]
 fn context_player_components_reject_as_expected_pending_workshop_admission() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/corpus/synthetic/context-player-components");

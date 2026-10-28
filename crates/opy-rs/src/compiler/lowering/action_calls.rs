@@ -664,29 +664,6 @@ impl<'a> Lowering<'a> {
                     value_id
                 }
             }
-            Value::String(value) if value.is_empty() && !operands => {
-                if replacement("emptyArray", self.hir) {
-                    self.push_call("emptyArray", Vec::new())
-                } else if replacement("variable", self.hir) {
-                    self.push_value(Value::GlobalVariable(EMPTY_STRING_NAME.to_string()))
-                } else {
-                    value_id
-                }
-            }
-            Value::Call { name, args }
-                if !operands
-                    && name == "customString"
-                    && args.len() == 1
-                    && self.value_is_empty_string(args[0]) =>
-            {
-                if replacement("emptyArray", self.hir) {
-                    self.push_call("emptyArray", Vec::new())
-                } else if replacement("variable", self.hir) {
-                    self.push_value(Value::GlobalVariable(EMPTY_STRING_NAME.to_string()))
-                } else {
-                    value_id
-                }
-            }
             _ => value_id,
         }
     }
