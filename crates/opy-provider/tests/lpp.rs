@@ -1,9 +1,10 @@
 use std::collections::BTreeMap;
-use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 use serde_json::{Value, json};
+
+mod common;
+use common::{Session, file_uri};
 
 const MULTI_FILE_MAIN: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -57,65 +58,6 @@ const INCLUDE_PARENT_ESCAPE_ROOT: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/tests/fixtures/include-parent-escape/src"
 );
-
-struct Session {
-    child: Child,
-    input: ChildStdin,
-    output: BufReader<ChildStdout>,
-}
-
-impl Session {
-    fn spawn() -> Self {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_opy-provider"))
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .expect("provider spawns");
-        Self {
-            input: child.stdin.take().expect("provider stdin"),
-            output: BufReader::new(child.stdout.take().expect("provider stdout")),
-            child,
-        }
-    }
-
-    fn request(&mut self, request: Value) -> Value {
-        writeln!(self.input, "{request}").expect("write request");
-        self.input.flush().expect("flush request");
-        let mut line = String::new();
-        self.output.read_line(&mut line).expect("read response");
-        serde_json::from_str(&line).expect("response is JSON")
-    }
-
-    fn initialize(&mut self) -> Value {
-        self.initialize_version("1.1")
-    }
-
-    fn initialize_version(&mut self, version: &str) -> Value {
-        self.request(json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "lpp/initialize",
-            "params": { "protocolVersion": version },
-        }))
-    }
-
-    fn shutdown(mut self) {
-        let response = self.request(json!({
-            "jsonrpc": "2.0",
-            "id": 99,
-            "method": "lpp/shutdown",
-            "params": {},
-        }));
-        assert_eq!(response["result"], Value::Null);
-        assert_eq!(self.child.wait().expect("provider exits").code(), Some(0));
-    }
-}
-
-fn file_uri(path: &str) -> String {
-    let path = Path::new(path).canonicalize().expect("fixture path");
-    format!("file://{}", path.to_string_lossy())
-}
 
 #[test]
 fn entry_check_loads_the_owner_project_closure_without_documents() {

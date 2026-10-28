@@ -10,7 +10,8 @@ The provider serves language id `opy` and the `opy` extension. It supports LPP
 `1.0` for document-supplied requests, LPP `1.1` for file-entry project loading,
 LPP `1.2` for provider-owned directory targets, LPP `1.3` for source identity,
 LPP `1.4` for compile artifact format negotiation, LPP `1.5` for name
-lookup, and LPP `1.6` for canonical id resolution.
+lookup, LPP `1.6` for canonical id resolution, and LPP `1.7` for declared
+compile inputs.
 
 | Capability | Method | Behavior |
 | --- | --- | --- |
@@ -22,6 +23,7 @@ lookup, and LPP `1.6` for canonical id resolution.
 | Edit validation | `lpp/validateEdits` | Applies a client's proposed edits and validates the result mechanically: range bounds, overlap, and whether the document's own text is still well-formed (`syntaxError`). Semantic or cross-file verdicts that depend on sibling sources defer to the client's post-edit project `lpp/check`. |
 | Lookup | `lpp/lookup` | LPP 1.5. Resolves a name guess to OPY spellings and structured facts — callable signatures, enum domains and members, settings keys and value forms, and `@Event` rule events — from the `opy-rs` name vocabulary. No loaded project or source document is required. |
 | Resolve ids | `lpp/resolveIds` | LPP 1.6. Maps canonical Workshop call and enum member ids to the OPY spellings that produce them — the reverse direction of `lpp/lookup`, answered from the same vocabulary. No loaded project or source document is required. |
+| Compile inputs | `lpp/compile` | LPP 1.7. Every entry-based compile result carries `compileInputs`: a sorted, duplicate-free array of absolute `file:` URIs naming every file the compile read — the entry, `#!mainFile` and `#!include` targets, external settings files, `.po` translation files, and compile-time `.js` scripts — resolved from the frontend file registry. Document-supplied results and pre-1.7 sessions omit the field. |
 
 Other LPP v1 capabilities are advertised as unavailable until they are
 implemented end to end.
