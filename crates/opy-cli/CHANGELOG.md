@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.28](https://github.com/wrightkit/opy-rs/compare/opy-cli-v0.3.27...opy-cli-v0.3.28) - 2026-10-28
+
+### Other
+
+- prune corpus-duplicate and mirror-of-implementation tests ([#662](https://github.com/wrightkit/opy-rs/pull/662))
+
 ## [0.3.23](https://github.com/wrightkit/opy-rs/compare/opy-cli-v0.3.22...opy-cli-v0.3.23) - 2026-10-21
 
 ### Other
