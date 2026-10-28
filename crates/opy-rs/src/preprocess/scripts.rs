@@ -12,6 +12,7 @@ impl Preprocessor {
         let path = path.replace('\\', "/");
         let candidate = base.join(&path);
         let canonical = candidate.canonicalize().ok();
+        self.record_access(&candidate, canonical.as_deref());
         let resolved_path =
             display_path(&candidate, canonical.as_deref(), &self.display_root, &path);
         let overlay_source = self

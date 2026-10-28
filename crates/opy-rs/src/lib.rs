@@ -115,6 +115,11 @@ pub struct CompileOutcome {
     /// `#!mainFile` effective directory when the entry redirects the project
     /// root, otherwise the canonicalized input root.
     pub display_root: std::path::PathBuf,
+    /// Filesystem paths the frontend probed or read while producing this
+    /// outcome, in the form each was accessed plus the resolved form when a
+    /// probe canonicalized it — the raw record a caller turns into declared
+    /// compile inputs.
+    pub accessed: std::collections::BTreeSet<std::path::PathBuf>,
     /// The declared `#!postCompileHook` script, when the source declared one
     /// and the frontend stage succeeded.
     ///
@@ -190,6 +195,7 @@ pub fn compile_with_overlay_outcome_with_locale(
         diagnostics: outcome.diagnostics,
         files: outcome.files,
         display_root: outcome.display_root,
+        accessed: outcome.accessed,
         post_compile_hook,
     };
     debug_assert!(
