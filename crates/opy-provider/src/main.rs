@@ -12,6 +12,7 @@ use workshop_rs::catalog::{Catalog, Locale};
 use workshop_rs::program::MappedText;
 
 mod edits;
+mod inputs;
 mod navigation;
 mod uri;
 mod vocab;
@@ -522,6 +523,12 @@ impl Server {
             .iter()
             .map(|file| file.path.clone())
             .collect::<Vec<_>>();
+        let accessed = outcome
+            .accessed
+            .iter()
+            .chain(project.filesystem.accessed_paths())
+            .cloned()
+            .collect::<Vec<_>>();
         let (report, mapped) = if format == Some(ArtifactFormat::Mapped) {
             compiler.compile_outcome_report_mapped_with_language(
                 outcome,
@@ -555,7 +562,7 @@ impl Server {
             "sourceIdentity": source_identity(&project)?,
         });
         if compile_inputs_negotiated {
-            result["compileInputs"] = json!(compile_inputs(display_root, &paths));
+            result["compileInputs"] = json!(inputs::compile_inputs(display_root, &paths, accessed));
         }
         Ok(result)
     }
@@ -714,16 +721,6 @@ fn artifact_json(
             "none of the accepted artifact formats can be produced",
         )),
     }
-}
-
-fn compile_inputs(display_root: &Path, paths: &[String]) -> Vec<String> {
-    let mut uris: Vec<String> = paths
-        .iter()
-        .map(|path| path_to_file_uri(&resolved_path(display_root, path)))
-        .collect();
-    uris.sort();
-    uris.dedup();
-    uris
 }
 
 fn source_identity(project: &LoadedProject) -> Result<String, HandlerError> {

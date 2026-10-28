@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::fmt;
 use std::fs;
 use std::io;
@@ -8,10 +9,12 @@ pub struct FilesystemProject {
     source: String,
     main_path: PathBuf,
     root: PathBuf,
+    accessed: BTreeSet<PathBuf>,
 }
 
 impl FilesystemProject {
     pub fn load(path: &Path) -> Result<Self, FilesystemProjectError> {
+        let mut accessed = BTreeSet::from([path.to_path_buf()]);
         let canonical_target = path.canonicalize().map_err(|error| {
             if is_absent(error.kind()) {
                 FilesystemProjectError::entry_not_found(path.to_path_buf(), error)
@@ -19,11 +22,13 @@ impl FilesystemProject {
                 FilesystemProjectError::entry_unreadable(path.to_path_buf(), error)
             }
         })?;
+        accessed.insert(canonical_target.clone());
         let selected_path = if canonical_target.is_dir() {
-            default_entry(&canonical_target)?
+            default_entry(&canonical_target, &mut accessed)?
         } else {
             canonical_target.clone()
         };
+        accessed.insert(selected_path.clone());
         let source = fs::read_to_string(&selected_path).map_err(|error| {
             FilesystemProjectError::entry_unreadable(selected_path.clone(), error)
         })?;
@@ -39,6 +44,7 @@ impl FilesystemProject {
                 path.to_path_buf()
             },
             root,
+            accessed,
         })
     }
 
@@ -53,15 +59,25 @@ impl FilesystemProject {
     pub fn root(&self) -> &Path {
         &self.root
     }
+
+    /// Filesystem paths the load probed or read, in the form each was
+    /// accessed plus the resolved form when a probe canonicalized it.
+    pub fn accessed_paths(&self) -> &BTreeSet<PathBuf> {
+        &self.accessed
+    }
 }
 
 fn is_absent(kind: io::ErrorKind) -> bool {
     matches!(kind, io::ErrorKind::NotFound | io::ErrorKind::NotADirectory)
 }
 
-fn default_entry(directory: &Path) -> Result<PathBuf, FilesystemProjectError> {
+fn default_entry(
+    directory: &Path,
+    accessed: &mut BTreeSet<PathBuf>,
+) -> Result<PathBuf, FilesystemProjectError> {
     let candidates = [directory.join("main.opy"), directory.join("src/main.opy")];
     for candidate in candidates {
+        accessed.insert(candidate.clone());
         match fs::metadata(&candidate) {
             Ok(metadata) if metadata.is_file() => return Ok(candidate),
             Ok(_) => {}

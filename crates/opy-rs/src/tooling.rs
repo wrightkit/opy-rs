@@ -10,7 +10,10 @@
 //! and report the first error, so `check` never disagrees with `compile`
 //! about whether a project is clean.
 
-use std::path::Path;
+use std::collections::BTreeSet;
+use std::path::{Path, PathBuf};
+
+mod acceptance;
 
 use serde::Serialize;
 
@@ -63,6 +66,10 @@ pub struct CheckOutcome {
     /// `#!mainFile` effective directory when the entry redirects the project
     /// root, otherwise the canonicalized input root.
     pub display_root: std::path::PathBuf,
+    /// Filesystem paths the pipeline probed or read while producing this
+    /// outcome, in the form each was accessed plus the resolved form when a
+    /// probe canonicalized it.
+    pub accessed: BTreeSet<PathBuf>,
 }
 
 impl CheckOutcome {
@@ -70,6 +77,7 @@ impl CheckOutcome {
         diagnostics: Vec<Diagnostic>,
         files: Vec<FileRecord>,
         display_root: std::path::PathBuf,
+        accessed: BTreeSet<PathBuf>,
     ) -> Self {
         Self {
             diagnostics,
@@ -77,6 +85,7 @@ impl CheckOutcome {
             files,
             post_compile_hook: None,
             display_root,
+            accessed,
         }
     }
 
@@ -215,6 +224,7 @@ fn check_pipeline(
         files,
         display_root,
         warnings,
+        accessed,
     } = crate::preprocess::preprocess_with_overlay_outcome(source, main_path, root, overlay);
     let preprocessed = match result {
         Ok((preprocessed, _)) => preprocessed,
@@ -224,7 +234,7 @@ fn check_pipeline(
                 .map(|warning| Diagnostic::from_warning(warning, &files))
                 .collect::<Vec<_>>();
             diagnostics.push(Diagnostic::from_error(error, &files));
-            return CheckOutcome::failure(diagnostics, files, display_root);
+            return CheckOutcome::failure(diagnostics, files, display_root, accessed);
         }
     };
     let parsed = crate::parser::parse_with_macros(
@@ -242,14 +252,14 @@ fn check_pipeline(
                 .iter()
                 .map(|error| Diagnostic::from_error(error.clone(), &files)),
         );
-        return CheckOutcome::failure(diagnostics, files, display_root);
+        return CheckOutcome::failure(diagnostics, files, display_root, accessed);
     };
     if let Some(block) = &preprocessed.settings {
         match crate::settings::parse_block(block) {
             Ok(parsed_settings) => program.settings = Some(parsed_settings),
             Err(error) => {
                 diagnostics.push(Diagnostic::from_error(error, &files));
-                return CheckOutcome::failure(diagnostics, files, display_root);
+                return CheckOutcome::failure(diagnostics, files, display_root, accessed);
             }
         }
     }
@@ -280,7 +290,7 @@ fn check_pipeline(
             hir.preprocessing = preprocessed.preprocessing;
             if let Err(error) = crate::settings::resolve_hir_settings(&mut hir, &program) {
                 diagnostics.push(Diagnostic::from_error(error, &files));
-                return CheckOutcome::failure(diagnostics, files, display_root);
+                return CheckOutcome::failure(diagnostics, files, display_root, accessed);
             }
             match crate::compiler::settings::workshop_settings(&hir, locale) {
                 Ok((settings, unknown)) => {
@@ -316,7 +326,7 @@ fn check_pipeline(
                 .iter()
                 .any(|diagnostic| diagnostic.severity == DiagnosticSeverity::Error)
             {
-                return CheckOutcome::failure(diagnostics, files, display_root);
+                return CheckOutcome::failure(diagnostics, files, display_root, accessed);
             }
             if matches!(stage, CheckStage::CompileStageAcceptance) {
                 let hook = preprocessed.post_compile_hook.as_ref().map(|hook| {
@@ -326,9 +336,11 @@ fn check_pipeline(
                         span: Some(hook.span),
                     }
                 });
-                if let Some(error) = compile_stage_spelling_rejection(&hir, hook, locale) {
+                if let Some(error) =
+                    acceptance::compile_stage_spelling_rejection(&hir, hook, locale)
+                {
                     diagnostics.push(Diagnostic::from_integration_error(error, &files));
-                    return CheckOutcome::failure(diagnostics, files, display_root);
+                    return CheckOutcome::failure(diagnostics, files, display_root, accessed);
                 }
             }
             CheckOutcome {
@@ -337,32 +349,14 @@ fn check_pipeline(
                 files,
                 post_compile_hook: preprocessed.post_compile_hook,
                 display_root,
+                accessed,
             }
         }
         Err(error) => {
             diagnostics.push(Diagnostic::from_error(error, &files));
-            CheckOutcome::failure(diagnostics, files, display_root)
+            CheckOutcome::failure(diagnostics, files, display_root, accessed)
         }
     }
-}
-
-fn compile_stage_spelling_rejection(
-    hir: &hir::types::Program,
-    hook: Option<crate::PostCompileHookRecord>,
-    locale: &workshop_rs::catalog::Locale,
-) -> Option<crate::compiler::IntegrationError> {
-    crate::compiler::Compiler::new()
-        .and_then(|compiler| {
-            compiler
-                .compile_hir_with_locale_and_hook(hir, hook, locale)
-                .map(|_| ())
-        })
-        .err()
-        .filter(|error| is_spelling_rejection(&error.diagnostic.code))
-}
-
-fn is_spelling_rejection(code: &str) -> bool {
-    code.starts_with("unknown-") || code == "missing-mapping"
 }
 
 /// A structured, source-attributed diagnostic.

@@ -56,6 +56,7 @@ impl Preprocessor {
         let include = include.replace('\\', "/");
         let candidate = self.include_base().join(&include);
         let canonical = std::fs::canonicalize(&candidate).ok();
+        self.record_access(&candidate, canonical.as_deref());
         if canonical.as_deref().is_some_and(Path::is_dir) {
             let mut files = std::fs::read_dir(&candidate)
                 .map_err(|error| {
@@ -99,6 +100,7 @@ impl Preprocessor {
         out: &mut Vec<Token>,
     ) -> OpyResult<()> {
         let canonical = std::fs::canonicalize(candidate).ok();
+        self.record_access(candidate, canonical.as_deref());
         let candidate_path = candidate.to_string_lossy().into_owned();
         let canonical_path = display_path(
             candidate,
@@ -230,6 +232,16 @@ impl Preprocessor {
         }
         out.extend(included);
         Ok(())
+    }
+
+    /// Record a filesystem path the pipeline probed or read — `candidate` in
+    /// the form it was accessed plus its resolved form when the probe
+    /// canonicalized it.
+    pub(super) fn record_access(&mut self, candidate: &Path, canonical: Option<&Path>) {
+        self.accessed.insert(candidate.to_path_buf());
+        if let Some(canonical) = canonical {
+            self.accessed.insert(canonical.to_path_buf());
+        }
     }
 
     fn contains_macro_use(&self, text: &str, file_id: u32) -> bool {
