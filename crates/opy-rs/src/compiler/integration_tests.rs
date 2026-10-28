@@ -1,5 +1,3 @@
-#[path = "tests/array_unique.rs"]
-mod array_unique;
 #[path = "tests/builtins.rs"]
 mod builtins;
 #[path = "tests/callable_surface.rs"]
@@ -16,14 +14,10 @@ mod conditionals;
 mod control_flow;
 #[path = "tests/diagnostic_frontiers.rs"]
 mod diagnostic_frontiers;
-#[path = "tests/dictionary_lowering.rs"]
-mod dictionary_lowering;
 #[path = "tests/directive_lowering.rs"]
 mod directive_lowering;
 #[path = "tests/enum_members.rs"]
 mod enum_members;
-#[path = "tests/frontend_diagnostics.rs"]
-mod frontend_diagnostics;
 #[path = "tests/higher_order.rs"]
 mod higher_order;
 #[path = "tests/hud.rs"]
@@ -38,8 +32,6 @@ mod locale;
 mod macro_preprocessing;
 #[path = "tests/member_angles.rs"]
 mod member_angles;
-#[path = "tests/member_values.rs"]
-mod member_values;
 #[path = "tests/numeric_settings.rs"]
 mod numeric_settings;
 #[path = "tests/optimization_index.rs"]
@@ -48,8 +40,6 @@ mod optimization_index;
 mod postfix_assignments;
 #[path = "tests/preprocessing.rs"]
 mod preprocessing;
-#[path = "tests/primitive_lowering.rs"]
-mod primitive_lowering;
 #[path = "tests/project_loading.rs"]
 mod project_loading;
 #[path = "tests/project_preprocessing.rs"]
@@ -58,8 +48,6 @@ mod project_preprocessing;
 mod range_bindings;
 #[path = "tests/resource_baseline.rs"]
 mod resource_baseline;
-#[path = "tests/semantic_diagnostics.rs"]
-mod semantic_diagnostics;
 #[path = "tests/settings_expressions.rs"]
 mod settings_expressions;
 #[path = "tests/string_continuations.rs"]

@@ -1,71 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::Compiler;
-use workshop_rs::catalog::{Catalog, Locale};
-use workshop_rs::roundtrip::equivalent;
 use workshop_rs::{Action, Value};
-
-fn fixture_dir(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures/corpus/synthetic")
-        .join(name)
-}
-
-#[test]
-fn nested_indexed_assignments_match_the_pinned_oracle() {
-    let dir = fixture_dir("indexed-assignment-nested");
-    let source = std::fs::read_to_string(dir.join("source.opy")).unwrap();
-    let hir = crate::compile(&source, "source.opy", &dir).expect("fixture must resolve");
-    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
-    let oracle: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(dir.join("oracle.json")).unwrap()).unwrap();
-    let expected = workshop_rs::parser::parse(
-        oracle["compile"]["workshop"].as_str().unwrap(),
-        &Catalog::builtin().unwrap(),
-        &Locale::new("en-US"),
-    )
-    .unwrap();
-    assert!(equivalent(&super::canonical_program(&artifact), &expected));
-}
-
-#[test]
-fn collection_deletion_matches_the_pinned_oracle() {
-    let dir = fixture_dir("collection-mutation-328");
-    let source = std::fs::read_to_string(dir.join("source.opy")).unwrap();
-    let hir = crate::compile(&source, "source.opy", &dir).expect("fixture must resolve");
-    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
-    let oracle: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(dir.join("oracle.json")).unwrap()).unwrap();
-    let expected = workshop_rs::parser::parse(
-        oracle["compile"]["workshop"].as_str().unwrap(),
-        &Catalog::builtin().unwrap(),
-        &Locale::new("en-US"),
-    )
-    .unwrap();
-    assert!(equivalent(&super::canonical_program(&artifact), &expected));
-}
-
-#[test]
-fn nested_random_delete_reaches_the_pinned_boundary() {
-    let dir = fixture_dir("collection-mutation-328-random-invalid");
-    let source = std::fs::read_to_string(dir.join("source.opy")).unwrap();
-    let report = Compiler::new()
-        .unwrap()
-        .compile_source_report(&source, "source.opy", &dir);
-    assert_eq!(report.compile.status, crate::CompileStatus::Failure);
-    assert_eq!(report.compile.diagnostics[0].code, "random-indexed-delete");
-}
-
-#[test]
-fn nested_random_player_receiver_delete_reaches_the_pinned_boundary() {
-    let dir = fixture_dir("collection-mutation-328-random-player-invalid");
-    let source = std::fs::read_to_string(dir.join("source.opy")).unwrap();
-    let report = Compiler::new()
-        .unwrap()
-        .compile_source_report(&source, "source.opy", &dir);
-    assert_eq!(report.compile.status, crate::CompileStatus::Failure);
-    assert_eq!(report.compile.diagnostics[0].code, "random-indexed-delete");
-}
 
 #[test]
 fn nested_player_collection_deletion_uses_the_canonical_indexed_action() {

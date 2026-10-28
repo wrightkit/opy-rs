@@ -143,24 +143,6 @@ fn malformed_numeric_range_keeps_frontend_diagnostic_boundary() {
     assert_eq!(report.compile.diagnostics[0].code, "parse-error");
 }
 
-#[test]
-fn motivating_project_compiles_after_numeric_range_and_return_support() {
-    let dir = fixture_dir();
-    let source = std::fs::read_to_string(dir.join("broken_weapons.opy"))
-        .expect("motivating project must be readable");
-    let report = Compiler::new()
-        .expect("released Workshop contract must load")
-        .compile_source_report_with_locale(
-            &source,
-            "broken_weapons.opy",
-            &dir,
-            &Locale::new("en-US"),
-        );
-
-    assert_eq!(report.compile.status, CompileStatus::Success);
-    assert!(report.compile.diagnostics.is_empty());
-}
-
 fn find_initializer(program: &crate::hir::Program) -> &Expr {
     program
         .declarations

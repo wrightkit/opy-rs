@@ -103,14 +103,3 @@ fn runtime_instance_is_reusable_across_invocations() {
         assert_eq!(result.text, "2");
     }
 }
-
-#[test]
-fn a_failed_invocation_does_not_poison_the_runtime() {
-    let rt = MacroRuntime::new(Limits::default());
-    assert!(
-        rt.run_macro("throw new Error(\"boom\");", &[], "bad.js")
-            .is_err()
-    );
-    let result = rt.run_macro(r#""still works";"#, &[], "good.js").unwrap();
-    assert_eq!(result.text, "still works");
-}

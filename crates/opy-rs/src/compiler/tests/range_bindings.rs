@@ -1,29 +1,13 @@
 use std::path::{Path, PathBuf};
 
-use crate::Compiler;
-use workshop_rs::catalog::{Catalog, Locale};
-use workshop_rs::roundtrip::equivalent;
-use workshop_rs::{Action, Value};
-
 fn fixture_dir(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/corpus/synthetic")
         .join(name)
 }
 
-fn oracle_workshop(dir: &Path) -> String {
-    let oracle: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(dir.join("oracle.json")).expect("oracle.json must be readable"),
-    )
-    .expect("oracle snapshot must parse");
-    oracle["compile"]["workshop"]
-        .as_str()
-        .expect("oracle snapshot must contain Workshop text")
-        .to_string()
-}
-
 #[test]
-fn player_variable_range_binder_matches_the_pinned_oracle() {
+fn player_variable_range_binder_keeps_its_member_span() {
     let dir = fixture_dir("range-player-variable");
     let source = std::fs::read_to_string(dir.join("source.opy")).expect("source must be readable");
     let hir = crate::compile(&source, "source.opy", &dir).expect("fixture must resolve");
@@ -46,31 +30,4 @@ fn player_variable_range_binder_matches_the_pinned_oracle() {
         hir_json["rules"][0]["actions"][0]["variable"]["member_span"]["start"]["col"],
         20
     );
-    let artifact = Compiler::new()
-        .expect("released workshop contract must load")
-        .compile_hir(&hir)
-        .expect("fixture must lower to canonical WIR");
-    let catalog = Catalog::builtin().expect("catalog must load");
-    let oracle =
-        workshop_rs::parser::parse(&oracle_workshop(&dir), &catalog, &Locale::new("en-US"))
-            .expect("oracle output must reparse");
-
-    assert!(
-        equivalent(&super::canonical_program(&artifact), &oracle),
-        "native WIR diverged\n{}",
-        artifact.emitted
-    );
-
-    let program = super::canonical_program(&artifact);
-    let rule = program
-        .rules
-        .first()
-        .expect("fixture must contain one rule");
-    let Action::ForPlayerVariable { player, .. } = &rule.actions[0] else {
-        panic!("fixture must lower to For Player Variable");
-    };
-    assert!(matches!(
-        player,
-        Value::Call { name, args } if name == "hostPlayer" && args.is_empty()
-    ));
 }

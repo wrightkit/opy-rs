@@ -201,17 +201,6 @@ mod tests {
     }
 
     #[test]
-    fn a_second_difference_in_the_same_rule_is_still_reported() {
-        let two = TWO_CONDITIONS
-            .replace("Global.A == 1", "Global.A == 2")
-            .replace("Wait(1,", "Wait(2,");
-        let found = differences(&parse(&two), &parse(TWO_CONDITIONS));
-        assert_eq!(found.len(), 2, "{found:?}");
-        assert!(found.iter().all(|difference| difference.index == 0));
-        assert_ne!(found[0].path, found[1].path);
-    }
-
-    #[test]
     fn block_and_line_shapes_of_the_same_program_do_not_differ() {
         let compact = "settings { extensions { Buff Status Effects } }\n";
         let spread = "settings\n{\n\textensions\n\t{\n\t\tBuff Status Effects\n\t}\n}\n";

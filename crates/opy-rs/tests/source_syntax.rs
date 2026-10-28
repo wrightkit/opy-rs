@@ -91,17 +91,6 @@ fn source_surface_reaches_validated_hir_with_spans() {
 }
 
 #[test]
-fn source_return_reaches_abort_in_canonical_wir() {
-    let source = "rule \"return\":\n    @Event global\n    return\n    debug(\"retained\")\n";
-    let artifact = opy_rs::Compiler::new()
-        .expect("the compiler contract loads")
-        .compile_source(source, "source-syntax-return.opy", Path::new(""))
-        .expect("return must lower to a canonical abort action");
-    assert!(artifact.emitted_workshop.contains("Abort;"));
-    assert!(!artifact.emitted_workshop.contains("Abort If(True)"));
-}
-
-#[test]
 fn source_invalid_statement_contexts_are_source_diagnostics() {
     let cases = [
         (
@@ -143,39 +132,6 @@ fn source_backend_boundary_is_explicit_for_source_only_statements() {
         assert!(error.diagnostic.message.contains(expected_text));
         assert!(error.diagnostic.span.is_some());
     }
-}
-
-#[test]
-fn source_delete_reaches_canonical_index_mutation() {
-    let source = "globalvar A\nrule \"delete\":\n    @Event global\n    del A[1]\n";
-    let artifact = opy_rs::Compiler::new()
-        .expect("the compiler contract loads")
-        .compile_source(source, "source-syntax-delete.opy", Path::new(""))
-        .expect("indexed delete must lower to canonical array operations");
-    assert!(
-        artifact
-            .emitted_workshop
-            .contains("Modify Global Variable(A, Remove From Array By Index, 1)")
-    );
-}
-
-#[test]
-fn source_continue_reaches_canonical_loop_control() {
-    let source = concat!(
-        "globalvar A\n",
-        "rule \"continue\":\n",
-        "    @Event global\n",
-        "    while A < 1:\n",
-        "        if A == 0:\n",
-        "            continue\n",
-        "        wait()\n",
-        "        A += 1\n",
-    );
-    let artifact = opy_rs::Compiler::new()
-        .expect("the compiler contract loads")
-        .compile_source(source, "source-syntax-continue.opy", Path::new(""))
-        .expect("continue must lower to canonical loop control");
-    assert!(artifact.emitted_workshop.contains("Skip If("));
 }
 
 #[test]

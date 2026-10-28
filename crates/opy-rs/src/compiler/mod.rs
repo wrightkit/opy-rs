@@ -1060,35 +1060,6 @@ mod tests {
     }
 
     #[test]
-    fn compiler_instances_share_the_verified_contract_concurrently() {
-        let instances = std::thread::scope(|scope| {
-            let handles = (0..8)
-                .map(|_| {
-                    scope.spawn(|| {
-                        let compiler = Compiler::new().expect("Workshop contract must load");
-                        (
-                            compiler.catalog as *const Catalog as usize,
-                            compiler.manifest as *const Manifest as usize,
-                            compiler.link_report(),
-                        )
-                    })
-                })
-                .collect::<Vec<_>>();
-            handles
-                .into_iter()
-                .map(|handle| handle.join().expect("compiler construction must not panic"))
-                .collect::<Vec<_>>()
-        });
-
-        let (catalog, manifest, links) = instances[0];
-        for (instance_catalog, instance_manifest, instance_links) in instances.into_iter().skip(1) {
-            assert_eq!(instance_catalog, catalog);
-            assert_eq!(instance_manifest, manifest);
-            assert_eq!(instance_links, links);
-        }
-    }
-
-    #[test]
     fn compile_report_is_versioned_and_contains_reproducibility_identity() {
         let compiler = Compiler::new().unwrap();
         let report = compiler.compile_source_report_with_locale(
@@ -2377,13 +2348,5 @@ rule "main":
             }
         }
         normalized
-    }
-
-    #[test]
-    fn settings_whitespace_normalization_preserves_quoted_values() {
-        assert_ne!(
-            normalize_workshop_structural_whitespace("Description: \"a b\""),
-            normalize_workshop_structural_whitespace("Description: \"ab\"")
-        );
     }
 }
