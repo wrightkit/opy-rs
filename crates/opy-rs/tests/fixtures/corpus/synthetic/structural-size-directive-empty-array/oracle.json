@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: arr\n        1: n\n        2: i\n        3: code\n    player:\n        0: parr\n        1: pn\n        2: pi\n}\n\n//Optimize for size enabled\nrule (\"values\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Set Global Variable(n, Empty Array);\n        Modify Global Variable(arr, Subtract, Empty Array);\n        Modify Global Variable(arr, Append To Array, Empty Array);\n        Modify Global Variable(arr, Remove From Array By Value, Empty Array);\n        Modify Global Variable At Index(arr, False, Subtract, Empty Array);\n        Modify Global Variable At Index(arr, False, Append To Array, Empty Array);\n        Modify Player Variable(Event Player, parr, Append To Array, Empty Array);\n        Modify Player Variable(Event Player, pn, Subtract, Empty Array);\n        Modify Global Variable(n, Min, Empty Array);\n        Modify Global Variable(n, Max, Empty Array);\n        For Global Variable(i, 0, Empty Array, True);\n        End;\n        For Global Variable(i, Empty Array, 5, True);\n        End;\n        For Global Variable(i, 1, 5, Empty Array);\n        End;\n        For Player Variable(Event Player, pi, 0, Empty Array, True);\n        End;\n        Set Global Variable(arr, Array(Empty Array, Custom String(\"x\")));\n        If(True);\n            Skip(Value In Array(Array(1, Null), Add(True, Index Of Array Value(Array(Empty Array), Global.code))));\n        //__label_switch_2_0__:\n        Set Global Variable(n, 1);\n        //__label_switch_2_default__:\n        Set Global Variable(n, 2);\n        End;\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: arr\n        1: n\n        2: i\n        3: code\n    player:\n        0: parr\n        1: pn\n        2: pi\n}\n\n//Optimize for size enabled\nrule (\"values\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Set Global Variable(n, Empty Array);\n        Modify Global Variable(arr, Subtract, Empty Array);\n        Modify Global Variable(arr, Append To Array, Empty Array);\n        Modify Global Variable(arr, Remove From Array By Value, Empty Array);\n        Modify Global Variable At Index(arr, False, Subtract, Empty Array);\n        Modify Global Variable At Index(arr, False, Append To Array, Empty Array);\n        Modify Player Variable(Event Player, parr, Append To Array, Empty Array);\n        Modify Player Variable(Event Player, pn, Subtract, Empty Array);\n        Modify Global Variable(n, Min, Empty Array);\n        Modify Global Variable(n, Max, Empty Array);\n        For Global Variable(i, 0, Empty Array, True);\n        End;\n        For Global Variable(i, Empty Array, 5, True);\n        End;\n        For Global Variable(i, 1, 5, Empty Array);\n        End;\n        For Player Variable(Event Player, pi, 0, Empty Array, True);\n        End;\n        Set Global Variable(arr, Array(Empty Array, Custom String(\"x\")));\n        If(True);\n            Skip(Value In Array(Array(1, Null), Add(True, Index Of Array Value(Array(Empty Array), Global.code))));\n        //__label_switch_2_0__:\n        Set Global Variable(n, 1);\n        //__label_switch_2_default__:\n        Set Global Variable(n, 2);\n        End;\n    }\n}\n\n",
+    "workshopSha256": "937d526aff87e24adc70bcfcad9b0e562a7febe0d3587291f855a690456ba770"
+  },
+  "fixture": "synthetic/structural-size-directive-empty-array",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "a560cd74540f8206fe4f2e6129166d017822456e24208c2f0413f2b9e4a944cd"
+      }
+    ],
+    "sha256": "03f104ed487956b0b8275d0af505fee309f62a3668858b354e40efa1a443d1ed",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "5a7d0e294b8cad73b9701987bb584d0551d7fa4d",
+    "gitHead": "ec763c1d245aa5485ef61af5b2bda4975bce4877",
+    "integrity": "sha512-C5F6btT5yn19BvHuE0bjMuSd/2esebBabmpL4SYLQFuJ4IdouVOKEoMLLuJFAyNc0Phwrolblj5GDkDGYR0ofg==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.17.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.17"
+  },
+  "schemaVersion": 1
+}

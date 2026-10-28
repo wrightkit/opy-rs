@@ -11,13 +11,41 @@ impl<'a> Lowering<'a> {
             .collect()
     }
 
+    /// `RULE_CONDITION` re-emits the stored conditions through the
+    /// ordinary argument path, so the emitted condition list lowers
+    /// separately: the reference does not treat a comparison's operands
+    /// as call arguments there.
+    pub(super) fn lower_rule_conditions(
+        &mut self,
+        condition_exprs: &[&Expr],
+    ) -> Result<(Vec<ValueId>, Vec<ValueId>), IntegrationError> {
+        let stored = self.lower_values(condition_exprs.iter().copied())?;
+        let emitted = condition_exprs
+            .iter()
+            .map(|expr| self.lower_rule_condition(expr))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok((emitted, stored))
+    }
+
     pub(super) fn lower_value(&mut self, expr: &Expr) -> Result<ValueId, IntegrationError> {
+        self.lower_value_inner(expr, false)
+    }
+
+    fn lower_rule_condition(&mut self, expr: &Expr) -> Result<ValueId, IntegrationError> {
+        self.lower_value_inner(expr, true)
+    }
+
+    fn lower_value_inner(
+        &mut self,
+        expr: &Expr,
+        rule_condition_root: bool,
+    ) -> Result<ValueId, IntegrationError> {
         let optimization = self.optimization_state_at(expr.span());
         let previous = std::mem::replace(
             &mut self.optimization_mark,
             optimization.enabled.then_some(optimization.strict),
         );
-        let result = self.lower_value_unoptimized(expr, &optimization);
+        let result = self.lower_value_unoptimized(expr, &optimization, rule_condition_root);
         self.optimization_mark = previous;
         result
     }
@@ -26,6 +54,7 @@ impl<'a> Lowering<'a> {
         &mut self,
         expr: &Expr,
         optimization: &OptimizationState,
+        rule_condition_root: bool,
     ) -> Result<ValueId, IntegrationError> {
         let span = expr.span().copied();
         if optimization.enabled
@@ -1370,7 +1399,7 @@ impl<'a> Lowering<'a> {
         let name = name.clone();
         let args = args.clone();
         let mut args = self.normalize_contextual_arguments(&name, args);
-        self.apply_replacements_to_values(&name, &mut args, span);
+        self.apply_replacements_to_values(&name, &mut args, span, rule_condition_root);
         if let Some(Value::Call {
             args: target_args, ..
         }) = self.values.get_mut(value_id)
@@ -1435,93 +1464,6 @@ impl<'a> Lowering<'a> {
         let spawned = self.push_call("hasSpawned", vec![current]);
         let condition = self.push_call("and", vec![alive, spawned]);
         self.push_call("filteredArray", vec![players, condition])
-    }
-
-    pub(super) fn apply_replacements_to_values(
-        &mut self,
-        call_id: &str,
-        args: &mut [ValueId],
-        span: Option<HirSpan>,
-    ) {
-        for value in args {
-            *value = self.apply_replacement(*value, call_id, span);
-        }
-    }
-
-    fn apply_replacement(
-        &mut self,
-        value_id: ValueId,
-        call_id: &str,
-        span: Option<HirSpan>,
-    ) -> ValueId {
-        let optimization = self.optimization_state_at(span.as_ref());
-        if !optimization.enabled
-            || !optimization.for_size
-            || matches!(
-                call_id,
-                "workshopSettingToggle"
-                    | "workshopSettingCombo"
-                    | "workshopSettingInteger"
-                    | "workshopSettingFloat"
-            )
-        {
-            return value_id;
-        }
-        let replacement = |name: &str, hir: &hir::Program| {
-            hir.preprocessing
-                .replacements
-                .iter()
-                .any(|value| value.value == name)
-        };
-        match self.value(value_id).clone() {
-            Value::Number(0.0) => {
-                let name = [
-                    "getCapturePercentage",
-                    "getPayloadProgressPercentage",
-                    "isMatchComplete",
-                ]
-                .into_iter()
-                .find(|name| replacement(name, self.hir));
-                name.map_or(value_id, |name| self.push_call(name, Vec::new()))
-            }
-            Value::Number(1.0) => {
-                if replacement("getMatchRound", self.hir) {
-                    self.push_call("getMatchRound", Vec::new())
-                } else {
-                    value_id
-                }
-            }
-            Value::Enum { value_type, value } if value_type == "Team" && value == "TEAM_1" => {
-                if replacement("getControlScoringTeam", self.hir) {
-                    self.push_call("getControlScoringTeam", Vec::new())
-                } else {
-                    value_id
-                }
-            }
-            Value::String(value) if value.is_empty() => {
-                if replacement("emptyArray", self.hir) {
-                    self.push_call("emptyArray", Vec::new())
-                } else if replacement("variable", self.hir) {
-                    self.push_value(Value::GlobalVariable(EMPTY_STRING_NAME.to_string()))
-                } else {
-                    value_id
-                }
-            }
-            Value::Call { name, args }
-                if name == "customString"
-                    && args.len() == 1
-                    && self.value_is_empty_string(args[0]) =>
-            {
-                if replacement("emptyArray", self.hir) {
-                    self.push_call("emptyArray", Vec::new())
-                } else if replacement("variable", self.hir) {
-                    self.push_value(Value::GlobalVariable(EMPTY_STRING_NAME.to_string()))
-                } else {
-                    value_id
-                }
-            }
-            _ => value_id,
-        }
     }
 
     fn lower_decompression(

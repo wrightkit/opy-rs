@@ -32,8 +32,8 @@ impl<'a> Lowering<'a> {
         for expr in &rule.conditions {
             Self::split_rule_condition(expr, &mut condition_exprs);
         }
-        let conditions = self.lower_values(condition_exprs.iter().copied())?;
-        let previous_conditions = self.current_rule_conditions.replace(conditions.clone());
+        let (conditions, stored) = self.lower_rule_conditions(&condition_exprs)?;
+        let previous_conditions = self.current_rule_conditions.replace(stored);
         let lowered_actions = self.lower_actions(&rule.actions, None);
         self.current_rule_conditions = previous_conditions;
         let actions = lowered_actions?;
@@ -61,7 +61,7 @@ impl<'a> Lowering<'a> {
                     split_all(&mut condition);
                     let optimization = self.optimization_state_at(expr.span());
                     if optimization.enabled && optimization.for_size {
-                        SizeOptimizer::new(self.compiler).condition(&mut condition);
+                        SizeOptimizer::new(self).condition(&mut condition);
                     }
                     let mut condition = OperatorOptimizer::new(self.compiler, optimization.strict)
                         .wrap_condition(condition);

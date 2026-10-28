@@ -14,5 +14,7 @@ rule "operands":
     @Condition g >= 0
     @Condition g == 0
     @Condition (g + 1) >= 1
+    @Condition g == ""
+    @Condition g != ""
     @Condition h
     h = 1

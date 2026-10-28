@@ -3,18 +3,24 @@ use workshop_rs::{Action, ModifyOp, Value};
 
 use self::literal_slots::{Slot, slot};
 use super::Compiler;
+use super::lowering::{EMPTY_STRING_NAME, Lowering};
 use super::operator_optimization::{falsy, literal_text, number_components};
 use super::value_walk::for_each_child;
+use crate::hir;
 
 mod literal_slots;
 
 pub(super) struct SizeOptimizer<'a> {
     compiler: &'a Compiler,
+    hir: &'a hir::Program,
 }
 
 impl<'a> SizeOptimizer<'a> {
-    pub(super) fn new(compiler: &'a Compiler) -> Self {
-        Self { compiler }
+    pub(super) fn new(lowering: &Lowering<'a>) -> Self {
+        Self {
+            compiler: lowering.compiler,
+            hir: lowering.hir,
+        }
     }
 
     pub(super) fn action(&self, action: &mut Action) {
@@ -24,9 +30,19 @@ impl<'a> SizeOptimizer<'a> {
             }
             Action::ModifyGlobalVariable { op, value, .. }
             | Action::ModifyPlayerVariable { op, value, .. } => self.modified(*op, value),
-            Action::ForGlobalVariable { stop, step, .. }
-            | Action::ForPlayerVariable { stop, step, .. } => {
+            Action::ForGlobalVariable {
+                start, stop, step, ..
+            }
+            | Action::ForPlayerVariable {
+                start, stop, step, ..
+            } => {
+                if is_empty_string(start) {
+                    *start = self.empty_string(false);
+                }
                 for bound in [stop, step] {
+                    if is_empty_string(bound) {
+                        *bound = self.empty_string(false);
+                    }
                     boolean_number(bound);
                 }
             }
@@ -55,16 +71,33 @@ impl<'a> SizeOptimizer<'a> {
         }
     }
 
-    /// An empty string is spelled as the first character of nothing, or as an
-    /// empty array where the parameter accepts one.
+    /// An empty string is spelled as an empty array where the parameter
+    /// accepts one or `#!replaceEmptyStringByEmptyArray` asks for it, as the
+    /// `#!replaceEmptyStringByVariable` global, or as the first character of
+    /// nothing.
     fn empty_string(&self, empty_array: bool) -> Value {
-        if empty_array {
+        if empty_array || self.replacement("emptyArray") {
             return Value::call("emptyArray", Vec::new());
+        }
+        if self.replacement("variable") {
+            return Value::GlobalVariable(EMPTY_STRING_NAME.to_string());
         }
         Value::call("charAt", [Value::String(String::new()), Value::Number(0.0)])
     }
 
+    fn replacement(&self, name: &str) -> bool {
+        self.hir
+            .preprocessing
+            .replacements
+            .iter()
+            .any(|value| value.value == name)
+    }
+
     fn modified(&self, op: ModifyOp, value: &mut Value) {
+        if is_empty_string(value) {
+            *value = self.empty_string(false);
+            return;
+        }
         let Value::Number(number) = value else {
             return;
         };
@@ -158,6 +191,11 @@ impl<'a> SizeOptimizer<'a> {
     fn call_arguments(&self, kind: Kind, name: &str, args: &mut [Value]) {
         let entry = self.compiler.catalog.entry(kind, name);
         for (index, arg) in args.iter_mut().enumerate() {
+            // A custom string's format is a string literal, not a value
+            // argument: the reference rewrites the substitutions only.
+            if (name, index) == ("customString", 0) {
+                continue;
+            }
             let mut coercions = entry
                 .and_then(|entry| entry.param_coercions(index))
                 .copied()

@@ -458,7 +458,7 @@ impl<'a> Lowering<'a> {
                 visibility,
             ],
         );
-        self.apply_replacements_to_values("createHudText", &mut args, span);
+        self.apply_replacements_to_values("createHudText", &mut args, span, false);
         Ok(self.push_call_action_with_spans(
             "createHudText",
             &args,

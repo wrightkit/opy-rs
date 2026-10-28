@@ -170,6 +170,36 @@ fn size_optimization_action_rewrites_match_the_pinned_oracle() {
 }
 
 #[test]
+fn size_optimization_condition_operands_match_the_pinned_oracle() {
+    assert_converges("structural-size-condition-operands");
+}
+
+#[test]
+fn size_optimization_action_values_match_the_pinned_oracle() {
+    assert_converges("structural-size-action-values");
+}
+
+#[test]
+fn condition_operands_skip_the_argument_replacements() {
+    assert_converges("structural-size-condition-replacements");
+}
+
+#[test]
+fn condition_operands_skip_the_variable_replacement() {
+    assert_converges("structural-size-condition-variable");
+}
+
+#[test]
+fn dedicated_action_values_take_the_empty_array_replacement() {
+    assert_converges("structural-size-directive-empty-array");
+}
+
+#[test]
+fn dedicated_action_values_take_the_variable_replacement() {
+    assert_converges("structural-size-directive-variable");
+}
+
+#[test]
 fn context_player_components_reject_as_expected_pending_workshop_admission() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/corpus/synthetic/context-player-components");
