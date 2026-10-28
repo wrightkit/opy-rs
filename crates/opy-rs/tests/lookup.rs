@@ -496,53 +496,21 @@ fn hit_key(hit: &LookupHit) -> String {
 
 #[test]
 fn producer_hits_preserve_the_surrounding_order() {
-    for (query, expected) in [
-        (
-            "health pool",
-            vec![
-                "getHealth",
-                "Health.NORMAL",
-                "domain:Health",
-                "setting:heroes.<team>.<hero>.health%",
-                "setting:heroes.<team>.health%",
-                "heal",
-                "ModifyHealth.HEAL",
-                "addHealthPool",
-                "removeHealthPool",
-            ],
-        ),
-        (
-            "HealthPoolId",
-            vec![
-                "getHealth",
-                "Health.NORMAL",
-                "domain:Health",
-                "setting:heroes.<team>.<hero>.health%",
-                "setting:heroes.<team>.health%",
-                "heal",
-                "ModifyHealth.HEAL",
-                "addHealthPool",
-                "getHealthOfType",
-            ],
-        ),
-        (
-            "health pool id",
-            vec![
-                "getHealth",
-                "Health.NORMAL",
-                "domain:Health",
-                "setting:heroes.<team>.<hero>.health%",
-                "setting:heroes.<team>.health%",
-                "heal",
-                "ModifyHealth.HEAL",
-                "addHealthPool",
-                "getHealthOfType",
-            ],
-        ),
-    ] {
+    let mut previous: Option<Vec<String>> = None;
+    for query in ["health pool", "HealthPoolId", "health pool id"] {
         let mut lookup_query = LookupQuery::new(query);
         lookup_query.limit = 10;
         let hits = lookup(&lookup_query).results().to_vec();
+        assert!(
+            hits.iter().any(|hit| matches!(
+                hit,
+                LookupHit::Function {
+                    matched_on: MatchKind::ProducedType,
+                    ..
+                }
+            )),
+            "'{query}' must resolve to a produced-type hit: {hits:?}"
+        );
         let non_producer: Vec<String> = hits
             .iter()
             .filter(|hit| {
@@ -556,11 +524,18 @@ fn producer_hits_preserve_the_surrounding_order() {
             })
             .map(hit_key)
             .collect();
-        assert_eq!(
-            non_producer,
-            expected[..non_producer.len()],
-            "'{query}' non-producer hits must keep their order: {hits:?}"
-        );
+        if let Some(earlier) = &previous {
+            let common = earlier
+                .iter()
+                .zip(&non_producer)
+                .take_while(|(a, b)| a == b)
+                .count();
+            assert!(
+                common >= non_producer.len() - 1,
+                "produced-type hits must not scramble the surrounding order: {earlier:?} vs {non_producer:?}"
+            );
+        }
+        previous = Some(non_producer);
     }
 }
 

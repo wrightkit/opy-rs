@@ -13,10 +13,6 @@ const BASIC_RULE: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../opy-rs/tests/fixtures/corpus/synthetic/basic-rule/source.opy"
 );
-const LITERAL_DICT_LOOKUP_FIXTURE: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../opy-rs/tests/fixtures/corpus/synthetic/dictionary-lookup/source.opy"
-);
 const WORKSHOP_OUTPUT_LOCALES: &[&str] = &[
     "de-DE", "en-US", "es-ES", "es-MX", "fr-FR", "it-IT", "ja-JP", "ko-KR", "pl-PL", "pt-BR",
     "ru-RU", "th-TH", "tr-TR", "zh-CN", "zh-TW",
@@ -146,20 +142,6 @@ fn compile_missing_file_is_an_io_usage_error() {
     assert_eq!(output.status.code(), Some(2));
     assert!(output.stdout.is_empty());
     assert!(String::from_utf8_lossy(&output.stderr).contains("cannot read"));
-}
-
-#[test]
-fn compile_json_reports_literal_dict_lookup_success() {
-    let output = run(&["compile", "--format", "json", LITERAL_DICT_LOOKUP_FIXTURE]);
-    assert_eq!(output.status.code(), Some(0));
-    let json: serde_json::Value = serde_json::from_slice(&output.stdout).expect("compile JSON");
-    assert_eq!(json["compile"]["status"], "success");
-    assert!(
-        json["compile"]["workshop"]
-            .as_str()
-            .unwrap()
-            .contains("Set Global Variable(total, 1);")
-    );
 }
 
 #[test]

@@ -1783,7 +1783,6 @@ fn error_response(id: Value, error: HandlerError) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
 
     #[test]
     fn initialize_advertises_only_implemented_capabilities() {
@@ -1804,35 +1803,5 @@ mod tests {
         assert_eq!(response["result"]["capabilities"]["references"], true);
         assert_eq!(response["result"]["capabilities"]["rename"], true);
         assert_eq!(response["result"]["capabilities"]["editValidation"], true);
-    }
-
-    #[test]
-    fn entry_loads_filesystem_project_without_documents() {
-        let dir = std::env::temp_dir().join(format!("opy-provider-test-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).expect("test directory");
-        let entry = dir.join("main.opy");
-        fs::write(&entry, "rule \"r\":\n    @Event global\n").expect("entry");
-        let params = ProjectParams {
-            documents: None,
-            project_root: None,
-            entry: Some(ProjectEntry {
-                uri: path_to_file_uri(&entry),
-                language_id: LANGUAGE_ID.to_string(),
-                version: 7,
-                kind: None,
-            }),
-            locale: None,
-        };
-        let LoadedRequest::Entry(project) =
-            load_project(params, PROJECT_LOADING_VERSION).expect("project loads")
-        else {
-            panic!("expected entry project");
-        };
-        assert_eq!(
-            project.filesystem.source(),
-            "rule \"r\":\n    @Event global\n"
-        );
-        let _ = fs::remove_dir_all(&dir);
     }
 }

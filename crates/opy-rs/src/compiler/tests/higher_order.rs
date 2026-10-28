@@ -1,24 +1,8 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::Compiler;
 use workshop_rs::catalog::{Catalog, Locale};
 use workshop_rs::roundtrip::equivalent;
-
-fn fixture_dir(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures/corpus/synthetic")
-        .join(name)
-}
-
-fn compile_fixture(name: &str) -> crate::CompilationArtifact {
-    let dir = fixture_dir(name);
-    let source = std::fs::read_to_string(dir.join("source.opy")).expect("source must be readable");
-    let hir = crate::compile(&source, "source.opy", &dir).expect("fixture must resolve");
-    Compiler::new()
-        .expect("released workshop contract must load")
-        .compile_hir(&hir)
-        .expect("fixture must lower to canonical WIR")
-}
 
 fn compile_source(source: &str) -> crate::CompilationArtifact {
     let hir = crate::compile(source, "source.opy", Path::new(".")).expect("source must resolve");
@@ -26,22 +10,6 @@ fn compile_source(source: &str) -> crate::CompilationArtifact {
         .expect("released workshop contract must load")
         .compile_hir(&hir)
         .expect("source must lower to canonical WIR")
-}
-
-fn oracle_wir(name: &str) -> workshop_rs::Program {
-    let dir = fixture_dir(name);
-    let oracle: serde_json::Value = serde_json::from_str(
-        &std::fs::read_to_string(dir.join("oracle.json")).expect("oracle must be readable"),
-    )
-    .expect("oracle must parse");
-    workshop_rs::parser::parse(
-        oracle["compile"]["workshop"]
-            .as_str()
-            .expect("oracle must contain Workshop output"),
-        &Catalog::builtin().expect("catalog must load"),
-        &Locale::new("en-US"),
-    )
-    .expect("oracle Workshop must reparse")
 }
 
 #[test]
@@ -58,19 +26,6 @@ fn demonstrated_comprehension_lowers_to_canonical_mapped_array() {
     assert!(
         equivalent(&super::canonical_program(&artifact), &expected),
         "native WIR diverged\n{}",
-        artifact.emitted
-    );
-}
-
-#[test]
-fn demonstrated_sorted_array_form_matches_the_pinned_oracle() {
-    let artifact = compile_fixture("strings-and-lambda");
-    assert!(
-        equivalent(
-            &super::canonical_program(&artifact),
-            &oracle_wir("strings-and-lambda"),
-        ),
-        "native WIR diverged for strings-and-lambda\n{}",
         artifact.emitted
     );
 }

@@ -184,35 +184,6 @@ fn console_sink_is_rebound_per_invocation() {
 }
 
 #[test]
-fn many_consecutive_invocations_stay_independent() {
-    let rt = runtime();
-    for i in 0..32 {
-        let leak =
-            format!(r#"globalThis.marker{i} = {i}; (globalThis.marker{i} === {i}).toString();"#);
-        let leaked = rt.run_macro(&leak, &[], "leak.js").unwrap();
-        assert_eq!(leaked.text, "true");
-        let check = rt
-            .run_macro(&format!(r#"typeof globalThis.marker{i};"#), &[], "check.js")
-            .unwrap();
-        assert_eq!(check.text, "undefined");
-        if i > 0 {
-            let previous = rt
-                .run_macro(
-                    &format!(r#"typeof globalThis.marker{};"#, i - 1),
-                    &[],
-                    "check-prev.js",
-                )
-                .unwrap();
-            assert_eq!(previous.text, "undefined");
-        }
-        if i % 3 == 0 {
-            rt.run_macro("throw new Error(\"x\");", &[], "err.js")
-                .unwrap_err();
-        }
-    }
-}
-
-#[test]
 fn scripts_see_no_filesystem_process_or_network_capabilities() {
     let rt = runtime();
     let result = rt

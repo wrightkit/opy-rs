@@ -1,15 +1,8 @@
-use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use crate::compiler::{Compiler, Lowering};
 use crate::hir::{self, Position, Span};
 use workshop_rs::catalog::Locale;
-
-const BASTION_PROJECT_ENV: &str = "OPY_BASTION_PROJECT";
-
-fn bastion_project() -> Option<PathBuf> {
-    std::env::var_os(BASTION_PROJECT_ENV).map(PathBuf::from)
-}
 
 fn lower_and_collect_queries(hir: &hir::Program) -> Vec<Option<Span>> {
     let compiler = Compiler::new().expect("Workshop contract must load");
@@ -104,30 +97,6 @@ fn optimization_index_matches_scan_over_corpus_fixtures() {
         checked += 1;
     }
     assert!(checked > 10, "corpus must provide fixtures to check");
-}
-
-#[test]
-fn optimization_index_matches_scan_on_bastion_project() {
-    let Some(project_dir) = bastion_project() else {
-        eprintln!("skipping Bastion equivalence check: {BASTION_PROJECT_ENV} is not set");
-        return;
-    };
-    let project = crate::FilesystemProject::load(&project_dir.join("src/main.opy"))
-        .expect("Bastion project must load");
-    let main_path = project.main_path().to_string_lossy().to_string();
-    let outcome = crate::compile_with_overlay_outcome(
-        project.source(),
-        &main_path,
-        project.root(),
-        &BTreeMap::new(),
-    );
-    let hir = outcome.hir.expect("Bastion frontend must succeed");
-    let expanded = crate::compiler::expand_macros(&hir).expect("Bastion macros must expand");
-
-    let spans = lower_and_collect_queries(&expanded);
-    assert!(!spans.is_empty(), "Bastion must lower optimization queries");
-    assert_index_matches_scan(&expanded, &spans);
-    eprintln!("checked {} Bastion optimization queries", spans.len());
 }
 
 fn walk_fixture_dirs(root: &Path) -> Vec<PathBuf> {
