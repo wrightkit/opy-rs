@@ -311,7 +311,7 @@ impl<'a> Lowering<'a> {
             })?
         };
         let mut args = self.normalize_contextual_arguments(catalog_id, args);
-        self.apply_replacements_to_values(catalog_id, &mut args, span);
+        self.apply_replacements_to_values(catalog_id, &mut args, span, false);
         self.optimize_wait_duration(catalog_id, &mut args, span);
         Ok(self.push_call_action_with_spans(catalog_id, &args, spans))
     }
@@ -592,7 +592,102 @@ impl<'a> Lowering<'a> {
         lowered.push(self.lower_value(receiver)?);
         lowered.extend(self.lower_values(args.iter())?);
         let mut args = self.normalize_contextual_arguments(catalog_id, lowered);
-        self.apply_replacements_to_values(catalog_id, &mut args, span);
+        self.apply_replacements_to_values(catalog_id, &mut args, span, false);
         Ok(self.push_call_action_with_spans(catalog_id.clone(), &args, argument_spans))
+    }
+
+    pub(super) fn apply_replacements_to_values(
+        &mut self,
+        call_id: &str,
+        args: &mut [ValueId],
+        span: Option<HirSpan>,
+        rule_condition_root: bool,
+    ) {
+        // A rule condition emits a comparison's operands directly rather
+        // than as call arguments: they keep the operand replacements (1,
+        // Team.1) but never the argument-only ones (0, the empty string).
+        let operands =
+            rule_condition_root && matches!(call_id, "==" | "!=" | "<" | "<=" | ">" | ">=");
+        for value in args {
+            *value = self.apply_replacement(*value, call_id, span, operands);
+        }
+    }
+
+    fn apply_replacement(
+        &mut self,
+        value_id: ValueId,
+        call_id: &str,
+        span: Option<HirSpan>,
+        operands: bool,
+    ) -> ValueId {
+        let optimization = self.optimization_state_at(span.as_ref());
+        if !optimization.enabled
+            || !optimization.for_size
+            || matches!(
+                call_id,
+                "workshopSettingToggle"
+                    | "workshopSettingCombo"
+                    | "workshopSettingInteger"
+                    | "workshopSettingFloat"
+            )
+        {
+            return value_id;
+        }
+        let replacement = |name: &str, hir: &hir::Program| {
+            hir.preprocessing
+                .replacements
+                .iter()
+                .any(|value| value.value == name)
+        };
+        match self.value(value_id).clone() {
+            Value::Number(0.0) if !operands => {
+                let name = [
+                    "getCapturePercentage",
+                    "getPayloadProgressPercentage",
+                    "isMatchComplete",
+                ]
+                .into_iter()
+                .find(|name| replacement(name, self.hir));
+                name.map_or(value_id, |name| self.push_call(name, Vec::new()))
+            }
+            Value::Number(1.0) => {
+                if replacement("getMatchRound", self.hir) {
+                    self.push_call("getMatchRound", Vec::new())
+                } else {
+                    value_id
+                }
+            }
+            Value::Enum { value_type, value } if value_type == "Team" && value == "TEAM_1" => {
+                if replacement("getControlScoringTeam", self.hir) {
+                    self.push_call("getControlScoringTeam", Vec::new())
+                } else {
+                    value_id
+                }
+            }
+            Value::String(value) if value.is_empty() && !operands => {
+                if replacement("emptyArray", self.hir) {
+                    self.push_call("emptyArray", Vec::new())
+                } else if replacement("variable", self.hir) {
+                    self.push_value(Value::GlobalVariable(EMPTY_STRING_NAME.to_string()))
+                } else {
+                    value_id
+                }
+            }
+            Value::Call { name, args }
+                if !operands
+                    && name == "customString"
+                    && args.len() == 1
+                    && self.value_is_empty_string(args[0]) =>
+            {
+                if replacement("emptyArray", self.hir) {
+                    self.push_call("emptyArray", Vec::new())
+                } else if replacement("variable", self.hir) {
+                    self.push_value(Value::GlobalVariable(EMPTY_STRING_NAME.to_string()))
+                } else {
+                    value_id
+                }
+            }
+            _ => value_id,
+        }
     }
 }

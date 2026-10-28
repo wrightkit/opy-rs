@@ -180,6 +180,16 @@ fn size_optimization_action_values_match_the_pinned_oracle() {
 }
 
 #[test]
+fn condition_operands_skip_the_argument_replacements() {
+    assert_converges("structural-size-condition-replacements");
+}
+
+#[test]
+fn condition_operands_skip_the_variable_replacement() {
+    assert_converges("structural-size-condition-variable");
+}
+
+#[test]
 fn context_player_components_reject_as_expected_pending_workshop_admission() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/corpus/synthetic/context-player-components");

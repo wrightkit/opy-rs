@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: code\n        1: n\n        127: __emptyString__\n}\n\nrule (\"Initialize global variables\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(__emptyString__, Char In String(Empty Array, Null));\n    }\n}\n\n//Optimize for size enabled\nrule (\"operands\") {\n    event {\n        Ongoing - Global;\n    }\n    conditions {\n        Global.code == Custom String(\"\");\n        Global.code != Custom String(\"\");\n    }\n    actions {\n        While(((Compare(Global.code, ==, Global.__emptyString__)) && (Compare(Global.code, !=, Global.__emptyString__))));\n            Set Global Variable(n, 1);\n            Wait(True, Ignore Condition);\n        End;\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: code\n        1: n\n        127: __emptyString__\n}\n\nrule (\"Initialize global variables\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(__emptyString__, Char In String(Empty Array, Null));\n    }\n}\n\n//Optimize for size enabled\nrule (\"operands\") {\n    event {\n        Ongoing - Global;\n    }\n    conditions {\n        Global.code == Custom String(\"\");\n        Global.code != Custom String(\"\");\n    }\n    actions {\n        While(((Compare(Global.code, ==, Global.__emptyString__)) && (Compare(Global.code, !=, Global.__emptyString__))));\n            Set Global Variable(n, 1);\n            Wait(True, Ignore Condition);\n        End;\n    }\n}\n\n",
+    "workshopSha256": "62d897933eca991092f3ffd25507eb24866dbd6e48d196ee27ab76d38b502f43"
+  },
+  "fixture": "synthetic/structural-size-condition-variable",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "a80f65e69fc861e920ef0725e8e4cf86ef5e5dddcb0f4d8d250b85bd8c234a8f"
+      }
+    ],
+    "sha256": "231f21239c492eadce047722b98e1046ee3a3b9a517cb60de4e6c53a338ad20a",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "5a7d0e294b8cad73b9701987bb584d0551d7fa4d",
+    "gitHead": "ec763c1d245aa5485ef61af5b2bda4975bce4877",
+    "integrity": "sha512-C5F6btT5yn19BvHuE0bjMuSd/2esebBabmpL4SYLQFuJ4IdouVOKEoMLLuJFAyNc0Phwrolblj5GDkDGYR0ofg==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.17.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.17"
+  },
+  "schemaVersion": 1
+}

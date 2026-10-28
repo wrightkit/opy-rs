@@ -32,8 +32,8 @@ impl<'a> Lowering<'a> {
         for expr in &rule.conditions {
             Self::split_rule_condition(expr, &mut condition_exprs);
         }
-        let conditions = self.lower_values(condition_exprs.iter().copied())?;
-        let previous_conditions = self.current_rule_conditions.replace(conditions.clone());
+        let (conditions, stored) = self.lower_rule_conditions(&condition_exprs)?;
+        let previous_conditions = self.current_rule_conditions.replace(stored);
         let lowered_actions = self.lower_actions(&rule.actions, None);
         self.current_rule_conditions = previous_conditions;
         let actions = lowered_actions?;
