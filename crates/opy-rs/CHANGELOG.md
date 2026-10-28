@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.27](https://github.com/wrightkit/opy-rs/compare/v0.3.26...v0.3.27) - 2026-10-27
+
+### Added
+
+- register compile-time script inputs in the files table ([#655](https://github.com/wrightkit/opy-rs/pull/655))
+
 ## [0.3.26](https://github.com/wrightkit/opy-rs/compare/v0.3.25...v0.3.26) - 2026-10-25
 
 ### Other
