@@ -1,0 +1,39 @@
+{
+  "compile": {
+    "diagnostics": [
+      {
+        "severity": "info",
+        "text": "The '+' operator cannot be used to concatenate strings. Use the .format() function or f-strings. (w_string_concat)\n    | line 17, col 5, at source.opy\nWarning: The '+' operator cannot be used to concatenate strings. Use the .format() function or f-strings. (w_string_concat)\n    | line 17, col 5, at source.opy"
+      }
+    ],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: arr\n        1: n\n        2: i\n    player:\n        0: parr\n        1: pn\n        2: pi\n}\n\n//Optimize for size enabled\nrule (\"values\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Modify Global Variable(arr, Append To Array, Char In String(Empty Array, False));\n        Modify Global Variable(arr, Subtract, Char In String(Empty Array, False));\n        Modify Global Variable(arr, Remove From Array By Value, Char In String(Empty Array, False));\n        Modify Global Variable(n, Min, Char In String(Empty Array, False));\n        Modify Global Variable(n, Max, Char In String(Empty Array, False));\n        Modify Global Variable(n, Add, Char In String(Empty Array, False));\n        Modify Global Variable(n, Multiply, Char In String(Empty Array, False));\n        Modify Global Variable(n, Divide, Char In String(Empty Array, False));\n        Modify Global Variable At Index(arr, False, Subtract, Char In String(Empty Array, False));\n        Modify Global Variable At Index(arr, False, Append To Array, Char In String(Empty Array, False));\n        Modify Player Variable(Event Player, parr, Append To Array, Char In String(Empty Array, False));\n        Modify Player Variable(Event Player, pn, Subtract, Char In String(Empty Array, False));\n        For Global Variable(i, 0, Char In String(Empty Array, False), True);\n        End;\n        For Global Variable(i, Char In String(Empty Array, False), 5, True);\n        End;\n        For Global Variable(i, 1, 5, Char In String(Empty Array, False));\n        End;\n        For Player Variable(Event Player, pi, 0, Char In String(Empty Array, False), True);\n        End;\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: arr\n        1: n\n        2: i\n    player:\n        0: parr\n        1: pn\n        2: pi\n}\n\n//Optimize for size enabled\nrule (\"values\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Modify Global Variable(arr, Append To Array, Char In String(Empty Array, False));\n        Modify Global Variable(arr, Subtract, Char In String(Empty Array, False));\n        Modify Global Variable(arr, Remove From Array By Value, Char In String(Empty Array, False));\n        Modify Global Variable(n, Min, Char In String(Empty Array, False));\n        Modify Global Variable(n, Max, Char In String(Empty Array, False));\n        Modify Global Variable(n, Add, Char In String(Empty Array, False));\n        Modify Global Variable(n, Multiply, Char In String(Empty Array, False));\n        Modify Global Variable(n, Divide, Char In String(Empty Array, False));\n        Modify Global Variable At Index(arr, False, Subtract, Char In String(Empty Array, False));\n        Modify Global Variable At Index(arr, False, Append To Array, Char In String(Empty Array, False));\n        Modify Player Variable(Event Player, parr, Append To Array, Char In String(Empty Array, False));\n        Modify Player Variable(Event Player, pn, Subtract, Char In String(Empty Array, False));\n        For Global Variable(i, 0, Char In String(Empty Array, False), True);\n        End;\n        For Global Variable(i, Char In String(Empty Array, False), 5, True);\n        End;\n        For Global Variable(i, 1, 5, Char In String(Empty Array, False));\n        End;\n        For Player Variable(Event Player, pi, 0, Char In String(Empty Array, False), True);\n        End;\n    }\n}\n\n",
+    "workshopSha256": "8a008296d4c693b0b73c5faba9fbb3427ce23676acb1d9487fc822b0cc4488da"
+  },
+  "fixture": "synthetic/structural-size-action-values",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "be24f95505c783d27fd3b5a7834335cacfff32600855082ce52434b929cf4c9a"
+      }
+    ],
+    "sha256": "8cc5dd8dd8894e56f3f4ccb3b41c626252c1a16d6db04e0e73666eadaf39e4e2",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "5a7d0e294b8cad73b9701987bb584d0551d7fa4d",
+    "gitHead": "ec763c1d245aa5485ef61af5b2bda4975bce4877",
+    "integrity": "sha512-C5F6btT5yn19BvHuE0bjMuSd/2esebBabmpL4SYLQFuJ4IdouVOKEoMLLuJFAyNc0Phwrolblj5GDkDGYR0ofg==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.17.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.17"
+  },
+  "schemaVersion": 1
+}

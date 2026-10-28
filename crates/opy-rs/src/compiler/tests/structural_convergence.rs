@@ -175,6 +175,11 @@ fn size_optimization_condition_operands_match_the_pinned_oracle() {
 }
 
 #[test]
+fn size_optimization_action_values_match_the_pinned_oracle() {
+    assert_converges("structural-size-action-values");
+}
+
+#[test]
 fn context_player_components_reject_as_expected_pending_workshop_admission() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/corpus/synthetic/context-player-components");

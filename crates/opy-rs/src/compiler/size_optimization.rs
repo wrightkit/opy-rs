@@ -24,9 +24,19 @@ impl<'a> SizeOptimizer<'a> {
             }
             Action::ModifyGlobalVariable { op, value, .. }
             | Action::ModifyPlayerVariable { op, value, .. } => self.modified(*op, value),
-            Action::ForGlobalVariable { stop, step, .. }
-            | Action::ForPlayerVariable { stop, step, .. } => {
+            Action::ForGlobalVariable {
+                start, stop, step, ..
+            }
+            | Action::ForPlayerVariable {
+                start, stop, step, ..
+            } => {
+                if is_empty_string(start) {
+                    *start = self.empty_string(false);
+                }
                 for bound in [stop, step] {
+                    if is_empty_string(bound) {
+                        *bound = self.empty_string(false);
+                    }
                     boolean_number(bound);
                 }
             }
@@ -65,6 +75,10 @@ impl<'a> SizeOptimizer<'a> {
     }
 
     fn modified(&self, op: ModifyOp, value: &mut Value) {
+        if is_empty_string(value) {
+            *value = self.empty_string(false);
+            return;
+        }
         let Value::Number(number) = value else {
             return;
         };
