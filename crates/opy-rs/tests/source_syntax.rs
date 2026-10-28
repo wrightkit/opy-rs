@@ -135,6 +135,85 @@ fn source_backend_boundary_is_explicit_for_source_only_statements() {
 }
 
 #[test]
+fn source_nested_continue_uses_the_nearest_loop_and_preserves_tail_flow() {
+    let source = concat!(
+        "globalvar A\n",
+        "rule \"nested continue\":\n",
+        "    @Event global\n",
+        "    while A < 2:\n",
+        "        if A == 0:\n",
+        "            if A < 1:\n",
+        "                continue\n",
+        "            A = 1\n",
+        "            A = A + 10\n",
+        "        A = A + 1\n",
+    );
+    let artifact = opy_rs::Compiler::new()
+        .expect("the compiler contract loads")
+        .compile_source(source, "source-syntax-nested-continue.opy", Path::new(""))
+        .expect("nested continue must lower to canonical loop control");
+    assert!(
+        artifact
+            .emitted_workshop
+            .contains("Skip If(Compare(Global.A, <, 1), 4);")
+    );
+    assert!(
+        artifact
+            .emitted_workshop
+            .contains("Modify Global Variable(A, Add, 1);")
+    );
+}
+
+#[test]
+fn source_nested_loop_continue_targets_the_innermost_loop() {
+    let source = concat!(
+        "globalvar A\n",
+        "rule \"nested loops\":\n",
+        "    @Event global\n",
+        "    while A < 2:\n",
+        "        while A < 1:\n",
+        "            continue\n",
+        "            A = A + 10\n",
+        "        A = A + 1\n",
+    );
+    let artifact = opy_rs::Compiler::new()
+        .expect("the compiler contract loads")
+        .compile_source(source, "source-syntax-nested-loops.opy", Path::new(""))
+        .expect("nested loop continue must lower");
+    assert!(
+        artifact
+            .emitted_workshop
+            .contains("While(Compare(Global.A, <, 1));\n                Skip(1);")
+    );
+    assert!(
+        artifact
+            .emitted_workshop
+            .contains("Modify Global Variable(A, Add, 1);")
+    );
+}
+
+#[test]
+fn source_continue_skips_later_conditional_branches() {
+    let source = concat!(
+        "globalvar A\n",
+        "rule \"continue if else\":\n",
+        "    @Event global\n",
+        "    while A < 2:\n",
+        "        if A == 0:\n",
+        "            continue\n",
+        "        else:\n",
+        "            A = A + 10\n",
+        "        A = A + 1\n",
+    );
+    let artifact = opy_rs::Compiler::new()
+        .expect("the compiler contract loads")
+        .compile_source(source, "source-syntax-continue-if-else.opy", Path::new(""))
+        .expect("continue in an if/else must lower to canonical loop control");
+    assert!(artifact.emitted_workshop.contains("Skip(4);"));
+    assert!(artifact.emitted_workshop.contains("Else;"));
+}
+
+#[test]
 fn source_multiline_grouped_expressions_reach_hir_with_spans() {
     let source = concat!(
         "rule \"multiline expressions\":\n",
