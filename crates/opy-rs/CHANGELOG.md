@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.28](https://github.com/wrightkit/opy-rs/compare/v0.3.27...v0.3.28) - 2026-10-28
+
+### Added
+
+- *(provider)* declare compile inputs over LPP ([#661](https://github.com/wrightkit/opy-rs/pull/661))
+
+### Other
+
+- prune corpus-duplicate and mirror-of-implementation tests ([#662](https://github.com/wrightkit/opy-rs/pull/662))
+
 ## [0.3.27](https://github.com/wrightkit/opy-rs/compare/v0.3.26...v0.3.27) - 2026-10-27
 
 ### Added
