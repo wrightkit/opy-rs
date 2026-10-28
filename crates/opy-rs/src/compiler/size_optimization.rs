@@ -158,6 +158,11 @@ impl<'a> SizeOptimizer<'a> {
     fn call_arguments(&self, kind: Kind, name: &str, args: &mut [Value]) {
         let entry = self.compiler.catalog.entry(kind, name);
         for (index, arg) in args.iter_mut().enumerate() {
+            // A custom string's format is a string literal, not a value
+            // argument: the reference rewrites the substitutions only.
+            if (name, index) == ("customString", 0) {
+                continue;
+            }
             let mut coercions = entry
                 .and_then(|entry| entry.param_coercions(index))
                 .copied()
