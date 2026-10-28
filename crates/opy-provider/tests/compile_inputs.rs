@@ -234,6 +234,42 @@ fn compile_inputs_declares_links_followed_and_their_resolutions() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+#[cfg(unix)]
+#[test]
+fn compile_inputs_declares_a_dangling_opy_symlink_and_its_target() {
+    let dir = scratch_project(
+        "dangling-link",
+        &[
+            (
+                "main.opy",
+                "#!include \"lib\"\nrule \"main\":\n    @Event global\n    pass\n",
+            ),
+            ("lib/a.opy", "rule \"a\":\n    @Event global\n    pass\n"),
+        ],
+    );
+    std::os::unix::fs::symlink("../elsewhere/x.opy", dir.join("lib/dangling.opy")).unwrap();
+    let mut session = Session::spawn();
+    session.initialize_version("1.7");
+
+    let inputs = compile_inputs(&mut session, 2, file_entry(&dir.join("main.opy")));
+    assert_eq!(
+        inputs,
+        uris(
+            &dir,
+            &[
+                "",
+                "elsewhere/x.opy",
+                "lib",
+                "lib/a.opy",
+                "lib/dangling.opy",
+                "main.opy",
+            ],
+        )
+    );
+    session.shutdown();
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn compile_inputs_omitted_before_lpp_1_7() {
     let (entry, _) = compile_inputs_project("gated");

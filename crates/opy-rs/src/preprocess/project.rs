@@ -69,9 +69,14 @@ impl Preprocessor {
                 .filter_map(Result::ok)
                 .map(|entry| entry.path())
                 .filter(|path| {
-                    path.extension()
+                    if !path
+                        .extension()
                         .is_some_and(|extension| extension.eq_ignore_ascii_case("opy"))
-                        && path.is_file()
+                    {
+                        return false;
+                    }
+                    self.record_access(path, None);
+                    path.is_file()
                 })
                 .collect::<Vec<_>>();
             files.sort();
