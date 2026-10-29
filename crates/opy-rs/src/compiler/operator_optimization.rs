@@ -836,27 +836,26 @@ impl<'a> OperatorOptimizer<'a> {
     }
 
     fn value_in_array(&self, args: Vec<Value>) -> Rewrite {
-        let [array, index] = two(args);
-        let mut array = literal_array(array);
-        if let Value::Number(position) = index {
-            if position < 0.0 {
+        let [mut array, index] = two(args);
+        array = literal_array(array);
+        let i = match (&array, index) {
+            (_, Value::Number(n)) if n < 0.0 => return Rewrite::Changed(Value::Null),
+            (Value::Array(items), Value::Number(n)) if self.strict && items.is_empty() => n,
+            (_, Value::Number(n)) => n.round(),
+            (_, index) => return Rewrite::Same(call("valueInArray", vec![array, index])),
+        };
+        if let Value::Array(items) = &mut array {
+            if (i as usize) < items.len() {
+                return Rewrite::Changed(items.swap_remove(i as usize));
+            }
+            if !items.is_empty() || !self.strict {
                 return Rewrite::Changed(Value::Null);
             }
-            let position = position.round();
-            if let Value::Array(elements) = &mut array {
-                if (position as usize) < elements.len() {
-                    return Rewrite::Changed(elements.swap_remove(position as usize));
-                }
-                if !elements.is_empty() || !self.strict {
-                    return Rewrite::Changed(Value::Null);
-                }
-            }
-            if position == 0.0 {
-                return Rewrite::Changed(call("firstOf", vec![array]));
-            }
-            return Rewrite::Same(call("valueInArray", vec![array, Value::Number(position)]));
         }
-        Rewrite::Same(call("valueInArray", vec![array, index]))
+        if i == 0.0 {
+            return Rewrite::Changed(call("firstOf", vec![array]));
+        }
+        Rewrite::Same(call("valueInArray", vec![array, Value::Number(i)]))
     }
 
     fn component(args: Vec<Value>, axis: usize) -> Rewrite {

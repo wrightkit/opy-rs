@@ -31,3 +31,5 @@ rule "strict empty array indexing":
     result = [][0]
     result = [][0.0]
     result = [][1]
+    result = [][0.1]
+    result = [][0.49]
