@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.33](https://github.com/wrightkit/opy-rs/compare/v0.3.32...v0.3.33) - 2026-10-29
+
+### Fixed
+
+- *(compiler)* preserve trailing comparisons under optimizeForSizeAggressive ([#681](https://github.com/wrightkit/opy-rs/pull/681))
+- *(compiler)* preserve replace0ByCapturePercentage precedence under optimizeForSize ([#680](https://github.com/wrightkit/opy-rs/pull/680))
+
 ## [0.3.32](https://github.com/wrightkit/opy-rs/compare/v0.3.31...v0.3.32) - 2026-10-29
 
 ### Fixed
