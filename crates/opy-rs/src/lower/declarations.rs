@@ -11,7 +11,11 @@ fn declaration_visible(
 }
 
 impl Lowerer {
-    pub(super) fn lower_declaration(&mut self, decl: &Decl) -> Option<Declaration> {
+    pub(super) fn lower_declaration(
+        &mut self,
+        decl: &Decl,
+        declarations: &[Declaration],
+    ) -> Option<Declaration> {
         match decl {
             Decl::GlobalVariable {
                 name,
@@ -24,7 +28,7 @@ impl Lowerer {
                 index: *index,
                 span: Some(span.into()),
                 name_span: Some(name_span.into()),
-                initializer: self.global_initializer(initializer.as_ref()),
+                initializer: self.global_initializer(initializer.as_ref(), declarations),
             }),
             Decl::PlayerVariable {
                 name,
@@ -191,19 +195,45 @@ impl Lowerer {
         declaration_visible(&self.enum_declarations, name, self.current_order)
     }
 
-    fn global_initializer(&mut self, initializer: Option<&Expr>) -> Option<Box<HirExpr>> {
+    fn global_initializer(
+        &mut self,
+        initializer: Option<&Expr>,
+        declarations: &[Declaration],
+    ) -> Option<Box<HirExpr>> {
         use crate::hir::visit::{self, Visitor};
 
-        struct EventPlayerCheck<'a>(&'a mut Lowerer, Span);
+        struct EventPlayerCheck<'a> {
+            declarations: &'a [Declaration],
+            visited: HashSet<&'a str>,
+            found: bool,
+        }
 
         impl Visitor for EventPlayerCheck<'_> {
             fn visit_expr(&mut self, expression: &HirExpr) {
-                if matches!(expression, HirExpr::EventPlayer { .. }) {
-                    self.0.error_at(
-                        "rule-event-gate",
-                        "Cannot use 'eventPlayer' with rule event 'global'".to_string(),
-                        self.1,
-                    );
+                match expression {
+                    HirExpr::EventPlayer { .. } => self.found = true,
+                    HirExpr::Constant { name, .. } | HirExpr::MacroCall { name, .. } => {
+                        for declaration in self.declarations {
+                            match declaration {
+                                Declaration::Constant {
+                                    name: defined,
+                                    value,
+                                    ..
+                                } if defined == name && self.visited.insert(defined) => {
+                                    self.visit_expr(value);
+                                }
+                                Declaration::Macro {
+                                    name: defined,
+                                    body,
+                                    ..
+                                } if defined == name && self.visited.insert(defined) => {
+                                    visit::walk_stmts(self, body);
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    _ => {}
                 }
                 visit::walk_expr(self, expression);
             }
@@ -211,7 +241,19 @@ impl Lowerer {
 
         let initializer = initializer?;
         let value = self.initializer(Some(initializer))?;
-        EventPlayerCheck(self, initializer.span()).visit_expr(&value);
+        let mut check = EventPlayerCheck {
+            declarations,
+            visited: HashSet::new(),
+            found: false,
+        };
+        check.visit_expr(&value);
+        if check.found {
+            self.error_at(
+                "rule-event-gate",
+                "Cannot use 'eventPlayer' with rule event 'global'".to_string(),
+                initializer.span(),
+            );
+        }
         Some(value)
     }
 

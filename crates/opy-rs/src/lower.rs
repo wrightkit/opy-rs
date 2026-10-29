@@ -163,9 +163,7 @@ fn lower_program(
         lowerer.current_order = order;
         match item {
             TopLevel::Declaration(decl) => {
-                if let Some(declaration) = lowerer.lower_declaration(decl) {
-                    declarations.push(declaration);
-                }
+                declarations.extend(lowerer.lower_declaration(decl, &declarations));
             }
             TopLevel::Rule(CstRuleEntry::Rule(rule)) => rules.push(RuleEntry::Rule(
                 lowerer.lower_rule(rule, files.as_slice(), preprocessing)?,

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/global-initializer-macro-event-player-invalid",
+  "category": "diagnostics",
+  "features": [
+    "declaration initializers",
+    "event context"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "failure",
+      "relationship": "match",
+      "ruleNames": false,
+      "diagnosticCode": "rule-event-gate"
+    },
+    "compiler": {
+      "nativeStatus": "failure",
+      "relationship": "match",
+      "comparison": "diagnostic-code",
+      "diagnosticCode": "rule-event-gate",
+      "failureClass": "frontend"
+    }
+  }
+}
