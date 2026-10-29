@@ -82,3 +82,55 @@ rule "initializer contract":
         5
     );
 }
+
+#[test]
+fn size_directive_does_not_rewrite_variable_initializers() {
+    let source = r#"#!optimizeForSize
+
+globalvar g = ""
+globalvar v = vect(0, 0, 0)
+globalvar n
+playervar ps = ""
+playervar pv = vect(0, 0, 0)
+
+rule "r":
+    @Event global
+    n = 0
+    g = ""
+    v = vect(0, 0, 0)
+"#;
+    let hir = crate::compile(source, "size-initializers.opy", Path::new(".")).unwrap();
+    let artifact = Compiler::new().unwrap().compile_hir(&hir).unwrap();
+
+    assert!(
+        artifact
+            .emitted
+            .contains("Set Global Variable(g, Custom String(\"\"));")
+    );
+    assert!(
+        artifact
+            .emitted
+            .contains("Set Global Variable(v, Vector(0, 0, 0));")
+    );
+    assert!(
+        artifact
+            .emitted
+            .contains("Set Player Variable(Event Player, ps, Custom String(\"\"));")
+    );
+    assert!(
+        artifact
+            .emitted
+            .contains("Set Player Variable(Event Player, pv, Vector(0, 0, 0));")
+    );
+    assert!(artifact.emitted.contains("Set Global Variable(n, Null);"));
+    assert!(
+        artifact
+            .emitted
+            .contains("Set Global Variable(g, Char In String(Empty Array, False));")
+    );
+    assert!(
+        artifact
+            .emitted
+            .contains("Set Global Variable(v, Add(Left, Right));")
+    );
+}

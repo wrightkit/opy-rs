@@ -20,6 +20,19 @@ fn check_explicit_index(
 }
 
 impl<'a> Lowering<'a> {
+    /// Generated initializer and setup rules precede every optimization
+    /// marker in the pinned reference's rule stream, so they parse and emit
+    /// under the default optimization state wherever `#!optimizeForSize` and
+    /// its siblings appear in the source.
+    fn with_default_optimization<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
+        let previous = self
+            .optimization_override
+            .replace(OptimizationState::default());
+        let result = f(self);
+        self.optimization_override = previous;
+        result
+    }
+
     fn translation_helper_index(
         &self,
         reserved: &HashSet<u32>,
@@ -447,7 +460,7 @@ impl<'a> Lowering<'a> {
             }
             for (name, init_expr, span, _target_span) in global_initializers {
                 let variable = *self.globals.get(name).expect("declared global is created");
-                let value = self.lower_value(init_expr)?;
+                let value = self.with_default_optimization(|this| this.lower_value(init_expr))?;
                 let action = self.push_action(Action::SetGlobalVariable {
                     variable: self.program.global_variables[variable].name.clone(),
                     value,
@@ -483,7 +496,7 @@ impl<'a> Lowering<'a> {
                     .get(name)
                     .expect("declared player variable is created");
                 let player = self.push_value(Value::EventPlayer);
-                let value = self.lower_value(init_expr)?;
+                let value = self.with_default_optimization(|this| this.lower_value(init_expr))?;
                 let action = self.push_action(Action::SetPlayerVariable {
                     player,
                     variable: self.program.player_variables[variable].name.clone(),
@@ -506,14 +519,16 @@ impl<'a> Lowering<'a> {
         event: Event,
         actions: Vec<ActionId>,
     ) -> Result<(), IntegrationError> {
-        let rule = rule_from_parts(
-            name.to_string(),
-            false,
-            event,
-            Vec::new(),
-            self.public_actions(&actions),
-        );
-        self.append_rule(rule, &actions, None, std::iter::empty())
+        self.with_default_optimization(|this| {
+            let rule = rule_from_parts(
+                name.to_string(),
+                false,
+                event,
+                Vec::new(),
+                this.public_actions(&actions),
+            );
+            this.append_rule(rule, &actions, None, std::iter::empty())
+        })
     }
 
     pub(super) fn translation_player_options(&self) -> (bool, bool, bool) {
@@ -648,18 +663,20 @@ impl<'a> Lowering<'a> {
             set_facing,
             finish,
         ];
-        let rule = rule_from_parts(
-            "OverPy translation setup - Determine the player's language".to_string(),
-            false,
-            Event::EachPlayer,
-            vec![
-                workshop_rs::Condition::new(self.materialize_value(has_spawned)),
-                workshop_rs::Condition::new(self.materialize_value(not_dummy)),
-                workshop_rs::Condition::new(self.materialize_value(initial_language)),
-            ],
-            self.public_actions(&actions),
-        );
-        self.append_rule(rule, &actions, None, [None, None, None])?;
+        self.with_default_optimization(|this| {
+            let rule = rule_from_parts(
+                "OverPy translation setup - Determine the player's language".to_string(),
+                false,
+                Event::EachPlayer,
+                vec![
+                    workshop_rs::Condition::new(this.materialize_value(has_spawned)),
+                    workshop_rs::Condition::new(this.materialize_value(not_dummy)),
+                    workshop_rs::Condition::new(this.materialize_value(initial_language)),
+                ],
+                this.public_actions(&actions),
+            );
+            this.append_rule(rule, &actions, None, [None, None, None])
+        })?;
         Ok(())
     }
 }
