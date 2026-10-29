@@ -611,10 +611,11 @@ impl<'a> Lowering<'a> {
             rule_condition_root && matches!(call_id, "==" | "!=" | "<" | "<=" | ">" | ">=");
         for (index, value) in args.iter_mut().enumerate() {
             if matches!(self.value(*value), Value::Number(0.0))
-                && matches!(
-                    slot(call_id, index),
-                    Some(Slot::Boolean | Slot::FalseOnly | Slot::ZeroAsNull)
-                )
+                && (matches!(call_id, "==" | "!=" | "<" | "<=" | ">" | ">=")
+                    || matches!(
+                        slot(call_id, index),
+                        Some(Slot::Boolean | Slot::FalseOnly | Slot::ZeroAsNull)
+                    ))
             {
                 continue;
             }
