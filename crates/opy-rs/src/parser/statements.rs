@@ -142,6 +142,10 @@ impl Parser<'_> {
     }
 
     pub(super) fn parse_expr_statement(&mut self) -> Result<Stmt, ()> {
+        if self.peek_kind() == TokenKind::Increment {
+            self.error_at_current("prefix increment is not a standalone assignment".to_string());
+            return Err(());
+        }
         if self.peek_kind() == TokenKind::LParen {
             let save_pos = self.pos;
             let save_errors = self.errors.len();
