@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.31](https://github.com/wrightkit/opy-rs/compare/v0.3.30...v0.3.31) - 2026-10-29
+
+### Other
+
+- *(compiler)* pin switch case/default output against the pinned oracle ([#675](https://github.com/wrightkit/opy-rs/pull/675))
+
 ## [0.3.30](https://github.com/wrightkit/opy-rs/compare/v0.3.29...v0.3.30) - 2026-10-29
 
 ### Fixed
