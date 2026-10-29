@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.32](https://github.com/wrightkit/opy-rs/compare/v0.3.31...v0.3.32) - 2026-10-29
+
+### Fixed
+
+- align global initializer and unary plus acceptance with OverPy ([#678](https://github.com/wrightkit/opy-rs/pull/678))
+- *(compiler)* honor disabled optimizations for array indexing ([#677](https://github.com/wrightkit/opy-rs/pull/677))
+
 ## [0.3.31](https://github.com/wrightkit/opy-rs/compare/v0.3.30...v0.3.31) - 2026-10-29
 
 ### Other
