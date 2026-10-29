@@ -1,7 +1,7 @@
 use workshop_rs::catalog::{Kind, ParamCoercions};
 use workshop_rs::{Action, ModifyOp, Value};
 
-use self::literal_slots::{Slot, slot};
+pub(super) use self::literal_slots::{Slot, slot};
 use super::Compiler;
 use super::lowering::{EMPTY_STRING_NAME, Lowering};
 use super::operator_optimization::{falsy, literal_text, number_components};

@@ -180,6 +180,11 @@ fn size_optimization_action_values_match_the_pinned_oracle() {
 }
 
 #[test]
+fn literal_slots_take_precedence_over_the_capture_replacement() {
+    assert_converges("structural-size-capture-slots");
+}
+
+#[test]
 fn condition_operands_skip_the_argument_replacements() {
     assert_converges("structural-size-condition-replacements");
 }
