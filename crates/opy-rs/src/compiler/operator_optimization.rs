@@ -837,23 +837,19 @@ impl<'a> OperatorOptimizer<'a> {
 
     fn value_in_array(&self, args: Vec<Value>) -> Rewrite {
         let [array, index] = two(args);
-        let array = literal_array(array);
+        let mut array = literal_array(array);
         if let Value::Number(position) = index {
             if position < 0.0 {
                 return Rewrite::Changed(Value::Null);
             }
             let position = position.round();
-            if let Value::Array(mut elements) = array {
+            if let Value::Array(elements) = &mut array {
                 if (position as usize) < elements.len() {
                     return Rewrite::Changed(elements.swap_remove(position as usize));
                 }
                 if !elements.is_empty() || !self.strict {
                     return Rewrite::Changed(Value::Null);
                 }
-                return Rewrite::Same(call(
-                    "valueInArray",
-                    vec![Value::Array(elements), Value::Number(position)],
-                ));
             }
             if position == 0.0 {
                 return Rewrite::Changed(call("firstOf", vec![array]));
