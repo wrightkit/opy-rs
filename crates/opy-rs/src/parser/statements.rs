@@ -142,6 +142,13 @@ impl Parser<'_> {
     }
 
     pub(super) fn parse_expr_statement(&mut self) -> Result<Stmt, ()> {
+        let starts_with_increment = self.peek_kind() == TokenKind::Increment;
+        if starts_with_increment
+            && matches!(self.peek_at(1).kind, TokenKind::Newline | TokenKind::Eof)
+        {
+            self.error_at_current("prefix increment is not a standalone assignment".to_string());
+            return Err(());
+        }
         if self.peek_kind() == TokenKind::LParen {
             let save_pos = self.pos;
             let save_errors = self.errors.len();
@@ -230,6 +237,14 @@ impl Parser<'_> {
                     value,
                     span,
                 })
+            }
+            _ if starts_with_increment => {
+                self.errors.push(OpyError::at(
+                    "parse-error",
+                    "prefix increment is not a standalone assignment".to_string(),
+                    start,
+                ));
+                Err(())
             }
             _ => {
                 let end = expr.span().end;

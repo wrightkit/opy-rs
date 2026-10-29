@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: target\n    player:\n        0: playerTarget\n}\n\nrule (\"Initialize global variables\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(target, 1);\n    }\n}\n\nrule (\"Initialize player variables\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Set Player Variable(Event Player, playerTarget, Event Player);\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: target\n    player:\n        0: playerTarget\n}\n\nrule (\"Initialize global variables\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(target, 1);\n    }\n}\n\nrule (\"Initialize player variables\") {\n    event {\n        Ongoing - Each Player;\n        All;\n        All;\n    }\n    actions {\n        Set Player Variable(Event Player, playerTarget, Event Player);\n    }\n}\n\n",
+    "workshopSha256": "31f5cdf794b0aac9089c83027ff555e374d2c6e6d0fa85140b98f3f3c51d2b77"
+  },
+  "fixture": "synthetic/constant-first-macro-initializer-safe",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "d15687f4dfd578243bae80736a29b757ed7b8ff1f3e000790cfa785df0c89492"
+      }
+    ],
+    "sha256": "edb71f43ec5026813a6df26c82a301ce8073082163b4532fce50e1d53ac5dc84",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "5a7d0e294b8cad73b9701987bb584d0551d7fa4d",
+    "gitHead": "ec763c1d245aa5485ef61af5b2bda4975bce4877",
+    "integrity": "sha512-C5F6btT5yn19BvHuE0bjMuSd/2esebBabmpL4SYLQFuJ4IdouVOKEoMLLuJFAyNc0Phwrolblj5GDkDGYR0ofg==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.17.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.17"
+  },
+  "schemaVersion": 1
+}
