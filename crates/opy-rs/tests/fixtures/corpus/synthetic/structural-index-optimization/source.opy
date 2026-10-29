@@ -1,0 +1,22 @@
+globalvar arr
+globalvar result
+
+rule "enabled zero indexing":
+    @Event global
+    result = arr[0]
+    result = arr[0.0]
+    result = arr[1]
+
+#!disableOptimizations
+
+rule "disabled zero indexing":
+    @Event global
+    result = arr[0]
+    result = arr[0.0]
+    result = arr[1]
+
+#!enableOptimizations
+
+rule "reenabled zero indexing":
+    @Event global
+    result = arr[0]

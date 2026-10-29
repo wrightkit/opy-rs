@@ -218,21 +218,11 @@ impl<'a> Lowering<'a> {
                     }
                     return Ok(self.push_value(Value::Null));
                 }
-                // The pinned OverPy oracle lowers a literal zero-index read
-                // (`arr[0]`, `arr[0.0]`) to `firstOf(arr)`; non-zero indexes
-                // and indexed writes keep the indexed forms.
                 let array = self.lower_value(array)?;
-                if matches!(index.as_ref(), Expr::Number { value, .. } if *value == 0.0) {
-                    Value::Call {
-                        name: "firstOf".to_string(),
-                        args: vec![array],
-                    }
-                } else {
-                    let index = self.lower_value(index)?;
-                    Value::Call {
-                        name: "valueInArray".to_string(),
-                        args: vec![array, index],
-                    }
+                let index = self.lower_value(index)?;
+                Value::Call {
+                    name: "valueInArray".to_string(),
+                    args: vec![array, index],
                 }
             }
             Expr::Format { text, args, .. } => {
