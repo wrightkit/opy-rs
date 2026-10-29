@@ -88,6 +88,7 @@ fn switch_lowering_matches_the_pinned_oracle() {
     for name in [
         "control-flow",
         "control-flow-lowering",
+        "switch-case-default",
         "switch-break",
         "switch-order",
         "switch-structured-target",

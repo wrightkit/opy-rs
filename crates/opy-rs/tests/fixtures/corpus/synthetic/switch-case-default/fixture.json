@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/switch-case-default",
+  "category": "compilation",
+  "features": ["switch", "case", "default", "fallthrough"],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": true
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": true
+    }
+  }
+}
