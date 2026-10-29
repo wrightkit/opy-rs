@@ -204,7 +204,7 @@ impl Lowerer {
 
         struct EventPlayerCheck<'a> {
             declarations: &'a [Declaration],
-            visited: HashSet<&'a str>,
+            visited: HashSet<(std::mem::Discriminant<Declaration>, &'a str)>,
             found: bool,
         }
 
@@ -214,19 +214,33 @@ impl Lowerer {
                     HirExpr::EventPlayer { .. } => self.found = true,
                     HirExpr::Constant { name, .. } | HirExpr::MacroCall { name, .. } => {
                         for declaration in self.declarations {
-                            match declaration {
-                                Declaration::Constant {
-                                    name: defined,
-                                    value,
-                                    ..
-                                } if defined == name && self.visited.insert(defined) => {
+                            match (expression, declaration) {
+                                (
+                                    HirExpr::Constant { .. },
+                                    Declaration::Constant {
+                                        name: defined,
+                                        value,
+                                        ..
+                                    },
+                                ) if defined == name
+                                    && self
+                                        .visited
+                                        .insert((std::mem::discriminant(declaration), defined)) =>
+                                {
                                     self.visit_expr(value);
                                 }
-                                Declaration::Macro {
-                                    name: defined,
-                                    body,
-                                    ..
-                                } if defined == name && self.visited.insert(defined) => {
+                                (
+                                    HirExpr::MacroCall { .. },
+                                    Declaration::Macro {
+                                        name: defined,
+                                        body,
+                                        ..
+                                    },
+                                ) if defined == name
+                                    && self
+                                        .visited
+                                        .insert((std::mem::discriminant(declaration), defined)) =>
+                                {
                                     visit::walk_stmts(self, body);
                                 }
                                 _ => {}
