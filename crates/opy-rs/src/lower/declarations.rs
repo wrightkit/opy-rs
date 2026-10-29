@@ -24,7 +24,7 @@ impl Lowerer {
                 index: *index,
                 span: Some(span.into()),
                 name_span: Some(name_span.into()),
-                initializer: self.initializer(initializer.as_ref()),
+                initializer: self.global_initializer(initializer.as_ref()),
             }),
             Decl::PlayerVariable {
                 name,
@@ -189,6 +189,30 @@ impl Lowerer {
 
     pub(super) fn enum_visible(&self, name: &str) -> bool {
         declaration_visible(&self.enum_declarations, name, self.current_order)
+    }
+
+    fn global_initializer(&mut self, initializer: Option<&Expr>) -> Option<Box<HirExpr>> {
+        use crate::hir::visit::{self, Visitor};
+
+        struct EventPlayerCheck<'a>(&'a mut Lowerer, Span);
+
+        impl Visitor for EventPlayerCheck<'_> {
+            fn visit_expr(&mut self, expression: &HirExpr) {
+                if matches!(expression, HirExpr::EventPlayer { .. }) {
+                    self.0.error_at(
+                        "rule-event-gate",
+                        "Cannot use 'eventPlayer' with rule event 'global'".to_string(),
+                        self.1,
+                    );
+                }
+                visit::walk_expr(self, expression);
+            }
+        }
+
+        let initializer = initializer?;
+        let value = self.initializer(Some(initializer))?;
+        EventPlayerCheck(self, initializer.span()).visit_expr(&value);
+        Some(value)
     }
 
     /// A declaration initializer: integer-`0` literal initializers are
