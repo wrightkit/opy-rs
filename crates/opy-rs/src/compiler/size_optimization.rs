@@ -1,7 +1,7 @@
 use workshop_rs::catalog::{Kind, ParamCoercions};
 use workshop_rs::{Action, ModifyOp, Value};
 
-use self::literal_slots::{Slot, slot};
+pub(super) use self::literal_slots::{Slot, slot};
 use super::Compiler;
 use super::lowering::{EMPTY_STRING_NAME, Lowering};
 use super::operator_optimization::{falsy, literal_text, number_components};
@@ -94,6 +94,19 @@ impl<'a> SizeOptimizer<'a> {
     }
 
     fn modified(&self, op: ModifyOp, value: &mut Value) {
+        if matches!(op, ModifyOp::Max | ModifyOp::Min) && matches!(value, Value::Number(0.0)) {
+            let replacement = [
+                "getCapturePercentage",
+                "getPayloadProgressPercentage",
+                "isMatchComplete",
+            ]
+            .into_iter()
+            .find(|name| self.replacement(name));
+            if let Some(name) = replacement {
+                *value = Value::call(name, []);
+                return;
+            }
+        }
         if is_empty_string(value) {
             *value = self.empty_string(false);
             return;

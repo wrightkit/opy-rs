@@ -1,5 +1,5 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Slot {
+pub(in crate::compiler) enum Slot {
     Boolean,
     TrueOnly,
     FalseOnly,
@@ -7,7 +7,7 @@ pub(super) enum Slot {
     ZeroVectorAsNull,
 }
 
-pub(super) fn slot(name: &str, index: usize) -> Option<Slot> {
+pub(in crate::compiler) fn slot(name: &str, index: usize) -> Option<Slot> {
     Some(match (name, index) {
         ("startForcingSpawn", 1) => Slot::FalseOnly,
         ("add", 0 | 1) | ("divide", 0) | ("modulo", 0 | 1) | ("subtract", 1) => Slot::TrueOnly,

@@ -1,6 +1,7 @@
 use super::*;
 
 use super::super::blizzard_global;
+use super::super::size_optimization::{Slot, slot};
 
 fn is_cased_color_tag(text: &[char], index: usize) -> Option<usize> {
     let remaining = text[index..].iter().collect::<String>();
@@ -608,7 +609,16 @@ impl<'a> Lowering<'a> {
         // Team.1) but never the argument-only ones (0, the empty string).
         let operands =
             rule_condition_root && matches!(call_id, "==" | "!=" | "<" | "<=" | ">" | ">=");
-        for value in args {
+        for (index, value) in args.iter_mut().enumerate() {
+            if matches!(self.value(*value), Value::Number(0.0))
+                && (matches!(call_id, "==" | "!=" | "<" | "<=" | ">" | ">=")
+                    || matches!(
+                        slot(call_id, index),
+                        Some(Slot::Boolean | Slot::FalseOnly | Slot::ZeroAsNull)
+                    ))
+            {
+                continue;
+            }
             *value = self.apply_replacement(*value, call_id, span, operands);
         }
     }
