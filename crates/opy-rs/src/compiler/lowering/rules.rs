@@ -1,6 +1,8 @@
 use super::*;
 use crate::enums;
 
+mod tail_negation;
+
 impl<'a> Lowering<'a> {
     pub(in crate::compiler) fn lower_rules(&mut self) -> Result<(), IntegrationError> {
         for entry in &self.hir.rules {
@@ -456,9 +458,7 @@ impl<'a> Lowering<'a> {
                     ..
                 } = statement
                 && branches.len() == 1
-                && let Expr::Unary { op, operand, .. } = &*branches[0].condition
-                && op == "not"
-                && !branches[0].body.is_empty()
+                && let Some(operand) = tail_negation::operand(self, &branches[0].condition)?
             {
                 let body = self.lower_actions(&branches[0].body, break_target)?;
                 if !body.is_empty() {
