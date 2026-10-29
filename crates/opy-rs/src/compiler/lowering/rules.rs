@@ -456,37 +456,20 @@ impl<'a> Lowering<'a> {
                     ..
                 } = statement
                 && branches.len() == 1
+                && let Expr::Unary { op, operand, .. } = &*branches[0].condition
+                && op == "not"
+                && !branches[0].body.is_empty()
             {
-                let branch = &branches[0];
-                let is_not_condition = matches!(
-                    &*branch.condition,
-                    Expr::Unary { op, .. } if op == "not"
-                );
-                let is_comparison = matches!(
-                    &*branch.condition,
-                    Expr::Binary { op, .. }
-                        if matches!(op.as_str(), "==" | "!=" | "<" | "<=" | ">" | ">=")
-                );
-                if (is_not_condition || is_comparison) && !branch.body.is_empty() {
-                    let body = self.lower_actions(&branch.body, break_target)?;
-                    if !body.is_empty() && (is_not_condition || branch.body.len() == 1) {
-                        let condition = if is_not_condition {
-                            let Expr::Unary { operand, .. } = &*branch.condition else {
-                                unreachable!()
-                            };
-                            self.lower_value(operand)?
-                        } else {
-                            let condition = self.lower_value(&branch.condition)?;
-                            self.push_call("not", vec![condition])
-                        };
-                        let distance = self.canonical_action_width(&body, *span)?;
-                        let distance = self.push_number(distance as f64);
-                        let skip = self.push_call_action("skipIf", &[condition, distance]);
-                        self.mark_action_origins(std::slice::from_ref(&skip), *span);
-                        actions.push(skip);
-                        actions.extend(body);
-                        continue;
-                    }
+                let body = self.lower_actions(&branches[0].body, break_target)?;
+                if !body.is_empty() {
+                    let condition = self.lower_value(operand)?;
+                    let distance = self.canonical_action_width(&body, *span)?;
+                    let distance = self.push_number(distance as f64);
+                    let skip = self.push_call_action("skipIf", &[condition, distance]);
+                    self.mark_action_origins(std::slice::from_ref(&skip), *span);
+                    actions.push(skip);
+                    actions.extend(body);
+                    continue;
                 }
             }
             if self.lower_conditional_label_jump(statement, &mut actions)? {

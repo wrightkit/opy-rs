@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: g\n}\n\nrule (\"default comparison\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        If(Compare(Global.g, ==, 1));\n            Set Global Variable(g, 2);\n    }\n}\n\nrule (\"aggressive alone comparison\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        If(Compare(Global.g, ==, 1));\n            Set Global Variable(g, 2);\n    }\n}\n\n//Optimize for size enabled\nrule (\"tail comparison\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        If(Compare(Global.g, ==, 1));\n            Set Global Variable(g, 2);\n    }\n}\n\nrule (\"tail negation\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Skip If(Global.g, True);\n        Set Global Variable(g, 2);\n        //__label_if_2__:\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: g\n}\n\nrule (\"default comparison\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        If(Compare(Global.g, ==, 1));\n            Set Global Variable(g, 2);\n    }\n}\n\nrule (\"aggressive alone comparison\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        If(Compare(Global.g, ==, 1));\n            Set Global Variable(g, 2);\n    }\n}\n\n//Optimize for size enabled\nrule (\"tail comparison\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        If(Compare(Global.g, ==, 1));\n            Set Global Variable(g, 2);\n    }\n}\n\nrule (\"tail negation\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Skip If(Global.g, True);\n        Set Global Variable(g, 2);\n        //__label_if_2__:\n    }\n}\n\n",
+    "workshopSha256": "64f20f75c61267f73da65b180c8bafed761e015f3eb60a1ff9f3164526b1f736"
+  },
+  "fixture": "synthetic/structural-size-aggressive-control-flow",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "067d3ff4b9f13149551b07a309061d2ad5c6ade9662ee98cb3b93924012a4b87"
+      }
+    ],
+    "sha256": "a899f77bfc8812c0f598ac4153db42fa23443e1af4bc02ef0e8f0bb79b5949a9",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "5a7d0e294b8cad73b9701987bb584d0551d7fa4d",
+    "gitHead": "ec763c1d245aa5485ef61af5b2bda4975bce4877",
+    "integrity": "sha512-C5F6btT5yn19BvHuE0bjMuSd/2esebBabmpL4SYLQFuJ4IdouVOKEoMLLuJFAyNc0Phwrolblj5GDkDGYR0ofg==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.17.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.17"
+  },
+  "schemaVersion": 1
+}
