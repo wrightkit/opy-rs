@@ -4,24 +4,57 @@ on:
   workflow_dispatch:
   push:
     branches: ["main"]
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
   pull_request:
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
 
 permissions:
   contents: read
 
+# A newer push to the same pull request supersedes the older run. Pushes to
+# main never share a group, so each main commit keeps a complete run.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  # Skipped jobs still report their check names as passing, so a change that
+  # touches only documentation does not leave a required check pending.
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+      workflows: ${{ steps.filter.outputs.workflows }}
+    steps:
+      - name: Check out repository
+        if: github.event_name != 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Filter paths
+        id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          predicate-quantifier: every
+          filters: |
+            code:
+              - '**'
+              - '!**/*.md'
+              - '!docs/**'
+            workflows:
+              - '.github/workflows/**'
+
   workflow-lint:
     name: Workflow lint
+    needs: changes
+    if: needs.changes.outputs.workflows == 'true'
     uses: wrightkit/.github/.github/workflows/actionlint.yml@main
 
   rust-quality:
     name: Rust (${{ matrix.toolchain }})
+    needs: changes
     strategy:
       fail-fast: false
       matrix:
@@ -34,10 +67,12 @@ jobs:
       toolchain: ${{ matrix.toolchain }}
       cache-shared-key: linux-quality
       all-features: true
+      skip: ${{ needs.changes.outputs.code != 'true' }}
 
   compiler-compatibility:
     name: Compiler compatibility gate
-    needs: rust-quality
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -49,8 +84,8 @@ jobs:
         uses: wrightkit/.github/.github/actions/setup-rust@main
         with:
           toolchain: stable
-          cache-shared-key: linux-quality
-          cache-targets: false
+          cache-shared-key: compiler-compatibility
+          cache-save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build public compiler CLI
         run: cargo build --locked -p opy-cli --bin opy-cli
@@ -110,7 +145,8 @@ jobs:
   # reconstruction path cannot hide behind optional features (#646).
   reconstruction-corpus:
     name: Reconstruction corpus gate
-    needs: rust-quality
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
@@ -130,7 +166,8 @@ jobs:
 
   macro-runtime-ports:
     name: JS runtime on ${{ matrix.os }}
-    needs: rust-quality
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
@@ -148,9 +185,7 @@ jobs:
         uses: wrightkit/.github/.github/actions/setup-rust@main
         with:
           toolchain: stable
-          components: clippy, rustfmt
           cache-shared-key: macro-runtime-${{ runner.os }}
-          cache-targets: false
           cache-save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Run internal macro runtime tests
@@ -158,6 +193,8 @@ jobs:
 
   release-order:
     name: Release promotion order
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
