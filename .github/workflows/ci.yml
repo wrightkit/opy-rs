@@ -26,7 +26,7 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      code: ${{ steps.filter.outputs.code }}
+      code: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.code }}
       workflows: ${{ steps.filter.outputs.workflows }}
     steps:
       - name: Check out repository
