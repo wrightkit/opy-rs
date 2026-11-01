@@ -85,7 +85,7 @@ jobs:
         with:
           toolchain: stable
           cache-shared-key: compiler-compatibility
-          cache-save: ${{ github.ref == 'refs/heads/main' }}
+          cache-save: true # TEMP: seed in the PR to measure
 
       - name: Build public compiler CLI
         run: cargo build --locked -p opy-cli --bin opy-cli
@@ -186,7 +186,7 @@ jobs:
         with:
           toolchain: stable
           cache-shared-key: macro-runtime-${{ runner.os }}
-          cache-save: ${{ github.ref == 'refs/heads/main' }}
+          cache-save: true # TEMP: seed in the PR to measure
 
       - name: Run internal macro runtime tests
         run: cargo test --locked -p opy-rs --lib macro_js::tests
