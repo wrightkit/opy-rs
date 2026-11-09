@@ -103,7 +103,7 @@ impl Preprocessor {
                 span,
             ));
         }
-        if self.macros.iter().any(|macro_def| macro_def.name == name) {
+        if self.macro_index.contains_key(&name) {
             if !self.preprocessing.allow_macro_redeclaration {
                 return Err(OpyError::at(
                     "macro-redeclaration",
@@ -112,6 +112,12 @@ impl Preprocessor {
                 ));
             }
             self.macros.retain(|macro_def| macro_def.name != name);
+            self.macro_index = self
+                .macros
+                .iter()
+                .enumerate()
+                .map(|(index, macro_def)| (macro_def.name.clone(), index))
+                .collect();
             self.defines.retain(|define| define.name != name);
         }
         let script = if is_function_like && body_text.starts_with("__script__(") {
@@ -150,6 +156,7 @@ impl Preprocessor {
             is_member,
             span: Some(span),
         });
+        self.macro_index.insert(name.clone(), self.macros.len());
         self.macros.push(MacroDef {
             name,
             params,
@@ -170,6 +177,10 @@ impl Preprocessor {
         Ok(out)
     }
 
+    pub(super) fn find_macro(&self, name: &str) -> Option<&MacroDef> {
+        self.macro_index.get(name).map(|&index| &self.macros[index])
+    }
+
     pub(super) fn expand_one(
         &self,
         tokens: &[Token],
@@ -185,7 +196,7 @@ impl Preprocessor {
             output.push(token.clone());
             return Ok(index + 1);
         }
-        let Some(mac) = self.macros.iter().find(|mac| mac.name == token.text) else {
+        let Some(mac) = self.find_macro(&token.text) else {
             output.push(token.clone());
             return Ok(index + 1);
         };
@@ -349,38 +360,38 @@ impl Preprocessor {
         let mut index = 0;
         while index < tokens.len() {
             let token = &tokens[index];
-            if token.kind == TokenKind::Ident
+            let macro_use = (token.kind == TokenKind::Ident
                 && !out.last().is_some_and(|previous| {
                     previous.kind == TokenKind::Ident && previous.text == "macro"
-                })
-            {
+                }))
+            .then(|| self.find_macro(&token.text))
+            .flatten();
+            if let Some(mac) = macro_use {
                 let name = token.text.clone();
-                if let Some(mac) = self.macros.iter().find(|m| m.name == name) {
-                    if stack.iter().any(|s| s == &name) {
-                        return Err(OpyError::at(
-                            "macro-recursion",
-                            format!("recursive macro expansion detected for '{name}'"),
-                            token.span,
-                        ));
-                    }
-                    let (args, after) = if mac.is_function
-                        && tokens
-                            .get(index + 1)
-                            .is_some_and(|next| next.kind == TokenKind::LParen)
-                    {
-                        self.collect_args(tokens, index + 1)?
-                    } else {
-                        (Vec::new(), index + 1)
-                    };
-                    let mut expanded =
-                        self.expand_macro(mac, args, token, line_indent(tokens, index))?;
-                    stack.push(name.clone());
-                    self.expand_into(&mut expanded, stack, depth + 1)?;
-                    stack.pop();
-                    out.append(&mut expanded);
-                    index = after;
-                    continue;
+                if stack.iter().any(|s| s == &name) {
+                    return Err(OpyError::at(
+                        "macro-recursion",
+                        format!("recursive macro expansion detected for '{name}'"),
+                        token.span,
+                    ));
                 }
+                let (args, after) = if mac.is_function
+                    && tokens
+                        .get(index + 1)
+                        .is_some_and(|next| next.kind == TokenKind::LParen)
+                {
+                    self.collect_args(tokens, index + 1)?
+                } else {
+                    (Vec::new(), index + 1)
+                };
+                let mut expanded =
+                    self.expand_macro(mac, args, token, line_indent(tokens, index))?;
+                stack.push(name.clone());
+                self.expand_into(&mut expanded, stack, depth + 1)?;
+                stack.pop();
+                out.append(&mut expanded);
+                index = after;
+                continue;
             }
             out.push(token.clone());
             index += 1;
