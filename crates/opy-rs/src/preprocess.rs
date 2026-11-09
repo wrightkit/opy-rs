@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 use crate::diag::{OpyError, OpyResult, Span};
@@ -165,6 +165,7 @@ pub fn preprocess_with_overlay_outcome(
         last_macro_include_path: None,
         imported_files: BTreeSet::new(),
         macros: Vec::new(),
+        macro_index: HashMap::new(),
         defines: Vec::new(),
         post_compile_hook: None,
         settings: None,
@@ -380,6 +381,7 @@ struct Preprocessor {
     imported_files: BTreeSet<PathBuf>,
     accessed: BTreeSet<PathBuf>,
     macros: Vec<MacroDef>,
+    macro_index: HashMap<String, usize>,
     settings: Option<SettingsBlock>,
     defines: Vec<DefineRecord>,
     post_compile_hook: Option<PostCompileHook>,

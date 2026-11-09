@@ -281,7 +281,7 @@ impl Preprocessor {
             {
                 return false;
             }
-            let Some(mac) = self.macros.iter().find(|mac| mac.name == token.text) else {
+            let Some(mac) = self.find_macro(&token.text) else {
                 return false;
             };
             mac.is_multiline
