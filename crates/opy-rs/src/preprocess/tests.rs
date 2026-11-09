@@ -532,3 +532,16 @@ fn malformed_translation_state_is_source_located() {
     assert_eq!(error.code, "translations-invalid");
     assert!(error.span.is_some());
 }
+
+#[test]
+fn macro_lookup_survives_redeclaring_non_last_macros() {
+    let source = "#!allowMacroRedeclaration\n#!define A 1\n#!define B 2\n#!define C 3\n#!define A 10\n#!define B 20\nrule \"r\":\n    x = A + B + C\n";
+    let (pre, _) = preprocess(source, "main.opy", Path::new(".")).unwrap();
+    let numbers: Vec<&str> = pre
+        .tokens
+        .iter()
+        .filter(|token| token.kind == TokenKind::Number)
+        .map(|token| token.text.as_str())
+        .collect();
+    assert_eq!(numbers, vec!["10", "20", "3"]);
+}
