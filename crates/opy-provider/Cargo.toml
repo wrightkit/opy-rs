@@ -17,6 +17,7 @@ path = "src/main.rs"
 workspace = true
 
 [dependencies]
+mimalloc = "0.1.52"
 opy-rs.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true

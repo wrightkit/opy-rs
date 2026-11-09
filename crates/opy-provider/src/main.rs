@@ -11,14 +11,16 @@ use sha2::{Digest, Sha256};
 use workshop_rs::catalog::{Catalog, Locale};
 use workshop_rs::program::MappedText;
 
+mod allocator;
 mod edits;
 mod inputs;
 mod navigation;
+mod negotiation;
 mod uri;
 mod vocab;
+use negotiation::{PROTOCOL_VERSIONS, version_at_least};
 use uri::{file_uri_path, filesystem_path, path_to_file_uri};
 
-const PROTOCOL_VERSIONS: [&str; 8] = ["1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6", "1.7"];
 const PROJECT_LOADING_VERSION: &str = "1.1";
 const DIRECTORY_TARGET_VERSION: &str = "1.2";
 const SOURCE_IDENTITY_VERSION: &str = "1.3";
@@ -31,11 +33,6 @@ const LANGUAGE_ID: &str = "opy";
 const LANGUAGE_EXTENSIONS: [&str; 1] = ["opy"];
 const WORKSHOP_ARTIFACT_FORMAT: &str = "workshop-rs/text-v1";
 const MAPPED_ARTIFACT_FORMAT: &str = "workshop-rs/mapped-text-v1";
-
-fn version_at_least(protocol_version: &str, minimum: &str) -> bool {
-    let rank = |version: &str| PROTOCOL_VERSIONS.iter().position(|known| *known == version);
-    rank(protocol_version) >= rank(minimum)
-}
 
 fn capabilities_json(protocol_version: &str) -> Value {
     let mut capabilities = json!({
