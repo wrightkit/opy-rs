@@ -3,7 +3,8 @@
 //! The content has object keys in sorted order at every depth, the order a
 //! `serde_json::Value` round trip produces. This module streams the document
 //! once into that order, without building a `Value` tree, and rewrites each
-//! `files[].path` to the URI supplied by the caller.
+//! `files[].path` to the URI supplied by the caller. A document that does not
+//! have the mapped-text shape, or that repeats an object key, is an error.
 
 use std::fmt;
 use std::ops::Range;
@@ -27,11 +28,9 @@ struct Node<'a, 'out> {
 }
 
 /// Returns `json` with sorted object keys and every `files[].path` replaced by
-/// `uri_for(path)`.
-pub(crate) fn encode(
-    json: &str,
-    uri_for: &dyn Fn(&str) -> String,
-) -> Result<String, serde_json::Error> {
+/// `uri_for(path)`. Fails when the root is not an object, `files` is missing or
+/// not an array, a file entry lacks a string `path`, or an object repeats a key.
+pub(crate) fn encode(json: &str, uri_for: &dyn Fn(&str) -> String) -> Result<String, String> {
     let mut deserializer = serde_json::Deserializer::from_str(json);
     let mut output = Vec::with_capacity(json.len());
     Node {
@@ -39,8 +38,9 @@ pub(crate) fn encode(
         uri_for,
         output: &mut output,
     }
-    .deserialize(&mut deserializer)?;
-    deserializer.end()?;
+    .deserialize(&mut deserializer)
+    .map_err(|error| error.to_string())?;
+    deserializer.end().map_err(|error| error.to_string())?;
     Ok(String::from_utf8(output).expect("serde_json writes UTF-8"))
 }
 
@@ -52,7 +52,12 @@ impl<'de> DeserializeSeed<'de> for Node<'_, '_> {
     type Value = ();
 
     fn deserialize<D: Deserializer<'de>>(self, deserializer: D) -> Result<(), D::Error> {
-        deserializer.deserialize_any(self)
+        match self.role {
+            Role::Document | Role::File => deserializer.deserialize_map(self),
+            Role::FileTable => deserializer.deserialize_seq(self),
+            Role::FilePath => deserializer.deserialize_str(self),
+            Role::Plain => deserializer.deserialize_any(self),
+        }
     }
 }
 
@@ -139,6 +144,18 @@ impl<'de> Visitor<'de> for Node<'_, '_> {
             entries.push((key, value_start..self.output.len()));
         }
         entries.sort_by(|left, right| left.0.cmp(&right.0));
+        if entries.windows(2).any(|pair| pair[0].0 == pair[1].0) {
+            return Err(de::Error::custom("duplicate object key"));
+        }
+        match self.role {
+            Role::Document if !entries.iter().any(|(key, _)| key == "files") => {
+                return Err(de::Error::custom("mapped text has no files"));
+            }
+            Role::File if !entries.iter().any(|(key, _)| key == "path") => {
+                return Err(de::Error::custom("file entry has no path"));
+            }
+            _ => {}
+        }
         let body = self.output.split_off(start);
         self.output.push(b'{');
         for (index, (key, range)) in entries.iter().enumerate() {
@@ -192,5 +209,38 @@ mod tests {
             encode(DOCUMENT, &with_prefix).expect("encodes"),
             value_round_trip(DOCUMENT)
         );
+    }
+
+    fn rejected(json: &str) -> String {
+        encode(json, &with_prefix)
+            .expect_err("document is rejected")
+            .to_string()
+    }
+
+    #[test]
+    fn rejects_a_root_that_is_not_an_object() {
+        assert!(rejected(r#"["files"]"#).contains("invalid type"));
+    }
+
+    #[test]
+    fn rejects_a_document_without_files() {
+        assert!(rejected(r#"{"format":"x","text":"t"}"#).contains("no files"));
+    }
+
+    #[test]
+    fn rejects_files_that_is_not_an_array() {
+        assert!(rejected(r#"{"files":5}"#).contains("invalid type"));
+    }
+
+    #[test]
+    fn rejects_a_file_entry_without_a_string_path() {
+        assert!(rejected(r#"{"files":[{"x":1}]}"#).contains("no path"));
+        assert!(rejected(r#"{"files":[{"path":5}]}"#).contains("invalid type"));
+    }
+
+    #[test]
+    fn rejects_a_repeated_object_key() {
+        let json = r#"{"files":[{"path":"p"}],"files":[{"path":"q"}]}"#;
+        assert!(rejected(json).contains("duplicate object key"));
     }
 }

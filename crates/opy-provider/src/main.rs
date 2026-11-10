@@ -703,7 +703,7 @@ fn artifact_json(
         })),
         (Some(ArtifactFormat::Mapped), Some(mapped)) => {
             let content =
-                mapped_artifact::encode(&mapped.to_json(), uri_for).expect("mapped text is JSON");
+                mapped_artifact::encode(&mapped.to_json(), uri_for).map_err(invalid_artifact)?;
             Ok(json!({
                 "format": MAPPED_ARTIFACT_FORMAT,
                 "content": content,
