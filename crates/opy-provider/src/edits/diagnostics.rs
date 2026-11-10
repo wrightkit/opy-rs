@@ -179,10 +179,12 @@ pub(super) const CODE_CLASSES: &[(DiagnosticClass, &[&str])] = &[
     (
         DiagnosticClass::Internal,
         &[
+            "catalog-validation",
             "incompatible-protocol",
             "malformed-payload",
             "unsupported-node",
             "workshop-emission",
+            "workshop-validation",
         ],
     ),
     (DiagnosticClass::WarningOnly, &["unknown-setting"]),

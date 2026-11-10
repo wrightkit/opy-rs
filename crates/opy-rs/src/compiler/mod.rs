@@ -13,6 +13,7 @@ pub mod reconstruct;
 mod action_optimization;
 mod backend;
 mod blizzard_global;
+mod emission;
 mod hooks;
 mod integration;
 mod lowering;
@@ -462,26 +463,8 @@ impl Compiler {
         let translation_files = lowering.translation_files();
 
         let program = lowering.program;
-        let to_error = |code: &str, error: workshop_rs::WorkshopError| {
-            IntegrationError::new(
-                code,
-                error.to_string(),
-                workshop_error_span(&error)
-                    .and_then(|span| hir_span_from_workshop(span, &expanded_hir)),
-            )
-        };
-        program
-            .validate()
-            .map_err(|error| to_error("workshop-validation", error))?;
-        workshop_rs::validate::validate_canonical_ids(&program, self.catalog)
-            .map_err(|error| to_error("catalog-validation", error))?;
+        let emitted = self.validate_and_emit(&program, &expanded_hir, locale)?;
         let exclude_variables = has_directive(&expanded_hir, "excludeVariablesInCompilation");
-        let emitted =
-            workshop_rs::emitter::emit(&program, self.catalog, locale).map_err(|error| {
-                let span = workshop_error_span(&error)
-                    .and_then(|span| hir_span_from_workshop(span, &expanded_hir));
-                self.emission_error(&expanded_hir, error, "workshop-emission", span)
-            })?;
         let emitted = if exclude_variables {
             omit_declaration_sections(&emitted, &program)
         } else {
