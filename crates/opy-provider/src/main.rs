@@ -14,6 +14,7 @@ use workshop_rs::program::MappedText;
 mod allocator;
 mod edits;
 mod inputs;
+mod mapped_artifact;
 mod navigation;
 mod negotiation;
 mod uri;
@@ -701,15 +702,11 @@ fn artifact_json(
             "content": text,
         })),
         (Some(ArtifactFormat::Mapped), Some(mapped)) => {
-            let mut content: Value =
-                serde_json::from_str(&mapped.to_json()).expect("mapped text is JSON");
-            for file in content["files"].as_array_mut().expect("file table") {
-                let uri = uri_for(file["path"].as_str().expect("file path"));
-                file["path"] = json!(uri);
-            }
+            let content =
+                mapped_artifact::encode(&mapped.to_json(), uri_for).expect("mapped text is JSON");
             Ok(json!({
                 "format": MAPPED_ARTIFACT_FORMAT,
-                "content": content.to_string(),
+                "content": content,
             }))
         }
         _ => Err(HandlerError::refusal(
