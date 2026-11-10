@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::path::{Component, Path, PathBuf};
 
 use crate::resolved_path;
@@ -14,13 +14,14 @@ pub(crate) fn compile_inputs(
     accessed: impl IntoIterator<Item = PathBuf>,
 ) -> Vec<String> {
     let mut declared = BTreeSet::new();
+    let mut links = LinkCache::default();
     for path in paths
         .iter()
         .map(|path| resolved_path(display_root, path))
         .chain(accessed)
     {
         if path.is_absolute() {
-            let resolved = resolve(&path, &mut declared);
+            let resolved = resolve(&path, &mut declared, &mut links);
             declared.insert(resolved);
         }
         declared.insert(path);
@@ -35,26 +36,47 @@ pub(crate) fn compile_inputs(
 /// `resolve` and record every symbolic link on the way — including links in
 /// a chain and linked directory components — plus the path each link
 /// resolves to.
-fn resolve(path: &Path, declared: &mut BTreeSet<PathBuf>) -> PathBuf {
+fn resolve(path: &Path, declared: &mut BTreeSet<PathBuf>, links: &mut LinkCache) -> PathBuf {
     let mut hops = 0;
-    resolve_inner(path, declared, &mut hops)
+    resolve_inner(path, declared, &mut hops, links)
+}
+
+/// `read_link` results for one compile; a directory prefix is shared by every
+/// path under it, so each link is read once.
+#[derive(Default)]
+struct LinkCache(HashMap<PathBuf, Option<PathBuf>>);
+
+impl LinkCache {
+    fn read_link(&mut self, path: &Path) -> Option<PathBuf> {
+        if let Some(target) = self.0.get(path) {
+            return target.clone();
+        }
+        let target = std::fs::read_link(path).ok();
+        self.0.insert(path.to_path_buf(), target.clone());
+        target
+    }
 }
 
 const MAX_LINK_HOPS: u32 = 40;
 
-fn resolve_inner(path: &Path, declared: &mut BTreeSet<PathBuf>, hops: &mut u32) -> PathBuf {
+fn resolve_inner(
+    path: &Path,
+    declared: &mut BTreeSet<PathBuf>,
+    hops: &mut u32,
+    links: &mut LinkCache,
+) -> PathBuf {
     let mut resolved = PathBuf::from("/");
     for component in path.components() {
         match component {
             Component::Normal(name) => {
                 let next = resolved.join(name);
-                match std::fs::read_link(&next) {
-                    Ok(target) if *hops < MAX_LINK_HOPS => {
+                match links.read_link(&next) {
+                    Some(target) if *hops < MAX_LINK_HOPS => {
                         *hops += 1;
                         declared.insert(next);
                         let target = resolved.join(target);
                         declared.insert(normalized(&target));
-                        resolved = resolve_inner(&target, declared, hops);
+                        resolved = resolve_inner(&target, declared, hops, links);
                     }
                     _ => resolved = next,
                 }

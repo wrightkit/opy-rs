@@ -11,7 +11,7 @@ impl Preprocessor {
     ) -> OpyResult<ScriptMacro> {
         let path = path.replace('\\', "/");
         let candidate = base.join(&path);
-        let canonical = candidate.canonicalize().ok();
+        let canonical = self.canonicalize(&candidate);
         self.record_access(&candidate, canonical.as_deref());
         let resolved_path =
             display_path(&candidate, canonical.as_deref(), &self.display_root, &path);
