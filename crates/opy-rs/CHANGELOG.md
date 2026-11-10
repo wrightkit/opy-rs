@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.35](https://github.com/wrightkit/opy-rs/compare/v0.3.34...v0.3.35) - 2026-11-10
+
+### Other
+
+- build the workshop-rs canonical form once per compile ([#693](https://github.com/wrightkit/opy-rs/pull/693))
+
 ## [0.3.34](https://github.com/wrightkit/opy-rs/compare/v0.3.33...v0.3.34) - 2026-11-10
 
 ### Other
