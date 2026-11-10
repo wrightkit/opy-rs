@@ -55,7 +55,7 @@ impl Preprocessor {
     ) -> OpyResult<()> {
         let include = include.replace('\\', "/");
         let candidate = self.include_base().join(&include);
-        let canonical = std::fs::canonicalize(&candidate).ok();
+        let canonical = self.canonicalize(&candidate);
         self.record_access(&candidate, canonical.as_deref());
         if canonical.as_deref().is_some_and(Path::is_dir) {
             let mut files = std::fs::read_dir(&candidate)
@@ -104,7 +104,7 @@ impl Preprocessor {
         span: Span,
         out: &mut Vec<Token>,
     ) -> OpyResult<()> {
-        let canonical = std::fs::canonicalize(candidate).ok();
+        let canonical = self.canonicalize(candidate);
         self.record_access(candidate, canonical.as_deref());
         let candidate_path = candidate.to_string_lossy().into_owned();
         let canonical_path = display_path(
@@ -237,6 +237,19 @@ impl Preprocessor {
         }
         out.extend(included);
         Ok(())
+    }
+
+    /// `std::fs::canonicalize`, memoized for this preprocessing run; the
+    /// source tree does not change while a compile reads it.
+    pub(super) fn canonicalize(&self, path: &Path) -> Option<PathBuf> {
+        if let Some(canonical) = self.canonical_paths.borrow().get(path) {
+            return canonical.clone();
+        }
+        let canonical = std::fs::canonicalize(path).ok();
+        self.canonical_paths
+            .borrow_mut()
+            .insert(path.to_path_buf(), canonical.clone());
+        canonical
     }
 
     /// Record a filesystem path the pipeline probed or read — `candidate` in

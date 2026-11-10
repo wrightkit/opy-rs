@@ -161,6 +161,7 @@ pub fn preprocess_with_overlay_outcome(
         overlay: overlay.clone(),
         source_texts: BTreeMap::from([(0, main_text.to_string())]),
         line_offsets: std::cell::RefCell::new(BTreeMap::new()),
+        canonical_paths: std::cell::RefCell::new(HashMap::new()),
         include_stack: Vec::new(),
         last_macro_include_path: None,
         imported_files: BTreeSet::new(),
@@ -196,7 +197,7 @@ pub fn preprocess_with_overlay_outcome(
     }
     if let Some((main_file, span)) = main_file_directive {
         let candidate = pre.root.join(&main_file);
-        let canonical = std::fs::canonicalize(&candidate).ok();
+        let canonical = pre.canonicalize(&candidate);
         pre.record_access(&candidate, canonical.as_deref());
         let overlay_text = overlay
             .get(&main_file)
@@ -374,6 +375,7 @@ struct Preprocessor {
     overlay: BTreeMap<String, String>,
     source_texts: BTreeMap<u32, String>,
     line_offsets: std::cell::RefCell<BTreeMap<u32, macros::LineOffsets>>,
+    canonical_paths: std::cell::RefCell<HashMap<PathBuf, Option<PathBuf>>>,
     include_stack: Vec<PathBuf>,
     // OverPy retains this file context after multiline macro expansion in an
     // included settings block; established projects rely on that lookup base.
@@ -439,7 +441,7 @@ impl Preprocessor {
         let requested = requested.replace('\\', "/");
         let candidate = self.include_base().join(&requested);
         let candidate_path = candidate.to_string_lossy().into_owned();
-        let canonical = std::fs::canonicalize(&candidate).ok();
+        let canonical = self.canonicalize(&candidate);
         self.record_access(&candidate, canonical.as_deref());
         let lexical_path = candidate.to_string_lossy().replace('\\', "/");
         let content = self
@@ -470,7 +472,7 @@ impl Preprocessor {
     }
 
     fn register_external_file(&mut self, candidate: &Path, requested: &str, text: String) -> u32 {
-        let canonical = std::fs::canonicalize(candidate).ok();
+        let canonical = self.canonicalize(candidate);
         self.record_access(candidate, canonical.as_deref());
         let file_id = self.files.len() as u32;
         self.source_texts.insert(file_id, text);
