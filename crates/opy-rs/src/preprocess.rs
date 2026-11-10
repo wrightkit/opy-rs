@@ -7,6 +7,7 @@ use crate::hir::types::{
     TranslationEntry, TranslationState,
 };
 use crate::lexer::{LexInput, Token, TokenKind, lex};
+use crate::macro_js::{Limits, MacroRuntime};
 use crate::settings::SettingsBlock;
 
 mod directives;
@@ -172,6 +173,7 @@ pub fn preprocess_with_overlay_outcome(
         settings: None,
         warnings: Vec::new(),
         preprocessing: PreprocessingState::default(),
+        macro_runtime: MacroRuntime::new(Limits::default()),
     };
     pre.preprocessing
         .source_file_initial_optimization
@@ -389,6 +391,7 @@ struct Preprocessor {
     post_compile_hook: Option<PostCompileHook>,
     warnings: Vec<PreprocessWarning>,
     preprocessing: PreprocessingState,
+    macro_runtime: MacroRuntime,
 }
 
 impl Preprocessor {

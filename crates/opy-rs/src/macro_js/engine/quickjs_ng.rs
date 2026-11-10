@@ -23,32 +23,71 @@ use libquickjs_ng_sys as q;
 use super::super::limits::Limits;
 use super::{Completion, EngineError};
 
-pub(crate) struct QuickJsEngine {
-    runtime: *mut q::JSRuntime,
+/// One QuickJS runtime. Its engines are fresh contexts that share it; the
+/// runtime is freed once, after every engine borrowing it has been dropped.
+#[derive(Debug)]
+pub(crate) struct QuickJsRuntime {
+    raw: *mut q::JSRuntime,
+}
+
+impl QuickJsRuntime {
+    pub(crate) fn new() -> Result<Self, EngineError> {
+        #[cfg(test)]
+        let started = Instant::now();
+        // SAFETY: the returned runtime owns `raw` and frees it once in `Drop`.
+        let raw = unsafe { q::JS_NewRuntime() };
+        if raw.is_null() {
+            return Err(EngineError::Internal("JS_NewRuntime failed".into()));
+        }
+        #[cfg(test)]
+        crate::resource_metrics::record_macro_phase(
+            crate::resource_metrics::MacroPhase::RuntimeCreation,
+            started.elapsed().as_nanos(),
+        );
+        Ok(Self { raw })
+    }
+}
+
+impl Drop for QuickJsRuntime {
+    fn drop(&mut self) {
+        #[cfg(test)]
+        let started = Instant::now();
+        // SAFETY: every `QuickJsEngine` borrows this runtime, so none is alive
+        // and `raw` is freed exactly once.
+        unsafe { q::JS_FreeRuntime(self.raw) };
+        #[cfg(test)]
+        crate::resource_metrics::record_macro_phase(
+            crate::resource_metrics::MacroPhase::RuntimeTeardown,
+            started.elapsed().as_nanos(),
+        );
+    }
+}
+
+/// A fresh JavaScript context on a shared [`QuickJsRuntime`].
+///
+/// Globals, intrinsics and prototypes live in the context, so each engine
+/// starts from the same clean state. Memory limit and stack size are set on the
+/// runtime for every engine, so each invocation keeps its own budget.
+pub(crate) struct QuickJsEngine<'rt> {
+    runtime: &'rt QuickJsRuntime,
     context: *mut q::JSContext,
     interrupt_deadline: Option<Instant>,
     console_lines: Vec<String>,
 }
 
-impl QuickJsEngine {
-    pub(crate) fn new(limits: &Limits) -> Result<Self, EngineError> {
+impl<'rt> QuickJsEngine<'rt> {
+    pub(crate) fn new(runtime: &'rt QuickJsRuntime, limits: &Limits) -> Result<Self, EngineError> {
         #[cfg(test)]
         crate::resource_metrics::record_macro_engine_creation();
         #[cfg(test)]
         let started = Instant::now();
-        // SAFETY: `runtime`/`context` are created here, owned by the returned
-        // engine, and freed once in `Drop`; every JS_* call uses those live
-        // engine-owned pointers.
+        // SAFETY: `context` is created here, owned by the returned engine, and
+        // freed once in `Drop` while `runtime` is still alive.
         unsafe {
-            let runtime = q::JS_NewRuntime();
-            if runtime.is_null() {
-                return Err(EngineError::Internal("JS_NewRuntime failed".into()));
-            }
-            q::JS_SetMemoryLimit(runtime, limits.memory_limit_bytes);
-            q::JS_SetMaxStackSize(runtime, limits.max_stack_bytes);
-            let context = q::JS_NewContext(runtime);
+            q::JS_SetMemoryLimit(runtime.raw, limits.memory_limit_bytes);
+            q::JS_SetMaxStackSize(runtime.raw, limits.max_stack_bytes);
+            let context = q::JS_NewContext(runtime.raw);
             if context.is_null() {
-                q::JS_FreeRuntime(runtime);
                 return Err(EngineError::Internal("JS_NewContext failed".into()));
             }
             let engine = Self {
@@ -124,7 +163,7 @@ impl QuickJsEngine {
             // Anchor the stack-size measurement at this entry point so the JS
             // stack limit is measured from here rather than from wherever the
             // runtime was created (the reference wrapper does the same).
-            q::JS_UpdateStackTop(self.runtime);
+            q::JS_UpdateStackTop(self.runtime.raw);
             let value = q::JS_Eval(
                 self.context,
                 source.as_ptr(),
@@ -171,10 +210,10 @@ impl QuickJsEngine {
         self.interrupt_deadline = deadline;
         // SAFETY: `self.runtime` is live; `opaque` points at the engine-owned
         // `interrupt_deadline`, which stays valid while the handler is armed
-        // (it is disarmed in `Drop` before the runtime is freed).
+        // (it is disarmed in `Drop` before the context is freed).
         unsafe {
             q::JS_SetInterruptHandler(
-                self.runtime,
+                self.runtime.raw,
                 Some(interrupt_handler),
                 &self.interrupt_deadline as *const Option<Instant> as *mut c_void,
             );
@@ -289,16 +328,18 @@ impl QuickJsEngine {
     }
 }
 
-impl Drop for QuickJsEngine {
+impl Drop for QuickJsEngine<'_> {
     fn drop(&mut self) {
         #[cfg(test)]
         let started = Instant::now();
         // SAFETY: the interrupt handler is disarmed first so it cannot observe
-        // freed state, then the engine-owned context and runtime are freed once.
+        // freed state, then the engine-owned context is freed once. The shared
+        // runtime is collected next so the cycles this context left behind do
+        // not count against the next invocation's memory limit.
         unsafe {
-            q::JS_SetInterruptHandler(self.runtime, None, ptr::null_mut());
+            q::JS_SetInterruptHandler(self.runtime.raw, None, ptr::null_mut());
             q::JS_FreeContext(self.context);
-            q::JS_FreeRuntime(self.runtime);
+            q::JS_RunGC(self.runtime.raw);
         }
         #[cfg(test)]
         crate::resource_metrics::record_macro_phase(

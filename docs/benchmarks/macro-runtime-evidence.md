@@ -15,4 +15,8 @@ Creation and teardown are substantial for the tiny script, but the representativ
 
 ## Conclusion
 
+Superseded by opy-rs#698: the runtime is now reused per `MacroRuntime`, and each invocation still runs in a fresh context. See [`compiler-resources.md`](compiler-resources.md#quickjs-lifecycle-conclusion-300).
+
+The conclusion below is the #300 record.
+
 No change is justified. Keep the fresh QuickJS runtime/context per invocation. The measured startup cost is real, but the selected workloads do not establish a material end-to-end bottleneck that warrants introducing reusable lifecycle state. The isolation suite independently covers globals, prototype mutation, helper bindings, console output, exceptions, interrupted execution, and concurrent runtime instances. A shared mutable context would change those existing resource and isolation invariants, so no lifecycle reuse implementation is included in this issue.

@@ -1,6 +1,7 @@
+use std::cell::OnceCell;
 use std::time::Instant;
 
-use super::engine::quickjs_ng::QuickJsEngine;
+use super::engine::quickjs_ng::{QuickJsEngine, QuickJsRuntime};
 use super::engine::{Completion, EngineError};
 use super::error::{MacroError, ScriptError};
 use super::helpers::Helpers;
@@ -27,10 +28,13 @@ pub(crate) struct MacroResult {
     pub(crate) console_output: Vec<String>,
 }
 
+/// Runs macro and hook scripts. One QuickJS runtime is created on first use and
+/// reused; each invocation runs in a fresh context on it.
 #[derive(Debug)]
 pub(crate) struct MacroRuntime {
     limits: Limits,
     helpers: Helpers,
+    js_runtime: OnceCell<QuickJsRuntime>,
 }
 
 impl MacroRuntime {
@@ -38,7 +42,16 @@ impl MacroRuntime {
         Self {
             limits,
             helpers: Helpers::new(),
+            js_runtime: OnceCell::new(),
         }
+    }
+
+    fn js_runtime(&self) -> Result<&QuickJsRuntime, MacroError> {
+        if let Some(runtime) = self.js_runtime.get() {
+            return Ok(runtime);
+        }
+        let runtime = QuickJsRuntime::new().map_err(|e| MacroError::Internal(e.to_string()))?;
+        Ok(self.js_runtime.get_or_init(|| runtime))
     }
 
     #[cfg(test)]
@@ -91,8 +104,8 @@ impl MacroRuntime {
         let line_adjust = prologue.matches('\n').count();
         let script_text = format!("{prologue}{source}");
 
-        let mut engine =
-            QuickJsEngine::new(&self.limits).map_err(|e| MacroError::Internal(e.to_string()))?;
+        let mut engine = QuickJsEngine::new(self.js_runtime()?, &self.limits)
+            .map_err(|e| MacroError::Internal(e.to_string()))?;
         #[cfg(test)]
         let started = Instant::now();
         engine

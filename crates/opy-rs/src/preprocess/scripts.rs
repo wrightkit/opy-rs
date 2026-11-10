@@ -1,4 +1,4 @@
-use crate::macro_js::{Limits, MacroArg, MacroError, MacroRuntime};
+use crate::macro_js::{MacroArg, MacroError};
 
 use super::*;
 
@@ -76,8 +76,8 @@ impl Preprocessor {
             .zip(args.iter())
             .map(|(param, argument)| MacroArg::new(param.clone(), argument.raw.clone()))
             .collect();
-        let runtime = MacroRuntime::new(Limits::default());
-        let result = runtime
+        let result = self
+            .macro_runtime
             .run_macro(&script.source, &macro_args, &script.path)
             .map_err(|error| map_macro_error(&error, &script.path, use_site.span))?;
         // Reference indentation rule (`resolveMacro`): every newline in the
