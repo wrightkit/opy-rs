@@ -27,7 +27,6 @@ jobs:
       pull-requests: read
     outputs:
       code: ${{ github.event_name == 'workflow_dispatch' && 'true' || steps.filter.outputs.code }}
-      workflows: ${{ steps.filter.outputs.workflows }}
     steps:
       - name: Check out repository
         if: github.event_name != 'pull_request'
@@ -43,13 +42,9 @@ jobs:
               - '**'
               - '!**/*.md'
               - '!docs/**'
-            workflows:
-              - '.github/workflows/**'
 
   workflow-lint:
     name: Workflow lint
-    needs: changes
-    if: needs.changes.outputs.workflows == 'true'
     uses: wrightkit/.github/.github/workflows/actionlint.yml@main
 
   rust-quality:
