@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.34](https://github.com/wrightkit/opy-rs/compare/v0.3.33...v0.3.34) - 2026-11-10
+
+### Other
+
+- *(preprocess)* index macros by name for lookup ([#689](https://github.com/wrightkit/opy-rs/pull/689))
+
 ## [0.3.33](https://github.com/wrightkit/opy-rs/compare/v0.3.32...v0.3.33) - 2026-10-29
 
 ### Fixed
