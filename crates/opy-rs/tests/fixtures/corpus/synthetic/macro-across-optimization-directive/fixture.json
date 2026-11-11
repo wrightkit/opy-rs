@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/macro-across-optimization-directive",
+  "category": "compilation",
+  "features": [
+    "structural convergence",
+    "macros",
+    "disableOptimizations"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": false
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "known-gap",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": false,
+      "semanticDifferenceSha256": "255d81f8c4803710a66d11c30b6205c4549ef77d348e673329531a1bf8736bb1"
+    }
+  }
+}
