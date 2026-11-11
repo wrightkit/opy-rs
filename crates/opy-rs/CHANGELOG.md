@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0](https://github.com/wrightkit/opy-rs/compare/v0.3.36...v0.4.0) - 2026-11-11
+
+### Other
+
+- [**breaking**] derive the mapped text and source map from one lowering ([#707](https://github.com/wrightkit/opy-rs/pull/707))
+
 ## [0.3.36](https://github.com/wrightkit/opy-rs/compare/v0.3.35...v0.3.36) - 2026-11-11
 
 ### Fixed

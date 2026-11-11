@@ -3,6 +3,18 @@
 version = 4
 
 [[package]]
+name = "ahash"
+version = "0.8.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a15f179cd60c4584b8a8c596927aadc462e27f2ca70c04e0071964a73ba7a75"
+dependencies = [
+ "cfg-if",
+ "once_cell",
+ "version_check",
+ "zerocopy",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -454,6 +466,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "once_cell"
+version = "1.21.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
+
+[[package]]
 name = "once_cell_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -461,7 +479,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "opy-cli"
-version = "0.3.36"
+version = "0.4.0"
 dependencies = [
  "clap",
  "clap_complete",
@@ -473,7 +491,7 @@ dependencies = [
 
 [[package]]
 name = "opy-provider"
-version = "0.3.36"
+version = "0.4.0"
 dependencies = [
  "mimalloc",
  "opy-rs",
@@ -485,7 +503,7 @@ dependencies = [
 
 [[package]]
 name = "opy-rs"
-version = "0.3.36"
+version = "0.4.0"
 dependencies = [
  "libm",
  "libquickjs-ng-sys",
@@ -754,16 +772,37 @@ dependencies = [
 
 [[package]]
 name = "workshop-rs"
-version = "1.28.5"
+version = "1.28.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c77af579610a2105090729d6c82b85a2ab36eb8bbd1c3b2b57d7e6e5b8543ac0"
+checksum = "0e31b159e1e74c0f6f50fed6696afc3e7f89b7df0348c4f1a64b6a42f3cf465c"
 dependencies = [
+ "ahash",
  "aho-corasick",
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "unicode-ident",
  "unicode-normalization",
+]
+
+[[package]]
+name = "zerocopy"
+version = "0.8.63"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5fe1f8f1b06191a00962174c61aa5005e0bb391a6d80d07e24d115c01a92ed8"
+dependencies = [
+ "zerocopy-derive",
+]
+
+[[package]]
+name = "zerocopy-derive"
+version = "0.8.63"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "863ad3ac83293fb4d740aedbfdc9240dd8d1a50c1099acd76ce80ce7c7230c7f"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]
