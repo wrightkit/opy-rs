@@ -1424,11 +1424,11 @@ impl<'a> Lowering<'a> {
         }
         let selector = self.lower_value(value)?;
         let mut case_values = Vec::new();
-        let mut lowered_arms = Vec::with_capacity(arms.len());
         let mut has_default = false;
-        let mut legacy_case_offsets = Vec::new();
-        let mut legacy_offset = 0;
-        let mut legacy_default_offset = None;
+        let mut case_offsets = Vec::new();
+        let mut default_offset = None;
+        let mut offset = 0;
+        let mut switch_body = Vec::new();
 
         let mut reverse_bodies =
             (loop_continue.is_some() && !do_while_continue).then(|| vec![None; arms.len()]);
@@ -1452,7 +1452,7 @@ impl<'a> Lowering<'a> {
             }
         }
         for (index, arm) in arms.iter().enumerate() {
-            let (value, (body, break_at)) = match arm {
+            let (is_case, (body, switch_break)) = match arm {
                 SwitchArm::Case { value, body, .. } => {
                     case_values.push(self.lower_value(value)?);
                     let lowered = if let Some(bodies) = reverse_bodies.as_mut() {
@@ -1460,7 +1460,7 @@ impl<'a> Lowering<'a> {
                     } else {
                         self.lower_switch_body(body, loop_continue, do_while_continue)?
                     };
-                    (Some(value), lowered)
+                    (true, lowered)
                 }
                 SwitchArm::Default { body, span } => {
                     if has_default {
@@ -1469,103 +1469,40 @@ impl<'a> Lowering<'a> {
                         );
                     }
                     has_default = true;
-                    legacy_default_offset = Some(legacy_offset);
+                    default_offset = Some(offset);
                     let lowered = if let Some(bodies) = reverse_bodies.as_mut() {
                         bodies[index].take().unwrap()
                     } else {
                         self.lower_switch_body(body, loop_continue, do_while_continue)?
                     };
-                    (None, lowered)
+                    (false, lowered)
                 }
             };
-            if value.is_some() {
-                legacy_case_offsets.push(legacy_offset);
+            if is_case {
+                case_offsets.push(offset);
             }
-            legacy_offset +=
-                self.canonical_action_width(&body, span)? + usize::from(break_at.is_some());
-            lowered_arms.push((value.map(Box::as_ref), body, break_at));
+            offset +=
+                self.canonical_action_width(&body, span)? + usize::from(switch_break.is_some());
+            match switch_break {
+                Some((at, marker)) => {
+                    switch_body.extend_from_slice(&body[..at]);
+                    switch_body.push(marker);
+                    switch_body.extend_from_slice(&body[at..]);
+                }
+                None => switch_body.extend(body),
+            }
         }
-
-        let break_arms: Vec<_> = lowered_arms
-            .iter()
-            .enumerate()
-            .filter_map(|(index, (_, _, break_at))| break_at.map(|break_at| (index, break_at)))
-            .collect();
-        let first_break = break_arms.first().copied();
-        let has_later_reachable_actions =
-            first_break.is_some_and(|(break_index, (break_at, _))| {
-                lowered_arms[break_index].1.len() > break_at
-                    || lowered_arms
-                        .iter()
-                        .skip(break_index + 1)
-                        .any(|(_, body, _)| !body.is_empty())
-            });
-        let use_shared_exit = break_arms.len() > 1 && has_later_reachable_actions;
 
         let case_values = self.lower_array(case_values);
-        if !use_shared_exit {
-            let default_offset = legacy_default_offset.unwrap_or(legacy_offset);
-            let offset_values = std::iter::once(default_offset)
-                .chain(legacy_case_offsets)
-                .map(|value| self.push_number(value as f64))
-                .collect();
-            let offsets = self.lower_array(offset_values);
-            let skip = self.lower_switch_selector(selector, case_values, offsets);
-            let true_value = self.push_value(Value::Bool(true));
-            let mut branch_body = vec![skip];
-            let else_body = if let Some((break_index, (break_at, _))) = first_break {
-                for (index, (_, body, _)) in lowered_arms.iter().enumerate() {
-                    if index < break_index {
-                        branch_body.extend(body.iter().copied());
-                    } else if index == break_index {
-                        branch_body.extend(body[..break_at].iter().copied());
-                    }
-                }
-                let mut tail = Vec::new();
-                tail.extend(lowered_arms[break_index].1[break_at..].iter().copied());
-                for (_, body, _) in lowered_arms.iter().skip(break_index + 1) {
-                    tail.extend(body.iter().copied());
-                }
-                Some(tail)
-            } else {
-                for (_, body, _) in &lowered_arms {
-                    branch_body.extend(body.iter().copied());
-                }
-                None
-            };
-            let result = self.push_if_actions(vec![(true_value, branch_body)], else_body);
-            return Ok(result);
-        }
-
-        let offsets = self.push_value(Value::Array(Vec::new()));
-        let skip = self.lower_switch_selector(selector, case_values, offsets);
-        let mut arm_offsets = vec![None; lowered_arms.len()];
-        let (switch, switch_end) =
-            self.lower_switch_level(&lowered_arms, 0, Some(skip), 0, &mut arm_offsets, span)?;
-
-        let default_offset = lowered_arms
-            .iter()
-            .enumerate()
-            .find_map(|(index, (value, _, _))| value.is_none().then(|| arm_offsets[index].unwrap()))
-            .unwrap_or(switch_end);
-        let offset_values = std::iter::once(default_offset)
-            .chain(
-                lowered_arms
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, (value, _, _))| value.is_some())
-                    .map(|(index, _)| arm_offsets[index].unwrap()),
-            )
+        let offset_values = std::iter::once(default_offset.unwrap_or(offset))
+            .chain(case_offsets)
             .map(|value| self.push_number(value as f64))
             .collect();
-        let offset_values = self.lower_array(offset_values);
-        let offset_value = self.value(offset_values).clone();
-        let Some(node) = self.values.get_mut(offsets) else {
-            unreachable!("switch offset placeholder must exist")
-        };
-        *node = offset_value;
-
-        Ok(switch)
+        let offsets = self.lower_array(offset_values);
+        let skip = self.lower_switch_selector(selector, case_values, offsets);
+        switch_body.insert(0, skip);
+        let true_value = self.push_value(Value::Bool(true));
+        Ok(self.push_if_actions(vec![(true_value, switch_body)], None))
     }
 
     fn lower_switch_selector(
@@ -1579,78 +1516,6 @@ impl<'a> Lowering<'a> {
         let case_offset = self.push_call("add", vec![one, index]);
         let skip_condition = self.push_call("valueInArray", vec![offsets, case_offset]);
         self.push_call_action("skip", &[skip_condition])
-    }
-
-    fn lower_switch_level(
-        &mut self,
-        arms: &[LoweredSwitchArm<'_>],
-        start: usize,
-        selector_skip: Option<ActionId>,
-        level_offset: usize,
-        arm_offsets: &mut [Option<usize>],
-        span: Option<HirSpan>,
-    ) -> Result<(Vec<ActionId>, usize), IntegrationError> {
-        let break_index = (start..arms.len())
-            .find(|index| arms[*index].2.is_some())
-            .expect("switch level must contain a break");
-        let mut branch_body = Vec::new();
-        if let Some(selector_skip) = selector_skip {
-            branch_body.push(selector_skip);
-        }
-        let mut branch_offset = 0;
-        for index in start..=break_index {
-            arm_offsets[index] = Some(if selector_skip.is_some() {
-                level_offset + branch_offset
-            } else if index == start {
-                level_offset
-            } else {
-                level_offset + 1 + branch_offset
-            });
-            let (_, body, break_at) = &arms[index];
-            let body = if index == break_index {
-                &body[..break_at.as_ref().unwrap().0]
-            } else {
-                body.as_slice()
-            };
-            branch_offset += self.canonical_action_width(body, span)?;
-            branch_body.extend(body.iter().copied());
-        }
-        let branch_width = self.canonical_action_width(&branch_body, span)?;
-        let (_, break_body, Some((break_at, _))) = &arms[break_index] else {
-            unreachable!("break index must point to a switch break")
-        };
-        let mut else_body = break_body[*break_at..].to_vec();
-        let tail_width = self.canonical_action_width(&else_body, span)?;
-        let else_content_start = if selector_skip.is_some() {
-            level_offset + branch_width + tail_width
-        } else {
-            level_offset + branch_width + tail_width + 2
-        };
-        let has_next_break = (break_index + 1..arms.len()).any(|index| arms[index].2.is_some());
-        let end_offset = if has_next_break {
-            let (child, child_end) = self.lower_switch_level(
-                arms,
-                break_index + 1,
-                None,
-                else_content_start,
-                arm_offsets,
-                span,
-            )?;
-            else_body.extend(child);
-            child_end
-        } else {
-            let mut offset = else_content_start;
-            for index in break_index + 1..arms.len() {
-                arm_offsets[index] = Some(offset);
-                let (_, body, _) = &arms[index];
-                offset += self.canonical_action_width(body, span)?;
-                else_body.extend(body.iter().copied());
-            }
-            offset
-        };
-        let true_value = self.push_value(Value::Bool(true));
-        let switch = self.push_if_actions(vec![(true_value, branch_body)], Some(else_body));
-        Ok((switch, end_offset))
     }
 
     fn lower_switch_body(
@@ -1692,12 +1557,11 @@ impl<'a> Lowering<'a> {
                     *span,
                 ));
             }
-            break_at = Some((
-                actions.len(),
-                span.ok_or_else(|| {
-                    self.unsupported("switch break is missing source provenance", None)
-                })?,
-            ));
+            let [marker] = self.lower_action(&statements[index], Some(BreakTarget::Switch))?[..]
+            else {
+                unreachable!("a switch break must lower to one Else marker")
+            };
+            break_at = Some((actions.len(), marker));
             for statement in statements[index + 1..].iter() {
                 actions.extend(self.lower_action(statement, Some(BreakTarget::Switch))?);
             }

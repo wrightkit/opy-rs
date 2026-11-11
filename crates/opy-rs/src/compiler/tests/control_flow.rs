@@ -83,17 +83,69 @@ fn pinned_switch_traces(dir: &Path) -> Vec<(i64, Vec<i64>)> {
         .collect()
 }
 
+const SWITCH_FIXTURES: [&str; 6] = [
+    "switch-break",
+    "switch-break-unsupported",
+    "switch-case-default",
+    "switch-multiple-break",
+    "switch-order",
+    "switch-structured-target",
+];
+
 #[test]
 fn switch_lowering_matches_the_pinned_oracle() {
-    for name in [
-        "control-flow",
-        "control-flow-lowering",
-        "switch-case-default",
-        "switch-break",
-        "switch-order",
-        "switch-structured-target",
-    ] {
+    for name in ["control-flow", "control-flow-lowering"]
+        .into_iter()
+        .chain(SWITCH_FIXTURES)
+    {
         assert_native_wir_equivalent(name);
+    }
+}
+
+/// Canonical comparison depends on the parser keeping every authored
+/// `Else;` of a switch in order; workshop-rs 1.28.4 collapsed repeated ones.
+#[test]
+fn switch_oracle_block_markers_survive_parsing() {
+    let catalog = Catalog::builtin().unwrap();
+    let locale = Locale::new("en-US");
+    for name in SWITCH_FIXTURES {
+        let workshop = oracle_workshop(&fixture_dir(name));
+        let authored: Vec<_> = workshop
+            .lines()
+            .map(str::trim)
+            .filter_map(|line| {
+                if line.starts_with("If(") {
+                    Some("If")
+                } else if line.starts_with("Else If(") {
+                    Some("Else If")
+                } else if line == "Else;" {
+                    Some("Else")
+                } else if line == "End;" {
+                    Some("End")
+                } else if line.starts_with("While(") || line.starts_with("For ") {
+                    Some("Loop")
+                } else {
+                    None
+                }
+            })
+            .collect();
+        let program = workshop_rs::parser::parse(&workshop, &catalog, &locale).unwrap();
+        let parsed: Vec<_> = program
+            .rules
+            .iter()
+            .flat_map(|rule| &rule.actions)
+            .filter_map(|action| match action {
+                workshop_rs::Action::If { .. } => Some("If"),
+                workshop_rs::Action::ElseIf { .. } => Some("Else If"),
+                workshop_rs::Action::Else => Some("Else"),
+                workshop_rs::Action::End => Some("End"),
+                workshop_rs::Action::While { .. }
+                | workshop_rs::Action::ForGlobalVariable { .. }
+                | workshop_rs::Action::ForPlayerVariable { .. } => Some("Loop"),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(parsed, authored, "{name}: parsed block markers diverged");
     }
 }
 
@@ -229,32 +281,6 @@ fn do_while_break_shapes_match_the_pinned_oracle() {
 }
 
 #[test]
-fn multiple_switch_breaks_match_independent_semantic_oracle() {
-    let compiler = Compiler::new().unwrap();
-    let dir = fixture_dir("switch-multiple-break");
-    let source = std::fs::read_to_string(dir.join("source.opy")).unwrap();
-    let hir = crate::compile(&source, "source.opy", &dir).unwrap();
-    let artifact = compiler
-        .compile_hir(&hir)
-        .expect("multi-break switch must lower");
-    let semantic_oracle: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(dir.join("semantic-oracle.json")).unwrap())
-            .unwrap();
-    let catalog = Catalog::builtin().unwrap();
-    let semantic_wir = workshop_rs::parser::parse(
-        semantic_oracle["compile"]["workshop"].as_str().unwrap(),
-        &catalog,
-        &Locale::new("en-US"),
-    )
-    .unwrap();
-    assert!(
-        equivalent(&super::canonical_program(&artifact), &semantic_wir),
-        "native WIR diverged from the independent switch semantic oracle\n{}",
-        artifact.emitted
-    );
-}
-
-#[test]
 fn pinned_overpy_switch_action_trace() {
     let compiler = Compiler::new().unwrap();
     let dir = fixture_dir("switch-multiple-break");
@@ -276,18 +302,6 @@ fn invalid_do_while_placement_is_source_attributed() {
         .expect_err("invalid do-while placement must be rejected");
     assert_eq!(error.code, "do-while-placement");
     assert_eq!(error.span.unwrap().start.line, 6);
-}
-
-#[test]
-fn nested_switch_break_matches_upstream_noop_elision() {
-    let compiler = Compiler::new().unwrap();
-    let dir = fixture_dir("switch-break-unsupported");
-    let source = std::fs::read_to_string(dir.join("source.opy")).unwrap();
-    let hir = crate::compile(&source, "source.opy", &dir).unwrap();
-    let artifact = compiler
-        .compile_hir(&hir)
-        .expect("nested switch break must follow the pinned upstream lowering");
-    assert!(artifact.wir.rules.is_empty());
 }
 
 #[test]

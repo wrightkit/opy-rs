@@ -677,7 +677,7 @@ impl<'a> Lowering<'a> {
 
     fn debug_value_is_array(&self, value: ValueId) -> bool {
         match self.value(value) {
-            Value::GlobalVariable(_) | Value::Array(_) => true,
+            Value::GlobalVariable(_) => true,
             Value::Call { name, .. } if matches!(name.as_str(), "array" | "emptyArray") => true,
             Value::Call { name, .. } => self
                 .compiler
