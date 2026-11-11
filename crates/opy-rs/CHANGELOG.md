@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1](https://github.com/wrightkit/opy-rs/compare/v0.4.0...v0.4.1) - 2026-11-11
+
+### Fixed
+
+- apply the call-site optimization state to macro bodies ([#710](https://github.com/wrightkit/opy-rs/pull/710))
+
 ## [0.4.0](https://github.com/wrightkit/opy-rs/compare/v0.3.36...v0.4.0) - 2026-11-11
 
 ### Other
