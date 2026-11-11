@@ -102,6 +102,7 @@ pub(super) const CODE_CLASSES: &[(DiagnosticClass, &[&str])] = &[
         DiagnosticClass::Catalog,
         &[
             "catalog-error",
+            "locale-unsupported",
             "manifest-error",
             "unknown-enum-member",
             "missing-mapping",

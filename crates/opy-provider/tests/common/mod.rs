@@ -15,7 +15,17 @@ pub(crate) struct Session {
 
 impl Session {
     pub(crate) fn spawn() -> Self {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_opy-provider"))
+        Self::spawn_traced(None)
+    }
+
+    /// Spawns with `WRIGHT_PROVIDER_TRACE_FILE` set to `trace`, or removed.
+    pub(crate) fn spawn_traced(trace: Option<&Path>) -> Self {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_opy-provider"));
+        command.env_remove("WRIGHT_PROVIDER_TRACE_FILE");
+        if let Some(trace) = trace {
+            command.env("WRIGHT_PROVIDER_TRACE_FILE", trace);
+        }
+        let mut child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

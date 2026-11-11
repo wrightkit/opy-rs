@@ -44,6 +44,7 @@ impl Compiler {
         text: &str,
         locale: &Locale,
     ) -> Result<MappedText, IntegrationError> {
+        let _span = crate::trace::span("source_map.build");
         let map = SourceMap::extract(program);
         let verbatim_emission = workshop_rs::emitter::emit(program, self.catalog, locale)
             .is_ok_and(|emitted| emitted == text);

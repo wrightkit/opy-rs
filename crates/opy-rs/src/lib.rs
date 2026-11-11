@@ -18,6 +18,7 @@ pub(crate) mod resource_metrics;
 pub mod settings;
 mod string_entities;
 pub mod tooling;
+pub mod trace;
 
 use std::path::Path;
 

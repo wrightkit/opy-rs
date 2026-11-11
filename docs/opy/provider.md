@@ -184,6 +184,58 @@ payload in a supported format is `invalidArtifact`. Environment failures
 (`manifest-error`, `catalog-error`) report as `providerFailure`, not
 refusals.
 
+## Phase trace file
+
+When `WRIGHT_PROVIDER_TRACE_FILE` holds an absolute path at process start, the
+provider appends one `wright-provider-trace/v1` JSON line per request to that
+file, before it writes the response. Wright's `--trace` uses it to show the
+phases inside `lpp/compile`; the protocol itself carries no timings. The
+variable is read once per process. When it is absent or not absolute, nothing
+is recorded: a phase boundary then costs one thread-local read, with no clock
+read and no allocation. A failure to write the file never fails the request.
+
+```json
+{"schema":"wright-provider-trace/v1","method":"lpp/compile","spans":[{"id":0,"parent":null,"name":"provider.request.decode","startNs":4000,"durationNs":15000,"facts":{}}]}
+```
+
+`method` is the request method, or `null` when the request names no served
+method. `startNs` counts from the receipt of the request line. `id` follows
+start order and `parent` is the id of the enclosing span, or `null`. The
+top-level spans are `provider.request.decode`, the handler span named after
+the method (`provider.compile` for `lpp/compile`), and
+`provider.response.encode`; their durations add up to the request time minus
+the trace bookkeeping. The phases inside an entry-based `lpp/compile`:
+
+| Span | Phase |
+| --- | --- |
+| `provider.project.load` | Entry selection and read. |
+| `provider.compiler.init` | Catalog and manifest load; first compile of the process only. |
+| `provider.frontend` | Preprocess, parse, HIR lowering, and the semantic model. |
+| `provider.preprocess` | Includes, directives, and macro expansion. |
+| `provider.parse` | Parse of the preprocessed tokens and the settings block. |
+| `provider.hir.lower` | Lowering to OPY HIR and settings resolution. |
+| `provider.acceptance` | Compile-stage acceptance; `lpp/check` only. |
+| `provider.semantic.model` | The semantic model of the HIR. |
+| `provider.backend` | Compilation of the HIR to Workshop text. |
+| `provider.hir.expand` | HIR macro expansion. |
+| `provider.workshop.lower` | Lowering to the Workshop program. |
+| `provider.source_map.attribute` | Invocation-site attribution; mapped format only. |
+| `provider.canonical` | Canonical program build and validation. |
+| `provider.emit` | Workshop text emission. |
+| `provider.hook` | The `#!postCompileHook` script and revalidation. |
+| `provider.source_map.build` | Source map extraction and check; mapped format only. |
+| `provider.translations.write` | Translation file output. |
+| `provider.artifact.encode` | Artifact construction, including mapped-text encoding. |
+| `provider.source.identity` | `sourceIdentity` hash. |
+| `provider.inputs` | `compileInputs` resolution. |
+
+Two spans aggregate repeated work under the phase where it happens:
+`provider.source.read` (facts `files`, `bytes`) for source file reads and
+`provider.macro.runtime` (fact `invocations`) for QuickJS script runs. Such a
+span starts at the first occurrence, and its duration is the sum of the
+occurrences. Other methods record the top-level spans and whatever of these
+phases they run.
+
 ## Running locally
 
 ```sh

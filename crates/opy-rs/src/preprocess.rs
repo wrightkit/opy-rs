@@ -227,7 +227,7 @@ pub fn preprocess_with_overlay_outcome(
                         pre,
                     );
                 };
-                let text = match std::fs::read_to_string(&canonical) {
+                let text = match crate::trace::read_to_string(&canonical) {
                     Ok(text) => text,
                     Err(error) => {
                         return PreprocessOutcome::failure(
@@ -412,7 +412,7 @@ impl Preprocessor {
         for language in languages.iter().skip(1) {
             let po_path = base.with_extension(format!("{language}.po"));
             self.accessed.insert(po_path.clone());
-            let Some(text) = std::fs::read_to_string(&po_path).ok() else {
+            let Some(text) = crate::trace::read_to_string(&po_path).ok() else {
                 continue;
             };
             let file_id = self.register_external_file(&po_path, language, text.clone());
@@ -455,7 +455,7 @@ impl Preprocessor {
                     .and_then(|path| self.overlay.get(&path.to_string_lossy().into_owned()))
             })
             .cloned()
-            .or_else(|| canonical.and_then(|path| std::fs::read_to_string(path).ok()))
+            .or_else(|| canonical.and_then(|path| crate::trace::read_to_string(path).ok()))
             .ok_or_else(|| {
                 OpyError::at(
                     "settings-not-found",
