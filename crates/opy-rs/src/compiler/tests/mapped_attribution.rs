@@ -40,26 +40,74 @@ rule \"r\":
     eventPlayer.foo = outer(eventPlayer.foo)
 ";
 
-fn hir() -> crate::hir::Program {
-    crate::compile(SOURCE, "source.opy", Path::new(".")).expect("source compiles")
+/// Arguments of a macro call written in a `#!define` body carry the define
+/// invocation span, which is also the call's site. Rule "before" is
+/// optimized and rule "after" is not.
+const DEFINE_SOURCE: &str = "globalvar g
+
+macro setv(v):
+    g = v
+
+macro pick():
+    if 1 == 1:
+        g = 1
+
+#!define CALLSET setv(3 * 4)
+#!define CALLPICK pick()
+
+rule \"before\":
+    @Event global
+    CALLSET
+    CALLPICK
+
+#!disableOptimizations
+rule \"after\":
+    @Event global
+    CALLSET
+    CALLPICK
+";
+
+/// Indexed self-assignment where the array and the index come from macros.
+const INDEX_SOURCE: &str = "globalvar a
+globalvar i
+
+macro A():
+    a
+
+macro idx():
+    i + 1
+
+rule \"r\":
+    @Event global
+    A()[idx()] = A()[idx()] + 1
+";
+
+fn hir(source: &str) -> crate::hir::Program {
+    crate::compile(source, "source.opy", Path::new(".")).expect("source compiles")
 }
 
 #[test]
 fn mapped_artifact_equals_the_plain_compile() {
     let compiler = Compiler::new().unwrap();
-    let hir = hir();
-    let plain = compiler.compile_hir(&hir).unwrap();
-    let (artifact, mapped) = compiler.compile_hir_mapped(&hir).unwrap();
-    // `Program` has no `PartialEq`; its debug form covers nodes and provenance.
-    assert_eq!(format!("{:?}", artifact.wir), format!("{:?}", plain.wir));
-    assert_eq!(artifact.final_output, plain.final_output);
-    assert_eq!(mapped.text, plain.final_output);
+    for source in [SOURCE, DEFINE_SOURCE, INDEX_SOURCE] {
+        let hir = hir(source);
+        let plain = compiler.compile_hir(&hir).unwrap();
+        let (artifact, mapped) = compiler.compile_hir_mapped(&hir).unwrap();
+        // `Program` has no `PartialEq`; its debug form covers nodes and provenance.
+        assert_eq!(
+            format!("{:?}", artifact.wir),
+            format!("{:?}", plain.wir),
+            "{source}"
+        );
+        assert_eq!(artifact.final_output, plain.final_output, "{source}");
+        assert_eq!(mapped.text, plain.final_output, "{source}");
+    }
 }
 
 #[test]
 fn map_attributes_macro_code_to_the_invocation_site() {
     let compiler = Compiler::new().unwrap();
-    let (artifact, mapped) = compiler.compile_hir_mapped(&hir()).unwrap();
+    let (artifact, mapped) = compiler.compile_hir_mapped(&hir(SOURCE)).unwrap();
     // `g = 1` inside `pick()`: defined on line 7, invoked on line 27.
     let definition = artifact.wir.action_span(0, 1).expect("definition span");
     assert_eq!(definition.start.line, 7);

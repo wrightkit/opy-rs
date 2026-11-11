@@ -12,8 +12,8 @@ pub struct Span {
     /// The range above stays the definition site: lowering decisions and
     /// diagnostics read it, and only the source map reads the site. A node
     /// with no definition span is attributed with a synthetic span whose
-    /// range repeats the site (see [`Span::is_synthetic`]). Producers never
-    /// set this field, and it is not part of the wire payload.
+    /// range repeats the site and which [`Site::synthetic`] marks. Producers
+    /// never set this field, and it is not part of the wire payload.
     #[serde(skip)]
     pub site: Option<Site>,
 }
@@ -24,6 +24,9 @@ pub struct Site {
     pub file: u32,
     pub start: Position,
     pub end: Position,
+    /// The node has no definition span: the span's range only repeats this
+    /// site.
+    pub synthetic: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -39,15 +42,16 @@ impl Span {
             file: site.file,
             start: site.start,
             end: site.end,
-            site: Some(site),
+            site: Some(Site {
+                synthetic: true,
+                ..site
+            }),
         }
     }
 
-    /// Whether the range only repeats the site: the node has no definition
-    /// span. A real definition range never equals its site, because an
-    /// invocation site lies outside every macro body.
+    /// Whether the node has no definition span.
     pub(crate) fn is_synthetic(&self) -> bool {
-        self.site == Some(self.range())
+        self.site.is_some_and(|site| site.synthetic)
     }
 
     /// The definition-site view of `span`: what the span is without macro
@@ -59,7 +63,9 @@ impl Span {
 
     /// The attributed view: the site when one is recorded, else the range.
     pub(crate) fn attributed(self) -> Span {
-        let Site { file, start, end } = self.site.unwrap_or(self.range());
+        let Site {
+            file, start, end, ..
+        } = self.site.unwrap_or(self.range());
         Span {
             file,
             start,
@@ -84,6 +90,7 @@ impl Span {
             file: self.file,
             start: self.start,
             end: self.end,
+            synthetic: false,
         }
     }
 }
