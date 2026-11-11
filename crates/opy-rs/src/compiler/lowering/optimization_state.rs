@@ -31,9 +31,11 @@ impl OptimizationIndex {
 }
 
 impl<'a> Lowering<'a> {
-    /// The optimization state at a node's definition site. A node without
-    /// one (span-less, or only attributed to a macro invocation) takes the
-    /// program state.
+    /// The optimization state where a node's source text is compiled: its
+    /// macro invocation site when macro expansion recorded one, else its
+    /// definition site. Upstream substitutes macro text at the call site, so
+    /// the call site's directives apply. A span-less node takes the program
+    /// state.
     pub(in crate::compiler) fn optimization_state_at(
         &self,
         span: Option<&HirSpan>,
@@ -43,7 +45,7 @@ impl<'a> Lowering<'a> {
         if let Some(state) = &self.optimization_override {
             return state.clone();
         }
-        let Some(span) = span.filter(|span| !span.is_synthetic()) else {
+        let Some(span) = span.map(|span| span.attributed()) else {
             return self.hir.preprocessing.optimization.clone();
         };
         self.optimization_index
@@ -67,7 +69,7 @@ impl<'a> Lowering<'a> {
         if let Some(state) = &self.optimization_override {
             return state.clone();
         }
-        let Some(span) = span else {
+        let Some(span) = span.map(|span| span.attributed()) else {
             return self.hir.preprocessing.optimization.clone();
         };
         let mut active = None;
