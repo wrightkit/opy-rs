@@ -1,5 +1,6 @@
 pub mod dump;
 pub mod error;
+mod span;
 pub mod types;
 mod validate;
 pub(crate) mod visit;
@@ -8,8 +9,8 @@ pub use error::HirError;
 pub use types::{
     Annotation, AnnotationArg, Declaration, DictEntry, DirectiveRecord, DirectiveValue, Event,
     Expr, Generator, OptimizationState, Position, PreprocessingSnapshot, PreprocessingState,
-    Program, Protocol, Rule, RuleEntry, Settings, SettingsListElement, SettingsNode, SourceFile,
-    Span, Stmt, SwitchArm, TranslationState, default_var_index,
+    Program, Protocol, Rule, RuleEntry, Settings, SettingsListElement, SettingsNode, Site,
+    SourceFile, Span, Stmt, SwitchArm, TranslationState, default_var_index,
 };
 
 use serde_json::Value;

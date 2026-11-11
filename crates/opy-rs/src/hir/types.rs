@@ -10,6 +10,8 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+pub use super::span::{Position, Site, Span};
+
 pub const PROTOCOL_NAME: &str = "wright/opy-hir";
 pub const PROTOCOL_MAJOR: u32 = 2;
 pub const PROTOCOL_VERSION: &str = "2.0.0";
@@ -76,19 +78,6 @@ pub struct Define {
     pub is_member: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub span: Option<Span>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Span {
-    pub file: u32,
-    pub start: Position,
-    pub end: Position,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Position {
-    pub line: u32,
-    pub col: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
