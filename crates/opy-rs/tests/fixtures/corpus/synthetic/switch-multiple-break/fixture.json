@@ -9,7 +9,6 @@
     "break"
   ],
   "source": "source.opy",
-  "semanticOracle": "semantic-oracle.json",
   "tests": {
     "source": {
       "nativeStatus": "success",

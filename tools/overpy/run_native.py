@@ -54,7 +54,7 @@ def run_semantic_comparison(
     project_sha256: str,
 ) -> dict[str, Any]:
     source = directory / metadata["source"]
-    oracle = directory / metadata.get("semanticOracle", "oracle.json")
+    oracle = directory / "oracle.json"
     completed = subprocess.run(
         [
             str(binary),

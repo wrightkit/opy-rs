@@ -32,7 +32,6 @@ enum Value {
     LocalizedString(String),
     Bool(bool),
     Null,
-    Array(Vec<ValueId>),
     Vector { x: ValueId, y: ValueId, z: ValueId },
     Enum { value_type: String, value: String },
     GlobalVariable(String),
@@ -137,9 +136,9 @@ enum BreakTarget {
     Switch,
 }
 
-type SwitchBreak = (usize, HirSpan);
+/// The break's position in the arm body and its lowered `Else` marker.
+type SwitchBreak = (usize, ActionId);
 type LoweredSwitchBody = (Vec<ActionId>, Option<SwitchBreak>);
-type LoweredSwitchArm<'a> = (Option<&'a Expr>, Vec<ActionId>, Option<SwitchBreak>);
 
 pub(super) struct OptimizationIndex {
     files: HashMap<u32, Vec<(hir::Position, OptimizationState)>>,
@@ -692,12 +691,6 @@ impl<'a> Lowering<'a> {
             Value::LocalizedString(value) => workshop_rs::Value::LocalizedString(value.clone()),
             Value::Bool(value) => workshop_rs::Value::Bool(*value),
             Value::Null => workshop_rs::Value::Null,
-            Value::Array(elements) => workshop_rs::Value::Array(
-                elements
-                    .iter()
-                    .map(|element| self.materialize_value_inner(*element))
-                    .collect(),
-            ),
             Value::Vector { x, y, z } => workshop_rs::Value::Vector {
                 x: Box::new(self.materialize_value_inner(*x)),
                 y: Box::new(self.materialize_value_inner(*y)),
