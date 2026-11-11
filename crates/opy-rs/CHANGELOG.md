@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.36](https://github.com/wrightkit/opy-rs/compare/v0.3.35...v0.3.36) - 2026-11-11
+
+### Fixed
+
+- lower switch breaks as flat ordered Else markers like upstream ([#706](https://github.com/wrightkit/opy-rs/pull/706))
+
+### Other
+
+- memoize path canonicalization and link reads per run ([#697](https://github.com/wrightkit/opy-rs/pull/697))
+
 ## [0.3.35](https://github.com/wrightkit/opy-rs/compare/v0.3.34...v0.3.35) - 2026-11-10
 
 ### Other
