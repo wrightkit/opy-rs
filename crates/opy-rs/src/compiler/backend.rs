@@ -52,21 +52,8 @@ impl<'a> MacroExpander<'a> {
 }
 
 pub(crate) fn expand_macros(program: &hir::Program) -> Result<hir::Program, IntegrationError> {
-    expand_macros_with(program, false)
-}
-
-pub(crate) fn expand_macros_attributed(
-    program: &hir::Program,
-) -> Result<hir::Program, IntegrationError> {
-    expand_macros_with(program, true)
-}
-
-fn expand_macros_with(
-    program: &hir::Program,
-    attribute_to_site: bool,
-) -> Result<hir::Program, IntegrationError> {
     let mut expander = MacroExpander::from_declarations(&program.declarations);
-    expander.attribute_to_site = attribute_to_site;
+    expander.attribute_to_site = true;
     let mut expanded = program.clone();
     let bindings = MacroBindings::new();
 

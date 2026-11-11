@@ -26,7 +26,7 @@ mod string_format;
 mod value_walk;
 
 pub(crate) use backend::MacroExpander;
-pub(super) use backend::{expand_macros, expand_macros_attributed, reject_unlowered_directives};
+pub(super) use backend::{expand_macros, reject_unlowered_directives};
 pub use integration::LinkReport;
 pub(super) use integration::load_compiler_contract;
 pub(super) use lowering::Lowering;
@@ -455,10 +455,10 @@ impl Compiler {
             .map(|(artifact, _)| artifact)
     }
 
-    /// Compile once. With `attributed`, macro expansion also records the
-    /// invocation site of each expanded node, and the second result is the
-    /// program whose provenance uses those sites (`None` when no node was
-    /// attributed).
+    /// Compile once. Macro expansion records the invocation site of each
+    /// expanded node, and optimization decisions read it. With `attributed`,
+    /// the second result is the program whose provenance uses those sites
+    /// (`None` when no node was attributed).
     pub(super) fn compile_hir_attributed(
         &self,
         hir: &hir::Program,
@@ -473,14 +473,14 @@ impl Compiler {
             ));
         }
         reject_unlowered_directives(hir)?;
-        let expanded_hir = if attributed {
-            expand_macros_attributed(hir)?
-        } else {
-            expand_macros(hir)?
-        };
+        let expanded_hir = expand_macros(hir)?;
         let lowering = self.fully_lowered(&expanded_hir, locale)?;
         let translation_files = lowering.translation_files();
-        let attributed_program = lowering.attributed_program()?;
+        let attributed_program = if attributed {
+            lowering.attributed_program()?
+        } else {
+            None
+        };
 
         let program = lowering.program;
         let emitted = self.validate_and_emit(&program, &expanded_hir, locale)?;

@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/macro-call-site-optimization",
+  "category": "compilation",
+  "features": [
+    "structural convergence",
+    "macros",
+    "disableOptimizations",
+    "optimizeStrict",
+    "optimizeForSize"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": false
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": true
+    }
+  }
+}

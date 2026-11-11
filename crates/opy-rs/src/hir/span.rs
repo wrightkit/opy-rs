@@ -9,8 +9,9 @@ pub struct Span {
     pub end: Position,
     /// The macro invocation that macro expansion attributed this node to.
     ///
-    /// The range above stays the definition site: lowering decisions and
-    /// diagnostics read it, and only the source map reads the site. A node
+    /// The range above stays the definition site, which diagnostics and
+    /// `wir` provenance read. The optimization state and the source map read
+    /// the site, because upstream substitutes macro text there. A node
     /// with no definition span is attributed with a synthetic span whose
     /// range repeats the site and which [`Site::synthetic`] marks. Producers
     /// never set this field, and it is not part of the wire payload.

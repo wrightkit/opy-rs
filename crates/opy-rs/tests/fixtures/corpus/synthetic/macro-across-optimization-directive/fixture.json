@@ -16,10 +16,9 @@
     },
     "compiler": {
       "nativeStatus": "success",
-      "relationship": "known-gap",
+      "relationship": "match",
       "comparison": "semantic-wir",
-      "semanticEquivalent": false,
-      "semanticDifferenceSha256": "255d81f8c4803710a66d11c30b6205c4549ef77d348e673329531a1bf8736bb1"
+      "semanticEquivalent": true
     }
   }
 }
