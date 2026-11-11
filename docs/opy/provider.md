@@ -153,7 +153,10 @@ returned. Attribution is owned here:
 - Included files map to their own document URIs, which are the `files` entries
   of the artifact.
 - Macro-expanded code maps to the invocation site, never into the macro
-  definition.
+  definition. One lowering produces the text and the map: expanded HIR spans
+  keep the definition site for lowering decisions and record the invocation
+  site in `Span.site`, which only the map reads. The artifact's `wir` keeps
+  definition-site spans and equals a compile without a map.
 - Generated helper nodes (initializer rules, translation helpers) carry no span.
 
 Columns are 1-based Unicode scalar values, matching `Position`.

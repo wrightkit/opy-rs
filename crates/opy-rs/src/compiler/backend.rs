@@ -100,6 +100,13 @@ fn expand_macros_with(
     Ok(expanded)
 }
 
+/// Attribute a macro-expanded span to its invocation site, if any.
+fn attribute(span: &mut Option<HirSpan>, site: Option<HirSpan>) {
+    if let Some(site) = site {
+        HirSpan::attribute(span, site);
+    }
+}
+
 impl<'a> MacroExpander<'a> {
     fn expand_stmts(
         &mut self,
@@ -119,9 +126,7 @@ impl<'a> MacroExpander<'a> {
                 continue;
             }
             self.expand_stmt_inner(&mut statement, bindings, site)?;
-            if let Some(site) = site {
-                *statement.span_mut() = Some(site);
-            }
+            attribute(statement.span_mut(), site);
             expanded.push(statement);
         }
         *statements = expanded;
@@ -177,11 +182,11 @@ impl<'a> MacroExpander<'a> {
                         SwitchArm::Case { value, body, span } => {
                             self.expand_expr_in_place(value, bindings, site)?;
                             self.expand_stmts(body, bindings, site)?;
-                            *span = site.or(*span);
+                            attribute(span, site);
                         }
                         SwitchArm::Default { body, span } => {
                             self.expand_stmts(body, bindings, site)?;
-                            *span = site.or(*span);
+                            attribute(span, site);
                         }
                     }
                 }
@@ -265,9 +270,7 @@ impl<'a> MacroExpander<'a> {
         };
         if let Some(replacement) = replacement {
             *expression = replacement;
-            if let Some(site) = site {
-                *expression.span_mut() = Some(site);
-            }
+            attribute(expression.span_mut(), site);
             return Ok(());
         }
 
@@ -281,7 +284,7 @@ impl<'a> MacroExpander<'a> {
                 for entry in entries {
                     self.expand_expr_in_place(&mut entry.key, bindings, site)?;
                     self.expand_expr_in_place(&mut entry.value, bindings, site)?;
-                    entry.span = site.or(entry.span);
+                    attribute(&mut entry.span, site);
                 }
             }
             Expr::Comprehension {
@@ -297,15 +300,15 @@ impl<'a> MacroExpander<'a> {
                 if let Some(condition) = condition {
                     self.expand_expr_in_place(condition, bindings, site)?;
                 }
-                *variable_span = site.or(*variable_span);
-                *index_span = site.or(*index_span);
+                attribute(variable_span, site);
+                attribute(index_span, site);
             }
             Expr::Lambda {
                 param_spans, body, ..
             } => {
                 self.expand_expr_in_place(body, bindings, site)?;
                 for span in param_spans {
-                    *span = site.or(*span);
+                    attribute(span, site);
                 }
             }
             Expr::Type { args, .. } | Expr::Call { args, .. } | Expr::Format { args, .. } => {
@@ -324,7 +327,7 @@ impl<'a> MacroExpander<'a> {
                 ..
             } => {
                 self.expand_expr_in_place(player, bindings, site)?;
-                *member_span = site.or(*member_span);
+                attribute(member_span, site);
             }
             Expr::Member {
                 receiver,
@@ -332,7 +335,7 @@ impl<'a> MacroExpander<'a> {
                 ..
             } => {
                 self.expand_expr_in_place(receiver, bindings, site)?;
-                *member_span = site.or(*member_span);
+                attribute(member_span, site);
             }
             Expr::ReceiverCall { receiver, args, .. } => {
                 self.expand_expr_in_place(receiver, bindings, site)?;
@@ -375,9 +378,7 @@ impl<'a> MacroExpander<'a> {
             | Expr::MacroCall { .. }
             | Expr::MacroParam { .. } => {}
         }
-        if let Some(site) = site {
-            *expression.span_mut() = Some(site);
-        }
+        attribute(expression.span_mut(), site);
         Ok(())
     }
 

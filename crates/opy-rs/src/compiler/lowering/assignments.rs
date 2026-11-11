@@ -1,4 +1,5 @@
 use super::*;
+use crate::hir::visit::same_definition;
 
 impl<'a> Lowering<'a> {
     pub(super) fn lower_delete(
@@ -172,7 +173,7 @@ impl<'a> Lowering<'a> {
                 if let Expr::Binary {
                     op, left, right, ..
                 } = value
-                    && matches!(left.as_ref(), Expr::PlayerVar { player: left_player, name: left_name, .. } if left_name == name && left_player.as_ref() == player.as_ref())
+                    && matches!(left.as_ref(), Expr::PlayerVar { player: left_player, name: left_name, .. } if left_name == name && same_definition(left_player, player))
                     && let Some((modify_op, _)) = modify_operator(op)
                 {
                     let value = self.lower_value(right)?;
@@ -265,8 +266,8 @@ impl<'a> Lowering<'a> {
                 index: left_index,
                 ..
             } = left.as_ref()
-            && left_array.as_ref() == array.as_ref()
-            && left_index.as_ref() == index.as_ref()
+            && same_definition(left_array, array)
+            && same_definition(left_index, index)
             && let Some((_, call_name)) = modify_operator(op)
         {
             let operator = self.push_call(call_name, Vec::new());
@@ -350,7 +351,7 @@ impl<'a> Lowering<'a> {
             if let Expr::Binary {
                 op, left, right, ..
             } = value
-                && left.as_ref() == target
+                && same_definition(left, target)
                 && let Some((_, call_name)) = modify_operator(op)
             {
                 let current = self.lower_indexed_read(array, index, index_value);

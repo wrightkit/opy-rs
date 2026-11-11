@@ -3,9 +3,9 @@ use std::collections::{HashMap, HashSet};
 use crate::hir::types::{
     Annotation as HirAnnotation, AnnotationArg as HirAnnotationArg, Declaration, Define,
     DictEntry as HirDictEntry, Event, Expr as HirExpr, Generator, IfBranch, PROTOCOL_VERSION,
-    Position, PreprocessingState, Program as HirProgram, Protocol, Rule, RuleEntry,
-    Settings as HirSettings, SettingsNode as HirSettingsNode, SourceFile, Span as HirSpan,
-    Stmt as HirStmt, SwitchArm as HirSwitchArm, default_var_index,
+    PreprocessingState, Program as HirProgram, Protocol, Rule, RuleEntry, Settings as HirSettings,
+    SettingsNode as HirSettingsNode, SourceFile, Span as HirSpan, Stmt as HirStmt,
+    SwitchArm as HirSwitchArm, default_var_index,
 };
 
 use crate::cst::{self, CallArg, Decl, Expr, RuleEntry as CstRuleEntry, Stmt, TopLevel};
@@ -1174,28 +1174,6 @@ fn indexed_expr_depth(expr: &Expr) -> usize {
     match expr {
         Expr::Index { array, .. } => 1 + indexed_expr_depth(array),
         _ => 0,
-    }
-}
-
-impl From<Span> for HirSpan {
-    fn from(span: Span) -> HirSpan {
-        HirSpan {
-            file: span.file,
-            start: Position {
-                line: span.start.line,
-                col: span.start.col,
-            },
-            end: Position {
-                line: span.end.line,
-                col: span.end.col,
-            },
-        }
-    }
-}
-
-impl From<&Span> for HirSpan {
-    fn from(span: &Span) -> HirSpan {
-        (*span).into()
     }
 }
 

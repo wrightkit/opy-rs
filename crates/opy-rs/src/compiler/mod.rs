@@ -17,6 +17,7 @@ mod emission;
 mod hooks;
 mod integration;
 mod lowering;
+mod mapped;
 pub(crate) mod number_format;
 mod operator_optimization;
 pub(crate) mod settings;
@@ -366,7 +367,7 @@ impl IntegrationDiagnostic {
         Self {
             code: code.into(),
             message: message.into(),
-            span,
+            span: HirSpan::definition(span),
             script: None,
         }
     }
@@ -450,6 +451,20 @@ impl Compiler {
         hir: &hir::Program,
         locale: &Locale,
     ) -> Result<CompilationArtifact, IntegrationError> {
+        self.compile_hir_attributed(hir, locale, false)
+            .map(|(artifact, _)| artifact)
+    }
+
+    /// Compile once. With `attributed`, macro expansion also records the
+    /// invocation site of each expanded node, and the second result is the
+    /// program whose provenance uses those sites (`None` when no node was
+    /// attributed).
+    pub(super) fn compile_hir_attributed(
+        &self,
+        hir: &hir::Program,
+        locale: &Locale,
+        attributed: bool,
+    ) -> Result<(CompilationArtifact, Option<Program>), IntegrationError> {
         if !self.catalog.supports(locale) {
             return Err(IntegrationError::new(
                 "locale-unsupported",
@@ -458,9 +473,14 @@ impl Compiler {
             ));
         }
         reject_unlowered_directives(hir)?;
-        let expanded_hir = expand_macros(hir)?;
+        let expanded_hir = if attributed {
+            expand_macros_attributed(hir)?
+        } else {
+            expand_macros(hir)?
+        };
         let lowering = self.fully_lowered(&expanded_hir, locale)?;
         let translation_files = lowering.translation_files();
+        let attributed_program = lowering.attributed_program()?;
 
         let program = lowering.program;
         let emitted = self.validate_and_emit(&program, &expanded_hir, locale)?;
@@ -476,48 +496,15 @@ impl Compiler {
             emitted
         };
 
-        Ok(CompilationArtifact {
+        let artifact = CompilationArtifact {
             wir: program,
             final_output: emitted.clone(),
             emitted,
             catalog_identity: self.catalog.identity(),
             hook_console_output: Vec::new(),
             translation_files,
-        })
-    }
-
-    /// Lower, validate, and emit `hir`, then pair the emitted Workshop text
-    /// with the source map of its authored origin (`workshop-rs/mapped-text-v1`)
-    /// in the same operation.
-    ///
-    /// The map is built from this call's own compilation, so the artifact and
-    /// its map can never come from different compiles. Diagnostics on the
-    /// artifact keep macro definition provenance while the map attributes
-    /// macro-expanded code to its invocation site.
-    pub fn compile_hir_mapped(
-        &self,
-        hir: &hir::Program,
-    ) -> Result<(CompilationArtifact, MappedText), IntegrationError> {
-        self.compile_hir_mapped_with_locale(hir, &Locale::new("en-US"))
-    }
-
-    pub fn compile_hir_mapped_with_locale(
-        &self,
-        hir: &hir::Program,
-        locale: &Locale,
-    ) -> Result<(CompilationArtifact, MappedText), IntegrationError> {
-        self.compile_hir_mapped_with_hook(hir, None, locale)
-    }
-
-    fn compile_hir_mapped_with_hook(
-        &self,
-        hir: &hir::Program,
-        hook: Option<crate::PostCompileHookRecord>,
-        locale: &Locale,
-    ) -> Result<(CompilationArtifact, MappedText), IntegrationError> {
-        let artifact = self.compile_hir_with_locale_and_hook(hir, hook, locale)?;
-        let mapped = self.mapped_text(hir, &artifact.final_output, locale)?;
-        Ok((artifact, mapped))
+        };
+        Ok((artifact, attributed_program))
     }
 
     fn fully_lowered<'a>(
@@ -530,29 +517,6 @@ impl Compiler {
         lowering.lower_declarations()?;
         lowering.lower_rules()?;
         Ok(lowering)
-    }
-
-    fn mapped_text(
-        &self,
-        hir: &hir::Program,
-        text: &str,
-        locale: &Locale,
-    ) -> Result<MappedText, IntegrationError> {
-        let expanded = expand_macros_attributed(hir)?;
-        let lowering = self.fully_lowered(&expanded, locale)?;
-        let map = SourceMap::extract(&lowering.program);
-        let verbatim_emission = workshop_rs::emitter::emit(&lowering.program, self.catalog, locale)
-            .is_ok_and(|emitted| emitted == text);
-        if !verbatim_emission {
-            let mut reparsed =
-                workshop_rs::parser::parse(text, self.catalog, locale).map_err(|error| {
-                    IntegrationError::new("source-map-parse", error.to_string(), None)
-                })?;
-            map.apply(&mut reparsed).map_err(|error| {
-                IntegrationError::new("source-map-shape", error.to_string(), None)
-            })?;
-        }
-        Ok(MappedText::new(text.to_owned(), map))
     }
 
     fn emission_error(
@@ -868,6 +832,7 @@ fn hir_span_from_workshop(span: workshop_rs::source::Span, hir: &hir::Program) -
                 line: span.end.line,
                 col: span.end.col,
             },
+            site: None,
         })
 }
 

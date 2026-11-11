@@ -1,7 +1,9 @@
 mod action_calls;
 mod assignments;
 mod declarations;
+mod optimization_state;
 mod presentation;
+mod provenance;
 mod rules;
 mod values;
 
@@ -100,6 +102,7 @@ pub(crate) struct Lowering<'a> {
     pub(super) compiler: &'a Compiler,
     pub(super) hir: &'a hir::Program,
     pub(super) program: Program,
+    site_edits: Vec<provenance::SiteEdit>,
     values: Vec<Value>,
     actions: Vec<Action>,
     action_origins: Vec<Option<HirSpan>>,
@@ -117,7 +120,7 @@ pub(crate) struct Lowering<'a> {
     optimized_nodes: HashMap<ValueId, bool>,
     optimization_mark: Option<bool>,
     optimization_override: Option<OptimizationState>,
-    optimization_index: OptimizationIndex,
+    optimization_index: optimization_state::OptimizationIndex,
     #[cfg(test)]
     pub(in crate::compiler) optimization_queries: std::cell::RefCell<Vec<Option<HirSpan>>>,
     used_maps: Vec<&'static str>,
@@ -139,34 +142,6 @@ enum BreakTarget {
 /// The break's position in the arm body and its lowered `Else` marker.
 type SwitchBreak = (usize, ActionId);
 type LoweredSwitchBody = (Vec<ActionId>, Option<SwitchBreak>);
-
-pub(super) struct OptimizationIndex {
-    files: HashMap<u32, Vec<(hir::Position, OptimizationState)>>,
-}
-
-impl OptimizationIndex {
-    fn build(hir: &hir::Program) -> Self {
-        let mut files: HashMap<u32, Vec<(hir::Position, OptimizationState)>> = HashMap::new();
-        for directive in &hir.preprocessing.directives {
-            let Some(span) = directive.span else {
-                continue;
-            };
-            files
-                .entry(span.file)
-                .or_default()
-                .push((span.start, directive.state.optimization.clone()));
-        }
-        Self { files }
-    }
-
-    fn state_at(&self, file: u32, position: hir::Position) -> Option<&OptimizationState> {
-        let entries = self.files.get(&file)?;
-        let index = entries.partition_point(|(start, _)| {
-            start.line < position.line || (start.line == position.line && start.col <= position.col)
-        });
-        index.checked_sub(1).map(|index| &entries[index].1)
-    }
-}
 
 fn pure_guarded_conditions<'s, T>(
     statement: &'s Stmt,
@@ -307,6 +282,7 @@ impl<'a> Lowering<'a> {
             compiler,
             hir,
             program: Program::default(),
+            site_edits: Vec::new(),
             values: Vec::new(),
             actions: Vec::new(),
             action_origins: Vec::new(),
@@ -321,7 +297,7 @@ impl<'a> Lowering<'a> {
             optimized_nodes: HashMap::new(),
             optimization_mark: None,
             optimization_override: None,
-            optimization_index: OptimizationIndex::build(hir),
+            optimization_index: optimization_state::OptimizationIndex::build(hir),
             #[cfg(test)]
             optimization_queries: std::cell::RefCell::new(Vec::new()),
             used_maps: used_bugged_maps(hir),
@@ -732,27 +708,6 @@ impl<'a> Lowering<'a> {
         }
     }
 
-    pub(super) fn workshop_span(
-        &self,
-        span: Option<HirSpan>,
-    ) -> Result<Option<workshop_rs::source::Span>, IntegrationError> {
-        let Some(span) = span else {
-            return Ok(None);
-        };
-        if !self.hir.files.iter().any(|file| file.id == span.file) {
-            return Err(IntegrationError::new(
-                "source-file",
-                format!("HIR span references unknown source file id {}", span.file),
-                Some(span),
-            ));
-        }
-        Ok(Some(workshop_rs::source::Span::new(
-            workshop_rs::source::FileId::from_index(span.file as usize),
-            workshop_rs::source::Position::new(span.start.line, span.start.col),
-            workshop_rs::source::Position::new(span.end.line, span.end.col),
-        )))
-    }
-
     fn useful_actions(&self, actions: &[ActionId]) -> Vec<ActionId> {
         actions
             .iter()
@@ -934,48 +889,6 @@ impl<'a> Lowering<'a> {
                     .collect(),
             },
         }
-    }
-
-    fn append_rule(
-        &mut self,
-        rule_value: workshop_rs::Rule,
-        actions: &[ActionId],
-        span: Option<HirSpan>,
-        condition_spans: impl IntoIterator<Item = Option<HirSpan>>,
-    ) -> Result<(), IntegrationError> {
-        let rule_index = self.program.rules.len();
-        self.program.rules.push(rule_value);
-        self.program
-            .set_rule_span(rule_index, self.workshop_span(span)?)
-            .map_err(|error| IntegrationError::new("provenance", error.to_string(), span))?;
-        for (index, span) in condition_spans.into_iter().enumerate() {
-            self.program
-                .set_condition_span(rule_index, index, self.workshop_span(span)?)
-                .map_err(|error| IntegrationError::new("provenance", error.to_string(), span))?;
-        }
-        for (index, (span, argument_spans)) in
-            self.action_provenance(actions).into_iter().enumerate()
-        {
-            self.program
-                .set_action_span(rule_index, index, self.workshop_span(span)?)
-                .map_err(|error| IntegrationError::new("provenance", error.to_string(), span))?;
-            for (argument, span) in argument_spans.into_iter().enumerate() {
-                let Some(span) = span else {
-                    continue;
-                };
-                self.program
-                    .set_action_argument_span(
-                        rule_index,
-                        index,
-                        argument,
-                        self.workshop_span(Some(span))?,
-                    )
-                    .map_err(|error| {
-                        IntegrationError::new("provenance", error.to_string(), Some(span))
-                    })?;
-            }
-        }
-        Ok(())
     }
 
     fn unsupported(&self, message: impl Into<String>, span: Option<HirSpan>) -> IntegrationError {

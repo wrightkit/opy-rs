@@ -1,4 +1,4 @@
-use super::types::{Declaration, Expr, Program, RuleEntry, Stmt, SwitchArm};
+use super::types::{Declaration, Expr, Program, RuleEntry, Span, Stmt, SwitchArm};
 
 pub(crate) fn contains_random(expression: &Expr) -> bool {
     struct RandomFinder(bool);
@@ -261,4 +261,289 @@ pub(crate) fn walk_stmt<V: Visitor + ?Sized>(visitor: &mut V, statement: &Stmt) 
         | Stmt::CallSubroutine { .. }
         | Stmt::Pass { .. } => {}
     }
+}
+
+/// Equality on definition-site spans: macro attribution (see
+/// [`Span::site`]) never changes the result, so a lowering decision is the
+/// same with and without attribution.
+pub(crate) fn same_definition(left: &Expr, right: &Expr) -> bool {
+    let all = |left: &[Expr], right: &[Expr]| {
+        left.len() == right.len()
+            && left
+                .iter()
+                .zip(right)
+                .all(|(left, right)| same_definition(left, right))
+    };
+    if !same_span(left.span(), right.span()) {
+        return false;
+    }
+    match (left, right) {
+        (
+            Expr::Number { value, text, .. },
+            Expr::Number {
+                value: other_value,
+                text: other_text,
+                ..
+            },
+        ) => value == other_value && text == other_text,
+        (Expr::String { value, .. }, Expr::String { value: other, .. }) => value == other,
+        (Expr::Bool { value, .. }, Expr::Bool { value: other, .. }) => value == other,
+        (Expr::Null { .. }, Expr::Null { .. })
+        | (Expr::HostPlayer { .. }, Expr::HostPlayer { .. })
+        | (Expr::EventPlayer { .. }, Expr::EventPlayer { .. }) => true,
+        (
+            Expr::Array { elements, .. },
+            Expr::Array {
+                elements: other, ..
+            },
+        ) => all(elements, other),
+        (Expr::Dict { entries, .. }, Expr::Dict { entries: other, .. }) => {
+            entries.len() == other.len()
+                && entries.iter().zip(other).all(|(entry, other)| {
+                    same_span(entry.span.as_ref(), other.span.as_ref())
+                        && same_definition(&entry.key, &other.key)
+                        && same_definition(&entry.value, &other.value)
+                })
+        }
+        (
+            Expr::Comprehension {
+                element,
+                variable,
+                variable_span,
+                index,
+                index_span,
+                iterable,
+                condition,
+                ..
+            },
+            Expr::Comprehension {
+                element: other_element,
+                variable: other_variable,
+                variable_span: other_variable_span,
+                index: other_index,
+                index_span: other_index_span,
+                iterable: other_iterable,
+                condition: other_condition,
+                ..
+            },
+        ) => {
+            variable == other_variable
+                && same_span(variable_span.as_ref(), other_variable_span.as_ref())
+                && same_span(index_span.as_ref(), other_index_span.as_ref())
+                && index == other_index
+                && same_definition(element, other_element)
+                && same_definition(iterable, other_iterable)
+                && match (condition, other_condition) {
+                    (Some(condition), Some(other)) => same_definition(condition, other),
+                    (condition, other) => condition.is_none() && other.is_none(),
+                }
+        }
+        (
+            Expr::Lambda {
+                params,
+                param_spans,
+                body,
+                ..
+            },
+            Expr::Lambda {
+                params: other_params,
+                param_spans: other_spans,
+                body: other_body,
+                ..
+            },
+        ) => {
+            params == other_params
+                && param_spans.len() == other_spans.len()
+                && param_spans
+                    .iter()
+                    .zip(other_spans)
+                    .all(|(span, other)| same_span(span.as_ref(), other.as_ref()))
+                && same_definition(body, other_body)
+        }
+        (
+            Expr::StringModifier {
+                modifier, value, ..
+            },
+            Expr::StringModifier {
+                modifier: other_modifier,
+                value: other_value,
+                ..
+            },
+        ) => modifier == other_modifier && value == other_value,
+        (Expr::Local { name, .. }, Expr::Local { name: other, .. })
+        | (Expr::GlobalVar { name, .. }, Expr::GlobalVar { name: other, .. })
+        | (Expr::Constant { name, .. }, Expr::Constant { name: other, .. })
+        | (Expr::MacroParam { name, .. }, Expr::MacroParam { name: other, .. }) => name == other,
+        (
+            Expr::Vector { x, y, z, .. },
+            Expr::Vector {
+                x: other_x,
+                y: other_y,
+                z: other_z,
+                ..
+            },
+        ) => {
+            same_definition(x, other_x)
+                && same_definition(y, other_y)
+                && same_definition(z, other_z)
+        }
+        (
+            Expr::Enum {
+                value_type,
+                value,
+                literal,
+                ..
+            },
+            Expr::Enum {
+                value_type: other_type,
+                value: other_value,
+                literal: other_literal,
+                ..
+            },
+        ) => value_type == other_type && value == other_value && literal == other_literal,
+        (
+            Expr::PlayerVar {
+                player,
+                name,
+                member_span,
+                ..
+            },
+            Expr::PlayerVar {
+                player: other_player,
+                name: other_name,
+                member_span: other_member_span,
+                ..
+            },
+        ) => {
+            name == other_name
+                && same_span(member_span.as_ref(), other_member_span.as_ref())
+                && same_definition(player, other_player)
+        }
+        (
+            Expr::Member {
+                receiver,
+                member,
+                member_span,
+                ..
+            },
+            Expr::Member {
+                receiver: other_receiver,
+                member: other_member,
+                member_span: other_member_span,
+                ..
+            },
+        ) => {
+            member == other_member
+                && same_span(member_span.as_ref(), other_member_span.as_ref())
+                && same_definition(receiver, other_receiver)
+        }
+        (
+            Expr::Call {
+                name,
+                args,
+                debug_source,
+                ..
+            },
+            Expr::Call {
+                name: other_name,
+                args: other_args,
+                debug_source: other_source,
+                ..
+            },
+        ) => name == other_name && debug_source == other_source && all(args, other_args),
+        (
+            Expr::ReceiverCall {
+                receiver,
+                name,
+                args,
+                ..
+            },
+            Expr::ReceiverCall {
+                receiver: other_receiver,
+                name: other_name,
+                args: other_args,
+                ..
+            },
+        ) => {
+            name == other_name && same_definition(receiver, other_receiver) && all(args, other_args)
+        }
+        (
+            Expr::MacroCall { name, args, .. },
+            Expr::MacroCall {
+                name: other,
+                args: other_args,
+                ..
+            },
+        )
+        | (
+            Expr::Type { name, args, .. },
+            Expr::Type {
+                name: other,
+                args: other_args,
+                ..
+            },
+        ) => name == other && all(args, other_args),
+        (
+            Expr::Binary {
+                op, left, right, ..
+            },
+            Expr::Binary {
+                op: other_op,
+                left: other_left,
+                right: other_right,
+                ..
+            },
+        ) => {
+            op == other_op
+                && same_definition(left, other_left)
+                && same_definition(right, other_right)
+        }
+        (
+            Expr::Conditional {
+                then_value,
+                condition,
+                else_value,
+                ..
+            },
+            Expr::Conditional {
+                then_value: other_then,
+                condition: other_condition,
+                else_value: other_else,
+                ..
+            },
+        ) => {
+            same_definition(then_value, other_then)
+                && same_definition(condition, other_condition)
+                && same_definition(else_value, other_else)
+        }
+        (
+            Expr::Unary { op, operand, .. },
+            Expr::Unary {
+                op: other_op,
+                operand: other_operand,
+                ..
+            },
+        ) => op == other_op && same_definition(operand, other_operand),
+        (
+            Expr::Index { array, index, .. },
+            Expr::Index {
+                array: other_array,
+                index: other_index,
+                ..
+            },
+        ) => same_definition(array, other_array) && same_definition(index, other_index),
+        (
+            Expr::Format { text, args, .. },
+            Expr::Format {
+                text: other,
+                args: other_args,
+                ..
+            },
+        ) => text == other && all(args, other_args),
+        _ => false,
+    }
+}
+
+fn same_span(left: Option<&Span>, right: Option<&Span>) -> bool {
+    Span::definition(left.copied()) == Span::definition(right.copied())
 }

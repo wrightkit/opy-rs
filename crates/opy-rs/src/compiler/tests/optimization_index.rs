@@ -50,6 +50,7 @@ fn optimization_index_matches_scan_on_synthetic_edge_cases() {
         file,
         start: position(line, col),
         end: position(line, col),
+        site: None,
     };
     for directive in &hir.preprocessing.directives {
         if let Some(directive_span) = directive.span {

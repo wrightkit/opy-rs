@@ -1,3 +1,4 @@
+use super::provenance::ProvenanceNode;
 use super::*;
 
 /// The pinned reference rejects an explicit declaration index outside the
@@ -317,15 +318,7 @@ impl<'a> Lowering<'a> {
             self.program
                 .global_variables
                 .push(workshop_rs::Variable::with_index(name, assigned));
-            self.program
-                .set_global_variable_spans(
-                    id,
-                    self.workshop_span(span)?,
-                    self.workshop_span(name_span)?,
-                )
-                .map_err(|error| {
-                    IntegrationError::new("provenance", error.to_string(), span.or(name_span))
-                })?;
+            self.set_provenance(ProvenanceNode::GlobalVariable(id), span, name_span)?;
         }
 
         planned_players.extend(
@@ -340,15 +333,7 @@ impl<'a> Lowering<'a> {
             self.program
                 .player_variables
                 .push(workshop_rs::Variable::with_index(name, assigned));
-            self.program
-                .set_player_variable_spans(
-                    id,
-                    self.workshop_span(span)?,
-                    self.workshop_span(name_span)?,
-                )
-                .map_err(|error| {
-                    IntegrationError::new("provenance", error.to_string(), span.or(name_span))
-                })?;
+            self.set_provenance(ProvenanceNode::PlayerVariable(id), span, name_span)?;
         }
 
         declared_subroutines.sort_by_key(|(_, index, ..)| *index);
@@ -358,15 +343,7 @@ impl<'a> Lowering<'a> {
             self.program
                 .subroutines
                 .push(workshop_rs::Subroutine::with_index(name, assigned));
-            self.program
-                .set_subroutine_spans(
-                    id,
-                    self.workshop_span(span)?,
-                    self.workshop_span(name_span)?,
-                )
-                .map_err(|error| {
-                    IntegrationError::new("provenance", error.to_string(), span.or(name_span))
-                })?;
+            self.set_provenance(ProvenanceNode::Subroutine(id), span, name_span)?;
         }
 
         let empty_string_initializer = empty_string_index

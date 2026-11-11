@@ -16,7 +16,21 @@ impl Compiler {
         hook: Option<crate::PostCompileHookRecord>,
         locale: &Locale,
     ) -> Result<CompilationArtifact, IntegrationError> {
-        let mut artifact = self.compile_hir_with_locale(hir, locale)?;
+        self.compile_hir_hooked(hir, hook, locale, false)
+            .map(|(artifact, _)| artifact)
+    }
+
+    /// [`Self::compile_hir_with_locale_and_hook`] with the attribution of
+    /// [`Self::compile_hir_attributed`].
+    pub(super) fn compile_hir_hooked(
+        &self,
+        hir: &hir::Program,
+        hook: Option<crate::PostCompileHookRecord>,
+        locale: &Locale,
+        attributed: bool,
+    ) -> Result<(CompilationArtifact, Option<Program>), IntegrationError> {
+        let (mut artifact, attributed_program) =
+            self.compile_hir_attributed(hir, locale, attributed)?;
         if let Some(hook) = hook {
             let runtime = crate::macro_js::MacroRuntime::new(crate::macro_js::Limits::default());
             let result = runtime
@@ -35,7 +49,7 @@ impl Compiler {
                 )?;
             }
         }
-        Ok(artifact)
+        Ok((artifact, attributed_program))
     }
 
     /// [`Self::compile_hir_with_locale_and_hook`], and on success also

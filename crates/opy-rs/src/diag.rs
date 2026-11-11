@@ -36,6 +36,29 @@ impl Position {
     }
 }
 
+impl From<Span> for crate::hir::Span {
+    fn from(span: Span) -> crate::hir::Span {
+        crate::hir::Span {
+            file: span.file,
+            start: crate::hir::Position {
+                line: span.start.line,
+                col: span.start.col,
+            },
+            end: crate::hir::Position {
+                line: span.end.line,
+                col: span.end.col,
+            },
+            site: None,
+        }
+    }
+}
+
+impl From<&Span> for crate::hir::Span {
+    fn from(span: &Span) -> crate::hir::Span {
+        (*span).into()
+    }
+}
+
 pub(crate) fn shift_position(position: Position, origin: Position) -> Position {
     Position::new(
         origin.line + position.line.saturating_sub(1),

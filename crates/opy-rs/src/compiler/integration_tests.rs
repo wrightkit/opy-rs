@@ -30,6 +30,8 @@ mod indexed_assignments;
 mod locale;
 #[path = "tests/macro_preprocessing.rs"]
 mod macro_preprocessing;
+#[path = "tests/mapped_attribution.rs"]
+mod mapped_attribution;
 #[path = "tests/member_angles.rs"]
 mod member_angles;
 #[path = "tests/numeric_settings.rs"]
