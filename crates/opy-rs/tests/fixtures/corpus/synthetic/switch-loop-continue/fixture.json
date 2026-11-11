@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/switch-loop-continue",
+  "category": "compilation",
+  "features": [
+    "switch",
+    "case",
+    "default",
+    "break",
+    "continue",
+    "loop"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": true
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "semantic-wir",
+      "semanticEquivalent": true
+    }
+  }
+}

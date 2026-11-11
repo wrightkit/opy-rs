@@ -83,10 +83,11 @@ fn pinned_switch_traces(dir: &Path) -> Vec<(i64, Vec<i64>)> {
         .collect()
 }
 
-const SWITCH_FIXTURES: [&str; 6] = [
+const SWITCH_FIXTURES: [&str; 7] = [
     "switch-break",
     "switch-break-unsupported",
     "switch-case-default",
+    "switch-loop-continue",
     "switch-multiple-break",
     "switch-order",
     "switch-structured-target",
