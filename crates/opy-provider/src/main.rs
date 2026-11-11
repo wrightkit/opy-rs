@@ -2,13 +2,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::{self, BufRead, BufWriter, Write};
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 use opy_rs::tooling::{CheckOutcome, Diagnostic as OpyDiagnostic, SourceLocation};
 use opy_rs::{CompileDiagnostic, Compiler};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-use workshop_rs::catalog::{Catalog, Locale};
+use workshop_rs::catalog::Locale;
 use workshop_rs::program::MappedText;
 
 mod allocator;
@@ -17,6 +18,8 @@ mod inputs;
 mod mapped_artifact;
 mod navigation;
 mod negotiation;
+mod reconstruct;
+mod trace_file;
 mod uri;
 mod vocab;
 use negotiation::{PROTOCOL_VERSIONS, version_at_least};
@@ -238,17 +241,6 @@ impl ProjectTargetKind {
     }
 }
 
-#[derive(Debug, Deserialize)]
-struct ReconstructParams {
-    artifact: ReconstructArtifact,
-}
-
-#[derive(Debug, Deserialize)]
-struct ReconstructArtifact {
-    format: String,
-    content: String,
-}
-
 #[derive(Debug)]
 struct LoadedProject {
     filesystem: opy_rs::FilesystemProject,
@@ -286,6 +278,7 @@ fn main() {
         compiler: None,
     };
     let mut line = String::new();
+    let trace_file = trace_file::path_from_env();
 
     loop {
         line.clear();
@@ -295,12 +288,21 @@ fn main() {
         if read == 0 {
             break;
         }
+        if trace_file.is_some() {
+            opy_rs::trace::start(Instant::now());
+        }
         let message = line.trim_end_matches(['\r', '\n']);
         if message.is_empty() {
             continue;
         }
         if let Some(response) = server.handle_message(message) {
-            let serialized = serde_json::to_string(&response).expect("LPP response serializes");
+            let serialized = {
+                let _span = opy_rs::trace::span("response.encode");
+                serde_json::to_string(&response).expect("LPP response serializes")
+            };
+            if let Some(path) = &trace_file {
+                trace_file::append(path);
+            }
             writeln!(writer, "{serialized}").expect("write LPP response");
             writer.flush().expect("flush LPP response");
         }
@@ -312,6 +314,7 @@ fn main() {
 
 impl Server {
     fn handle_message(&mut self, line: &str) -> Option<Value> {
+        let decode = opy_rs::trace::span("request.decode");
         let parsed: Value = match serde_json::from_str(line) {
             Ok(value) => value,
             Err(_) => return Some(standard_error(Value::Null, -32700, "Parse error")),
@@ -345,7 +348,8 @@ impl Server {
         let Some(params) = object.remove("params") else {
             return Some(standard_error(id, -32602, "Invalid params"));
         };
-
+        drop(decode);
+        let _span = trace_file::handler_span(&method);
         match method.as_str() {
             "lpp/initialize" => Some(self.initialize(id, params)),
             "lpp/shutdown" => Some(self.shutdown(id)),
@@ -442,7 +446,7 @@ impl Server {
         let result = match method {
             "lpp/check" => self.check(params),
             "lpp/compile" => self.compile(params),
-            "lpp/reconstruct" => reconstruct(params),
+            "lpp/reconstruct" => reconstruct::reconstruct(params),
             "lpp/symbols" => navigation::symbols(params),
             "lpp/definition" => navigation::definition(params),
             "lpp/references" => navigation::references(params),
@@ -567,6 +571,7 @@ impl Server {
 
     fn ensure_compiler(&mut self) -> Result<&Compiler, HandlerError> {
         if self.compiler.is_none() {
+            let _span = opy_rs::trace::span("compiler.init");
             self.compiler = Some(Compiler::new().map_err(|error| HandlerError::Lpp {
                 kind: "providerFailure",
                 details: json!({ "code": "compiler-init" }),
@@ -615,62 +620,6 @@ fn accepted_artifact_formats(
     Ok(Some(formats))
 }
 
-fn reconstruct(value: Value) -> Result<Value, HandlerError> {
-    let params: ReconstructParams =
-        serde_json::from_value(value).map_err(|_| HandlerError::invalid_params())?;
-    let text = match params.artifact.format.as_str() {
-        WORKSHOP_ARTIFACT_FORMAT => params.artifact.content,
-        MAPPED_ARTIFACT_FORMAT => {
-            MappedText::from_json(&params.artifact.content)
-                .map_err(|error| invalid_artifact(error.to_string()))?
-                .text
-        }
-        format => {
-            return Err(HandlerError::refusal(
-                "reconstruct.artifactFormatUnsupported",
-                json!({ "format": format }),
-                format!("artifact format is not supported for reconstruction: {format}"),
-            ));
-        }
-    };
-    let catalog = Catalog::builtin_ref().map_err(|error| HandlerError::Lpp {
-        kind: "providerFailure",
-        details: json!({ "code": "catalog-init" }),
-        message: format!("cannot load the Workshop catalog: {error}"),
-    })?;
-    let locale = workshop_rs::detect::resolve_locale(&text, catalog, None)
-        .map_err(|error| invalid_artifact(error.to_string()))?;
-    let program = workshop_rs::parser::parse(&text, catalog, &locale)
-        .map_err(|error| invalid_artifact(error.to_string()))?;
-    match opy_rs::reconstruct::reconstruct(&program) {
-        Ok(source) => Ok(json!({ "source": source })),
-        Err(error) => {
-            if error
-                .issues
-                .iter()
-                .all(|issue| matches!(issue.code, "manifest-error" | "catalog-error"))
-            {
-                return Err(HandlerError::Lpp {
-                    kind: "providerFailure",
-                    details: json!({
-                        "code": issue_code(&error).unwrap_or("environment")
-                    }),
-                    message: error.to_string(),
-                });
-            }
-            Err(HandlerError::refusal(
-                issue_code(&error).unwrap_or("reconstruct.unsupported"),
-                json!({}),
-                format!("reconstruct refused: {error}"),
-            ))
-        }
-    }
-}
-
-fn issue_code(error: &opy_rs::reconstruct::ReconstructError) -> Option<&'static str> {
-    error.issues.first().map(|issue| issue.code)
-}
-
 fn invalid_artifact(reason: String) -> HandlerError {
     HandlerError::Lpp {
         kind: "invalidArtifact",
@@ -696,6 +645,7 @@ fn artifact_json(
     mapped: Option<&MappedText>,
     uri_for: &dyn Fn(&str) -> String,
 ) -> Result<Value, HandlerError> {
+    let _span = opy_rs::trace::span("artifact.encode");
     match (format, mapped) {
         (Some(ArtifactFormat::Text), _) => Ok(json!({
             "format": WORKSHOP_ARTIFACT_FORMAT,
@@ -718,8 +668,9 @@ fn artifact_json(
 }
 
 fn source_identity(project: &LoadedProject) -> Result<String, HandlerError> {
+    let _span = opy_rs::trace::span("source.identity");
     let source = if let Some(path) = effective_primary_source_path(project)? {
-        fs::read_to_string(&path).map_err(|error| HandlerError::Lpp {
+        opy_rs::trace::read_to_string(&path).map_err(|error| HandlerError::Lpp {
             kind: "providerFailure",
             details: json!({ "code": "source-identity-read" }),
             message: format!("cannot read effective primary source: {error}"),
@@ -765,6 +716,7 @@ fn load_project(
     params: ProjectParams,
     protocol_version: &str,
 ) -> Result<LoadedRequest, HandlerError> {
+    let _span = opy_rs::trace::span("project.load");
     let ProjectParams {
         documents,
         project_root: _project_root,

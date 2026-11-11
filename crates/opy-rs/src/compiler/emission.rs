@@ -16,6 +16,7 @@ impl Compiler {
                 workshop_error_span(&error).and_then(|span| hir_span_from_workshop(span, hir)),
             )
         };
+        let canonical_span = crate::trace::span("canonical");
         let canonical = program
             .canonical()
             .map_err(|error| to_error("workshop-validation", error))?;
@@ -25,6 +26,8 @@ impl Compiler {
         canonical
             .validate_canonical_ids(self.catalog)
             .map_err(|error| to_error("catalog-validation", error))?;
+        drop(canonical_span);
+        let _span = crate::trace::span("emit");
         canonical
             .emit_with_options(
                 self.catalog,

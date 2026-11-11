@@ -39,7 +39,7 @@ impl Preprocessor {
                         span,
                     )
                 })?;
-                std::fs::read_to_string(&canonical).map_err(|error| {
+                crate::trace::read_to_string(&canonical).map_err(|error| {
                     OpyError::at(
                         "script-not-found",
                         format!("cannot read script '{path}': {error}"),

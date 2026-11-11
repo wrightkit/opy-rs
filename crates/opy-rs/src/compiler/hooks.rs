@@ -32,6 +32,7 @@ impl Compiler {
         let (mut artifact, attributed_program) =
             self.compile_hir_attributed(hir, locale, attributed)?;
         if let Some(hook) = hook {
+            let _span = crate::trace::span("hook");
             let runtime = crate::macro_js::MacroRuntime::new(crate::macro_js::Limits::default());
             let result = runtime
                 .run_hook(&hook.source, &artifact.emitted, &hook.script)

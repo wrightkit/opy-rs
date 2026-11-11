@@ -13,6 +13,7 @@ pub(crate) fn compile_inputs(
     paths: &[String],
     accessed: impl IntoIterator<Item = PathBuf>,
 ) -> Vec<String> {
+    let _span = opy_rs::trace::span("inputs");
     let mut declared = BTreeSet::new();
     let mut links = LinkCache::default();
     for path in paths

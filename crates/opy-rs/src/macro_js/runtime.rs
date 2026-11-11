@@ -86,6 +86,7 @@ impl MacroRuntime {
         script_name: &str,
         time_budget: std::time::Duration,
     ) -> Result<MacroResult, MacroError> {
+        let _span = crate::trace::accumulate("macro.runtime", "invocations");
         // Stack line numbers count the prologue too; the reference subtracts
         // the prepended block's line count, so we adjust the same way.
         let line_adjust = prologue.matches('\n').count();

@@ -29,7 +29,7 @@ impl FilesystemProject {
             canonical_target.clone()
         };
         accessed.insert(selected_path.clone());
-        let source = fs::read_to_string(&selected_path).map_err(|error| {
+        let source = crate::trace::read_to_string(&selected_path).map_err(|error| {
             FilesystemProjectError::entry_unreadable(selected_path.clone(), error)
         })?;
         let root = selected_path

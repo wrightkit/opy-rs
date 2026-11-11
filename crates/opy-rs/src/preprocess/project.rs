@@ -165,7 +165,7 @@ impl Preprocessor {
                         span,
                     )
                 })?;
-                std::fs::read_to_string(&canonical).map_err(|error| {
+                crate::trace::read_to_string(&canonical).map_err(|error| {
                     OpyError::at(
                         "include-not-found",
                         format!("cannot read included file '{requested}': {error}"),
