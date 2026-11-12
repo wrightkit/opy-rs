@@ -19,12 +19,7 @@ or LPP, while `opy-rs` must remain independently usable as a library and CLI.
 - Workshop → OPY reconstruction when implemented;
 - OPY compatibility tests and support claims.
 
-`workshop-rs` owns:
-
-- canonical raw Workshop semantics and catalog identities;
-- Workshop WIR, validation, settings/localization data, parser, and emitter;
-- Workshop-observable contracts shared by all source-language implementations.
-
+`workshop-rs` owns canonical Workshop semantics, catalog, WIR, and emission.
 The durable dependency direction is:
 
 ```text
@@ -40,12 +35,9 @@ Workshop emission. Compilation may depend on `workshop-rs`; `check`, semantic
 inspection, source queries, and other Workshop-independent operations should
 not be forced through the compiler pipeline without a concrete requirement.
 
-Do not invent WrightKit-only OPY syntax. Compilation converges structurally on
-the pinned upstream OverPy output, compared as `workshop-rs`-parsed canonical
-programs; formatting is not a criterion. Structural differences, including
-behaviorally equivalent or cheaper rewrites, are defects unless recorded as an
-approved exception (see
-[`language-core.md`](docs/architecture/language-core.md#compatibility-target)).
+The workspace invariants on upstream structural convergence and WrightKit-only
+syntax apply here; the OverPy compatibility target is defined in
+[`language-core.md`](docs/architecture/language-core.md#compatibility-target).
 
 ## Architecture routing
 
@@ -61,10 +53,6 @@ The current contracts are:
   semantic ownership, typed implementation, and feature locality;
 - [`workshop-boundary.md`](docs/architecture/workshop-boundary.md) for canonical
   Workshop dependency/lowering/reconstruction boundaries.
-
-If the Issue, current contract, and source/tests disagree materially, stop and
-surface the mismatch rather than selecting a design by implementation
-convenience.
 
 ## Upstream reference and source attribution
 
