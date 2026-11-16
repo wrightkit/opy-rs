@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.4](https://github.com/wrightkit/opy-rs/compare/v0.4.3...v0.4.4) - 2026-11-16
+
+### Fixed
+
+- keep not (a == b) unfolded when optimizations are disabled like upstream ([#735](https://github.com/wrightkit/opy-rs/pull/735))
+- drop a constant @Condition in optimized rules like upstream ([#734](https://github.com/wrightkit/opy-rs/pull/734))
+- drop a constant if in optimized rules like upstream ([#730](https://github.com/wrightkit/opy-rs/pull/730))
+- emit Set for self-assignment when optimizations are disabled like upstream ([#729](https://github.com/wrightkit/opy-rs/pull/729))
+
 ## [0.4.3](https://github.com/wrightkit/opy-rs/compare/v0.4.2...v0.4.3) - 2026-11-16
 
 ### Fixed
