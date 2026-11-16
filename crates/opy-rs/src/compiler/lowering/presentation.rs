@@ -83,7 +83,7 @@ impl<'a> Lowering<'a> {
         };
         let (literal, format_args) = match target {
             Expr::String { value, .. } => (value.clone(), Vec::new()),
-            Expr::Format { .. } => self.fold_format_constants(target),
+            Expr::Format { .. } => self.fold_translated_format(target),
             _ => {
                 let target = self.lower_value(target)?;
                 if name == "___" {

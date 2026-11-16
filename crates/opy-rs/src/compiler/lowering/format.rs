@@ -5,10 +5,28 @@ impl<'a> Lowering<'a> {
         &self,
         format: &'b hir::Expr,
     ) -> (String, Vec<&'b hir::Expr>) {
-        let hir::Expr::Format { text, args, span } = format else {
+        let optimized = self.optimization_state_at(format.span()).enabled;
+        self.fold_constants(format, optimized)
+    }
+
+    /// Translated formats always fold: their replacement fallback passes the
+    /// arguments to `stringReplace`, which rejects an unfolded numeric
+    /// expression.
+    pub(super) fn fold_translated_format<'b>(
+        &self,
+        format: &'b hir::Expr,
+    ) -> (String, Vec<&'b hir::Expr>) {
+        self.fold_constants(format, true)
+    }
+
+    fn fold_constants<'b>(
+        &self,
+        format: &'b hir::Expr,
+        optimized: bool,
+    ) -> (String, Vec<&'b hir::Expr>) {
+        let hir::Expr::Format { text, args, .. } = format else {
             unreachable!("format folding is only reached for format expressions")
         };
-        let optimized = self.optimization_state_at(span.as_ref()).enabled;
         let bindings = HashMap::new();
         let mut values = Vec::with_capacity(args.len());
         let mut dynamic_args = Vec::new();
