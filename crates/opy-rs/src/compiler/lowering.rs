@@ -1793,18 +1793,6 @@ fn canonical_debug_text(text: &str) -> String {
     text.chars().map(case_sensitive_character).collect()
 }
 
-fn negated_comparison(op: &str) -> Option<&'static str> {
-    Some(match op {
-        "==" => "!=",
-        "!=" => "==",
-        "<" => ">=",
-        ">" => "<=",
-        "<=" => ">",
-        ">=" => "<",
-        _ => return None,
-    })
-}
-
 fn modify_operator(op: &str) -> Option<(ModifyOp, &'static str)> {
     Some(match op {
         "+" => (ModifyOp::Add, "add"),
