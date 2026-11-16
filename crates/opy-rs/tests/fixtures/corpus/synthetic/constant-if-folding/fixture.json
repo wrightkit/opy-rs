@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/constant-if-folding",
+  "category": "synthetic",
+  "features": [
+    "structural convergence",
+    "syntax/if",
+    "syntax/while"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": true
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "normalized-output"
+    }
+  }
+}

@@ -3243,7 +3243,7 @@ mod tests {
                     ],
                 ))
                 .action(Action::If {
-                    condition: Value::Bool(true),
+                    condition: Value::global_variable("g"),
                 })
                 .action(Action::SetGlobalVariable {
                     variable: "g".into(),
@@ -3613,7 +3613,7 @@ mod tests {
             Rule::new("main", Event::Global)
                 .action(Action::call("skip", [Value::number(2.0)]))
                 .action(Action::If {
-                    condition: Value::Bool(true),
+                    condition: Value::global_variable("g"),
                 })
                 .action(Action::SetGlobalVariable {
                     variable: "g".into(),
@@ -3622,7 +3622,7 @@ mod tests {
                 .action(Action::End),
         );
 
-        let source = reconstruct(&program).expect("skip should reconstruct");
+        let source = reconstruct(&program).unwrap();
         assert!(source.contains("goto loc+2\n"), "{source}");
         assert!(!source.contains("__op_label"), "{source}");
         assert_behaviorally_equivalent(&program, &source);

@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "variables {\n    global:\n        0: g\n        1: h\n        2: A\n}\n\nrule (\"true if\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(g, 1);\n    }\n}\n\nrule (\"true if else\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(g, 1);\n    }\n}\n\nrule (\"false if else\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(g, 2);\n    }\n}\n\nrule (\"false elif\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        If(Compare(Global.A, ==, 1));\n            Set Global Variable(g, 1);\n        Else;\n            Set Global Variable(g, 3);\n    }\n}\n\nrule (\"true elif\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        If(Compare(Global.A, ==, 1));\n            Set Global Variable(g, 1);\n        Else;\n            Set Global Variable(g, 2);\n    }\n}\n\nrule (\"false if true elif\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(g, 2);\n    }\n}\n\nrule (\"false if live elif\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        If(Compare(Global.A, ==, 2));\n            Set Global Variable(g, 2);\n        Else;\n            Set Global Variable(g, 3);\n    }\n}\n\nrule (\"nested\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        If(Compare(Global.A, ==, 1));\n            Set Global Variable(g, 1);\n            Set Global Variable(h, 3);\n    }\n}\n\nrule (\"in while\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        While(Compare(Global.A, ==, 1));\n            Set Global Variable(g, 1);\n            Wait(1, Ignore Condition);\n        End;\n    }\n}\n\nrule (\"live condition\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        If(Compare(Global.A, ==, 1));\n            Set Global Variable(g, 1);\n    }\n}\n",
+    "workshopExact": "variables {\n    global:\n        0: g\n        1: h\n        2: A\n}\n\nrule (\"true if\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(g, 1);\n    }\n}\n\nrule (\"true if else\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(g, 1);\n    }\n}\n\nrule (\"false if else\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(g, 2);\n    }\n}\n\nrule (\"false elif\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        If(Compare(Global.A, ==, 1));\n            Set Global Variable(g, 1);\n        Else;\n            Set Global Variable(g, 3);\n    }\n}\n\nrule (\"true elif\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        If(Compare(Global.A, ==, 1));\n            Set Global Variable(g, 1);\n        Else;\n            Set Global Variable(g, 2);\n    }\n}\n\nrule (\"false if true elif\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        Set Global Variable(g, 2);\n    }\n}\n\nrule (\"false if live elif\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        If(Compare(Global.A, ==, 2));\n            Set Global Variable(g, 2);\n        Else;\n            Set Global Variable(g, 3);\n    }\n}\n\nrule (\"nested\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        If(Compare(Global.A, ==, 1));\n            Set Global Variable(g, 1);\n            Set Global Variable(h, 3);\n    }\n}\n\nrule (\"in while\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        While(Compare(Global.A, ==, 1));\n            Set Global Variable(g, 1);\n            Wait(1, Ignore Condition);\n        End;\n    }\n}\n\nrule (\"live condition\") {\n    event {\n        Ongoing - Global;\n    }\n    actions {\n        If(Compare(Global.A, ==, 1));\n            Set Global Variable(g, 1);\n    }\n}\n\n",
+    "workshopSha256": "0b2d100e44f0690c2942b8efe66bf25b28e4ec6ded6ed2655cc34ac5371344c6"
+  },
+  "fixture": "synthetic/constant-if-folding",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "ef3b2187fbceb92870c98d776770f29a7d1ce4652e3e21a24aaea15ab079b83c"
+      }
+    ],
+    "sha256": "2b8277ca839d5522faf04b00da3822883b677c97265fc6865e63dd1046201919",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "5a7d0e294b8cad73b9701987bb584d0551d7fa4d",
+    "gitHead": "ec763c1d245aa5485ef61af5b2bda4975bce4877",
+    "integrity": "sha512-C5F6btT5yn19BvHuE0bjMuSd/2esebBabmpL4SYLQFuJ4IdouVOKEoMLLuJFAyNc0Phwrolblj5GDkDGYR0ofg==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.17.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.17"
+  },
+  "schemaVersion": 1
+}
