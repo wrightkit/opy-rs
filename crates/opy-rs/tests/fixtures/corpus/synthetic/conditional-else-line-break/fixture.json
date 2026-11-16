@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/conditional-else-line-break",
+  "category": "synthetic",
+  "features": [
+    "syntax/inline-if"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": true
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "normalized-output"
+    }
+  }
+}
