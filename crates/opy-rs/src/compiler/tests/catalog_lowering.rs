@@ -175,12 +175,7 @@ fn len_player_set_counts_match_the_pinned_oracle() {
 
 #[test]
 fn catalog_backed_contextual_chase_calls_match_the_pinned_oracle() {
-    let artifact = compile_fixture("chase-condition-agentlab");
-    assert!(
-        artifact
-            .emitted
-            .contains("Chase Global Variable Over Time(Global.Round_Attack_Time, 0, 30, None);")
-    );
+    assert_matches_oracle("chase-condition-agentlab");
 }
 
 #[test]
