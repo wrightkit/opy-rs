@@ -8,6 +8,18 @@ impl Parser<'_> {
             Ok(name) => name,
             Err(()) => return false,
         };
+        if global
+            && declarations.iter().any(
+                |decl| matches!(decl, Decl::Constant { name: existing, .. } if existing == &name),
+            )
+        {
+            self.errors.push(OpyError::at(
+                "macro-global-conflict",
+                format!("Variable name '{name}' is already declared as a macro"),
+                start.span,
+            ));
+            return false;
+        }
         let mut index = None;
         let mut initializer = None;
         if self.peek_kind() == TokenKind::Number {
@@ -246,6 +258,19 @@ impl Parser<'_> {
             return false;
         }
         if self.peek_kind() == TokenKind::Assign {
+            if !qualified
+                && (crate::hir::types::default_var_index(&name).is_some()
+                    || declarations.iter().any(
+                        |decl| matches!(decl, Decl::GlobalVariable { name: existing, .. } if existing == &name),
+                    ))
+            {
+                self.errors.push(OpyError::at(
+                    "macro-global-conflict",
+                    format!("Macro '{name}' is already a global variable"),
+                    name_span,
+                ));
+                return false;
+            }
             self.bump();
             let value = match self.parse_expr() {
                 Ok(value) => value,

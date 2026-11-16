@@ -1,0 +1,39 @@
+{
+  "compile": {
+    "diagnostics": [
+      {
+        "severity": "error",
+        "text": "Error: Variable name 'customName' is already declared as a macro\n    | line 3, col 1, at source.opy"
+      }
+    ],
+    "exitCode": 1,
+    "status": "failure",
+    "stdout": "",
+    "workshop": "",
+    "workshopExact": "",
+    "workshopSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "fixture": "synthetic/global-after-macro-invalid",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "f9eae3336fceb44e3f40a44c3b5fd1ead2cbc2ebb768e2d907a51bacd02dbd2f"
+      }
+    ],
+    "sha256": "e49d0dab127d98492abe7226456d84177522262b0bacc6373e3b2f887eba8367",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "5a7d0e294b8cad73b9701987bb584d0551d7fa4d",
+    "gitHead": "ec763c1d245aa5485ef61af5b2bda4975bce4877",
+    "integrity": "sha512-C5F6btT5yn19BvHuE0bjMuSd/2esebBabmpL4SYLQFuJ4IdouVOKEoMLLuJFAyNc0Phwrolblj5GDkDGYR0ofg==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.17.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.17"
+  },
+  "schemaVersion": 1
+}
