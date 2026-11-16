@@ -129,6 +129,7 @@ impl<'a> Lowering<'a> {
         span: Option<HirSpan>,
     ) -> Result<ActionId, IntegrationError> {
         let (root, indices) = hir::visit::indexed_expr_parts(target);
+        let optimized = self.optimization_state_at(span.as_ref()).enabled;
         if matches!(root, Expr::GlobalVar { .. } | Expr::PlayerVar { .. }) {
             if indices.len() > 3 {
                 return Err(self.unsupported("Cannot assign to 4d array", target.span().copied()));
@@ -143,9 +144,10 @@ impl<'a> Lowering<'a> {
                 span: target_span,
             } => {
                 let variable = self.global_variable_id(name, *target_span)?;
-                if let Expr::Binary {
-                    op, left, right, ..
-                } = value
+                if optimized
+                    && let Expr::Binary {
+                        op, left, right, ..
+                    } = value
                     && matches!(left.as_ref(), Expr::GlobalVar { name: left_name, .. } if left_name == name)
                     && let Some((modify_op, _)) = modify_operator(op)
                 {
@@ -170,9 +172,10 @@ impl<'a> Lowering<'a> {
             } => {
                 let variable = self.player_variable_id(name, *target_span)?;
                 let player_val = self.lower_value(player)?;
-                if let Expr::Binary {
-                    op, left, right, ..
-                } = value
+                if optimized
+                    && let Expr::Binary {
+                        op, left, right, ..
+                    } = value
                     && matches!(left.as_ref(), Expr::PlayerVar { player: left_player, name: left_name, .. } if left_name == name && same_definition(left_player, player))
                     && let Some((modify_op, _)) = modify_operator(op)
                 {
@@ -210,6 +213,7 @@ impl<'a> Lowering<'a> {
                         var_node,
                         index_val,
                         value,
+                        optimized,
                         ("setGlobalVariableAtIndex", "modifyGlobalVariableAtIndex"),
                     )
                 }
@@ -231,6 +235,7 @@ impl<'a> Lowering<'a> {
                         var_node,
                         index_val,
                         value,
+                        optimized,
                         ("setPlayerVariableAtIndex", "modifyPlayerVariableAtIndex"),
                     )
                 }
@@ -252,15 +257,17 @@ impl<'a> Lowering<'a> {
         variable: ValueId,
         index_value: ValueId,
         value: &Expr,
+        optimized: bool,
         actions: (&str, &str),
     ) -> Result<ActionId, IntegrationError> {
         let Expr::Index { array, index, .. } = target else {
             unreachable!("indexed assignment target was matched before lowering")
         };
         let (set_action, modify_action) = actions;
-        if let Expr::Binary {
-            op, left, right, ..
-        } = value
+        if optimized
+            && let Expr::Binary {
+                op, left, right, ..
+            } = value
             && let Expr::Index {
                 array: left_array,
                 index: left_index,
