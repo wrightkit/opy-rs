@@ -387,37 +387,10 @@ impl<'a> Lowering<'a> {
             }
             Expr::Unary { op, operand, .. } => match op.as_str() {
                 "not" => {
-                    // The pinned OverPy 9.7.10 oracle lowers `not (a == b)`
-                    // to the negated comparison (`a != b`), flipping every
-                    // ordering comparison; `in` membership stays wrapped in
-                    // `not`. Mirror that observable lowering.
-                    if let Expr::Binary {
-                        op: comparison,
-                        left,
-                        right,
-                        ..
-                    } = operand.as_ref()
-                    {
-                        if let Some(negated) = negated_comparison(comparison) {
-                            let left = self.lower_value(left)?;
-                            let right = self.lower_value(right)?;
-                            Value::Call {
-                                name: negated.to_string(),
-                                args: vec![left, right],
-                            }
-                        } else {
-                            let operand = self.lower_value(operand)?;
-                            Value::Call {
-                                name: "not".to_string(),
-                                args: vec![operand],
-                            }
-                        }
-                    } else {
-                        let operand = self.lower_value(operand)?;
-                        Value::Call {
-                            name: "not".to_string(),
-                            args: vec![operand],
-                        }
+                    let operand = self.lower_value(operand)?;
+                    Value::Call {
+                        name: "not".to_string(),
+                        args: vec![operand],
                     }
                 }
                 "-" => {
