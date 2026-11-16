@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/constant-condition-folding",
+  "category": "synthetic",
+  "features": [
+    "structural convergence",
+    "syntax/rule"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": true
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "normalized-output"
+    }
+  }
+}
