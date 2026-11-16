@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/macro-default-global-invalid",
+  "category": "diagnostics",
+  "features": [
+    "macros",
+    "global variables",
+    "negative diagnostic"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "failure",
+      "relationship": "match",
+      "ruleNames": false,
+      "diagnosticCode": "macro-global-conflict"
+    },
+    "compiler": {
+      "nativeStatus": "failure",
+      "relationship": "match",
+      "comparison": "diagnostic-code",
+      "diagnosticCode": "macro-global-conflict",
+      "failureClass": "frontend"
+    }
+  }
+}

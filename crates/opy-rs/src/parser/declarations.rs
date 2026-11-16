@@ -42,6 +42,18 @@ impl Parser<'_> {
             );
             return false;
         }
+        if global
+            && declarations.iter().any(
+                |decl| matches!(decl, Decl::Constant { name: existing, .. } if existing == &name),
+            )
+        {
+            self.errors.push(OpyError::at(
+                "macro-global-conflict",
+                format!("Variable name '{name}' is already declared as a macro"),
+                start.span,
+            ));
+            return false;
+        }
         let end = self
             .tokens
             .get(self.pos.saturating_sub(1))
@@ -252,6 +264,19 @@ impl Parser<'_> {
                 Err(()) => return false,
             };
             let span = Span::new(start.span.file, start.span.start, value.span().end);
+            if !qualified
+                && (crate::hir::types::default_var_index(&name).is_some()
+                    || declarations.iter().any(
+                        |decl| matches!(decl, Decl::GlobalVariable { name: existing, .. } if existing == &name),
+                    ))
+            {
+                self.errors.push(OpyError::at(
+                    "macro-global-conflict",
+                    format!("Macro '{name}' is already a global variable"),
+                    name_span,
+                ));
+                return false;
+            }
             if qualified {
                 declarations.push(Decl::Macro {
                     name,

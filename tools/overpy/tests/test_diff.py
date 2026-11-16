@@ -187,6 +187,23 @@ class DiffTests(unittest.TestCase):
         self.assertTrue(frontiers)
         self.assertTrue(all(frontiers))
 
+    def test_macro_global_conflict_frontier_ignores_other_macro_errors(self):
+        def frontier(text):
+            result = {"compile": {"status": "failure", "diagnostics": [{"text": text}]}}
+            return diff.reference_failure_frontier(result)
+
+        for text in (
+            "Error: Macro 'K' is already a global variable",
+            "Error: Variable name 'K' is already declared as a macro",
+        ):
+            self.assertEqual(frontier(text)["construct"], "macro-global-conflict")
+        for text in (
+            "Error: Macro 'thing' is already defined",
+            "Error: Macro 'abs' is already a built-in function",
+            "Error: Macro '.shared' is already a player variable",
+        ):
+            self.assertIsNone(frontier(text))
+
     def test_compiler_failure_frontier_is_compared_independently(self):
         fixture = "synthetic/diagnostics"
         result = copy.deepcopy(

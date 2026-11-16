@@ -16,6 +16,11 @@ from pathlib import Path
 from typing import Any
 
 import input_identity
+from failure_frontier import (
+    NATIVE_FRONTIER_CONSTRUCTS,
+    NATIVE_FRONTIER_STAGES,
+    REFERENCE_FRONTIER_RULES,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -32,74 +37,6 @@ EXPECTED_COMPILER_COMPARISONS = {
 }
 SOURCE_VISIBLE_CONTRACTS = {"debug-element-count"}
 NUMBER_TOKEN = re.compile(r"\d[\d.]*")
-
-REFERENCE_FRONTIER_RULES = (
-    ("Invalid content before string", "lex", "lex-error"),
-    ("ENOENT:", "preprocess", "script-not-found"),
-    ("Invalid language", "preprocess", "translations-invalid"),
-    ("Do/While loops can only be at the beginning", "semantic", "do-while-placement"),
-    ("Rule name was already declared", "semantic", "duplicate-rule-name"),
-    ("Cannot assign to 4d array", "semantic", "four-dimensional-assignment"),
-    ("Cannot auto-increment enum member", "semantic", "enum-increment"),
-    ("Cannot delete index of 4d array", "semantic", "four-dimensional-delete"),
-    (
-        "Cannot delete from 2d array with a random index",
-        "lowering",
-        "unsupported-integration-surface",
-    ),
-    ("Expected variable for 1st argument", "semantic", "invalid-range-binder"),
-    ("Missing argument", "semantic", "missing-argument"),
-    ("Cannot use '", "semantic", "rule-event-gate"),
-    ("Unknown member", "semantic", "unknown-member"),
-    ("Unknown hero", "semantic", "unknown-enum-member"),
-    ("Unknown map", "semantic", "unknown-enum-member"),
-    ("Unknown team", "semantic", "unknown-enum-member"),
-    ("Unknown gamemode", "semantic", "unknown-enum-member"),
-    ("Unknown clip", "semantic", "unknown-enum-member"),
-    ("Unknown function name", "semantic", "unknown-identifier"),
-    ("Expected a ':'", "parse", "parse-error"),
-    ("Content is empty", "parse", "parse-error"),
-    ("Expected an action", "parse", "parse-error"),
-    ("Malformed globalvar declaration", "parse", "parse-error"),
-    ("Cannot modify or assign to operator '='", "parse", "parse-error"),
-    ("Expected '(' after 'lambda'", "parse", "parse-error"),
-    ("Found 'if', but no 'else'", "parse", "parse-error"),
-    (
-        "Custom game settings have already been declared",
-        "preprocess",
-        "settings-placement",
-    ),
-    (
-        "No match found for keyword",
-        "lowering",
-        "workshop-emission",
-    ),
-    ("must be an integer", "lowering", "workshop-emission"),
-    ("must be from 0 to 127", "lowering", "index-out-of-range"),
-    ("in custom game settings, expected", "semantic", "settings-expression"),
-)
-NATIVE_FRONTIER_STAGES = {
-    "lex-error": "lex",
-    "parse-error": "parse",
-    "lambda-context": "parse",
-    "settings-placement": "preprocess",
-    "settings-invalid": "preprocess",
-    "translations-invalid": "preprocess",
-    "script-not-found": "preprocess",
-    "do-while-placement": "semantic",
-    "invalid-range-binder": "semantic",
-    "four-dimensional-assignment": "semantic",
-    "four-dimensional-delete": "semantic",
-    "random-indexed-delete": "lowering",
-    "duplicate-rule-name": "semantic",
-    "unknown-member": "semantic",
-    "workshop-emission": "lowering",
-    "enum-increment": "semantic",
-}
-NATIVE_FRONTIER_CONSTRUCTS = {
-    "lambda-context": "parse-error",
-    "random-indexed-delete": "unsupported-integration-surface",
-}
 
 
 class DiffError(RuntimeError):

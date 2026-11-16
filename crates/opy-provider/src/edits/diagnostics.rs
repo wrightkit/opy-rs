@@ -59,6 +59,7 @@ pub(super) const CODE_CLASSES: &[(DiagnosticClass, &[&str])] = &[
             "duplicate-rule-name",
             "enum-type-without-member",
             "invalid-arity",
+            "macro-global-conflict",
             "vect-arity",
             "unresolved-reference",
             "unknown-keyword",
