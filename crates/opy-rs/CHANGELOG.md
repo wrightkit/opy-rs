@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.3](https://github.com/wrightkit/opy-rs/compare/v0.4.2...v0.4.3) - 2026-11-16
+
+### Fixed
+
+- continue a conditional expression after a line break following else inside brackets ([#727](https://github.com/wrightkit/opy-rs/pull/727))
+
+### Other
+
+- *(deps)* update workshop-rs to 1.28.7 ([#726](https://github.com/wrightkit/opy-rs/pull/726))
+
 ## [0.4.2](https://github.com/wrightkit/opy-rs/compare/v0.4.1...v0.4.2) - 2026-11-11
 
 ### Added
