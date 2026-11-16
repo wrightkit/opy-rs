@@ -2,6 +2,7 @@ use super::*;
 use crate::enums;
 
 mod constant_branches;
+mod constant_conditions;
 mod switch;
 mod tail_negation;
 
@@ -53,34 +54,19 @@ impl<'a> Lowering<'a> {
         if elide_noop_switch && !rule.disabled {
             return Ok(());
         }
+        let Some((conditions, condition_spans)) =
+            self.optimized_rule_conditions(&conditions, &condition_exprs, rule.delimiter)
+        else {
+            return Ok(());
+        };
         let value = rule_from_parts(
             rule.name.clone(),
             rule.disabled,
             event,
-            conditions
-                .iter()
-                .zip(&condition_exprs)
-                .map(|(value, expr)| {
-                    let mut condition = self.materialize_value(*value);
-                    split_all(&mut condition);
-                    let optimization = self.optimization_state_at(expr.span());
-                    if optimization.enabled && optimization.for_size {
-                        SizeOptimizer::new(self).condition(&mut condition);
-                    }
-                    let mut condition = OperatorOptimizer::new(self.compiler, optimization.strict)
-                        .wrap_condition(condition);
-                    trim_numbers(&mut condition);
-                    workshop_rs::Condition::new(condition)
-                })
-                .collect(),
+            conditions,
             self.public_actions(&actions),
         );
-        self.append_rule(
-            value,
-            &actions,
-            rule.span,
-            condition_exprs.iter().map(|expr| expr.span().copied()),
-        )?;
+        self.append_rule(value, &actions, rule.span, condition_spans)?;
         Ok(())
     }
 
