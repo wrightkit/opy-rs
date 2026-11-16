@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use crate::hir::types::{
     Annotation as HirAnnotation, AnnotationArg as HirAnnotationArg, Declaration, Define,
     DictEntry as HirDictEntry, Event, Expr as HirExpr, Generator, IfBranch, PROTOCOL_VERSION,
-    PreprocessingState, Program as HirProgram, Protocol, Rule, RuleEntry, Settings as HirSettings,
+    PreprocessingState, Program as HirProgram, Protocol, Rule, RuleEntry,
     SettingsNode as HirSettingsNode, SourceFile, Span as HirSpan, Stmt as HirStmt,
     SwitchArm as HirSwitchArm, default_var_index,
 };
@@ -244,7 +244,10 @@ fn lower_program(
         defines,
         declarations,
         rules,
-        settings: program.settings.as_ref().map(lower_settings),
+        settings: program
+            .settings
+            .as_ref()
+            .map(crate::settings::map_variants::lower_settings),
         preprocessing: preprocessing.clone(),
     })
 }
@@ -741,24 +744,13 @@ fn lower_annotations(annotations: &[cst::Annotation]) -> Vec<HirAnnotation> {
         .collect()
 }
 
-fn lower_settings(settings: &cst::Settings) -> HirSettings {
-    HirSettings {
-        span: Some(settings.span.into()),
-        children: settings.children.iter().map(lower_settings_node).collect(),
-    }
-}
-
-fn lower_settings_node(node: &cst::SettingsNode) -> HirSettingsNode {
+pub(crate) fn lower_settings_node(node: &cst::SettingsNode) -> HirSettingsNode {
     match node {
         cst::SettingsNode::Group {
             name,
             children,
             span,
-        } => HirSettingsNode::Group {
-            name: name.clone(),
-            children: children.iter().map(lower_settings_node).collect(),
-            span: Some((*span).into()),
-        },
+        } => crate::settings::map_variants::lower_group(name, children, *span),
         cst::SettingsNode::Number { name, value, span } => HirSettingsNode::Number {
             name: name.clone(),
             value: *value,
@@ -787,7 +779,12 @@ fn lower_settings_node(node: &cst::SettingsNode) -> HirSettingsNode {
             name: name.clone(),
             elements: elements
                 .iter()
-                .map(crate::settings::map_variants::lower_element)
+                .map(|element| crate::hir::SettingsListElement {
+                    value: element.value.clone(),
+                    evaluated: (!element.expr).then(|| element.value.clone()),
+                    variant: None,
+                    span: Some(element.span.into()),
+                })
                 .collect(),
             span: Some((*span).into()),
         },

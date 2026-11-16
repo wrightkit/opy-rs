@@ -396,9 +396,8 @@ fn resolve_hir_node(
                     "settings value has no source span",
                 ));
             };
-            let diag_span = hir_span_to_diag_span(span);
             let value = eval_settings_text(&value, span, constants, expander, lowerer)?;
-            node_from_value(name, value, diag_span)
+            map_variants::node_from_value(name, value, span, map_scope)
         }
         hir::SettingsNode::List {
             name,
@@ -479,82 +478,6 @@ fn settings_expression_error(span: Span, message: String) -> OpyError {
         format!("settings value is not a compile-time value: {message}"),
         span,
     )
-}
-
-fn node_from_value(
-    name: String,
-    value: crate::compile_time::Value,
-    span: Span,
-) -> OpyResult<hir::SettingsNode> {
-    let node = match value {
-        // `String(numValue)` writes `NaN`/`Infinity` literally upstream —
-        // `x: 5%0` is `x: NaN` and `x: Infinity` is `x: Infinity` (#512).
-        crate::compile_time::Value::Number(value) => hir::SettingsNode::Number {
-            name,
-            value,
-            span: Some(span.into()),
-        },
-        crate::compile_time::Value::String(value) => {
-            if crate::compile_time::has_unbound_formatters(&value) {
-                return Err(settings_expression_error(
-                    span,
-                    format!("settings string '{value}' has format arguments"),
-                ));
-            }
-            hir::SettingsNode::String {
-                name,
-                value,
-                span: Some(span.into()),
-            }
-        }
-        crate::compile_time::Value::Bool(value) => hir::SettingsNode::Bool {
-            name,
-            value,
-            span: Some(span.into()),
-        },
-        crate::compile_time::Value::Array(values) => hir::SettingsNode::List {
-            name,
-            elements: values
-                .into_iter()
-                .map(|value| {
-                    let value = display_value(&value)?;
-                    Ok(hir::SettingsListElement {
-                        evaluated: Some(value.clone()),
-                        value,
-                        variant: None,
-                        span: Some(span.into()),
-                    })
-                })
-                .collect::<Result<Vec<_>, String>>()
-                .map_err(|message| settings_expression_error(span, message))?,
-            span: Some(span.into()),
-        },
-        crate::compile_time::Value::Object(entries) => hir::SettingsNode::Group {
-            name,
-            children: entries
-                .into_iter()
-                .map(|(key, value)| {
-                    let crate::compile_time::Value::String(name) = key else {
-                        return Err(settings_expression_error(
-                            span,
-                            "compile-time object keys must be strings".to_string(),
-                        ));
-                    };
-                    node_from_value(name, value, span)
-                })
-                .collect::<OpyResult<Vec<_>>>()?,
-            span: Some(span.into()),
-        },
-        // A `vect` AST has no settings object form upstream — the
-        // reference reports it unhandled (#512).
-        crate::compile_time::Value::Vector(_) | crate::compile_time::Value::Null => {
-            return Err(settings_expression_error(
-                span,
-                "compile-time value is not a settings value".to_string(),
-            ));
-        }
-    };
-    Ok(node)
 }
 
 fn display_value(value: &crate::compile_time::Value) -> Result<String, String> {
