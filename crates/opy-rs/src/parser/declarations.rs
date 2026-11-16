@@ -8,18 +8,6 @@ impl Parser<'_> {
             Ok(name) => name,
             Err(()) => return false,
         };
-        if global
-            && declarations.iter().any(
-                |decl| matches!(decl, Decl::Constant { name: existing, .. } if existing == &name),
-            )
-        {
-            self.errors.push(OpyError::at(
-                "macro-global-conflict",
-                format!("Variable name '{name}' is already declared as a macro"),
-                start.span,
-            ));
-            return false;
-        }
         let mut index = None;
         let mut initializer = None;
         if self.peek_kind() == TokenKind::Number {
@@ -52,6 +40,18 @@ impl Parser<'_> {
                 "expected '=', an integer index, or end of line after the variable name"
                     .to_string(),
             );
+            return false;
+        }
+        if global
+            && declarations.iter().any(
+                |decl| matches!(decl, Decl::Constant { name: existing, .. } if existing == &name),
+            )
+        {
+            self.errors.push(OpyError::at(
+                "macro-global-conflict",
+                format!("Variable name '{name}' is already declared as a macro"),
+                start.span,
+            ));
             return false;
         }
         let end = self
@@ -258,6 +258,12 @@ impl Parser<'_> {
             return false;
         }
         if self.peek_kind() == TokenKind::Assign {
+            self.bump();
+            let value = match self.parse_expr() {
+                Ok(value) => value,
+                Err(()) => return false,
+            };
+            let span = Span::new(start.span.file, start.span.start, value.span().end);
             if !qualified
                 && (crate::hir::types::default_var_index(&name).is_some()
                     || declarations.iter().any(
@@ -271,12 +277,6 @@ impl Parser<'_> {
                 ));
                 return false;
             }
-            self.bump();
-            let value = match self.parse_expr() {
-                Ok(value) => value,
-                Err(()) => return false,
-            };
-            let span = Span::new(start.span.file, start.span.start, value.span().end);
             if qualified {
                 declarations.push(Decl::Macro {
                     name,

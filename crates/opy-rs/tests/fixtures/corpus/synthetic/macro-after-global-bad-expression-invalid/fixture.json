@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/macro-after-global-bad-expression-invalid",
+  "category": "synthetic",
+  "features": [
+    "macros",
+    "global variables"
+  ],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "failure",
+      "relationship": "match",
+      "ruleNames": false,
+      "diagnosticCode": "parse-error"
+    },
+    "compiler": {
+      "nativeStatus": "failure",
+      "relationship": "match",
+      "comparison": "diagnostic-code",
+      "diagnosticCode": "parse-error",
+      "failureClass": "frontend"
+    }
+  }
+}
