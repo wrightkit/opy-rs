@@ -1,0 +1,34 @@
+{
+  "compile": {
+    "diagnostics": [],
+    "exitCode": 0,
+    "status": "success",
+    "stdout": "",
+    "workshop": "settings\n{\n\tmodes\n\t{\n\t\tSkirmish\n\t\t{\n\t\t\tenabled maps\n\t\t\t{\n\t\t\t\tAntarctic Peninsula 972777519512068154\n\t\t\t}\n\t\t}\n\t}\n}\n",
+    "workshopExact": "settings\n{\n\tmodes\n\t{\n\t\tSkirmish\n\t\t{\n\t\t\tenabled maps\n\t\t\t{\n\t\t\t\tAntarctic Peninsula 972777519512068154\n\t\t\t}\n\t\t}\n\t}\n}\n\n",
+    "workshopSha256": "916a473ffb1a8f1a0dfd5c0819023850d13f5464763ae15959d0f7785f46093a"
+  },
+  "fixture": "synthetic/settings-map-variant-named",
+  "input": {
+    "files": [
+      {
+        "path": "source.opy",
+        "sha256": "c602d09925fde272ceaa1afdc11cbc8a388afb9d77709afaf20a4d7e1962bcf2"
+      }
+    ],
+    "sha256": "7f08dc66824c8b17c64a6fb6d9b91daaed99c0f57f906cdcbba885256415ff48",
+    "source": "source.opy"
+  },
+  "oracle": {
+    "contentCommit": "5a7d0e294b8cad73b9701987bb584d0551d7fa4d",
+    "gitHead": "ec763c1d245aa5485ef61af5b2bda4975bce4877",
+    "integrity": "sha512-C5F6btT5yn19BvHuE0bjMuSd/2esebBabmpL4SYLQFuJ4IdouVOKEoMLLuJFAyNc0Phwrolblj5GDkDGYR0ofg==",
+    "language": "en-US",
+    "license": "GPL-3.0-only",
+    "name": "overpy",
+    "registryTarball": "https://registry.npmjs.org/overpy/-/overpy-9.7.17.tgz",
+    "repository": "https://github.com/Zezombye/overpy",
+    "version": "9.7.17"
+  },
+  "schemaVersion": 1
+}

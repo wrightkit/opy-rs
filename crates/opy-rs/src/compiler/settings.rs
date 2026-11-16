@@ -853,7 +853,7 @@ fn convert_settings_node(
                     }
                     SettingsListElement {
                         value: element.evaluated.unwrap_or(element.value),
-                        variant: None,
+                        variant: element.variant,
                         span,
                     }
                 })
@@ -863,8 +863,7 @@ fn convert_settings_node(
     })
 }
 
-/// `main.modeName` and `main.description` are the settings strings the pinned
-/// OverPy escapes for filtered words.
+/// The pinned OverPy escapes filtered words in `main.modeName`/`description`.
 fn escape_main_string(group: &str, node: crate::hir::SettingsNode) -> crate::hir::SettingsNode {
     use crate::hir::SettingsNode;
     match node {

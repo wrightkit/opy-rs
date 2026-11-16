@@ -1,3 +1,5 @@
+pub(crate) mod map_variants;
+
 use std::collections::HashMap;
 
 use crate::cst;
@@ -343,7 +345,7 @@ pub(crate) fn resolve_hir_settings(
     let children = settings
         .children
         .into_iter()
-        .map(|node| resolve_hir_node(node, &constants, &mut expander, &mut lowerer))
+        .map(|node| resolve_hir_node(node, &constants, &mut expander, &mut lowerer, 0))
         .collect::<OpyResult<Vec<_>>>()?;
     program.settings = Some(hir::Settings {
         span: settings.span,
@@ -369,20 +371,24 @@ fn resolve_hir_node(
     constants: &HashMap<String, &hir::Expr>,
     expander: &mut crate::compiler::MacroExpander<'_>,
     lowerer: &mut crate::lower::SettingsLowerer,
+    map_scope: u8,
 ) -> OpyResult<hir::SettingsNode> {
     match node {
         hir::SettingsNode::Group {
             name,
             children,
             span,
-        } => Ok(hir::SettingsNode::Group {
-            name,
-            children: children
-                .into_iter()
-                .map(|child| resolve_hir_node(child, constants, expander, lowerer))
-                .collect::<OpyResult<Vec<_>>>()?,
-            span,
-        }),
+        } => {
+            let next_scope = map_variants::child_scope(map_scope, &name);
+            Ok(hir::SettingsNode::Group {
+                name,
+                children: children
+                    .into_iter()
+                    .map(|child| resolve_hir_node(child, constants, expander, lowerer, next_scope))
+                    .collect::<OpyResult<Vec<_>>>()?,
+                span,
+            })
+        }
         hir::SettingsNode::Raw { name, value, span } => {
             let Some(span) = span else {
                 return Err(OpyError::new(
@@ -394,33 +400,13 @@ fn resolve_hir_node(
             let value = eval_settings_text(&value, span, constants, expander, lowerer)?;
             node_from_value(name, value, diag_span)
         }
-        // The pinned OverPy evaluates each settings list element through its
-        // expression path and errors on what it cannot resolve (#512).
-        // Evaluation is recorded on the element rather than emitted eagerly:
-        // elements under catalogued enum keys and hero lists are member
-        // names, not expressions, and only the downstream pass knows which.
         hir::SettingsNode::List {
             name,
             elements,
             span,
-        } => Ok(hir::SettingsNode::List {
-            name,
-            elements: elements
-                .into_iter()
-                .map(|mut element| {
-                    if element.evaluated.is_none()
-                        && let Some(span) = element.span
-                    {
-                        element.evaluated =
-                            eval_settings_text(&element.value, span, constants, expander, lowerer)
-                                .ok()
-                                .and_then(|value| display_value(&value).ok());
-                    }
-                    element
-                })
-                .collect(),
-            span,
-        }),
+        } => map_variants::resolve_list(
+            name, elements, span, map_scope, constants, expander, lowerer,
+        ),
         // A literal string still passes the pinned `__customString__`
         // check upstream — `{n}`/`{}` formatters without arguments are an
         // error even outside `.format(...)` calls (#512).
@@ -535,6 +521,7 @@ fn node_from_value(
                     Ok(hir::SettingsListElement {
                         evaluated: Some(value.clone()),
                         value,
+                        variant: None,
                         span: Some(span.into()),
                     })
                 })
