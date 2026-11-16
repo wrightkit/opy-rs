@@ -229,7 +229,7 @@ impl<'a> Lowering<'a> {
                 if let Some(error) = format_arity_error(text, args.len()) {
                     return Err(self.unsupported(error, span));
                 }
-                let (format_text, dynamic_args) = self.fold_format_constants(text, args);
+                let (format_text, dynamic_args) = self.fold_format_constants(expr);
                 if let Some(error) = format_arity_error(&format_text, dynamic_args.len()) {
                     return Err(self.unsupported(error, span));
                 }

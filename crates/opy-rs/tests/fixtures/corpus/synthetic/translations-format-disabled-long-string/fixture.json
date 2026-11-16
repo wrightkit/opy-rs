@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "synthetic/translations-format-disabled-long-string",
+  "category": "compilation",
+  "features": ["translations", "translated-format", "disableOptimizations"],
+  "source": "source.opy",
+  "tests": {
+    "source": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "ruleNames": true
+    },
+    "compiler": {
+      "nativeStatus": "success",
+      "relationship": "match",
+      "comparison": "compiler-contract"
+    }
+  }
+}

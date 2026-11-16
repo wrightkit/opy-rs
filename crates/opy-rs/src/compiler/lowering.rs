@@ -1,6 +1,7 @@
 mod action_calls;
 mod assignments;
 mod declarations;
+mod format;
 mod optimization_state;
 mod presentation;
 mod provenance;
@@ -397,61 +398,6 @@ impl<'a> Lowering<'a> {
     fn lower_custom_string(&mut self, value: String) -> ValueId {
         let text = self.push_value(Value::String(value));
         self.push_call("customString", vec![text])
-    }
-
-    fn fold_format_constants<'b>(
-        &self,
-        text: &str,
-        args: &'b [hir::Expr],
-    ) -> (String, Vec<&'b hir::Expr>) {
-        let bindings = HashMap::new();
-        let mut values = Vec::with_capacity(args.len());
-        let mut dynamic_args = Vec::new();
-        let mut dynamic_position = HashMap::new();
-        for (index, arg) in args.iter().enumerate() {
-            let mut stack = Vec::new();
-            let value = crate::compile_time::evaluate(arg, &self.constants, &bindings, &mut stack)
-                .and_then(crate::compile_time::display);
-            if value.is_none() {
-                dynamic_position.insert(index, dynamic_args.len());
-                dynamic_args.push(arg);
-            }
-            values.push(value);
-        }
-
-        let canonical = canonical_format_text(text);
-        let mut output = String::with_capacity(canonical.len());
-        let mut cursor = 0;
-        while cursor < canonical.len() {
-            let Some(open_rel) = canonical[cursor..].find('{') else {
-                output.push_str(&canonical[cursor..]);
-                break;
-            };
-            let open = cursor + open_rel;
-            output.push_str(&canonical[cursor..open]);
-            let Some(close_rel) = canonical[open + 1..].find('}') else {
-                output.push_str(&canonical[open..]);
-                break;
-            };
-            let close = open + 1 + close_rel;
-            let marker = &canonical[open + 1..close];
-            let Ok(index) = marker.parse::<usize>() else {
-                output.push_str(&canonical[open..=close]);
-                cursor = close + 1;
-                continue;
-            };
-            if let Some(Some(value)) = values.get(index) {
-                output.push_str(value);
-            } else if let Some(position) = dynamic_position.get(&index) {
-                output.push('{');
-                output.push_str(&position.to_string());
-                output.push('}');
-            } else {
-                output.push_str(&canonical[open..=close]);
-            }
-            cursor = close + 1;
-        }
-        (output, dynamic_args)
     }
 
     fn push_number(&mut self, value: f64) -> ValueId {
